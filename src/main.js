@@ -5,6 +5,7 @@ import {renderAppShell, renderAuthScreen, renderFatalError} from "./ui/render.js
 
 const state = {
   user: null,
+  profile: null,
   api: null,
   workspaces: [],
   sessions: [],
@@ -30,6 +31,7 @@ async function start() {
       if (!user) {
         state.workspaces = [];
         state.sessions = [];
+        state.profile = null;
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
         render();
@@ -72,6 +74,8 @@ function toggleDrawer() {
 
 async function refreshAll() {
   await runBusy(async () => {
+    const me = await state.api.getMe();
+    state.profile = me.user || null;
     const data = await state.api.getWorkspaces();
     state.workspaces = data.workspaces || [];
     if (!state.selectedWorkspaceId && state.workspaces.length) {

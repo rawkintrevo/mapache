@@ -10,7 +10,7 @@ https://pi-agents-cloud.web.app/
 
 - Firebase Hosting serves the Vite-built console from `dist/`.
 - Firebase Auth uses Google sign-in.
-- Firestore stores workspaces, sessions, and terminal history.
+- Firestore stores user profiles, workspaces, sessions, and terminal history.
 - Cloud Functions exposes `/api/**` for workspace/session management.
 - `session-runner/` is the Cloud Run container that serves a WebSocket terminal and syncs `/workspace` to Cloud Storage.
 

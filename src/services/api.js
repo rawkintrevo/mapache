@@ -1,5 +1,6 @@
 export function createApiClient(getToken) {
   return {
+    getMe: () => request(getToken, "/api/me"),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
     createWorkspace: (body) => request(getToken, "/api/workspaces", {
       method: "POST",
