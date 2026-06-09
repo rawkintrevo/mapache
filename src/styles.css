@@ -142,13 +142,60 @@ main {
   min-height: 0;
 }
 
-aside {
+main.drawer-collapsed {
+  grid-template-columns: 58px 1fr;
+}
+
+.drawer {
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 20px;
   padding: 20px;
   border-right: 1px solid var(--line);
   background: var(--panel);
+}
+
+.drawer.collapsed {
+  justify-items: center;
+  padding: 14px 10px;
+}
+
+.drawer-header,
+.drawer-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.drawer-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.drawer-section-heading h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.drawer-toggle {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+}
+
+.icon {
+  display: block;
+  flex: none;
 }
 
 .workspace {
@@ -399,7 +446,16 @@ h2 {
   border-radius: 50%;
   font-size: 24px;
   line-height: 1;
+}
+
+.close-button {
   transform: rotate(45deg);
+}
+
+.icon-button.compact {
+  width: 30px;
+  height: 30px;
+  font-size: 20px;
 }
 
 @media (max-width: 900px) {
@@ -407,9 +463,20 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  aside {
+  main.drawer-collapsed {
+    grid-template-columns: 58px 1fr;
+  }
+
+  .drawer {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .drawer.collapsed {
+    align-content: center;
+    min-height: 56px;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
   }
 
   .details {
@@ -430,7 +497,7 @@ h2 {
     padding: 14px;
   }
 
-  aside,
+  .drawer,
   .workspace {
     padding: 14px;
   }

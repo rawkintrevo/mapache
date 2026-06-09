@@ -2,6 +2,10 @@
 
 Firebase + Cloud Run scaffold for browser-managed cloud terminal sessions.
 
+## Deployed at
+
+https://pi-agents-cloud.web.app/
+
 ## Pieces
 
 - Firebase Hosting serves the Vite-built console from `dist/`.
