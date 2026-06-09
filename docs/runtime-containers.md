@@ -45,7 +45,11 @@ Installed OS packages currently include:
 
 The container runs `session-runner/server.js`.
 
-It starts an Express server on `PORT`, serves the terminal iframe page, and exposes a WebSocket at `/terminal`. On WebSocket connection, the server starts a process through `node-pty`.
+It starts an Express server on `PORT`, serves the terminal iframe page, and exposes a WebSocket at `/terminal`. The runner keeps one active `node-pty` process per container instance. Browser WebSocket connections attach to that PTY, and closing or recreating the browser iframe detaches only the socket instead of killing the process.
+
+The runner stores a bounded raw-output replay buffer so a newly loaded iframe can redraw recent terminal output after reconnecting. The default replay limit is `1000000` characters and can be changed with `TERMINAL_REPLAY_LIMIT`. Automatic reconnects from the same iframe skip replay to avoid duplicating visible terminal content. If the shell process itself exits, the runner closes connected sockets and the next fresh iframe connection starts a new PTY.
+
+This persistence is scoped to the current Cloud Run container instance. A Cloud Run revision replacement, service stop, container crash, or scale-down still ends the PTY process.
 
 By default, that process is the login shell:
 
@@ -131,6 +135,7 @@ New sessions use the image selected in the modal. Existing sessions keep their c
 ## Design Decisions
 
 - Browser terminals should use a real terminal emulator. The app uses xterm.js so terminal programs and shell formatting render correctly.
+- The runner keeps the PTY alive across WebSocket disconnects so frontend re-renders, iframe reloads, and brief network drops do not discard in-progress terminal work.
 - Runtime image selection is user-facing but config-controlled. This prevents arbitrary image entry in the UI while keeping the path open for curated images.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
