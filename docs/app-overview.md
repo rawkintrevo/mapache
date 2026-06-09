@@ -38,7 +38,7 @@ User documents have this shape:
 
 Workspaces are top-level documents in `workspaces/{workspaceId}` with `ownerUid` set to the authenticated user's UID and `userPath` set to `users/{uid}`. Sessions are stored under `workspaces/{workspaceId}/sessions/{sessionId}` and carry the same `ownerUid`, `userPath`, and `workspaceId` for explicit ownership and operational queries.
 
-Users can only see workspaces where `ownerUid` matches their Firebase Auth UID. Session list, resize, and restart operations first require ownership of the parent workspace, then operate only on that workspace's session subcollection. Firestore rules mirror this ownership boundary for direct client reads.
+Users can only see workspaces where `ownerUid` matches their Firebase Auth UID. Session list, resize, restart, and stop operations first require ownership of the parent workspace, then operate only on that workspace's session subcollection. Firestore rules mirror this ownership boundary for direct client reads.
 
 ## Frontend Structure
 
@@ -54,7 +54,7 @@ Session image choices live in `src/config/sessionImages.js`. This is the fronten
 
 The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`.
 
-`functions/index.js` handles user, workspace, and session operations. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix.
+`functions/index.js` handles user, workspace, and session operations. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status.
 
 The backend already accepts `payload.image` for session creation. If no image is passed, it falls back to `SESSION_RUNNER_IMAGE`.
 

@@ -273,6 +273,40 @@ main.drawer-collapsed {
   overflow: visible;
 }
 
+.session-row {
+  padding: 0;
+  overflow: visible;
+}
+
+.session-select {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 0;
+  padding: 12px 42px 12px 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.session-select:hover {
+  background: transparent;
+}
+
+.session-stop-button {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  color: var(--danger);
+}
+
 .workspace-select {
   display: grid;
   gap: 5px;

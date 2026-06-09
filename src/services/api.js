@@ -25,6 +25,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/restart`,
         {method: "POST", body: {}},
     ),
+    stopSession: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/stop`,
+        {method: "POST", body: {}},
+    ),
   };
 }
 

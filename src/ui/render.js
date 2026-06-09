@@ -1,4 +1,4 @@
-import {createElement as createLucideIcon, Menu, PanelLeftClose} from "lucide";
+import {createElement as createLucideIcon, Menu, PanelLeftClose, SquareStop} from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
 import {sessionImages} from "../config/sessionImages.js";
 
@@ -94,6 +94,7 @@ function renderSidebar(props) {
     onOpenSessionModal,
     onSelectSession,
     onSelectWorkspace,
+    onStopSession,
     onToggleDrawer,
   } = props;
 
@@ -160,7 +161,7 @@ function renderSidebar(props) {
         createElement("h3", {}, "Sessions"),
         createSessionButton(state, onOpenSessionModal),
       ]),
-      renderDrawerSessionList(state, onSelectSession),
+      renderDrawerSessionList(state, onSelectSession, onStopSession),
     ]),
   ]);
 }
@@ -218,7 +219,7 @@ function renderWorkspaceRow(workspace, isActive, busy, onSelectWorkspace, onOpen
   ]);
 }
 
-function renderDrawerSessionList(state, onSelectSession) {
+function renderDrawerSessionList(state, onSelectSession, onStopSession) {
   if (!state.selectedWorkspaceId) {
     return createElement("p", {className: "empty"}, "Select a workspace to view sessions.");
   }
@@ -229,7 +230,7 @@ function renderDrawerSessionList(state, onSelectSession) {
 
   return createElement("div", {className: "list"}, state.sessions.map((session) => {
     const button = createElement("button", {
-      className: `row ${session.id === state.selectedSessionId ? "active" : ""}`,
+      className: "session-select",
       type: "button",
     }, [
       createElement("span", {className: "session-title"}, [
@@ -239,8 +240,30 @@ function renderDrawerSessionList(state, onSelectSession) {
       createElement("span", {className: "subtle"}, `${session.resources.cpu} CPU / ${session.resources.memory}`),
     ]);
     button.addEventListener("click", () => onSelectSession(session.id));
-    return button;
+
+    return createElement("div", {
+      className: `row session-row ${session.id === state.selectedSessionId ? "active" : ""}`,
+    }, [
+      button,
+      session.status === "running" ? renderStopSessionButton(state, session, onStopSession) : null,
+    ]);
   }));
+}
+
+function renderStopSessionButton(state, session, onStopSession) {
+  const button = createElement("button", {
+    ariaLabel: `Stop ${session.name}`,
+    className: "session-stop-button secondary",
+    disabled: state.busy,
+    title: `Stop ${session.name}`,
+    type: "button",
+  }, renderIcon(SquareStop));
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onStopSession(session.id);
+  });
+
+  return button;
 }
 
 function renderWorkspaceHeader(workspace) {

@@ -64,6 +64,7 @@ function render() {
     onSelectSession: selectSession,
     onResizeSession: resizeSession,
     onRestartSession: restartSession,
+    onStopSession: stopSession,
   });
 }
 
@@ -152,6 +153,15 @@ async function resizeSession(sessionId, payload) {
 async function restartSession(sessionId) {
   await runBusy(async () => {
     await state.api.restartSession(state.selectedWorkspaceId, sessionId);
+    const data = await state.api.getSessions(state.selectedWorkspaceId);
+    state.sessions = data.sessions || [];
+    state.selectedSessionId = sessionId;
+  });
+}
+
+async function stopSession(sessionId) {
+  await runBusy(async () => {
+    await state.api.stopSession(state.selectedWorkspaceId, sessionId);
     const data = await state.api.getSessions(state.selectedWorkspaceId);
     state.sessions = data.sessions || [];
     state.selectedSessionId = sessionId;
