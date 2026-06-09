@@ -74,6 +74,13 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && route.name === "stopSession") {
+      res.json({
+        session: await stopSession(user.uid, route.workspaceId, route.sessionId),
+      });
+      return;
+    }
+
     res.status(404).json({error: "not_found"});
   } catch (error) {
     logger.error("api request failed", error);
@@ -104,6 +111,14 @@ function routeRequest(path) {
     parts[4] === "restart"
   ) {
     return {name: "restartSession", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "stop"
+  ) {
+    return {name: "stopSession", workspaceId: parts[1], sessionId: parts[3]};
   }
   return {name: "unknown"};
 }
@@ -244,6 +259,16 @@ async function restartSession(uid, workspaceId, sessionId) {
   return toClientDoc(await sessionRef.get());
 }
 
+async function stopSession(uid, workspaceId, sessionId) {
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  await sessionRef.update({
+    status: "stopping",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await deleteSessionService(sessionRef, sessionSnap.data());
+  return toClientDoc(await sessionRef.get());
+}
+
 async function requireWorkspace(uid, workspaceId) {
   const snap = await db.collection("workspaces").doc(workspaceId).get();
   if (!snap.exists) throw httpError(404, "workspace_not_found");
@@ -353,6 +378,42 @@ async function patchSessionService(sessionRef, session, options = {}) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
+}
+
+async function deleteSessionService(sessionRef, session) {
+  if (!session.serviceName) {
+    await markSessionStopped(sessionRef);
+    return;
+  }
+
+  try {
+    const client = await auth.getClient();
+    const url = `https://run.googleapis.com/v2/${session.serviceName}`;
+    const response = await client.request({url, method: "DELETE"});
+    await waitForOperation(client, response.data);
+    await markSessionStopped(sessionRef);
+  } catch (error) {
+    if (isGoogleNotFound(error)) {
+      await markSessionStopped(sessionRef);
+      return;
+    }
+
+    await sessionRef.update({
+      status: "stop_failed",
+      lastError: publicGoogleError(error),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+async function markSessionStopped(sessionRef) {
+  await sessionRef.update({
+    status: "stopped",
+    serviceUrl: null,
+    stoppedAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastError: null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
 function buildCloudRunService(workspace, session) {
@@ -471,6 +532,16 @@ function publicGoogleError(error) {
     JSON.stringify(error.response.data) :
     error.message;
   return cleanName(message || "Cloud Run request failed.");
+}
+
+function isGoogleNotFound(error) {
+  return error && (
+    error.code === 404 ||
+    error.status === 404 ||
+    (error.response && error.response.status === 404) ||
+    (error.response && error.response.data && error.response.data.error &&
+      error.response.data.error.code === 404)
+  );
 }
 
 function httpError(status, publicMessage, cause) {

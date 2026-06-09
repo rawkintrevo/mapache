@@ -35,3 +35,5 @@ Keep changes scoped to the existing structure:
 - Runtime container code lives in `session-runner/`.
 
 For frontend changes, run `npm run build` before handing off when feasible. For runtime container changes, validate the container path and document whether existing Cloud Run services need a new revision.
+
+When `functions/` code changes, deploy Cloud Functions before handing off unless the user explicitly asks not to deploy. Report the deploy command and outcome.

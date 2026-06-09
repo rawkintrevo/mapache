@@ -108,6 +108,8 @@ session-<lowercase-session-id>
 
 Cloud Run resource limits are derived from the session's CPU and memory settings.
 
+Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped.
+
 ## Existing Sessions vs New Sessions
 
 Pushing a new `:latest` image affects new pulls, but existing Cloud Run services need a new revision to pick it up. For an existing session service, update the service image to create a fresh revision:
