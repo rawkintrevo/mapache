@@ -10,6 +10,7 @@ const state = {
   sessions: [],
   selectedWorkspaceId: null,
   selectedSessionId: null,
+  drawerCollapsed: false,
   sessionModalOpen: false,
   busy: false,
   error: "",
@@ -52,6 +53,7 @@ function render() {
     state,
     onSignOut: signOut,
     onRefresh: refreshAll,
+    onToggleDrawer: toggleDrawer,
     onCreateWorkspace: createWorkspace,
     onSelectWorkspace: selectWorkspace,
     onOpenSessionModal: openSessionModal,
@@ -61,6 +63,11 @@ function render() {
     onResizeSession: resizeSession,
     onRestartSession: restartSession,
   });
+}
+
+function toggleDrawer() {
+  state.drawerCollapsed = !state.drawerCollapsed;
+  render();
 }
 
 async function refreshAll() {

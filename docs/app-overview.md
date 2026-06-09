@@ -6,7 +6,7 @@ Pi Agents Cloud is a Firebase and Cloud Run app for browser-managed cloud termin
 
 The app lets an authenticated user create workspaces and run terminal sessions inside Cloud Run containers. The frontend is intentionally operational rather than marketing-oriented: after sign-in, users manage workspaces, sessions, and the active browser terminal.
 
-The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Session creation is available from the selected workspace row in the sidebar through a circular `+` action.
+The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Navigation lives in a collapsible drawer with separate Workspaces and Sessions sections. Session creation is available from the active workspace row or from the Sessions section action in the drawer.
 
 ## Main Components
 
@@ -23,7 +23,7 @@ The frontend entrypoint is `src/main.js`. It owns app state, authentication wiri
 
 Rendering lives in `src/ui/render.js`. It uses small DOM helpers from `src/ui/utils.js` rather than a component framework. The UI is rebuilt from state on each render. This keeps the current app small and explicit, but means interactive state that should survive a render must live in `src/main.js`.
 
-Styling lives in `src/styles.css`. The interface uses restrained operational styling: dense sidebar lists, compact controls, 8px-or-less radii for panels/cards, and a terminal-first selected-session view.
+Styling lives in `src/styles.css`. The interface uses restrained operational styling: dense drawer lists, compact controls, 8px-or-less radii for panels/cards, and a terminal-first selected-session view.
 
 Session image choices live in `src/config/sessionImages.js`. This is the frontend source of truth for the container image dropdown in the create-session modal.
 

@@ -1,3 +1,4 @@
+import {createElement as createLucideIcon, Menu, PanelLeftClose} from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
 import {sessionImages} from "../config/sessionImages.js";
 
@@ -44,7 +45,7 @@ export function renderAppShell(root, props) {
 
   replaceChildren(root, createElement("div", {className: "app"}, [
     renderTopbar(props),
-    createElement("main", {}, [
+    createElement("main", {className: state.drawerCollapsed ? "drawer-collapsed" : ""}, [
       renderSidebar(props),
       createElement("section", {className: "workspace"}, workspaceContent),
     ]),
@@ -81,7 +82,30 @@ function renderTopbar({state, onSignOut, onRefresh}) {
 }
 
 function renderSidebar(props) {
-  const {state, onCreateWorkspace, onOpenSessionModal, onSelectWorkspace} = props;
+  const {
+    state,
+    onCreateWorkspace,
+    onOpenSessionModal,
+    onSelectSession,
+    onSelectWorkspace,
+    onToggleDrawer,
+  } = props;
+
+  const toggleButton = createElement("button", {
+    "aria-expanded": String(!state.drawerCollapsed),
+    ariaLabel: state.drawerCollapsed ? "Expand drawer" : "Collapse drawer",
+    className: "drawer-toggle secondary",
+    title: state.drawerCollapsed ? "Expand drawer" : "Collapse drawer",
+    type: "button",
+  }, renderIcon(state.drawerCollapsed ? Menu : PanelLeftClose));
+  toggleButton.addEventListener("click", onToggleDrawer);
+
+  if (state.drawerCollapsed) {
+    return createElement("aside", {className: "drawer collapsed"}, [
+      toggleButton,
+    ]);
+  }
+
   const nameInput = createElement("input", {
     autocomplete: "off",
     name: "name",
@@ -113,10 +137,47 @@ function renderSidebar(props) {
     )) :
     [createElement("p", {className: "empty"}, "No workspaces yet.")];
 
-  return createElement("aside", {}, [
-    form,
-    createElement("div", {className: "list"}, list),
+  return createElement("aside", {className: "drawer"}, [
+    createElement("div", {className: "drawer-header"}, [
+      createElement("h2", {}, "Navigation"),
+      toggleButton,
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Workspaces"),
+      ]),
+      form,
+      createElement("div", {className: "list"}, list),
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Sessions"),
+        createSessionButton(state, onOpenSessionModal),
+      ]),
+      renderDrawerSessionList(state, onSelectSession),
+    ]),
   ]);
+}
+
+function renderIcon(iconNode) {
+  return createLucideIcon(iconNode, {
+    "aria-hidden": "true",
+    class: "icon",
+    height: "18",
+    width: "18",
+  });
+}
+
+function createSessionButton(state, onOpenSessionModal) {
+  const button = createElement("button", {
+    ariaLabel: "Create session",
+    className: "icon-button compact",
+    disabled: state.busy || !state.selectedWorkspaceId,
+    title: "Create session",
+    type: "button",
+  }, "+");
+  button.addEventListener("click", onOpenSessionModal);
+  return button;
 }
 
 function renderWorkspaceRow(workspace, isActive, busy, onSelectWorkspace, onOpenSessionModal) {
@@ -149,6 +210,31 @@ function renderWorkspaceRow(workspace, isActive, busy, onSelectWorkspace, onOpen
     selectButton,
     isActive ? addButton : null,
   ]);
+}
+
+function renderDrawerSessionList(state, onSelectSession) {
+  if (!state.selectedWorkspaceId) {
+    return createElement("p", {className: "empty"}, "Select a workspace to view sessions.");
+  }
+
+  if (!state.sessions.length) {
+    return createElement("p", {className: "empty"}, "No sessions in this workspace.");
+  }
+
+  return createElement("div", {className: "list"}, state.sessions.map((session) => {
+    const button = createElement("button", {
+      className: `row ${session.id === state.selectedSessionId ? "active" : ""}`,
+      type: "button",
+    }, [
+      createElement("span", {className: "session-title"}, [
+        createElement("span", {}, session.name),
+        createElement("span", {className: "pill"}, session.status),
+      ]),
+      createElement("span", {className: "subtle"}, `${session.resources.cpu} CPU / ${session.resources.memory}`),
+    ]);
+    button.addEventListener("click", () => onSelectSession(session.id));
+    return button;
+  }));
 }
 
 function renderWorkspaceHeader(workspace) {
@@ -208,7 +294,7 @@ function renderSessionModal({state, onCloseSessionModal, onCreateSession}) {
       createElement("h2", {id: "session-modal-title"}, "New session"),
       createElement("button", {
         ariaLabel: "Close",
-        className: "icon-button secondary",
+        className: "icon-button close-button secondary",
         type: "button",
       }, "+"),
     ]),
