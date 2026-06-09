@@ -36,4 +36,12 @@ Keep changes scoped to the existing structure:
 
 For frontend changes, run `npm run build` before handing off when feasible. For runtime container changes, validate the container path and document whether existing Cloud Run services need a new revision.
 
+This repo deploys to the `pi-agents-cloud` Firebase/GCP project. Use explicit project flags for remote build and deploy commands so a local default gcloud project cannot send work to the wrong place. For example, push the default runner image with:
+
+```bash
+gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
+```
+
+Deploy Firebase resources with `--project pi-agents-cloud`.
+
 When `functions/` code changes, deploy Cloud Functions before handing off unless the user explicitly asks not to deploy. Report the deploy command and outcome.

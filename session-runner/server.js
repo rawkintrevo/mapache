@@ -15,9 +15,11 @@ const bucketName = process.env.STORAGE_BUCKET || "";
 const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
 const workspaceId = process.env.WORKSPACE_ID || "";
 const sessionId = process.env.SESSION_ID || "";
+const shutdownToken = process.env.SESSION_SHUTDOWN_TOKEN || "";
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MS || 30000);
 const terminalReplayLimit = positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000);
 const directoryMarkerFile = ".mapahce-directory";
+const activityWriteDebounceMs = positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000);
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -41,6 +43,25 @@ app.get("/healthz", (req, res) => {
   res.json({ok: true, workspaceId, sessionId, bucketName, prefix});
 });
 
+app.post("/shutdown", async (req, res) => {
+  if (!shutdownToken || req.get("x-shutdown-token") !== shutdownToken) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    await syncUp();
+    await updateSessionActivity({
+      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    res.json({ok: true});
+  } catch (error) {
+    console.error("shutdown sync failed", error);
+    res.status(500).json({error: "shutdown_sync_failed"});
+  }
+});
+
 wss.on("connection", (socket, request) => {
   terminalSession.attach(socket, shouldReplayTerminal(request));
 
@@ -57,11 +78,14 @@ function createTerminalSession() {
   const sockets = new Set();
   let term = null;
   let outputBuffer = "";
+  let activityTimer = null;
+  let pendingActivity = null;
 
   return {
     attach(socket, replayOutput) {
       const activeTerm = ensureTerm();
       sockets.add(socket);
+      updateSocketActivity("lastConnectedAt");
       if (replayOutput && outputBuffer) {
         sendTerminalMessage(socket, {type: "data", data: outputBuffer});
       }
@@ -69,9 +93,11 @@ function createTerminalSession() {
     },
     detach(socket) {
       sockets.delete(socket);
+      updateSocketActivity("lastDisconnectedAt");
     },
     handleMessage(raw) {
       handleTerminalMessage(ensureTerm(), raw);
+      markTerminalActivity();
     },
   };
 
@@ -118,6 +144,34 @@ function createTerminalSession() {
     for (const socket of sockets) {
       socket.close();
     }
+  }
+
+  function updateSocketActivity(timestampField) {
+    updateSessionActivity({
+      activeSocketCount: sockets.size,
+      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      [timestampField]: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  function markTerminalActivity() {
+    if (activityTimer) {
+      pendingActivity = {
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      return;
+    }
+
+    updateSessionActivity({
+      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    activityTimer = setTimeout(() => {
+      activityTimer = null;
+      if (!pendingActivity) return;
+      const activity = pendingActivity;
+      pendingActivity = null;
+      updateSessionActivity(activity);
+    }, activityWriteDebounceMs);
   }
 }
 
@@ -248,6 +302,16 @@ async function appendHistory(stream, data) {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
       .catch((error) => console.error("terminal history write failed", error));
+}
+
+async function updateSessionActivity(updates) {
+  if (!workspaceId || !sessionId) return;
+  await db.collection("workspaces")
+      .doc(workspaceId)
+      .collection("sessions")
+      .doc(sessionId)
+      .update(updates)
+      .catch((error) => console.error("session activity write failed", error));
 }
 
 function normalizePrefix(value) {
