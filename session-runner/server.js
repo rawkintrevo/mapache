@@ -16,6 +16,7 @@ const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
 const workspaceId = process.env.WORKSPACE_ID || "";
 const sessionId = process.env.SESSION_ID || "";
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MS || 30000);
+const directoryMarkerFile = ".mapahce-directory";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -106,6 +107,10 @@ async function syncDown() {
     if (file.name.endsWith("/")) return;
     const relative = file.name.slice(prefix.length).replace(/^\//, "");
     if (!relative) return;
+    if (relative.endsWith(`/${directoryMarkerFile}`)) {
+      await fs.promises.mkdir(path.join(workspaceDir, path.dirname(relative)), {recursive: true});
+      return;
+    }
     const localPath = path.join(workspaceDir, relative);
     await fs.promises.mkdir(path.dirname(localPath), {recursive: true});
     await file.download({destination: localPath});
@@ -114,7 +119,16 @@ async function syncDown() {
 
 async function syncUp() {
   if (!bucketName || !prefix) return;
-  const files = await walk(workspaceDir);
+  const {directories, files} = await walkWorkspace(workspaceDir);
+  await Promise.all(directories.map(async (localPath) => {
+    const relative = path.relative(workspaceDir, localPath);
+    if (!relative) return;
+    const remotePath = `${prefix}/${relative}/${directoryMarkerFile}`.replace(/\/+/g, "/");
+    await storage.bucket(bucketName).file(remotePath).save("", {
+      contentType: "text/plain",
+      resumable: false,
+    });
+  }));
   await Promise.all(files.map(async (localPath) => {
     const relative = path.relative(workspaceDir, localPath);
     const remotePath = `${prefix}/${relative}`.replace(/\/+/g, "/");
@@ -122,15 +136,22 @@ async function syncUp() {
   }));
 }
 
-async function walk(dir) {
+async function walkWorkspace(dir) {
   const entries = await fs.promises.readdir(dir, {withFileTypes: true});
-  const files = await Promise.all(entries.map(async (entry) => {
+  const results = await Promise.all(entries.map(async (entry) => {
     const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) return walk(entryPath);
-    if (entry.isFile()) return entryPath;
-    return [];
+    if (entry.isDirectory()) return walkWorkspace(entryPath);
+    if (entry.isFile()) return {directories: [], files: [entryPath]};
+    return {directories: [], files: []};
   }));
-  return files.flat();
+  return results.reduce((acc, result) => {
+    acc.directories.push(...result.directories);
+    acc.files.push(...result.files);
+    return acc;
+  }, {
+    directories: dir === workspaceDir ? [] : [dir],
+    files: [],
+  });
 }
 
 async function appendHistory(stream, data) {

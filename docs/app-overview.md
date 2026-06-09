@@ -6,7 +6,7 @@ Pi Agents Cloud is a Firebase and Cloud Run app for browser-managed cloud termin
 
 The app lets an authenticated user create workspaces and run terminal sessions inside Cloud Run containers. The frontend is intentionally operational rather than marketing-oriented: after sign-in, users manage workspaces, sessions, and the active browser terminal.
 
-The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Navigation lives in a collapsible drawer with separate Workspaces and Sessions sections. Session creation is available from the active workspace row or from the Sessions section action in the drawer.
+The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Navigation lives in a collapsible drawer with separate Workspaces, Files, and Sessions sections. Session creation is available from the active workspace row or from the Sessions section action in the drawer.
 
 ## Main Components
 
@@ -55,6 +55,8 @@ Session image choices live in `src/config/sessionImages.js`. This is the fronten
 The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`.
 
 `functions/index.js` handles user, workspace, and session operations. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status.
+
+The sidebar Files section calls `GET /api/workspaces/{workspaceId}/files`. The backend first verifies workspace ownership, then lists objects in the workspace's configured Cloud Storage bucket and `storagePrefix`. The frontend renders the returned flat paths as an expandable tree; folder expansion state lives in `src/main.js` because `src/ui/render.js` rebuilds the DOM each render.
 
 The backend already accepts `payload.image` for session creation. If no image is passed, it falls back to `SESSION_RUNNER_IMAGE`.
 

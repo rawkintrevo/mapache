@@ -6,6 +6,10 @@ export function createApiClient(getToken) {
       method: "POST",
       body,
     }),
+    getWorkspaceFiles: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/files`,
+    ),
     getSessions: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions`,
