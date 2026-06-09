@@ -11,15 +11,27 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerUid == request.auth.uid;
     }
 
+    function validUserDocument(userId) {
+      return userId == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.keys().hasOnly([
+          "uid",
+          "email",
+          "displayName",
+          "photoURL",
+          "providerIds",
+          "createdAt",
+          "lastSignedInAt",
+          "updatedAt"
+        ]);
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && userId == request.auth.uid;
-      allow create: if signedIn() &&
-        userId == request.auth.uid &&
-        request.resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && validUserDocument(userId);
       allow update: if signedIn() &&
-        userId == request.auth.uid &&
         resource.data.uid == request.auth.uid &&
-        request.resource.data.uid == request.auth.uid;
+        validUserDocument(userId);
       allow delete: if false;
     }
 
@@ -28,10 +40,11 @@ service cloud.firestore {
       allow create: if signedIn() &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.userPath == "users/" + request.auth.uid;
-      allow update, delete: if signedIn() &&
+      allow update: if signedIn() &&
         resource.data.ownerUid == request.auth.uid &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.userPath == "users/" + request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       match /sessions/{sessionId} {
         allow read: if ownsWorkspace(workspaceId);
