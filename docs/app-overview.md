@@ -17,6 +17,29 @@ The current selected-session experience prioritizes the terminal. When a session
 - Cloud Run runs per-session terminal containers from the configured runner image.
 - Cloud Storage syncs workspace files to and from each session container's `/workspace` directory.
 
+## Firestore Ownership Model
+
+Firebase Auth is the source of user identity. On authenticated API requests, `functions/index.js` verifies the Firebase ID token and upserts a profile document at `users/{uid}` before serving workspace/session data.
+
+User documents have this shape:
+
+```js
+{
+  uid: "firebase-auth-uid",
+  email: "user@example.com",
+  displayName: "User Name",
+  photoURL: "https://...",
+  providerIds: ["google.com"],
+  createdAt: Timestamp,
+  lastSignedInAt: Timestamp,
+  updatedAt: Timestamp
+}
+```
+
+Workspaces are top-level documents in `workspaces/{workspaceId}` with `ownerUid` set to the authenticated user's UID and `userPath` set to `users/{uid}`. Sessions are stored under `workspaces/{workspaceId}/sessions/{sessionId}` and carry the same `ownerUid`, `userPath`, and `workspaceId` for explicit ownership and operational queries.
+
+Users can only see workspaces where `ownerUid` matches their Firebase Auth UID. Session list, resize, and restart operations first require ownership of the parent workspace, then operate only on that workspace's session subcollection. Firestore rules mirror this ownership boundary for direct client reads.
+
 ## Frontend Structure
 
 The frontend entrypoint is `src/main.js`. It owns app state, authentication wiring, API calls, selected workspace/session state, and modal state.
@@ -31,7 +54,7 @@ Session image choices live in `src/config/sessionImages.js`. This is the fronten
 
 The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`.
 
-`functions/index.js` handles workspace/session operations. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, and workspace storage prefix.
+`functions/index.js` handles user, workspace, and session operations. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix.
 
 The backend already accepts `payload.image` for session creation. If no image is passed, it falls back to `SESSION_RUNNER_IMAGE`.
 

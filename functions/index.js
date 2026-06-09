@@ -29,7 +29,7 @@ exports.api = onRequest({cors: true}, async (req, res) => {
     const route = routeRequest(req.path);
 
     if (req.method === "GET" && route.name === "me") {
-      res.json({uid: user.uid, email: user.email || null});
+      res.json({user});
       return;
     }
 
@@ -115,10 +115,41 @@ async function requireUser(req) {
     throw httpError(401, "missing_auth_token");
   }
   try {
-    return await admin.auth().verifyIdToken(match[1]);
+    const token = await admin.auth().verifyIdToken(match[1]);
+    return await upsertUser(token);
   } catch (error) {
     throw httpError(401, "invalid_auth_token", error);
   }
+}
+
+async function upsertUser(token) {
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const ref = db.collection("users").doc(token.uid);
+  const profile = {
+    uid: token.uid,
+    email: cleanName(token.email || ""),
+    displayName: cleanName(token.name || ""),
+    photoURL: cleanName(token.picture || ""),
+    providerIds: Array.isArray(token.firebase && token.firebase.identities) ?
+      [] :
+      Object.keys((token.firebase && token.firebase.identities) || {}),
+    lastSignedInAt: now,
+    updatedAt: now,
+  };
+
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (snap.exists) {
+      transaction.update(ref, profile);
+      return;
+    }
+    transaction.set(ref, {
+      ...profile,
+      createdAt: now,
+    });
+  });
+
+  return toClientDoc(await ref.get());
 }
 
 async function listWorkspaces(uid) {
@@ -134,6 +165,7 @@ async function createWorkspace(uid, payload) {
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const doc = {
     ownerUid: uid,
+    userPath: userPath(uid),
     name,
     bucket,
     storagePrefix: `workspaces/${uid}/${slugify(name)}`,
@@ -162,6 +194,7 @@ async function createSession(uid, workspaceId, payload) {
   const serviceId = `session-${sessionRef.id.toLowerCase()}`;
   const session = {
     ownerUid: uid,
+    userPath: userPath(uid),
     workspaceId,
     runnerSessionId: sessionRef.id,
     workspaceStoragePrefix: workspace.storagePrefix,
@@ -189,10 +222,7 @@ async function createSession(uid, workspaceId, payload) {
 }
 
 async function resizeSession(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
   const resources = normalizeResources(payload);
   await sessionRef.update({
     resources,
@@ -204,10 +234,7 @@ async function resizeSession(uid, workspaceId, sessionId, payload) {
 }
 
 async function restartSession(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
   await sessionRef.update({
     status: "restarting",
     restartNonce: Date.now().toString(),
@@ -226,8 +253,22 @@ async function requireWorkspace(uid, workspaceId) {
   return {id: snap.id, ...data};
 }
 
+async function requireSession(uid, workspaceId, sessionId) {
+  await requireWorkspace(uid, workspaceId);
+  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
+  const data = sessionSnap.data();
+  if (data.ownerUid && data.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  return {sessionRef, sessionSnap};
+}
+
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
+}
+
+function userPath(uid) {
+  return `users/${uid}`;
 }
 
 async function provisionSessionService(workspace, sessionRef, session) {

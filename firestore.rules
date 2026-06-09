@@ -11,10 +11,27 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerUid == request.auth.uid;
     }
 
+    match /users/{userId} {
+      allow read: if signedIn() && userId == request.auth.uid;
+      allow create: if signedIn() &&
+        userId == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn() &&
+        userId == request.auth.uid &&
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.userPath == "users/" + request.auth.uid;
+      allow update, delete: if signedIn() &&
+        resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.userPath == "users/" + request.auth.uid;
 
       match /sessions/{sessionId} {
         allow read: if ownsWorkspace(workspaceId);

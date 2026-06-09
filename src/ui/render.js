@@ -74,11 +74,17 @@ function renderTopbar({state, onSignOut, onRefresh}) {
       createElement("h1", {}, "Pi Agents Cloud"),
     ]),
     createElement("div", {className: "userbar"}, [
-      createElement("span", {}, state.user.email || state.user.uid),
+      createElement("span", {}, userLabel(state)),
       refreshButton,
       signOutButton,
     ]),
   ]);
+}
+
+function userLabel(state) {
+  return (state.profile && (state.profile.displayName || state.profile.email)) ||
+    state.user.email ||
+    state.user.uid;
 }
 
 function renderSidebar(props) {
