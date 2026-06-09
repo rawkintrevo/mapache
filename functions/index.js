@@ -114,12 +114,13 @@ async function requireUser(req) {
   if (!match) {
     throw httpError(401, "missing_auth_token");
   }
+  let token;
   try {
-    const token = await admin.auth().verifyIdToken(match[1]);
-    return await upsertUser(token);
+    token = await admin.auth().verifyIdToken(match[1]);
   } catch (error) {
     throw httpError(401, "invalid_auth_token", error);
   }
+  return upsertUser(token);
 }
 
 async function upsertUser(token) {
@@ -130,9 +131,7 @@ async function upsertUser(token) {
     email: cleanName(token.email || ""),
     displayName: cleanName(token.name || ""),
     photoURL: cleanName(token.picture || ""),
-    providerIds: Array.isArray(token.firebase && token.firebase.identities) ?
-      [] :
-      Object.keys((token.firebase && token.firebase.identities) || {}),
+    providerIds: providerIdsFromToken(token),
     lastSignedInAt: now,
     updatedAt: now,
   };
@@ -265,6 +264,15 @@ async function requireSession(uid, workspaceId, sessionId) {
 
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
+}
+
+function providerIdsFromToken(token) {
+  const firebase = token.firebase || {};
+  const ids = Object.keys(firebase.identities || {}).filter((id) => id !== "email");
+  if (firebase.sign_in_provider && !ids.includes(firebase.sign_in_provider)) {
+    ids.unshift(firebase.sign_in_provider);
+  }
+  return ids;
 }
 
 function userPath(uid) {
