@@ -1,8 +1,10 @@
 "use strict";
 
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 const {GoogleAuth} = require("google-auth-library");
 const {onRequest} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {setGlobalOptions} = require("firebase-functions/v2");
 const logger = require("firebase-functions/logger");
 
@@ -17,6 +19,7 @@ const DEFAULT_CPU = process.env.SESSION_CPU || "1";
 const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
+const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
 const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 
 exports.api = onRequest({cors: true}, async (req, res) => {
@@ -93,6 +96,34 @@ exports.api = onRequest({cors: true}, async (req, res) => {
     const status = error.status || 500;
     res.status(status).json({error: error.publicMessage || "internal_error"});
   }
+});
+
+exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
+  const snap = await db.collectionGroup("sessions")
+      .where("status", "==", "running")
+      .get();
+  const now = Date.now();
+  const results = await Promise.allSettled(snap.docs.map(async (doc) => {
+    const session = doc.data();
+    if (!isIdleSession(session, now)) return false;
+    logger.info("stopping idle session", {
+      workspaceId: session.workspaceId,
+      sessionId: doc.id,
+      serviceId: session.serviceId,
+    });
+    await doc.ref.update({
+      status: "stopping",
+      stopReason: "idle_timeout",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
+    return true;
+  }));
+
+  const stopped = results.filter((result) => result.status === "fulfilled" && result.value).length;
+  const failed = results.filter((result) => result.status === "rejected");
+  failed.forEach((result) => logger.error("idle session stop failed", result.reason));
+  logger.info("idle session reap complete", {checked: snap.size, stopped, failed: failed.length});
 });
 
 function routeRequest(path) {
@@ -236,6 +267,10 @@ async function createSession(uid, workspaceId, payload) {
   const sessionRef = sessionCollection(workspaceId).doc();
   const region = cleanName(payload.region || DEFAULT_REGION);
   const resources = normalizeResources(payload);
+  const idleTimeoutMinutes = positiveNumber(
+      payload.idleTimeoutMinutes,
+      DEFAULT_IDLE_TIMEOUT_MINUTES,
+  );
   const serviceId = `session-${sessionRef.id.toLowerCase()}`;
   const session = {
     ownerUid: uid,
@@ -253,6 +288,14 @@ async function createSession(uid, workspaceId, payload) {
     serviceUrl: null,
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
     resources,
+    activeSocketCount: 0,
+    idleTimeoutMinutes,
+    lastActivityAt: now,
+    lastConnectedAt: null,
+    lastDisconnectedAt: null,
+    autoStoppedAt: null,
+    stopReason: null,
+    shutdownToken: crypto.randomBytes(24).toString("hex"),
     createdAt: now,
     updatedAt: now,
     restartedAt: null,
@@ -297,7 +340,7 @@ async function stopSession(uid, workspaceId, sessionId) {
     status: "stopping",
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await deleteSessionService(sessionRef, sessionSnap.data());
+  await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "manual"});
   return toClientDoc(await sessionRef.get());
 }
 
@@ -413,21 +456,22 @@ async function patchSessionService(sessionRef, session, options = {}) {
   }
 }
 
-async function deleteSessionService(sessionRef, session) {
+async function deleteSessionService(sessionRef, session, options = {}) {
   if (!session.serviceName) {
-    await markSessionStopped(sessionRef);
+    await markSessionStopped(sessionRef, options.reason);
     return;
   }
 
   try {
+    await requestRunnerShutdown(session);
     const client = await auth.getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const response = await client.request({url, method: "DELETE"});
     await waitForOperation(client, response.data);
-    await markSessionStopped(sessionRef);
+    await markSessionStopped(sessionRef, options.reason);
   } catch (error) {
     if (isGoogleNotFound(error)) {
-      await markSessionStopped(sessionRef);
+      await markSessionStopped(sessionRef, options.reason);
       return;
     }
 
@@ -439,14 +483,20 @@ async function deleteSessionService(sessionRef, session) {
   }
 }
 
-async function markSessionStopped(sessionRef) {
-  await sessionRef.update({
+async function markSessionStopped(sessionRef, reason) {
+  const stopped = {
     status: "stopped",
+    activeSocketCount: 0,
     serviceUrl: null,
     stoppedAt: admin.firestore.FieldValue.serverTimestamp(),
     lastError: null,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (reason) stopped.stopReason = reason;
+  if (reason === "idle_timeout") {
+    stopped.autoStoppedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+  await sessionRef.update(stopped);
 }
 
 function buildCloudRunService(workspace, session) {
@@ -480,8 +530,36 @@ function sessionRunnerEnv(session, options = {}) {
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
+    {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ].filter(Boolean);
+}
+
+async function requestRunnerShutdown(session) {
+  if (!session.serviceUrl || !session.shutdownToken) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}/shutdown`, {
+      method: "POST",
+      headers: {"x-shutdown-token": session.shutdownToken},
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      logger.warn("runner shutdown request failed", {
+        serviceId: session.serviceId,
+        status: response.status,
+      });
+    }
+  } catch (error) {
+    logger.warn("runner shutdown request failed", {
+      serviceId: session.serviceId,
+      error: cleanName(error.message || error),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function setPublicInvoker(client, serviceName) {
@@ -540,6 +618,35 @@ function resourceLimits(resources) {
   };
 }
 
+function isIdleSession(session, now) {
+  if (Number(session.activeSocketCount || 0) > 0) return false;
+  const idleTimeoutMinutes = positiveNumber(
+      session.idleTimeoutMinutes,
+      DEFAULT_IDLE_TIMEOUT_MINUTES,
+  );
+  const idleSince = timestampMillis(
+      session.lastDisconnectedAt ||
+      session.lastActivityAt ||
+      session.updatedAt ||
+      session.createdAt,
+  );
+  if (!idleSince) return false;
+  return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (typeof value === "number") return value;
+  return 0;
+}
+
 function storageFileToClientFile(file, queryPrefix) {
   const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
   if (!relativePath || relativePath.endsWith("/")) return null;
@@ -584,6 +691,11 @@ function serialize(value) {
 
 function cleanName(value) {
   return String(value || "").trim().slice(0, 256);
+}
+
+function positiveNumber(value, fallback) {
+  const number = Number(value || fallback);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
 function slugify(value) {

@@ -51,6 +51,8 @@ The runner stores a bounded raw-output replay buffer so a newly loaded iframe ca
 
 This persistence is scoped to the current Cloud Run container instance. A Cloud Run revision replacement, service stop, container crash, or scale-down still ends the PTY process.
 
+The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update `activeSocketCount`, `lastConnectedAt`, `lastDisconnectedAt`, and `lastActivityAt`; terminal input updates `lastActivityAt` with a short debounce to avoid one Firestore write per keystroke.
+
 By default, that process is the login shell:
 
 ```text
@@ -119,6 +121,25 @@ Cloud Run resource limits are derived from the session's CPU and memory settings
 
 Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped.
 
+Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
+
+## Idle Shutdown
+
+Sessions automatically stop after a period without a connected browser terminal. New session records store:
+
+- `activeSocketCount`
+- `lastActivityAt`
+- `lastConnectedAt`
+- `lastDisconnectedAt`
+- `idleTimeoutMinutes`
+- `shutdownToken`
+
+The default idle timeout is 60 minutes and can be changed for new sessions with the Cloud Functions environment variable `SESSION_IDLE_TIMEOUT_MINUTES`.
+
+The scheduled Cloud Function `reapIdleSessions` runs every 5 minutes. It scans running session documents, treats a session as idle when `activeSocketCount` is `0` and the latest disconnect or activity timestamp is older than `idleTimeoutMinutes`, then reuses the same Cloud Run deletion flow as manual stop. Idle-stopped sessions are marked with `stopReason: "idle_timeout"` and `autoStoppedAt`.
+
+Idle is defined as no connected terminal client, not no shell output. A long-running command continues while the browser terminal remains connected. If the browser is closed or disconnected past the timeout, the session service is deleted.
+
 ## Existing Sessions vs New Sessions
 
 Pushing a new `:latest` image affects new pulls, but existing Cloud Run services need a new revision to pick it up. For an existing session service, update the service image to create a fresh revision:
@@ -132,10 +153,13 @@ gcloud run services update SERVICE_NAME \
 
 New sessions use the image selected in the modal. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
 
+Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
+
 ## Design Decisions
 
 - Browser terminals should use a real terminal emulator. The app uses xterm.js so terminal programs and shell formatting render correctly.
 - The runner keeps the PTY alive across WebSocket disconnects so frontend re-renders, iframe reloads, and brief network drops do not discard in-progress terminal work.
+- Idle shutdown is controlled by Cloud Functions instead of browser timers so abandoned sessions are cleaned up even after the browser is closed.
 - Runtime image selection is user-facing but config-controlled. This prevents arbitrary image entry in the UI while keeping the path open for curated images.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
