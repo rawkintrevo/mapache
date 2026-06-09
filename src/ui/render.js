@@ -19,14 +19,48 @@ const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
 export function renderAuthScreen(root, handlers) {
   const signInButton = createElement("button", {type: "button"}, "Sign in with Google");
   signInButton.addEventListener("click", handlers.onSignIn);
+  const storyText = "Once, I got so angry at Anthropic for ruining all the open souce foundations...";
+  const followupText = "So I made Mapache Guache using only rage and spite.";
+  const closingText = "I hope you enjoy it.";
 
   replaceChildren(root, createElement("div", {className: "auth"}, [
-    createElement("section", {className: "auth-panel"}, [
-      createElement("h1", {}, "Pi Agents Cloud"),
-      createElement("p", {}, "Sign in to manage cloud terminal sessions."),
+    createElement("aside", {
+      ariaLabel: storyText,
+      className: "auth-story",
+      style: "--story-delay: 700ms;",
+    }, renderStoryWords(storyText)),
+    createElement("aside", {
+      ariaLabel: followupText,
+      className: "auth-story auth-story-followup",
+      style: "--story-delay: 6200ms;",
+    }, renderStoryWords(followupText)),
+    createElement("section", {
+      className: "auth-panel",
+      style: "--story-delay: 10400ms;",
+    }, [
+      createElement("p", {
+        ariaLabel: closingText,
+        className: "auth-panel-message",
+      }, renderStoryWords(closingText)),
       signInButton,
     ]),
   ]));
+}
+
+function renderStoryWords(text) {
+  let letterIndex = 0;
+
+  return text.split(" ").map((word) => createElement("span", {
+    ariaHidden: "true",
+    className: "story-word",
+  }, Array.from(word).map((letter) => {
+    const letterElement = createElement("span", {
+      className: "story-letter",
+      style: `--letter-delay: ${letterIndex * 45}ms;`,
+    }, letter);
+    letterIndex += 1;
+    return letterElement;
+  })));
 }
 
 export function renderFatalError(root, error) {
