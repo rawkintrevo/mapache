@@ -1,0 +1,46 @@
+export function createApiClient(getToken) {
+  return {
+    getWorkspaces: () => request(getToken, "/api/workspaces"),
+    createWorkspace: (body) => request(getToken, "/api/workspaces", {
+      method: "POST",
+      body,
+    }),
+    getSessions: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions`,
+    ),
+    createSession: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions`,
+        {method: "POST", body},
+    ),
+    resizeSession: (workspaceId, sessionId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/resize`,
+        {method: "POST", body},
+    ),
+    restartSession: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/restart`,
+        {method: "POST", body: {}},
+    ),
+  };
+}
+
+async function request(getToken, path, options = {}) {
+  const token = await getToken();
+  const response = await fetch(path, {
+    method: options.method || "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || response.statusText || "Request failed");
+  }
+  return data;
+}

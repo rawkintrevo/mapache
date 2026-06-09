@@ -1,0 +1,30 @@
+rules_version='2'
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsWorkspace(workspaceId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerUid == request.auth.uid;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /sessions/{sessionId} {
+        allow read: if ownsWorkspace(workspaceId);
+        allow write: if false;
+
+        match /terminalHistory/{entryId} {
+          allow read: if ownsWorkspace(workspaceId);
+          allow write: if ownsWorkspace(workspaceId);
+        }
+      }
+    }
+  }
+}
