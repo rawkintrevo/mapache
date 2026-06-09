@@ -69,6 +69,11 @@ The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This i
 curl -fsSL https://pi.dev/install.sh | sh
 ```
 
+It also adds search tools for terminal-first coding workflows:
+
+- `fd-find`, exposed as `fd` with a symlink to Debian's `fdfind` binary
+- `ripgrep`
+
 The image sets `TERMINAL_COMMAND=pi`, so new browser terminal connections open Pi directly instead of a login shell.
 
 Build and push the image with:
