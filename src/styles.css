@@ -207,29 +207,169 @@ main.drawer-collapsed {
 }
 
 .auth {
+  position: relative;
   min-height: 100vh;
   display: grid;
-  place-items: center;
+  place-items: end;
   padding: 24px;
+  overflow: hidden;
+  background:
+    linear-gradient(rgb(16 24 32 / 45%), rgb(16 24 32 / 45%)),
+    url("/jumbotron.gif") center / cover no-repeat;
+}
+
+.auth-story {
+  position: absolute;
+  top: clamp(24px, 9vh, 84px);
+  left: clamp(24px, 7vw, 88px);
+  width: min(560px, calc(100vw - 48px));
+  min-height: 156px;
+  padding: 30px 34px;
+  border: 1px solid rgb(255 255 255 / 42%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 18%);
+  box-shadow: 0 24px 70px rgb(16 24 32 / 28%);
+  color: #2f3b1f;
+  font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  font-size: clamp(24px, 3.4vw, 42px);
+  font-weight: 700;
+  line-height: 1.15;
+  opacity: 0;
+  transform: translateY(18px) scale(0.96);
+  animation: story-pop 520ms cubic-bezier(0.2, 0.9, 0.2, 1.18) var(--story-delay) both;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.auth-story-followup {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% + 18px)) scale(0.96);
+  animation-name: story-pop-centered;
+}
+
+.auth-story .story-word,
+.auth-panel-message .story-word {
+  display: inline-block;
+  margin-right: 0.32em;
+  white-space: nowrap;
+}
+
+.auth-story .story-letter,
+.auth-panel-message .story-letter {
+  display: inline-block;
+  opacity: 0;
+  animation: story-letter 280ms ease-out calc(var(--story-delay) + 480ms + var(--letter-delay)) both;
 }
 
 .auth-panel {
   width: min(420px, 100%);
   padding: 28px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 18%);
+  border: 1px solid rgb(255 255 255 / 42%);
   border-radius: 8px;
+  box-shadow: 0 24px 70px rgb(16 24 32 / 28%);
+  opacity: 0;
+  transform: translateY(18px) scale(0.96);
+  animation: story-pop 520ms cubic-bezier(0.2, 0.9, 0.2, 1.18) var(--story-delay) both;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
-.auth-panel h1 {
-  margin-bottom: 10px;
-  font-size: 24px;
+.auth-panel p {
+  margin: 0 0 18px;
+  color: #2f3b1f;
+  font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  font-size: clamp(24px, 3.4vw, 38px);
+  font-weight: 700;
+  line-height: 1.15;
 }
 
-.auth-panel p,
+.auth-panel button {
+  display: block;
+  margin-left: auto;
+  background: #2f3b1f;
+  color: white;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: auth-button-in 320ms ease-out calc(var(--story-delay) + 1400ms) both;
+}
+
+.auth-panel button:hover {
+  background: #243018;
+}
+
 .empty,
 .subtle {
   color: var(--muted);
+}
+
+@keyframes story-pop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes story-letter {
+  from {
+    opacity: 0;
+    transform: translateY(0.25em);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-button-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes story-pop-centered {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 18px)) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (max-width: 760px) {
+  .auth {
+    align-content: end;
+    gap: 16px;
+  }
+
+  .auth-story {
+    position: static;
+    width: min(420px, 100%);
+    min-height: 132px;
+    padding: 24px;
+    font-size: clamp(21px, 8vw, 30px);
+  }
+
+  .auth-story-followup {
+    transform: translateY(18px) scale(0.96);
+    animation-name: story-pop;
+  }
 }
 
 .toolbar,
