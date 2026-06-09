@@ -1,7 +1,8 @@
 FROM node:24-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl git openssh-client python3 make g++ \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl fd-find git openssh-client python3 make g++ ripgrep \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
   && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://pi.dev/install.sh | sh
