@@ -1,4 +1,15 @@
-import {createElement as createLucideIcon, Menu, PanelLeftClose, SquareStop} from "lucide";
+import {
+  ChevronDown,
+  ChevronRight,
+  createElement as createLucideIcon,
+  FileText,
+  Folder,
+  FolderOpen,
+  Menu,
+  PanelLeftClose,
+  RefreshCw,
+  SquareStop,
+} from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
 import {sessionImages} from "../config/sessionImages.js";
 
@@ -92,10 +103,13 @@ function renderSidebar(props) {
     state,
     onCreateWorkspace,
     onOpenSessionModal,
+    onRefreshWorkspaceFiles,
+    onSelectWorkspaceFile,
     onSelectSession,
     onSelectWorkspace,
     onStopSession,
     onToggleDrawer,
+    onToggleWorkspaceFileDir,
   } = props;
 
   const toggleButton = createElement("button", {
@@ -158,6 +172,13 @@ function renderSidebar(props) {
     ]),
     createElement("section", {className: "drawer-section"}, [
       createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Files"),
+        createFilesRefreshButton(state, onRefreshWorkspaceFiles),
+      ]),
+      renderWorkspaceFileTree(state, onToggleWorkspaceFileDir, onSelectWorkspaceFile),
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
         createElement("h3", {}, "Sessions"),
         createSessionButton(state, onOpenSessionModal),
       ]),
@@ -184,6 +205,18 @@ function createSessionButton(state, onOpenSessionModal) {
     type: "button",
   }, "+");
   button.addEventListener("click", onOpenSessionModal);
+  return button;
+}
+
+function createFilesRefreshButton(state, onRefreshWorkspaceFiles) {
+  const button = createElement("button", {
+    ariaLabel: "Refresh files",
+    className: "icon-button compact secondary",
+    disabled: state.busy || !state.selectedWorkspaceId,
+    title: "Refresh files",
+    type: "button",
+  }, renderIcon(RefreshCw));
+  button.addEventListener("click", onRefreshWorkspaceFiles);
   return button;
 }
 
@@ -248,6 +281,114 @@ function renderDrawerSessionList(state, onSelectSession, onStopSession) {
       session.status === "running" ? renderStopSessionButton(state, session, onStopSession) : null,
     ]);
   }));
+}
+
+function renderWorkspaceFileTree(state, onToggleWorkspaceFileDir, onSelectWorkspaceFile) {
+  if (!state.selectedWorkspaceId) {
+    return createElement("p", {className: "empty"}, "Select a workspace to view files.");
+  }
+
+  if (state.workspaceFilesWorkspaceId !== state.selectedWorkspaceId) {
+    return createElement("p", {className: "empty"}, "Refresh files for this workspace.");
+  }
+
+  if (state.workspaceFilesError) {
+    return createElement("p", {className: "file-error"}, state.workspaceFilesError);
+  }
+
+  if (!state.workspaceFiles.length) {
+    return createElement("p", {className: "empty"}, "No files synced yet.");
+  }
+
+  const tree = buildFileTree(state.workspaceFiles);
+  return createElement("div", {className: "file-tree"}, [
+    ...renderFileNodes(tree.children, {
+      expandedPaths: state.expandedFilePaths,
+      onSelectWorkspaceFile,
+      onToggleWorkspaceFileDir,
+      selectedPath: state.selectedWorkspaceFilePath,
+    }),
+    ...renderFiles(tree.files, 0, {
+      onSelectWorkspaceFile,
+      selectedPath: state.selectedWorkspaceFilePath,
+    }),
+    state.workspaceFilesTruncated ?
+      createElement("p", {className: "empty"}, "Showing first 500 files.") :
+      null,
+  ]);
+}
+
+function buildFileTree(files) {
+  const root = {children: new Map(), files: [], name: "", path: ""};
+  for (const entry of files) {
+    const parts = String(entry.path || "").split("/").filter(Boolean);
+    if (!parts.length) continue;
+    let current = root;
+    const folderParts = entry.type === "directory" ? parts : parts.slice(0, -1);
+    folderParts.forEach((part) => {
+      const path = current.path ? `${current.path}/${part}` : part;
+      if (!current.children.has(part)) {
+        current.children.set(part, {children: new Map(), files: [], name: part, path});
+      }
+      current = current.children.get(part);
+    });
+    if (entry.type !== "directory") {
+      current.files.push(entry);
+    }
+  }
+  return root;
+}
+
+function renderFileNodes(children, options, depth = 0) {
+  const folders = Array.from(children.values())
+      .sort((left, right) => left.name.localeCompare(right.name));
+  return folders.flatMap((folder) => {
+    const expanded = options.expandedPaths.has(folder.path);
+    const button = createElement("button", {
+      className: "file-row folder-row",
+      style: `--depth: ${depth}`,
+      title: folder.path,
+      type: "button",
+    }, [
+      renderIcon(expanded ? ChevronDown : ChevronRight),
+      renderIcon(expanded ? FolderOpen : Folder),
+      createElement("span", {className: "file-name"}, folder.name),
+      createElement("span", {className: "file-count"}, String(countFolderFiles(folder))),
+    ]);
+    button.addEventListener("click", () => options.onToggleWorkspaceFileDir(folder.path));
+
+    if (!expanded) return [button];
+    return [
+      button,
+      ...renderFileNodes(folder.children, options, depth + 1),
+      ...renderFiles(folder.files, depth + 1, options),
+    ];
+  });
+}
+
+function renderFiles(files, depth, options) {
+  return files
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((file) => {
+        const button = createElement("button", {
+          className: `file-row ${file.path === options.selectedPath ? "active" : ""}`,
+          style: `--depth: ${depth}`,
+          title: `${file.path}${file.updatedAt ? `\nUpdated ${formatDate(file.updatedAt)}` : ""}`,
+          type: "button",
+        }, [
+          createElement("span", {className: "file-spacer"}),
+          renderIcon(FileText),
+          createElement("span", {className: "file-name"}, file.name),
+          createElement("span", {className: "file-size"}, formatBytes(file.size)),
+        ]);
+        button.addEventListener("click", () => options.onSelectWorkspaceFile(file.path));
+        return button;
+      });
+}
+
+function countFolderFiles(folder) {
+  return folder.files.length +
+    Array.from(folder.children.values()).reduce((total, child) => total + countFolderFiles(child), 0);
 }
 
 function renderStopSessionButton(state, session, onStopSession) {
@@ -444,4 +585,13 @@ function metric(label, value) {
 
 function formatMemory(value) {
   return value.replace("Gi", " GiB");
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const amount = bytes / (1024 ** index);
+  return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
 }

@@ -16,7 +16,8 @@ const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
 const DEFAULT_CPU = process.env.SESSION_CPU || "1";
 const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
-const DEFAULT_BUCKET = process.env.SESSION_BUCKET || "";
+const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
+const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 
 exports.api = onRequest({cors: true}, async (req, res) => {
   try {
@@ -40,6 +41,11 @@ exports.api = onRequest({cors: true}, async (req, res) => {
 
     if (req.method === "POST" && route.name === "workspaces") {
       res.status(201).json({workspace: await createWorkspace(user.uid, req.body || {})});
+      return;
+    }
+
+    if (req.method === "GET" && route.name === "workspaceFiles") {
+      res.json(await listWorkspaceFiles(user.uid, route.workspaceId));
       return;
     }
 
@@ -93,6 +99,9 @@ function routeRequest(path) {
   const parts = path.replace(/^\/api\/?/, "/").split("/").filter(Boolean);
   if (parts.length === 1 && parts[0] === "me") return {name: "me"};
   if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
+    return {name: "workspaceFiles", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
     return {name: "sessions", workspaceId: parts[1]};
   }
@@ -199,6 +208,28 @@ async function listSessions(uid, workspaceId) {
   return snap.docs.map(toClientDoc);
 }
 
+async function listWorkspaceFiles(uid, workspaceId) {
+  const workspace = await requireWorkspace(uid, workspaceId);
+  const bucketName = workspace.bucket || DEFAULT_BUCKET;
+  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
+  if (!bucketName || !prefix) return {files: [], truncated: false};
+
+  const queryPrefix = `${prefix}/`;
+  const [files, nextQuery] = await admin.storage().bucket(bucketName).getFiles({
+    autoPaginate: false,
+    maxResults: 500,
+    prefix: queryPrefix,
+  });
+
+  return {
+    files: files
+        .map((file) => storageFileToClientFile(file, queryPrefix))
+        .filter(Boolean)
+        .sort((left, right) => left.path.localeCompare(right.path)),
+    truncated: Boolean(nextQuery),
+  };
+}
+
 async function createSession(uid, workspaceId, payload) {
   const workspace = await requireWorkspace(uid, workspaceId);
   const now = admin.firestore.FieldValue.serverTimestamp();
@@ -220,6 +251,7 @@ async function createSession(uid, workspaceId, payload) {
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
+    workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
     resources,
     createdAt: now,
     updatedAt: now,
@@ -345,13 +377,14 @@ async function patchSessionService(sessionRef, session, options = {}) {
   try {
     const client = await auth.getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
-    const env = [{name: "RESTART_NONCE", value: Date.now().toString()}];
     const body = {
       template: {
         containers: [{
           image: session.image,
           resources: {limits: resourceLimits(session.resources)},
-          env: options.restart ? env : undefined,
+          env: options.restart ? sessionRunnerEnv(session, {
+            restartNonce: Date.now().toString(),
+          }) : undefined,
         }],
       },
     };
@@ -428,15 +461,27 @@ function buildCloudRunService(workspace, session) {
         ports: [{containerPort: 8080}],
         resources: {limits: resourceLimits(session.resources)},
         env: [
-          {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
-          {name: "WORKSPACE_ID", value: workspace.id},
-          {name: "SESSION_ID", value: session.runnerSessionId},
-          {name: "STORAGE_BUCKET", value: workspace.bucket || DEFAULT_BUCKET || ""},
-          {name: "STORAGE_PREFIX", value: workspace.storagePrefix || ""},
+          ...sessionRunnerEnv({
+            ...session,
+            workspaceId: workspace.id,
+            workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
+            workspaceStoragePrefix: workspace.storagePrefix,
+          }),
         ],
       }],
     },
   };
+}
+
+function sessionRunnerEnv(session, options = {}) {
+  return [
+    {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
+    {name: "WORKSPACE_ID", value: session.workspaceId || ""},
+    {name: "SESSION_ID", value: session.runnerSessionId || ""},
+    {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
+    options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
+  ].filter(Boolean);
 }
 
 async function setPublicInvoker(client, serviceName) {
@@ -495,6 +540,30 @@ function resourceLimits(resources) {
   };
 }
 
+function storageFileToClientFile(file, queryPrefix) {
+  const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
+  if (!relativePath || relativePath.endsWith("/")) return null;
+  if (relativePath.endsWith(`/${DIRECTORY_MARKER_FILE}`)) {
+    const directoryPath = relativePath.slice(0, -(`/${DIRECTORY_MARKER_FILE}`).length);
+    if (!directoryPath) return null;
+    return {
+      path: directoryPath,
+      name: directoryPath.split("/").pop(),
+      type: "directory",
+      size: 0,
+      updatedAt: "",
+    };
+  }
+  const metadata = file.metadata || {};
+  return {
+    path: relativePath,
+    name: relativePath.split("/").pop(),
+    type: "file",
+    size: Number(metadata.size || 0),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
 function toClientDoc(doc) {
   return {id: doc.id, ...serialize(doc.data())};
 }
@@ -520,6 +589,19 @@ function cleanName(value) {
 function slugify(value) {
   return cleanName(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
     "workspace";
+}
+
+function normalizeStoragePrefix(value) {
+  return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function firebaseStorageBucket() {
+  try {
+    const config = JSON.parse(process.env.FIREBASE_CONFIG || "{}");
+    return cleanName(config.storageBucket || "");
+  } catch (error) {
+    return "";
+  }
 }
 
 function cloudRunServiceName(region, serviceId) {

@@ -307,6 +307,69 @@ main.drawer-collapsed {
   color: var(--danger);
 }
 
+.file-tree {
+  display: grid;
+  gap: 2px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 2px 0;
+}
+
+.file-error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #f4c7c3;
+  border-radius: 6px;
+  background: #fff3f2;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: 18px 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px 5px calc(8px + var(--depth, 0) * 16px);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.file-row:hover {
+  background: #eef2f6;
+}
+
+.file-row.active {
+  background: #e9f6f2;
+  color: var(--accent-dark);
+}
+
+.file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.file-count,
+.file-size {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.file-spacer {
+  width: 18px;
+  height: 18px;
+}
+
 .workspace-select {
   display: grid;
   gap: 5px;

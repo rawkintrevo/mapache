@@ -5,6 +5,8 @@ export function createElement(tag, props = {}, children = []) {
     if (value === undefined || value === null || value === false) continue;
     if (key === "className") {
       element.className = value;
+    } else if (key === "style" && typeof value === "string") {
+      element.setAttribute("style", value);
     } else if (key === "dataset") {
       Object.assign(element.dataset, value);
     } else if (key in element) {
