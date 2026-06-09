@@ -5,7 +5,7 @@ const path = require("path");
 const http = require("http");
 const express = require("express");
 const pty = require("node-pty");
-const {WebSocketServer} = require("ws");
+const {WebSocket, WebSocketServer} = require("ws");
 const {Storage} = require("@google-cloud/storage");
 const admin = require("firebase-admin");
 
@@ -16,6 +16,7 @@ const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
 const workspaceId = process.env.WORKSPACE_ID || "";
 const sessionId = process.env.SESSION_ID || "";
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MS || 30000);
+const terminalReplayLimit = positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000);
 const directoryMarkerFile = ".mapahce-directory";
 
 admin.initializeApp();
@@ -25,6 +26,7 @@ const storage = new Storage();
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
+const terminalSession = createTerminalSession();
 
 app.use(
     "/xterm",
@@ -39,47 +41,124 @@ app.get("/healthz", (req, res) => {
   res.json({ok: true, workspaceId, sessionId, bucketName, prefix});
 });
 
-wss.on("connection", (socket) => {
-  const command = terminalCommand();
-  const term = pty.spawn(command.file, command.args, {
+wss.on("connection", (socket, request) => {
+  terminalSession.attach(socket, shouldReplayTerminal(request));
+
+  socket.on("message", (raw) => {
+    terminalSession.handleMessage(raw);
+  });
+
+  socket.on("close", () => {
+    terminalSession.detach(socket);
+  });
+});
+
+function createTerminalSession() {
+  const sockets = new Set();
+  let term = null;
+  let outputBuffer = "";
+
+  return {
+    attach(socket, replayOutput) {
+      const activeTerm = ensureTerm();
+      sockets.add(socket);
+      if (replayOutput && outputBuffer) {
+        sendTerminalMessage(socket, {type: "data", data: outputBuffer});
+      }
+      return activeTerm;
+    },
+    detach(socket) {
+      sockets.delete(socket);
+    },
+    handleMessage(raw) {
+      handleTerminalMessage(ensureTerm(), raw);
+    },
+  };
+
+  function ensureTerm() {
+    if (term) return term;
+
+    outputBuffer = "";
+
+    const command = terminalCommand();
+    term = spawnTerminal(command);
+
+    appendHistory("system", `opened ${command.display}`);
+
+    term.onData((data) => {
+      appendToBuffer(data);
+      broadcast({type: "data", data});
+      appendHistory("stdout", data);
+    });
+
+    term.onExit(({exitCode: code}) => {
+      appendHistory("system", `closed with exit code ${code}`);
+      broadcast({type: "exit", exitCode: code});
+      closeSockets();
+      term = null;
+    });
+
+    return term;
+  }
+
+  function appendToBuffer(data) {
+    outputBuffer += data;
+    if (outputBuffer.length > terminalReplayLimit) {
+      outputBuffer = outputBuffer.slice(outputBuffer.length - terminalReplayLimit);
+    }
+  }
+
+  function broadcast(message) {
+    for (const socket of sockets) {
+      sendTerminalMessage(socket, message);
+    }
+  }
+
+  function closeSockets() {
+    for (const socket of sockets) {
+      socket.close();
+    }
+  }
+}
+
+function shouldReplayTerminal(request) {
+  try {
+    const url = new URL(request.url, "http://localhost");
+    return url.searchParams.get("replay") !== "0";
+  } catch (error) {
+    return true;
+  }
+}
+
+function spawnTerminal(command) {
+  return pty.spawn(command.file, command.args, {
     name: "xterm-256color",
     cols: 100,
     rows: 32,
     cwd: workspaceDir,
     env: {...process.env, TERM: "xterm-256color"},
   });
+}
 
-  appendHistory("system", `opened ${command.display}`);
-
-  term.onData((data) => {
-    socket.send(JSON.stringify({type: "data", data}));
-    appendHistory("stdout", data);
-  });
-
-  term.onExit(({exitCode}) => {
-    appendHistory("system", `closed with exit code ${exitCode}`);
-    socket.close();
-  });
-
-  socket.on("message", (raw) => {
-    try {
-      const message = JSON.parse(raw.toString());
-      if (message.type === "resize") {
-        term.resize(Number(message.cols || 100), Number(message.rows || 32));
-        return;
-      }
-      if (message.type === "data") {
-        term.write(String(message.data || ""));
-      }
-    } catch (error) {
-      term.write(raw.toString());
+function handleTerminalMessage(term, raw) {
+  try {
+    const message = JSON.parse(raw.toString());
+    if (message.type === "resize") {
+      term.resize(Number(message.cols || 100), Number(message.rows || 32));
+      return;
     }
-  });
+    if (message.type === "data") {
+      term.write(String(message.data || ""));
+    }
+  } catch (error) {
+    term.write(raw.toString());
+  }
+}
 
-  socket.on("close", () => {
-    term.kill();
-  });
-});
+function sendTerminalMessage(socket, message) {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify(message));
+}
 
 ensureWorkspace()
     .then(syncDown)
@@ -175,6 +254,11 @@ function normalizePrefix(value) {
   return String(value || "").replace(/^\/+|\/+$/g, "");
 }
 
+function positiveNumber(value, fallback) {
+  const number = Number(value || fallback);
+  return Number.isFinite(number) ? Math.max(0, number) : fallback;
+}
+
 function terminalCommand() {
   const command = String(process.env.TERMINAL_COMMAND || "").trim();
   if (command) {
@@ -238,29 +322,26 @@ function renderTerminalPage() {
           selectionBackground: "#334155",
         },
       });
-      const socket = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/terminal");
+      let socket = null;
+      let reconnectTimer = null;
+      let replayOnConnect = true;
+      let terminalExited = false;
 
       term.open(terminalElement);
       term.focus();
-
-      socket.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === "data") term.write(message.data);
-      });
 
       term.onData((data) => {
         sendData(data);
       });
 
       term.onResize(({cols, rows}) => {
-        if (socket.readyState === WebSocket.OPEN) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({type: "resize", cols, rows}));
         }
       });
 
       terminalElement.addEventListener("pointerdown", () => term.focus());
       window.addEventListener("resize", resizeTerminal);
-      socket.addEventListener("open", resizeTerminal);
 
       function resizeTerminal() {
         const rect = terminalElement.getBoundingClientRect();
@@ -270,12 +351,41 @@ function renderTerminalPage() {
       }
 
       function sendData(data) {
-        if (socket.readyState === WebSocket.OPEN) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({type: "data", data}));
         }
       }
 
+      function connectTerminal() {
+        const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+        const replay = replayOnConnect ? "1" : "0";
+        socket = new WebSocket(protocol + location.host + "/terminal?replay=" + replay);
+        replayOnConnect = false;
+
+        socket.addEventListener("open", () => {
+          resizeTerminal();
+        });
+
+        socket.addEventListener("message", (event) => {
+          const message = JSON.parse(event.data);
+          if (message.type === "data") term.write(message.data);
+          if (message.type === "exit") {
+            terminalExited = true;
+            term.write("\\r\\n[process exited with code " + message.exitCode + "]\\r\\n");
+          }
+        });
+
+        socket.addEventListener("close", () => {
+          if (terminalExited || reconnectTimer) return;
+          reconnectTimer = window.setTimeout(() => {
+            reconnectTimer = null;
+            connectTerminal();
+          }, 1000);
+        });
+      }
+
       resizeTerminal();
+      connectTerminal();
     </script>
   </body>
 </html>`;
