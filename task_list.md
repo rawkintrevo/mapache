@@ -196,12 +196,13 @@ Before implementation tasks, read:
   - Git conflict results are surfaced as Git state, not custom merge logic.
   - Completed: 2026-06-10. Added protected runner/backend pull plumbing plus a frontend Pull control that refreshes Git state and surfaces merge issues through returned Git status.
 
-- [ ] 21. **Add stage and unstage action plumbing** - medium (gpt-5.4)
+- [x] 21. **Add stage and unstage action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner supports staging and unstaging selected files.
   - Backend validates paths and verifies ownership.
   - UI can stage/unstage files from the Git panel.
   - Path validation prevents escaping `/workspace`.
+  - Completed: 2026-06-10. Added protected runner/backend stage and unstage routes with workspace-relative path validation, plus Git panel file rows with Stage/Unstage controls.
 
 - [ ] 22. **Add commit action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:

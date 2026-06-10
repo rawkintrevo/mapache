@@ -542,13 +542,16 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
       "This workspace is not Git-backed." :
       "Git status is unavailable.");
   } else {
-    body = createElement("div", {className: "details git-status-details"}, [
-      metric("Branch", data.branch || ""),
-      metric("Commit", data.commit ? data.commit.slice(0, 7) : ""),
-      metric("Ahead", formatGitCount(data.ahead)),
-      metric("Behind", formatGitCount(data.behind)),
-      metric("Dirty", formatGitDirtySummary(data.dirty)),
-      metric("Conflicted", data.conflicted ? "Yes" : "No"),
+    body = createElement("div", {className: "git-status-body"}, [
+      createElement("div", {className: "details git-status-details"}, [
+        metric("Branch", data.branch || ""),
+        metric("Commit", data.commit ? data.commit.slice(0, 7) : ""),
+        metric("Ahead", formatGitCount(data.ahead)),
+        metric("Behind", formatGitCount(data.behind)),
+        metric("Dirty", formatGitDirtySummary(data.dirty)),
+        metric("Conflicted", data.conflicted ? "Yes" : "No"),
+      ]),
+      renderGitFileList(data.files || [], status.loading, handlers),
     ]);
   }
 
@@ -563,6 +566,56 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
     status.actionMessage ? createElement("p", {className: "subtle"}, status.actionMessage) : null,
     body,
   ]);
+}
+
+function renderGitFileList(files, busy, handlers) {
+  if (!files.length) {
+    return createElement("p", {className: "subtle"}, "No changed files.");
+  }
+
+  return createElement("div", {className: "git-file-list"}, files.map((file) => {
+    const actions = [];
+    if (file.unstaged || file.untracked || file.conflicted) {
+      const stageButton = createElement("button", {
+        className: "secondary",
+        disabled: busy || !handlers.onStageGitPath,
+        type: "button",
+      }, "Stage");
+      if (handlers.onStageGitPath) {
+        stageButton.addEventListener("click", () => handlers.onStageGitPath(file.path));
+      }
+      actions.push(stageButton);
+    }
+    if (file.staged) {
+      const unstageButton = createElement("button", {
+        className: "secondary",
+        disabled: busy || !handlers.onUnstageGitPath,
+        type: "button",
+      }, "Unstage");
+      if (handlers.onUnstageGitPath) {
+        unstageButton.addEventListener("click", () => handlers.onUnstageGitPath(file.path));
+      }
+      actions.push(unstageButton);
+    }
+
+    return createElement("div", {className: "git-file-row"}, [
+      createElement("div", {className: "git-file-meta"}, [
+        createElement("strong", {}, file.path || ""),
+        createElement("span", {className: "subtle"}, formatGitFileStatus(file)),
+      ]),
+      createElement("div", {className: "git-file-actions"}, actions),
+    ]);
+  }));
+}
+
+function formatGitFileStatus(file) {
+  if (!file) return "";
+  const parts = [];
+  if (file.conflicted) parts.push("conflicted");
+  if (file.untracked) parts.push("untracked");
+  if (file.staged) parts.push("staged");
+  if (file.unstaged) parts.push("unstaged");
+  return parts.join(" · ") || "changed";
 }
 
 function formatGitCount(value) {
@@ -766,7 +819,14 @@ function renderSessionList(state, {onSelectSession}) {
   }));
 }
 
-function renderSessionDetail(session, {state, onResizeSession, onRestartSession, onPullGit}) {
+function renderSessionDetail(session, {
+  state,
+  onResizeSession,
+  onRestartSession,
+  onPullGit,
+  onStageGitPath,
+  onUnstageGitPath,
+}) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
       "resizeMemory",
@@ -821,7 +881,11 @@ function renderSessionDetail(session, {state, onResizeSession, onRestartSession,
       metric("Service", session.serviceId || ""),
       metric("Updated", formatDate(session.updatedAt)),
     ]),
-    renderGitStatusPanel(session, state.gitStatus, {onPullGit}),
+    renderGitStatusPanel(session, state.gitStatus, {
+      onPullGit,
+      onStageGitPath,
+      onUnstageGitPath,
+    }),
   ]);
 }
 
