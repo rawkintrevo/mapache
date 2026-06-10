@@ -326,11 +326,12 @@ Before implementation tasks, read:
   - Branch protection failures are surfaced as GitHub/Git state, not custom policy logic.
   - Completed: 2026-06-10. Added runner-backed PR branch preparation and push flow, backend GitHub App PR creation with repo-template body defaults, plus an Open PR modal/action in the Git panel for connected repositories.
 
-- [ ] 38. **Add focused regression checklist for GitHub-backed workspaces** - easy (gpt-5.4-mini)
+- [x] 38. **Add focused regression checklist for GitHub-backed workspaces** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Add a docs checklist covering blank workspace regression, one-active-session enforcement, public GitHub clone, exact checkout, `.git` archive restore, worktree deletion sync, ignored paths, and Git panel actions.
   - Include commands to validate frontend, functions, and runner syntax/build checks.
   - Keep checklist concise enough to use before deployment.
+  - Completed: 2026-06-10. Added `docs/guides/github-workspace-regression-checklist.md` and linked it from the GitHub workspace design doc as the compact pre-deploy validation checklist.
 
 ## Future Larger Work
 

@@ -373,6 +373,7 @@ This feature changes runner behavior, workspace sync expectations, and session p
 
 - `docs/app-overview.md` should summarize the new workspace source model.
 - `docs/runtime-containers.md` should describe `.git` archive behavior and GitHub reconstruction order.
+- `docs/guides/github-workspace-regression-checklist.md` should be used as the compact pre-deploy validation list.
 - Existing Cloud Run sessions will not pick up runner changes automatically.
 - New runner images require a Cloud Build push.
 - Existing session services need a new Cloud Run revision if they must adopt the new runner behavior without being recreated.
