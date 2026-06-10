@@ -327,7 +327,7 @@ function renderWorkspaceRow(workspace, isActive, busy, onSelectWorkspace, onOpen
       createElement("span", {}, workspace.name),
       createElement("span", {className: "pill"}, workspace.id.slice(0, 5)),
     ]),
-    createElement("span", {className: "subtle"}, workspace.storagePrefix || ""),
+    createElement("span", {className: "subtle"}, workspaceSourceSummary(workspace)),
   ]);
   selectButton.addEventListener("click", () => onSelectWorkspace(workspace.id));
 
@@ -515,8 +515,21 @@ function renderWorkspaceHeader(workspace) {
 
   return createElement("div", {}, [
     createElement("h1", {}, workspace.name),
-    createElement("p", {className: "subtle"}, workspace.storagePrefix || ""),
+    createElement("p", {className: "subtle"}, workspaceSourceSummary(workspace)),
   ]);
+}
+
+function workspaceSourceSummary(workspace) {
+  if (!workspace) return "";
+  const source = workspace.source || {type: "blank"};
+  if (source.type !== "github") {
+    return workspace.storagePrefix || "";
+  }
+
+  const repo = [source.owner, source.repo].filter(Boolean).join("/") || "GitHub repo";
+  const branch = source.resolvedBranch || source.requestedBranch || "main";
+  const sha = (source.resolvedCommit || source.requestedCommit || "").slice(0, 7);
+  return [repo, branch, sha ? sha : null].filter(Boolean).join(" · ");
 }
 
 function renderSessionForm({state, onCreateSession}) {
