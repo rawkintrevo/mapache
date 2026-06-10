@@ -235,31 +235,32 @@ Before implementation tasks, read:
   - Record decisions in the GitHub App planning doc before implementation continues.
   - Completed: 2026-06-10. Decisions recorded in `adrs/adr-0001-github-app-ownership-and-permissions.md`: owner is `ata-systems` org, permissions are Contents (read/write), Metadata (read), Pull Requests (read/write), scope is all repositories.
 
-- [ ] 26. **Create the GitHub App in GitHub** - human
+- [x] 26. **Create the GitHub App in GitHub** - human
   - Acceptance criteria:
   - Create the GitHub App with the chosen owner and permission policy.
   - Configure callback/webhook URLs for the deployed `pi-agents-cloud` environment or clearly mark them pending if backend routes do not exist yet.
-  - Generate the app private key and record where it is stored, without committing secret values.
-  - Record the GitHub App ID, client ID, and installation URL location in private operational notes or deployment configuration.
+  - Generate the app private key and record where it is stored, without committing secret values. (in .secrets/)
+  - Record the GitHub App ID, client ID, and installation URL location in private operational notes or deployment configuration. (in .secrets/github_app.txt)
 
-- [ ] 27. **Configure GitHub App secrets for Firebase/Cloud Functions** - human
+- [x] 27. **Configure GitHub App secrets for Firebase/Cloud Functions** - human
   - Acceptance criteria:
   - Store GitHub App private key, app ID, client ID, client secret if needed, and webhook secret in the approved secret manager or Firebase Functions secret mechanism.
   - Confirm no secret values are committed to this repository.
   - Record the deploy-time secret names in docs or deployment notes.
 
-- [ ] 28. **Install the GitHub App on a test repository** - human
+- [x] 28. **Install the GitHub App on a test repository** - human
   - Acceptance criteria:
   - Install the app on at least one low-risk test repository.
   - Confirm the app has access only to intended repositories.
   - Confirm the installing user/account can be used for end-to-end repo picker and clone testing.
 
-- [ ] 29. **Create GitHub connection metadata schema** - easy (gpt-5.4-mini)
+- [x] 29. **Create GitHub connection metadata schema** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Define Firestore document shapes for GitHub installation/user/repo metadata.
   - Do not store secret token values in docs.
   - Include ownership and permission boundaries.
   - Add docs/tests where appropriate.
+  - Completed: 2026-06-10. Added `docs/guides/github-connection-metadata-schema.md` with recommended Firestore shapes for GitHub users, installations, repositories, and workspace source metadata, plus ownership and permission boundaries.
 
 - [ ] 30. **Add GitHub repo picker API placeholder with clear unsupported response** - easy (gpt-5.4-mini)
   - Acceptance criteria:
