@@ -32,10 +32,12 @@ Installed OS packages currently include:
 - `ca-certificates`
 - `curl`
 - `git`
+- `gzip`
 - `openssh-client`
 - `python3`
 - `make`
 - `g++`
+- `tar`
 
 `curl` is intentionally installed by default because users expect it in the browser terminal, and installing it manually inside ephemeral sessions is a poor default experience.
 
@@ -99,13 +101,24 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 - `STORAGE_PREFIX`
 - `WORKSPACE_ID`
 - `SESSION_ID`
+- `SYNC_INTERVAL_MS`, defaulting to `30000`
+- `ARCHIVE_SYNC_INTERVAL_MS`, defaulting to `300000`
 
 The backend sets these when provisioning the Cloud Run session service.
 `STORAGE_BUCKET` comes from the workspace record when present, then falls back to `SESSION_BUCKET`, then Firebase's configured default `storageBucket`.
 
-The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs up every 30 seconds.
+The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
 
 Cloud Storage does not store real directories, so the runner uploads a `.mapahce-directory` marker object inside each synced directory. The Files API maps those marker objects to `type: "directory"` entries and filters them out of the displayed file list. Existing Cloud Run sessions need a new runner revision before empty directories can appear in the sidebar.
+
+High-cardinality runtime directories are not synced as individual Cloud Storage objects:
+
+- `/workspace/node_modules`
+- `/root/.pi`
+
+The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted. Archive objects live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
+
+This keeps dependency installs and Pi Agent state available to later sessions without creating thousands of Cloud Storage objects for `node_modules`. It also means dependency changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
 
 ## Provisioning
 
@@ -121,7 +134,9 @@ Cloud Run resource limits are derived from the session's CPU and memory settings
 
 Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped.
 
-Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
+Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
+
+The shutdown request timeout defaults to 120 seconds because archive-backed dependency directories can be large. New deployments can override it with `RUNNER_SHUTDOWN_TIMEOUT_MS`.
 
 ## Idle Shutdown
 
@@ -163,4 +178,5 @@ Existing services created before idle shutdown support do not have `SESSION_SHUT
 - Runtime image selection is user-facing but config-controlled. This prevents arbitrary image entry in the UI while keeping the path open for curated images.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
+- Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.
