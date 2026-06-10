@@ -99,6 +99,8 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 
 - `STORAGE_BUCKET`
 - `STORAGE_PREFIX`
+- `PI_HOME_STORAGE_BUCKET`
+- `PI_HOME_STORAGE_PREFIX`
 - `WORKSPACE_ID`
 - `SESSION_ID`
 - `SYNC_INTERVAL_MS`, defaulting to `30000`
@@ -152,11 +154,15 @@ High-cardinality runtime directories are not synced as individual Cloud Storage 
 - `/workspace/.git` for GitHub-backed workspaces
 - `/root/.pi`
 
-The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted. Archive objects live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
+The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted.
+
+`/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
+
+`/root/.pi` is user-scoped so Pi auth and agent state follow the authenticated user across workspaces. The backend passes `PI_HOME_STORAGE_BUCKET` and `PI_HOME_STORAGE_PREFIX`; new sessions store the archive under `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`. During restore, the runner first checks the user-scoped archive and then falls back to the old workspace-scoped archive path so existing auth can migrate on the next archive upload.
 
 For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces, and archive upload stores `.git` under the hidden internal archive prefix while skipping obvious transient `*.lock` files where practical. Dedicated startup restore ordering for `.git` remains a later task.
 
-This keeps dependency installs, Git metadata, and Pi Agent state available to later sessions without creating thousands of Cloud Storage objects for `node_modules` or `.git`. It also means archive-backed changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
+This keeps dependency installs, Git metadata, and Pi Agent state available without creating thousands of Cloud Storage objects for `node_modules` or `.git`. Archive-backed changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
 
 The detailed GitHub workspace architecture, including one-active-session enforcement and cache semantics, lives in [github-workspaces.md](./github-workspaces.md).
 

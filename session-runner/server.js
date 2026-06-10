@@ -15,6 +15,8 @@ const port = Number(process.env.PORT || 8080);
 const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
 const bucketName = process.env.STORAGE_BUCKET || "";
 const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
+const piHomeBucketName = process.env.PI_HOME_STORAGE_BUCKET || bucketName;
+const piHomePrefix = normalizePrefix(process.env.PI_HOME_STORAGE_PREFIX || "");
 const workspaceId = process.env.WORKSPACE_ID || "";
 const sessionId = process.env.SESSION_ID || "";
 const shutdownToken = process.env.SESSION_SHUTDOWN_TOKEN || "";
@@ -413,7 +415,12 @@ function createArchiveSyncTargets() {
       name: "root-pi",
       mode: "directory",
       localPath: process.env.PI_HOME_DIR || "/root/.pi",
-      remotePath: archiveRemotePath("root-pi.tar.gz"),
+      bucketName: piHomeBucketName,
+      remotePath: piHomeArchiveRemotePath("root-pi.tar.gz"),
+      fallbackArchives: [{
+        bucketName,
+        remotePath: archiveRemotePath("root-pi.tar.gz"),
+      }],
       ensureLocalPath: true,
       restoreOnStartup: true,
     },
@@ -711,9 +718,8 @@ async function syncArchivesDown(options = {}) {
   await Promise.all(archiveSyncTargets.map(async (target) => {
     if (!target.restoreOnStartup || excludeModes.has(target.mode)) return;
     try {
-      const file = storage.bucket(bucketName).file(target.remotePath);
-      const [exists] = await file.exists();
-      if (!exists) return;
+      const file = await findArchiveFile(target);
+      if (!file) return;
       await fs.promises.mkdir(target.localPath, {recursive: true});
       await extractStorageArchive(file, target);
     } catch (error) {
@@ -727,7 +733,8 @@ async function syncArchivesUp() {
   await Promise.all(archiveSyncTargets.map(async (target) => {
     try {
       if (!await pathExists(target.localPath)) return;
-      const file = storage.bucket(bucketName).file(target.remotePath);
+      const file = archiveFile(target);
+      if (!file) return;
       if (target.mode === "workspaceNodeModules") {
         await uploadWorkspaceNodeModulesArchive(file, target);
         return;
@@ -742,6 +749,29 @@ async function syncArchivesUp() {
       throw error;
     }
   }));
+}
+
+async function findArchiveFile(target) {
+  const archives = [
+    {bucketName: target.bucketName || bucketName, remotePath: target.remotePath},
+    ...(target.fallbackArchives || []),
+  ];
+  for (const archive of archives) {
+    const file = archiveFile({
+      bucketName: archive.bucketName,
+      remotePath: archive.remotePath,
+    });
+    if (!file) continue;
+    const [exists] = await file.exists();
+    if (exists) return file;
+  }
+  return null;
+}
+
+function archiveFile(target, remotePath = target.remotePath) {
+  const targetBucketName = target.bucketName || bucketName;
+  if (!targetBucketName || !remotePath) return null;
+  return storage.bucket(targetBucketName).file(remotePath);
 }
 
 async function extractStorageArchive(file, target) {
@@ -940,6 +970,11 @@ function shouldIgnoreInternalWorkspacePath(relativePath) {
 function archiveRemotePath(fileName) {
   if (!prefix) return "";
   return `${prefix}/${archiveStorageDir}/${fileName}`.replace(/\/+/g, "/");
+}
+
+function piHomeArchiveRemotePath(fileName) {
+  if (!piHomePrefix) return archiveRemotePath(fileName);
+  return `${piHomePrefix}/${fileName}`.replace(/\/+/g, "/");
 }
 
 async function appendHistory(stream, data) {
