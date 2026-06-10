@@ -148,9 +148,12 @@ async function loadWorkspaceFiles() {
   }
 }
 
-async function createWorkspace({name}) {
+async function createWorkspace(payload) {
   await runBusy(async () => {
-    const data = await state.api.createWorkspace({name});
+    const data = await state.api.createWorkspace({
+      name: payload.name,
+      source: payload.source,
+    });
     state.selectedWorkspaceId = data.workspace.id;
     state.selectedSessionId = null;
     resetWorkspaceFiles();
