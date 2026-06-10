@@ -119,6 +119,13 @@ GitHub-backed sessions also receive source metadata env vars for runner startup 
 - `GITHUB_RESOLVED_COMMIT`
 - `GITHUB_CHECKOUT_REF`
 
+Private connected-repo sessions now also receive a short-lived installation token pair for clone-only auth:
+
+- `GITHUB_CLONE_USERNAME`
+- `GITHUB_CLONE_TOKEN`
+
+The backend mints those values only while provisioning or restarting the runner. They are not written to Firestore, not synced into `/workspace`, and the runner uses them only through a temporary `GIT_ASKPASS` helper outside the workspace tree.
+
 Blank workspaces continue using the existing storage-oriented env setup, with `WORKSPACE_SOURCE_TYPE=blank` so the runner can detect mode without guessing.
 
 Workspace records also carry an app-owned `syncPolicy` field. Blank workspaces default to `mode: "blank"` with no exclusions. GitHub workspaces default to `mode: "github-cache"` and exclude `.git/`, `node_modules/`, build outputs, `.next/`, and `.mapahce-internal/` paths from normal file sync.
@@ -163,7 +170,7 @@ GitHub-backed workspaces should reconstruct `/workspace` in this order:
 4. Restore other archive-backed runtime directories such as `node_modules` and `/root/.pi`.
 5. Validate and publish Git runtime state before serving the terminal.
 
-The current runner implementation now follows that startup order for GitHub workspaces. It first checks for a cached `.git` archive under the hidden archive prefix and restores it when present. If no cached Git archive exists, it clones the public repository and uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. After Git state is available, the runner restores cached worktree files, restores the other archive-backed directories such as `node_modules` and `/root/.pi`, resolves the current `HEAD` commit, and writes runtime metadata back to both the session document and workspace `source` fields. That update is limited to runtime-derived fields such as resolved branch/commit and source status so user-selected repo settings are not overwritten. Missing `.git` cache is handled as a normal clone fallback. Failure logs now identify whether startup broke during Git archive restore, clone, checkout, or later cache/worktree restore, while user-facing runtime status still distinguishes `clone_failed` from `sync_failed`.
+The current runner implementation now follows that startup order for GitHub workspaces. It first checks for a cached `.git` archive under the hidden archive prefix and restores it when present. If no cached Git archive exists, it clones the repository and uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. Public repos still clone anonymously. Private connected repos now clone with a short-lived GitHub App installation token supplied by the backend at provisioning time, passed through a temporary `GIT_ASKPASS` script so the token is not embedded into the repo remote config or workspace files. After Git state is available, the runner restores cached worktree files, restores the other archive-backed directories such as `node_modules` and `/root/.pi`, resolves the current `HEAD` commit, and writes runtime metadata back to both the session document and workspace `source` fields. That update is limited to runtime-derived fields such as resolved branch/commit and source status so user-selected repo settings are not overwritten. Missing `.git` cache is handled as a normal clone fallback. Failure logs now identify whether startup broke during Git archive restore, clone, checkout, or later cache/worktree restore, while user-facing runtime status still distinguishes clone auth, repo-not-found, network, and later sync failures.
 
 Deleted worktree files are important here. A GitHub workspace cannot rely on upload-only file sync. If a file was deleted locally, the cached copy in Cloud Storage must be removed or invalidated so it does not reappear on the next restore.
 

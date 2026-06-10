@@ -32,6 +32,8 @@ const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_
 const githubRepoUrl = normalizeEnvString(process.env.GITHUB_REPO_URL);
 const githubRequestedBranch = normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH);
 const githubRequestedCommit = normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT);
+const githubCloneUsername = normalizeEnvString(process.env.GITHUB_CLONE_USERNAME) || "x-access-token";
+const githubCloneToken = normalizeEnvString(process.env.GITHUB_CLONE_TOKEN);
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -498,7 +500,11 @@ async function runGitClone() {
   }
   args.push(githubRepoUrl, workspaceDir);
   try {
-    await runGitCommand(args, {cwd: "/"});
+    if (githubCloneToken) {
+      await withGitCloneAuth((env) => runGitCommand(args, {cwd: "/", env}));
+    } else {
+      await runGitCommand(args, {cwd: "/"});
+    }
   } catch (error) {
     throw new Error(`clone failed: ${compactErrorMessage(error.message || error)}`);
   }
@@ -525,8 +531,9 @@ async function resolveGitHead() {
 
 async function recordGithubCloneFailure(error) {
   const message = compactErrorMessage(error && error.message ? error.message : error);
-  console.error("github workspace clone failed", message);
-  await publishGithubFailureState("clone_failed", message, `github_clone_failed: ${message}`);
+  const classified = classifyGithubCloneFailure(message);
+  console.error("github workspace clone failed", classified.code, message);
+  await publishGithubFailureState("clone_failed", classified.statusMessage, `${classified.code}: ${message}`);
 }
 
 async function recordGithubSyncFailure(error) {
@@ -841,6 +848,7 @@ async function runGitCommand(args, options = {}) {
   const child = spawn("git", args, {
     cwd: options.cwd || workspaceDir,
     stdio: ["ignore", "pipe", "pipe"],
+    env: options.env || process.env,
   });
   const stderr = collectStderr(child);
   let stdout = "";
@@ -967,6 +975,52 @@ function normalizeEnvString(value) {
 
 function compactErrorMessage(value) {
   return normalizeEnvString(value).slice(0, 1000) || "unknown_error";
+}
+
+function classifyGithubCloneFailure(message) {
+  const normalized = compactErrorMessage(message).toLowerCase();
+  if (
+    normalized.includes("authentication failed") ||
+    normalized.includes("invalid username or token") ||
+    normalized.includes("could not read username") ||
+    normalized.includes("could not read password") ||
+    normalized.includes("terminal prompts disabled") ||
+    normalized.includes("access denied")
+  ) {
+    return {
+      code: "github_clone_auth_failed",
+      statusMessage: "GitHub clone auth failed.",
+    };
+  }
+
+  if (
+    normalized.includes("repository not found") ||
+    normalized.includes("not found")
+  ) {
+    return {
+      code: "github_clone_repo_not_found",
+      statusMessage: "GitHub repository not found.",
+    };
+  }
+
+  if (
+    normalized.includes("could not resolve host") ||
+    normalized.includes("failed to connect") ||
+    normalized.includes("connection timed out") ||
+    normalized.includes("connection reset") ||
+    normalized.includes("network is unreachable") ||
+    normalized.includes("tls")
+  ) {
+    return {
+      code: "github_clone_network_failed",
+      statusMessage: "GitHub clone network failed.",
+    };
+  }
+
+  return {
+    code: "github_clone_failed",
+    statusMessage: "GitHub clone failed.",
+  };
 }
 
 async function getGitStatusSummary() {
@@ -1166,19 +1220,17 @@ function normalizeGitCommitMessage(value) {
   return message.slice(0, 500);
 }
 
-async function withGitPushAuth(task) {
-  const token = normalizeEnvString(process.env.GITHUB_PUSH_TOKEN);
+async function withGitAskPassAuth({token, username, userEnvName, tokenEnvName, askPassFilePrefix}, task) {
   if (!token) {
     throw new Error("github_auth_not_configured");
   }
 
-  const username = normalizeEnvString(process.env.GITHUB_PUSH_USERNAME) || "x-access-token";
-  const askPassPath = path.join(process.env.TMPDIR || "/tmp", `mapahce-git-askpass-${sessionId || "runner"}.sh`);
+  const askPassPath = path.join(process.env.TMPDIR || "/tmp", `${askPassFilePrefix}-${sessionId || "runner"}.sh`);
   await fs.promises.writeFile(askPassPath, [
     "#!/bin/sh",
     "case \"$1\" in",
-    "  *Username*) printf '%s\\n' \"${GITHUB_PUSH_USERNAME:-x-access-token}\" ;;",
-    "  *) printf '%s\\n' \"${GITHUB_PUSH_TOKEN:-}\" ;;",
+    `  *Username*) printf '%s\\n' \"\${${userEnvName}:-x-access-token}\" ;;`,
+    `  *) printf '%s\\n' \"\${${tokenEnvName}:-}\" ;;`,
     "esac",
     "",
   ].join("\n"), {mode: 0o700});
@@ -1188,12 +1240,33 @@ async function withGitPushAuth(task) {
       ...process.env,
       GIT_TERMINAL_PROMPT: "0",
       GIT_ASKPASS: askPassPath,
-      GITHUB_PUSH_USERNAME: username,
-      GITHUB_PUSH_TOKEN: token,
+      [userEnvName]: username || "x-access-token",
+      [tokenEnvName]: token,
     });
   } finally {
     await fs.promises.rm(askPassPath, {force: true}).catch(() => {});
   }
+}
+
+async function withGitCloneAuth(task) {
+  return withGitAskPassAuth({
+    token: githubCloneToken,
+    username: githubCloneUsername,
+    userEnvName: "GITHUB_CLONE_USERNAME",
+    tokenEnvName: "GITHUB_CLONE_TOKEN",
+    askPassFilePrefix: "mapahce-git-clone-askpass",
+  }, task);
+}
+
+async function withGitPushAuth(task) {
+  const token = normalizeEnvString(process.env.GITHUB_PUSH_TOKEN);
+  return withGitAskPassAuth({
+    token,
+    username: normalizeEnvString(process.env.GITHUB_PUSH_USERNAME) || "x-access-token",
+    userEnvName: "GITHUB_PUSH_USERNAME",
+    tokenEnvName: "GITHUB_PUSH_TOKEN",
+    askPassFilePrefix: "mapahce-git-push-askpass",
+  }, task);
 }
 
 function positiveNumber(value, fallback) {
