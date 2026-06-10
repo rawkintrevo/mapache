@@ -109,16 +109,38 @@ The backend sets these when provisioning the Cloud Run session service.
 
 The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
 
+This behavior now needs to be read together with workspace source mode:
+
+- For `blank` workspaces, Cloud Storage remains the durable source of truth.
+- For `github` workspaces, Cloud Storage is a cache and resumability layer for the last active local state. GitHub is the durable repository source of truth.
+
 Cloud Storage does not store real directories, so the runner uploads a `.mapahce-directory` marker object inside each synced directory. The Files API maps those marker objects to `type: "directory"` entries and filters them out of the displayed file list. Existing Cloud Run sessions need a new runner revision before empty directories can appear in the sidebar.
 
 High-cardinality runtime directories are not synced as individual Cloud Storage objects:
 
 - `/workspace/node_modules`
+- `/workspace/.git` for GitHub-backed workspaces
 - `/root/.pi`
 
 The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted. Archive objects live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
-This keeps dependency installs and Pi Agent state available to later sessions without creating thousands of Cloud Storage objects for `node_modules`. It also means dependency changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
+For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects.
+
+This keeps dependency installs, Git metadata, and Pi Agent state available to later sessions without creating thousands of Cloud Storage objects for `node_modules` or `.git`. It also means archive-backed changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
+
+The detailed GitHub workspace architecture, including one-active-session enforcement and cache semantics, lives in [github-workspaces.md](./github-workspaces.md).
+
+### GitHub Workspace Reconstruction
+
+GitHub-backed workspaces should reconstruct `/workspace` in this order:
+
+1. Restore cached `.git` archive when present.
+2. If no cached Git state exists, clone the repository and check out the requested commit or branch.
+3. Restore cached worktree files from Cloud Storage, excluding ignored and internal paths.
+4. Restore other archive-backed runtime directories such as `node_modules` and `/root/.pi`.
+5. Validate and publish Git runtime state before serving the terminal.
+
+Deleted worktree files are important here. A GitHub workspace cannot rely on upload-only file sync. If a file was deleted locally, the cached copy in Cloud Storage must be removed or invalidated so it does not reappear on the next restore.
 
 ## Provisioning
 
@@ -135,6 +157,8 @@ Cloud Run resource limits are derived from the session's CPU and memory settings
 Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped.
 
 Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
+
+For GitHub workspaces, this final sync is especially important because it is the last chance to persist local working tree changes and refreshed `.git` archive state before the Cloud Run service disappears.
 
 The shutdown request timeout defaults to 120 seconds because archive-backed dependency directories can be large. New deployments can override it with `RUNNER_SHUTDOWN_TIMEOUT_MS`.
 
@@ -179,4 +203,6 @@ Existing services created before idle shutdown support do not have `SESSION_SHUT
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
+- GitHub workspaces should archive `/workspace/.git` instead of exposing it through normal file sync. That keeps Git state resumable without treating Cloud Storage as a Git database.
+- GitHub workspaces should allow only one active session at a time until the app has an explicit multi-session Git isolation model.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.
