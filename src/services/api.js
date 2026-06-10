@@ -78,6 +78,10 @@ export function createApiClient(getToken) {
         {method: "POST", body},
     ),
     getConnectedRepos: () => request(getToken, "/api/github/repos"),
+    getGithubConnectUrl: () => request(
+        getToken,
+        `/api/github/connect?returnTo=${encodeURIComponent(window.location.href)}`,
+    ),
   };
 }
 

@@ -437,6 +437,10 @@ main.drawer-collapsed {
   font-size: 12px;
 }
 
+.github-connect-button {
+  width: 100%;
+}
+
 .hidden {
   display: none !important;
 }

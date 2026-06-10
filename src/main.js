@@ -130,6 +130,7 @@ function render() {
     onUpdatePullRequestForm: updatePullRequestForm,
     onSubmitPullRequest: submitPullRequest,
     onLoadConnectedRepos: loadConnectedRepos,
+    onConnectGithub: connectGithub,
   });
 }
 
@@ -218,9 +219,44 @@ async function loadConnectedRepos() {
     const data = await state.api.getConnectedRepos();
     state.repoPicker = {loading: false, error: "", repos: data.repos || [], attempted: true};
   } catch (error) {
-    state.repoPicker = {loading: false, error: error.message || "", repos: [], attempted: true};
+    state.repoPicker = {loading: false, error: friendlyRepoPickerError(error), repos: [], attempted: true};
   }
   render();
+}
+
+async function connectGithub() {
+  if (!state.api) return;
+  state.repoPicker = {...state.repoPicker, loading: true, error: ""};
+  render();
+  try {
+    const data = await state.api.getGithubConnectUrl();
+    if (!data.url) {
+      throw new Error("github_connect_url_unavailable");
+    }
+    window.location.href = data.url;
+  } catch (error) {
+    state.repoPicker = {
+      loading: false,
+      error: friendlyRepoPickerError(error),
+      repos: [],
+      attempted: true,
+    };
+    render();
+  }
+}
+
+function friendlyRepoPickerError(error) {
+  const message = error.message || "Could not load connected repositories.";
+  if (message === "github_app_not_configured") {
+    return "github_app_not_configured";
+  }
+  if (message === "github_oauth_not_configured") {
+    return "GitHub OAuth is not configured.";
+  }
+  if (message === "github_connect_url_unavailable") {
+    return "Could not start GitHub connection.";
+  }
+  return message;
 }
 
 async function createWorkspace(payload) {

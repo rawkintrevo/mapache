@@ -101,18 +101,25 @@ firebase functions:secrets:set GITHUB_APP_ID --project pi-agents-cloud
 firebase functions:secrets:set GITHUB_APP_CLIENT_ID --project pi-agents-cloud
 firebase functions:secrets:set GITHUB_APP_CLIENT_SECRET --project pi-agents-cloud
 firebase functions:secrets:set GITHUB_APP_PRIVATE_KEY --project pi-agents-cloud
+firebase functions:secrets:set GITHUB_APP_WEBHOOK_SECRET --project pi-agents-cloud
 ```
 
-Alternatively, store them in Google Cloud Secret Manager and reference them in your Cloud Functions environment.
+The backend uses `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` for connected-repository listing, private repository cloning, push credentials, and PR creation. It uses `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` for the user-facing **Connect GitHub** OAuth flow that discovers which GitHub App installations the signed-in Firebase user can access. After setting or changing those secrets, deploy the API function so Firebase binds the secrets to the Cloud Functions v2 service:
+
+```bash
+firebase deploy --only functions:api --project pi-agents-cloud
+```
+
+Alternatively, store them in Google Cloud Secret Manager and reference them in your Cloud Functions environment. If you use manual Cloud Run environment variables or secret bindings instead of Firebase Functions secrets, make sure the deployed `api` service exposes `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID`, and `GITHUB_APP_CLIENT_SECRET`.
 
 ## Step 9: Configure Callback and Webhook URLs (when ready)
 
-When the backend OAuth callback route exists:
+For the deployed app:
 
 - **Callback URL**: `https://mapache-tools/api/github/callback`
 - **Webhook URL**: `https://us-central1-pi-agents-cloud.cloudfunctions.net/api/github/webhook`
 
-If you used temporary values during app creation, replace them here before production rollout.
+The callback route completes the **Connect GitHub** flow from the workspace drawer. The webhook URL is reserved for later install/remove/suspend updates; the current picker refreshes live repository access from GitHub when a connected Firebase user opens the picker.
 
 ## Step 10: Verify
 
@@ -121,6 +128,8 @@ Test that the app is accessible:
 1. Go to the app page (`https://github.com/apps/<app-name>`).
 2. Confirm the installation shows on the target organization/account.
 3. Confirm the private key is stored securely and retrievable by the Cloud Functions deployment.
+4. Confirm the deployed `api` function has `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID`, and `GITHUB_APP_CLIENT_SECRET` attached as Firebase Functions secrets or Cloud Run secret-backed environment variables.
+5. Open the workspace drawer, choose **GitHub**, click **Connect GitHub**, authorize the app, and confirm the connected repository picker shows repositories from the installed account.
 
 ## Troubleshooting
 
