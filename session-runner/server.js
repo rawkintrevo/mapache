@@ -40,6 +40,8 @@ const archiveSyncTargets = [
   },
 ];
 const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
+const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
+const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
 const githubRepoUrl = normalizeEnvString(process.env.GITHUB_REPO_URL);
 const githubRequestedBranch = normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH);
 const githubRequestedCommit = normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT);
@@ -239,7 +241,7 @@ function sendTerminalMessage(socket, message) {
 
 ensureWorkspace()
     .then(async () => {
-      console.log(`workspace source mode: ${workspaceSourceMode}`);
+      console.log(`workspace source mode: ${workspaceSourceMode}, sync policy mode: ${workspaceSyncPolicyMode}`);
       await prepareWorkspaceSource();
     })
     .then(() => {
@@ -594,12 +596,46 @@ async function pathExists(localPath) {
 }
 
 function shouldIgnoreWorkspacePath(relativePath) {
-  const parts = String(relativePath || "").split(path.sep).filter(Boolean);
+  const normalizedPath = normalizeRelativeWorkspacePath(relativePath);
+  const parts = normalizedPath.split("/").filter(Boolean);
   if (parts.includes("node_modules") || parts[0] === internalStorageDir) {
     return true;
   }
-  if (isGithubWorkspace() && parts.includes(".git")) {
-    return true;
+  return workspaceSyncPolicyExclude.some((pattern) => matchesSyncPolicyPattern(normalizedPath, pattern));
+}
+
+function normalizeRelativeWorkspacePath(relativePath) {
+  return String(relativePath || "").split(path.sep).join("/").replace(/^\/+|\/+$/g, "");
+}
+
+function parseSyncPolicyExclude(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed.map((item) => normalizeEnvString(item)).filter(Boolean) : [];
+  } catch (error) {
+    console.error("invalid WORKSPACE_SYNC_POLICY_EXCLUDE, using no policy exclusions", error);
+    return [];
+  }
+}
+
+function matchesSyncPolicyPattern(relativePath, pattern) {
+  const normalizedPath = normalizeRelativeWorkspacePath(relativePath);
+  const normalizedPattern = normalizeRelativeWorkspacePath(pattern);
+  if (!normalizedPath || !normalizedPattern) return false;
+
+  const pathParts = normalizedPath.split("/").filter(Boolean);
+  const patternParts = normalizedPattern.split("/").filter(Boolean);
+  if (!patternParts.length) return false;
+
+  if (patternParts.length === 1) {
+    return pathParts.includes(patternParts[0]);
+  }
+
+  for (let index = 0; index <= pathParts.length - patternParts.length; index++) {
+    const window = pathParts.slice(index, index + patternParts.length);
+    if (window.join("/") === patternParts.join("/")) {
+      return true;
+    }
   }
   return false;
 }

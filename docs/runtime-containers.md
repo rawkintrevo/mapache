@@ -121,7 +121,14 @@ GitHub-backed sessions also receive source metadata env vars for runner startup 
 
 Blank workspaces continue using the existing storage-oriented env setup, with `WORKSPACE_SOURCE_TYPE=blank` so the runner can detect mode without guessing.
 
-Workspace records also carry an app-owned `syncPolicy` field. Blank workspaces default to `mode: "blank"` with no exclusions. GitHub workspaces default to `mode: "github-cache"` and exclude `.git/`, `node_modules/`, build outputs, `.next/`, and `.mapahce-internal/` paths from normal file sync. The policy is metadata first; later runner sync tasks will use it to drive upload/download behavior.
+Workspace records also carry an app-owned `syncPolicy` field. Blank workspaces default to `mode: "blank"` with no exclusions. GitHub workspaces default to `mode: "github-cache"` and exclude `.git/`, `node_modules/`, build outputs, `.next/`, and `.mapahce-internal/` paths from normal file sync.
+
+The backend passes that policy into the runner with:
+
+- `WORKSPACE_SYNC_POLICY_MODE`
+- `WORKSPACE_SYNC_POLICY_EXCLUDE` (JSON array)
+
+Normal upload/download sync now applies base exclusions for archive-backed/internal paths plus any `syncPolicy.exclude` entries. That keeps blank workspace behavior effectively unchanged while letting GitHub workspaces skip extra cached paths during ordinary file sync. Directory marker objects still apply for non-excluded directories.
 
 The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
 
@@ -212,7 +219,7 @@ New sessions use the image selected in the modal. Existing sessions keep their c
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to new GitHub workspace source env vars. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE` or `GITHUB_*` env vars; they need a new revision or a recreated session service before runner changes that depend on those variables will take effect.
+The same rule applies to new GitHub workspace source env vars and sync-policy env vars. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, or `WORKSPACE_SYNC_POLICY_*` env vars; they need a new revision or a recreated session service before runner changes that depend on those variables will take effect.
 
 ## Design Decisions
 

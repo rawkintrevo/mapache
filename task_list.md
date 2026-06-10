@@ -124,12 +124,13 @@ Before implementation tasks, read:
   - Policy is documented in `docs/runtime-containers.md`.
   - Completed: 2026-06-10. Workspace records now persist a source-aware syncPolicy field, and runtime docs describe the blank vs GitHub defaults.
 
-- [ ] 12. **Apply sync ignore policy in runner upload/download paths** - medium (gpt-5.4)
+- [x] 12. **Apply sync ignore policy in runner upload/download paths** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner sync ignores policy-excluded paths during normal file sync.
   - Existing archive sync behavior for dependency/runtime caches is preserved or intentionally adjusted.
   - Directory marker behavior still works for non-excluded directories.
   - `node --check session-runner/server.js` passes.
+  - Completed: 2026-06-10. Runner now receives sync policy env vars, applies policy exclusions during normal upload/download sync, preserves archive-backed paths, and keeps directory markers for non-excluded directories.
 
 - [ ] 13. **Add archive sync support for workspace .git directories** - medium (gpt-5.4)
   - Acceptance criteria:
