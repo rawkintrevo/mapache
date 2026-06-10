@@ -292,8 +292,14 @@ async function prepareWorkspaceSource() {
     await syncDown();
     return;
   }
+
   await cloneGithubWorkspace();
-  await syncDown();
+  try {
+    await syncDown();
+  } catch (error) {
+    await recordGithubSyncFailure(error);
+    throw new Error(`GitHub workspace cache restore failed: ${compactErrorMessage(error.message || error)}`);
+  }
 }
 
 async function cloneGithubWorkspace() {
@@ -313,11 +319,7 @@ async function cloneGithubWorkspace() {
     }
     const resolved = await resolveGitHead();
     console.log(`github workspace ready at ${resolved.commit}${resolved.branch ? ` on ${resolved.branch}` : ""}`);
-    await updateSessionActivity({
-      sourceResolvedBranch: resolved.branch,
-      sourceResolvedCommit: resolved.commit,
-      lastError: null,
-    });
+    await publishGithubResolvedMetadata(resolved);
   } catch (error) {
     await recordGithubCloneFailure(error);
     throw new Error(`GitHub workspace startup failed: ${compactErrorMessage(error.message || error)}`);
@@ -345,9 +347,45 @@ async function resolveGitHead() {
 async function recordGithubCloneFailure(error) {
   const message = compactErrorMessage(error && error.message ? error.message : error);
   console.error("github workspace clone failed", message);
-  await updateSessionActivity({
-    lastError: `github_clone_failed: ${message}`,
-  });
+  await publishGithubFailureState("clone_failed", message, `github_clone_failed: ${message}`);
+}
+
+async function recordGithubSyncFailure(error) {
+  const message = compactErrorMessage(error && error.message ? error.message : error);
+  console.error("github workspace cache restore failed", message);
+  await publishGithubFailureState("sync_failed", message, `github_sync_failed: ${message}`);
+}
+
+async function publishGithubResolvedMetadata(resolved) {
+  await Promise.all([
+    updateSessionActivity({
+      sourceResolvedBranch: resolved.branch,
+      sourceResolvedCommit: resolved.commit,
+      sourceStatus: "ready",
+      sourceStatusMessage: null,
+      lastError: null,
+    }),
+    updateWorkspaceSourceState({
+      resolvedBranch: resolved.branch,
+      resolvedCommit: resolved.commit,
+      status: "ready",
+      statusMessage: null,
+    }),
+  ]);
+}
+
+async function publishGithubFailureState(status, statusMessage, lastError) {
+  await Promise.all([
+    updateSessionActivity({
+      sourceStatus: status,
+      sourceStatusMessage: statusMessage,
+      lastError,
+    }),
+    updateWorkspaceSourceState({
+      status,
+      statusMessage,
+    }),
+  ]);
 }
 
 async function emptyWorkspaceDir(dir) {
@@ -601,6 +639,20 @@ async function updateSessionActivity(updates) {
       .doc(sessionId)
       .update(updates)
       .catch((error) => console.error("session activity write failed", error));
+}
+
+async function updateWorkspaceSourceState(updates) {
+  if (!workspaceId) return;
+  const workspaceUpdates = Object.entries(updates || {}).reduce((acc, [key, value]) => {
+    acc[`source.${key}`] = value;
+    return acc;
+  }, {
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await db.collection("workspaces")
+      .doc(workspaceId)
+      .update(workspaceUpdates)
+      .catch((error) => console.error("workspace source update failed", error));
 }
 
 function normalizePrefix(value) {

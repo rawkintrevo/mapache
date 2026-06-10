@@ -236,6 +236,7 @@ The `.git` directory should not be synced object-by-object through normal Cloud 
 
 - Resolve the current branch and commit.
 - Write resolved source metadata and any useful Git status summary back to Firestore.
+- Update only runtime-derived source fields such as `resolvedBranch`, `resolvedCommit`, `status`, and `statusMessage`; do not overwrite user-selected repo settings like repo URL or requested branch.
 - Start the PTY and accept terminal connections.
 
 ## Why `.git` Is Archived Instead of Normally Synced
@@ -308,6 +309,13 @@ The implementation should distinguish these failures clearly:
 - GitHub authentication failure for private repo support
 
 These failures should not collapse into one generic "workspace sync failed" error if the app can reasonably separate them.
+
+The current runner should therefore distinguish at least:
+
+- `clone_failed` when repository clone or checkout fails before the worktree cache restore phase
+- `sync_failed` when Git clone succeeds but Cloud Storage worktree/archive restore fails afterward
+
+Those states belong in runtime metadata such as session fields and workspace `source.status` / `source.statusMessage` so later UI can display the difference.
 
 ## Security and Credential Boundaries
 

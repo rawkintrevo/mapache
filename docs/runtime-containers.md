@@ -154,7 +154,7 @@ GitHub-backed workspaces should reconstruct `/workspace` in this order:
 4. Restore other archive-backed runtime directories such as `node_modules` and `/root/.pi`.
 5. Validate and publish Git runtime state before serving the terminal.
 
-The current runner implementation already clones public GitHub repositories during startup when `WORKSPACE_SOURCE_TYPE=github`. It uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. Successful startup resolves the current `HEAD` commit for the session document, and clone failures are logged plus written to the session `lastError` field.
+The current runner implementation already clones public GitHub repositories during startup when `WORKSPACE_SOURCE_TYPE=github`. It uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. Successful startup resolves the current `HEAD` commit and writes runtime metadata back to both the session document and workspace `source` fields. That update is limited to runtime-derived fields such as resolved branch/commit and source status so user-selected repo settings are not overwritten. Clone failures and later cache-restore failures are recorded distinctly (`clone_failed` vs `sync_failed`) so later UI can show which startup phase broke.
 
 Deleted worktree files are important here. A GitHub workspace cannot rely on upload-only file sync. If a file was deleted locally, the cached copy in Cloud Storage must be removed or invalidated so it does not reappear on the next restore.
 
