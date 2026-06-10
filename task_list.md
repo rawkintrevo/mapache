@@ -156,12 +156,13 @@ Before implementation tasks, read:
   - Failure logs identify whether Git archive restore, clone, checkout, or worktree restore failed.
   - Completed: 2026-06-10. GitHub startup now restores cached `.git` first when available, falls back to clone/checkout when missing, restores worktree and other archives in order, validates HEAD, and logs phase-specific restore failures.
 
-- [ ] 16. **Display GitHub source summary in workspace UI** - easy (gpt-5.4-mini)
+- [x] 16. **Display GitHub source summary in workspace UI** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Workspace rows or header display repo/branch/short SHA for GitHub workspaces.
   - Blank workspaces continue showing storage prefix or current equivalent.
   - UI stays compact and consistent with existing drawer/header design.
   - `npm run build` passes.
+  - Completed: 2026-06-10. Workspace rows and the selected workspace header now show compact GitHub repo/branch/short-SHA summaries, while blank workspaces continue showing the storage prefix.
 
 - [ ] 17. **Add backend route for Git status summary** - medium (gpt-5.4)
   - Acceptance criteria:
