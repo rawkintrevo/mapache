@@ -22,10 +22,10 @@ Fill in the registration form:
 - **GitHub App name**: `Pi Agents Cloud`
 - **Description**: `Pi Agents Cloud workspace connector for GitHub repositories`
 - **Homepage URL**: `https://pi-agents-cloud.web.app` (or your deployed Firebase Hosting URL)
-- **Callback URL**: leave blank for now (will be configured later when OAuth routes exist)
+- **Callback URL**: use your deployed OAuth callback URL if it exists; otherwise enter a temporary URL you can update later
 - **Setup URL**: leave blank
-- **Webhook URL**: leave blank for now (or enter a placeholder)
-- **Webhook secret**: click **Generate a new client secret** and copy it immediately (store it securely)
+- **Webhook URL**: GitHub requires a URL here — enter your deployed webhook endpoint if it exists, or a temporary placeholder URL that you will replace before production
+- **Webhook secret**: generate a webhook secret and copy it immediately (store it securely)
 
 ## Step 3: Choose Permissions
 
@@ -113,7 +113,7 @@ When the backend OAuth callback route exists:
 - **Callback URL**: `https://pi-agents-cloud.web.app/api/github/callback`
 - **Webhook URL**: `https://<region>-pi-agents-cloud.cloudfunctions.net/api/github/webhook`
 
-Update these in the GitHub App settings before going live.
+If you used temporary values during app creation, replace them here before production rollout.
 
 ## Step 10: Verify
 
