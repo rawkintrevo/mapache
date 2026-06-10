@@ -167,6 +167,24 @@ app.post("/git/commit", async (req, res) => {
   }
 });
 
+app.post("/git/push", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await pushGitChanges());
+  } catch (error) {
+    console.error("git push failed", error);
+    res.status(400).json({error: compactErrorMessage(error.message || error) || "git_push_failed"});
+  }
+});
+
 wss.on("connection", (socket, request) => {
   terminalSession.attach(socket, shouldReplayTerminal(request));
 
@@ -1013,6 +1031,33 @@ async function commitGitChanges(payload) {
   };
 }
 
+async function pushGitChanges() {
+  const branch = await runGitCommand(["branch", "--show-current"], {captureStdout: true});
+  if (!branch) {
+    throw new Error("git_push_no_current_branch");
+  }
+
+  let push = {ok: true, message: "", branch};
+  try {
+    await withGitPushAuth((env) => runGitCommand(["push", "origin", `HEAD:${branch}`], {env}));
+  } catch (error) {
+    if (String(error && error.message || "") === "github_auth_not_configured") {
+      throw error;
+    }
+    push = {
+      ok: false,
+      message: compactErrorMessage(error && error.message ? error.message : error),
+      branch,
+    };
+  }
+
+  return {
+    ...(await getGitStatusSummary()),
+    action: "push",
+    push,
+  };
+}
+
 async function pullGitAction() {
   let pull = {ok: true, message: ""};
   await runGitCommand(["fetch", "--all", "--prune"]);
@@ -1119,6 +1164,36 @@ function normalizeGitCommitMessage(value) {
     throw new Error("missing_commit_message");
   }
   return message.slice(0, 500);
+}
+
+async function withGitPushAuth(task) {
+  const token = normalizeEnvString(process.env.GITHUB_PUSH_TOKEN);
+  if (!token) {
+    throw new Error("github_auth_not_configured");
+  }
+
+  const username = normalizeEnvString(process.env.GITHUB_PUSH_USERNAME) || "x-access-token";
+  const askPassPath = path.join(process.env.TMPDIR || "/tmp", `mapahce-git-askpass-${sessionId || "runner"}.sh`);
+  await fs.promises.writeFile(askPassPath, [
+    "#!/bin/sh",
+    "case \"$1\" in",
+    "  *Username*) printf '%s\\n' \"${GITHUB_PUSH_USERNAME:-x-access-token}\" ;;",
+    "  *) printf '%s\\n' \"${GITHUB_PUSH_TOKEN:-}\" ;;",
+    "esac",
+    "",
+  ].join("\n"), {mode: 0o700});
+
+  try {
+    return await task({
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_ASKPASS: askPassPath,
+      GITHUB_PUSH_USERNAME: username,
+      GITHUB_PUSH_TOKEN: token,
+    });
+  } finally {
+    await fs.promises.rm(askPassPath, {force: true}).catch(() => {});
+  }
 }
 
 function positiveNumber(value, fallback) {

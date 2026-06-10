@@ -212,12 +212,13 @@ Before implementation tasks, read:
   - Empty commits are rejected unless explicitly supported by a later task.
   - Completed: 2026-06-10. Added protected runner/backend commit routes with commit-message validation and empty-commit rejection, plus a Git panel commit input and button.
 
-- [ ] 23. **Add push branch action plumbing** - medium (gpt-5.4)
+- [x] 23. **Add push branch action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner supports pushing the current branch using configured GitHub credentials.
   - Backend/runner do not log credentials.
   - UI shows push success/failure and refreshes Git status.
   - If credentials are unavailable, the error clearly says GitHub auth is not configured.
+  - Completed: 2026-06-10. Added protected push plumbing across runner/backend/UI, refreshed Git status after push, and return a clear `github_auth_not_configured` error when push credentials are missing.
 
 - [ ] 24. **Add GitHub App/Connector planning doc for private repos and repo picker** - easy (gpt-5.4-mini)
   - Acceptance criteria:
