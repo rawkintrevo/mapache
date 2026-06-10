@@ -390,6 +390,47 @@ main.drawer-collapsed {
   flex: 1 1 0;
 }
 
+.workspace-create {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-source-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.source-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.source-choice input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.workspace-source-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .list,
 .session-detail {
   display: grid;
@@ -843,6 +884,10 @@ h2 {
   .session-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .workspace-source-choice {
+    grid-template-columns: 1fr;
   }
 
   .topbar {

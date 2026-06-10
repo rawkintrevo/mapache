@@ -170,19 +170,80 @@ function renderSidebar(props) {
     placeholder: "default",
     required: true,
   });
-  const form = createElement("form", {className: "form-row"}, [
+  const sourceBlankInput = createElement("input", {
+    checked: true,
+    name: "workspaceSource",
+    type: "radio",
+    value: "blank",
+  });
+  const sourceGithubInput = createElement("input", {
+    name: "workspaceSource",
+    type: "radio",
+    value: "github",
+  });
+  const repoUrlInput = createElement("input", {
+    autocomplete: "off",
+    name: "repoUrl",
+    placeholder: "https://github.com/owner/repo",
+    type: "url",
+  });
+  const branchInput = createElement("input", {
+    autocomplete: "off",
+    name: "branch",
+    placeholder: "main",
+  });
+  const githubFields = createElement("div", {className: "workspace-source-fields hidden"}, [
+    createElement("label", {}, [
+      createElement("span", {}, "GitHub repo URL"),
+      repoUrlInput,
+    ]),
+    createElement("label", {}, [
+      createElement("span", {}, "Branch (optional)"),
+      branchInput,
+    ]),
+  ]);
+  const form = createElement("form", {className: "workspace-create"}, [
     createElement("label", {}, [
       createElement("span", {}, "Workspace"),
       nameInput,
     ]),
+    createElement("div", {className: "workspace-source-choice"}, [
+      createElement("label", {className: "source-choice"}, [
+        sourceBlankInput,
+        createElement("span", {}, "Blank"),
+      ]),
+      createElement("label", {className: "source-choice"}, [
+        sourceGithubInput,
+        createElement("span", {}, "GitHub"),
+      ]),
+    ]),
+    githubFields,
     createElement("button", {
       disabled: state.busy,
       type: "submit",
     }, "Create"),
   ]);
+  const syncSourceFields = () => {
+    const githubSelected = sourceGithubInput.checked;
+    githubFields.classList.toggle("hidden", !githubSelected);
+    repoUrlInput.required = githubSelected;
+    repoUrlInput.disabled = !githubSelected;
+    branchInput.disabled = !githubSelected;
+  };
+  sourceBlankInput.addEventListener("change", syncSourceFields);
+  sourceGithubInput.addEventListener("change", syncSourceFields);
+  syncSourceFields();
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    onCreateWorkspace({name: nameInput.value.trim() || "Default workspace"});
+    const source = sourceGithubInput.checked ? {
+      type: "github",
+      repoUrl: repoUrlInput.value.trim(),
+      requestedBranch: branchInput.value.trim() || undefined,
+    } : {type: "blank"};
+    onCreateWorkspace({
+      name: nameInput.value.trim() || "Default workspace",
+      source,
+    });
   });
 
   const list = state.workspaces.length ?
