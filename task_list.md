@@ -164,12 +164,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-10. Workspace rows and the selected workspace header now show compact GitHub repo/branch/short-SHA summaries, while blank workspaces continue showing the storage prefix.
 
-- [ ] 17. **Add backend route for Git status summary** - medium (gpt-5.4)
+- [x] 17. **Add backend route for Git status summary** - medium (gpt-5.4)
   - Acceptance criteria:
   - Add an authenticated API endpoint for active-session Git status summary.
   - Endpoint verifies workspace/session ownership.
   - Backend proxies or requests status from the runner rather than reading Cloud Storage as Git state.
   - Status includes branch, commit, dirty counts, ahead/behind when available, and conflicted state when available.
+  - Completed: 2026-06-10. Added an authenticated session-scoped Git status route in Cloud Functions that verifies ownership, requires a live runner, and proxies to the protected runner Git status endpoint.
 
 - [ ] 18. **Add runner endpoint for Git status summary** - medium (gpt-5.4)
   - Acceptance criteria:
