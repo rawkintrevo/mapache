@@ -703,6 +703,12 @@ main.drawer-collapsed {
   gap: 8px;
 }
 
+.git-commit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
 .git-status-details {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

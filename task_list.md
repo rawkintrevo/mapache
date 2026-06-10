@@ -204,12 +204,13 @@ Before implementation tasks, read:
   - Path validation prevents escaping `/workspace`.
   - Completed: 2026-06-10. Added protected runner/backend stage and unstage routes with workspace-relative path validation, plus Git panel file rows with Stage/Unstage controls.
 
-- [ ] 22. **Add commit action plumbing** - medium (gpt-5.4)
+- [x] 22. **Add commit action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner supports creating a commit with a user-provided message.
   - Backend validates message presence and ownership.
   - UI exposes commit message input and commit button.
   - Empty commits are rejected unless explicitly supported by a later task.
+  - Completed: 2026-06-10. Added protected runner/backend commit routes with commit-message validation and empty-commit rejection, plus a Git panel commit input and button.
 
 - [ ] 23. **Add push branch action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:
@@ -226,9 +227,9 @@ Before implementation tasks, read:
 
 - [ ] 25. **Decide GitHub App ownership and permission policy** - human
   - Acceptance criteria:
-  - Decide whether the GitHub App is owned by a personal account, organization, or deployment-specific GitHub org.
+  - Decide whether the GitHub App is owned by a personal account, organization, or deployment-specific GitHub org. (ata-systems)
   - Decide required permissions for repository contents, metadata, pull requests, and webhooks.
-  - Decide whether the app supports all repositories or only selected repositories per installation.
+  - Decide whether the app supports all repositories or only selected repositories per installation. (all)
   - Record decisions in the GitHub App planning doc before implementation continues.
 
 - [ ] 26. **Create the GitHub App in GitHub** - human
