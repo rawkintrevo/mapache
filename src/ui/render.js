@@ -140,6 +140,7 @@ function renderSidebar(props) {
   const {
     state,
     onCreateWorkspace,
+    onConnectGithub,
     onLoadConnectedRepos,
     onOpenSessionModal,
     onRefreshWorkspaceFiles,
@@ -222,6 +223,7 @@ function renderSidebar(props) {
       createElement("span", {}, "Connected repository"),
       repoSelect,
     ]),
+    createGithubConnectButton({repoPicker, onConnectGithub}),
     repoPicker.error === "github_app_not_configured" ?
       createElement("p", {className: "subtle repo-picker-fallback"}, "GitHub App not configured. Enter a public repository URL below.") :
       repoPicker.error ?
@@ -372,6 +374,21 @@ function renderSidebar(props) {
       renderDrawerSessionList(state, onSelectSession, onStopSession),
     ]),
   ]);
+}
+
+function createGithubConnectButton({repoPicker, onConnectGithub}) {
+  if ((repoPicker.repos || []).length) {
+    return null;
+  }
+  const button = createElement("button", {
+    className: "secondary github-connect-button",
+    disabled: repoPicker.loading || !onConnectGithub,
+    type: "button",
+  }, repoPicker.loading ? "Loading..." : "Connect GitHub");
+  if (onConnectGithub) {
+    button.addEventListener("click", onConnectGithub);
+  }
+  return button;
 }
 
 function renderIcon(iconNode) {

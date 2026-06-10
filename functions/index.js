@@ -6,6 +6,7 @@ const {GoogleAuth} = require("google-auth-library");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {setGlobalOptions} = require("firebase-functions/v2");
+const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 
 admin.initializeApp();
@@ -13,6 +14,10 @@ setGlobalOptions({maxInstances: 10, region: process.env.FUNCTION_REGION || "us-c
 
 const db = admin.firestore();
 const auth = new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
+const GITHUB_APP_ID_SECRET = defineSecret("GITHUB_APP_ID");
+const GITHUB_APP_CLIENT_ID_SECRET = defineSecret("GITHUB_APP_CLIENT_ID");
+const GITHUB_APP_CLIENT_SECRET_SECRET = defineSecret("GITHUB_APP_CLIENT_SECRET");
+const GITHUB_APP_PRIVATE_KEY_SECRET = defineSecret("GITHUB_APP_PRIVATE_KEY");
 
 const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
 const DEFAULT_CPU = process.env.SESSION_CPU || "1";
@@ -27,15 +32,29 @@ const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
 const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 const INTERNAL_STORAGE_DIR = ".mapahce-internal";
 
-exports.api = onRequest({cors: true}, async (req, res) => {
+exports.api = onRequest({
+  cors: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_CLIENT_ID_SECRET,
+    GITHUB_APP_CLIENT_SECRET_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+  ],
+}, async (req, res) => {
   try {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
       return;
     }
 
-    const user = await requireUser(req);
     const route = routeRequest(req.path);
+
+    if (req.method === "GET" && route.name === "githubCallback") {
+      await handleGithubCallback(req, res);
+      return;
+    }
+
+    const user = await requireUser(req);
 
     if (req.method === "GET" && route.name === "me") {
       res.json({user});
@@ -142,6 +161,11 @@ exports.api = onRequest({cors: true}, async (req, res) => {
 
     if (req.method === "GET" && route.name === "githubRepos") {
       res.json(await listConnectedRepos(user.uid));
+      return;
+    }
+
+    if (req.method === "GET" && route.name === "githubConnect") {
+      res.json(await createGithubConnectUrl(user.uid, req));
       return;
     }
 
@@ -273,6 +297,12 @@ function routeRequest(path) {
     parts[4] === "git-open-pr"
   ) {
     return {name: "gitOpenPr", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
+    return {name: "githubConnect"};
+  }
+  if (parts.length === 2 && parts[0] === "github" && parts[1] === "callback") {
+    return {name: "githubCallback"};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "repos") {
     return {name: "githubRepos"};
@@ -960,6 +990,199 @@ async function listConnectedRepos(uid) {
   return {repos};
 }
 
+async function createGithubConnectUrl(uid, req) {
+  if (!isGithubOAuthConfigured()) {
+    throw httpError(503, "github_oauth_not_configured");
+  }
+
+  const state = crypto.randomBytes(24).toString("base64url");
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await githubOAuthStateDoc(state).set({
+    uid,
+    returnTo: normalizeGithubReturnTo(req.query.returnTo || req.get("referer") || req.get("origin")),
+    createdAt: now,
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (10 * 60 * 1000)),
+  });
+
+  const url = new URL("https://github.com/login/oauth/authorize");
+  url.searchParams.set("client_id", githubClientId());
+  url.searchParams.set("state", state);
+  url.searchParams.set("redirect_uri", githubCallbackUrl(req));
+  return {url: url.toString()};
+}
+
+async function handleGithubCallback(req, res) {
+  const code = cleanGithubValue(req.query.code);
+  const state = cleanGithubValue(req.query.state);
+  if (!code || !state) {
+    res.status(400).send("Missing GitHub authorization code or state.");
+    return;
+  }
+  if (!isGithubOAuthConfigured()) {
+    res.status(503).send("GitHub OAuth is not configured.");
+    return;
+  }
+
+  const stateRef = githubOAuthStateDoc(state);
+  const stateSnap = await stateRef.get();
+  if (!stateSnap.exists) {
+    res.status(400).send("GitHub authorization state expired or was not found.");
+    return;
+  }
+
+  const stateData = stateSnap.data() || {};
+  await stateRef.delete();
+  const uid = cleanGithubValue(stateData.uid);
+  if (!uid || githubStateExpired(stateData)) {
+    res.status(400).send("GitHub authorization state expired or was invalid.");
+    return;
+  }
+
+  const tokenResponse = await exchangeGithubOAuthCode(code, githubCallbackUrl(req));
+  const accessToken = cleanGithubToken(tokenResponse.access_token);
+  if (!accessToken) {
+    throw httpError(502, "github_oauth_token_failed");
+  }
+
+  const [githubUser, installations] = await Promise.all([
+    requestGithubJson("https://api.github.com/user", accessToken, {
+      failureError: "github_user_lookup_failed",
+    }),
+    listGithubUserInstallations(accessToken),
+  ]);
+  await storeGithubConnection(uid, githubUser, installations);
+
+  const redirectTo = cleanGithubValue(stateData.returnTo) || "/";
+  res.status(302).set("Location", redirectTo).send("GitHub connected.");
+}
+
+function isGithubOAuthConfigured() {
+  return Boolean(githubClientId() && githubClientSecret());
+}
+
+function githubCallbackUrl(req) {
+  const host = req.get("x-forwarded-host") || req.get("host") || "";
+  const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+  return `${proto}://${host}/api/github/callback`;
+}
+
+function normalizeGithubReturnTo(value) {
+  const fallback = "/";
+  const rawValue = String(value || "").trim();
+  if (!rawValue) {
+    return fallback;
+  }
+  try {
+    const url = new URL(rawValue);
+    if (url.protocol === "https:" || url.protocol === "http:") {
+      return url.toString().slice(0, 512);
+    }
+  } catch (error) {
+    return fallback;
+  }
+  return fallback;
+}
+
+function githubStateExpired(value) {
+  const expiresAt = value && value.expiresAt;
+  return expiresAt && typeof expiresAt.toMillis === "function" && expiresAt.toMillis() < Date.now();
+}
+
+async function exchangeGithubOAuthCode(code, redirectUri) {
+  let response;
+  try {
+    response = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "user-agent": "mapahce-functions",
+      },
+      body: JSON.stringify({
+        client_id: githubClientId(),
+        client_secret: githubClientSecret(),
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+  } catch (error) {
+    throw httpError(502, "github_oauth_token_failed", error);
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) {
+    logger.error("github oauth token exchange failed", {
+      status: response.status,
+      error: cleanGithubValue(data.error),
+      errorDescription: cleanGithubValue(data.error_description),
+    });
+    throw httpError(502, "github_oauth_token_failed");
+  }
+  return data;
+}
+
+async function listGithubUserInstallations(token) {
+  const installations = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const url = new URL("https://api.github.com/user/installations");
+    url.searchParams.set("per_page", "100");
+    url.searchParams.set("page", String(page));
+    const data = await requestGithubJson(url.toString(), token, {
+      failureError: "github_user_installations_failed",
+    });
+    const pageInstallations = Array.isArray(data && data.installations) ? data.installations : [];
+    installations.push(...pageInstallations);
+    if (pageInstallations.length < 100) {
+      break;
+    }
+  }
+  return installations;
+}
+
+async function storeGithubConnection(uid, githubUser, installations) {
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const installationIds = installations
+      .map((installation) => cleanGithubNumericId(installation && installation.id))
+      .filter(Boolean);
+  const batch = db.batch();
+  batch.set(githubUserDoc(uid), {
+    firebaseUid: uid,
+    githubUserId: cleanGithubNumericId(githubUser && githubUser.id),
+    githubLogin: cleanGithubValue(githubUser && githubUser.login),
+    displayName: cleanGithubValue(githubUser && githubUser.name),
+    avatarUrl: cleanGithubValue(githubUser && githubUser.avatar_url),
+    connectionStatus: "connected",
+    installationIds,
+    updatedAt: now,
+    lastSyncedAt: now,
+    createdAt: now,
+  }, {merge: true});
+
+  installations.forEach((installation) => {
+    const installationId = cleanGithubNumericId(installation && installation.id);
+    if (!installationId) return;
+    const account = installation.account || {};
+    batch.set(githubInstallationCollection(uid).doc(installationId), {
+      installationId,
+      ownerUid: uid,
+      githubAccountId: cleanGithubNumericId(account.id),
+      githubAccountLogin: cleanGithubValue(account.login),
+      githubAccountType: cleanGithubValue(account.type),
+      repositorySelection: cleanGithubValue(installation.repository_selection),
+      appId: cleanGithubNumericId(installation.app_id),
+      permissionSet: normalizeGithubTokenPermissions(installation.permissions),
+      installationStatus: "active",
+      webhookConfigured: true,
+      updatedAt: now,
+      lastSyncedAt: now,
+      createdAt: now,
+      removedAt: null,
+    }, {merge: true});
+  });
+
+  await batch.commit();
+}
+
 async function createGithubInstallationToken(installationId) {
   if (!isGithubAppConfigured()) {
     throw httpError(503, "github_app_not_configured");
@@ -979,7 +1202,7 @@ async function createGithubInstallationToken(installationId) {
 }
 
 function isGithubAppConfigured() {
-  return Boolean(normalizeGithubAppId(process.env.GITHUB_APP_ID) && normalizeGithubPrivateKey());
+  return Boolean(normalizeGithubAppId(githubAppId()) && normalizeGithubPrivateKey());
 }
 
 function normalizeGithubInstallationId(value) {
@@ -995,12 +1218,12 @@ function normalizeGithubAppId(value) {
 }
 
 function normalizeGithubPrivateKey() {
-  const key = String(process.env.GITHUB_APP_PRIVATE_KEY || "").trim();
+  const key = String(githubPrivateKey() || "").trim();
   return key ? key.replace(/\\n/g, "\n") : "";
 }
 
 function createGithubAppJwt() {
-  const appId = normalizeGithubAppId(process.env.GITHUB_APP_ID);
+  const appId = normalizeGithubAppId(githubAppId());
   const privateKey = normalizeGithubPrivateKey();
   if (!appId || !privateKey) {
     throw httpError(503, "github_app_not_configured");
@@ -1029,6 +1252,30 @@ function createGithubAppJwt() {
 
 function encodeJwtSegment(value) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function githubAppId() {
+  return secretValue(GITHUB_APP_ID_SECRET) || process.env.GITHUB_APP_ID || "";
+}
+
+function githubClientId() {
+  return secretValue(GITHUB_APP_CLIENT_ID_SECRET) || process.env.GITHUB_APP_CLIENT_ID || "";
+}
+
+function githubClientSecret() {
+  return secretValue(GITHUB_APP_CLIENT_SECRET_SECRET) || process.env.GITHUB_APP_CLIENT_SECRET || "";
+}
+
+function githubPrivateKey() {
+  return secretValue(GITHUB_APP_PRIVATE_KEY_SECRET) || process.env.GITHUB_APP_PRIVATE_KEY || "";
+}
+
+function secretValue(secret) {
+  try {
+    return secret.value();
+  } catch (error) {
+    return "";
+  }
 }
 
 async function requestGithubInstallationToken(installationId, appJwt) {
@@ -1297,6 +1544,10 @@ function githubInstallationCollection(uid) {
 
 function githubInstallationRepoCollection(uid, installationId) {
   return githubInstallationCollection(uid).doc(installationId).collection("repositories");
+}
+
+function githubOAuthStateDoc(state) {
+  return db.collection("githubOAuthStates").doc(state);
 }
 
 function normalizeGithubInstallationIds(value) {
