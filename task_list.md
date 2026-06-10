@@ -227,12 +227,13 @@ Before implementation tasks, read:
   - Identify required security decisions before implementation.
   - Completed: 2026-06-10. Added a dedicated guide under `docs/guides/` for GitHub App/private-repo planning, linked it from the GitHub workspace design doc, and added an ADR template under `adrs/` for upcoming decisions.
 
-- [ ] 25. **Decide GitHub App ownership and permission policy** - human
+- [x] 25. **Decide GitHub App ownership and permission policy** - human
   - Acceptance criteria:
   - Decide whether the GitHub App is owned by a personal account, organization, or deployment-specific GitHub org. (ata-systems)
   - Decide required permissions for repository contents, metadata, pull requests, and webhooks.
   - Decide whether the app supports all repositories or only selected repositories per installation. (all)
   - Record decisions in the GitHub App planning doc before implementation continues.
+  - Completed: 2026-06-10. Decisions recorded in `adrs/adr-0001-github-app-ownership-and-permissions.md`: owner is `ata-systems` org, permissions are Contents (read/write), Metadata (read), Pull Requests (read/write), scope is all repositories.
 
 - [ ] 26. **Create the GitHub App in GitHub** - human
   - Acceptance criteria:
