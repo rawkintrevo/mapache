@@ -302,12 +302,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-10. Connected repo selections now populate workspace creation with installation/repo metadata and default branch hints, manual repo URL entry still clears back to public fallback mode, and backend workspace creation validates connected repo selections against the authenticated user’s installation before storing connected source metadata.
 
-- [ ] 35. **Support private repo clone with installation tokens** - medium (gpt-5.4)
+- [x] 35. **Support private repo clone with installation tokens** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner can clone private connected repos using a short-lived installation token supplied by the backend.
   - Tokens are passed without logging and are not stored in Cloud Storage or normal workspace files.
   - Public repo clone behavior still works.
   - Failure messages distinguish auth failure from repo-not-found and network failure.
+  - Completed: 2026-06-10. Backend now mints clone-only installation tokens during runner provisioning/restart for private connected repos, the runner uses a temporary askpass script outside `/workspace`, and clone failures now classify auth vs repo-not-found vs network errors.
 
 - [ ] 36. **Decide PR creation and branch naming policy** - human
   - Acceptance criteria:

@@ -173,7 +173,7 @@ Expected UX:
 4. The backend validates and normalizes the source payload.
 5. The workspace document is created with explicit source metadata.
 
-The public GitHub URL flow remains the lowest-common-denominator fallback. Connected repository selection can already persist installation-scoped source metadata, but private repository clone/auth during session startup still belongs to later GitHub App tasks.
+The public GitHub URL flow remains the lowest-common-denominator fallback. Connected repository selection now persists installation-scoped source metadata, and private connected repos can clone during session startup by using a short-lived GitHub App installation token minted by the backend for runner startup only.
 
 ## Session Creation Flow
 
@@ -218,6 +218,7 @@ For GitHub workspaces:
 
 - If a cached `.git` archive exists in internal storage, restore it to `/workspace/.git`.
 - Otherwise clone the repository and check out the requested commit or branch.
+- For private connected repos, the backend supplies a short-lived installation token to the runner for clone auth only; the runner must not write that token into normal workspace files or persist it in Cloud Storage.
 
 The `.git` directory should not be synced object-by-object through normal Cloud Storage file listing. It should be treated like archive-backed runtime state because it has many small files and is vulnerable to partial-sync corruption.
 

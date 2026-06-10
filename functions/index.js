@@ -1293,7 +1293,7 @@ async function provisionSessionService(workspace, sessionRef, session) {
     const client = await auth.getClient();
     const parent = `projects/${await getProjectId()}/locations/${session.region}`;
     const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${session.serviceId}`;
-    const body = buildCloudRunService(workspace, session);
+    const body = await buildCloudRunService(workspace, session);
     const response = await client.request({url, method: "POST", data: body});
     await waitForOperation(client, response.data);
     await setPublicInvoker(client, `${parent}/services/${session.serviceId}`);
@@ -1334,7 +1334,7 @@ async function patchSessionService(sessionRef, session, options = {}) {
         containers: [{
           image: session.image,
           resources: {limits: resourceLimits(session.resources)},
-          env: options.restart ? sessionRunnerEnv(session, {
+          env: options.restart ? await sessionRunnerEnv(session, {
             restartNonce: Date.now().toString(),
           }) : undefined,
         }],
@@ -1408,7 +1408,7 @@ async function markSessionStopped(sessionRef, reason) {
   await sessionRef.update(stopped);
 }
 
-function buildCloudRunService(workspace, session) {
+async function buildCloudRunService(workspace, session) {
   return {
     template: {
       scaling: {
@@ -1420,7 +1420,7 @@ function buildCloudRunService(workspace, session) {
         ports: [{containerPort: 8080}],
         resources: {limits: resourceLimits(session.resources)},
         env: [
-          ...sessionRunnerEnv({
+          ...await sessionRunnerEnv({
             ...session,
             workspaceId: workspace.id,
             workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
@@ -1432,7 +1432,7 @@ function buildCloudRunService(workspace, session) {
   };
 }
 
-function sessionRunnerEnv(session, options = {}) {
+async function sessionRunnerEnv(session, options = {}) {
   const env = [
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "WORKSPACE_ID", value: session.workspaceId || ""},
@@ -1466,9 +1466,36 @@ function sessionRunnerEnv(session, options = {}) {
           ),
         },
     );
+
+    env.push(...await buildGithubCloneEnv(session));
   }
 
   return env.filter(Boolean);
+}
+
+async function buildGithubCloneEnv(session) {
+  if (cleanName(session.sourceType) !== "github") {
+    return [];
+  }
+
+  if (cleanName(session.sourceMode) !== "connected") {
+    return [];
+  }
+
+  if (cleanName(session.sourceVisibility) !== "private") {
+    return [];
+  }
+
+  const installationId = cleanGithubNumericId(session.sourceInstallationId);
+  if (!installationId) {
+    throw httpError(503, "github_clone_auth_unavailable");
+  }
+
+  const tokenResponse = await createGithubInstallationToken(installationId);
+  return [
+    {name: "GITHUB_CLONE_USERNAME", value: "x-access-token"},
+    {name: "GITHUB_CLONE_TOKEN", value: tokenResponse.token},
+  ];
 }
 
 function sessionSourceMetadata(workspace) {
@@ -1479,6 +1506,8 @@ function sessionSourceMetadata(workspace) {
 
   return {
     sourceType: "github",
+    sourceMode: cleanName(source.mode || "public"),
+    sourceVisibility: cleanName(source.visibility || "public"),
     sourceRepoUrl: cleanName(source.repoUrl || ""),
     sourceRepoOwner: cleanName(source.owner || ""),
     sourceRepoName: cleanName(source.repo || ""),
@@ -1486,6 +1515,8 @@ function sessionSourceMetadata(workspace) {
     sourceRequestedCommit: cleanName(source.requestedCommit || ""),
     sourceResolvedBranch: cleanName(source.resolvedBranch || ""),
     sourceResolvedCommit: cleanName(source.resolvedCommit || ""),
+    sourceInstallationId: cleanGithubNumericId(source.connection && source.connection.installationId),
+    sourceRepoId: cleanGithubNumericId(source.connection && source.connection.repoId),
   };
 }
 
