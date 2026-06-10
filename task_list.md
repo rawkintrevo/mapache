@@ -116,12 +116,13 @@ Before implementation tasks, read:
   - Backend/frontend can display the resolved commit later.
   - Completed: 2026-06-10. Runner now publishes resolved branch/commit plus source status to session and workspace docs, while keeping requested repo settings intact and separating clone vs sync failure states.
 
-- [ ] 11. **Introduce app-owned sync ignore policy metadata** - easy (gpt-5.4-mini)
+- [x] 11. **Introduce app-owned sync ignore policy metadata** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Workspace metadata can carry a sync policy.
   - GitHub workspaces default to cache exclusions such as `.git/` normal file sync, `node_modules/`, build outputs, and internal state.
   - Blank workspaces keep current effective sync behavior.
   - Policy is documented in `docs/runtime-containers.md`.
+  - Completed: 2026-06-10. Workspace records now persist a source-aware syncPolicy field, and runtime docs describe the blank vs GitHub defaults.
 
 - [ ] 12. **Apply sync ignore policy in runner upload/download paths** - medium (gpt-5.4)
   - Acceptance criteria:
