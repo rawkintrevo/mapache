@@ -390,6 +390,61 @@ main.drawer-collapsed {
   flex: 1 1 0;
 }
 
+.workspace-create {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-source-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.source-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.source-choice input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.workspace-source-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.repo-picker {
+  display: grid;
+  gap: 6px;
+}
+
+.repo-picker-fallback {
+  margin: 0;
+  font-size: 12px;
+}
+
+.github-connect-button {
+  width: 100%;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .list,
 .session-detail {
   display: grid;
@@ -614,6 +669,71 @@ main.drawer-collapsed {
   gap: 10px;
 }
 
+.git-status-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
+}
+
+.git-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.git-status-body,
+.git-file-list {
+  display: grid;
+  gap: 10px;
+}
+
+.git-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.git-file-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.git-file-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-file-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.git-commit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.git-status-panel textarea,
+.modal-form textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+}
+
+.git-status-details {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .metric {
   display: grid;
   gap: 4px;
@@ -655,6 +775,21 @@ main.drawer-collapsed {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 22px 60px rgba(16, 24, 32, 0.28);
+}
+
+.pull-request-panel {
+  width: min(760px, 100%);
+}
+
+.modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .file-editor-panel {
@@ -843,6 +978,10 @@ h2 {
   .session-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .workspace-source-choice {
+    grid-template-columns: 1fr;
   }
 
   .topbar {

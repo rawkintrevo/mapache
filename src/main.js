@@ -28,6 +28,29 @@ const state = {
   },
   selectedWorkspaceId: null,
   selectedSessionId: null,
+  gitStatus: {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+    actionMessage: "",
+    commitMessage: "",
+    canOpenPr: false,
+  },
+  pullRequestForm: {
+    open: false,
+    title: "",
+    body: "",
+    branchDescription: "",
+    draft: false,
+    error: "",
+  },
+  repoPicker: {
+    loading: false,
+    error: "",
+    repos: [],
+    attempted: false,
+  },
   drawerCollapsed: false,
   sessionModalOpen: false,
   busy: false,
@@ -58,6 +81,7 @@ async function start() {
         state.profile = null;
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
+        resetGitStatus();
         render();
         return;
       }
@@ -95,7 +119,43 @@ function render() {
     onResizeSession: resizeSession,
     onRestartSession: restartSession,
     onStopSession: stopSession,
+    onPullGit: pullGit,
+    onPushGit: pushGit,
+    onStageGitPath: stageGitPath,
+    onUnstageGitPath: unstageGitPath,
+    onUpdateGitCommitMessage: updateGitCommitMessage,
+    onCommitGit: commitGit,
+    onOpenPullRequest: openPullRequestModal,
+    onClosePullRequest: closePullRequestModal,
+    onUpdatePullRequestForm: updatePullRequestForm,
+    onSubmitPullRequest: submitPullRequest,
+    onLoadConnectedRepos: loadConnectedRepos,
+    onConnectGithub: connectGithub,
   });
+}
+
+function resetGitStatus() {
+  state.gitStatus = {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+    actionMessage: "",
+    commitMessage: "",
+    canOpenPr: false,
+  };
+  resetPullRequestForm();
+}
+
+function resetPullRequestForm() {
+  state.pullRequestForm = {
+    open: false,
+    title: "",
+    body: "",
+    branchDescription: "",
+    draft: false,
+    error: "",
+  };
 }
 
 function toggleDrawer() {
@@ -118,8 +178,10 @@ async function refreshAll() {
     }
     if (previousWorkspaceId !== state.selectedWorkspaceId) {
       resetWorkspaceFiles();
+      resetGitStatus();
     }
     await loadSessions();
+    await loadGitStatus();
     await loadWorkspaceFiles();
   });
 }
@@ -132,6 +194,7 @@ async function loadSessions() {
   const data = await state.api.getSessions(state.selectedWorkspaceId);
   state.sessions = data.sessions || [];
   state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
+  await loadGitStatus();
 }
 
 async function loadWorkspaceFiles() {
@@ -148,9 +211,60 @@ async function loadWorkspaceFiles() {
   }
 }
 
-async function createWorkspace({name}) {
+async function loadConnectedRepos() {
+  if (state.repoPicker.loading || state.repoPicker.attempted) return;
+  state.repoPicker = {...state.repoPicker, loading: true, attempted: true};
+  render();
+  try {
+    const data = await state.api.getConnectedRepos();
+    state.repoPicker = {loading: false, error: "", repos: data.repos || [], attempted: true};
+  } catch (error) {
+    state.repoPicker = {loading: false, error: friendlyRepoPickerError(error), repos: [], attempted: true};
+  }
+  render();
+}
+
+async function connectGithub() {
+  if (!state.api) return;
+  state.repoPicker = {...state.repoPicker, loading: true, error: ""};
+  render();
+  try {
+    const data = await state.api.getGithubConnectUrl();
+    if (!data.url) {
+      throw new Error("github_connect_url_unavailable");
+    }
+    window.location.href = data.url;
+  } catch (error) {
+    state.repoPicker = {
+      loading: false,
+      error: friendlyRepoPickerError(error),
+      repos: [],
+      attempted: true,
+    };
+    render();
+  }
+}
+
+function friendlyRepoPickerError(error) {
+  const message = error.message || "Could not load connected repositories.";
+  if (message === "github_app_not_configured") {
+    return "github_app_not_configured";
+  }
+  if (message === "github_oauth_not_configured") {
+    return "GitHub OAuth is not configured.";
+  }
+  if (message === "github_connect_url_unavailable") {
+    return "Could not start GitHub connection.";
+  }
+  return message;
+}
+
+async function createWorkspace(payload) {
   await runBusy(async () => {
-    const data = await state.api.createWorkspace({name});
+    const data = await state.api.createWorkspace({
+      name: payload.name,
+      source: payload.source,
+    });
     state.selectedWorkspaceId = data.workspace.id;
     state.selectedSessionId = null;
     resetWorkspaceFiles();
@@ -162,8 +276,10 @@ async function selectWorkspace(workspaceId) {
   state.selectedWorkspaceId = workspaceId;
   state.sessionModalOpen = false;
   resetWorkspaceFiles();
+  resetGitStatus();
   await runBusy(async () => {
     await loadSessions();
+    await loadGitStatus();
     await loadWorkspaceFiles();
   });
 }
@@ -187,16 +303,75 @@ async function createSession(payload) {
     const next = await state.api.getSessions(state.selectedWorkspaceId);
     state.sessions = next.sessions || [];
     state.sessionModalOpen = false;
+    await loadGitStatus();
   });
 }
 
-function selectSession(sessionId) {
+async function selectSession(sessionId) {
   state.selectedSessionId = sessionId;
+  await loadGitStatus();
   render();
 }
 
 async function refreshWorkspaceFiles() {
   await runBusy(loadWorkspaceFiles);
+}
+
+async function loadGitStatus() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) {
+    resetGitStatus();
+    return;
+  }
+
+  state.gitStatus = {
+    loading: true,
+    error: "",
+    unavailable: false,
+    data: null,
+    actionMessage: state.gitStatus.actionMessage || "",
+    commitMessage: state.gitStatus.commitMessage || "",
+    canOpenPr: state.gitStatus.canOpenPr || false,
+  };
+  render();
+
+  try {
+    const data = await state.api.getGitStatus(workspaceId, sessionId);
+    if (data && data.ok && data.git === false) {
+      state.gitStatus = {
+        loading: false,
+        error: "",
+        unavailable: true,
+        data,
+        actionMessage: state.gitStatus.actionMessage || "",
+        commitMessage: state.gitStatus.commitMessage || "",
+        canOpenPr: false,
+      };
+      render();
+      return;
+    }
+    state.gitStatus = {
+      loading: false,
+      error: "",
+      unavailable: false,
+      data: data || null,
+      actionMessage: state.gitStatus.actionMessage || "",
+      commitMessage: state.gitStatus.commitMessage || "",
+      canOpenPr: canOpenPullRequestForSession(getSelectedSession(), data, state.gitStatus.canOpenPr),
+    };
+  } catch (error) {
+    state.gitStatus = {
+      loading: false,
+      error: friendlyGitStatusError(error),
+      unavailable: true,
+      data: null,
+      actionMessage: state.gitStatus.actionMessage || "",
+      commitMessage: state.gitStatus.commitMessage || "",
+      canOpenPr: false,
+    };
+  }
+  render();
 }
 
 function toggleWorkspaceFileDir(path) {
@@ -329,6 +504,265 @@ function friendlyFilesError(error) {
   const message = error.message || "Could not load files.";
   if (message === "not_found") return "Files API is not deployed yet.";
   return message;
+}
+
+function friendlyGitStatusError(error) {
+  const message = error.message || "Could not load Git status.";
+  if (message === "runner_git_status_unavailable") {
+    return "Git status is temporarily unavailable.";
+  }
+  if (message === "runner_git_push_unavailable") {
+    return "Git push is temporarily unavailable.";
+  }
+  if (message === "runner_git_open_pr_unavailable") {
+    return "Pull request creation is temporarily unavailable.";
+  }
+  if (message === "github_auth_not_configured") {
+    return "GitHub auth is not configured for push.";
+  }
+  if (message === "github_pr_requires_connected_repo") {
+    return "Pull requests are only supported for connected GitHub repositories.";
+  }
+  if (message === "missing_pr_branch_description") {
+    return "Add a short branch description before opening a PR from the default branch.";
+  }
+  if (message === "git_pr_branch_name_conflict") {
+    return "That mapache/<description> branch name already exists. Choose a different description.";
+  }
+  if (message === "session_not_running") {
+    return "Git status is available once the session is running.";
+  }
+  return message;
+}
+
+async function pullGit() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Pulling latest changes...",
+      error: "",
+    };
+    render();
+    const result = await state.api.pullGit(workspaceId, sessionId);
+    state.gitStatus = {
+      loading: false,
+      error: result && result.pull && result.pull.ok === false ? (result.pull.message || "Git pull reported an issue.") : "",
+      unavailable: Boolean(result && result.git === false),
+      data: result || null,
+      actionMessage: result && result.pull && result.pull.ok === false ?
+        "Pull completed with Git conflicts or merge issues." :
+        "Pull completed.",
+    };
+    await loadGitStatus();
+  });
+}
+
+async function stageGitPath(path) {
+  await runGitFileAction(path, "stage", "Staging file...", (workspaceId, sessionId) => (
+    state.api.stageGit(workspaceId, sessionId, [path])
+  ));
+}
+
+async function unstageGitPath(path) {
+  await runGitFileAction(path, "unstage", "Unstaging file...", (workspaceId, sessionId) => (
+    state.api.unstageGit(workspaceId, sessionId, [path])
+  ));
+}
+
+async function runGitFileAction(path, action, actionMessage, requestAction) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId || !path) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage,
+      error: "",
+    };
+    render();
+    const result = await requestAction(workspaceId, sessionId);
+    state.gitStatus = {
+      loading: false,
+      error: "",
+      unavailable: Boolean(result && result.git === false),
+      data: result || null,
+      actionMessage: `${action === "stage" ? "Staged" : "Unstaged"} ${path}.`,
+      commitMessage: state.gitStatus.commitMessage || "",
+      canOpenPr: state.gitStatus.canOpenPr || false,
+    };
+    await loadGitStatus();
+  });
+}
+
+function updateGitCommitMessage(message) {
+  state.gitStatus = {
+    ...state.gitStatus,
+    commitMessage: message,
+  };
+}
+
+async function commitGit() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const message = (state.gitStatus.commitMessage || "").trim();
+  if (!workspaceId || !sessionId || !message) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Creating commit...",
+      error: "",
+    };
+    render();
+    const result = await state.api.commitGit(workspaceId, sessionId, message);
+    state.gitStatus = {
+      loading: false,
+      error: "",
+      unavailable: Boolean(result && result.git === false),
+      data: result || null,
+      actionMessage: result && result.committedHead ?
+        `Committed ${result.committedHead.slice(0, 7)}.` :
+        "Commit created.",
+      commitMessage: "",
+      canOpenPr: state.gitStatus.canOpenPr || false,
+    };
+    await loadGitStatus();
+  });
+}
+
+async function pushGit() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Pushing current branch...",
+      error: "",
+    };
+    render();
+    try {
+      const result = await state.api.pushGit(workspaceId, sessionId);
+      state.gitStatus = {
+        loading: false,
+        error: result && result.push && result.push.ok === false ? (result.push.message || "Git push reported an issue.") : "",
+        unavailable: Boolean(result && result.git === false),
+        data: result || null,
+        actionMessage: result && result.push && result.push.ok === false ?
+          "Push completed with Git errors." :
+          "Push completed.",
+        commitMessage: state.gitStatus.commitMessage || "",
+        canOpenPr: result && result.push && result.push.ok === false ? state.gitStatus.canOpenPr : true,
+      };
+      await loadGitStatus();
+    } catch (error) {
+      state.gitStatus = {
+        ...state.gitStatus,
+        error: friendlyGitStatusError(error),
+        actionMessage: "",
+      };
+      render();
+    }
+  });
+}
+
+function openPullRequestModal() {
+  state.pullRequestForm = {
+    ...state.pullRequestForm,
+    open: true,
+    error: "",
+  };
+  render();
+}
+
+function closePullRequestModal() {
+  resetPullRequestForm();
+  render();
+}
+
+function updatePullRequestForm(patch) {
+  state.pullRequestForm = {
+    ...state.pullRequestForm,
+    ...patch,
+    error: patch && Object.prototype.hasOwnProperty.call(patch, "error") ? patch.error : state.pullRequestForm.error,
+  };
+  render();
+}
+
+async function submitPullRequest() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+
+  await runBusy(async () => {
+    state.pullRequestForm = {
+      ...state.pullRequestForm,
+      error: "",
+    };
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Opening pull request...",
+      error: "",
+    };
+    render();
+    try {
+      const result = await state.api.openPullRequest(workspaceId, sessionId, {
+        title: state.pullRequestForm.title,
+        body: state.pullRequestForm.body,
+        branchDescription: state.pullRequestForm.branchDescription,
+        draft: state.pullRequestForm.draft,
+      });
+      state.gitStatus = {
+        loading: false,
+        error: "",
+        unavailable: Boolean(result && result.git === false),
+        data: result || null,
+        actionMessage: result && result.pullRequest && result.pullRequest.number ?
+          `Opened PR #${result.pullRequest.number}.` :
+          "Opened pull request.",
+        commitMessage: state.gitStatus.commitMessage || "",
+        canOpenPr: true,
+      };
+      const pullRequestUrl = result && result.pullRequest ? result.pullRequest.url : "";
+      resetPullRequestForm();
+      await loadGitStatus();
+      if (pullRequestUrl) {
+        window.open(pullRequestUrl, "_blank", "noopener");
+      }
+    } catch (error) {
+      state.pullRequestForm = {
+        ...state.pullRequestForm,
+        error: friendlyGitStatusError(error),
+      };
+      state.gitStatus = {
+        ...state.gitStatus,
+        actionMessage: "",
+      };
+      render();
+    }
+  });
+}
+
+function getSelectedSession() {
+  return state.sessions.find((session) => session.id === state.selectedSessionId) || null;
+}
+
+function canOpenPullRequestForSession(session, gitStatus, sticky = false) {
+  if (!session || session.sourceMode !== "connected" || !gitStatus || gitStatus.git === false) {
+    return false;
+  }
+  const baseBranch = session.sourceResolvedBranch || session.sourceRequestedBranch || "";
+  return Boolean(
+      sticky ||
+      Number(gitStatus.ahead || 0) > 0 ||
+      (gitStatus.branch && baseBranch && gitStatus.branch !== baseBranch),
+  );
 }
 
 async function resizeSession(sessionId, payload) {

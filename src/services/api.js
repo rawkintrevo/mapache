@@ -43,6 +43,45 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/stop`,
         {method: "POST", body: {}},
     ),
+    getGitStatus: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,
+    ),
+    pullGit: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-pull`,
+        {method: "POST", body: {}},
+    ),
+    stageGit: (workspaceId, sessionId, paths) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-stage`,
+        {method: "POST", body: {paths}},
+    ),
+    unstageGit: (workspaceId, sessionId, paths) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-unstage`,
+        {method: "POST", body: {paths}},
+    ),
+    commitGit: (workspaceId, sessionId, message) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-commit`,
+        {method: "POST", body: {message}},
+    ),
+    pushGit: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-push`,
+        {method: "POST", body: {}},
+    ),
+    openPullRequest: (workspaceId, sessionId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-open-pr`,
+        {method: "POST", body},
+    ),
+    getConnectedRepos: () => request(getToken, "/api/github/repos"),
+    getGithubConnectUrl: () => request(
+        getToken,
+        `/api/github/connect?returnTo=${encodeURIComponent(window.location.href)}`,
+    ),
   };
 }
 

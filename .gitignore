@@ -69,3 +69,4 @@ functions/.env*
 
 # dataconnect generated files
 .dataconnect
+.secrets/
