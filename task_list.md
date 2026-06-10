@@ -32,6 +32,7 @@ Before implementation tasks, read:
 - A GitHub workspace may have only one active session at a time. This avoids two Cloud Run containers writing competing Git metadata and working tree cache state.
 - Initial GitHub support can use pasted HTTPS GitHub repo URLs. Full GitHub App/Connector repo picker work is split into later tasks.
 - For `functions/` changes in normal implementation work, deploy Cloud Functions before handoff unless the user explicitly says not to deploy. For `next_task` skill runs, follow that skill's "do not deploy unless explicitly requested" rule.
+- Commit messages should start with `Issue #7: Workspace from Repo, ` (for example: `Issue #7: Workspace from Repo, Task 2: validate workspace source payloads`).
 
 ## Tasks
 
@@ -50,12 +51,13 @@ Before implementation tasks, read:
   - Existing blank workspace creation behavior remains unchanged when no source is provided.
   - Completed: 2026-06-10. Added workspace source normalization helpers and wired create-workspace validation for blank and public GitHub HTTPS repo payloads.
 
-- [ ] 3. **Persist workspace source metadata on create** - easy (gpt-5.4-mini)
+- [x] 3. **Persist workspace source metadata on create** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - `createWorkspace` stores normalized source metadata.
   - Blank workspaces explicitly store `source.type: "blank"` or equivalent stable metadata.
   - GitHub workspaces store repo URL, owner, repo name, requested branch if present, and source status fields.
   - `npm run build` and `npm --prefix functions run lint` pass when feasible.
+  - Completed: 2026-06-10. Workspace creation now persists explicit blank source metadata and initializes GitHub source records with repo identity plus status fields.
 
 - [ ] 4. **Expose workspace source fields in the create-workspace API client** - easy (gpt-5.4-mini)
   - Acceptance criteria:

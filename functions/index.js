@@ -235,12 +235,25 @@ async function createWorkspace(uid, payload) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
-  normalizeWorkspaceSourcePayload(payload);
+  const source = normalizeWorkspaceSourcePayload(payload);
   const doc = {
     ownerUid: uid,
     userPath: userPath(uid),
     name,
     bucket,
+    source: source.type === "blank" ? {
+      type: "blank",
+      status: "ready",
+      statusMessage: null,
+      resolvedBranch: null,
+      resolvedCommit: null,
+    } : {
+      ...source,
+      status: "pending",
+      statusMessage: null,
+      resolvedBranch: null,
+      resolvedCommit: null,
+    },
     storagePrefix: `workspaces/${uid}/${slugify(name)}`,
     createdAt: now,
     updatedAt: now,
