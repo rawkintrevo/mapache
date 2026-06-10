@@ -291,7 +291,7 @@ function createArchiveSyncTargets() {
       localPath: path.join(workspaceDir, ".git"),
       remotePath: archiveRemotePath("workspace-git.tar.gz"),
       ensureLocalPath: false,
-      restoreOnStartup: false,
+      restoreOnStartup: true,
     });
   }
 
@@ -316,37 +316,64 @@ async function prepareWorkspaceSource() {
     return;
   }
 
-  await cloneGithubWorkspace();
+  await emptyWorkspaceDir(workspaceDir);
+
+  let restoredGitArchive = false;
   try {
-    await syncDown();
+    restoredGitArchive = await restoreGithubGitArchiveIfPresent();
+    if (!restoredGitArchive) {
+      await cloneGithubWorkspace();
+    }
+  } catch (error) {
+    const handler = restoredGitArchive ? recordGithubSyncFailure : recordGithubCloneFailure;
+    await handler(error);
+    const label = restoredGitArchive ?
+      "GitHub workspace cache restore failed" :
+      "GitHub workspace startup failed";
+    throw new Error(`${label}: ${compactErrorMessage(error.message || error)}`);
+  }
+
+  try {
+    await syncWorktreeDown();
+    await syncArchivesDown({excludeModes: ["workspaceGit"]});
+    const resolved = await resolveGitHead();
+    console.log(`github workspace ready at ${resolved.commit}${resolved.branch ? ` on ${resolved.branch}` : ""}`);
+    await publishGithubResolvedMetadata(resolved);
   } catch (error) {
     await recordGithubSyncFailure(error);
     throw new Error(`GitHub workspace cache restore failed: ${compactErrorMessage(error.message || error)}`);
   }
 }
 
-async function cloneGithubWorkspace() {
-  if (!githubRepoUrl) {
-    const error = new Error("Missing GITHUB_REPO_URL for GitHub workspace startup.");
-    await recordGithubCloneFailure(error);
-    throw error;
+async function restoreGithubGitArchiveIfPresent() {
+  const target = archiveSyncTargets.find((item) => item.mode === "workspaceGit");
+  if (!target || !bucketName || !prefix) return false;
+
+  const file = storage.bucket(bucketName).file(target.remotePath);
+  const [exists] = await file.exists();
+  if (!exists) {
+    console.log("no cached .git archive found; falling back to clone");
+    return false;
   }
 
+  console.log("restoring cached .git archive");
   try {
-    await emptyWorkspaceDir(workspaceDir);
-    console.log(`cloning GitHub workspace from ${githubRepoUrl}`);
-    await runGitClone();
-    if (githubRequestedCommit) {
-      console.log(`checking out requested commit ${githubRequestedCommit}`);
-      await runGitCommand(["checkout", "--force", githubRequestedCommit]);
-    }
-    const resolved = await resolveGitHead();
-    console.log(`github workspace ready at ${resolved.commit}${resolved.branch ? ` on ${resolved.branch}` : ""}`);
-    await publishGithubResolvedMetadata(resolved);
+    await fs.promises.mkdir(target.localPath, {recursive: true});
+    await extractStorageArchive(file, target);
+    return true;
   } catch (error) {
-    await recordGithubCloneFailure(error);
-    throw new Error(`GitHub workspace startup failed: ${compactErrorMessage(error.message || error)}`);
+    throw new Error(`git archive restore failed: ${compactErrorMessage(error.message || error)}`);
   }
+}
+
+async function cloneGithubWorkspace() {
+  if (!githubRepoUrl) {
+    throw new Error("missing GitHub repo URL for workspace startup");
+  }
+
+  console.log(`cloning GitHub workspace from ${githubRepoUrl}`);
+  await runGitClone();
+  await checkoutRequestedCommit();
 }
 
 async function runGitClone() {
@@ -355,7 +382,21 @@ async function runGitClone() {
     args.push("--branch", githubRequestedBranch, "--single-branch");
   }
   args.push(githubRepoUrl, workspaceDir);
-  await runGitCommand(args, {cwd: "/"});
+  try {
+    await runGitCommand(args, {cwd: "/"});
+  } catch (error) {
+    throw new Error(`clone failed: ${compactErrorMessage(error.message || error)}`);
+  }
+}
+
+async function checkoutRequestedCommit() {
+  if (!githubRequestedCommit) return;
+  console.log(`checking out requested commit ${githubRequestedCommit}`);
+  try {
+    await runGitCommand(["checkout", "--force", githubRequestedCommit]);
+  } catch (error) {
+    throw new Error(`checkout failed: ${compactErrorMessage(error.message || error)}`);
+  }
 }
 
 async function resolveGitHead() {
@@ -423,6 +464,12 @@ async function emptyWorkspaceDir(dir) {
 
 async function syncDown() {
   if (!bucketName || !prefix) return;
+  await syncWorktreeDown();
+  await syncArchivesDown();
+}
+
+async function syncWorktreeDown() {
+  if (!bucketName || !prefix) return;
   const [files] = await storage.bucket(bucketName).getFiles({prefix});
   await Promise.all(files.map(async (file) => {
     if (file.name.endsWith("/")) return;
@@ -437,7 +484,6 @@ async function syncDown() {
     await fs.promises.mkdir(path.dirname(localPath), {recursive: true});
     await file.download({destination: localPath});
   }));
-  await syncArchivesDown();
 }
 
 async function syncUp(options = {}) {
@@ -520,9 +566,10 @@ async function walkWorkspace(dir) {
   });
 }
 
-async function syncArchivesDown() {
+async function syncArchivesDown(options = {}) {
+  const excludeModes = new Set(options.excludeModes || []);
   await Promise.all(archiveSyncTargets.map(async (target) => {
-    if (!target.restoreOnStartup) return;
+    if (!target.restoreOnStartup || excludeModes.has(target.mode)) return;
     try {
       const file = storage.bucket(bucketName).file(target.remotePath);
       const [exists] = await file.exists();
