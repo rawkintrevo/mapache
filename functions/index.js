@@ -254,6 +254,7 @@ async function createWorkspace(uid, payload) {
       resolvedBranch: null,
       resolvedCommit: null,
     },
+    syncPolicy: normalizeWorkspaceSyncPolicy(source),
     storagePrefix: `workspaces/${uid}/${slugify(name)}`,
     createdAt: now,
     updatedAt: now,
@@ -300,6 +301,27 @@ function normalizeWorkspaceSourcePayload(payload) {
     requestedBranch: requestedBranch || null,
     requestedCommit: requestedCommit || null,
     visibility: "public",
+  };
+}
+
+function normalizeWorkspaceSyncPolicy(source) {
+  if (!source || source.type !== "github") {
+    return {
+      mode: "blank",
+      exclude: [],
+    };
+  }
+
+  return {
+    mode: "github-cache",
+    exclude: [
+      ".git/",
+      "node_modules/",
+      "dist/",
+      "build/",
+      ".next/",
+      ".mapahce-internal/",
+    ],
   };
 }
 

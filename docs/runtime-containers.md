@@ -121,6 +121,8 @@ GitHub-backed sessions also receive source metadata env vars for runner startup 
 
 Blank workspaces continue using the existing storage-oriented env setup, with `WORKSPACE_SOURCE_TYPE=blank` so the runner can detect mode without guessing.
 
+Workspace records also carry an app-owned `syncPolicy` field. Blank workspaces default to `mode: "blank"` with no exclusions. GitHub workspaces default to `mode: "github-cache"` and exclude `.git/`, `node_modules/`, build outputs, `.next/`, and `.mapahce-internal/` paths from normal file sync. The policy is metadata first; later runner sync tasks will use it to drive upload/download behavior.
+
 The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
 
 This behavior now needs to be read together with workspace source mode:
