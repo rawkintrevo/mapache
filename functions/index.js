@@ -130,6 +130,11 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && route.name === "gitPush") {
+      res.json(await pushGit(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
     res.status(404).json({error: "not_found"});
   } catch (error) {
     logger.error("api request failed", error);
@@ -242,6 +247,14 @@ function routeRequest(path) {
     parts[4] === "git-commit"
   ) {
     return {name: "gitCommit", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "git-push"
+  ) {
+    return {name: "gitPush", workspaceId: parts[1], sessionId: parts[3]};
   }
   return {name: "unknown"};
 }
@@ -687,6 +700,15 @@ async function commitGit(uid, workspaceId, sessionId, payload) {
   return requestRunnerGitCommit(session, {message: normalizeGitCommitMessage(payload)});
 }
 
+async function pushGit(uid, workspaceId, sessionId) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "session_not_running");
+  if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
+  return requestRunnerGitPush(session);
+}
+
 async function requireWorkspace(uid, workspaceId) {
   const snap = await db.collection("workspaces").doc(workspaceId).get();
   if (!snap.exists) throw httpError(404, "workspace_not_found");
@@ -1002,6 +1024,13 @@ async function requestRunnerGitCommit(session, body) {
     method: "POST",
     body,
     unavailableError: "runner_git_commit_unavailable",
+  });
+}
+
+async function requestRunnerGitPush(session) {
+  return requestRunnerJson(session, "/git/push", {
+    method: "POST",
+    unavailableError: "runner_git_push_unavailable",
   });
 }
 

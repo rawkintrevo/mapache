@@ -105,6 +105,7 @@ function render() {
     onRestartSession: restartSession,
     onStopSession: stopSession,
     onPullGit: pullGit,
+    onPushGit: pushGit,
     onStageGitPath: stageGitPath,
     onUnstageGitPath: unstageGitPath,
     onUpdateGitCommitMessage: updateGitCommitMessage,
@@ -424,6 +425,12 @@ function friendlyGitStatusError(error) {
   if (message === "runner_git_status_unavailable") {
     return "Git status is temporarily unavailable.";
   }
+  if (message === "runner_git_push_unavailable") {
+    return "Git push is temporarily unavailable.";
+  }
+  if (message === "github_auth_not_configured") {
+    return "GitHub auth is not configured for push.";
+  }
   if (message === "session_not_running") {
     return "Git status is available once the session is running.";
   }
@@ -525,6 +532,42 @@ async function commitGit() {
       commitMessage: "",
     };
     await loadGitStatus();
+  });
+}
+
+async function pushGit() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Pushing current branch...",
+      error: "",
+    };
+    render();
+    try {
+      const result = await state.api.pushGit(workspaceId, sessionId);
+      state.gitStatus = {
+        loading: false,
+        error: result && result.push && result.push.ok === false ? (result.push.message || "Git push reported an issue.") : "",
+        unavailable: Boolean(result && result.git === false),
+        data: result || null,
+        actionMessage: result && result.push && result.push.ok === false ?
+          "Push completed with Git errors." :
+          "Push completed.",
+        commitMessage: state.gitStatus.commitMessage || "",
+      };
+      await loadGitStatus();
+    } catch (error) {
+      state.gitStatus = {
+        ...state.gitStatus,
+        error: friendlyGitStatusError(error),
+        actionMessage: "",
+      };
+      render();
+    }
   });
 }
 

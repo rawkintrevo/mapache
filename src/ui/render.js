@@ -538,6 +538,14 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
   if (handlers.onPullGit) {
     pullButton.addEventListener("click", () => handlers.onPullGit(session.id));
   }
+  const pushButton = createElement("button", {
+    className: "secondary",
+    disabled: !handlers.onPushGit || status.loading || !data || data.git === false,
+    type: "button",
+  }, "Push");
+  if (handlers.onPushGit) {
+    pushButton.addEventListener("click", () => handlers.onPushGit(session.id));
+  }
 
   let body;
   if (status.loading) {
@@ -587,6 +595,7 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
       createElement("div", {className: "git-status-actions"}, [
         createElement("span", {className: "pill"}, data && data.git ? "Git" : status.unavailable ? "Unavailable" : "Loading"),
         pullButton,
+        pushButton,
       ]),
     ]),
     status.actionMessage ? createElement("p", {className: "subtle"}, status.actionMessage) : null,
@@ -854,6 +863,7 @@ function renderSessionDetail(session, {
   onResizeSession,
   onRestartSession,
   onPullGit,
+  onPushGit,
   onStageGitPath,
   onUnstageGitPath,
   onUpdateGitCommitMessage,
@@ -915,6 +925,7 @@ function renderSessionDetail(session, {
     ]),
     renderGitStatusPanel(session, state.gitStatus, {
       onPullGit,
+      onPushGit,
       onStageGitPath,
       onUnstageGitPath,
       onUpdateGitCommitMessage,
