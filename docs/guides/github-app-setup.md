@@ -110,8 +110,8 @@ Alternatively, store them in Google Cloud Secret Manager and reference them in y
 
 When the backend OAuth callback route exists:
 
-- **Callback URL**: `https://pi-agents-cloud.web.app/api/github/callback`
-- **Webhook URL**: `https://<region>-pi-agents-cloud.cloudfunctions.net/api/github/webhook`
+- **Callback URL**: `https://mapache-tools/api/github/callback`
+- **Webhook URL**: `https://us-central1-pi-agents-cloud.cloudfunctions.net/api/github/webhook`
 
 If you used temporary values during app creation, replace them here before production rollout.
 
@@ -136,5 +136,6 @@ Test that the app is accessible:
 
 After setup is complete, continue with:
 
+- [GitHub connection metadata schema](github-connection-metadata-schema.md)
 - [Task 27: Configure GitHub App secrets for Firebase/Cloud Functions](../task_list.md)
 - [Task 28: Install the GitHub App on a test repository](../task_list.md)
