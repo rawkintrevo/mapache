@@ -20,7 +20,12 @@ const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
+const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
+    process.env.RUNNER_SHUTDOWN_TIMEOUT_MS,
+    120000,
+);
 const DIRECTORY_MARKER_FILE = ".mapahce-directory";
+const INTERNAL_STORAGE_DIR = ".mapahce-internal";
 
 exports.api = onRequest({cors: true}, async (req, res) => {
   try {
@@ -591,7 +596,7 @@ async function requestRunnerShutdown(session) {
   if (!session.serviceUrl || !session.shutdownToken) return;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS);
   try {
     const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}/shutdown`, {
       method: "POST",
@@ -702,6 +707,9 @@ function timestampMillis(value) {
 function storageFileToClientFile(file, queryPrefix) {
   const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
   if (!relativePath || relativePath.endsWith("/")) return null;
+  if (relativePath === INTERNAL_STORAGE_DIR || relativePath.startsWith(`${INTERNAL_STORAGE_DIR}/`)) {
+    return null;
+  }
   if (relativePath.endsWith(`/${DIRECTORY_MARKER_FILE}`)) {
     const directoryPath = relativePath.slice(0, -(`/${DIRECTORY_MARKER_FILE}`).length);
     if (!directoryPath) return null;
@@ -742,6 +750,9 @@ function normalizeWorkspaceFilePath(value) {
     throw httpError(400, "invalid_file_path");
   }
   if (parts.includes(DIRECTORY_MARKER_FILE)) {
+    throw httpError(400, "invalid_file_path");
+  }
+  if (parts[0] === INTERNAL_STORAGE_DIR) {
     throw httpError(400, "invalid_file_path");
   }
   return parts.join("/");

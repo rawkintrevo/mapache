@@ -3,6 +3,8 @@
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const {spawn} = require("child_process");
+const {pipeline} = require("stream/promises");
 const express = require("express");
 const pty = require("node-pty");
 const {WebSocket, WebSocketServer} = require("ws");
@@ -17,9 +19,26 @@ const workspaceId = process.env.WORKSPACE_ID || "";
 const sessionId = process.env.SESSION_ID || "";
 const shutdownToken = process.env.SESSION_SHUTDOWN_TOKEN || "";
 const syncIntervalMs = Number(process.env.SYNC_INTERVAL_MS || 30000);
+const archiveSyncIntervalMs = Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000);
 const terminalReplayLimit = positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000);
 const directoryMarkerFile = ".mapahce-directory";
+const internalStorageDir = ".mapahce-internal";
+const archiveStorageDir = `${internalStorageDir}/archives`;
 const activityWriteDebounceMs = positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000);
+const archiveSyncTargets = [
+  {
+    name: "workspace-node-modules",
+    mode: "workspaceNodeModules",
+    localPath: workspaceDir,
+    remotePath: archiveRemotePath("workspace-node_modules.tar.gz"),
+  },
+  {
+    name: "root-pi",
+    mode: "directory",
+    localPath: process.env.PI_HOME_DIR || "/root/.pi",
+    remotePath: archiveRemotePath("root-pi.tar.gz"),
+  },
+];
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -50,7 +69,7 @@ app.post("/shutdown", async (req, res) => {
   }
 
   try {
-    await syncUp();
+    await syncUp({includeArchives: true});
     await updateSessionActivity({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -217,8 +236,21 @@ function sendTerminalMessage(socket, message) {
 ensureWorkspace()
     .then(syncDown)
     .then(() => {
+      let lastArchiveSync = 0;
+      let syncUpRunning = false;
       setInterval(() => {
-        syncUp().catch((error) => console.error("sync up failed", error));
+        if (syncUpRunning) return;
+        syncUpRunning = true;
+        const now = Date.now();
+        const includeArchives = now - lastArchiveSync >= archiveSyncIntervalMs;
+        syncUp({includeArchives})
+            .then(() => {
+              if (includeArchives) lastArchiveSync = now;
+            })
+            .catch((error) => console.error("sync up failed", error))
+            .finally(() => {
+              syncUpRunning = false;
+            });
       }, syncIntervalMs);
       server.listen(port, () => {
         console.log(`session runner listening on ${port}`);
@@ -231,6 +263,9 @@ ensureWorkspace()
 
 async function ensureWorkspace() {
   await fs.promises.mkdir(workspaceDir, {recursive: true});
+  await Promise.all(archiveSyncTargets.map((target) => (
+    fs.promises.mkdir(target.localPath, {recursive: true})
+  )));
 }
 
 async function syncDown() {
@@ -240,6 +275,7 @@ async function syncDown() {
     if (file.name.endsWith("/")) return;
     const relative = file.name.slice(prefix.length).replace(/^\//, "");
     if (!relative) return;
+    if (shouldIgnoreWorkspacePath(relative)) return;
     if (relative.endsWith(`/${directoryMarkerFile}`)) {
       await fs.promises.mkdir(path.join(workspaceDir, path.dirname(relative)), {recursive: true});
       return;
@@ -248,9 +284,10 @@ async function syncDown() {
     await fs.promises.mkdir(path.dirname(localPath), {recursive: true});
     await file.download({destination: localPath});
   }));
+  await syncArchivesDown();
 }
 
-async function syncUp() {
+async function syncUp(options = {}) {
   if (!bucketName || !prefix) return;
   const {directories, files} = await walkWorkspace(workspaceDir);
   await Promise.all(directories.map(async (localPath) => {
@@ -267,12 +304,17 @@ async function syncUp() {
     const remotePath = `${prefix}/${relative}`.replace(/\/+/g, "/");
     await storage.bucket(bucketName).upload(localPath, {destination: remotePath});
   }));
+  if (options.includeArchives) {
+    await syncArchivesUp();
+  }
 }
 
 async function walkWorkspace(dir) {
   const entries = await fs.promises.readdir(dir, {withFileTypes: true});
   const results = await Promise.all(entries.map(async (entry) => {
     const entryPath = path.join(dir, entry.name);
+    const relativePath = path.relative(workspaceDir, entryPath);
+    if (shouldIgnoreWorkspacePath(relativePath)) return {directories: [], files: []};
     if (entry.isDirectory()) return walkWorkspace(entryPath);
     if (entry.isFile()) return {directories: [], files: [entryPath]};
     return {directories: [], files: []};
@@ -285,6 +327,140 @@ async function walkWorkspace(dir) {
     directories: dir === workspaceDir ? [] : [dir],
     files: [],
   });
+}
+
+async function syncArchivesDown() {
+  await Promise.all(archiveSyncTargets.map(async (target) => {
+    const file = storage.bucket(bucketName).file(target.remotePath);
+    const [exists] = await file.exists();
+    if (!exists) return;
+    await fs.promises.mkdir(target.localPath, {recursive: true});
+    await extractStorageArchive(file, target);
+  }));
+}
+
+async function syncArchivesUp() {
+  await Promise.all(archiveSyncTargets.map(async (target) => {
+    if (!await pathExists(target.localPath)) return;
+    const file = storage.bucket(bucketName).file(target.remotePath);
+    if (target.mode === "workspaceNodeModules") {
+      await uploadWorkspaceNodeModulesArchive(file, target);
+      return;
+    }
+    await uploadDirectoryArchive(file, target);
+  }));
+}
+
+async function extractStorageArchive(file, target) {
+  const tar = spawn("tar", ["-xzf", "-", "-C", target.localPath], {
+    stdio: ["pipe", "ignore", "pipe"],
+  });
+  const stderr = collectStderr(tar);
+  await Promise.all([
+    pipeline(file.createReadStream(), tar.stdin),
+    waitForChild(tar, stderr, `extract ${target.name}`),
+  ]);
+}
+
+async function uploadDirectoryArchive(file, target) {
+  const tar = spawn("tar", ["-czf", "-", "-C", target.localPath, "."], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stderr = collectStderr(tar);
+  await Promise.all([
+    pipeline(tar.stdout, file.createWriteStream({
+      resumable: true,
+      metadata: {
+        contentType: "application/gzip",
+        metadata: {
+          mapahceArchiveTarget: target.name,
+        },
+      },
+    })),
+    waitForChild(tar, stderr, `archive ${target.name}`),
+  ]);
+}
+
+async function uploadWorkspaceNodeModulesArchive(file, target) {
+  const nodeModulesDirs = await findNodeModulesDirs(workspaceDir);
+  if (!nodeModulesDirs.length) return;
+  const tar = spawn("tar", ["--null", "-czf", "-", "-C", workspaceDir, "--files-from", "-"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  tar.stdin.end(Buffer.from(nodeModulesDirs.map(toTarPath).join("\0") + "\0"));
+  const stderr = collectStderr(tar);
+  await Promise.all([
+    pipeline(tar.stdout, file.createWriteStream({
+      resumable: true,
+      metadata: {
+        contentType: "application/gzip",
+        metadata: {
+          mapahceArchiveTarget: target.name,
+        },
+      },
+    })),
+    waitForChild(tar, stderr, `archive ${target.name}`),
+  ]);
+}
+
+async function findNodeModulesDirs(dir) {
+  const entries = await fs.promises.readdir(dir, {withFileTypes: true});
+  const results = await Promise.all(entries.map(async (entry) => {
+    if (!entry.isDirectory()) return [];
+    const entryPath = path.join(dir, entry.name);
+    const relativePath = path.relative(workspaceDir, entryPath);
+    if (shouldIgnoreInternalWorkspacePath(relativePath)) return [];
+    if (entry.name === "node_modules") return [entryPath];
+    return findNodeModulesDirs(entryPath);
+  }));
+  return results.flat();
+}
+
+function toTarPath(localPath) {
+  return `./${path.relative(workspaceDir, localPath).split(path.sep).join("/")}`;
+}
+
+async function waitForChild(child, stderr, label) {
+  const code = await new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+  if (code !== 0) {
+    throw new Error(`${label} failed with exit code ${code}: ${stderr()}`);
+  }
+}
+
+function collectStderr(child) {
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+    if (stderr.length > 4096) stderr = stderr.slice(stderr.length - 4096);
+  });
+  return () => stderr.trim();
+}
+
+async function pathExists(localPath) {
+  try {
+    await fs.promises.access(localPath);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function shouldIgnoreWorkspacePath(relativePath) {
+  const parts = String(relativePath || "").split(path.sep).filter(Boolean);
+  return parts.includes("node_modules") || parts[0] === internalStorageDir;
+}
+
+function shouldIgnoreInternalWorkspacePath(relativePath) {
+  const firstPart = String(relativePath || "").split(path.sep).filter(Boolean)[0] || "";
+  return firstPart === internalStorageDir;
+}
+
+function archiveRemotePath(fileName) {
+  if (!prefix) return "";
+  return `${prefix}/${archiveStorageDir}/${fileName}`.replace(/\/+/g, "/");
 }
 
 async function appendHistory(stream, data) {
