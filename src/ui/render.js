@@ -8,7 +8,9 @@ import {
   Menu,
   PanelLeftClose,
   RefreshCw,
+  Save,
   SquareStop,
+  X,
 } from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
 import {sessionImages} from "../config/sessionImages.js";
@@ -95,6 +97,7 @@ export function renderAppShell(root, props) {
       createElement("section", {className: "workspace"}, workspaceContent),
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
+    state.fileEditor.open ? renderFileEditorModal(props) : null,
   ]));
 }
 
@@ -514,6 +517,95 @@ function renderSessionModal({state, onCloseSessionModal, onCreateSession}) {
   return overlay;
 }
 
+function renderFileEditorModal({
+  state,
+  onCloseFileEditor,
+  onSaveFileEditor,
+  onUpdateFileEditorContent,
+}) {
+  const editor = state.fileEditor;
+  const language = languageForPath(editor.path);
+  const textarea = createElement("textarea", {
+    autocapitalize: "off",
+    autocomplete: "off",
+    autocorrect: "off",
+    className: "file-editor-input",
+    disabled: editor.loading || editor.saving,
+    spellcheck: false,
+    value: editor.content,
+  });
+  const highlight = createElement("pre", {
+    ariaHidden: "true",
+    className: "file-editor-highlight",
+  }, renderHighlightedCode(editor.content, language));
+
+  textarea.addEventListener("input", () => {
+    onUpdateFileEditorContent(textarea.value);
+    replaceChildren(highlight, createElement("span", {}, renderHighlightedCode(
+        textarea.value,
+        language,
+    )));
+  });
+  textarea.addEventListener("scroll", () => {
+    highlight.scrollTop = textarea.scrollTop;
+    highlight.scrollLeft = textarea.scrollLeft;
+  });
+
+  const saveButton = createElement("button", {
+    className: "file-editor-save",
+    disabled: editor.loading || editor.saving,
+    type: "button",
+  }, [
+    renderIcon(Save),
+    createElement("span", {}, editor.saving ? "Saving" : "Save"),
+  ]);
+  saveButton.addEventListener("click", () => onSaveFileEditor(textarea.value));
+
+  const closeButton = createElement("button", {
+    ariaLabel: "Close editor",
+    className: "icon-button secondary",
+    title: "Close editor",
+    type: "button",
+  }, renderIcon(X));
+  closeButton.addEventListener("click", onCloseFileEditor);
+
+  const body = editor.loading ?
+    createElement("div", {className: "file-editor-status"}, "Loading file...") :
+    createElement("div", {className: "file-editor-stack"}, [
+      highlight,
+      textarea,
+    ]);
+
+  const panel = createElement("section", {
+    "aria-labelledby": "file-editor-title",
+    "aria-modal": "true",
+    className: "modal-panel file-editor-panel",
+    role: "dialog",
+  }, [
+    createElement("div", {className: "modal-heading"}, [
+      createElement("div", {className: "file-editor-title"}, [
+        createElement("h2", {id: "file-editor-title"}, editor.name || "File"),
+        createElement("span", {}, editor.path),
+      ]),
+      closeButton,
+    ]),
+    editor.error ? createElement("div", {className: "error"}, editor.error) : null,
+    body,
+    createElement("div", {className: "file-editor-actions"}, [
+      editor.updatedAt ?
+        createElement("span", {className: "subtle"}, `Updated ${formatDate(editor.updatedAt)}`) :
+        createElement("span", {className: "subtle"}, ""),
+      saveButton,
+    ]),
+  ]);
+
+  const overlay = createElement("div", {className: "modal-backdrop"}, [panel]);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) onCloseFileEditor();
+  });
+  return overlay;
+}
+
 function renderSessionList(state, {onSelectSession}) {
   if (!state.selectedWorkspaceId) return null;
   if (!state.sessions.length) {
@@ -615,6 +707,109 @@ function metric(label, value) {
     createElement("span", {}, label),
     createElement("strong", {}, value || "pending"),
   ]);
+}
+
+function languageForPath(path) {
+  const extension = String(path || "").split(".").pop().toLowerCase();
+  if (["js", "mjs", "cjs"].includes(extension)) return "js";
+  if (["json"].includes(extension)) return "json";
+  if (["css"].includes(extension)) return "css";
+  if (["html", "htm", "xml"].includes(extension)) return "markup";
+  if (["md", "markdown"].includes(extension)) return "markdown";
+  if (["py"].includes(extension)) return "python";
+  if (["sh", "bash", "zsh"].includes(extension)) return "shell";
+  if (["yaml", "yml"].includes(extension)) return "yaml";
+  return "text";
+}
+
+function renderHighlightedCode(code, language) {
+  const lines = String(code || "").split("\n");
+  return lines.flatMap((line, index) => [
+    ...highlightLine(line, language),
+    index < lines.length - 1 ? "\n" : "",
+  ]);
+}
+
+function highlightLine(line, language) {
+  if (!line) return [""];
+
+  const commentStart = findCommentStart(line, language);
+  const codePart = commentStart >= 0 ? line.slice(0, commentStart) : line;
+  const commentPart = commentStart >= 0 ? line.slice(commentStart) : "";
+  const nodes = tokenizeCodePart(codePart, language);
+  if (commentPart) {
+    nodes.push(createElement("span", {className: "token-comment"}, commentPart));
+  }
+  return nodes;
+}
+
+function findCommentStart(line, language) {
+  const markers = language === "markup" ?
+    ["<!--"] :
+    language === "css" ?
+      ["/*"] :
+      ["//", "#"];
+
+  let inString = "";
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (inString) {
+      if (char === "\\" && index + 1 < line.length) {
+        index += 1;
+      } else if (char === inString) {
+        inString = "";
+      }
+      continue;
+    }
+    if (char === "\"" || char === "'" || char === "`") {
+      inString = char;
+      continue;
+    }
+    const marker = markers.find((item) => line.startsWith(item, index));
+    if (marker) return index;
+  }
+  return -1;
+}
+
+function tokenizeCodePart(line, language) {
+  const keywordPattern = keywordRegex(language);
+  const tokenPattern = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?\b|[A-Za-z_$][\w$-]*)(\s*:)?/g;
+  const nodes = [];
+  let cursor = 0;
+  let match;
+
+  while ((match = tokenPattern.exec(line))) {
+    if (match.index > cursor) nodes.push(line.slice(cursor, match.index));
+    const token = match[1];
+    const suffix = match[2] || "";
+    let className = "";
+    if (/^["'`]/.test(token)) {
+      className = suffix && language === "json" ? "token-key" : "token-string";
+    } else if (/^\d/.test(token)) {
+      className = "token-number";
+    } else if (keywordPattern && keywordPattern.test(token)) {
+      className = "token-keyword";
+    }
+    nodes.push(className ? createElement("span", {className}, token) : token);
+    if (suffix) nodes.push(suffix);
+    cursor = tokenPattern.lastIndex;
+  }
+
+  if (cursor < line.length) nodes.push(line.slice(cursor));
+  return nodes;
+}
+
+function keywordRegex(language) {
+  const groups = {
+    css: /^(align-items|background|border|color|display|font|gap|grid|height|margin|padding|position|width)$/,
+    js: /^(async|await|break|case|catch|const|continue|default|else|export|for|from|function|if|import|let|new|null|return|throw|true|false|try|while)$/,
+    markdown: /^(TODO|NOTE|true|false|null)$/,
+    markup: /^(body|button|div|form|head|html|input|label|main|meta|script|section|span|style|title)$/,
+    python: /^(and|as|class|def|elif|else|except|False|for|from|if|import|in|None|not|or|return|True|try|while|with)$/,
+    shell: /^(case|do|done|elif|else|esac|fi|for|function|if|in|then|while)$/,
+    yaml: /^(true|false|null)$/,
+  };
+  return groups[language] || null;
 }
 
 function formatMemory(value) {
