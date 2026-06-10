@@ -25,21 +25,8 @@ const directoryMarkerFile = ".mapahce-directory";
 const internalStorageDir = ".mapahce-internal";
 const archiveStorageDir = `${internalStorageDir}/archives`;
 const activityWriteDebounceMs = positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000);
-const archiveSyncTargets = [
-  {
-    name: "workspace-node-modules",
-    mode: "workspaceNodeModules",
-    localPath: workspaceDir,
-    remotePath: archiveRemotePath("workspace-node_modules.tar.gz"),
-  },
-  {
-    name: "root-pi",
-    mode: "directory",
-    localPath: process.env.PI_HOME_DIR || "/root/.pi",
-    remotePath: archiveRemotePath("root-pi.tar.gz"),
-  },
-];
 const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
+const archiveSyncTargets = createArchiveSyncTargets();
 const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
 const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
 const githubRepoUrl = normalizeEnvString(process.env.GITHUB_REPO_URL);
@@ -272,9 +259,43 @@ ensureWorkspace()
 
 async function ensureWorkspace() {
   await fs.promises.mkdir(workspaceDir, {recursive: true});
-  await Promise.all(archiveSyncTargets.map((target) => (
-    fs.promises.mkdir(target.localPath, {recursive: true})
-  )));
+  await Promise.all(archiveSyncTargets
+      .filter((target) => target.ensureLocalPath)
+      .map((target) => fs.promises.mkdir(target.localPath, {recursive: true})));
+}
+
+function createArchiveSyncTargets() {
+  const targets = [
+    {
+      name: "workspace-node-modules",
+      mode: "workspaceNodeModules",
+      localPath: workspaceDir,
+      remotePath: archiveRemotePath("workspace-node_modules.tar.gz"),
+      ensureLocalPath: true,
+      restoreOnStartup: true,
+    },
+    {
+      name: "root-pi",
+      mode: "directory",
+      localPath: process.env.PI_HOME_DIR || "/root/.pi",
+      remotePath: archiveRemotePath("root-pi.tar.gz"),
+      ensureLocalPath: true,
+      restoreOnStartup: true,
+    },
+  ];
+
+  if (isGithubWorkspace()) {
+    targets.push({
+      name: "workspace-git",
+      mode: "workspaceGit",
+      localPath: path.join(workspaceDir, ".git"),
+      remotePath: archiveRemotePath("workspace-git.tar.gz"),
+      ensureLocalPath: false,
+      restoreOnStartup: false,
+    });
+  }
+
+  return targets;
 }
 
 function normalizeWorkspaceSourceMode(value) {
@@ -463,23 +484,38 @@ async function walkWorkspace(dir) {
 
 async function syncArchivesDown() {
   await Promise.all(archiveSyncTargets.map(async (target) => {
-    const file = storage.bucket(bucketName).file(target.remotePath);
-    const [exists] = await file.exists();
-    if (!exists) return;
-    await fs.promises.mkdir(target.localPath, {recursive: true});
-    await extractStorageArchive(file, target);
+    if (!target.restoreOnStartup) return;
+    try {
+      const file = storage.bucket(bucketName).file(target.remotePath);
+      const [exists] = await file.exists();
+      if (!exists) return;
+      await fs.promises.mkdir(target.localPath, {recursive: true});
+      await extractStorageArchive(file, target);
+    } catch (error) {
+      console.error(`archive restore failed for ${target.name}`, error);
+      throw error;
+    }
   }));
 }
 
 async function syncArchivesUp() {
   await Promise.all(archiveSyncTargets.map(async (target) => {
-    if (!await pathExists(target.localPath)) return;
-    const file = storage.bucket(bucketName).file(target.remotePath);
-    if (target.mode === "workspaceNodeModules") {
-      await uploadWorkspaceNodeModulesArchive(file, target);
-      return;
+    try {
+      if (!await pathExists(target.localPath)) return;
+      const file = storage.bucket(bucketName).file(target.remotePath);
+      if (target.mode === "workspaceNodeModules") {
+        await uploadWorkspaceNodeModulesArchive(file, target);
+        return;
+      }
+      if (target.mode === "workspaceGit") {
+        await uploadWorkspaceGitArchive(file, target);
+        return;
+      }
+      await uploadDirectoryArchive(file, target);
+    } catch (error) {
+      console.error(`archive upload failed for ${target.name}`, error);
+      throw error;
     }
-    await uploadDirectoryArchive(file, target);
   }));
 }
 
@@ -516,10 +552,21 @@ async function uploadDirectoryArchive(file, target) {
 async function uploadWorkspaceNodeModulesArchive(file, target) {
   const nodeModulesDirs = await findNodeModulesDirs(workspaceDir);
   if (!nodeModulesDirs.length) return;
+  await uploadTarEntries(file, target, nodeModulesDirs.map(toTarPath));
+}
+
+async function uploadWorkspaceGitArchive(file, target) {
+  const gitEntries = await findGitArchiveEntries(target.localPath);
+  if (!gitEntries.length) return;
+  await uploadTarEntries(file, target, gitEntries.map(toTarPath));
+}
+
+async function uploadTarEntries(file, target, entries) {
+  if (!entries.length) return;
   const tar = spawn("tar", ["--null", "-czf", "-", "-C", workspaceDir, "--files-from", "-"], {
     stdio: ["pipe", "pipe", "pipe"],
   });
-  tar.stdin.end(Buffer.from(nodeModulesDirs.map(toTarPath).join("\0") + "\0"));
+  tar.stdin.end(Buffer.from(entries.join("\0") + "\0"));
   const stderr = collectStderr(tar);
   await Promise.all([
     pipeline(tar.stdout, file.createWriteStream({
@@ -546,6 +593,25 @@ async function findNodeModulesDirs(dir) {
     return findNodeModulesDirs(entryPath);
   }));
   return results.flat();
+}
+
+async function findGitArchiveEntries(dir) {
+  const relativeDir = path.relative(workspaceDir, dir);
+  if (!relativeDir || !await pathExists(dir)) return [];
+  const entries = await fs.promises.readdir(dir, {withFileTypes: true});
+  const results = [dir];
+  for (const entry of entries) {
+    if (entry.name.endsWith(".lock")) continue;
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...await findGitArchiveEntries(entryPath));
+      continue;
+    }
+    if (entry.isFile()) {
+      results.push(entryPath);
+    }
+  }
+  return results;
 }
 
 function toTarPath(localPath) {

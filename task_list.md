@@ -132,12 +132,13 @@ Before implementation tasks, read:
   - `node --check session-runner/server.js` passes.
   - Completed: 2026-06-10. Runner now receives sync policy env vars, applies policy exclusions during normal upload/download sync, preserves archive-backed paths, and keeps directory markers for non-excluded directories.
 
-- [ ] 13. **Add archive sync support for workspace .git directories** - medium (gpt-5.4)
+- [x] 13. **Add archive sync support for workspace .git directories** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner stores `/workspace/.git` as an internal gzip archive for GitHub workspaces.
   - `.git` archive objects live under the hidden internal storage prefix.
   - `.git/` is never listed in the Files sidebar or editable through file routes.
   - Archive upload avoids obvious transient lock files where practical and logs archive failures clearly.
+  - Completed: 2026-06-10. Runner now uploads GitHub workspace `.git` state as a hidden internal archive, skips obvious `.lock` files while packaging it, and logs archive upload/restore failures per target.
 
 - [ ] 14. **Reconcile GitHub worktree sync including deletions** - medium (gpt-5.4)
   - Acceptance criteria:
