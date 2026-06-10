@@ -180,12 +180,13 @@ Before implementation tasks, read:
   - Blank workspaces return a clear non-Git status.
   - Completed: 2026-06-10. Runner now exposes a token-protected `/git/status` endpoint backed by fixed Git commands, and blank workspaces return a structured non-Git response.
 
-- [ ] 19. **Add frontend Git status panel skeleton** - easy (gpt-5.4-mini)
+- [x] 19. **Add frontend Git status panel skeleton** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - UI has a compact Git panel for GitHub workspaces with branch, commit, dirty counts, ahead/behind when available, and conflict state.
   - The panel handles loading, unavailable, and non-Git workspace states.
   - No mutating Git actions are added yet.
   - `npm run build` passes.
+  - Completed: 2026-06-10. Added a read-only Git status panel in the session detail view with loading, unavailable, and non-Git states, plus frontend fetch plumbing.
 
 - [ ] 20. **Add Git fetch/pull action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:

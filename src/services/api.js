@@ -43,6 +43,10 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/stop`,
         {method: "POST", body: {}},
     ),
+    getGitStatus: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,
+    ),
   };
 }
 

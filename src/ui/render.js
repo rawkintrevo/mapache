@@ -519,6 +519,56 @@ function renderWorkspaceHeader(workspace) {
   ]);
 }
 
+function renderGitStatusPanel(session, gitStatus) {
+  const status = gitStatus || {loading: false, error: "", unavailable: false, data: null};
+  const data = status.data || null;
+  const title = session && session.name ? `Git status · ${session.name}` : "Git status";
+
+  let body;
+  if (status.loading) {
+    body = createElement("p", {className: "empty"}, "Loading Git status...");
+  } else if (status.error) {
+    body = createElement("p", {className: "empty"}, status.error);
+  } else if (status.unavailable || !data || data.git === false) {
+    body = createElement("p", {className: "empty"}, data && data.reason === "not_git_workspace" ?
+      "This workspace is not Git-backed." :
+      "Git status is unavailable.");
+  } else {
+    body = createElement("div", {className: "details git-status-details"}, [
+      metric("Branch", data.branch || ""),
+      metric("Commit", data.commit ? data.commit.slice(0, 7) : ""),
+      metric("Ahead", formatGitCount(data.ahead)),
+      metric("Behind", formatGitCount(data.behind)),
+      metric("Dirty", formatGitDirtySummary(data.dirty)),
+      metric("Conflicted", data.conflicted ? "Yes" : "No"),
+    ]);
+  }
+
+  return createElement("section", {className: "git-status-panel"}, [
+    createElement("div", {className: "drawer-section-heading"}, [
+      createElement("h3", {}, title),
+      createElement("span", {className: "pill"}, data && data.git ? "Git" : status.unavailable ? "Unavailable" : "Loading"),
+    ]),
+    body,
+  ]);
+}
+
+function formatGitCount(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return String(value);
+}
+
+function formatGitDirtySummary(dirty) {
+  if (!dirty) return "—";
+  const parts = [];
+  if (dirty.staged) parts.push(`${dirty.staged} staged`);
+  if (dirty.modified) parts.push(`${dirty.modified} modified`);
+  if (dirty.deleted) parts.push(`${dirty.deleted} deleted`);
+  if (dirty.untracked) parts.push(`${dirty.untracked} untracked`);
+  if (dirty.conflicted) parts.push(`${dirty.conflicted} conflicted`);
+  return parts.length ? parts.join(", ") : "Clean";
+}
+
 function workspaceSourceSummary(workspace) {
   if (!workspace) return "";
   const source = workspace.source || {type: "blank"};
@@ -759,6 +809,7 @@ function renderSessionDetail(session, {state, onResizeSession, onRestartSession}
       metric("Service", session.serviceId || ""),
       metric("Updated", formatDate(session.updatedAt)),
     ]),
+    renderGitStatusPanel(session, state.gitStatus),
   ]);
 }
 
