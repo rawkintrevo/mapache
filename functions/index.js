@@ -688,6 +688,8 @@ async function createSession(uid, workspaceId, payload) {
     workspaceId,
     runnerSessionId: sessionRef.id,
     workspaceStoragePrefix: workspace.storagePrefix,
+    piHomeStorageBucket: DEFAULT_BUCKET || workspace.bucket,
+    piHomeStoragePrefix: piHomeStoragePrefix(uid),
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
     status: DEFAULT_IMAGE ? "provisioning" : "needs_image",
@@ -1786,6 +1788,11 @@ function userPath(uid) {
   return `users/${uid}`;
 }
 
+function piHomeStoragePrefix(uid) {
+  const cleanUid = cleanName(uid);
+  return cleanUid ? `users/${cleanUid}/.mapahce-internal/pi-home` : "";
+}
+
 async function provisionSessionService(workspace, sessionRef, session) {
   try {
     const client = await auth.getClient();
@@ -1937,6 +1944,8 @@ async function sessionRunnerEnv(session, options = {}) {
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
+    {name: "PI_HOME_STORAGE_BUCKET", value: session.piHomeStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "PI_HOME_STORAGE_PREFIX", value: session.piHomeStoragePrefix || piHomeStoragePrefix(session.ownerUid)},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
