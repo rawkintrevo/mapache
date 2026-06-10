@@ -285,6 +285,23 @@ Expected control surface:
 
 The Git panel should read live state from the active session through runner-backed APIs. It should not infer Git status from Cloud Storage alone.
 
+### Pull request creation flow
+
+PR creation is only supported for GitHub App-connected repositories because the backend must mint a short-lived installation token for the GitHub API call.
+
+The intended flow is:
+
+1. Read live Git state from the runner.
+2. Resolve the repository default branch from GitHub.
+3. If the current branch is the default branch, require a short kebab-case description and create a new `mapache/<description>` working branch in the runner.
+4. Fail clearly if that working-branch name already exists locally or remotely.
+5. Push the working branch with a short-lived installation token.
+6. Default the PR title from the first commit subject on the working branch (or the head commit subject for a single-commit branch).
+7. Prefer the repository PR template when one exists on the default branch; otherwise use a small fallback body template.
+8. Create the PR against the repository default branch, ready for review by default unless the user chooses draft.
+
+This keeps PR state inside GitHub while still letting the app help with the branch/push/create plumbing.
+
 ## Files Sidebar Expectations
 
 The existing Files section reads from Cloud Storage. That works for blank workspaces and still works as a cache view for GitHub workspaces, but readers need to understand the difference:

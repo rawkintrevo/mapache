@@ -187,6 +187,24 @@ app.post("/git/push", async (req, res) => {
   }
 });
 
+app.post("/git/open-pr", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await prepareGitPullRequest(req.body || {}));
+  } catch (error) {
+    console.error("git open pr prepare failed", error);
+    res.status(400).json({error: compactErrorMessage(error.message || error) || "git_open_pr_failed"});
+  }
+});
+
 wss.on("connection", (socket, request) => {
   terminalSession.attach(socket, shouldReplayTerminal(request));
 
@@ -1131,6 +1149,75 @@ async function pullGitAction() {
   };
 }
 
+async function prepareGitPullRequest(payload) {
+  const request = normalizeGitPullRequestPayload(payload);
+  const before = await getGitStatusSummary();
+  let branch = before.branch;
+  if (!branch) {
+    throw new Error("git_pr_no_current_branch");
+  }
+
+  let createdBranch = false;
+  if (branch === request.baseBranch) {
+    if (!request.workingBranchName) {
+      throw new Error("missing_pr_branch_description");
+    }
+    await ensureGitBranchDoesNotExist(request.workingBranchName, request);
+    await runGitCommand(["checkout", "-b", request.workingBranchName]);
+    branch = request.workingBranchName;
+    createdBranch = true;
+  }
+
+  await pushGitBranchWithAuth(branch, request);
+  const after = await getGitStatusSummary();
+  return {
+    ...after,
+    action: "open_pr_prepare",
+    pullRequest: {
+      branch,
+      baseBranch: request.baseBranch,
+      createdBranch,
+      defaultTitle: await getPullRequestTitleSuggestion(request.baseBranch),
+    },
+  };
+}
+
+async function ensureGitBranchDoesNotExist(branch, auth) {
+  const localBranch = await runGitCommand(["branch", "--list", branch], {captureStdout: true});
+  if (localBranch) {
+    throw new Error("git_pr_branch_name_conflict");
+  }
+  const remoteBranch = await withGitPushPayloadAuth(auth, (env) => (
+    runGitCommand(["ls-remote", "--heads", "origin", branch], {captureStdout: true, env})
+  ));
+  if (remoteBranch) {
+    throw new Error("git_pr_branch_name_conflict");
+  }
+}
+
+async function pushGitBranchWithAuth(branch, auth) {
+  await withGitPushPayloadAuth(auth, (env) => (
+    runGitCommand(["push", "--set-upstream", "origin", `HEAD:${branch}`], {env})
+  ));
+}
+
+async function getPullRequestTitleSuggestion(baseBranch) {
+  try {
+    const messages = await runGitCommand(["log", "--reverse", "--format=%s", `origin/${baseBranch}..HEAD`], {
+      captureStdout: true,
+    });
+    const firstMessage = String(messages || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0];
+    if (firstMessage) {
+      return firstMessage.slice(0, 256);
+    }
+  } catch (error) {
+    // Fall back to HEAD subject below.
+  }
+
+  const headMessage = await runGitCommand(["log", "-1", "--format=%s", "HEAD"], {captureStdout: true});
+  return String(headMessage || "").trim().slice(0, 256);
+}
+
 function parseGitPorcelainStatus(output) {
   const lines = String(output || "").split(/\r?\n/).filter(Boolean);
   let ahead = null;
@@ -1220,6 +1307,39 @@ function normalizeGitCommitMessage(value) {
   return message.slice(0, 500);
 }
 
+function normalizeGitPullRequestPayload(payload) {
+  const value = payload && typeof payload === "object" ? payload : {};
+  return {
+    baseBranch: normalizeGitBranchName(value.baseBranch, {required: true}),
+    workingBranchName: normalizeGitBranchName(value.workingBranchName),
+    pushUsername: normalizeEnvString(value.pushUsername) || "x-access-token",
+    pushToken: normalizeEnvString(value.pushToken),
+  };
+}
+
+function normalizeGitBranchName(value, options = {}) {
+  const branch = normalizeEnvString(value).replace(/^\/+/g, "").replace(/\/+$/g, "");
+  if (!branch) {
+    if (options.required) {
+      throw new Error("missing_git_branch");
+    }
+    return "";
+  }
+  if (
+    branch.length > 120 ||
+    branch.startsWith("-") ||
+    branch.includes("..") ||
+    branch.includes("//") ||
+    branch.endsWith(".") ||
+    branch.endsWith(".lock") ||
+    branch.includes("@{") ||
+    /[~^:?\\\s]/.test(branch)
+  ) {
+    throw new Error("invalid_git_branch");
+  }
+  return branch;
+}
+
 async function withGitAskPassAuth({token, username, userEnvName, tokenEnvName, askPassFilePrefix}, task) {
   if (!token) {
     throw new Error("github_auth_not_configured");
@@ -1263,6 +1383,16 @@ async function withGitPushAuth(task) {
   return withGitAskPassAuth({
     token,
     username: normalizeEnvString(process.env.GITHUB_PUSH_USERNAME) || "x-access-token",
+    userEnvName: "GITHUB_PUSH_USERNAME",
+    tokenEnvName: "GITHUB_PUSH_TOKEN",
+    askPassFilePrefix: "mapahce-git-push-askpass",
+  }, task);
+}
+
+async function withGitPushPayloadAuth(auth, task) {
+  return withGitAskPassAuth({
+    token: normalizeEnvString(auth && auth.pushToken),
+    username: normalizeEnvString(auth && auth.pushUsername) || "x-access-token",
     userEnvName: "GITHUB_PUSH_USERNAME",
     tokenEnvName: "GITHUB_PUSH_TOKEN",
     askPassFilePrefix: "mapahce-git-push-askpass",

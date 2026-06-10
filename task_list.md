@@ -310,19 +310,21 @@ Before implementation tasks, read:
   - Failure messages distinguish auth failure from repo-not-found and network failure.
   - Completed: 2026-06-10. Backend now mints clone-only installation tokens during runner provisioning/restart for private connected repos, the runner uses a temporary askpass script outside `/workspace`, and clone failures now classify auth vs repo-not-found vs network errors.
 
-- [ ] 36. **Decide PR creation and branch naming policy** - human
+- [x] 36. **Decide PR creation and branch naming policy** - human
   - Acceptance criteria:
   - Decide whether the app pushes directly to selected branches or always creates working branches.
   - Decide branch naming format for agent-created branches.
   - Decide PR title/body defaults and whether draft PRs are preferred.
   - Record decisions before implementing PR creation.
+  - Completed: 2026-06-10. Recorded ADR-0002 choosing working-branch-only PR flows, `mapache/<short-desc-in-kabob>` branch names, ready-for-review default with user override, first-commit-message PR titles, repo-template-first PR bodies, default-branch-only targets, and fail-on-name-collision behavior.
 
-- [ ] 37. **Add pull request creation plumbing** - medium (gpt-5.4)
+- [x] 37. **Add pull request creation plumbing** - medium (gpt-5.4)
   - Acceptance criteria:
   - Backend can request PR creation for a pushed GitHub workspace branch.
   - GitHub API calls use short-lived installation tokens.
   - UI exposes an Open PR action after successful push or when a branch is ahead.
   - Branch protection failures are surfaced as GitHub/Git state, not custom policy logic.
+  - Completed: 2026-06-10. Added runner-backed PR branch preparation and push flow, backend GitHub App PR creation with repo-template body defaults, plus an Open PR modal/action in the Git panel for connected repositories.
 
 - [ ] 38. **Add focused regression checklist for GitHub-backed workspaces** - easy (gpt-5.4-mini)
   - Acceptance criteria:

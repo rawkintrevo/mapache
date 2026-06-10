@@ -35,6 +35,15 @@ const state = {
     data: null,
     actionMessage: "",
     commitMessage: "",
+    canOpenPr: false,
+  },
+  pullRequestForm: {
+    open: false,
+    title: "",
+    body: "",
+    branchDescription: "",
+    draft: false,
+    error: "",
   },
   repoPicker: {
     loading: false,
@@ -116,6 +125,10 @@ function render() {
     onUnstageGitPath: unstageGitPath,
     onUpdateGitCommitMessage: updateGitCommitMessage,
     onCommitGit: commitGit,
+    onOpenPullRequest: openPullRequestModal,
+    onClosePullRequest: closePullRequestModal,
+    onUpdatePullRequestForm: updatePullRequestForm,
+    onSubmitPullRequest: submitPullRequest,
     onLoadConnectedRepos: loadConnectedRepos,
   });
 }
@@ -128,6 +141,19 @@ function resetGitStatus() {
     data: null,
     actionMessage: "",
     commitMessage: "",
+    canOpenPr: false,
+  };
+  resetPullRequestForm();
+}
+
+function resetPullRequestForm() {
+  state.pullRequestForm = {
+    open: false,
+    title: "",
+    body: "",
+    branchDescription: "",
+    draft: false,
+    error: "",
   };
 }
 
@@ -270,6 +296,7 @@ async function loadGitStatus() {
     data: null,
     actionMessage: state.gitStatus.actionMessage || "",
     commitMessage: state.gitStatus.commitMessage || "",
+    canOpenPr: state.gitStatus.canOpenPr || false,
   };
   render();
 
@@ -283,6 +310,7 @@ async function loadGitStatus() {
         data,
         actionMessage: state.gitStatus.actionMessage || "",
         commitMessage: state.gitStatus.commitMessage || "",
+        canOpenPr: false,
       };
       render();
       return;
@@ -294,6 +322,7 @@ async function loadGitStatus() {
       data: data || null,
       actionMessage: state.gitStatus.actionMessage || "",
       commitMessage: state.gitStatus.commitMessage || "",
+      canOpenPr: canOpenPullRequestForSession(getSelectedSession(), data, state.gitStatus.canOpenPr),
     };
   } catch (error) {
     state.gitStatus = {
@@ -303,6 +332,7 @@ async function loadGitStatus() {
       data: null,
       actionMessage: state.gitStatus.actionMessage || "",
       commitMessage: state.gitStatus.commitMessage || "",
+      canOpenPr: false,
     };
   }
   render();
@@ -448,8 +478,20 @@ function friendlyGitStatusError(error) {
   if (message === "runner_git_push_unavailable") {
     return "Git push is temporarily unavailable.";
   }
+  if (message === "runner_git_open_pr_unavailable") {
+    return "Pull request creation is temporarily unavailable.";
+  }
   if (message === "github_auth_not_configured") {
     return "GitHub auth is not configured for push.";
+  }
+  if (message === "github_pr_requires_connected_repo") {
+    return "Pull requests are only supported for connected GitHub repositories.";
+  }
+  if (message === "missing_pr_branch_description") {
+    return "Add a short branch description before opening a PR from the default branch.";
+  }
+  if (message === "git_pr_branch_name_conflict") {
+    return "That mapache/<description> branch name already exists. Choose a different description.";
   }
   if (message === "session_not_running") {
     return "Git status is available once the session is running.";
@@ -515,6 +557,7 @@ async function runGitFileAction(path, action, actionMessage, requestAction) {
       data: result || null,
       actionMessage: `${action === "stage" ? "Staged" : "Unstaged"} ${path}.`,
       commitMessage: state.gitStatus.commitMessage || "",
+      canOpenPr: state.gitStatus.canOpenPr || false,
     };
     await loadGitStatus();
   });
@@ -550,6 +593,7 @@ async function commitGit() {
         `Committed ${result.committedHead.slice(0, 7)}.` :
         "Commit created.",
       commitMessage: "",
+      canOpenPr: state.gitStatus.canOpenPr || false,
     };
     await loadGitStatus();
   });
@@ -578,6 +622,7 @@ async function pushGit() {
           "Push completed with Git errors." :
           "Push completed.",
         commitMessage: state.gitStatus.commitMessage || "",
+        canOpenPr: result && result.push && result.push.ok === false ? state.gitStatus.canOpenPr : true,
       };
       await loadGitStatus();
     } catch (error) {
@@ -589,6 +634,99 @@ async function pushGit() {
       render();
     }
   });
+}
+
+function openPullRequestModal() {
+  state.pullRequestForm = {
+    ...state.pullRequestForm,
+    open: true,
+    error: "",
+  };
+  render();
+}
+
+function closePullRequestModal() {
+  resetPullRequestForm();
+  render();
+}
+
+function updatePullRequestForm(patch) {
+  state.pullRequestForm = {
+    ...state.pullRequestForm,
+    ...patch,
+    error: patch && Object.prototype.hasOwnProperty.call(patch, "error") ? patch.error : state.pullRequestForm.error,
+  };
+  render();
+}
+
+async function submitPullRequest() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+
+  await runBusy(async () => {
+    state.pullRequestForm = {
+      ...state.pullRequestForm,
+      error: "",
+    };
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Opening pull request...",
+      error: "",
+    };
+    render();
+    try {
+      const result = await state.api.openPullRequest(workspaceId, sessionId, {
+        title: state.pullRequestForm.title,
+        body: state.pullRequestForm.body,
+        branchDescription: state.pullRequestForm.branchDescription,
+        draft: state.pullRequestForm.draft,
+      });
+      state.gitStatus = {
+        loading: false,
+        error: "",
+        unavailable: Boolean(result && result.git === false),
+        data: result || null,
+        actionMessage: result && result.pullRequest && result.pullRequest.number ?
+          `Opened PR #${result.pullRequest.number}.` :
+          "Opened pull request.",
+        commitMessage: state.gitStatus.commitMessage || "",
+        canOpenPr: true,
+      };
+      const pullRequestUrl = result && result.pullRequest ? result.pullRequest.url : "";
+      resetPullRequestForm();
+      await loadGitStatus();
+      if (pullRequestUrl) {
+        window.open(pullRequestUrl, "_blank", "noopener");
+      }
+    } catch (error) {
+      state.pullRequestForm = {
+        ...state.pullRequestForm,
+        error: friendlyGitStatusError(error),
+      };
+      state.gitStatus = {
+        ...state.gitStatus,
+        actionMessage: "",
+      };
+      render();
+    }
+  });
+}
+
+function getSelectedSession() {
+  return state.sessions.find((session) => session.id === state.selectedSessionId) || null;
+}
+
+function canOpenPullRequestForSession(session, gitStatus, sticky = false) {
+  if (!session || session.sourceMode !== "connected" || !gitStatus || gitStatus.git === false) {
+    return false;
+  }
+  const baseBranch = session.sourceResolvedBranch || session.sourceRequestedBranch || "";
+  return Boolean(
+      sticky ||
+      Number(gitStatus.ahead || 0) > 0 ||
+      (gitStatus.branch && baseBranch && gitStatus.branch !== baseBranch),
+  );
 }
 
 async function resizeSession(sessionId, payload) {

@@ -135,6 +135,11 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && route.name === "gitOpenPr") {
+      res.json(await openPullRequest(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "githubRepos") {
       res.json(await listConnectedRepos(user.uid));
       return;
@@ -260,6 +265,14 @@ function routeRequest(path) {
     parts[4] === "git-push"
   ) {
     return {name: "gitPush", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "git-open-pr"
+  ) {
+    return {name: "gitOpenPr", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "repos") {
     return {name: "githubRepos"};
@@ -807,6 +820,77 @@ async function pushGit(uid, workspaceId, sessionId) {
   return requestRunnerGitPush(session);
 }
 
+async function openPullRequest(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (cleanName(session.sourceType) !== "github") {
+    throw httpError(400, "not_git_workspace");
+  }
+  if (cleanName(session.sourceMode) !== "connected") {
+    throw httpError(400, "github_pr_requires_connected_repo");
+  }
+  if (!session.serviceUrl) throw httpError(409, "session_not_running");
+  if (!session.shutdownToken) throw httpError(503, "runner_git_open_pr_unavailable");
+
+  const installationId = cleanGithubNumericId(session.sourceInstallationId);
+  const owner = cleanGithubValue(session.sourceRepoOwner);
+  const repo = cleanGithubValue(session.sourceRepoName);
+  if (!installationId || !owner || !repo) {
+    throw httpError(503, "github_pr_auth_unavailable");
+  }
+
+  const tokenResponse = await createGithubInstallationToken(installationId);
+  const repository = await getGithubRepository(owner, repo, tokenResponse.token);
+  const baseBranch = cleanGithubValue(repository.default_branch);
+  if (!baseBranch) {
+    throw httpError(502, "github_default_branch_unavailable");
+  }
+
+  const prepared = await requestRunnerGitOpenPr(session, {
+    baseBranch,
+    workingBranchName: buildWorkingBranchName(payload && payload.branchDescription),
+    pushToken: tokenResponse.token,
+    pushUsername: "x-access-token",
+  });
+
+  const template = await getGithubPullRequestTemplate(owner, repo, baseBranch, tokenResponse.token);
+  const title = normalizePullRequestTitle(
+      (payload && payload.title) || prepared.pullRequest && prepared.pullRequest.defaultTitle,
+  );
+  if (!title) {
+    throw httpError(400, "missing_pull_request_title");
+  }
+
+  const body = Object.prototype.hasOwnProperty.call(payload || {}, "body") ?
+    normalizePullRequestBody(payload.body) :
+    template.body;
+  const pullRequest = await createGithubPullRequest({
+    owner,
+    repo,
+    token: tokenResponse.token,
+    title,
+    body,
+    head: cleanGithubValue(prepared.pullRequest && prepared.pullRequest.branch),
+    base: baseBranch,
+    draft: Boolean(payload && payload.draft),
+  });
+
+  return {
+    ...prepared,
+    action: "open_pr",
+    pullRequest: {
+      number: Number(pullRequest.number || 0) || null,
+      url: cleanGithubValue(pullRequest.html_url),
+      title: cleanGithubValue(pullRequest.title) || title,
+      draft: Boolean(pullRequest.draft),
+      head: cleanGithubValue(pullRequest.head && pullRequest.head.ref) || cleanGithubValue(prepared.pullRequest && prepared.pullRequest.branch),
+      base: cleanGithubValue(pullRequest.base && pullRequest.base.ref) || baseBranch,
+      bodySource: template.source,
+    },
+  };
+}
+
 async function listConnectedRepos(uid) {
   if (!isGithubAppConfigured()) {
     throw httpError(503, "github_app_not_configured");
@@ -989,6 +1073,169 @@ async function requestGithubInstallationToken(installationId, appJwt) {
   }
 
   return data;
+}
+
+async function getGithubRepository(owner, repo, token) {
+  return requestGithubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, token, {
+    failureError: "github_repository_lookup_failed",
+  });
+}
+
+async function getGithubPullRequestTemplate(owner, repo, baseBranch, token) {
+  const directPaths = [
+    ".github/pull_request_template.md",
+    ".github/pull_request_template.txt",
+    "docs/pull_request_template.md",
+    "docs/pull_request_template.txt",
+    "pull_request_template.md",
+    "pull_request_template.txt",
+  ];
+  for (const templatePath of directPaths) {
+    const content = await getGithubRepositoryFile(owner, repo, templatePath, baseBranch, token);
+    if (content) {
+      return {body: content, source: `repository_template:${templatePath}`};
+    }
+  }
+
+  const templateDirs = [
+    ".github/PULL_REQUEST_TEMPLATE",
+    "docs/PULL_REQUEST_TEMPLATE",
+    "PULL_REQUEST_TEMPLATE",
+  ];
+  for (const directoryPath of templateDirs) {
+    const entries = await listGithubRepositoryDirectory(owner, repo, directoryPath, baseBranch, token);
+    const templateEntry = (entries || [])
+        .filter((entry) => entry && entry.type === "file" && /\.(md|txt)$/i.test(entry.name || ""))
+        .sort((left, right) => cleanGithubValue(left.path).localeCompare(cleanGithubValue(right.path)))[0];
+    if (!templateEntry || !templateEntry.path) {
+      continue;
+    }
+    const content = await getGithubRepositoryFile(owner, repo, templateEntry.path, baseBranch, token);
+    if (content) {
+      return {body: content, source: `repository_template:${cleanGithubValue(templateEntry.path)}`};
+    }
+  }
+
+  return {
+    body: defaultPullRequestBody(),
+    source: "fallback_template",
+  };
+}
+
+async function getGithubRepositoryFile(owner, repo, filePath, ref, token) {
+  let data;
+  try {
+    data = await requestGithubJson(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeGithubContentPath(filePath)}?ref=${encodeURIComponent(ref)}`,
+        token,
+        {failureError: "github_repository_file_lookup_failed"},
+    );
+  } catch (error) {
+    if (error && error.status === 404) {
+      return "";
+    }
+    throw error;
+  }
+
+  if (!data || Array.isArray(data) || cleanGithubValue(data.type) !== "file") {
+    return "";
+  }
+  if (cleanGithubValue(data.encoding) !== "base64") {
+    return "";
+  }
+
+  try {
+    return Buffer.from(String(data.content || "").replace(/\n/g, ""), "base64").toString("utf8");
+  } catch (error) {
+    throw httpError(502, "github_repository_file_decode_failed", error);
+  }
+}
+
+async function listGithubRepositoryDirectory(owner, repo, directoryPath, ref, token) {
+  try {
+    const data = await requestGithubJson(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeGithubContentPath(directoryPath)}?ref=${encodeURIComponent(ref)}`,
+        token,
+        {failureError: "github_repository_directory_lookup_failed"},
+    );
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    if (error && error.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function createGithubPullRequest({owner, repo, token, title, body, head, base, draft}) {
+  return requestGithubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`, token, {
+    method: "POST",
+    body: {
+      title,
+      head,
+      base,
+      body,
+      draft: Boolean(draft),
+    },
+    failureError: "github_pull_request_create_failed",
+  });
+}
+
+async function requestGithubJson(url, token, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, {
+      method: options.method || "GET",
+      headers: {
+        "accept": "application/vnd.github+json",
+        "authorization": `Bearer ${token}`,
+        "content-type": "application/json",
+        "user-agent": "mapahce-functions",
+        "x-github-api-version": "2022-11-28",
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (error) {
+    throw httpError(502, options.failureError || "github_request_failed", error);
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 404) {
+    throw httpError(404, cleanGithubApiMessage(data) || options.failureError || "github_request_failed");
+  }
+  if (!response.ok) {
+    const status = response.status === 422 || response.status === 409 ? 400 : 502;
+    throw httpError(status, cleanGithubApiMessage(data) || options.failureError || "github_request_failed");
+  }
+  return data;
+}
+
+function cleanGithubApiMessage(value) {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  const message = cleanGithubValue(value.message || "");
+  const detail = Array.isArray(value.errors) ? value.errors.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return cleanGithubValue(entry);
+    }
+    return cleanGithubValue(entry.message || entry.code || entry.field || entry.resource);
+  }).filter(Boolean)[0] : "";
+  return [message, detail].filter(Boolean).join(": ");
+}
+
+function encodeGithubContentPath(value) {
+  return String(value || "").split("/").filter(Boolean).map((part) => encodeURIComponent(part)).join("/");
+}
+
+function defaultPullRequestBody() {
+  return [
+    "## Summary",
+    "- ",
+    "",
+    "## Testing",
+    "- Not run (fill in)",
+  ].join("\n");
 }
 
 async function safeReadGithubErrorBody(response) {
@@ -1609,6 +1856,14 @@ async function requestRunnerGitPush(session) {
   });
 }
 
+async function requestRunnerGitOpenPr(session, body) {
+  return requestRunnerJson(session, "/git/open-pr", {
+    method: "POST",
+    body,
+    unavailableError: "runner_git_open_pr_unavailable",
+  });
+}
+
 async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
@@ -1793,6 +2048,29 @@ function normalizeGitCommitMessage(payload) {
     throw httpError(400, "missing_commit_message");
   }
   return message;
+}
+
+function buildWorkingBranchName(value) {
+  const slug = normalizeBranchDescription(value);
+  return slug ? `mapache/${slug}` : "";
+}
+
+function normalizeBranchDescription(value) {
+  return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48);
+}
+
+function normalizePullRequestTitle(value) {
+  return String(value || "").trim().slice(0, 256);
+}
+
+function normalizePullRequestBody(value) {
+  return String(value || "").trim().slice(0, 20000);
 }
 
 function contentTypeForPath(path) {
