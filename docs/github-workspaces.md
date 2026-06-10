@@ -330,6 +330,8 @@ Private repository support should use short-lived GitHub App installation tokens
 
 This design doc assumes that GitHub App work is a follow-on capability, not a prerequisite for the public-repo architecture.
 
+For the current planning guide for private repos, connector-backed repo picking, installation tokens, and later PR creation, see [guides/github-app-private-repos.md](./guides/github-app-private-repos.md).
+
 ## Why One Active Session Is Enforced
 
 The app currently supports multiple sessions per workspace. That is safe for blank workspaces because Cloud Storage is treated as the source of truth and the data model is already coarse-grained.

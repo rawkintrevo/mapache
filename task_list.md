@@ -220,11 +220,12 @@ Before implementation tasks, read:
   - If credentials are unavailable, the error clearly says GitHub auth is not configured.
   - Completed: 2026-06-10. Added protected push plumbing across runner/backend/UI, refreshed Git status after push, and return a clear `github_auth_not_configured` error when push credentials are missing.
 
-- [ ] 24. **Add GitHub App/Connector planning doc for private repos and repo picker** - easy (gpt-5.4-mini)
+- [x] 24. **Add GitHub App/Connector planning doc for private repos and repo picker** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Add a focused doc section or new doc describing GitHub App installation, repo picker, short-lived tokens, private repo cloning, and PR creation.
   - Clearly separate future GitHub App work from current public-URL support.
   - Identify required security decisions before implementation.
+  - Completed: 2026-06-10. Added a dedicated guide under `docs/guides/` for GitHub App/private-repo planning, linked it from the GitHub workspace design doc, and added an ADR template under `adrs/` for upcoming decisions.
 
 - [ ] 25. **Decide GitHub App ownership and permission policy** - human
   - Acceptance criteria:
