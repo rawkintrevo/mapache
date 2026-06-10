@@ -98,6 +98,7 @@ export function renderAppShell(root, props) {
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
     state.fileEditor.open ? renderFileEditorModal(props) : null,
+    state.pullRequestForm.open ? renderPullRequestModal(props) : null,
   ]));
 }
 
@@ -139,6 +140,8 @@ function renderSidebar(props) {
   const {
     state,
     onCreateWorkspace,
+    onConnectGithub,
+    onLoadConnectedRepos,
     onOpenSessionModal,
     onRefreshWorkspaceFiles,
     onSelectWorkspaceFile,
@@ -170,19 +173,168 @@ function renderSidebar(props) {
     placeholder: "default",
     required: true,
   });
-  const form = createElement("form", {className: "form-row"}, [
+  const sourceBlankInput = createElement("input", {
+    checked: true,
+    name: "workspaceSource",
+    type: "radio",
+    value: "blank",
+  });
+  const sourceGithubInput = createElement("input", {
+    name: "workspaceSource",
+    type: "radio",
+    value: "github",
+  });
+  const repoUrlInput = createElement("input", {
+    autocomplete: "off",
+    name: "repoUrl",
+    placeholder: "https://github.com/owner/repo",
+    type: "url",
+  });
+  const branchInput = createElement("input", {
+    autocomplete: "off",
+    name: "branch",
+    placeholder: "main",
+  });
+  const repoPicker = state.repoPicker || {loading: false, error: "", repos: [], attempted: false};
+
+  const repoSelect = createElement("select", {
+    disabled: repoPicker.loading || !repoPicker.repos.length,
+    name: "connectedRepo",
+  }, [
+    createElement("option", {value: ""}, repoPicker.loading ? "Loading..." : "Select a repository"),
+    ...(repoPicker.repos || []).map((repo) => createElement("option", {
+      value: JSON.stringify({
+        mode: "connected",
+        owner: repo.owner || "",
+        repo: repo.name || "",
+        fullName: repo.fullName || "",
+        installationId: repo.installationId || "",
+        repoId: repo.repoId || "",
+        repoUrl: repo.cloneUrl || repo.repoUrl || "",
+        defaultBranch: repo.defaultBranch || "",
+        private: Boolean(repo.private),
+        visibility: repo.visibility || (repo.private ? "private" : "public") || "public",
+      }),
+    }, repo.fullName || `${repo.owner || ""}/${repo.name || ""}`)),
+  ]);
+
+  const repoPickerSection = createElement("div", {className: "repo-picker hidden"}, [
+    createElement("label", {}, [
+      createElement("span", {}, "Connected repository"),
+      repoSelect,
+    ]),
+    createGithubConnectButton({repoPicker, onConnectGithub}),
+    repoPicker.error === "github_app_not_configured" ?
+      createElement("p", {className: "subtle repo-picker-fallback"}, "GitHub App not configured. Enter a public repository URL below.") :
+      repoPicker.error ?
+      createElement("p", {className: "subtle repo-picker-fallback"}, repoPicker.error) :
+      null,
+  ]);
+
+  const githubFields = createElement("div", {className: "workspace-source-fields hidden"}, [
+    createElement("label", {}, [
+      createElement("span", {}, "GitHub repo URL"),
+      repoUrlInput,
+    ]),
+    createElement("label", {}, [
+      createElement("span", {}, "Branch (optional)"),
+      branchInput,
+    ]),
+  ]);
+  const form = createElement("form", {className: "workspace-create"}, [
     createElement("label", {}, [
       createElement("span", {}, "Workspace"),
       nameInput,
     ]),
+    createElement("div", {className: "workspace-source-choice"}, [
+      createElement("label", {className: "source-choice"}, [
+        sourceBlankInput,
+        createElement("span", {}, "Blank"),
+      ]),
+      createElement("label", {className: "source-choice"}, [
+        sourceGithubInput,
+        createElement("span", {}, "GitHub"),
+      ]),
+    ]),
+    repoPickerSection,
+    githubFields,
     createElement("button", {
       disabled: state.busy,
       type: "submit",
     }, "Create"),
   ]);
+  const parseConnectedRepoValue = () => {
+    if (!repoSelect.value) return null;
+    try {
+      return JSON.parse(repoSelect.value);
+    } catch (error) {
+      return null;
+    }
+  };
+  const syncSourceFields = () => {
+    const githubSelected = sourceGithubInput.checked;
+    githubFields.classList.toggle("hidden", !githubSelected);
+    repoPickerSection.classList.toggle("hidden", !githubSelected);
+    repoUrlInput.required = githubSelected;
+    repoUrlInput.disabled = !githubSelected;
+    branchInput.disabled = !githubSelected;
+
+    if (githubSelected && onLoadConnectedRepos && !repoPicker.loading && !repoPicker.attempted) {
+      onLoadConnectedRepos();
+    }
+  };
+  const syncConnectedRepoSelection = () => {
+    const connectedRepo = parseConnectedRepoValue();
+    if (!connectedRepo) return;
+    if (connectedRepo.repoUrl) {
+      repoUrlInput.value = connectedRepo.repoUrl;
+    }
+    if (!branchInput.value.trim() && connectedRepo.defaultBranch) {
+      branchInput.value = connectedRepo.defaultBranch;
+    }
+  };
+  sourceBlankInput.addEventListener("change", syncSourceFields);
+  sourceGithubInput.addEventListener("change", syncSourceFields);
+  repoSelect.addEventListener("change", syncConnectedRepoSelection);
+  repoUrlInput.addEventListener("input", () => {
+    const connectedRepo = parseConnectedRepoValue();
+    if (!connectedRepo) return;
+    if (repoUrlInput.value.trim() !== (connectedRepo.repoUrl || "")) {
+      repoSelect.value = "";
+    }
+  });
+  syncSourceFields();
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    onCreateWorkspace({name: nameInput.value.trim() || "Default workspace"});
+    let source;
+    if (sourceGithubInput.checked) {
+      const connectedRepo = parseConnectedRepoValue();
+      if (connectedRepo) {
+        source = {
+          type: "github",
+          mode: "connected",
+          repoUrl: connectedRepo.repoUrl || repoUrlInput.value.trim(),
+          owner: connectedRepo.owner || "",
+          repo: connectedRepo.repo || "",
+          repoId: connectedRepo.repoId || undefined,
+          installationId: connectedRepo.installationId || undefined,
+          visibility: connectedRepo.visibility || undefined,
+          requestedBranch: branchInput.value.trim() || connectedRepo.defaultBranch || undefined,
+        };
+      } else {
+        source = {
+          type: "github",
+          repoUrl: repoUrlInput.value.trim(),
+          requestedBranch: branchInput.value.trim() || undefined,
+        };
+      }
+    } else {
+      source = {type: "blank"};
+    }
+    onCreateWorkspace({
+      name: nameInput.value.trim() || "Default workspace",
+      source,
+    });
   });
 
   const list = state.workspaces.length ?
@@ -222,6 +374,21 @@ function renderSidebar(props) {
       renderDrawerSessionList(state, onSelectSession, onStopSession),
     ]),
   ]);
+}
+
+function createGithubConnectButton({repoPicker, onConnectGithub}) {
+  if ((repoPicker.repos || []).length) {
+    return null;
+  }
+  const button = createElement("button", {
+    className: "secondary github-connect-button",
+    disabled: repoPicker.loading || !onConnectGithub,
+    type: "button",
+  }, repoPicker.loading ? "Loading..." : "Connect GitHub");
+  if (onConnectGithub) {
+    button.addEventListener("click", onConnectGithub);
+  }
+  return button;
 }
 
 function renderIcon(iconNode) {
@@ -266,7 +433,7 @@ function renderWorkspaceRow(workspace, isActive, busy, onSelectWorkspace, onOpen
       createElement("span", {}, workspace.name),
       createElement("span", {className: "pill"}, workspace.id.slice(0, 5)),
     ]),
-    createElement("span", {className: "subtle"}, workspace.storagePrefix || ""),
+    createElement("span", {className: "subtle"}, workspaceSourceSummary(workspace)),
   ]);
   selectButton.addEventListener("click", () => onSelectWorkspace(workspace.id));
 
@@ -454,8 +621,185 @@ function renderWorkspaceHeader(workspace) {
 
   return createElement("div", {}, [
     createElement("h1", {}, workspace.name),
-    createElement("p", {className: "subtle"}, workspace.storagePrefix || ""),
+    createElement("p", {className: "subtle"}, workspaceSourceSummary(workspace)),
   ]);
+}
+
+function renderGitStatusPanel(session, gitStatus, handlers = {}) {
+  const status = gitStatus || {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+    actionMessage: "",
+    commitMessage: "",
+    canOpenPr: false,
+  };
+  const data = status.data || null;
+  const title = session && session.name ? `Git status · ${session.name}` : "Git status";
+  const pullButton = createElement("button", {
+    className: "secondary",
+    disabled: !handlers.onPullGit || status.loading,
+    type: "button",
+  }, status.loading ? "Loading..." : "Pull");
+  if (handlers.onPullGit) {
+    pullButton.addEventListener("click", () => handlers.onPullGit(session.id));
+  }
+  const pushButton = createElement("button", {
+    className: "secondary",
+    disabled: !handlers.onPushGit || status.loading || !data || data.git === false,
+    type: "button",
+  }, "Push");
+  if (handlers.onPushGit) {
+    pushButton.addEventListener("click", () => handlers.onPushGit(session.id));
+  }
+  const openPrButton = createElement("button", {
+    className: "secondary",
+    disabled: !handlers.onOpenPullRequest || status.loading || !status.canOpenPr,
+    type: "button",
+  }, "Open PR");
+  if (handlers.onOpenPullRequest) {
+    openPrButton.addEventListener("click", () => handlers.onOpenPullRequest(session.id));
+  }
+
+  let body;
+  if (status.loading) {
+    body = createElement("p", {className: "empty"}, "Loading Git status...");
+  } else if (status.error) {
+    body = createElement("p", {className: "empty"}, status.error);
+  } else if (status.unavailable || !data || data.git === false) {
+    body = createElement("p", {className: "empty"}, data && data.reason === "not_git_workspace" ?
+      "This workspace is not Git-backed." :
+      "Git status is unavailable.");
+  } else {
+    body = createElement("div", {className: "git-status-body"}, [
+      createElement("div", {className: "details git-status-details"}, [
+        metric("Branch", data.branch || ""),
+        metric("Commit", data.commit ? data.commit.slice(0, 7) : ""),
+        metric("Ahead", formatGitCount(data.ahead)),
+        metric("Behind", formatGitCount(data.behind)),
+        metric("Dirty", formatGitDirtySummary(data.dirty)),
+        metric("Conflicted", data.conflicted ? "Yes" : "No"),
+      ]),
+      renderGitFileList(data.files || [], status.loading, handlers),
+    ]);
+  }
+
+  const commitInput = createElement("input", {
+    autocomplete: "off",
+    disabled: status.loading || !data || data.git === false,
+    placeholder: "Commit message",
+    type: "text",
+    value: status.commitMessage || "",
+  });
+  if (handlers.onUpdateGitCommitMessage) {
+    commitInput.addEventListener("input", () => handlers.onUpdateGitCommitMessage(commitInput.value));
+  }
+  const commitButton = createElement("button", {
+    disabled: status.loading || !handlers.onCommitGit || !data || data.git === false ||
+      !status.commitMessage || !status.commitMessage.trim() || !(data.dirty && data.dirty.staged),
+    type: "button",
+  }, "Commit");
+  if (handlers.onCommitGit) {
+    commitButton.addEventListener("click", () => handlers.onCommitGit(session.id));
+  }
+
+  return createElement("section", {className: "git-status-panel"}, [
+    createElement("div", {className: "drawer-section-heading"}, [
+      createElement("h3", {}, title),
+      createElement("div", {className: "git-status-actions"}, [
+        createElement("span", {className: "pill"}, data && data.git ? "Git" : status.unavailable ? "Unavailable" : "Loading"),
+        pullButton,
+        pushButton,
+        openPrButton,
+      ]),
+    ]),
+    status.actionMessage ? createElement("p", {className: "subtle"}, status.actionMessage) : null,
+    body,
+    data && data.git ? createElement("div", {className: "git-commit-form"}, [
+      commitInput,
+      commitButton,
+    ]) : null,
+  ]);
+}
+
+function renderGitFileList(files, busy, handlers) {
+  if (!files.length) {
+    return createElement("p", {className: "subtle"}, "No changed files.");
+  }
+
+  return createElement("div", {className: "git-file-list"}, files.map((file) => {
+    const actions = [];
+    if (file.unstaged || file.untracked || file.conflicted) {
+      const stageButton = createElement("button", {
+        className: "secondary",
+        disabled: busy || !handlers.onStageGitPath,
+        type: "button",
+      }, "Stage");
+      if (handlers.onStageGitPath) {
+        stageButton.addEventListener("click", () => handlers.onStageGitPath(file.path));
+      }
+      actions.push(stageButton);
+    }
+    if (file.staged) {
+      const unstageButton = createElement("button", {
+        className: "secondary",
+        disabled: busy || !handlers.onUnstageGitPath,
+        type: "button",
+      }, "Unstage");
+      if (handlers.onUnstageGitPath) {
+        unstageButton.addEventListener("click", () => handlers.onUnstageGitPath(file.path));
+      }
+      actions.push(unstageButton);
+    }
+
+    return createElement("div", {className: "git-file-row"}, [
+      createElement("div", {className: "git-file-meta"}, [
+        createElement("strong", {}, file.path || ""),
+        createElement("span", {className: "subtle"}, formatGitFileStatus(file)),
+      ]),
+      createElement("div", {className: "git-file-actions"}, actions),
+    ]);
+  }));
+}
+
+function formatGitFileStatus(file) {
+  if (!file) return "";
+  const parts = [];
+  if (file.conflicted) parts.push("conflicted");
+  if (file.untracked) parts.push("untracked");
+  if (file.staged) parts.push("staged");
+  if (file.unstaged) parts.push("unstaged");
+  return parts.join(" · ") || "changed";
+}
+
+function formatGitCount(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return String(value);
+}
+
+function formatGitDirtySummary(dirty) {
+  if (!dirty) return "—";
+  const parts = [];
+  if (dirty.staged) parts.push(`${dirty.staged} staged`);
+  if (dirty.modified) parts.push(`${dirty.modified} modified`);
+  if (dirty.deleted) parts.push(`${dirty.deleted} deleted`);
+  if (dirty.untracked) parts.push(`${dirty.untracked} untracked`);
+  if (dirty.conflicted) parts.push(`${dirty.conflicted} conflicted`);
+  return parts.length ? parts.join(", ") : "Clean";
+}
+
+function workspaceSourceSummary(workspace) {
+  if (!workspace) return "";
+  const source = workspace.source || {type: "blank"};
+  if (source.type !== "github") {
+    return workspace.storagePrefix || "";
+  }
+
+  const repo = [source.owner, source.repo].filter(Boolean).join("/") || "GitHub repo";
+  const branch = source.resolvedBranch || source.requestedBranch || "main";
+  const sha = (source.resolvedCommit || source.requestedCommit || "").slice(0, 7);
+  return [repo, branch, sha ? sha : null].filter(Boolean).join(" · ");
 }
 
 function renderSessionForm({state, onCreateSession}) {
@@ -513,6 +857,98 @@ function renderSessionModal({state, onCloseSessionModal, onCreateSession}) {
   const overlay = createElement("div", {className: "modal-backdrop"}, [panel]);
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) onCloseSessionModal();
+  });
+  return overlay;
+}
+
+function renderPullRequestModal({state, onClosePullRequest, onUpdatePullRequestForm, onSubmitPullRequest}) {
+  const formState = state.pullRequestForm || {
+    title: "",
+    body: "",
+    branchDescription: "",
+    draft: false,
+    error: "",
+  };
+  const branchInput = createElement("input", {
+    autocomplete: "off",
+    placeholder: "fix-login-timeout",
+    type: "text",
+    value: formState.branchDescription || "",
+  });
+  branchInput.addEventListener("input", () => onUpdatePullRequestForm({branchDescription: branchInput.value}));
+
+  const titleInput = createElement("input", {
+    autocomplete: "off",
+    placeholder: "Leave blank to use the first commit message",
+    type: "text",
+    value: formState.title || "",
+  });
+  titleInput.addEventListener("input", () => onUpdatePullRequestForm({title: titleInput.value}));
+
+  const bodyInput = createElement("textarea", {rows: 10}, formState.body || "");
+  bodyInput.value = formState.body || "";
+  bodyInput.addEventListener("input", () => onUpdatePullRequestForm({body: bodyInput.value}));
+
+  const draftInput = createElement("input", {
+    checked: Boolean(formState.draft),
+    type: "checkbox",
+  });
+  draftInput.addEventListener("change", () => onUpdatePullRequestForm({draft: draftInput.checked}));
+
+  const closeButton = createElement("button", {
+    className: "icon-button secondary",
+    type: "button",
+    ariaLabel: "Close pull request dialog",
+  }, renderIcon(X));
+  closeButton.addEventListener("click", onClosePullRequest);
+
+  const panel = createElement("section", {
+    className: "modal-panel pull-request-panel",
+    role: "dialog",
+    ariaModal: "true",
+  }, [
+    createElement("div", {className: "modal-heading"}, [
+      createElement("h2", {}, "Open pull request"),
+      closeButton,
+    ]),
+    createElement("p", {className: "subtle"}, "If the current branch is the default branch, a new mapache/<description> branch will be created before opening the PR."),
+    formState.error ? createElement("div", {className: "error"}, formState.error) : null,
+    createElement("div", {className: "modal-form"}, [
+      createElement("label", {}, [
+        createElement("span", {}, "Working branch description"),
+        branchInput,
+      ]),
+      createElement("label", {}, [
+        createElement("span", {}, "PR title"),
+        titleInput,
+      ]),
+      createElement("label", {}, [
+        createElement("span", {}, "PR body"),
+        bodyInput,
+      ]),
+      createElement("label", {className: "checkbox-row"}, [
+        draftInput,
+        createElement("span", {}, "Open as draft"),
+      ]),
+    ]),
+    createElement("div", {className: "toolbar"}, [
+      createElement("div"),
+      createElement("div", {className: "session-actions"}, [
+        createElement("button", {
+          className: "secondary",
+          type: "button",
+        }, "Cancel"),
+        createElement("button", {type: "button"}, "Open PR"),
+      ]),
+    ]),
+  ]);
+  const [cancelButton, submitButton] = panel.querySelectorAll(".session-actions button");
+  cancelButton.addEventListener("click", onClosePullRequest);
+  submitButton.addEventListener("click", onSubmitPullRequest);
+
+  const overlay = createElement("div", {className: "modal-backdrop"}, [panel]);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) onClosePullRequest();
   });
   return overlay;
 }
@@ -630,7 +1066,18 @@ function renderSessionList(state, {onSelectSession}) {
   }));
 }
 
-function renderSessionDetail(session, {state, onResizeSession, onRestartSession}) {
+function renderSessionDetail(session, {
+  state,
+  onResizeSession,
+  onRestartSession,
+  onPullGit,
+  onPushGit,
+  onStageGitPath,
+  onUnstageGitPath,
+  onUpdateGitCommitMessage,
+  onCommitGit,
+  onOpenPullRequest,
+}) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
       "resizeMemory",
@@ -685,6 +1132,15 @@ function renderSessionDetail(session, {state, onResizeSession, onRestartSession}
       metric("Service", session.serviceId || ""),
       metric("Updated", formatDate(session.updatedAt)),
     ]),
+    renderGitStatusPanel(session, state.gitStatus, {
+      onPullGit,
+      onPushGit,
+      onStageGitPath,
+      onUnstageGitPath,
+      onUpdateGitCommitMessage,
+      onCommitGit,
+      onOpenPullRequest,
+    }),
   ]);
 }
 
