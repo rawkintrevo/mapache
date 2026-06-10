@@ -139,6 +139,7 @@ function renderSidebar(props) {
   const {
     state,
     onCreateWorkspace,
+    onLoadConnectedRepos,
     onOpenSessionModal,
     onRefreshWorkspaceFiles,
     onSelectWorkspaceFile,
@@ -192,6 +193,35 @@ function renderSidebar(props) {
     name: "branch",
     placeholder: "main",
   });
+  const repoPicker = state.repoPicker || {loading: false, error: "", repos: [], attempted: false};
+
+  const repoSelect = createElement("select", {
+    disabled: repoPicker.loading || !repoPicker.repos.length,
+    name: "connectedRepo",
+  }, [
+    createElement("option", {value: ""}, repoPicker.loading ? "Loading..." : "Select a repository"),
+    ...(repoPicker.repos || []).map((repo) => createElement("option", {
+      value: JSON.stringify({
+        owner: repo.owner || "",
+        repo: repo.name || "",
+        installationId: repo.installationId || "",
+        repoUrl: repo.cloneUrl || repo.repoUrl || "",
+      }),
+    }, repo.fullName || `${repo.owner || ""}/${repo.name || ""}`)),
+  ]);
+
+  const repoPickerSection = createElement("div", {className: "repo-picker hidden"}, [
+    createElement("label", {}, [
+      createElement("span", {}, "Connected repository"),
+      repoSelect,
+    ]),
+    repoPicker.error === "github_app_not_configured" ?
+      createElement("p", {className: "subtle repo-picker-fallback"}, "GitHub App not configured. Enter a public repository URL below.") :
+      repoPicker.error ?
+      createElement("p", {className: "subtle repo-picker-fallback"}, repoPicker.error) :
+      null,
+  ]);
+
   const githubFields = createElement("div", {className: "workspace-source-fields hidden"}, [
     createElement("label", {}, [
       createElement("span", {}, "GitHub repo URL"),
@@ -217,6 +247,7 @@ function renderSidebar(props) {
         createElement("span", {}, "GitHub"),
       ]),
     ]),
+    repoPickerSection,
     githubFields,
     createElement("button", {
       disabled: state.busy,
@@ -226,20 +257,51 @@ function renderSidebar(props) {
   const syncSourceFields = () => {
     const githubSelected = sourceGithubInput.checked;
     githubFields.classList.toggle("hidden", !githubSelected);
+    repoPickerSection.classList.toggle("hidden", !githubSelected);
     repoUrlInput.required = githubSelected;
     repoUrlInput.disabled = !githubSelected;
     branchInput.disabled = !githubSelected;
+
+    if (githubSelected && onLoadConnectedRepos && !repoPicker.loading && !repoPicker.attempted) {
+      onLoadConnectedRepos();
+    }
   };
   sourceBlankInput.addEventListener("change", syncSourceFields);
   sourceGithubInput.addEventListener("change", syncSourceFields);
   syncSourceFields();
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const source = sourceGithubInput.checked ? {
-      type: "github",
-      repoUrl: repoUrlInput.value.trim(),
-      requestedBranch: branchInput.value.trim() || undefined,
-    } : {type: "blank"};
+    let source;
+    if (sourceGithubInput.checked) {
+      const connectedRepoValue = repoSelect.value;
+      if (connectedRepoValue) {
+        try {
+          const connectedRepo = JSON.parse(connectedRepoValue);
+          source = {
+            type: "github",
+            repoUrl: connectedRepo.repoUrl || "",
+            owner: connectedRepo.owner || "",
+            repo: connectedRepo.repo || "",
+            installationId: connectedRepo.installationId || undefined,
+            requestedBranch: branchInput.value.trim() || undefined,
+          };
+        } catch (e) {
+          source = {
+            type: "github",
+            repoUrl: repoUrlInput.value.trim(),
+            requestedBranch: branchInput.value.trim() || undefined,
+          };
+        }
+      } else {
+        source = {
+          type: "github",
+          repoUrl: repoUrlInput.value.trim(),
+          requestedBranch: branchInput.value.trim() || undefined,
+        };
+      }
+    } else {
+      source = {type: "blank"};
+    }
     onCreateWorkspace({
       name: nameInput.value.trim() || "Default workspace",
       source,

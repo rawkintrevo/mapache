@@ -427,6 +427,16 @@ main.drawer-collapsed {
   gap: 10px;
 }
 
+.repo-picker {
+  display: grid;
+  gap: 6px;
+}
+
+.repo-picker-fallback {
+  margin: 0;
+  font-size: 12px;
+}
+
 .hidden {
   display: none !important;
 }
