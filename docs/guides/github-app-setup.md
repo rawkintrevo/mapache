@@ -101,7 +101,6 @@ firebase functions:secrets:set GITHUB_APP_ID --project pi-agents-cloud
 firebase functions:secrets:set GITHUB_APP_CLIENT_ID --project pi-agents-cloud
 firebase functions:secrets:set GITHUB_APP_CLIENT_SECRET --project pi-agents-cloud
 firebase functions:secrets:set GITHUB_APP_PRIVATE_KEY --project pi-agents-cloud
-firebase functions:secrets:set GITHUB_APP_WEBHOOK_SECRET --project pi-agents-cloud
 ```
 
 Alternatively, store them in Google Cloud Secret Manager and reference them in your Cloud Functions environment.
