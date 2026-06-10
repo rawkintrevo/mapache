@@ -93,6 +93,25 @@ app.get("/git/status", async (req, res) => {
   }
 });
 
+app.post("/git/pull", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await pullGitAction());
+  } catch (error) {
+    console.error("git pull failed", error);
+    res.status(500).json({error: "git_pull_failed"});
+  }
+});
+
 wss.on("connection", (socket, request) => {
   terminalSession.attach(socket, shouldReplayTerminal(request));
 
@@ -898,6 +917,25 @@ async function getGitStatusSummary() {
       untracked: parsed.untracked,
       conflicted: parsed.conflicted,
     },
+  };
+}
+
+async function pullGitAction() {
+  let pull = {ok: true, message: ""};
+  await runGitCommand(["fetch", "--all", "--prune"]);
+  try {
+    await runGitCommand(["pull", "--no-rebase"]);
+  } catch (error) {
+    pull = {
+      ok: false,
+      message: compactErrorMessage(error && error.message ? error.message : error),
+    };
+  }
+
+  return {
+    ...(await getGitStatusSummary()),
+    action: "pull",
+    pull,
   };
 }
 

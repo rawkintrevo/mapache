@@ -33,6 +33,7 @@ const state = {
     error: "",
     unavailable: false,
     data: null,
+    actionMessage: "",
   },
   drawerCollapsed: false,
   sessionModalOpen: false,
@@ -102,6 +103,7 @@ function render() {
     onResizeSession: resizeSession,
     onRestartSession: restartSession,
     onStopSession: stopSession,
+    onPullGit: pullGit,
   });
 }
 
@@ -111,6 +113,7 @@ function resetGitStatus() {
     error: "",
     unavailable: false,
     data: null,
+    actionMessage: "",
   };
 }
 
@@ -238,6 +241,7 @@ async function loadGitStatus() {
     error: "",
     unavailable: false,
     data: null,
+    actionMessage: state.gitStatus.actionMessage || "",
   };
   render();
 
@@ -249,6 +253,7 @@ async function loadGitStatus() {
         error: "",
         unavailable: true,
         data,
+        actionMessage: state.gitStatus.actionMessage || "",
       };
       render();
       return;
@@ -258,6 +263,7 @@ async function loadGitStatus() {
       error: "",
       unavailable: false,
       data: data || null,
+      actionMessage: state.gitStatus.actionMessage || "",
     };
   } catch (error) {
     state.gitStatus = {
@@ -265,6 +271,7 @@ async function loadGitStatus() {
       error: friendlyGitStatusError(error),
       unavailable: true,
       data: null,
+      actionMessage: state.gitStatus.actionMessage || "",
     };
   }
   render();
@@ -411,6 +418,32 @@ function friendlyGitStatusError(error) {
     return "Git status is available once the session is running.";
   }
   return message;
+}
+
+async function pullGit() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Pulling latest changes...",
+      error: "",
+    };
+    render();
+    const result = await state.api.pullGit(workspaceId, sessionId);
+    state.gitStatus = {
+      loading: false,
+      error: result && result.pull && result.pull.ok === false ? (result.pull.message || "Git pull reported an issue.") : "",
+      unavailable: Boolean(result && result.git === false),
+      data: result || null,
+      actionMessage: result && result.pull && result.pull.ok === false ?
+        "Pull completed with Git conflicts or merge issues." :
+        "Pull completed.",
+    };
+    await loadGitStatus();
+  });
 }
 
 async function resizeSession(sessionId, payload) {

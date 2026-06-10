@@ -188,12 +188,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-10. Added a read-only Git status panel in the session detail view with loading, unavailable, and non-Git states, plus frontend fetch plumbing.
 
-- [ ] 20. **Add Git fetch/pull action plumbing** - medium (gpt-5.4)
+- [x] 20. **Add Git fetch/pull action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner supports a protected fetch/pull action for GitHub workspaces.
   - Backend exposes an authenticated route that verifies ownership and calls the runner.
   - UI adds a fetch or pull control with busy/error states.
   - Git conflict results are surfaced as Git state, not custom merge logic.
+  - Completed: 2026-06-10. Added protected runner/backend pull plumbing plus a frontend Pull control that refreshes Git state and surfaces merge issues through returned Git status.
 
 - [ ] 21. **Add stage and unstage action plumbing** - medium (gpt-5.4)
   - Acceptance criteria:

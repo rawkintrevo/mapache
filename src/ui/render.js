@@ -519,10 +519,18 @@ function renderWorkspaceHeader(workspace) {
   ]);
 }
 
-function renderGitStatusPanel(session, gitStatus) {
-  const status = gitStatus || {loading: false, error: "", unavailable: false, data: null};
+function renderGitStatusPanel(session, gitStatus, handlers = {}) {
+  const status = gitStatus || {loading: false, error: "", unavailable: false, data: null, actionMessage: ""};
   const data = status.data || null;
   const title = session && session.name ? `Git status · ${session.name}` : "Git status";
+  const pullButton = createElement("button", {
+    className: "secondary",
+    disabled: !handlers.onPullGit || status.loading,
+    type: "button",
+  }, status.loading ? "Loading..." : "Pull");
+  if (handlers.onPullGit) {
+    pullButton.addEventListener("click", () => handlers.onPullGit(session.id));
+  }
 
   let body;
   if (status.loading) {
@@ -547,8 +555,12 @@ function renderGitStatusPanel(session, gitStatus) {
   return createElement("section", {className: "git-status-panel"}, [
     createElement("div", {className: "drawer-section-heading"}, [
       createElement("h3", {}, title),
-      createElement("span", {className: "pill"}, data && data.git ? "Git" : status.unavailable ? "Unavailable" : "Loading"),
+      createElement("div", {className: "git-status-actions"}, [
+        createElement("span", {className: "pill"}, data && data.git ? "Git" : status.unavailable ? "Unavailable" : "Loading"),
+        pullButton,
+      ]),
     ]),
+    status.actionMessage ? createElement("p", {className: "subtle"}, status.actionMessage) : null,
     body,
   ]);
 }
@@ -754,7 +766,7 @@ function renderSessionList(state, {onSelectSession}) {
   }));
 }
 
-function renderSessionDetail(session, {state, onResizeSession, onRestartSession}) {
+function renderSessionDetail(session, {state, onResizeSession, onRestartSession, onPullGit}) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
       "resizeMemory",
@@ -809,7 +821,7 @@ function renderSessionDetail(session, {state, onResizeSession, onRestartSession}
       metric("Service", session.serviceId || ""),
       metric("Updated", formatDate(session.updatedAt)),
     ]),
-    renderGitStatusPanel(session, state.gitStatus),
+    renderGitStatusPanel(session, state.gitStatus, {onPullGit}),
   ]);
 }
 
