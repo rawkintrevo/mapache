@@ -202,10 +202,16 @@ function renderSidebar(props) {
     createElement("option", {value: ""}, repoPicker.loading ? "Loading..." : "Select a repository"),
     ...(repoPicker.repos || []).map((repo) => createElement("option", {
       value: JSON.stringify({
+        mode: "connected",
         owner: repo.owner || "",
         repo: repo.name || "",
+        fullName: repo.fullName || "",
         installationId: repo.installationId || "",
+        repoId: repo.repoId || "",
         repoUrl: repo.cloneUrl || repo.repoUrl || "",
+        defaultBranch: repo.defaultBranch || "",
+        private: Boolean(repo.private),
+        visibility: repo.visibility || (repo.private ? "private" : "public") || "public",
       }),
     }, repo.fullName || `${repo.owner || ""}/${repo.name || ""}`)),
   ]);
@@ -254,6 +260,14 @@ function renderSidebar(props) {
       type: "submit",
     }, "Create"),
   ]);
+  const parseConnectedRepoValue = () => {
+    if (!repoSelect.value) return null;
+    try {
+      return JSON.parse(repoSelect.value);
+    } catch (error) {
+      return null;
+    }
+  };
   const syncSourceFields = () => {
     const githubSelected = sourceGithubInput.checked;
     githubFields.classList.toggle("hidden", !githubSelected);
@@ -266,32 +280,44 @@ function renderSidebar(props) {
       onLoadConnectedRepos();
     }
   };
+  const syncConnectedRepoSelection = () => {
+    const connectedRepo = parseConnectedRepoValue();
+    if (!connectedRepo) return;
+    if (connectedRepo.repoUrl) {
+      repoUrlInput.value = connectedRepo.repoUrl;
+    }
+    if (!branchInput.value.trim() && connectedRepo.defaultBranch) {
+      branchInput.value = connectedRepo.defaultBranch;
+    }
+  };
   sourceBlankInput.addEventListener("change", syncSourceFields);
   sourceGithubInput.addEventListener("change", syncSourceFields);
+  repoSelect.addEventListener("change", syncConnectedRepoSelection);
+  repoUrlInput.addEventListener("input", () => {
+    const connectedRepo = parseConnectedRepoValue();
+    if (!connectedRepo) return;
+    if (repoUrlInput.value.trim() !== (connectedRepo.repoUrl || "")) {
+      repoSelect.value = "";
+    }
+  });
   syncSourceFields();
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     let source;
     if (sourceGithubInput.checked) {
-      const connectedRepoValue = repoSelect.value;
-      if (connectedRepoValue) {
-        try {
-          const connectedRepo = JSON.parse(connectedRepoValue);
-          source = {
-            type: "github",
-            repoUrl: connectedRepo.repoUrl || "",
-            owner: connectedRepo.owner || "",
-            repo: connectedRepo.repo || "",
-            installationId: connectedRepo.installationId || undefined,
-            requestedBranch: branchInput.value.trim() || undefined,
-          };
-        } catch (e) {
-          source = {
-            type: "github",
-            repoUrl: repoUrlInput.value.trim(),
-            requestedBranch: branchInput.value.trim() || undefined,
-          };
-        }
+      const connectedRepo = parseConnectedRepoValue();
+      if (connectedRepo) {
+        source = {
+          type: "github",
+          mode: "connected",
+          repoUrl: connectedRepo.repoUrl || repoUrlInput.value.trim(),
+          owner: connectedRepo.owner || "",
+          repo: connectedRepo.repo || "",
+          repoId: connectedRepo.repoId || undefined,
+          installationId: connectedRepo.installationId || undefined,
+          visibility: connectedRepo.visibility || undefined,
+          requestedBranch: branchInput.value.trim() || connectedRepo.defaultBranch || undefined,
+        };
       } else {
         source = {
           type: "github",

@@ -169,11 +169,11 @@ Expected UX:
 
 1. User enters workspace name.
 2. User chooses a source mode: `Blank` or `GitHub`.
-3. For `GitHub`, the UI accepts a repo URL and optional branch at minimum.
+3. For `GitHub`, the UI accepts a public repo URL and optional branch at minimum, and when the GitHub App is configured it can also offer a connected-repository picker.
 4. The backend validates and normalizes the source payload.
 5. The workspace document is created with explicit source metadata.
 
-Initial implementation can support public GitHub HTTPS URLs only. That keeps early validation simple and avoids blocking the basic architecture on GitHub App setup. Private repository support belongs to later GitHub App tasks.
+The public GitHub URL flow remains the lowest-common-denominator fallback. Connected repository selection can already persist installation-scoped source metadata, but private repository clone/auth during session startup still belongs to later GitHub App tasks.
 
 ## Session Creation Flow
 

@@ -294,12 +294,13 @@ Before implementation tasks, read:
   - Placeholder `not_configured` behavior remains for environments without GitHub App secrets.
   - Completed: 2026-06-10. Replaced the placeholder repo picker backend with installation-scoped GitHub repository listing, filtered installations/repository metadata to the authenticated Firebase user, and kept `github_app_not_configured` as the stable fallback when app secrets are missing.
 
-- [ ] 34. **Wire connected repo picker into workspace creation UI** - medium (gpt-5.4)
+- [x] 34. **Wire connected repo picker into workspace creation UI** - medium (gpt-5.4)
   - Acceptance criteria:
   - Workspace creation can select a connected GitHub repository when the repo picker is configured.
   - Public repo URL entry remains available as a fallback.
   - Selected connected repo payload includes enough metadata for backend validation.
   - `npm run build` passes.
+  - Completed: 2026-06-10. Connected repo selections now populate workspace creation with installation/repo metadata and default branch hints, manual repo URL entry still clears back to public fallback mode, and backend workspace creation validates connected repo selections against the authenticated user’s installation before storing connected source metadata.
 
 - [ ] 35. **Support private repo clone with installation tokens** - medium (gpt-5.4)
   - Acceptance criteria:
