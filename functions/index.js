@@ -135,6 +135,11 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && route.name === "githubRepos") {
+      res.json(await listConnectedRepos(user.uid));
+      return;
+    }
+
     res.status(404).json({error: "not_found"});
   } catch (error) {
     logger.error("api request failed", error);
@@ -255,6 +260,9 @@ function routeRequest(path) {
     parts[4] === "git-push"
   ) {
     return {name: "gitPush", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (parts.length === 2 && parts[0] === "github" && parts[1] === "repos") {
+    return {name: "githubRepos"};
   }
   return {name: "unknown"};
 }
@@ -707,6 +715,20 @@ async function pushGit(uid, workspaceId, sessionId) {
   if (!session.serviceUrl) throw httpError(409, "session_not_running");
   if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
   return requestRunnerGitPush(session);
+}
+
+async function listConnectedRepos(uid) {
+  if (!isGithubAppConfigured()) {
+    throw httpError(503, "github_app_not_configured");
+  }
+  // Placeholder: actual repo listing via installation tokens will be
+  // implemented in Task 33. Until then, return the same stable response
+  // so the frontend can safely detect the unavailable state.
+  throw httpError(503, "github_app_not_configured");
+}
+
+function isGithubAppConfigured() {
+  return Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY);
 }
 
 async function requireWorkspace(uid, workspaceId) {

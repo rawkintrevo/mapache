@@ -72,6 +72,7 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-push`,
         {method: "POST", body: {}},
     ),
+    getConnectedRepos: () => request(getToken, "/api/github/repos"),
   };
 }
 

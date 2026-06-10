@@ -262,12 +262,13 @@ Before implementation tasks, read:
   - Add docs/tests where appropriate.
   - Completed: 2026-06-10. Added `docs/guides/github-connection-metadata-schema.md` with recommended Firestore shapes for GitHub users, installations, repositories, and workspace source metadata, plus ownership and permission boundaries.
 
-- [ ] 30. **Add GitHub repo picker API placeholder with clear unsupported response** - easy (gpt-5.4-mini)
+- [x] 30. **Add GitHub repo picker API placeholder with clear unsupported response** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Add authenticated backend route shape for listing connected repos.
   - Until GitHub App auth exists, route returns a stable `not_configured` response.
   - Frontend can safely detect the unavailable state later.
   - Existing routes are unaffected.
+  - Completed: 2026-06-10. Added `GET /api/github/repos` route with `isGithubAppConfigured()` check, returns stable `github_app_not_configured` when unconfigured or as a placeholder until Task 33. Wired `getConnectedRepos` in the frontend API client.
 
 - [ ] 31. **Add repo picker UI unavailable state** - easy (gpt-5.4-mini)
   - Acceptance criteria:
