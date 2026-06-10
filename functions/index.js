@@ -110,6 +110,11 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && route.name === "gitPull") {
+      res.json(await pullGit(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
     res.status(404).json({error: "not_found"});
   } catch (error) {
     logger.error("api request failed", error);
@@ -190,6 +195,14 @@ function routeRequest(path) {
     parts[4] === "git-status"
   ) {
     return {name: "gitStatus", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "git-pull"
+  ) {
+    return {name: "gitPull", workspaceId: parts[1], sessionId: parts[3]};
   }
   return {name: "unknown"};
 }
@@ -593,6 +606,21 @@ async function getGitStatusSummary(uid, workspaceId, sessionId) {
   return requestRunnerGitStatus(session);
 }
 
+async function pullGit(uid, workspaceId, sessionId) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+
+  if (!session.serviceUrl) {
+    throw httpError(409, "session_not_running");
+  }
+  if (!session.shutdownToken) {
+    throw httpError(503, "runner_git_pull_unavailable");
+  }
+
+  return requestRunnerGitPull(session);
+}
+
 async function requireWorkspace(uid, workspaceId) {
   const snap = await db.collection("workspaces").doc(workspaceId).get();
   if (!snap.exists) throw httpError(404, "workspace_not_found");
@@ -875,11 +903,24 @@ async function requestRunnerShutdown(session) {
 }
 
 async function requestRunnerGitStatus(session) {
+  return requestRunnerJson(session, "/git/status", {
+    unavailableError: "runner_git_status_unavailable",
+  });
+}
+
+async function requestRunnerGitPull(session) {
+  return requestRunnerJson(session, "/git/pull", {
+    method: "POST",
+    unavailableError: "runner_git_pull_unavailable",
+  });
+}
+
+async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
   try {
-    const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}/git/status`, {
-      method: "GET",
+    const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}${routePath}`, {
+      method: options.method || "GET",
       headers: {"x-shutdown-token": session.shutdownToken},
       signal: controller.signal,
     });
@@ -887,13 +928,15 @@ async function requestRunnerGitStatus(session) {
     if (!response.ok) {
       throw httpError(
           response.status === 404 ? 503 : response.status,
-          cleanName(data.error || "runner_git_status_failed") || "runner_git_status_failed",
+          cleanName(data.error || options.failureError || "runner_request_failed") ||
+            options.failureError ||
+            "runner_request_failed",
       );
     }
     return data;
   } catch (error) {
     if (error && error.status) throw error;
-    throw httpError(503, "runner_git_status_unavailable", error);
+    throw httpError(503, options.unavailableError || "runner_request_unavailable", error);
   } finally {
     clearTimeout(timeout);
   }

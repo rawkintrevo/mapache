@@ -664,6 +664,12 @@ main.drawer-collapsed {
   background: #fbfcfd;
 }
 
+.git-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .git-status-details {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

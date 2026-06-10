@@ -47,6 +47,11 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,
     ),
+    pullGit: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-pull`,
+        {method: "POST", body: {}},
+    ),
   };
 }
 
