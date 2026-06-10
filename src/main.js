@@ -36,6 +36,12 @@ const state = {
     actionMessage: "",
     commitMessage: "",
   },
+  repoPicker: {
+    loading: false,
+    error: "",
+    repos: [],
+    attempted: false,
+  },
   drawerCollapsed: false,
   sessionModalOpen: false,
   busy: false,
@@ -110,6 +116,7 @@ function render() {
     onUnstageGitPath: unstageGitPath,
     onUpdateGitCommitMessage: updateGitCommitMessage,
     onCommitGit: commitGit,
+    onLoadConnectedRepos: loadConnectedRepos,
   });
 }
 
@@ -175,6 +182,19 @@ async function loadWorkspaceFiles() {
   } catch (error) {
     state.workspaceFilesError = friendlyFilesError(error);
   }
+}
+
+async function loadConnectedRepos() {
+  if (state.repoPicker.loading || state.repoPicker.attempted) return;
+  state.repoPicker = {...state.repoPicker, loading: true, attempted: true};
+  render();
+  try {
+    const data = await state.api.getConnectedRepos();
+    state.repoPicker = {loading: false, error: "", repos: data.repos || [], attempted: true};
+  } catch (error) {
+    state.repoPicker = {loading: false, error: error.message || "", repos: [], attempted: true};
+  }
+  render();
 }
 
 async function createWorkspace(payload) {

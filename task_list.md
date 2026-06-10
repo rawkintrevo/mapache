@@ -270,12 +270,13 @@ Before implementation tasks, read:
   - Existing routes are unaffected.
   - Completed: 2026-06-10. Added `GET /api/github/repos` route with `isGithubAppConfigured()` check, returns stable `github_app_not_configured` when unconfigured or as a placeholder until Task 33. Wired `getConnectedRepos` in the frontend API client.
 
-- [ ] 31. **Add repo picker UI unavailable state** - easy (gpt-5.4-mini)
+- [x] 31. **Add repo picker UI unavailable state** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Workspace creation UI has a place for connected-repo selection.
   - When repo picker API returns `not_configured`, UI falls back to public repo URL entry.
   - No fake connected repos are shown.
   - `npm run build` passes.
+  - Completed: 2026-06-10. Added a repo picker section to the workspace creation form with a disabled select, loading state, and `github_app_not_configured` fallback message. Public repo URL entry remains visible and usable. Connected repo selection is wired into form submission for future Task 34.
 
 - [ ] 32. **Implement GitHub App installation token creation** - medium (gpt-5.4)
   - Acceptance criteria:
