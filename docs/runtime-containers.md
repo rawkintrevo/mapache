@@ -167,6 +167,8 @@ The current runner implementation already clones public GitHub repositories duri
 
 Deleted worktree files are important here. A GitHub workspace cannot rely on upload-only file sync. If a file was deleted locally, the cached copy in Cloud Storage must be removed or invalidated so it does not reappear on the next restore.
 
+The current runner implementation now does that reconciliation for GitHub workspaces during normal sync: after uploading the current non-ignored worktree files and directory markers, it deletes stale non-internal Cloud Storage objects that are no longer part of the desired worktree cache. Blank workspaces still keep the older upload-only behavior.
+
 ## Provisioning
 
 When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected image. The image value comes from the create-session payload when present, or from the backend `SESSION_RUNNER_IMAGE` default.

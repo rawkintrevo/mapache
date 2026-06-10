@@ -443,23 +443,61 @@ async function syncDown() {
 async function syncUp(options = {}) {
   if (!bucketName || !prefix) return;
   const {directories, files} = await walkWorkspace(workspaceDir);
+  const desiredRemotePaths = new Set();
+
   await Promise.all(directories.map(async (localPath) => {
-    const relative = path.relative(workspaceDir, localPath);
+    const relative = normalizeRelativeWorkspacePath(path.relative(workspaceDir, localPath));
     if (!relative) return;
-    const remotePath = `${prefix}/${relative}/${directoryMarkerFile}`.replace(/\/+/g, "/");
+    const remotePath = workspaceRemotePath(`${relative}/${directoryMarkerFile}`);
+    desiredRemotePaths.add(remotePath);
     await storage.bucket(bucketName).file(remotePath).save("", {
       contentType: "text/plain",
       resumable: false,
     });
   }));
+
   await Promise.all(files.map(async (localPath) => {
-    const relative = path.relative(workspaceDir, localPath);
-    const remotePath = `${prefix}/${relative}`.replace(/\/+/g, "/");
+    const relative = normalizeRelativeWorkspacePath(path.relative(workspaceDir, localPath));
+    const remotePath = workspaceRemotePath(relative);
+    desiredRemotePaths.add(remotePath);
     await storage.bucket(bucketName).upload(localPath, {destination: remotePath});
   }));
+
+  if (isGithubWorkspace()) {
+    await reconcileGithubRemoteWorktree(desiredRemotePaths);
+  }
+
   if (options.includeArchives) {
     await syncArchivesUp();
   }
+}
+
+async function reconcileGithubRemoteWorktree(desiredRemotePaths) {
+  const [remoteFiles] = await storage.bucket(bucketName).getFiles({prefix: `${prefix}/`});
+  await Promise.all(remoteFiles.map(async (file) => {
+    if (!shouldManageGithubWorktreeRemotePath(file.name)) return;
+    if (desiredRemotePaths.has(file.name)) return;
+    await file.delete({ignoreNotFound: true});
+  }));
+}
+
+function shouldManageGithubWorktreeRemotePath(remotePath) {
+  if (!remotePath || remotePath.endsWith("/")) return false;
+  const relative = normalizeRemoteWorkspacePath(remotePath);
+  if (!relative) return false;
+  if (relative === directoryMarkerFile) return false;
+  if (relative === internalStorageDir || relative.startsWith(`${internalStorageDir}/`)) {
+    return false;
+  }
+  return true;
+}
+
+function workspaceRemotePath(relativePath) {
+  return `${prefix}/${normalizeRelativeWorkspacePath(relativePath)}`.replace(/\/+/g, "/");
+}
+
+function normalizeRemoteWorkspacePath(remotePath) {
+  return normalizeRelativeWorkspacePath(String(remotePath || "").slice(prefix.length).replace(/^\/+/, ""));
 }
 
 async function walkWorkspace(dir) {

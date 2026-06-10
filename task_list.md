@@ -140,12 +140,13 @@ Before implementation tasks, read:
   - Archive upload avoids obvious transient lock files where practical and logs archive failures clearly.
   - Completed: 2026-06-10. Runner now uploads GitHub workspace `.git` state as a hidden internal archive, skips obvious `.lock` files while packaging it, and logs archive upload/restore failures per target.
 
-- [ ] 14. **Reconcile GitHub worktree sync including deletions** - medium (gpt-5.4)
+- [x] 14. **Reconcile GitHub worktree sync including deletions** - medium (gpt-5.4)
   - Acceptance criteria:
   - GitHub workspace normal file sync uploads current non-ignored worktree files.
   - Remote cached worktree files that no longer exist locally are removed or otherwise prevented from restoring.
   - Blank workspace sync behavior is not changed unless explicitly necessary.
   - Directory markers remain consistent after local directory deletion.
+  - Completed: 2026-06-10. GitHub-mode normal sync now reconciles stale cached worktree files and directory markers in Cloud Storage after local deletions, while blank workspaces keep the existing upload-only flow.
 
 - [ ] 15. **Restore GitHub workspace from cached .git archive and worktree files** - medium (gpt-5.4)
   - Acceptance criteria:
