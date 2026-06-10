@@ -42,12 +42,13 @@ Before implementation tasks, read:
   - Add a dedicated GitHub workspace design document and update overview docs to point at it.
   - Completed: 2026-06-10. Added `docs/github-workspaces.md` and updated the overview/runtime docs to describe source modes, cache semantics, `.git` archive handling, and single-session enforcement.
 
-- [ ] 2. **Add workspace source metadata validation helpers** - easy (gpt-5.4-mini)
+- [x] 2. **Add workspace source metadata validation helpers** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Add backend helpers in `functions/index.js` to normalize workspace source payloads.
   - Support `blank` and public GitHub HTTPS repo metadata.
   - Reject unsupported repo URLs, embedded credentials, and unsupported source types.
   - Existing blank workspace creation behavior remains unchanged when no source is provided.
+  - Completed: 2026-06-10. Added workspace source normalization helpers and wired create-workspace validation for blank and public GitHub HTTPS repo payloads.
 
 - [ ] 3. **Persist workspace source metadata on create** - easy (gpt-5.4-mini)
   - Acceptance criteria:

@@ -235,6 +235,7 @@ async function createWorkspace(uid, payload) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
+  normalizeWorkspaceSourcePayload(payload);
   const doc = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -247,6 +248,104 @@ async function createWorkspace(uid, payload) {
   const ref = await db.collection("workspaces").add(doc);
   const snap = await ref.get();
   return toClientDoc(snap);
+}
+
+function normalizeWorkspaceSourcePayload(payload) {
+  const source = payload && Object.prototype.hasOwnProperty.call(payload, "source") ? payload.source : undefined;
+  if (source === undefined || source === null || source === "") {
+    return {type: "blank"};
+  }
+  if (typeof source !== "object" || Array.isArray(source)) {
+    throw httpError(400, "invalid_workspace_source");
+  }
+
+  const rawType = source.type == null ? (source.repoUrl || source.url ? "github" : "") : source.type;
+  const type = cleanName(rawType).toLowerCase();
+  if (!type) {
+    throw httpError(400, "invalid_workspace_source_type");
+  }
+  if (type === "blank") {
+    return {type: "blank"};
+  }
+  if (type !== "github") {
+    throw httpError(400, "unsupported_workspace_source_type");
+  }
+
+  const repoUrl = normalizePublicGitHubRepoUrl(source.repoUrl || source.url || "");
+  const requestedBranch = cleanName(source.requestedBranch || source.branch || "");
+  const requestedCommit = cleanName(source.requestedCommit || source.commit || "");
+  if (requestedCommit && !/^[0-9a-f]{7,40}$/i.test(requestedCommit)) {
+    throw httpError(400, "invalid_workspace_source_commit");
+  }
+
+  const {owner, repo, cloneUrl} = parsePublicGitHubRepoUrl(repoUrl);
+  return {
+    type: "github",
+    repoUrl: cloneUrl,
+    owner,
+    repo,
+    requestedBranch: requestedBranch || null,
+    requestedCommit: requestedCommit || null,
+    visibility: "public",
+  };
+}
+
+function normalizePublicGitHubRepoUrl(value) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    throw httpError(400, "missing_github_repo_url");
+  }
+  return String(value).trim();
+}
+
+function parsePublicGitHubRepoUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw httpError(400, "invalid_github_repo_url", error);
+  }
+
+  if (url.protocol !== "https:") {
+    throw httpError(400, "github_repo_url_must_use_https");
+  }
+  if (url.username || url.password) {
+    throw httpError(400, "github_repo_url_must_not_include_credentials");
+  }
+
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (host !== "github.com") {
+    throw httpError(400, "unsupported_github_repo_host");
+  }
+  if (url.search || url.hash) {
+    throw httpError(400, "invalid_github_repo_url");
+  }
+
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts.length !== 2) {
+    throw httpError(400, "invalid_github_repo_url");
+  }
+
+  let owner;
+  let repoPath;
+  try {
+    owner = decodeURIComponent(parts[0]).trim();
+    repoPath = decodeURIComponent(parts[1]).trim();
+  } catch (error) {
+    throw httpError(400, "invalid_github_repo_url", error);
+  }
+  const repo = repoPath.endsWith(".git") ? repoPath.slice(0, -4) : repoPath;
+  if (!owner || !repo) {
+    throw httpError(400, "invalid_github_repo_url");
+  }
+  if (owner.includes("/") || repo.includes("/")) {
+    throw httpError(400, "invalid_github_repo_url");
+  }
+
+  return {
+    owner,
+    repo,
+    cloneUrl: `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}.git`,
+  };
 }
 
 async function listSessions(uid, workspaceId) {
