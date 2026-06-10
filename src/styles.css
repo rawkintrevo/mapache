@@ -655,6 +655,19 @@ main.drawer-collapsed {
   gap: 10px;
 }
 
+.git-status-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
+}
+
+.git-status-details {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .metric {
   display: grid;
   gap: 4px;

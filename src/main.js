@@ -28,6 +28,12 @@ const state = {
   },
   selectedWorkspaceId: null,
   selectedSessionId: null,
+  gitStatus: {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+  },
   drawerCollapsed: false,
   sessionModalOpen: false,
   busy: false,
@@ -58,6 +64,7 @@ async function start() {
         state.profile = null;
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
+        resetGitStatus();
         render();
         return;
       }
@@ -98,6 +105,15 @@ function render() {
   });
 }
 
+function resetGitStatus() {
+  state.gitStatus = {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+  };
+}
+
 function toggleDrawer() {
   state.drawerCollapsed = !state.drawerCollapsed;
   render();
@@ -118,8 +134,10 @@ async function refreshAll() {
     }
     if (previousWorkspaceId !== state.selectedWorkspaceId) {
       resetWorkspaceFiles();
+      resetGitStatus();
     }
     await loadSessions();
+    await loadGitStatus();
     await loadWorkspaceFiles();
   });
 }
@@ -132,6 +150,7 @@ async function loadSessions() {
   const data = await state.api.getSessions(state.selectedWorkspaceId);
   state.sessions = data.sessions || [];
   state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
+  await loadGitStatus();
 }
 
 async function loadWorkspaceFiles() {
@@ -165,8 +184,10 @@ async function selectWorkspace(workspaceId) {
   state.selectedWorkspaceId = workspaceId;
   state.sessionModalOpen = false;
   resetWorkspaceFiles();
+  resetGitStatus();
   await runBusy(async () => {
     await loadSessions();
+    await loadGitStatus();
     await loadWorkspaceFiles();
   });
 }
@@ -190,16 +211,63 @@ async function createSession(payload) {
     const next = await state.api.getSessions(state.selectedWorkspaceId);
     state.sessions = next.sessions || [];
     state.sessionModalOpen = false;
+    await loadGitStatus();
   });
 }
 
-function selectSession(sessionId) {
+async function selectSession(sessionId) {
   state.selectedSessionId = sessionId;
+  await loadGitStatus();
   render();
 }
 
 async function refreshWorkspaceFiles() {
   await runBusy(loadWorkspaceFiles);
+}
+
+async function loadGitStatus() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) {
+    resetGitStatus();
+    return;
+  }
+
+  state.gitStatus = {
+    loading: true,
+    error: "",
+    unavailable: false,
+    data: null,
+  };
+  render();
+
+  try {
+    const data = await state.api.getGitStatus(workspaceId, sessionId);
+    if (data && data.ok && data.git === false) {
+      state.gitStatus = {
+        loading: false,
+        error: "",
+        unavailable: true,
+        data,
+      };
+      render();
+      return;
+    }
+    state.gitStatus = {
+      loading: false,
+      error: "",
+      unavailable: false,
+      data: data || null,
+    };
+  } catch (error) {
+    state.gitStatus = {
+      loading: false,
+      error: friendlyGitStatusError(error),
+      unavailable: true,
+      data: null,
+    };
+  }
+  render();
 }
 
 function toggleWorkspaceFileDir(path) {
@@ -331,6 +399,17 @@ function resetFileEditor() {
 function friendlyFilesError(error) {
   const message = error.message || "Could not load files.";
   if (message === "not_found") return "Files API is not deployed yet.";
+  return message;
+}
+
+function friendlyGitStatusError(error) {
+  const message = error.message || "Could not load Git status.";
+  if (message === "runner_git_status_unavailable") {
+    return "Git status is temporarily unavailable.";
+  }
+  if (message === "session_not_running") {
+    return "Git status is available once the session is running.";
+  }
   return message;
 }
 
