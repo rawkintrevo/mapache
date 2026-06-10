@@ -185,6 +185,8 @@ Stopping a running session from the sidebar calls the backend stop route for tha
 
 Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
 
+The runner also exposes a protected `GET /git/status` endpoint that uses the same token gate. For GitHub workspaces it derives branch, commit, ahead/behind, dirty counts, and conflicted state from Git commands inside `/workspace`. For blank workspaces it returns a structured non-Git response instead of pretending Cloud Storage state is a repository.
+
 For GitHub workspaces, this final sync is especially important because it is the last chance to persist local working tree changes and refreshed `.git` archive state before the Cloud Run service disappears.
 
 The shutdown request timeout defaults to 120 seconds because archive-backed dependency directories can be large. New deployments can override it with `RUNNER_SHUTDOWN_TIMEOUT_MS`.

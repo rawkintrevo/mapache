@@ -56,7 +56,7 @@ app.get("/healthz", (req, res) => {
 });
 
 app.post("/shutdown", async (req, res) => {
-  if (!shutdownToken || req.get("x-shutdown-token") !== shutdownToken) {
+  if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
     return;
   }
@@ -71,6 +71,25 @@ app.post("/shutdown", async (req, res) => {
   } catch (error) {
     console.error("shutdown sync failed", error);
     res.status(500).json({error: "shutdown_sync_failed"});
+  }
+});
+
+app.get("/git/status", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await getGitStatusSummary());
+  } catch (error) {
+    console.error("git status failed", error);
+    res.status(500).json({error: "git_status_failed"});
   }
 });
 
@@ -185,6 +204,10 @@ function createTerminalSession() {
       updateSessionActivity(activity);
     }, activityWriteDebounceMs);
   }
+}
+
+function hasRunnerAccess(req) {
+  return Boolean(shutdownToken) && req.get("x-shutdown-token") === shutdownToken;
 }
 
 function shouldReplayTerminal(request) {
@@ -852,6 +875,68 @@ function normalizeEnvString(value) {
 
 function compactErrorMessage(value) {
   return normalizeEnvString(value).slice(0, 1000) || "unknown_error";
+}
+
+async function getGitStatusSummary() {
+  const commit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
+  const branch = await runGitCommand(["branch", "--show-current"], {captureStdout: true});
+  const porcelain = await runGitCommand(["status", "--porcelain=1", "--branch"], {captureStdout: true});
+  const parsed = parseGitPorcelainStatus(porcelain);
+  return {
+    ok: true,
+    git: true,
+    sourceType: workspaceSourceMode,
+    branch: branch || null,
+    commit: commit || null,
+    ahead: parsed.ahead,
+    behind: parsed.behind,
+    conflicted: parsed.conflicted > 0,
+    dirty: {
+      staged: parsed.staged,
+      modified: parsed.modified,
+      deleted: parsed.deleted,
+      untracked: parsed.untracked,
+      conflicted: parsed.conflicted,
+    },
+  };
+}
+
+function parseGitPorcelainStatus(output) {
+  const lines = String(output || "").split(/\r?\n/).filter(Boolean);
+  let ahead = null;
+  let behind = null;
+  let staged = 0;
+  let modified = 0;
+  let deleted = 0;
+  let untracked = 0;
+  let conflicted = 0;
+  const conflictCodes = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
+
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      const aheadMatch = line.match(/ahead (\d+)/);
+      const behindMatch = line.match(/behind (\d+)/);
+      ahead = aheadMatch ? Number(aheadMatch[1]) : 0;
+      behind = behindMatch ? Number(behindMatch[1]) : 0;
+      continue;
+    }
+    if (line.startsWith("??")) {
+      untracked += 1;
+      continue;
+    }
+    const x = line[0] || " ";
+    const y = line[1] || " ";
+    const code = `${x}${y}`;
+    if (conflictCodes.has(code)) {
+      conflicted += 1;
+      continue;
+    }
+    if (x !== " ") staged += 1;
+    if (y === "M" || y === "T") modified += 1;
+    if (x === "D" || y === "D") deleted += 1;
+  }
+
+  return {ahead, behind, staged, modified, deleted, untracked, conflicted};
 }
 
 function positiveNumber(value, fallback) {

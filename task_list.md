@@ -172,12 +172,13 @@ Before implementation tasks, read:
   - Status includes branch, commit, dirty counts, ahead/behind when available, and conflicted state when available.
   - Completed: 2026-06-10. Added an authenticated session-scoped Git status route in Cloud Functions that verifies ownership, requires a live runner, and proxies to the protected runner Git status endpoint.
 
-- [ ] 18. **Add runner endpoint for Git status summary** - medium (gpt-5.4)
+- [x] 18. **Add runner endpoint for Git status summary** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner exposes a protected status endpoint for GitHub workspaces.
   - Status is derived from Git commands in `/workspace`.
   - Endpoint does not expose secrets or arbitrary command execution.
   - Blank workspaces return a clear non-Git status.
+  - Completed: 2026-06-10. Runner now exposes a token-protected `/git/status` endpoint backed by fixed Git commands, and blank workspaces return a structured non-Git response.
 
 - [ ] 19. **Add frontend Git status panel skeleton** - easy (gpt-5.4-mini)
   - Acceptance criteria:

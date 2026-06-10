@@ -579,13 +579,10 @@ async function stopSession(uid, workspaceId, sessionId) {
 }
 
 async function getGitStatusSummary(uid, workspaceId, sessionId) {
-  const workspace = await requireWorkspace(uid, workspaceId);
+  await requireWorkspace(uid, workspaceId);
   const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
 
-  if (!isGithubWorkspace(workspace)) {
-    throw httpError(409, "workspace_not_git_backed");
-  }
   if (!session.serviceUrl) {
     throw httpError(409, "session_not_running");
   }
