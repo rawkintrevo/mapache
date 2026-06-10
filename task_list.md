@@ -148,12 +148,13 @@ Before implementation tasks, read:
   - Directory markers remain consistent after local directory deletion.
   - Completed: 2026-06-10. GitHub-mode normal sync now reconciles stale cached worktree files and directory markers in Cloud Storage after local deletions, while blank workspaces keep the existing upload-only flow.
 
-- [ ] 15. **Restore GitHub workspace from cached .git archive and worktree files** - medium (gpt-5.4)
+- [x] 15. **Restore GitHub workspace from cached .git archive and worktree files** - medium (gpt-5.4)
   - Acceptance criteria:
   - Startup order restores cached `.git` archive when present, restores cached worktree files, then validates Git status.
   - If no cached `.git` archive exists, startup clones/fetches the repo and checks out the exact commit or branch.
   - Restore handles missing cache gracefully.
   - Failure logs identify whether Git archive restore, clone, checkout, or worktree restore failed.
+  - Completed: 2026-06-10. GitHub startup now restores cached `.git` first when available, falls back to clone/checkout when missing, restores worktree and other archives in order, validates HEAD, and logs phase-specific restore failures.
 
 - [ ] 16. **Display GitHub source summary in workspace UI** - easy (gpt-5.4-mini)
   - Acceptance criteria:
