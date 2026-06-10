@@ -321,7 +321,7 @@ async function createWorkspace(uid, payload) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
-  const source = normalizeWorkspaceSourcePayload(payload);
+  const source = await normalizeWorkspaceSourcePayload(uid, payload);
   const doc = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -350,7 +350,7 @@ async function createWorkspace(uid, payload) {
   return toClientDoc(snap);
 }
 
-function normalizeWorkspaceSourcePayload(payload) {
+async function normalizeWorkspaceSourcePayload(uid, payload) {
   const source = payload && Object.prototype.hasOwnProperty.call(payload, "source") ? payload.source : undefined;
   if (source === undefined || source === null || source === "") {
     return {type: "blank"};
@@ -371,16 +371,24 @@ function normalizeWorkspaceSourcePayload(payload) {
     throw httpError(400, "unsupported_workspace_source_type");
   }
 
-  const repoUrl = normalizePublicGitHubRepoUrl(source.repoUrl || source.url || "");
   const requestedBranch = cleanName(source.requestedBranch || source.branch || "");
   const requestedCommit = cleanName(source.requestedCommit || source.commit || "");
   if (requestedCommit && !/^[0-9a-f]{7,40}$/i.test(requestedCommit)) {
     throw httpError(400, "invalid_workspace_source_commit");
   }
 
+  if (isConnectedGithubSourcePayload(source)) {
+    return normalizeConnectedGithubSourcePayload(uid, source, {
+      requestedBranch,
+      requestedCommit,
+    });
+  }
+
+  const repoUrl = normalizePublicGitHubRepoUrl(source.repoUrl || source.url || "");
   const {owner, repo, cloneUrl} = parsePublicGitHubRepoUrl(repoUrl);
   return {
     type: "github",
+    mode: "public",
     repoUrl: cloneUrl,
     owner,
     repo,
@@ -388,6 +396,88 @@ function normalizeWorkspaceSourcePayload(payload) {
     requestedCommit: requestedCommit || null,
     visibility: "public",
   };
+}
+
+function isConnectedGithubSourcePayload(source) {
+  const mode = cleanName(source && source.mode).toLowerCase();
+  if (mode === "connected") {
+    return true;
+  }
+  return Boolean(cleanGithubNumericId(source && source.installationId) || cleanGithubNumericId(source && source.repoId));
+}
+
+async function normalizeConnectedGithubSourcePayload(uid, source, options = {}) {
+  if (!isGithubAppConfigured()) {
+    throw httpError(503, "github_app_not_configured");
+  }
+
+  const installationId = normalizeGithubInstallationId(source.installationId);
+  const expectedRepoId = cleanGithubNumericId(source.repoId);
+  const expectedOwner = cleanGithubValue(source.owner).toLowerCase();
+  const expectedRepo = cleanGithubValue(source.repo).toLowerCase();
+  const requestedRepoUrl = cleanGithubValue(source.repoUrl || source.url);
+  const installation = await requireGithubInstallationForUser(uid, installationId);
+  const tokenResponse = await createGithubInstallationToken(installationId);
+  const repos = await listGithubInstallationRepositories(installationId, tokenResponse.token);
+  const matchedRepo = repos.find((repo) => {
+    const liveRepoId = cleanGithubNumericId(repo && repo.id);
+    const liveOwner = cleanGithubValue(repo && repo.owner && repo.owner.login).toLowerCase();
+    const liveName = cleanGithubValue(repo && repo.name).toLowerCase();
+    const liveCloneUrl = cleanGithubValue(repo && repo.clone_url);
+    if (expectedRepoId && liveRepoId) {
+      return expectedRepoId === liveRepoId;
+    }
+    if (expectedOwner && expectedRepo) {
+      return expectedOwner === liveOwner && expectedRepo === liveName;
+    }
+    return Boolean(requestedRepoUrl && liveCloneUrl && requestedRepoUrl === liveCloneUrl);
+  });
+
+  if (!matchedRepo) {
+    throw httpError(403, "github_connected_repo_forbidden");
+  }
+
+  const owner = cleanGithubValue(matchedRepo.owner && matchedRepo.owner.login);
+  const repo = cleanGithubValue(matchedRepo.name);
+  const cloneUrl = cleanGithubValue(matchedRepo.clone_url);
+  const repoId = cleanGithubNumericId(matchedRepo.id);
+  if (!owner || !repo || !cloneUrl || !repoId) {
+    throw httpError(502, "github_connected_repo_invalid");
+  }
+
+  return {
+    type: "github",
+    mode: "connected",
+    repoUrl: cloneUrl,
+    owner,
+    repo,
+    requestedBranch: options.requestedBranch || cleanGithubValue(matchedRepo.default_branch) || null,
+    requestedCommit: options.requestedCommit || null,
+    visibility: matchedRepo.private ? "private" : "public",
+    connection: {
+      installationId,
+      repoId,
+      ownerUid: uid,
+    },
+  };
+}
+
+async function requireGithubInstallationForUser(uid, installationId) {
+  const [userSnap, installationDoc] = await Promise.all([
+    githubUserDoc(uid).get(),
+    githubInstallationCollection(uid).doc(installationId).get(),
+  ]);
+  if (!installationDoc.exists) {
+    throw httpError(403, "github_installation_forbidden");
+  }
+
+  const userData = userSnap.exists ? userSnap.data() || {} : {};
+  const allowedInstallationIds = new Set(normalizeGithubInstallationIds(userData.installationIds));
+  const installation = normalizeGithubInstallationRecord(uid, installationDoc.id, installationDoc.data(), allowedInstallationIds);
+  if (!installation) {
+    throw httpError(403, "github_installation_forbidden");
+  }
+  return installation;
 }
 
 function normalizeWorkspaceSyncPolicy(source) {
