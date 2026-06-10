@@ -479,6 +479,7 @@ async function createSession(uid, workspaceId, payload) {
     serviceUrl: null,
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
     ...sessionSourceMetadata(workspace),
+    ...sessionSyncPolicyMetadata(workspace),
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
@@ -752,6 +753,8 @@ function sessionRunnerEnv(session, options = {}) {
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
+    {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
+    {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];
 
@@ -796,6 +799,24 @@ function sessionSourceMetadata(workspace) {
     sourceResolvedBranch: cleanName(source.resolvedBranch || ""),
     sourceResolvedCommit: cleanName(source.resolvedCommit || ""),
   };
+}
+
+function sessionSyncPolicyMetadata(workspace) {
+  const syncPolicy = workspace && workspace.syncPolicy ? workspace.syncPolicy : {mode: "blank", exclude: []};
+  return {
+    syncPolicyMode: cleanName(syncPolicy.mode || "blank") || "blank",
+    syncPolicyExclude: Array.isArray(syncPolicy.exclude) ?
+      syncPolicy.exclude.map((value) => cleanName(value)).filter(Boolean) :
+      [],
+  };
+}
+
+function stringifySyncPolicyExclude(value) {
+  try {
+    return JSON.stringify(Array.isArray(value) ? value : []);
+  } catch (error) {
+    return "[]";
+  }
 }
 
 async function requestRunnerShutdown(session) {
