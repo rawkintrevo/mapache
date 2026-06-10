@@ -520,7 +520,14 @@ function renderWorkspaceHeader(workspace) {
 }
 
 function renderGitStatusPanel(session, gitStatus, handlers = {}) {
-  const status = gitStatus || {loading: false, error: "", unavailable: false, data: null, actionMessage: ""};
+  const status = gitStatus || {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+    actionMessage: "",
+    commitMessage: "",
+  };
   const data = status.data || null;
   const title = session && session.name ? `Git status · ${session.name}` : "Git status";
   const pullButton = createElement("button", {
@@ -555,6 +562,25 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
     ]);
   }
 
+  const commitInput = createElement("input", {
+    autocomplete: "off",
+    disabled: status.loading || !data || data.git === false,
+    placeholder: "Commit message",
+    type: "text",
+    value: status.commitMessage || "",
+  });
+  if (handlers.onUpdateGitCommitMessage) {
+    commitInput.addEventListener("input", () => handlers.onUpdateGitCommitMessage(commitInput.value));
+  }
+  const commitButton = createElement("button", {
+    disabled: status.loading || !handlers.onCommitGit || !data || data.git === false ||
+      !status.commitMessage || !status.commitMessage.trim() || !(data.dirty && data.dirty.staged),
+    type: "button",
+  }, "Commit");
+  if (handlers.onCommitGit) {
+    commitButton.addEventListener("click", () => handlers.onCommitGit(session.id));
+  }
+
   return createElement("section", {className: "git-status-panel"}, [
     createElement("div", {className: "drawer-section-heading"}, [
       createElement("h3", {}, title),
@@ -565,6 +591,10 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
     ]),
     status.actionMessage ? createElement("p", {className: "subtle"}, status.actionMessage) : null,
     body,
+    data && data.git ? createElement("div", {className: "git-commit-form"}, [
+      commitInput,
+      commitButton,
+    ]) : null,
   ]);
 }
 
@@ -826,6 +856,8 @@ function renderSessionDetail(session, {
   onPullGit,
   onStageGitPath,
   onUnstageGitPath,
+  onUpdateGitCommitMessage,
+  onCommitGit,
 }) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
@@ -885,6 +917,8 @@ function renderSessionDetail(session, {
       onPullGit,
       onStageGitPath,
       onUnstageGitPath,
+      onUpdateGitCommitMessage,
+      onCommitGit,
     }),
   ]);
 }

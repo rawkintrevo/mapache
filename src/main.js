@@ -34,6 +34,7 @@ const state = {
     unavailable: false,
     data: null,
     actionMessage: "",
+    commitMessage: "",
   },
   drawerCollapsed: false,
   sessionModalOpen: false,
@@ -106,6 +107,8 @@ function render() {
     onPullGit: pullGit,
     onStageGitPath: stageGitPath,
     onUnstageGitPath: unstageGitPath,
+    onUpdateGitCommitMessage: updateGitCommitMessage,
+    onCommitGit: commitGit,
   });
 }
 
@@ -116,6 +119,7 @@ function resetGitStatus() {
     unavailable: false,
     data: null,
     actionMessage: "",
+    commitMessage: "",
   };
 }
 
@@ -244,6 +248,7 @@ async function loadGitStatus() {
     unavailable: false,
     data: null,
     actionMessage: state.gitStatus.actionMessage || "",
+    commitMessage: state.gitStatus.commitMessage || "",
   };
   render();
 
@@ -256,6 +261,7 @@ async function loadGitStatus() {
         unavailable: true,
         data,
         actionMessage: state.gitStatus.actionMessage || "",
+        commitMessage: state.gitStatus.commitMessage || "",
       };
       render();
       return;
@@ -266,6 +272,7 @@ async function loadGitStatus() {
       unavailable: false,
       data: data || null,
       actionMessage: state.gitStatus.actionMessage || "",
+      commitMessage: state.gitStatus.commitMessage || "",
     };
   } catch (error) {
     state.gitStatus = {
@@ -274,6 +281,7 @@ async function loadGitStatus() {
       unavailable: true,
       data: null,
       actionMessage: state.gitStatus.actionMessage || "",
+      commitMessage: state.gitStatus.commitMessage || "",
     };
   }
   render();
@@ -479,6 +487,42 @@ async function runGitFileAction(path, action, actionMessage, requestAction) {
       unavailable: Boolean(result && result.git === false),
       data: result || null,
       actionMessage: `${action === "stage" ? "Staged" : "Unstaged"} ${path}.`,
+      commitMessage: state.gitStatus.commitMessage || "",
+    };
+    await loadGitStatus();
+  });
+}
+
+function updateGitCommitMessage(message) {
+  state.gitStatus = {
+    ...state.gitStatus,
+    commitMessage: message,
+  };
+}
+
+async function commitGit() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const message = (state.gitStatus.commitMessage || "").trim();
+  if (!workspaceId || !sessionId || !message) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage: "Creating commit...",
+      error: "",
+    };
+    render();
+    const result = await state.api.commitGit(workspaceId, sessionId, message);
+    state.gitStatus = {
+      loading: false,
+      error: "",
+      unavailable: Boolean(result && result.git === false),
+      data: result || null,
+      actionMessage: result && result.committedHead ?
+        `Committed ${result.committedHead.slice(0, 7)}.` :
+        "Commit created.",
+      commitMessage: "",
     };
     await loadGitStatus();
   });

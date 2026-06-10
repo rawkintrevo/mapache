@@ -149,6 +149,24 @@ app.post("/git/unstage", async (req, res) => {
   }
 });
 
+app.post("/git/commit", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await commitGitChanges(req.body || {}));
+  } catch (error) {
+    console.error("git commit failed", error);
+    res.status(400).json({error: compactErrorMessage(error.message || error) || "git_commit_failed"});
+  }
+});
+
 wss.on("connection", (socket, request) => {
   terminalSession.attach(socket, shouldReplayTerminal(request));
 
@@ -978,6 +996,23 @@ async function unstageGitPaths(payload) {
   };
 }
 
+async function commitGitChanges(payload) {
+  const message = normalizeGitCommitMessage(payload.message);
+  const before = await getGitStatusSummary();
+  if (!before.dirty || !before.dirty.staged) {
+    throw new Error("empty_commit_not_allowed");
+  }
+
+  await runGitCommand(["commit", "-m", message]);
+  const after = await getGitStatusSummary();
+  return {
+    ...after,
+    action: "commit",
+    commitMessage: message,
+    committedHead: after.commit,
+  };
+}
+
 async function pullGitAction() {
   let pull = {ok: true, message: ""};
   await runGitCommand(["fetch", "--all", "--prune"]);
@@ -1076,6 +1111,14 @@ function normalizeGitActionPaths(paths) {
     }
     return normalized;
   });
+}
+
+function normalizeGitCommitMessage(value) {
+  const message = normalizeEnvString(value);
+  if (!message) {
+    throw new Error("missing_commit_message");
+  }
+  return message.slice(0, 500);
 }
 
 function positiveNumber(value, fallback) {
