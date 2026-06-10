@@ -40,6 +40,9 @@ const archiveSyncTargets = [
   },
 ];
 const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
+const githubRepoUrl = normalizeEnvString(process.env.GITHUB_REPO_URL);
+const githubRequestedBranch = normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH);
+const githubRequestedCommit = normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT);
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -237,7 +240,7 @@ function sendTerminalMessage(socket, message) {
 ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${workspaceSourceMode}`);
-      await syncDown();
+      await prepareWorkspaceSource();
     })
     .then(() => {
       let lastArchiveSync = 0;
@@ -282,6 +285,79 @@ function isGithubWorkspace() {
 
 function isBlankWorkspace() {
   return workspaceSourceMode !== "github";
+}
+
+async function prepareWorkspaceSource() {
+  if (isBlankWorkspace()) {
+    await syncDown();
+    return;
+  }
+  await cloneGithubWorkspace();
+  await syncDown();
+}
+
+async function cloneGithubWorkspace() {
+  if (!githubRepoUrl) {
+    const error = new Error("Missing GITHUB_REPO_URL for GitHub workspace startup.");
+    await recordGithubCloneFailure(error);
+    throw error;
+  }
+
+  try {
+    await emptyWorkspaceDir(workspaceDir);
+    console.log(`cloning GitHub workspace from ${githubRepoUrl}`);
+    await runGitClone();
+    if (githubRequestedCommit) {
+      console.log(`checking out requested commit ${githubRequestedCommit}`);
+      await runGitCommand(["checkout", "--force", githubRequestedCommit]);
+    }
+    const resolved = await resolveGitHead();
+    console.log(`github workspace ready at ${resolved.commit}${resolved.branch ? ` on ${resolved.branch}` : ""}`);
+    await updateSessionActivity({
+      sourceResolvedBranch: resolved.branch,
+      sourceResolvedCommit: resolved.commit,
+      lastError: null,
+    });
+  } catch (error) {
+    await recordGithubCloneFailure(error);
+    throw new Error(`GitHub workspace startup failed: ${compactErrorMessage(error.message || error)}`);
+  }
+}
+
+async function runGitClone() {
+  const args = ["clone"];
+  if (!githubRequestedCommit && githubRequestedBranch) {
+    args.push("--branch", githubRequestedBranch, "--single-branch");
+  }
+  args.push(githubRepoUrl, workspaceDir);
+  await runGitCommand(args, {cwd: "/"});
+}
+
+async function resolveGitHead() {
+  const commit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
+  const branch = await runGitCommand(["branch", "--show-current"], {captureStdout: true});
+  return {
+    branch: branch || null,
+    commit: commit || githubRequestedCommit || null,
+  };
+}
+
+async function recordGithubCloneFailure(error) {
+  const message = compactErrorMessage(error && error.message ? error.message : error);
+  console.error("github workspace clone failed", message);
+  await updateSessionActivity({
+    lastError: `github_clone_failed: ${message}`,
+  });
+}
+
+async function emptyWorkspaceDir(dir) {
+  const entries = await fs.promises.readdir(dir, {withFileTypes: true}).catch((error) => {
+    if (error && error.code === "ENOENT") return [];
+    throw error;
+  });
+  await Promise.all(entries.map((entry) => (
+    fs.promises.rm(path.join(dir, entry.name), {recursive: true, force: true})
+  )));
 }
 
 async function syncDown() {
@@ -455,6 +531,21 @@ function collectStderr(child) {
   return () => stderr.trim();
 }
 
+async function runGitCommand(args, options = {}) {
+  const child = spawn("git", args, {
+    cwd: options.cwd || workspaceDir,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stderr = collectStderr(child);
+  let stdout = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+    if (stdout.length > 8192) stdout = stdout.slice(stdout.length - 8192);
+  });
+  await waitForChild(child, stderr, `git ${args.join(" ")}`);
+  return options.captureStdout ? stdout.trim() : "";
+}
+
 async function pathExists(localPath) {
   try {
     await fs.promises.access(localPath);
@@ -466,7 +557,13 @@ async function pathExists(localPath) {
 
 function shouldIgnoreWorkspacePath(relativePath) {
   const parts = String(relativePath || "").split(path.sep).filter(Boolean);
-  return parts.includes("node_modules") || parts[0] === internalStorageDir;
+  if (parts.includes("node_modules") || parts[0] === internalStorageDir) {
+    return true;
+  }
+  if (isGithubWorkspace() && parts.includes(".git")) {
+    return true;
+  }
+  return false;
 }
 
 function shouldIgnoreInternalWorkspacePath(relativePath) {
@@ -508,6 +605,14 @@ async function updateSessionActivity(updates) {
 
 function normalizePrefix(value) {
   return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function normalizeEnvString(value) {
+  return String(value || "").trim();
+}
+
+function compactErrorMessage(value) {
+  return normalizeEnvString(value).slice(0, 1000) || "unknown_error";
 }
 
 function positiveNumber(value, fallback) {
