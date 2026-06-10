@@ -138,7 +138,7 @@ High-cardinality runtime directories are not synced as individual Cloud Storage 
 
 The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted. Archive objects live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
-For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects.
+For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces even before dedicated `.git` archive restore is fully implemented.
 
 This keeps dependency installs, Git metadata, and Pi Agent state available to later sessions without creating thousands of Cloud Storage objects for `node_modules` or `.git`. It also means archive-backed changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
 
@@ -153,6 +153,8 @@ GitHub-backed workspaces should reconstruct `/workspace` in this order:
 3. Restore cached worktree files from Cloud Storage, excluding ignored and internal paths.
 4. Restore other archive-backed runtime directories such as `node_modules` and `/root/.pi`.
 5. Validate and publish Git runtime state before serving the terminal.
+
+The current runner implementation already clones public GitHub repositories during startup when `WORKSPACE_SOURCE_TYPE=github`. It uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. Successful startup resolves the current `HEAD` commit for the session document, and clone failures are logged plus written to the session `lastError` field.
 
 Deleted worktree files are important here. A GitHub workspace cannot rely on upload-only file sync. If a file was deleted locally, the cached copy in Cloud Storage must be removed or invalidated so it does not reappear on the next restore.
 

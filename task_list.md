@@ -99,13 +99,14 @@ Before implementation tasks, read:
   - `node --check session-runner/server.js` passes.
   - Completed: 2026-06-10. Added workspace source-mode helpers and startup logging while preserving blank-mode sync/start behavior.
 
-- [ ] 9. **Implement public GitHub clone and exact checkout in the runner** - medium (gpt-5.4)
+- [x] 9. **Implement public GitHub clone and exact checkout in the runner** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner can clone a public GitHub repo into `/workspace`.
   - Runner checks out the exact commit when provided.
   - If only a branch is provided, runner resolves and records the checked-out commit when practical.
   - Clone errors are logged clearly and surfaced to the session document when feasible.
   - `.git/` is not uploaded by normal workspace sync.
+  - Completed: 2026-06-10. Runner now clones GitHub workspaces on startup, force-checks out requested commits, records resolved HEAD info on the session, logs clone failures to `lastError`, and skips `.git` during GitHub-mode normal sync.
 
 - [ ] 10. **Record resolved Git commit metadata from runner startup** - medium (gpt-5.4)
   - Acceptance criteria:
