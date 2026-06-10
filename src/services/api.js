@@ -10,6 +10,15 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/files`,
     ),
+    getWorkspaceFile: (workspaceId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+    ),
+    saveWorkspaceFile: (workspaceId, path, content) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+        {method: "PUT", body: {content}},
+    ),
     getSessions: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions`,

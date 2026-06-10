@@ -27,7 +27,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -60,7 +61,8 @@ button:disabled {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--line);
@@ -68,6 +70,10 @@ select {
   background: white;
   color: var(--text);
   padding: 8px 10px;
+}
+
+textarea {
+  resize: vertical;
 }
 
 label {
@@ -651,6 +657,12 @@ main.drawer-collapsed {
   box-shadow: 0 22px 60px rgba(16, 24, 32, 0.28);
 }
 
+.file-editor-panel {
+  width: min(960px, 100%);
+  max-height: calc(100vh - 40px);
+  grid-template-rows: auto auto minmax(220px, 1fr) auto;
+}
+
 .modal-heading {
   display: flex;
   align-items: center;
@@ -665,6 +677,109 @@ main.drawer-collapsed {
 
 .modal-panel .toolbar label:nth-child(2) {
   grid-column: 1 / -1;
+}
+
+.file-editor-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.file-editor-title span {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-editor-stack {
+  position: relative;
+  min-height: min(62vh, 620px);
+  overflow: hidden;
+  border: 1px solid #c8d1dc;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.file-editor-highlight,
+.file-editor-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.file-editor-highlight {
+  padding: 14px;
+  color: #1f2937;
+  pointer-events: none;
+}
+
+.file-editor-input {
+  min-height: 0;
+  padding: 14px;
+  background: transparent;
+  caret-color: #101820;
+  color: transparent;
+  outline: none;
+  resize: none;
+}
+
+.file-editor-input::selection {
+  background: rgba(20, 125, 100, 0.22);
+}
+
+.file-editor-status {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.file-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.file-editor-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.token-comment {
+  color: #64748b;
+}
+
+.token-key {
+  color: #7c2d12;
+}
+
+.token-keyword {
+  color: #075985;
+  font-weight: 700;
+}
+
+.token-number {
+  color: #9a3412;
+}
+
+.token-string {
+  color: #166534;
 }
 
 h2 {

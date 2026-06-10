@@ -52,6 +52,16 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && route.name === "workspaceFile") {
+      res.json(await readWorkspaceFile(user.uid, route.workspaceId, req.query.path));
+      return;
+    }
+
+    if (req.method === "PUT" && route.name === "workspaceFile") {
+      res.json(await saveWorkspaceFile(user.uid, route.workspaceId, req.query.path, req.body || {}));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "sessions") {
       res.json({sessions: await listSessions(user.uid, route.workspaceId)});
       return;
@@ -132,6 +142,9 @@ function routeRequest(path) {
   if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
     return {name: "workspaceFiles", workspaceId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "file") {
+    return {name: "workspaceFile", workspaceId: parts[1]};
   }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
     return {name: "sessions", workspaceId: parts[1]};
@@ -258,6 +271,45 @@ async function listWorkspaceFiles(uid, workspaceId) {
         .filter(Boolean)
         .sort((left, right) => left.path.localeCompare(right.path)),
     truncated: Boolean(nextQuery),
+  };
+}
+
+async function readWorkspaceFile(uid, workspaceId, path) {
+  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
+  const [exists] = await file.exists();
+  if (!exists) throw httpError(404, "file_not_found");
+
+  const [metadata] = await file.getMetadata();
+  const size = Number(metadata.size || 0);
+  if (size > 1024 * 1024) throw httpError(413, "file_too_large");
+
+  const [buffer] = await file.download();
+  return {
+    path: relativePath,
+    name: relativePath.split("/").pop(),
+    content: buffer.toString("utf8"),
+    contentType: metadata.contentType || "text/plain",
+    size,
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
+async function saveWorkspaceFile(uid, workspaceId, path, payload) {
+  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
+  const content = String(payload.content ?? "");
+  if (Buffer.byteLength(content, "utf8") > 1024 * 1024) {
+    throw httpError(413, "file_too_large");
+  }
+
+  await file.save(content, {
+    contentType: contentTypeForPath(relativePath),
+    resumable: false,
+  });
+
+  const [metadata] = await file.getMetadata();
+  return {
+    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
   };
 }
 
@@ -669,6 +721,48 @@ function storageFileToClientFile(file, queryPrefix) {
     size: Number(metadata.size || 0),
     updatedAt: metadata.updated || metadata.timeCreated || "",
   };
+}
+
+async function workspaceStorageFile(uid, workspaceId, path) {
+  const workspace = await requireWorkspace(uid, workspaceId);
+  const bucketName = workspace.bucket || DEFAULT_BUCKET;
+  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
+  const relativePath = normalizeWorkspaceFilePath(path);
+  if (!bucketName || !prefix) throw httpError(400, "workspace_storage_not_configured");
+  return {
+    file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
+    relativePath,
+  };
+}
+
+function normalizeWorkspaceFilePath(value) {
+  const path = String(value || "").replace(/^\/+|\/+$/g, "");
+  const parts = path.split("/").filter(Boolean);
+  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
+    throw httpError(400, "invalid_file_path");
+  }
+  if (parts.includes(DIRECTORY_MARKER_FILE)) {
+    throw httpError(400, "invalid_file_path");
+  }
+  return parts.join("/");
+}
+
+function contentTypeForPath(path) {
+  const extension = path.split(".").pop().toLowerCase();
+  const contentTypes = {
+    css: "text/css; charset=utf-8",
+    html: "text/html; charset=utf-8",
+    js: "text/javascript; charset=utf-8",
+    json: "application/json; charset=utf-8",
+    md: "text/markdown; charset=utf-8",
+    py: "text/x-python; charset=utf-8",
+    sh: "text/x-shellscript; charset=utf-8",
+    txt: "text/plain; charset=utf-8",
+    xml: "application/xml; charset=utf-8",
+    yaml: "application/yaml; charset=utf-8",
+    yml: "application/yaml; charset=utf-8",
+  };
+  return contentTypes[extension] || "text/plain; charset=utf-8";
 }
 
 function toClientDoc(doc) {

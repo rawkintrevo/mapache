@@ -15,6 +15,17 @@ const state = {
   workspaceFilesWorkspaceId: null,
   expandedFilePaths: new Set(),
   selectedWorkspaceFilePath: "",
+  fileEditor: {
+    open: false,
+    path: "",
+    name: "",
+    content: "",
+    originalContent: "",
+    loading: false,
+    saving: false,
+    error: "",
+    updatedAt: "",
+  },
   selectedWorkspaceId: null,
   selectedSessionId: null,
   drawerCollapsed: false,
@@ -43,6 +54,7 @@ async function start() {
         state.workspaceFilesWorkspaceId = null;
         state.expandedFilePaths = new Set();
         state.selectedWorkspaceFilePath = "";
+        resetFileEditor();
         state.profile = null;
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
@@ -76,6 +88,9 @@ function render() {
     onSelectSession: selectSession,
     onRefreshWorkspaceFiles: refreshWorkspaceFiles,
     onSelectWorkspaceFile: selectWorkspaceFile,
+    onCloseFileEditor: closeFileEditor,
+    onUpdateFileEditorContent: updateFileEditorContent,
+    onSaveFileEditor: saveFileEditor,
     onToggleWorkspaceFileDir: toggleWorkspaceFileDir,
     onResizeSession: resizeSession,
     onRestartSession: restartSession,
@@ -195,8 +210,94 @@ function toggleWorkspaceFileDir(path) {
   render();
 }
 
-function selectWorkspaceFile(path) {
+async function selectWorkspaceFile(path) {
+  const workspaceId = state.selectedWorkspaceId;
   state.selectedWorkspaceFilePath = path;
+  state.fileEditor = {
+    open: true,
+    path,
+    name: path.split("/").pop(),
+    content: "",
+    originalContent: "",
+    loading: true,
+    saving: false,
+    error: "",
+    updatedAt: "",
+  };
+  render();
+  try {
+    const data = await state.api.getWorkspaceFile(workspaceId, path);
+    if (
+      state.selectedWorkspaceId !== workspaceId ||
+      state.fileEditor.path !== path ||
+      !state.fileEditor.open
+    ) {
+      return;
+    }
+    state.fileEditor = {
+      ...state.fileEditor,
+      name: data.name || path.split("/").pop(),
+      content: data.content || "",
+      originalContent: data.content || "",
+      loading: false,
+      updatedAt: data.updatedAt || "",
+    };
+  } catch (error) {
+    if (
+      state.selectedWorkspaceId !== workspaceId ||
+      state.fileEditor.path !== path ||
+      !state.fileEditor.open
+    ) {
+      return;
+    }
+    state.fileEditor = {
+      ...state.fileEditor,
+      loading: false,
+      error: friendlyFilesError(error),
+    };
+  }
+  render();
+}
+
+function closeFileEditor() {
+  resetFileEditor();
+  render();
+}
+
+function updateFileEditorContent(content) {
+  state.fileEditor.content = content;
+}
+
+async function saveFileEditor(content) {
+  if (!state.selectedWorkspaceId || !state.fileEditor.path) return;
+  state.fileEditor = {
+    ...state.fileEditor,
+    content,
+    saving: true,
+    error: "",
+  };
+  render();
+  try {
+    const data = await state.api.saveWorkspaceFile(
+        state.selectedWorkspaceId,
+        state.fileEditor.path,
+        content,
+    );
+    state.fileEditor = {
+      ...state.fileEditor,
+      content,
+      originalContent: content,
+      saving: false,
+      updatedAt: data.updatedAt || state.fileEditor.updatedAt,
+    };
+    await loadWorkspaceFiles();
+  } catch (error) {
+    state.fileEditor = {
+      ...state.fileEditor,
+      saving: false,
+      error: friendlyFilesError(error),
+    };
+  }
   render();
 }
 
@@ -207,6 +308,21 @@ function resetWorkspaceFiles() {
   state.workspaceFilesWorkspaceId = state.selectedWorkspaceId;
   state.expandedFilePaths = new Set();
   state.selectedWorkspaceFilePath = "";
+  resetFileEditor();
+}
+
+function resetFileEditor() {
+  state.fileEditor = {
+    open: false,
+    path: "",
+    name: "",
+    content: "",
+    originalContent: "",
+    loading: false,
+    saving: false,
+    error: "",
+    updatedAt: "",
+  };
 }
 
 function friendlyFilesError(error) {
