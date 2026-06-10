@@ -484,7 +484,7 @@ main.drawer-collapsed {
   gap: 5px;
   width: 100%;
   min-height: 0;
-  padding: 12px 42px 12px 12px;
+  padding: 12px 82px 12px 12px;
   border-radius: 8px;
   background: transparent;
   color: var(--text);
@@ -495,16 +495,24 @@ main.drawer-collapsed {
   background: transparent;
 }
 
-.session-stop-button {
+.session-row-actions {
   position: absolute;
   right: 10px;
   bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.session-action-button {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
   min-height: 0;
   padding: 0;
+}
+
+.session-action-button.danger {
   color: var(--danger);
 }
 

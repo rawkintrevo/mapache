@@ -119,6 +119,7 @@ function render() {
     onResizeSession: resizeSession,
     onRestartSession: restartSession,
     onStopSession: stopSession,
+    onDeleteSession: deleteSession,
     onPullGit: pullGit,
     onPushGit: pushGit,
     onStageGitPath: stageGitPath,
@@ -789,6 +790,20 @@ async function stopSession(sessionId) {
     const data = await state.api.getSessions(state.selectedWorkspaceId);
     state.sessions = data.sessions || [];
     state.selectedSessionId = sessionId;
+  });
+}
+
+async function deleteSession(sessionId) {
+  if (!window.confirm("Delete this session? Running sessions will be stopped first.")) return;
+
+  await runBusy(async () => {
+    await state.api.deleteSession(state.selectedWorkspaceId, sessionId);
+    const data = await state.api.getSessions(state.selectedWorkspaceId);
+    state.sessions = data.sessions || [];
+    if (state.selectedSessionId === sessionId) {
+      state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
+    }
+    await loadGitStatus();
   });
 }
 

@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Save,
   SquareStop,
+  Trash2,
   X,
 } from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
@@ -147,6 +148,7 @@ function renderSidebar(props) {
     onSelectWorkspaceFile,
     onSelectSession,
     onSelectWorkspace,
+    onDeleteSession,
     onStopSession,
     onToggleDrawer,
     onToggleWorkspaceFileDir,
@@ -371,7 +373,7 @@ function renderSidebar(props) {
         createElement("h3", {}, "Sessions"),
         createSessionButton(state, onOpenSessionModal),
       ]),
-      renderDrawerSessionList(state, onSelectSession, onStopSession),
+      renderDrawerSessionList(state, onSelectSession, onStopSession, onDeleteSession),
     ]),
   ]);
 }
@@ -456,7 +458,7 @@ function renderWorkspaceRow(workspace, isActive, busy, onSelectWorkspace, onOpen
   ]);
 }
 
-function renderDrawerSessionList(state, onSelectSession, onStopSession) {
+function renderDrawerSessionList(state, onSelectSession, onStopSession, onDeleteSession) {
   if (!state.selectedWorkspaceId) {
     return createElement("p", {className: "empty"}, "Select a workspace to view sessions.");
   }
@@ -482,7 +484,10 @@ function renderDrawerSessionList(state, onSelectSession, onStopSession) {
       className: `row session-row ${session.id === state.selectedSessionId ? "active" : ""}`,
     }, [
       button,
-      session.status === "running" ? renderStopSessionButton(state, session, onStopSession) : null,
+      createElement("div", {className: "session-row-actions"}, [
+        session.status === "running" ? renderStopSessionButton(state, session, onStopSession) : null,
+        renderDeleteSessionButton(state, session, onDeleteSession),
+      ]),
     ]);
   }));
 }
@@ -598,7 +603,7 @@ function countFolderFiles(folder) {
 function renderStopSessionButton(state, session, onStopSession) {
   const button = createElement("button", {
     ariaLabel: `Stop ${session.name}`,
-    className: "session-stop-button secondary",
+    className: "session-action-button secondary",
     disabled: state.busy,
     title: `Stop ${session.name}`,
     type: "button",
@@ -606,6 +611,22 @@ function renderStopSessionButton(state, session, onStopSession) {
   button.addEventListener("click", (event) => {
     event.stopPropagation();
     onStopSession(session.id);
+  });
+
+  return button;
+}
+
+function renderDeleteSessionButton(state, session, onDeleteSession) {
+  const button = createElement("button", {
+    ariaLabel: `Delete ${session.name}`,
+    className: "session-action-button secondary danger",
+    disabled: state.busy,
+    title: `Delete ${session.name}`,
+    type: "button",
+  }, renderIcon(Trash2));
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onDeleteSession(session.id);
   });
 
   return button;

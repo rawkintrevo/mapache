@@ -43,6 +43,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/stop`,
         {method: "POST", body: {}},
     ),
+    deleteSession: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}`,
+        {method: "DELETE"},
+    ),
     getGitStatus: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,

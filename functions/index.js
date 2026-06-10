@@ -124,6 +124,11 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "DELETE" && route.name === "session") {
+      res.json(await deleteSession(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "gitStatus") {
       res.json(await getGitStatusSummary(user.uid, route.workspaceId, route.sessionId));
       return;
@@ -217,6 +222,9 @@ function routeRequest(path) {
   }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
     return {name: "sessions", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "sessions") {
+    return {name: "session", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (
     parts.length === 5 &&
@@ -784,6 +792,20 @@ async function stopSession(uid, workspaceId, sessionId) {
   });
   await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "manual"});
   return toClientDoc(await sessionRef.get());
+}
+
+async function deleteSession(uid, workspaceId, sessionId) {
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  await sessionRef.update({
+    status: "deleting",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  const serviceDeleted = await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "deleted"});
+  if (!serviceDeleted) {
+    throw httpError(502, "session_delete_failed");
+  }
+  await sessionRef.delete();
+  return {ok: true};
 }
 
 async function getGitStatusSummary(uid, workspaceId, sessionId) {
@@ -1873,7 +1895,7 @@ async function patchSessionService(sessionRef, session, options = {}) {
 async function deleteSessionService(sessionRef, session, options = {}) {
   if (!session.serviceName) {
     await markSessionStopped(sessionRef, options.reason);
-    return;
+    return true;
   }
 
   try {
@@ -1883,10 +1905,11 @@ async function deleteSessionService(sessionRef, session, options = {}) {
     const response = await client.request({url, method: "DELETE"});
     await waitForOperation(client, response.data);
     await markSessionStopped(sessionRef, options.reason);
+    return true;
   } catch (error) {
     if (isGoogleNotFound(error)) {
       await markSessionStopped(sessionRef, options.reason);
-      return;
+      return true;
     }
 
     await sessionRef.update({
@@ -1894,6 +1917,7 @@ async function deleteSessionService(sessionRef, session, options = {}) {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    return false;
   }
 }
 
