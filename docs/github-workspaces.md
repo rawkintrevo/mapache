@@ -330,7 +330,9 @@ Private repository support should use short-lived GitHub App installation tokens
 
 This design doc assumes that GitHub App work is a follow-on capability, not a prerequisite for the public-repo architecture.
 
-For the current planning guide for private repos, connector-backed repo picking, installation tokens, and later PR creation, see [guides/github-app-private-repos.md](./guides/github-app-private-repos.md).
+For a step-by-step guide to creating and configuring the GitHub App, see [guides/github-app-setup.md](./guides/github-app-setup.md).
+
+For the architecture decision record covering ownership, permissions, and repository scope, see [adrs/adr-0001-github-app-ownership-and-permissions.md](../../adrs/adr-0001-github-app-ownership-and-permissions.md).
 
 ## Why One Active Session Is Enforced
 
