@@ -1,6 +1,6 @@
 # GitHub Workspaces
 
-GitHub-backed workspaces are a second workspace mode for Pi Agents Cloud.
+GitHub-backed workspaces are a second workspace mode for Mapache Tools.
 
 The current app assumes that Cloud Storage is the durable source of truth for a workspace. That works well for blank workspaces, but it is the wrong model for a repository-centric workflow. A GitHub workspace changes that contract:
 
@@ -13,7 +13,7 @@ This document is intentionally more detailed than the high-level app overview. I
 
 ## Goals
 
-The feature should make a GitHub repository feel like a natural base for a workspace without turning Pi Agents Cloud into a separate version-control system.
+The feature should make a GitHub repository feel like a natural base for a workspace without turning Mapache Tools into a separate version-control system.
 
 Primary goals:
 
@@ -32,7 +32,7 @@ Non-goals for the first implementation:
 
 ## Workspace Modes
 
-Pi Agents Cloud should explicitly support two workspace source modes.
+Mapache Tools should explicitly support two workspace source modes.
 
 ### Blank workspaces
 

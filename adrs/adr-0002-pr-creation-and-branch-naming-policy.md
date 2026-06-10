@@ -2,12 +2,12 @@
 
 - Status: Accepted
 - Date: 2026-06-10
-- Owners: Pi Agents Cloud maintainers
+- Owners: Mapache Tools maintainers
 - Related tasks: Task 36 (Decide PR creation and branch naming policy), Task 37 (Add pull request creation plumbing)
 
 ## Context
 
-Pi Agents Cloud now supports GitHub-backed workspaces with clone, status, stage, commit, pull, and push actions. Before implementing pull request creation, the project needs a stable policy for:
+Mapache Tools now supports GitHub-backed workspaces with clone, status, stage, commit, pull, and push actions. Before implementing pull request creation, the project needs a stable policy for:
 
 1. Whether the app may push directly to a selected branch
 2. How agent-created working branches are named
@@ -22,7 +22,7 @@ These decisions affect safety, user expectations, branch hygiene, and the UI/bac
 
 ### Branch strategy: always use a working branch
 
-Pi Agents Cloud will **not** open pull requests from direct pushes to the selected base branch. Agent-authored changes intended for PR creation must use a separate working branch.
+Mapache Tools will **not** open pull requests from direct pushes to the selected base branch. Agent-authored changes intended for PR creation must use a separate working branch.
 
 **Rationale:**
 
@@ -107,7 +107,7 @@ The fallback template should remain minimal and implementation-oriented.
 **Rationale:**
 
 - Defers to repository-local workflow when present
-- Keeps Pi Agents Cloud compatible with repo-specific review expectations
+- Keeps Mapache Tools compatible with repo-specific review expectations
 - Avoids inventing a mandatory global PR body format
 
 ### Allowed base branch

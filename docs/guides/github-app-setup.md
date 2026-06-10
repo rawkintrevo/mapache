@@ -1,6 +1,6 @@
 # GitHub App Setup Guide
 
-This guide walks you through creating the GitHub App that Pi Agents Cloud uses for private-repo support, repo picking, and PR creation.
+This guide walks you through creating the GitHub App that Mapache Tools uses for private-repo support, repo picking, and PR creation.
 
 ## Prerequisites
 
@@ -19,8 +19,8 @@ This guide walks you through creating the GitHub App that Pi Agents Cloud uses f
 
 Fill in the registration form:
 
-- **GitHub App name**: `Pi Agents Cloud`
-- **Description**: `Pi Agents Cloud workspace connector for GitHub repositories`
+- **GitHub App name**: `Mapache Tools`
+- **Description**: `Mapache Tools workspace connector for GitHub repositories`
 - **Homepage URL**: `https://pi-agents-cloud.web.app` (or your deployed Firebase Hosting URL)
 - **Callback URL**: use your deployed OAuth callback URL if it exists; otherwise enter a temporary URL you can update later
 - **Setup URL**: leave blank

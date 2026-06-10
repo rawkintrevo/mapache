@@ -1,6 +1,6 @@
 # App Overview
 
-Pi Agents Cloud is a Firebase and Cloud Run app for browser-managed cloud terminal sessions.
+Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud terminal sessions.
 
 ## Product Shape
 

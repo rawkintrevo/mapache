@@ -1,8 +1,8 @@
 {
-  "name": "pi-agents-session-runner",
+  "name": "mapache-tools-session-runner",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloud Run terminal runner for Pi Agents Cloud sessions.",
+  "description": "Cloud Run terminal runner for Mapache Tools sessions.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
