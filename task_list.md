@@ -66,13 +66,14 @@ Before implementation tasks, read:
   - No behavior changes for existing blank workspace creation.
   - Completed: 2026-06-10. Frontend create plumbing now forwards optional source payloads without changing the generic API client.
 
-- [ ] 5. **Add create-workspace UI controls for blank vs GitHub source** - easy (gpt-5.4-mini)
+- [x] 5. **Add create-workspace UI controls for blank vs GitHub source** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Workspace creation UI offers a compact source choice.
   - Blank remains the default.
   - GitHub option accepts repo URL and optional branch.
   - Controls fit the existing drawer style and remain usable on mobile.
   - `npm run build` passes.
+  - Completed: 2026-06-10. Added drawer source toggles plus GitHub repo URL/branch fields with mobile-friendly layout.
 
 - [ ] 6. **Enforce one active session for GitHub workspaces** - medium (gpt-5.4)
   - Acceptance criteria:
