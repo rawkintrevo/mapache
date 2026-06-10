@@ -98,6 +98,7 @@ export function renderAppShell(root, props) {
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
     state.fileEditor.open ? renderFileEditorModal(props) : null,
+    state.pullRequestForm.open ? renderPullRequestModal(props) : null,
   ]));
 }
 
@@ -615,6 +616,7 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
     data: null,
     actionMessage: "",
     commitMessage: "",
+    canOpenPr: false,
   };
   const data = status.data || null;
   const title = session && session.name ? `Git status · ${session.name}` : "Git status";
@@ -633,6 +635,14 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
   }, "Push");
   if (handlers.onPushGit) {
     pushButton.addEventListener("click", () => handlers.onPushGit(session.id));
+  }
+  const openPrButton = createElement("button", {
+    className: "secondary",
+    disabled: !handlers.onOpenPullRequest || status.loading || !status.canOpenPr,
+    type: "button",
+  }, "Open PR");
+  if (handlers.onOpenPullRequest) {
+    openPrButton.addEventListener("click", () => handlers.onOpenPullRequest(session.id));
   }
 
   let body;
@@ -684,6 +694,7 @@ function renderGitStatusPanel(session, gitStatus, handlers = {}) {
         createElement("span", {className: "pill"}, data && data.git ? "Git" : status.unavailable ? "Unavailable" : "Loading"),
         pullButton,
         pushButton,
+        openPrButton,
       ]),
     ]),
     status.actionMessage ? createElement("p", {className: "subtle"}, status.actionMessage) : null,
@@ -833,6 +844,98 @@ function renderSessionModal({state, onCloseSessionModal, onCreateSession}) {
   return overlay;
 }
 
+function renderPullRequestModal({state, onClosePullRequest, onUpdatePullRequestForm, onSubmitPullRequest}) {
+  const formState = state.pullRequestForm || {
+    title: "",
+    body: "",
+    branchDescription: "",
+    draft: false,
+    error: "",
+  };
+  const branchInput = createElement("input", {
+    autocomplete: "off",
+    placeholder: "fix-login-timeout",
+    type: "text",
+    value: formState.branchDescription || "",
+  });
+  branchInput.addEventListener("input", () => onUpdatePullRequestForm({branchDescription: branchInput.value}));
+
+  const titleInput = createElement("input", {
+    autocomplete: "off",
+    placeholder: "Leave blank to use the first commit message",
+    type: "text",
+    value: formState.title || "",
+  });
+  titleInput.addEventListener("input", () => onUpdatePullRequestForm({title: titleInput.value}));
+
+  const bodyInput = createElement("textarea", {rows: 10}, formState.body || "");
+  bodyInput.value = formState.body || "";
+  bodyInput.addEventListener("input", () => onUpdatePullRequestForm({body: bodyInput.value}));
+
+  const draftInput = createElement("input", {
+    checked: Boolean(formState.draft),
+    type: "checkbox",
+  });
+  draftInput.addEventListener("change", () => onUpdatePullRequestForm({draft: draftInput.checked}));
+
+  const closeButton = createElement("button", {
+    className: "icon-button secondary",
+    type: "button",
+    ariaLabel: "Close pull request dialog",
+  }, renderIcon(X));
+  closeButton.addEventListener("click", onClosePullRequest);
+
+  const panel = createElement("section", {
+    className: "modal-panel pull-request-panel",
+    role: "dialog",
+    ariaModal: "true",
+  }, [
+    createElement("div", {className: "modal-heading"}, [
+      createElement("h2", {}, "Open pull request"),
+      closeButton,
+    ]),
+    createElement("p", {className: "subtle"}, "If the current branch is the default branch, a new mapache/<description> branch will be created before opening the PR."),
+    formState.error ? createElement("div", {className: "error"}, formState.error) : null,
+    createElement("div", {className: "modal-form"}, [
+      createElement("label", {}, [
+        createElement("span", {}, "Working branch description"),
+        branchInput,
+      ]),
+      createElement("label", {}, [
+        createElement("span", {}, "PR title"),
+        titleInput,
+      ]),
+      createElement("label", {}, [
+        createElement("span", {}, "PR body"),
+        bodyInput,
+      ]),
+      createElement("label", {className: "checkbox-row"}, [
+        draftInput,
+        createElement("span", {}, "Open as draft"),
+      ]),
+    ]),
+    createElement("div", {className: "toolbar"}, [
+      createElement("div"),
+      createElement("div", {className: "session-actions"}, [
+        createElement("button", {
+          className: "secondary",
+          type: "button",
+        }, "Cancel"),
+        createElement("button", {type: "button"}, "Open PR"),
+      ]),
+    ]),
+  ]);
+  const [cancelButton, submitButton] = panel.querySelectorAll(".session-actions button");
+  cancelButton.addEventListener("click", onClosePullRequest);
+  submitButton.addEventListener("click", onSubmitPullRequest);
+
+  const overlay = createElement("div", {className: "modal-backdrop"}, [panel]);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) onClosePullRequest();
+  });
+  return overlay;
+}
+
 function renderFileEditorModal({
   state,
   onCloseFileEditor,
@@ -956,6 +1059,7 @@ function renderSessionDetail(session, {
   onUnstageGitPath,
   onUpdateGitCommitMessage,
   onCommitGit,
+  onOpenPullRequest,
 }) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
@@ -1018,6 +1122,7 @@ function renderSessionDetail(session, {
       onUnstageGitPath,
       onUpdateGitCommitMessage,
       onCommitGit,
+      onOpenPullRequest,
     }),
   ]);
 }

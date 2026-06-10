@@ -719,6 +719,13 @@ main.drawer-collapsed {
   gap: 10px;
 }
 
+.git-status-panel textarea,
+.modal-form textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+}
+
 .git-status-details {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -764,6 +771,21 @@ main.drawer-collapsed {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 22px 60px rgba(16, 24, 32, 0.28);
+}
+
+.pull-request-panel {
+  width: min(760px, 100%);
+}
+
+.modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .file-editor-panel {
