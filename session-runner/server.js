@@ -39,6 +39,7 @@ const archiveSyncTargets = [
     remotePath: archiveRemotePath("root-pi.tar.gz"),
   },
 ];
+const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -234,7 +235,10 @@ function sendTerminalMessage(socket, message) {
 }
 
 ensureWorkspace()
-    .then(syncDown)
+    .then(async () => {
+      console.log(`workspace source mode: ${workspaceSourceMode}`);
+      await syncDown();
+    })
     .then(() => {
       let lastArchiveSync = 0;
       let syncUpRunning = false;
@@ -266,6 +270,18 @@ async function ensureWorkspace() {
   await Promise.all(archiveSyncTargets.map((target) => (
     fs.promises.mkdir(target.localPath, {recursive: true})
   )));
+}
+
+function normalizeWorkspaceSourceMode(value) {
+  return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
+}
+
+function isGithubWorkspace() {
+  return workspaceSourceMode === "github";
+}
+
+function isBlankWorkspace() {
+  return workspaceSourceMode !== "github";
 }
 
 async function syncDown() {

@@ -91,12 +91,13 @@ Before implementation tasks, read:
   - Docs note that existing Cloud Run services need a new revision for runner env changes.
   - Completed: 2026-06-10. Session provisioning now carries source metadata into runner env vars and docs now call out the required Cloud Run revision refresh for existing services.
 
-- [ ] 8. **Add runner source-mode detection and blank-mode compatibility checks** - easy (gpt-5.4-mini)
+- [x] 8. **Add runner source-mode detection and blank-mode compatibility checks** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Runner has clear source-mode helpers.
   - Blank mode follows the existing `syncDown` then terminal startup behavior.
   - GitHub mode can be detected without changing blank behavior.
   - `node --check session-runner/server.js` passes.
+  - Completed: 2026-06-10. Added workspace source-mode helpers and startup logging while preserving blank-mode sync/start behavior.
 
 - [ ] 9. **Implement public GitHub clone and exact checkout in the runner** - medium (gpt-5.4)
   - Acceptance criteria:
