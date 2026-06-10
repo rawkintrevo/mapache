@@ -2,6 +2,10 @@
 
 Firebase + Cloud Run scaffold for browser-managed cloud terminal sessions.
 
+## License
+
+This repository is licensed under Business Source License 1.1. See [LICENSE](./LICENSE) for the full text and [NOTICE](./NOTICE) for the project notice. The current change date is June 10, 2030, after which the code converts to GNU AGPLv3-or-later.
+
 ## Deployed at
 
 https://pi-agents-cloud.web.app/
