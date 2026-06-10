@@ -83,12 +83,13 @@ Before implementation tasks, read:
   - Docs explain that this prevents competing writes to cached Git state and worktree files.
   - Completed: 2026-06-10. Added backend GitHub-session reservation checks with a stable 409 message and documented which session states count as active.
 
-- [ ] 7. **Pass workspace source metadata into session runner environment** - medium (gpt-5.4)
+- [x] 7. **Pass workspace source metadata into session runner environment** - medium (gpt-5.4)
   - Acceptance criteria:
   - Cloud Run session provisioning includes env vars needed by the runner for GitHub workspaces.
   - Blank sessions keep current env behavior.
   - GitHub env vars include repo URL, branch if present, and exact commit when known.
   - Docs note that existing Cloud Run services need a new revision for runner env changes.
+  - Completed: 2026-06-10. Session provisioning now carries source metadata into runner env vars and docs now call out the required Cloud Run revision refresh for existing services.
 
 - [ ] 8. **Add runner source-mode detection and blank-mode compatibility checks** - easy (gpt-5.4-mini)
   - Acceptance criteria:

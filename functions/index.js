@@ -456,6 +456,7 @@ async function createSession(uid, workspaceId, payload) {
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
+    ...sessionSourceMetadata(workspace),
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
@@ -721,15 +722,58 @@ function buildCloudRunService(workspace, session) {
 }
 
 function sessionRunnerEnv(session, options = {}) {
-  return [
+  const env = [
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "WORKSPACE_ID", value: session.workspaceId || ""},
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
+    {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
-  ].filter(Boolean);
+  ];
+
+  if (cleanName(session.sourceType) === "github") {
+    env.push(
+        {name: "GITHUB_REPO_URL", value: cleanName(session.sourceRepoUrl || "")},
+        {name: "GITHUB_REPO_OWNER", value: cleanName(session.sourceRepoOwner || "")},
+        {name: "GITHUB_REPO_NAME", value: cleanName(session.sourceRepoName || "")},
+        {name: "GITHUB_REQUESTED_BRANCH", value: cleanName(session.sourceRequestedBranch || "")},
+        {name: "GITHUB_REQUESTED_COMMIT", value: cleanName(session.sourceRequestedCommit || "")},
+        {name: "GITHUB_RESOLVED_BRANCH", value: cleanName(session.sourceResolvedBranch || "")},
+        {name: "GITHUB_RESOLVED_COMMIT", value: cleanName(session.sourceResolvedCommit || "")},
+        {
+          name: "GITHUB_CHECKOUT_REF",
+          value: cleanName(
+              session.sourceResolvedCommit ||
+              session.sourceRequestedCommit ||
+              session.sourceResolvedBranch ||
+              session.sourceRequestedBranch ||
+              "",
+          ),
+        },
+    );
+  }
+
+  return env.filter(Boolean);
+}
+
+function sessionSourceMetadata(workspace) {
+  const source = workspace && workspace.source ? workspace.source : {type: "blank"};
+  if (source.type !== "github") {
+    return {sourceType: "blank"};
+  }
+
+  return {
+    sourceType: "github",
+    sourceRepoUrl: cleanName(source.repoUrl || ""),
+    sourceRepoOwner: cleanName(source.owner || ""),
+    sourceRepoName: cleanName(source.repo || ""),
+    sourceRequestedBranch: cleanName(source.requestedBranch || ""),
+    sourceRequestedCommit: cleanName(source.requestedCommit || ""),
+    sourceResolvedBranch: cleanName(source.resolvedBranch || ""),
+    sourceResolvedCommit: cleanName(source.resolvedCommit || ""),
+  };
 }
 
 async function requestRunnerShutdown(session) {

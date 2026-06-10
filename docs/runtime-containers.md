@@ -107,6 +107,20 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 The backend sets these when provisioning the Cloud Run session service.
 `STORAGE_BUCKET` comes from the workspace record when present, then falls back to `SESSION_BUCKET`, then Firebase's configured default `storageBucket`.
 
+GitHub-backed sessions also receive source metadata env vars for runner startup and later Git-aware behavior:
+
+- `WORKSPACE_SOURCE_TYPE=github`
+- `GITHUB_REPO_URL`
+- `GITHUB_REPO_OWNER`
+- `GITHUB_REPO_NAME`
+- `GITHUB_REQUESTED_BRANCH`
+- `GITHUB_REQUESTED_COMMIT`
+- `GITHUB_RESOLVED_BRANCH`
+- `GITHUB_RESOLVED_COMMIT`
+- `GITHUB_CHECKOUT_REF`
+
+Blank workspaces continue using the existing storage-oriented env setup, with `WORKSPACE_SOURCE_TYPE=blank` so the runner can detect mode without guessing.
+
 The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
 
 This behavior now needs to be read together with workspace source mode:
@@ -193,6 +207,8 @@ gcloud run services update SERVICE_NAME \
 New sessions use the image selected in the modal. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
+
+The same rule applies to new GitHub workspace source env vars. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE` or `GITHUB_*` env vars; they need a new revision or a recreated session service before runner changes that depend on those variables will take effect.
 
 ## Design Decisions
 
