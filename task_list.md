@@ -59,11 +59,12 @@ Before implementation tasks, read:
   - `npm run build` and `npm --prefix functions run lint` pass when feasible.
   - Completed: 2026-06-10. Workspace creation now persists explicit blank source metadata and initializes GitHub source records with repo identity plus status fields.
 
-- [ ] 4. **Expose workspace source fields in the create-workspace API client** - easy (gpt-5.4-mini)
+- [x] 4. **Expose workspace source fields in the create-workspace API client** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - `src/services/api.js` continues to send JSON workspace create payloads without special cases.
   - Frontend create handlers can pass source fields through cleanly.
   - No behavior changes for existing blank workspace creation.
+  - Completed: 2026-06-10. Frontend create plumbing now forwards optional source payloads without changing the generic API client.
 
 - [ ] 5. **Add create-workspace UI controls for blank vs GitHub source** - easy (gpt-5.4-mini)
   - Acceptance criteria:
