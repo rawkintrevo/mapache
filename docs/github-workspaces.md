@@ -195,6 +195,7 @@ The GitHub flow adds a stricter session policy and different reconstruction orde
 1. Backend verifies the workspace is GitHub-backed.
 2. Backend checks whether another session for that workspace is already active.
 3. If an active session exists, session creation fails with a stable user-facing error.
+   Active means any non-terminal session state that could still own or mutate the cached Git/worktree state, such as `provisioning`, `running`, `resizing`, `restarting`, `stopping`, `update_failed`, or `stop_failed`.
 4. If not, backend creates the session document with source metadata.
 5. Backend provisions the Cloud Run service and passes source metadata in env vars.
 6. Runner reconstructs `/workspace` from cache and/or Git.

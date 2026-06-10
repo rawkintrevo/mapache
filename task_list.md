@@ -75,12 +75,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-10. Added drawer source toggles plus GitHub repo URL/branch fields with mobile-friendly layout.
 
-- [ ] 6. **Enforce one active session for GitHub workspaces** - medium (gpt-5.4)
+- [x] 6. **Enforce one active session for GitHub workspaces** - medium (gpt-5.4)
   - Acceptance criteria:
   - Backend rejects creating a new GitHub workspace session when another session for that workspace is provisioning, running, resizing, or otherwise active.
   - Blank workspaces keep existing multi-session behavior.
   - Error response is stable enough for the frontend to show a clear message.
   - Docs explain that this prevents competing writes to cached Git state and worktree files.
+  - Completed: 2026-06-10. Added backend GitHub-session reservation checks with a stable 409 message and documented which session states count as active.
 
 - [ ] 7. **Pass workspace source metadata into session runner environment** - medium (gpt-5.4)
   - Acceptance criteria:

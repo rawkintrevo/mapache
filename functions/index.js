@@ -470,13 +470,41 @@ async function createSession(uid, workspaceId, payload) {
     restartedAt: null,
     lastError: DEFAULT_IMAGE ? null : "Set SESSION_RUNNER_IMAGE before provisioning Cloud Run sessions.",
   };
-  await sessionRef.set(session);
+
+  if (isGithubWorkspace(workspace)) {
+    await reserveGithubWorkspaceSession(workspaceId, sessionRef, session);
+  } else {
+    await sessionRef.set(session);
+  }
 
   if (DEFAULT_IMAGE || payload.image) {
     await provisionSessionService(workspace, sessionRef, session);
   }
 
   return toClientDoc(await sessionRef.get());
+}
+
+async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(sessionCollection(workspaceId));
+    const activeSession = snap.docs.find((doc) => isActiveGithubWorkspaceSession(doc.data()));
+    if (activeSession) {
+      throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
+    }
+    transaction.set(sessionRef, session);
+  });
+}
+
+function isGithubWorkspace(workspace) {
+  return workspace && workspace.source && workspace.source.type === "github";
+}
+
+function isActiveGithubWorkspaceSession(session) {
+  return !isTerminalSessionStatus(session && session.status);
+}
+
+function isTerminalSessionStatus(status) {
+  return ["stopped", "provision_failed", "needs_image"].includes(cleanName(status));
 }
 
 async function resizeSession(uid, workspaceId, sessionId, payload) {
