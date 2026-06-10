@@ -40,7 +40,7 @@ User documents have this shape:
 
 Workspaces are top-level documents in `workspaces/{workspaceId}` with `ownerUid` set to the authenticated user's UID and `userPath` set to `users/{uid}`. They also carry source metadata that distinguishes `blank` from `github` workspaces. Sessions are stored under `workspaces/{workspaceId}/sessions/{sessionId}` and carry the same `ownerUid`, `userPath`, and `workspaceId` for explicit ownership and operational queries.
 
-Users can only see workspaces where `ownerUid` matches their Firebase Auth UID. Session list, resize, restart, and stop operations first require ownership of the parent workspace, then operate only on that workspace's session subcollection. Firestore rules mirror this ownership boundary for direct client reads.
+Users can only see workspaces where `ownerUid` matches their Firebase Auth UID. Session list, resize, restart, stop, and delete operations first require ownership of the parent workspace, then operate only on that workspace's session subcollection. Firestore rules mirror this ownership boundary for direct client reads.
 
 ## Frontend Structure
 
@@ -56,7 +56,7 @@ Session image choices live in `src/config/sessionImages.js`. This is the fronten
 
 The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`.
 
-`functions/index.js` handles user, workspace, and session operations. Creating a workspace writes explicit source metadata so later flows can distinguish a blank workspace from a GitHub-backed one. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. GitHub sessions also need source metadata so the runner can reconstruct `/workspace` from Git and cache state. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status.
+`functions/index.js` handles user, workspace, and session operations. Creating a workspace writes explicit source metadata so later flows can distinguish a blank workspace from a GitHub-backed one. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. GitHub sessions also need source metadata so the runner can reconstruct `/workspace` from Git and cache state. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status. Deleting a session uses the same service cleanup path first, then removes the session document from the workspace session list.
 
 The sidebar Files section calls `GET /api/workspaces/{workspaceId}/files`. The backend first verifies workspace ownership, then lists objects in the workspace's configured Cloud Storage bucket and `storagePrefix`. The frontend renders the returned flat paths as an expandable tree; folder expansion state lives in `src/main.js` because `src/ui/render.js` rebuilds the DOM each render. For blank workspaces, this is the durable workspace state. For GitHub workspaces, this is a cached view of the most recently synced working tree, not the canonical repository remote state.
 
