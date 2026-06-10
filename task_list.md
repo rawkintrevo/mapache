@@ -286,12 +286,13 @@ Before implementation tasks, read:
   - Unit/syntax checks pass where feasible.
   - Completed: 2026-06-10. Added backend helpers to mint GitHub App JWTs, request short-lived installation tokens without persisting them, normalize installation ids, and return distinct config/installation/API errors.
 
-- [ ] 33. **Implement connected repo picker backend** - medium (gpt-5.4)
+- [x] 33. **Implement connected repo picker backend** - medium (gpt-5.4)
   - Acceptance criteria:
   - Repo picker API lists repositories available through installed GitHub App installations.
   - Endpoint verifies the authenticated app user can access the returned installation/repository records.
   - Response includes owner, repo name, default branch, privacy flag, and installation id.
   - Placeholder `not_configured` behavior remains for environments without GitHub App secrets.
+  - Completed: 2026-06-10. Replaced the placeholder repo picker backend with installation-scoped GitHub repository listing, filtered installations/repository metadata to the authenticated Firebase user, and kept `github_app_not_configured` as the stable fallback when app secrets are missing.
 
 - [ ] 34. **Wire connected repo picker into workspace creation UI** - medium (gpt-5.4)
   - Acceptance criteria:

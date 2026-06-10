@@ -721,10 +721,69 @@ async function listConnectedRepos(uid) {
   if (!isGithubAppConfigured()) {
     throw httpError(503, "github_app_not_configured");
   }
-  // Placeholder: actual repo listing via installation tokens will be
-  // implemented in Task 33. Until then, return the same stable response
-  // so the frontend can safely detect the unavailable state.
-  throw httpError(503, "github_app_not_configured");
+
+  const [userSnap, installationSnap] = await Promise.all([
+    githubUserDoc(uid).get(),
+    githubInstallationCollection(uid).get(),
+  ]);
+  const userData = userSnap.exists ? userSnap.data() || {} : {};
+  const connectionStatus = cleanName(userData.connectionStatus).toLowerCase();
+  if (connectionStatus === "disconnected") {
+    return {repos: []};
+  }
+
+  const allowedInstallationIds = new Set(normalizeGithubInstallationIds(userData.installationIds));
+  const installations = installationSnap.docs
+      .map((doc) => normalizeGithubInstallationRecord(uid, doc.id, doc.data(), allowedInstallationIds))
+      .filter(Boolean);
+
+  const repos = [];
+  for (const installation of installations) {
+    let tokenResponse;
+    try {
+      tokenResponse = await createGithubInstallationToken(installation.installationId);
+    } catch (error) {
+      if (isGithubInstallationNotFoundError(error)) {
+        logger.warn("github installation missing during repo listing", {
+          installationId: installation.installationId,
+          uid,
+        });
+        continue;
+      }
+      throw error;
+    }
+
+    const storedRepos = await listStoredGithubInstallationRepositories(uid, installation.installationId);
+    const liveRepos = await listGithubInstallationRepositories(
+        installation.installationId,
+        tokenResponse.token,
+    );
+    const repoMap = new Map();
+
+    storedRepos.forEach((repo) => {
+      repoMap.set(githubRepoMapKey(repo), repo);
+    });
+
+    liveRepos.forEach((repo) => {
+      const normalizedRepo = normalizeGithubConnectedRepo(
+          installation,
+          repo,
+          repoMap.get(githubRepoMapKey(repo)) || null,
+          tokenResponse.repositorySelection,
+      );
+      if (normalizedRepo) {
+        repos.push(normalizedRepo);
+      }
+    });
+  }
+
+  repos.sort((left, right) => {
+    const leftKey = `${left.fullName || ""} ${left.installationId || ""}`.trim();
+    const rightKey = `${right.fullName || ""} ${right.installationId || ""}`.trim();
+    return leftKey.localeCompare(rightKey);
+  });
+
+  return {repos};
 }
 
 async function createGithubInstallationToken(installationId) {
@@ -884,6 +943,224 @@ function normalizeGithubTokenPermissions(value) {
 
 function cleanGithubValue(value) {
   return String(value || "").trim().slice(0, 256);
+}
+
+function cleanGithubNumericId(value) {
+  const normalized = String(value == null ? "" : value).trim();
+  return /^\d+$/.test(normalized) ? normalized : "";
+}
+
+function githubUserDoc(uid) {
+  return db.collection("githubUsers").doc(uid);
+}
+
+function githubInstallationCollection(uid) {
+  return githubUserDoc(uid).collection("installations");
+}
+
+function githubInstallationRepoCollection(uid, installationId) {
+  return githubInstallationCollection(uid).doc(installationId).collection("repositories");
+}
+
+function normalizeGithubInstallationIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+      .map(cleanGithubNumericId)
+      .filter(Boolean);
+}
+
+function normalizeGithubInstallationRecord(uid, installationId, value, allowedInstallationIds) {
+  const normalizedInstallationId = cleanGithubNumericId(installationId || value && value.installationId);
+  if (!normalizedInstallationId) {
+    return null;
+  }
+  if (allowedInstallationIds.size && !allowedInstallationIds.has(normalizedInstallationId)) {
+    return null;
+  }
+
+  const ownerUid = cleanGithubValue(value && value.ownerUid);
+  if (ownerUid && ownerUid !== uid) {
+    return null;
+  }
+
+  const status = cleanName(value && value.installationStatus).toLowerCase();
+  if (status && status !== "active") {
+    return null;
+  }
+
+  return {
+    installationId: normalizedInstallationId,
+    githubAccountLogin: cleanGithubValue(value && value.githubAccountLogin),
+    repositorySelection: cleanGithubValue(value && value.repositorySelection),
+  };
+}
+
+async function listStoredGithubInstallationRepositories(uid, installationId) {
+  const snap = await githubInstallationRepoCollection(uid, installationId).get();
+  return snap.docs
+      .map((doc) => normalizeStoredGithubRepositoryRecord(uid, installationId, doc.id, doc.data()))
+      .filter(Boolean);
+}
+
+function normalizeStoredGithubRepositoryRecord(uid, installationId, docId, value) {
+  const ownerUid = cleanGithubValue(value && value.ownerUid);
+  if (ownerUid && ownerUid !== uid) {
+    return null;
+  }
+  if (value && value.accessible === false) {
+    return null;
+  }
+
+  const normalizedInstallationId = cleanGithubNumericId(value && value.installationId) || installationId;
+  if (normalizedInstallationId !== installationId) {
+    return null;
+  }
+
+  const repoId = cleanGithubNumericId(docId || value && value.repoId);
+  const owner = cleanGithubValue(value && (value.ownerLogin || value.owner));
+  const name = cleanGithubValue(value && value.name);
+  const fullName = cleanGithubValue(value && (value.fullName || (owner && name ? `${owner}/${name}` : "")));
+  if (!repoId && !fullName) {
+    return null;
+  }
+
+  return {
+    repoId,
+    owner,
+    name,
+    fullName,
+    defaultBranch: cleanGithubValue(value && value.defaultBranch),
+    private: Boolean(value && value.private),
+    cloneUrl: cleanGithubValue(value && value.cloneUrl),
+    htmlUrl: cleanGithubValue(value && value.htmlUrl),
+  };
+}
+
+async function listGithubInstallationRepositories(installationId, token) {
+  const repositories = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const url = new URL("https://api.github.com/installation/repositories");
+    url.searchParams.set("per_page", "100");
+    url.searchParams.set("page", String(page));
+
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "accept": "application/vnd.github+json",
+          "authorization": `Bearer ${token}`,
+          "user-agent": "mapahce-functions",
+          "x-github-api-version": "2022-11-28",
+        },
+      });
+    } catch (error) {
+      throw httpError(502, "github_connected_repos_failed", error);
+    }
+
+    if (response.status === 404) {
+      throw httpError(404, "github_installation_not_found");
+    }
+
+    if (!response.ok) {
+      const errorBody = await safeReadGithubErrorBody(response);
+      logger.error("github installation repository list failed", {
+        installationId,
+        status: response.status,
+        body: errorBody,
+      });
+      throw httpError(502, "github_connected_repos_failed");
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw httpError(502, "github_connected_repos_failed", error);
+    }
+
+    const pageRepos = Array.isArray(data && data.repositories) ? data.repositories : null;
+    if (!pageRepos) {
+      throw httpError(502, "github_connected_repos_failed");
+    }
+
+    repositories.push(...pageRepos);
+    if (pageRepos.length < 100) {
+      break;
+    }
+  }
+
+  return repositories;
+}
+
+function githubRepoMapKey(value) {
+  const repoId = cleanGithubNumericId(value && (value.id || value.repoId));
+  if (repoId) {
+    return `id:${repoId}`;
+  }
+
+  const owner = cleanGithubValue(value && (value.owner && value.owner.login || value.ownerLogin || value.owner));
+  const name = cleanGithubValue(value && (value.name || value.repo));
+  if (owner && name) {
+    return `name:${owner.toLowerCase()}/${name.toLowerCase()}`;
+  }
+
+  const fullName = cleanGithubValue(value && (value.full_name || value.fullName));
+  return fullName ? `name:${fullName.toLowerCase()}` : "";
+}
+
+function normalizeGithubConnectedRepo(installation, liveRepo, storedRepo, repositorySelection) {
+  const owner = cleanGithubValue(
+      liveRepo && liveRepo.owner && liveRepo.owner.login ||
+      storedRepo && storedRepo.owner ||
+      installation && installation.githubAccountLogin,
+  );
+  const name = cleanGithubValue(liveRepo && liveRepo.name || storedRepo && storedRepo.name);
+  const fullName = cleanGithubValue(
+      liveRepo && liveRepo.full_name ||
+      storedRepo && storedRepo.fullName ||
+      (owner && name ? `${owner}/${name}` : ""),
+  );
+  if (!owner || !name || !fullName) {
+    return null;
+  }
+
+  const cloneUrl = cleanGithubValue(
+      liveRepo && liveRepo.clone_url ||
+      storedRepo && storedRepo.cloneUrl ||
+      `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}.git`,
+  );
+  const repoUrl = cleanGithubValue(
+      liveRepo && liveRepo.html_url ||
+      storedRepo && storedRepo.htmlUrl ||
+      `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+  );
+  const isPrivate = Boolean(liveRepo && liveRepo.private != null ? liveRepo.private : storedRepo && storedRepo.private);
+
+  return {
+    repoId: cleanGithubNumericId(liveRepo && liveRepo.id || storedRepo && storedRepo.repoId),
+    installationId: installation.installationId,
+    owner,
+    name,
+    fullName,
+    defaultBranch: cleanGithubValue(
+        liveRepo && liveRepo.default_branch ||
+        storedRepo && storedRepo.defaultBranch ||
+        "main",
+    ),
+    private: isPrivate,
+    visibility: cleanGithubValue(liveRepo && liveRepo.visibility || (isPrivate ? "private" : "public")),
+    cloneUrl,
+    repoUrl,
+    repositorySelection: cleanGithubValue(
+        repositorySelection || installation.repositorySelection,
+    ),
+  };
+}
+
+function isGithubInstallationNotFoundError(error) {
+  return Boolean(error && error.status === 404 && error.publicMessage === "github_installation_not_found");
 }
 
 async function requireWorkspace(uid, workspaceId) {

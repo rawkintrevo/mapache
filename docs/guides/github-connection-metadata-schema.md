@@ -142,7 +142,9 @@ If the app later needs more GitHub permissions, add them explicitly here before 
 
 ### Repo picker
 
-The repo picker backend should read from the current user’s installation/repository branch and return only repositories that are accessible for that user.
+The repo picker backend should scope reads to `githubUsers/{firebaseUid}` and verify any returned installation/repository metadata still belongs to that same Firebase auth UID.
+
+When GitHub App secrets are configured, the backend may mint short-lived installation tokens for the user’s active installations and call GitHub’s installation repository listing API so the picker reflects live repository access instead of stale cached metadata. Any cached repository docs under the same user branch are supplemental metadata only and must never override the ownership check.
 
 ### Clone / push / PR operations
 
