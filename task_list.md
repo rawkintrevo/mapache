@@ -108,12 +108,13 @@ Before implementation tasks, read:
   - `.git/` is not uploaded by normal workspace sync.
   - Completed: 2026-06-10. Runner now clones GitHub workspaces on startup, force-checks out requested commits, records resolved HEAD info on the session, logs clone failures to `lastError`, and skips `.git` during GitHub-mode normal sync.
 
-- [ ] 10. **Record resolved Git commit metadata from runner startup** - medium (gpt-5.4)
+- [x] 10. **Record resolved Git commit metadata from runner startup** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner writes resolved branch and commit SHA back to the session and/or workspace document.
   - Startup metadata does not overwrite user-facing repo settings unexpectedly.
   - Failure states distinguish clone failure from sync failure.
   - Backend/frontend can display the resolved commit later.
+  - Completed: 2026-06-10. Runner now publishes resolved branch/commit plus source status to session and workspace docs, while keeping requested repo settings intact and separating clone vs sync failure states.
 
 - [ ] 11. **Introduce app-owned sync ignore policy metadata** - easy (gpt-5.4-mini)
   - Acceptance criteria:
