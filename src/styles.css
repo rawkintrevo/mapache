@@ -670,6 +670,39 @@ main.drawer-collapsed {
   gap: 8px;
 }
 
+.git-status-body,
+.git-file-list {
+  display: grid;
+  gap: 10px;
+}
+
+.git-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.git-file-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.git-file-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-file-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .git-status-details {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

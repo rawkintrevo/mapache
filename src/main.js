@@ -104,6 +104,8 @@ function render() {
     onRestartSession: restartSession,
     onStopSession: stopSession,
     onPullGit: pullGit,
+    onStageGitPath: stageGitPath,
+    onUnstageGitPath: unstageGitPath,
   });
 }
 
@@ -441,6 +443,42 @@ async function pullGit() {
       actionMessage: result && result.pull && result.pull.ok === false ?
         "Pull completed with Git conflicts or merge issues." :
         "Pull completed.",
+    };
+    await loadGitStatus();
+  });
+}
+
+async function stageGitPath(path) {
+  await runGitFileAction(path, "stage", "Staging file...", (workspaceId, sessionId) => (
+    state.api.stageGit(workspaceId, sessionId, [path])
+  ));
+}
+
+async function unstageGitPath(path) {
+  await runGitFileAction(path, "unstage", "Unstaging file...", (workspaceId, sessionId) => (
+    state.api.unstageGit(workspaceId, sessionId, [path])
+  ));
+}
+
+async function runGitFileAction(path, action, actionMessage, requestAction) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId || !path) return;
+
+  await runBusy(async () => {
+    state.gitStatus = {
+      ...state.gitStatus,
+      actionMessage,
+      error: "",
+    };
+    render();
+    const result = await requestAction(workspaceId, sessionId);
+    state.gitStatus = {
+      loading: false,
+      error: "",
+      unavailable: Boolean(result && result.git === false),
+      data: result || null,
+      actionMessage: `${action === "stage" ? "Staged" : "Unstaged"} ${path}.`,
     };
     await loadGitStatus();
   });

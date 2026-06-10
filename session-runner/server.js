@@ -42,6 +42,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const terminalSession = createTerminalSession();
 
+app.use(express.json());
 app.use(
     "/xterm",
     express.static(path.join(__dirname, "node_modules", "@xterm", "xterm")),
@@ -109,6 +110,42 @@ app.post("/git/pull", async (req, res) => {
   } catch (error) {
     console.error("git pull failed", error);
     res.status(500).json({error: "git_pull_failed"});
+  }
+});
+
+app.post("/git/stage", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await stageGitPaths(req.body || {}));
+  } catch (error) {
+    console.error("git stage failed", error);
+    res.status(400).json({error: "git_stage_failed"});
+  }
+});
+
+app.post("/git/unstage", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+  if (isBlankWorkspace()) {
+    res.json({ok: true, git: false, sourceType: workspaceSourceMode, reason: "not_git_workspace"});
+    return;
+  }
+
+  try {
+    res.json(await unstageGitPaths(req.body || {}));
+  } catch (error) {
+    console.error("git unstage failed", error);
+    res.status(400).json({error: "git_unstage_failed"});
   }
 });
 
@@ -917,6 +954,27 @@ async function getGitStatusSummary() {
       untracked: parsed.untracked,
       conflicted: parsed.conflicted,
     },
+    files: parsed.files,
+  };
+}
+
+async function stageGitPaths(payload) {
+  const paths = normalizeGitActionPaths(payload.paths);
+  await runGitCommand(["add", "--", ...paths]);
+  return {
+    ...(await getGitStatusSummary()),
+    action: "stage",
+    paths,
+  };
+}
+
+async function unstageGitPaths(payload) {
+  const paths = normalizeGitActionPaths(payload.paths);
+  await runGitCommand(["reset", "HEAD", "--", ...paths]);
+  return {
+    ...(await getGitStatusSummary()),
+    action: "unstage",
+    paths,
   };
 }
 
@@ -948,6 +1006,7 @@ function parseGitPorcelainStatus(output) {
   let deleted = 0;
   let untracked = 0;
   let conflicted = 0;
+  const files = [];
   const conflictCodes = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
 
   for (const line of lines) {
@@ -960,12 +1019,31 @@ function parseGitPorcelainStatus(output) {
     }
     if (line.startsWith("??")) {
       untracked += 1;
+      files.push({
+        path: parseGitStatusPath(line.slice(3)),
+        x: "?",
+        y: "?",
+        staged: false,
+        unstaged: true,
+        untracked: true,
+        conflicted: false,
+      });
       continue;
     }
     const x = line[0] || " ";
     const y = line[1] || " ";
     const code = `${x}${y}`;
-    if (conflictCodes.has(code)) {
+    const file = {
+      path: parseGitStatusPath(line.slice(3)),
+      x,
+      y,
+      staged: x !== " ",
+      unstaged: y !== " ",
+      untracked: false,
+      conflicted: conflictCodes.has(code),
+    };
+    files.push(file);
+    if (file.conflicted) {
       conflicted += 1;
       continue;
     }
@@ -974,7 +1052,30 @@ function parseGitPorcelainStatus(output) {
     if (x === "D" || y === "D") deleted += 1;
   }
 
-  return {ahead, behind, staged, modified, deleted, untracked, conflicted};
+  return {ahead, behind, staged, modified, deleted, untracked, conflicted, files};
+}
+
+function parseGitStatusPath(value) {
+  const text = String(value || "").trim();
+  const renameParts = text.split(" -> ");
+  return normalizeRelativeWorkspacePath(renameParts[renameParts.length - 1] || text);
+}
+
+function normalizeGitActionPaths(paths) {
+  if (!Array.isArray(paths) || !paths.length) {
+    throw new Error("missing_paths");
+  }
+  return paths.map((item) => {
+    const normalized = normalizeRelativeWorkspacePath(item);
+    const parts = normalized.split("/").filter(Boolean);
+    if (!parts.length || parts.some((part) => part === "." || part === "..")) {
+      throw new Error("invalid_git_path");
+    }
+    if (parts[0] === internalStorageDir || parts.includes(directoryMarkerFile)) {
+      throw new Error("invalid_git_path");
+    }
+    return normalized;
+  });
 }
 
 function positiveNumber(value, fallback) {

@@ -52,6 +52,16 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-pull`,
         {method: "POST", body: {}},
     ),
+    stageGit: (workspaceId, sessionId, paths) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-stage`,
+        {method: "POST", body: {paths}},
+    ),
+    unstageGit: (workspaceId, sessionId, paths) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-unstage`,
+        {method: "POST", body: {paths}},
+    ),
   };
 }
 

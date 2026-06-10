@@ -115,6 +115,16 @@ exports.api = onRequest({cors: true}, async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && route.name === "gitStage") {
+      res.json(await stageGit(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "gitUnstage") {
+      res.json(await unstageGit(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
     res.status(404).json({error: "not_found"});
   } catch (error) {
     logger.error("api request failed", error);
@@ -203,6 +213,22 @@ function routeRequest(path) {
     parts[4] === "git-pull"
   ) {
     return {name: "gitPull", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "git-stage"
+  ) {
+    return {name: "gitStage", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "git-unstage"
+  ) {
+    return {name: "gitUnstage", workspaceId: parts[1], sessionId: parts[3]};
   }
   return {name: "unknown"};
 }
@@ -621,6 +647,24 @@ async function pullGit(uid, workspaceId, sessionId) {
   return requestRunnerGitPull(session);
 }
 
+async function stageGit(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "session_not_running");
+  if (!session.shutdownToken) throw httpError(503, "runner_git_stage_unavailable");
+  return requestRunnerGitStage(session, {paths: normalizeGitActionPayloadPaths(payload)});
+}
+
+async function unstageGit(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "session_not_running");
+  if (!session.shutdownToken) throw httpError(503, "runner_git_unstage_unavailable");
+  return requestRunnerGitUnstage(session, {paths: normalizeGitActionPayloadPaths(payload)});
+}
+
 async function requireWorkspace(uid, workspaceId) {
   const snap = await db.collection("workspaces").doc(workspaceId).get();
   if (!snap.exists) throw httpError(404, "workspace_not_found");
@@ -915,13 +959,33 @@ async function requestRunnerGitPull(session) {
   });
 }
 
+async function requestRunnerGitStage(session, body) {
+  return requestRunnerJson(session, "/git/stage", {
+    method: "POST",
+    body,
+    unavailableError: "runner_git_stage_unavailable",
+  });
+}
+
+async function requestRunnerGitUnstage(session, body) {
+  return requestRunnerJson(session, "/git/unstage", {
+    method: "POST",
+    body,
+    unavailableError: "runner_git_unstage_unavailable",
+  });
+}
+
 async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
   try {
     const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}${routePath}`, {
       method: options.method || "GET",
-      headers: {"x-shutdown-token": session.shutdownToken},
+      headers: {
+        "x-shutdown-token": session.shutdownToken,
+        "Content-Type": "application/json",
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
     });
     const data = await response.json().catch(() => ({}));
@@ -1079,6 +1143,14 @@ function normalizeWorkspaceFilePath(value) {
     throw httpError(400, "invalid_file_path");
   }
   return parts.join("/");
+}
+
+function normalizeGitActionPayloadPaths(payload) {
+  const paths = payload && Array.isArray(payload.paths) ? payload.paths : null;
+  if (!paths || !paths.length) {
+    throw httpError(400, "invalid_git_paths");
+  }
+  return paths.map((value) => normalizeWorkspaceFilePath(value));
 }
 
 function contentTypeForPath(path) {
