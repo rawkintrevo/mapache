@@ -22,7 +22,7 @@ export function renderAuthScreen(root, handlers) {
   const signInButton = createElement("button", {type: "button"}, "Sign in with Google");
   signInButton.addEventListener("click", handlers.onSignIn);
   const storyText = "Once, I got so angry at Anthropic for ruining all the open souce foundations...";
-  const followupText = "So I made Mapache Guache using only rage and spite.";
+  const followupText = "that I made Mapache Tools using only rage and spite.";
   const closingText = "I hope you enjoy it.";
 
   replaceChildren(root, createElement("div", {className: "auth"}, [
@@ -120,7 +120,7 @@ function renderTopbar({state, onSignOut, onRefresh}) {
   return createElement("header", {className: "topbar"}, [
     createElement("div", {className: "brand"}, [
       createElement("div", {className: "mark", ariaHidden: "true"}, "pi"),
-      createElement("h1", {}, "Pi Agents Cloud"),
+      createElement("h1", {}, "Mapache Tools"),
     ]),
     createElement("div", {className: "userbar"}, [
       createElement("span", {}, userLabel(state)),

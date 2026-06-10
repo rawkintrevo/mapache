@@ -2,12 +2,12 @@
 
 - Status: Accepted
 - Date: 2026-06-10
-- Owners: Pi Agents Cloud maintainers
+- Owners: Mapache Tools maintainers
 - Related tasks: Task 25 (Decide GitHub App ownership and permission policy)
 
 ## Context
 
-The Pi Agents Cloud project needs a GitHub App to support private repository access, a connected repo picker, and pull request creation. Before creating the app or writing code that depends on its permissions, we must decide:
+The Mapache Tools project needs a GitHub App to support private repository access, a connected repo picker, and pull request creation. Before creating the app or writing code that depends on its permissions, we must decide:
 
 1. Who will own the GitHub App
 2. What repository permissions it requires
