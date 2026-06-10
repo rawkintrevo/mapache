@@ -8,6 +8,8 @@ The app lets an authenticated user create workspaces and run terminal sessions i
 
 The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Navigation lives in a collapsible drawer with separate Workspaces, Files, and Sessions sections. Session creation is available from the active workspace row or from the Sessions section action in the drawer.
 
+The app now has an explicit architectural split between blank workspaces and GitHub-backed workspaces. Blank workspaces continue to treat Cloud Storage as their durable source of truth. GitHub workspaces treat GitHub as durable and use Cloud Storage as a resumability/cache layer. The detailed design lives in [github-workspaces.md](./github-workspaces.md).
+
 ## Main Components
 
 - Firebase Hosting serves the Vite frontend from `dist/`.
@@ -36,7 +38,7 @@ User documents have this shape:
 }
 ```
 
-Workspaces are top-level documents in `workspaces/{workspaceId}` with `ownerUid` set to the authenticated user's UID and `userPath` set to `users/{uid}`. Sessions are stored under `workspaces/{workspaceId}/sessions/{sessionId}` and carry the same `ownerUid`, `userPath`, and `workspaceId` for explicit ownership and operational queries.
+Workspaces are top-level documents in `workspaces/{workspaceId}` with `ownerUid` set to the authenticated user's UID and `userPath` set to `users/{uid}`. They also carry source metadata that distinguishes `blank` from `github` workspaces. Sessions are stored under `workspaces/{workspaceId}/sessions/{sessionId}` and carry the same `ownerUid`, `userPath`, and `workspaceId` for explicit ownership and operational queries.
 
 Users can only see workspaces where `ownerUid` matches their Firebase Auth UID. Session list, resize, restart, and stop operations first require ownership of the parent workspace, then operate only on that workspace's session subcollection. Firestore rules mirror this ownership boundary for direct client reads.
 
@@ -54,11 +56,11 @@ Session image choices live in `src/config/sessionImages.js`. This is the fronten
 
 The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`.
 
-`functions/index.js` handles user, workspace, and session operations. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status.
+`functions/index.js` handles user, workspace, and session operations. Creating a workspace writes explicit source metadata so later flows can distinguish a blank workspace from a GitHub-backed one. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. GitHub sessions also need source metadata so the runner can reconstruct `/workspace` from Git and cache state. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status.
 
-The sidebar Files section calls `GET /api/workspaces/{workspaceId}/files`. The backend first verifies workspace ownership, then lists objects in the workspace's configured Cloud Storage bucket and `storagePrefix`. The frontend renders the returned flat paths as an expandable tree; folder expansion state lives in `src/main.js` because `src/ui/render.js` rebuilds the DOM each render.
+The sidebar Files section calls `GET /api/workspaces/{workspaceId}/files`. The backend first verifies workspace ownership, then lists objects in the workspace's configured Cloud Storage bucket and `storagePrefix`. The frontend renders the returned flat paths as an expandable tree; folder expansion state lives in `src/main.js` because `src/ui/render.js` rebuilds the DOM each render. For blank workspaces, this is the durable workspace state. For GitHub workspaces, this is a cached view of the most recently synced working tree, not the canonical repository remote state.
 
-Clicking a file opens a modal editor. The editor loads text content with `GET /api/workspaces/{workspaceId}/file?path={path}` and saves text content with `PUT /api/workspaces/{workspaceId}/file?path={path}`. Both endpoints verify workspace ownership, normalize the requested relative path under the workspace storage prefix, reject directory marker paths, and cap editor reads/writes at 1 MiB. Editor modal state lives in `src/main.js`; the textarea updates that state without re-rendering on every keystroke so typing remains stable while the syntax-highlight backing layer updates in place.
+Clicking a file opens a modal editor. The editor loads text content with `GET /api/workspaces/{workspaceId}/file?path={path}` and saves text content with `PUT /api/workspaces/{workspaceId}/file?path={path}`. Both endpoints verify workspace ownership, normalize the requested relative path under the workspace storage prefix, reject directory marker paths, reject internal runner cache paths, and cap editor reads/writes at 1 MiB. Editor modal state lives in `src/main.js`; the textarea updates that state without re-rendering on every keystroke so typing remains stable while the syntax-highlight backing layer updates in place.
 
 The backend already accepts `payload.image` for session creation. If no image is passed, it falls back to `SESSION_RUNNER_IMAGE`.
 
@@ -69,6 +71,8 @@ The backend already accepts `payload.image` for session creation. If no image is
 - Store container image choices in a config file so the UI can grow from one image to several without changing form code.
 - Use Cloud Run per session. This isolates terminals and lets each session carry its own resource settings and image.
 - Use Firebase Hosting rewrites for `/api/**`, so the deployed frontend can call the API without hard-coding Cloud Function URLs.
+- Treat workspace source mode as an explicit domain concept. Blank workspaces use Cloud Storage as durable state; GitHub workspaces use GitHub as durable state and Cloud Storage as resumability/cache.
+- Enforce one active session at a time for GitHub workspaces so two runners cannot race on cached `.git` state and worktree sync.
 
 ## Deployment
 
