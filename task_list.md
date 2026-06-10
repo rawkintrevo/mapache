@@ -278,12 +278,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-10. Added a repo picker section to the workspace creation form with a disabled select, loading state, and `github_app_not_configured` fallback message. Public repo URL entry remains visible and usable. Connected repo selection is wired into form submission for future Task 34.
 
-- [ ] 32. **Implement GitHub App installation token creation** - medium (gpt-5.4)
+- [x] 32. **Implement GitHub App installation token creation** - medium (gpt-5.4)
   - Acceptance criteria:
   - Backend can create a short-lived GitHub App installation token using configured secrets.
   - Token values are never logged or stored in Firestore.
   - Errors distinguish missing configuration, invalid installation, and GitHub API failures.
   - Unit/syntax checks pass where feasible.
+  - Completed: 2026-06-10. Added backend helpers to mint GitHub App JWTs, request short-lived installation tokens without persisting them, normalize installation ids, and return distinct config/installation/API errors.
 
 - [ ] 33. **Implement connected repo picker backend** - medium (gpt-5.4)
   - Acceptance criteria:

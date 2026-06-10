@@ -727,8 +727,163 @@ async function listConnectedRepos(uid) {
   throw httpError(503, "github_app_not_configured");
 }
 
+async function createGithubInstallationToken(installationId) {
+  if (!isGithubAppConfigured()) {
+    throw httpError(503, "github_app_not_configured");
+  }
+
+  const normalizedInstallationId = normalizeGithubInstallationId(installationId);
+  const appJwt = createGithubAppJwt();
+  const response = await requestGithubInstallationToken(normalizedInstallationId, appJwt);
+
+  return {
+    installationId: normalizedInstallationId,
+    token: cleanGithubToken(response.token),
+    expiresAt: cleanGithubTimestamp(response.expires_at),
+    permissions: normalizeGithubTokenPermissions(response.permissions),
+    repositorySelection: cleanGithubValue(response.repository_selection),
+  };
+}
+
 function isGithubAppConfigured() {
-  return Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_PRIVATE_KEY);
+  return Boolean(normalizeGithubAppId(process.env.GITHUB_APP_ID) && normalizeGithubPrivateKey());
+}
+
+function normalizeGithubInstallationId(value) {
+  const installationId = String(value || "").trim();
+  if (!/^\d+$/.test(installationId)) {
+    throw httpError(400, "invalid_github_installation_id");
+  }
+  return installationId;
+}
+
+function normalizeGithubAppId(value) {
+  return String(value || "").trim();
+}
+
+function normalizeGithubPrivateKey() {
+  const key = String(process.env.GITHUB_APP_PRIVATE_KEY || "").trim();
+  return key ? key.replace(/\\n/g, "\n") : "";
+}
+
+function createGithubAppJwt() {
+  const appId = normalizeGithubAppId(process.env.GITHUB_APP_ID);
+  const privateKey = normalizeGithubPrivateKey();
+  if (!appId || !privateKey) {
+    throw httpError(503, "github_app_not_configured");
+  }
+
+  const issuedAt = Math.floor(Date.now() / 1000) - 60;
+  const expiresAt = issuedAt + (9 * 60);
+  const header = {alg: "RS256", typ: "JWT"};
+  const payload = {
+    iat: issuedAt,
+    exp: expiresAt,
+    iss: appId,
+  };
+  const encodedHeader = encodeJwtSegment(header);
+  const encodedPayload = encodeJwtSegment(payload);
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+
+  try {
+    const signature = crypto.sign("RSA-SHA256", Buffer.from(signingInput), privateKey)
+        .toString("base64url");
+    return `${signingInput}.${signature}`;
+  } catch (error) {
+    throw httpError(502, "github_app_jwt_failed", error);
+  }
+}
+
+function encodeJwtSegment(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+async function requestGithubInstallationToken(installationId, appJwt) {
+  let response;
+  try {
+    response = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
+      method: "POST",
+      headers: {
+        "accept": "application/vnd.github+json",
+        "authorization": `Bearer ${appJwt}`,
+        "user-agent": "mapahce-functions",
+        "x-github-api-version": "2022-11-28",
+      },
+    });
+  } catch (error) {
+    throw httpError(502, "github_installation_token_failed", error);
+  }
+
+  if (response.status === 404) {
+    throw httpError(404, "github_installation_not_found");
+  }
+
+  if (!response.ok) {
+    const errorBody = await safeReadGithubErrorBody(response);
+    logger.error("github installation token request failed", {
+      installationId,
+      status: response.status,
+      body: errorBody,
+    });
+    throw httpError(502, "github_installation_token_failed");
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw httpError(502, "github_installation_token_failed", error);
+  }
+
+  if (!data || typeof data.token !== "string" || !data.token.trim()) {
+    throw httpError(502, "github_installation_token_failed");
+  }
+
+  return data;
+}
+
+async function safeReadGithubErrorBody(response) {
+  try {
+    const text = await response.text();
+    return cleanGithubErrorBody(text);
+  } catch (error) {
+    return "";
+  }
+}
+
+function cleanGithubErrorBody(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+function cleanGithubToken(value) {
+  const token = String(value || "").trim();
+  if (!token) {
+    throw httpError(502, "github_installation_token_failed");
+  }
+  return token;
+}
+
+function cleanGithubTimestamp(value) {
+  const timestamp = String(value || "").trim();
+  return timestamp || "";
+}
+
+function normalizeGithubTokenPermissions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.entries(value).reduce((result, [key, permission]) => {
+    const normalizedKey = cleanGithubValue(key);
+    const normalizedPermission = cleanGithubValue(permission);
+    if (normalizedKey && normalizedPermission) {
+      result[normalizedKey] = normalizedPermission;
+    }
+    return result;
+  }, {});
+}
+
+function cleanGithubValue(value) {
+  return String(value || "").trim().slice(0, 256);
 }
 
 async function requireWorkspace(uid, workspaceId) {
