@@ -269,6 +269,7 @@ Cloud Functions should expose authenticated `/api/**` routes that proxy package 
 ```text
 GET  /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages
 POST /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages/install
+POST /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages/remove
 ```
 
 The backend is responsible for:

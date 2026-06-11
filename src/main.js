@@ -141,6 +141,7 @@ function render() {
     onRefreshPiPackages: refreshPiPackages,
     onUpdatePiInstallSource: updatePiInstallSource,
     onInstallPiPackage: installPiPackage,
+    onRemovePiPackage: removePiPackage,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -332,6 +333,26 @@ function friendlyPiInstallError(error) {
   return message;
 }
 
+function friendlyPiRemoveError(error) {
+  const message = error.message || "Could not remove extension.";
+  if (message === "invalid_package_source" || message === "unsupported_package_source") {
+    return "That package source is not valid for removal.";
+  }
+  if (message === "package_operation_busy") {
+    return "Another package operation is already running. Try again in a moment.";
+  }
+  if (message === "runner_package_remove_unsupported") {
+    return "This session runner does not support extension removal yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_remove_unavailable") {
+    return "The session runner is unavailable. Try again after the terminal is ready.";
+  }
+  if (message === "pi_package_remove_failed") {
+    return "Pi could not remove that package source.";
+  }
+  return message;
+}
+
 async function createWorkspace(payload) {
   await runBusy(async () => {
     const data = await state.api.createWorkspace({
@@ -443,6 +464,39 @@ async function installPiPackage(source) {
       ...state.piPackages,
       installing: false,
       error: friendlyPiInstallError(error),
+      installMessage: "",
+    };
+    render();
+  }
+}
+
+async function removePiPackage(source) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const packageSource = String(source || "").trim();
+  if (!workspaceId || !sessionId || !packageSource) return;
+
+  state.piPackages = {
+    ...state.piPackages,
+    installing: true,
+    error: "",
+    installMessage: "Removing package...",
+  };
+  render();
+
+  try {
+    await state.api.removePiPackage(workspaceId, sessionId, packageSource);
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      installMessage: "Package removed from this workspace.",
+    };
+    await loadPiPackages();
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      error: friendlyPiRemoveError(error),
       installMessage: "",
     };
     render();

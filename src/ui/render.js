@@ -427,6 +427,7 @@ function renderInspectorSidebar(props) {
       onRefreshPiPackages,
       onUpdatePiInstallSource: props.onUpdatePiInstallSource,
       onInstallPiPackage: props.onInstallPiPackage,
+      onRemovePiPackage: props.onRemovePiPackage,
     }),
   ]);
 }
@@ -455,7 +456,11 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
     body = createElement("p", {className: "empty"}, "No workspace-local Pi packages are configured. Packages installed with `pi install -l ...` will appear here after refresh.");
   } else {
     body = createElement("div", {className: "package-list"}, [
-      ...packages.map((packageInfo) => renderPackageRow(packageInfo, {installed: true})),
+      ...packages.map((packageInfo) => renderPackageRow(packageInfo, {
+        installed: true,
+        busy: status.installing,
+        onRemovePiPackage: handlers.onRemovePiPackage,
+      })),
       knownPackages.length ? createElement("div", {className: "package-subsection"}, [
         createElement("h4", {}, "Known packages"),
         createElement("p", {className: "subtle"}, "Packages observed in your other workspaces. Use Install to add one to this workspace."),
@@ -519,6 +524,14 @@ function renderPackageRow(packageInfo, options = {}) {
   if (options.onInstallPiPackage) {
     installButton.addEventListener("click", () => options.onInstallPiPackage(source));
   }
+  const removeButton = createElement("button", {
+    className: "secondary",
+    disabled: options.busy || !options.onRemovePiPackage,
+    type: "button",
+  }, options.busy ? "Working..." : "Remove");
+  if (options.onRemovePiPackage) {
+    removeButton.addEventListener("click", () => options.onRemovePiPackage(source));
+  }
   return createElement("div", {className: `package-row ${installed ? "" : "known-package-row"}`}, [
     createElement("div", {className: "package-row-main"}, [
       createElement("strong", {}, source),
@@ -528,7 +541,7 @@ function renderPackageRow(packageInfo, options = {}) {
         createElement("span", {className: "subtle"}, "Configured; install path not present in the current runner.") :
         createElement("span", {className: "subtle"}, "Not installed in this workspace."),
     ]),
-    installed ? null : createElement("div", {className: "package-row-actions"}, [installButton]),
+    createElement("div", {className: "package-row-actions"}, [installed ? removeButton : installButton]),
   ]);
 }
 
