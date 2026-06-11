@@ -65,12 +65,13 @@ Before implementation tasks, read:
   - `node --check session-runner/server.js` passes.
   - Completed: 2026-06-11. Added archive targets for `/workspace/.pi/npm` and `/workspace/.pi/git`, storing them under `.mapahce-internal/archives/` while leaving `/workspace/.pi/settings.json` in normal workspace sync.
 
-- [ ] 3. **Hide workspace Pi package cache paths from normal file surfaces** - easy (gpt-5.4-mini)
+- [x] 3. **Hide workspace Pi package cache paths from normal file surfaces** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Normal workspace sync skips object-per-file sync for `.pi/npm/` and `.pi/git/`.
   - Files API and file editor routes do not expose `.pi/npm/`, `.pi/git/`, or related internal archive objects.
   - `.pi/settings.json` can still appear as a normal workspace file when present.
   - Runtime docs describe the visibility and sync rules.
+  - Completed: 2026-06-11. Normal sync now skips `.pi/npm/` and `.pi/git/`, Cloud Functions hides them from file listings/editor paths, and runtime docs describe visibility rules.
 
 - [ ] 4. **Add runner read-only Pi package listing endpoint** - medium (gpt-5.4)
   - Acceptance criteria:

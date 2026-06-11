@@ -2267,7 +2267,7 @@ function timestampMillis(value) {
 function storageFileToClientFile(file, queryPrefix) {
   const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
   if (!relativePath || relativePath.endsWith("/")) return null;
-  if (relativePath === INTERNAL_STORAGE_DIR || relativePath.startsWith(`${INTERNAL_STORAGE_DIR}/`)) {
+  if (isHiddenWorkspaceFilePath(relativePath)) {
     return null;
   }
   if (relativePath.endsWith(`/${DIRECTORY_MARKER_FILE}`)) {
@@ -2312,10 +2312,16 @@ function normalizeWorkspaceFilePath(value) {
   if (parts.includes(DIRECTORY_MARKER_FILE)) {
     throw httpError(400, "invalid_file_path");
   }
-  if (parts[0] === INTERNAL_STORAGE_DIR) {
+  if (isHiddenWorkspaceFilePath(parts.join("/"))) {
     throw httpError(400, "invalid_file_path");
   }
   return parts.join("/");
+}
+
+function isHiddenWorkspaceFilePath(relativePath) {
+  const parts = String(relativePath || "").split("/").filter(Boolean);
+  if (parts[0] === INTERNAL_STORAGE_DIR) return true;
+  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
 }
 
 function normalizeGitActionPayloadPaths(payload) {
