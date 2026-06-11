@@ -725,10 +725,15 @@ main.drawer-collapsed.right-drawer-collapsed {
   padding: 6px 10px;
 }
 
+.package-install-form,
 .package-subsection,
 .package-row {
   display: grid;
   gap: 8px;
+}
+
+.package-install-form {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .package-subsection {

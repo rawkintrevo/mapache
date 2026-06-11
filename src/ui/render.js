@@ -425,6 +425,8 @@ function renderInspectorSidebar(props) {
     ]),
     renderExtensionsPanel(selectedSession, state.piPackages, {
       onRefreshPiPackages,
+      onUpdatePiInstallSource: props.onUpdatePiInstallSource,
+      onInstallPiPackage: props.onInstallPiPackage,
     }),
   ]);
 }
@@ -435,7 +437,7 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
   const knownPackages = status.data && Array.isArray(status.data.knownPackages) ? status.data.knownPackages : [];
   const refreshButton = createElement("button", {
     className: "secondary",
-    disabled: status.loading || !handlers.onRefreshPiPackages,
+    disabled: status.loading || status.installing || !handlers.onRefreshPiPackages,
     type: "button",
   }, status.loading ? "Refreshing..." : "Refresh");
   if (handlers.onRefreshPiPackages) {
@@ -456,8 +458,12 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
       ...packages.map((packageInfo) => renderPackageRow(packageInfo, {installed: true})),
       knownPackages.length ? createElement("div", {className: "package-subsection"}, [
         createElement("h4", {}, "Known packages"),
-        createElement("p", {className: "subtle"}, "Packages observed in your other workspaces. Use Install to add one to this workspace when install support is enabled."),
-        ...knownPackages.map((packageInfo) => renderPackageRow(packageInfo, {installed: false})),
+        createElement("p", {className: "subtle"}, "Packages observed in your other workspaces. Use Install to add one to this workspace."),
+        ...knownPackages.map((packageInfo) => renderPackageRow(packageInfo, {
+          installed: false,
+          busy: status.installing,
+          onInstallPiPackage: handlers.onInstallPiPackage,
+        })),
       ]) : null,
     ]);
   }
@@ -468,8 +474,33 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
       refreshButton,
     ]),
     createElement("p", {className: "subtle"}, "Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh."),
+    session ? renderPackageInstallForm(status, handlers) : null,
+    status.installMessage ? createElement("p", {className: "subtle"}, status.installMessage) : null,
     body,
   ]);
+}
+
+function renderPackageInstallForm(status, handlers) {
+  const input = createElement("input", {
+    autocomplete: "off",
+    disabled: status.loading || status.installing,
+    placeholder: "npm:@scope/package or git:https://...",
+    type: "text",
+    value: status.installSource || "",
+  });
+  if (handlers.onUpdatePiInstallSource) {
+    input.addEventListener("input", () => handlers.onUpdatePiInstallSource(input.value));
+  }
+  const button = createElement("button", {
+    disabled: status.loading || status.installing || !handlers.onInstallPiPackage || !(status.installSource || "").trim(),
+    type: "submit",
+  }, status.installing ? "Installing..." : "Install");
+  const form = createElement("form", {className: "package-install-form"}, [input, button]);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (handlers.onInstallPiPackage) handlers.onInstallPiPackage(input.value);
+  });
+  return form;
 }
 
 function renderPackageRow(packageInfo, options = {}) {
@@ -482,10 +513,12 @@ function renderPackageRow(packageInfo, options = {}) {
   ].filter(Boolean).join(" · ");
   const installButton = createElement("button", {
     className: "secondary",
-    disabled: true,
-    title: "Install support is added in a later package-manager task.",
+    disabled: options.busy || !options.onInstallPiPackage,
     type: "button",
-  }, "Install");
+  }, options.busy ? "Installing..." : "Install");
+  if (options.onInstallPiPackage) {
+    installButton.addEventListener("click", () => options.onInstallPiPackage(source));
+  }
   return createElement("div", {className: `package-row ${installed ? "" : "known-package-row"}`}, [
     createElement("div", {className: "package-row-main"}, [
       createElement("strong", {}, source),
