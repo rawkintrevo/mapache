@@ -412,6 +412,22 @@ function createArchiveSyncTargets() {
       restoreOnStartup: true,
     },
     {
+      name: "workspace-pi-npm",
+      mode: "directory",
+      localPath: path.join(workspaceDir, ".pi", "npm"),
+      remotePath: archiveRemotePath("workspace-pi-npm.tar.gz"),
+      ensureLocalPath: false,
+      restoreOnStartup: true,
+    },
+    {
+      name: "workspace-pi-git",
+      mode: "directory",
+      localPath: path.join(workspaceDir, ".pi", "git"),
+      remotePath: archiveRemotePath("workspace-pi-git.tar.gz"),
+      ensureLocalPath: false,
+      restoreOnStartup: true,
+    },
+    {
       name: "root-pi",
       mode: "directory",
       localPath: process.env.PI_HOME_DIR || "/root/.pi",
