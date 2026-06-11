@@ -52,6 +52,7 @@ const state = {
     attempted: false,
   },
   drawerCollapsed: false,
+  rightDrawerCollapsed: true,
   sessionModalOpen: false,
   busy: false,
   error: "",
@@ -104,6 +105,7 @@ function render() {
     onSignOut: signOut,
     onRefresh: refreshAll,
     onToggleDrawer: toggleDrawer,
+    onToggleRightDrawer: toggleRightDrawer,
     onCreateWorkspace: createWorkspace,
     onSelectWorkspace: selectWorkspace,
     onOpenSessionModal: openSessionModal,
@@ -161,6 +163,11 @@ function resetPullRequestForm() {
 
 function toggleDrawer() {
   state.drawerCollapsed = !state.drawerCollapsed;
+  render();
+}
+
+function toggleRightDrawer() {
+  state.rightDrawerCollapsed = !state.rightDrawerCollapsed;
   render();
 }
 

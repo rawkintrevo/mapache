@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Menu,
   PanelLeftClose,
+  PanelRightClose,
   RefreshCw,
   Save,
   SquareStop,
@@ -90,12 +91,21 @@ export function renderAppShell(root, props) {
     state.error ? createElement("div", {className: "error"}, state.error) : null,
     renderSessionList(state, props),
   ];
+  const shellClassName = [
+    state.drawerCollapsed ? "drawer-collapsed" : "",
+    state.rightDrawerCollapsed ? "right-drawer-collapsed" : "",
+  ].filter(Boolean).join(" ");
 
   replaceChildren(root, createElement("div", {className: "app"}, [
     renderTopbar(props),
-    createElement("main", {className: state.drawerCollapsed ? "drawer-collapsed" : ""}, [
+    createElement("main", {className: shellClassName}, [
       renderSidebar(props),
       createElement("section", {className: "workspace"}, workspaceContent),
+      renderInspectorSidebar({
+        ...props,
+        selectedWorkspace,
+        selectedSession,
+      }),
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
     state.fileEditor.open ? renderFileEditorModal(props) : null,
@@ -374,6 +384,50 @@ function renderSidebar(props) {
         createSessionButton(state, onOpenSessionModal),
       ]),
       renderDrawerSessionList(state, onSelectSession, onStopSession, onDeleteSession),
+    ]),
+  ]);
+}
+
+function renderInspectorSidebar(props) {
+  const {state, onToggleRightDrawer} = props;
+
+  const toggleButton = createElement("button", {
+    "aria-expanded": String(!state.rightDrawerCollapsed),
+    ariaLabel: state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector",
+    className: "drawer-toggle secondary",
+    title: state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector",
+    type: "button",
+  }, renderIcon(state.rightDrawerCollapsed ? Menu : PanelRightClose));
+  toggleButton.addEventListener("click", onToggleRightDrawer);
+
+  if (state.rightDrawerCollapsed) {
+    return createElement("aside", {className: "drawer inspector collapsed"}, [
+      toggleButton,
+    ]);
+  }
+
+  return createElement("aside", {className: "drawer inspector"}, [
+    createElement("div", {className: "drawer-header"}, [
+      createElement("h2", {}, "Inspector"),
+      toggleButton,
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Authentication Center"),
+      ]),
+      createElement("p", {className: "empty"}, "tbd"),
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Skills"),
+      ]),
+      createElement("p", {className: "empty"}, "tbd"),
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Extensions"),
+      ]),
+      createElement("p", {className: "empty"}, "tbd"),
     ]),
   ]);
 }
@@ -1091,13 +1145,6 @@ function renderSessionDetail(session, {
   state,
   onResizeSession,
   onRestartSession,
-  onPullGit,
-  onPushGit,
-  onStageGitPath,
-  onUnstageGitPath,
-  onUpdateGitCommitMessage,
-  onCommitGit,
-  onOpenPullRequest,
 }) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
@@ -1147,21 +1194,6 @@ function renderSessionDetail(session, {
         restartButton,
       ]),
     ]),
-    createElement("div", {className: "details"}, [
-      metric("Status", session.status),
-      metric("Region", session.region || ""),
-      metric("Service", session.serviceId || ""),
-      metric("Updated", formatDate(session.updatedAt)),
-    ]),
-    renderGitStatusPanel(session, state.gitStatus, {
-      onPullGit,
-      onPushGit,
-      onStageGitPath,
-      onUnstageGitPath,
-      onUpdateGitCommitMessage,
-      onCommitGit,
-      onOpenPullRequest,
-    }),
   ]);
 }
 
