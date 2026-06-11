@@ -213,12 +213,13 @@ Before implementation tasks, read:
   - If not needed, document the decision and leave this task marked complete with rationale.
   - Completed: 2026-06-11. Determined Firestore operation persistence is not needed for v1 because package operations are synchronous runner calls with ephemeral UI status; documented the deferred decision.
 
-- [ ] 20. **Add regression coverage for package source validation and catalog writes** - easy (gpt-5.4-mini)
+- [x] 20. **Add regression coverage for package source validation and catalog writes** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Add focused tests or test seams for source normalization and identity derivation.
   - Cover npm, scoped npm, pinned npm, git shorthand, git URL, and invalid source cases.
   - Cover catalog merge/update behavior.
   - Existing relevant checks pass.
+  - Completed: 2026-06-11. Added package catalog helper test coverage for npm/scoped/pinned sources, git shorthand/URL sources, invalid source rejection, encoded catalog IDs, and catalog merge fields.
 
 - [ ] 21. **Run end-to-end package manager regression checks** - human
   - Acceptance criteria:
