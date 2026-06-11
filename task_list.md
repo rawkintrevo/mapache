@@ -100,12 +100,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-11. Added a read-only Extensions inspector panel with refresh/loading/empty/unavailable/error states wired to the backend package listing route.
 
-- [ ] 7. **Add Firestore package catalog schema helpers** - easy (gpt-5.4-mini)
+- [x] 7. **Add Firestore package catalog schema helpers** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Backend has helpers to normalize package source and derive package identity for npm and git sources.
   - Firestore package catalog lives under the authenticated user.
   - Catalog records exact source string, derived identity, type, timestamps, last workspace id, install count, and future `favorite` field.
   - Validation rejects unsupported or unsafe package source strings.
+  - Completed: 2026-06-11. Added backend helpers for npm/git package source normalization, identity derivation, encoded user catalog document IDs, merge records, and unsafe/unsupported source rejection.
 
 - [ ] 8. **Populate catalog from observed workspace packages** - medium (gpt-5.4)
   - Acceptance criteria:

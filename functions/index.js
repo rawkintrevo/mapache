@@ -2337,6 +2337,109 @@ async function workspaceStorageFile(uid, workspaceId, path) {
   };
 }
 
+function normalizePiPackageSource(value) {
+  const source = String(value || "").trim();
+  if (!source || /[\u0000-\u001f\u007f]/.test(source)) {
+    throw httpError(400, "invalid_package_source");
+  }
+  if (source.startsWith("npm:")) {
+    return normalizeNpmPackageSource(source);
+  }
+  const gitSource = normalizeGitPackageSource(source);
+  if (gitSource) return gitSource;
+  throw httpError(400, "unsupported_package_source");
+}
+
+function normalizeNpmPackageSource(source) {
+  const spec = source.slice("npm:".length).trim();
+  const match = spec.match(/^(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)(?:@([^\s/]+))?$/i);
+  if (!match) throw httpError(400, "invalid_package_source");
+  const name = match[1].toLowerCase();
+  return {
+    source,
+    type: "npm",
+    identity: `npm:${name}`,
+    name,
+    pinned: Boolean(match[2]),
+  };
+}
+
+function normalizeGitPackageSource(source) {
+  const parsed = parseGitPackageSource(source);
+  if (!parsed) return null;
+  return {
+    source,
+    type: "git",
+    identity: `git:${parsed.host}/${parsed.path}`,
+    host: parsed.host,
+    path: parsed.path,
+    pinned: Boolean(parsed.ref),
+  };
+}
+
+function parseGitPackageSource(source) {
+  const withoutGitPrefix = source.startsWith("git:") ? source.slice("git:".length) : source;
+  const withoutGitPlus = withoutGitPrefix.startsWith("git+") ? withoutGitPrefix.slice("git+".length) : withoutGitPrefix;
+  const [withoutRef, ref = ""] = withoutGitPlus.split("#");
+
+  const sshMatch = withoutRef.match(/^git@([^:]+):(.+)$/);
+  if (sshMatch) return buildGitPackageSource(sshMatch[1], sshMatch[2], ref);
+
+  const githubShorthand = withoutRef.match(/^github:([^/]+\/.+)$/);
+  if (githubShorthand) return buildGitPackageSource("github.com", githubShorthand[1], ref);
+
+  try {
+    const parsed = new URL(withoutRef);
+    if (parsed.username || parsed.password) throw httpError(400, "package_source_must_not_include_credentials");
+    if (["git:", "https:", "ssh:"].includes(parsed.protocol)) {
+      return buildGitPackageSource(parsed.hostname, parsed.pathname.replace(/^\/+/, ""), ref || parsed.hash.replace(/^#/, ""));
+    }
+  } catch (error) {
+    if (error && error.status) throw error;
+  }
+
+  return null;
+}
+
+function buildGitPackageSource(host, gitPath, ref = "") {
+  const normalizedHost = String(host || "").trim().toLowerCase();
+  const normalizedPath = String(gitPath || "").trim().replace(/\.git$/, "");
+  const parts = normalizeStoragePrefix(normalizedPath).split("/").filter(Boolean);
+  if (!normalizedHost || !parts.length || parts.some((part) => part === "." || part === "..")) {
+    throw httpError(400, "invalid_package_source");
+  }
+  if (!/^[a-z0-9.-]+$/i.test(normalizedHost)) throw httpError(400, "invalid_package_source");
+  return {host: normalizedHost, path: parts.join("/"), ref: String(ref || "").trim()};
+}
+
+function piPackageCatalogCollection(uid) {
+  return db.collection("users").doc(uid).collection("piPackageCatalog");
+}
+
+function piPackageCatalogDocId(identity) {
+  return encodeURIComponent(identity);
+}
+
+function piPackageCatalogRecord(source, workspaceId, options = {}) {
+  const normalized = normalizePiPackageSource(source);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  return {
+    identity: normalized.identity,
+    type: normalized.type,
+    source: normalized.source,
+    updatedAt: now,
+    lastWorkspaceId: cleanName(workspaceId || ""),
+    installCount: admin.firestore.FieldValue.increment(options.incrementInstallCount ? 1 : 0),
+    ...(options.includeCreatedAt ? {createdAt: now, favorite: false} : {}),
+  };
+}
+
+async function mergePiPackageCatalogEntry(uid, workspaceId, source, options = {}) {
+  const record = piPackageCatalogRecord(source, workspaceId, options);
+  await piPackageCatalogCollection(uid).doc(piPackageCatalogDocId(record.identity)).set(record, {merge: true});
+  return record;
+}
+
 function normalizeWorkspaceFilePath(value) {
   const path = String(value || "").replace(/^\/+|\/+$/g, "");
   const parts = path.split("/").filter(Boolean);
