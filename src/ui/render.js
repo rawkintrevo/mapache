@@ -389,7 +389,7 @@ function renderSidebar(props) {
 }
 
 function renderInspectorSidebar(props) {
-  const {state, onToggleRightDrawer} = props;
+  const {state, selectedSession, onRefreshPiPackages, onToggleRightDrawer} = props;
 
   const toggleButton = createElement("button", {
     "aria-expanded": String(!state.rightDrawerCollapsed),
@@ -423,11 +423,61 @@ function renderInspectorSidebar(props) {
       ]),
       createElement("p", {className: "empty"}, "tbd"),
     ]),
-    createElement("section", {className: "drawer-section"}, [
-      createElement("div", {className: "drawer-section-heading"}, [
-        createElement("h3", {}, "Extensions"),
-      ]),
-      createElement("p", {className: "empty"}, "tbd"),
+    renderExtensionsPanel(selectedSession, state.piPackages, {
+      onRefreshPiPackages,
+    }),
+  ]);
+}
+
+function renderExtensionsPanel(session, piPackages, handlers = {}) {
+  const status = piPackages || {loading: false, error: "", unavailable: false, data: null};
+  const packages = status.data && Array.isArray(status.data.packages) ? status.data.packages : [];
+  const refreshButton = createElement("button", {
+    className: "secondary",
+    disabled: status.loading || !handlers.onRefreshPiPackages,
+    type: "button",
+  }, status.loading ? "Refreshing..." : "Refresh");
+  if (handlers.onRefreshPiPackages) {
+    refreshButton.addEventListener("click", handlers.onRefreshPiPackages);
+  }
+
+  let body;
+  if (!session) {
+    body = createElement("p", {className: "empty"}, "Start or select an active session to inspect workspace-local Pi extensions.");
+  } else if (status.loading) {
+    body = createElement("p", {className: "empty"}, "Loading workspace extensions...");
+  } else if (status.error) {
+    body = createElement("p", {className: "empty"}, status.error);
+  } else if (!packages.length) {
+    body = createElement("p", {className: "empty"}, "No workspace-local Pi packages are configured. Packages installed with `pi install -l ...` will appear here after refresh.");
+  } else {
+    body = createElement("div", {className: "package-list"}, packages.map(renderPackageRow));
+  }
+
+  return createElement("section", {className: "drawer-section extensions-panel"}, [
+    createElement("div", {className: "drawer-section-heading"}, [
+      createElement("h3", {}, "Extensions"),
+      refreshButton,
+    ]),
+    createElement("p", {className: "subtle"}, "Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh."),
+    body,
+  ]);
+}
+
+function renderPackageRow(packageInfo) {
+  const source = packageInfo.source || "unknown package";
+  const meta = [
+    packageInfo.type || "package",
+    packageInfo.scope || "workspace",
+    packageInfo.filtered ? "filtered" : "unfiltered",
+  ].filter(Boolean).join(" · ");
+  return createElement("div", {className: "package-row"}, [
+    createElement("div", {className: "package-row-main"}, [
+      createElement("strong", {}, source),
+      createElement("span", {className: "subtle"}, meta),
+      packageInfo.installedPath ?
+        createElement("code", {className: "package-path"}, packageInfo.installedPath) :
+        createElement("span", {className: "subtle"}, "Configured; install path not present in the current runner."),
     ]),
   ]);
 }

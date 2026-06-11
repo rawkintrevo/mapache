@@ -714,9 +714,40 @@ main.drawer-collapsed.right-drawer-collapsed {
 }
 
 .git-status-body,
-.git-file-list {
+.git-file-list,
+.package-list {
   display: grid;
   gap: 10px;
+}
+
+.extensions-panel .drawer-section-heading button {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+.package-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.package-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.package-row-main strong,
+.package-path {
+  overflow-wrap: anywhere;
+}
+
+.package-path {
+  color: var(--code);
+  font-size: 12px;
 }
 
 .git-file-row {
