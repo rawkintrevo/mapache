@@ -125,6 +125,19 @@ app.post("/pi/packages/install", async (req, res) => {
   }
 });
 
+app.post("/pi/packages/remove", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: false}, () => removeWorkspacePiPackage(req.body || {})));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_remove_failed");
+  }
+});
+
 app.post("/git/pull", async (req, res) => {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
@@ -985,6 +998,18 @@ async function installWorkspacePiPackage(body) {
   return {
     ok: true,
     action: "install",
+    source,
+    packages: (await listWorkspacePiPackages()).packages,
+  };
+}
+
+async function removeWorkspacePiPackage(body) {
+  const source = normalizePiMutationPackageSource(body.source);
+  await runPiCommand(["remove", "-l", source]);
+  await syncUp({includeArchives: true});
+  return {
+    ok: true,
+    action: "remove",
     source,
     packages: (await listWorkspacePiPackages()).packages,
   };

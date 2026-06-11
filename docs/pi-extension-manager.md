@@ -258,7 +258,7 @@ The initial list endpoint returns workspace-local configured packages from `/wor
 }
 ```
 
-Mutating endpoints should default to workspace-local behavior. Runner install support uses `pi install -l <source>` from `/workspace` for npm/git sources, then forces normal workspace sync plus package cache archive upload so `/workspace/.pi/settings.json`, `/workspace/.pi/npm`, and `/workspace/.pi/git` persist. Remove is equivalent to `pi remove -l <source>`, and update should follow Pi package update semantics.
+Mutating endpoints should default to workspace-local behavior. Runner install support uses `pi install -l <source>` from `/workspace` for npm/git sources, and runner remove support uses `pi remove -l <source>`. Both force normal workspace sync plus package cache archive upload so `/workspace/.pi/settings.json`, `/workspace/.pi/npm`, and `/workspace/.pi/git` persist. Update should follow Pi package update semantics.
 
 When practical, the runner should use Pi's exported package manager APIs rather than parsing CLI output. CLI fallback is acceptable if the package manager API is not available in the installed runtime, but the web API should still return structured responses.
 

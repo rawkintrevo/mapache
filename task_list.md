@@ -161,13 +161,14 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-11. Added Extensions install form and known-package install buttons wired to the backend install route with busy, success, validation, runner error, and post-install refresh handling.
 
-- [ ] 14. **Add runner package remove support** - medium (gpt-5.4)
+- [x] 14. **Add runner package remove support** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner exposes a token-protected remove endpoint.
   - Endpoint removes workspace-local package settings and installed package cache when supported by Pi package behavior.
   - Removing one package does not remove unrelated known catalog entries.
   - Operation triggers or schedules archive sync for package cache directories.
   - Errors are structured and safe to display.
+  - Completed: 2026-06-11. Added protected runner `POST /pi/packages/remove` using `pi remove -l` under the package operation lock, followed by settings/archive sync and structured errors.
 
 - [ ] 15. **Add backend and frontend remove flow** - medium (gpt-5.4)
   - Acceptance criteria:
