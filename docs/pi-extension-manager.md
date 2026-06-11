@@ -246,6 +246,14 @@ The initial list endpoint returns workspace-local configured packages from `/wor
       filtered: false,
       installedPath: "/workspace/.pi/npm/node_modules/@foo/bar"
     }
+  ],
+  knownPackages: [
+    {
+      source: "npm:@org/previous-tool",
+      identity: "npm:@org/previous-tool",
+      type: "npm",
+      favorite: false
+    }
   ]
 }
 ```

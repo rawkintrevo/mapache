@@ -897,7 +897,30 @@ async function listPiPackages(uid, workspaceId, sessionId) {
   await recordObservedPiPackages(uid, workspaceId, data).catch((error) => {
     logger.warn("observed package catalog update failed", {workspaceId, sessionId, error: error.message || error});
   });
-  return data;
+  const knownPackages = await listKnownPiPackages(uid, data).catch((error) => {
+    logger.warn("known package catalog read failed", {workspaceId, sessionId, error: error.message || error});
+    return [];
+  });
+  return {...data, knownPackages};
+}
+
+async function listKnownPiPackages(uid, data) {
+  const configuredSources = new Set((data && Array.isArray(data.packages) ? data.packages : [])
+      .map((packageInfo) => packageInfo && packageInfo.source)
+      .filter(Boolean));
+  const snap = await piPackageCatalogCollection(uid).get();
+  return snap.docs
+      .map((doc) => ({id: doc.id, ...doc.data()}))
+      .filter((packageInfo) => packageInfo.source && !configuredSources.has(packageInfo.source))
+      .map((packageInfo) => ({
+        source: packageInfo.source,
+        identity: packageInfo.identity || "",
+        type: packageInfo.type || "",
+        favorite: Boolean(packageInfo.favorite),
+        lastWorkspaceId: packageInfo.lastWorkspaceId || "",
+        installCount: Number(packageInfo.installCount || 0),
+      }))
+      .sort((left, right) => left.source.localeCompare(right.source));
 }
 
 async function recordObservedPiPackages(uid, workspaceId, data) {

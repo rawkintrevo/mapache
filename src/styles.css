@@ -725,13 +725,31 @@ main.drawer-collapsed.right-drawer-collapsed {
   padding: 6px 10px;
 }
 
+.package-subsection,
 .package-row {
   display: grid;
   gap: 8px;
+}
+
+.package-subsection {
+  margin-top: 2px;
+}
+
+.package-subsection h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.package-row {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.known-package-row {
+  background: #fffdf7;
 }
 
 .package-row-main {
@@ -748,6 +766,11 @@ main.drawer-collapsed.right-drawer-collapsed {
 .package-path {
   color: var(--code);
   font-size: 12px;
+}
+
+.package-row-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .git-file-row {
