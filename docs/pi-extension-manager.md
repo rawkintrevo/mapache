@@ -231,7 +231,7 @@ POST /pi/packages/remove
 POST /pi/packages/update
 ```
 
-The initial list endpoint returns workspace-local configured packages from `/workspace/.pi/settings.json` and a stable empty `packages: []` array when the settings file is absent or contains no packages. User-scoped packages can be added later in a separate section:
+The list endpoint returns workspace-local configured packages from `/workspace/.pi/settings.json`, user-scoped packages from `/root/.pi/agent/settings.json`, and a stable empty `packages: []` array when the workspace settings file is absent or contains no packages:
 
 ```js
 {
@@ -245,6 +245,15 @@ The initial list endpoint returns workspace-local configured packages from `/wor
       type: "npm",
       filtered: false,
       installedPath: "/workspace/.pi/npm/node_modules/@foo/bar"
+    }
+  ],
+  userPackages: [
+    {
+      source: "npm:@org/user-tool",
+      scope: "user",
+      type: "npm",
+      filtered: false,
+      installedPath: "/root/.pi/agent/npm/node_modules/@org/user-tool"
     }
   ],
   knownPackages: [
