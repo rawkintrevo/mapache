@@ -342,7 +342,7 @@ Reasons:
 - npm and git package installs can modify package cache directories.
 - Archive upload may run while package directories are changing.
 
-The first implementation can use an in-memory runner lock. Mutating web operations should fail with a stable busy response when another package operation is running. Read operations can either wait briefly for the lock or return a response marked busy.
+The first implementation uses an in-memory runner lock. Mutating web operations should fail with a stable `package_operation_busy` response when another package operation is running. Read/list operations wait for the current lock and then run under the same lock so package settings and cache paths are read consistently.
 
 The lock does not prevent a user from running `pi install -l ...` manually in the terminal at the exact same time. The web manager still needs to recover by refreshing from disk and returning safe errors if Pi package settings are temporarily inconsistent.
 

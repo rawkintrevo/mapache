@@ -45,6 +45,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const terminalSession = createTerminalSession();
+let packageOperationLock = null;
 
 app.use(express.json());
 app.use(
@@ -105,8 +106,12 @@ app.get("/pi/packages", async (req, res) => {
   }
 
   try {
-    res.json(await listWorkspacePiPackages());
+    res.json(await withPackageOperationLock({read: true}, listWorkspacePiPackages));
   } catch (error) {
+    if (error && error.code === "package_operation_busy") {
+      res.status(409).json({error: "package_operation_busy", busy: true});
+      return;
+    }
     console.error("pi package list failed", error);
     res.status(500).json({error: "pi_package_list_failed"});
   }
@@ -901,6 +906,31 @@ async function findGitArchiveEntries(dir) {
 
 function toTarPath(localPath) {
   return `./${path.relative(workspaceDir, localPath).split(path.sep).join("/")}`;
+}
+
+async function withPackageOperationLock(options, operation) {
+  while (packageOperationLock) {
+    if (!options || !options.read) {
+      const busyError = new Error("package_operation_busy");
+      busyError.code = "package_operation_busy";
+      throw busyError;
+    }
+    await packageOperationLock.catch(() => {});
+  }
+
+  let releaseLock;
+  const currentLock = new Promise((resolve) => {
+    releaseLock = resolve;
+  });
+  packageOperationLock = currentLock;
+  try {
+    return await operation();
+  } finally {
+    releaseLock();
+    if (packageOperationLock === currentLock) {
+      packageOperationLock = null;
+    }
+  }
 }
 
 async function listWorkspacePiPackages() {
