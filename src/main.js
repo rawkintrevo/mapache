@@ -37,6 +37,12 @@ const state = {
     commitMessage: "",
     canOpenPr: false,
   },
+  piPackages: {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+  },
   pullRequestForm: {
     open: false,
     title: "",
@@ -83,6 +89,7 @@ async function start() {
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
         resetGitStatus();
+        resetPiPackages();
         render();
         return;
       }
@@ -128,6 +135,7 @@ function render() {
     onUnstageGitPath: unstageGitPath,
     onUpdateGitCommitMessage: updateGitCommitMessage,
     onCommitGit: commitGit,
+    onRefreshPiPackages: refreshPiPackages,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -148,6 +156,15 @@ function resetGitStatus() {
     canOpenPr: false,
   };
   resetPullRequestForm();
+}
+
+function resetPiPackages() {
+  state.piPackages = {
+    loading: false,
+    error: "",
+    unavailable: false,
+    data: null,
+  };
 }
 
 function resetPullRequestForm() {
@@ -187,9 +204,11 @@ async function refreshAll() {
     if (previousWorkspaceId !== state.selectedWorkspaceId) {
       resetWorkspaceFiles();
       resetGitStatus();
+      resetPiPackages();
     }
     await loadSessions();
     await loadGitStatus();
+    await loadPiPackages();
     await loadWorkspaceFiles();
   });
 }
@@ -203,6 +222,7 @@ async function loadSessions() {
   state.sessions = data.sessions || [];
   state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
   await loadGitStatus();
+  await loadPiPackages();
 }
 
 async function loadWorkspaceFiles() {
@@ -267,6 +287,23 @@ function friendlyRepoPickerError(error) {
   return message;
 }
 
+function friendlyPiPackageError(error) {
+  const message = error.message || "Could not load extensions.";
+  if (message === "no_active_session" || message === "session_not_running") {
+    return "Start an active pi-basic session to inspect workspace extensions.";
+  }
+  if (message === "runner_package_listing_unsupported") {
+    return "This session runner does not support extension listing yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_list_unavailable") {
+    return "The session runner is unavailable. Try refreshing after the terminal is ready.";
+  }
+  if (message === "pi_package_read_failed" || message === "pi_package_list_failed") {
+    return "The runner could not read workspace Pi package settings.";
+  }
+  return message;
+}
+
 async function createWorkspace(payload) {
   await runBusy(async () => {
     const data = await state.api.createWorkspace({
@@ -285,9 +322,11 @@ async function selectWorkspace(workspaceId) {
   state.sessionModalOpen = false;
   resetWorkspaceFiles();
   resetGitStatus();
+  resetPiPackages();
   await runBusy(async () => {
     await loadSessions();
     await loadGitStatus();
+    await loadPiPackages();
     await loadWorkspaceFiles();
   });
 }
@@ -312,17 +351,64 @@ async function createSession(payload) {
     state.sessions = next.sessions || [];
     state.sessionModalOpen = false;
     await loadGitStatus();
+    await loadPiPackages();
   });
 }
 
 async function selectSession(sessionId) {
   state.selectedSessionId = sessionId;
   await loadGitStatus();
+  await loadPiPackages();
   render();
 }
 
 async function refreshWorkspaceFiles() {
   await runBusy(loadWorkspaceFiles);
+}
+
+async function refreshPiPackages() {
+  await loadPiPackages();
+}
+
+async function loadPiPackages() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) {
+    state.piPackages = {
+      loading: false,
+      error: "Select or start an active session to inspect extensions.",
+      unavailable: true,
+      data: null,
+    };
+    render();
+    return;
+  }
+
+  state.piPackages = {
+    loading: true,
+    error: "",
+    unavailable: false,
+    data: state.piPackages.data || null,
+  };
+  render();
+
+  try {
+    const data = await state.api.getPiPackages(workspaceId, sessionId);
+    state.piPackages = {
+      loading: false,
+      error: "",
+      unavailable: false,
+      data: data || {packages: []},
+    };
+  } catch (error) {
+    state.piPackages = {
+      loading: false,
+      error: friendlyPiPackageError(error),
+      unavailable: true,
+      data: null,
+    };
+  }
+  render();
 }
 
 async function loadGitStatus() {

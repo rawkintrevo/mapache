@@ -91,13 +91,14 @@ Before implementation tasks, read:
   - No package code or secrets are returned.
   - Completed: 2026-06-11. Added authenticated `GET /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages` proxy with workspace/session ownership checks, live runner/token requirements, and stable unsupported/unavailable/read-failure errors.
 
-- [ ] 6. **Add frontend read-only Extensions panel** - medium (gpt-5.4)
+- [x] 6. **Add frontend read-only Extensions panel** - medium (gpt-5.4)
   - Acceptance criteria:
   - Existing right drawer `Extensions` section shows workspace-local installed/configured packages.
   - Panel has refresh, loading, empty, unavailable, and error states.
   - Panel requires an active session for v1 and explains that state without replacing Pi tooling.
   - UI stays compact and consistent with the current operational drawer style.
   - `npm run build` passes.
+  - Completed: 2026-06-11. Added a read-only Extensions inspector panel with refresh/loading/empty/unavailable/error states wired to the backend package listing route.
 
 - [ ] 7. **Add Firestore package catalog schema helpers** - easy (gpt-5.4-mini)
   - Acceptance criteria:
