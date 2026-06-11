@@ -986,22 +986,30 @@ async function withPackageOperationLock(options, operation) {
 
 async function listWorkspacePiPackages() {
   const settingsPath = path.join(workspaceDir, ".pi", "settings.json");
+  const userSettingsPath = path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "settings.json");
   const settings = await readJsonFile(settingsPath, {});
-  const packages = Array.isArray(settings.packages) ? settings.packages : [];
-  const normalizedPackages = await Promise.all(packages
-      .map(normalizePiPackageSettingsEntry)
-      .filter(Boolean)
-      .map(async (entry) => ({
-        ...entry,
-        installedPath: await resolveInstalledPiPackagePath(entry.source),
-      })));
+  const userSettings = await readJsonFile(userSettingsPath, {});
+  const packages = await listPiPackageSettingsEntries(settings, "workspace");
+  const userPackages = await listPiPackageSettingsEntries(userSettings, "user");
 
   return {
     ok: true,
     scope: "workspace",
     settingsPath,
-    packages: normalizedPackages,
+    packages,
+    userPackages,
   };
+}
+
+async function listPiPackageSettingsEntries(settings, scope) {
+  const packages = Array.isArray(settings.packages) ? settings.packages : [];
+  return Promise.all(packages
+      .map((entry) => normalizePiPackageSettingsEntry(entry, scope))
+      .filter(Boolean)
+      .map(async (entry) => ({
+        ...entry,
+        installedPath: await resolveInstalledPiPackagePath(entry.source, scope),
+      })));
 }
 
 async function installWorkspacePiPackage(body) {
@@ -1101,7 +1109,7 @@ async function runPiCommand(args) {
   }
 }
 
-function normalizePiPackageSettingsEntry(entry) {
+function normalizePiPackageSettingsEntry(entry, scope = "workspace") {
   const source = typeof entry === "string" ? entry : entry && typeof entry.source === "string" ? entry.source : "";
   const safeSource = redactPackageSource(source.trim());
   if (!safeSource) return null;
@@ -1114,7 +1122,7 @@ function normalizePiPackageSettingsEntry(entry) {
 
   return {
     source: safeSource,
-    scope: "workspace",
+    scope,
     type: classifyPiPackageSource(safeSource).type,
     installedPath: null,
     filtered: Object.keys(filters).length > 0,
@@ -1138,13 +1146,14 @@ function redactPackageSource(source) {
   return source;
 }
 
-async function resolveInstalledPiPackagePath(source) {
+async function resolveInstalledPiPackagePath(source, scope = "workspace") {
   const parsed = classifyPiPackageSource(source);
+  const root = scope === "user" ? path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent") : path.join(workspaceDir, ".pi");
   if (parsed.type === "npm" && parsed.name) {
-    return existingManagedPackagePath(path.join(workspaceDir, ".pi", "npm", "node_modules"), [parsed.name]);
+    return existingManagedPackagePath(path.join(root, "npm", "node_modules"), [parsed.name]);
   }
   if (parsed.type === "git" && parsed.host && parsed.gitPath) {
-    return existingManagedPackagePath(path.join(workspaceDir, ".pi", "git"), [parsed.host, ...parsed.gitPath.split("/")]);
+    return existingManagedPackagePath(path.join(root, "git"), [parsed.host, ...parsed.gitPath.split("/")]);
   }
   if (parsed.type === "local" && parsed.localPath) {
     const resolved = resolveWorkspacePackagePath(parsed.localPath);

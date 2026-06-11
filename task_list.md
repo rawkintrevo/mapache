@@ -197,12 +197,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-11. Added authenticated backend update proxy and frontend update-all/update-one controls with busy/error/success states and post-update refresh while relying on Pi's pinned package semantics.
 
-- [ ] 18. **Detect and surface user-scoped Pi packages** - easy (gpt-5.4-mini)
+- [x] 18. **Detect and surface user-scoped Pi packages** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Runner listing can detect packages configured in `/root/.pi/agent/settings.json`.
   - Frontend shows user-scoped packages separately from workspace-local packages.
   - User-scoped packages are not treated as installed in the current workspace by default.
   - UI offers a clear path to install the same source workspace-locally.
+  - Completed: 2026-06-11. Runner listing now includes `/root/.pi/agent/settings.json` packages as `userPackages`, and the Extensions panel shows them separately with workspace-local install actions.
 
 - [ ] 19. **Add package operation status persistence if needed** - medium (gpt-5.4)
   - Acceptance criteria:

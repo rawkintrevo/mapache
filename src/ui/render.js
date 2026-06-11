@@ -437,6 +437,7 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
   const status = piPackages || {loading: false, error: "", unavailable: false, data: null};
   const packages = status.data && Array.isArray(status.data.packages) ? status.data.packages : [];
   const knownPackages = status.data && Array.isArray(status.data.knownPackages) ? status.data.knownPackages : [];
+  const userPackages = status.data && Array.isArray(status.data.userPackages) ? status.data.userPackages : [];
   const refreshButton = createElement("button", {
     className: "secondary",
     disabled: status.loading || status.installing || !handlers.onRefreshPiPackages,
@@ -461,7 +462,7 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
     body = createElement("p", {className: "empty"}, "Loading workspace extensions...");
   } else if (status.error) {
     body = createElement("p", {className: "empty"}, status.error);
-  } else if (!packages.length && !knownPackages.length) {
+  } else if (!packages.length && !knownPackages.length && !userPackages.length) {
     body = createElement("p", {className: "empty"}, "No workspace-local Pi packages are configured. Packages installed with `pi install -l ...` will appear here after refresh.");
   } else {
     body = createElement("div", {className: "package-list"}, [
@@ -471,6 +472,16 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
         onRemovePiPackage: handlers.onRemovePiPackage,
         onUpdatePiPackage: handlers.onUpdatePiPackage,
       })),
+      userPackages.length ? createElement("div", {className: "package-subsection"}, [
+        createElement("h4", {}, "User-scoped packages"),
+        createElement("p", {className: "subtle"}, "Installed for Pi in this session user scope, not automatically installed in this workspace."),
+        ...userPackages.map((packageInfo) => renderPackageRow(packageInfo, {
+          installed: false,
+          scopeLabel: "user-scoped",
+          busy: status.installing,
+          onInstallPiPackage: handlers.onInstallPiPackage,
+        })),
+      ]) : null,
       knownPackages.length ? createElement("div", {className: "package-subsection"}, [
         createElement("h4", {}, "Known packages"),
         createElement("p", {className: "subtle"}, "Packages observed in your other workspaces. Use Install to add one to this workspace."),
@@ -523,7 +534,7 @@ function renderPackageRow(packageInfo, options = {}) {
   const installed = options.installed !== false;
   const meta = [
     packageInfo.type || "package",
-    installed ? packageInfo.scope || "workspace" : "known",
+    installed ? packageInfo.scope || "workspace" : options.scopeLabel || "known",
     installed && packageInfo.filtered ? "filtered" : installed ? "unfiltered" : null,
   ].filter(Boolean).join(" · ");
   const installButton = createElement("button", {
