@@ -39,9 +39,12 @@ const state = {
   },
   piPackages: {
     loading: false,
+    installing: false,
     error: "",
     unavailable: false,
     data: null,
+    installSource: "",
+    installMessage: "",
   },
   pullRequestForm: {
     open: false,
@@ -136,6 +139,8 @@ function render() {
     onUpdateGitCommitMessage: updateGitCommitMessage,
     onCommitGit: commitGit,
     onRefreshPiPackages: refreshPiPackages,
+    onUpdatePiInstallSource: updatePiInstallSource,
+    onInstallPiPackage: installPiPackage,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -161,9 +166,12 @@ function resetGitStatus() {
 function resetPiPackages() {
   state.piPackages = {
     loading: false,
+    installing: false,
     error: "",
     unavailable: false,
     data: null,
+    installSource: "",
+    installMessage: "",
   };
 }
 
@@ -304,6 +312,26 @@ function friendlyPiPackageError(error) {
   return message;
 }
 
+function friendlyPiInstallError(error) {
+  const message = error.message || "Could not install extension.";
+  if (message === "invalid_package_source" || message === "unsupported_package_source") {
+    return "Enter a supported npm: or git package source.";
+  }
+  if (message === "package_operation_busy") {
+    return "Another package operation is already running. Try again in a moment.";
+  }
+  if (message === "runner_package_install_unsupported") {
+    return "This session runner does not support extension installs yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_install_unavailable") {
+    return "The session runner is unavailable. Try again after the terminal is ready.";
+  }
+  if (message === "pi_package_install_failed") {
+    return "Pi could not install that package source.";
+  }
+  return message;
+}
+
 async function createWorkspace(payload) {
   await runBusy(async () => {
     const data = await state.api.createWorkspace({
@@ -370,11 +398,63 @@ async function refreshPiPackages() {
   await loadPiPackages();
 }
 
+function updatePiInstallSource(source) {
+  state.piPackages = {
+    ...state.piPackages,
+    installSource: source,
+    installMessage: "",
+    error: "",
+  };
+  render();
+}
+
+async function installPiPackage(source) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const packageSource = String(source || state.piPackages.installSource || "").trim();
+  if (!workspaceId || !sessionId || !packageSource) {
+    state.piPackages = {
+      ...state.piPackages,
+      error: packageSource ? "Start an active session before installing." : "Enter an npm: or git package source.",
+    };
+    render();
+    return;
+  }
+
+  state.piPackages = {
+    ...state.piPackages,
+    installing: true,
+    error: "",
+    installMessage: "Installing package...",
+  };
+  render();
+
+  try {
+    await state.api.installPiPackage(workspaceId, sessionId, packageSource);
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      installSource: "",
+      installMessage: "Package installed into this workspace.",
+    };
+    await loadPiPackages();
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      error: friendlyPiInstallError(error),
+      installMessage: "",
+    };
+    render();
+  }
+}
+
 async function loadPiPackages() {
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   if (!workspaceId || !sessionId) {
     state.piPackages = {
+      ...state.piPackages,
       loading: false,
       error: "Select or start an active session to inspect extensions.",
       unavailable: true,
@@ -385,6 +465,7 @@ async function loadPiPackages() {
   }
 
   state.piPackages = {
+    ...state.piPackages,
     loading: true,
     error: "",
     unavailable: false,
@@ -395,6 +476,7 @@ async function loadPiPackages() {
   try {
     const data = await state.api.getPiPackages(workspaceId, sessionId);
     state.piPackages = {
+      ...state.piPackages,
       loading: false,
       error: "",
       unavailable: false,
@@ -402,6 +484,7 @@ async function loadPiPackages() {
     };
   } catch (error) {
     state.piPackages = {
+      ...state.piPackages,
       loading: false,
       error: friendlyPiPackageError(error),
       unavailable: true,

@@ -152,13 +152,14 @@ Before implementation tasks, read:
   - Failure responses are stable for frontend display.
   - Completed: 2026-06-11. Added authenticated backend install proxy with source validation, runner ownership/availability checks, stable install errors, and successful catalog update.
 
-- [ ] 13. **Add frontend package install flow** - medium (gpt-5.4)
+- [x] 13. **Add frontend package install flow** - medium (gpt-5.4)
   - Acceptance criteria:
   - Extensions panel supports installing npm and git package sources into the current workspace.
   - Known package rows include an install button.
   - Install form handles busy, success, validation error, and runner error states.
   - Package list refreshes after successful install.
   - `npm run build` passes.
+  - Completed: 2026-06-11. Added Extensions install form and known-package install buttons wired to the backend install route with busy, success, validation, runner error, and post-install refresh handling.
 
 - [ ] 14. **Add runner package remove support** - medium (gpt-5.4)
   - Acceptance criteria:
