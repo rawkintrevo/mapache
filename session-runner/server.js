@@ -108,12 +108,20 @@ app.get("/pi/packages", async (req, res) => {
   try {
     res.json(await withPackageOperationLock({read: true}, listWorkspacePiPackages));
   } catch (error) {
-    if (error && error.code === "package_operation_busy") {
-      res.status(409).json({error: "package_operation_busy", busy: true});
-      return;
-    }
-    console.error("pi package list failed", error);
-    res.status(500).json({error: "pi_package_list_failed"});
+    sendPiPackageError(res, error, "pi_package_list_failed");
+  }
+});
+
+app.post("/pi/packages/install", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: false}, () => installWorkspacePiPackage(req.body || {})));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_install_failed");
   }
 });
 
@@ -908,6 +916,23 @@ function toTarPath(localPath) {
   return `./${path.relative(workspaceDir, localPath).split(path.sep).join("/")}`;
 }
 
+function sendPiPackageError(res, error, fallbackCode) {
+  if (error && error.code === "package_operation_busy") {
+    res.status(409).json({error: "package_operation_busy", busy: true});
+    return;
+  }
+  if (error && error.code === "invalid_package_source") {
+    res.status(400).json({error: "invalid_package_source"});
+    return;
+  }
+  if (error && error.code === "unsupported_package_source") {
+    res.status(400).json({error: "unsupported_package_source"});
+    return;
+  }
+  console.error(`${fallbackCode.replace(/_/g, " ")}`, error);
+  res.status(500).json({error: fallbackCode});
+}
+
 async function withPackageOperationLock(options, operation) {
   while (packageOperationLock) {
     if (!options || !options.read) {
@@ -953,6 +978,18 @@ async function listWorkspacePiPackages() {
   };
 }
 
+async function installWorkspacePiPackage(body) {
+  const source = normalizePiMutationPackageSource(body.source);
+  await runPiCommand(["install", "-l", source]);
+  await syncUp({includeArchives: true});
+  return {
+    ok: true,
+    action: "install",
+    source,
+    packages: (await listWorkspacePiPackages()).packages,
+  };
+}
+
 async function readJsonFile(filePath, fallback) {
   try {
     const raw = await fs.promises.readFile(filePath, "utf8");
@@ -960,6 +997,56 @@ async function readJsonFile(filePath, fallback) {
   } catch (error) {
     if (error && error.code === "ENOENT") return fallback;
     throw error;
+  }
+}
+
+function normalizePiMutationPackageSource(source) {
+  const normalized = String(source || "").trim();
+  if (!normalized || normalized.length > 2048 || /[\u0000-\u001f\u007f]/.test(normalized)) {
+    const error = new Error("invalid_package_source");
+    error.code = "invalid_package_source";
+    throw error;
+  }
+  if (hasPackageSourceCredentials(normalized)) {
+    const error = new Error("invalid_package_source");
+    error.code = "invalid_package_source";
+    throw error;
+  }
+  const parsed = classifyPiPackageSource(normalized);
+  if (parsed.type !== "npm" && parsed.type !== "git") {
+    const error = new Error("unsupported_package_source");
+    error.code = "unsupported_package_source";
+    throw error;
+  }
+  if (parsed.type === "npm" && !/^(@[^/]+\/[^@/]+|[^@/]+)(?:@[^\s/]+)?$/.test(normalized.slice("npm:".length))) {
+    const error = new Error("invalid_package_source");
+    error.code = "invalid_package_source";
+    throw error;
+  }
+  return normalized;
+}
+
+function hasPackageSourceCredentials(source) {
+  const candidate = source.startsWith("git+") ? source.slice("git+".length) : source;
+  try {
+    const parsed = new URL(candidate.startsWith("git:") ? candidate.slice("git:".length) : candidate);
+    return Boolean(parsed.username || parsed.password);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function runPiCommand(args) {
+  const child = spawn("pi", args, {
+    cwd: workspaceDir,
+    stdio: ["ignore", "ignore", "pipe"],
+    env: process.env,
+  });
+  const stderr = collectStderr(child);
+  try {
+    await waitForChild(child, stderr, `pi ${args[0]}`);
+  } catch (error) {
+    throw new Error(compactErrorMessage(error.message || error) || "pi_command_failed");
   }
 }
 
