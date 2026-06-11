@@ -73,6 +73,7 @@ const state = {
   rightDrawerCollapsed: true,
   collapsedDrawerSections: new Set(),
   sessionModalOpen: false,
+  authModalOpen: false,
   busy: false,
   error: "",
 };
@@ -159,6 +160,8 @@ function render() {
     onSavePiAuthProvider: savePiAuthProvider,
     onRemovePiPackage: removePiPackage,
     onUpdatePiPackage: updatePiPackage,
+    onOpenAuthModal: openAuthModal,
+    onCloseAuthModal: closeAuthModal,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -447,6 +450,16 @@ function openSessionModal() {
 
 function closeSessionModal() {
   state.sessionModalOpen = false;
+  render();
+}
+
+function openAuthModal() {
+  state.authModalOpen = true;
+  render();
+}
+
+function closeAuthModal() {
+  state.authModalOpen = false;
   render();
 }
 

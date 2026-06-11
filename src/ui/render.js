@@ -8,6 +8,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelRightClose,
+  Plus,
   RefreshCw,
   Save,
   SquareStop,
@@ -15,6 +16,7 @@ import {
   X,
 } from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
+import {renderAddAuthModal} from "./authModal.js";
 import {sessionImages} from "../config/sessionImages.js";
 import {piAuthProviderLabel, piAuthProviders} from "../config/piAuthProviders.js";
 
@@ -109,6 +111,10 @@ export function renderAppShell(root, props) {
       }),
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
+    state.authModalOpen ? renderAddAuthModal({onClose: props.onCloseAuthModal, onSave: (provider, key) => {
+      props.onUpdatePiAuthForm({selectedProvider: provider, apiKey: key});
+      props.onSavePiAuthProvider();
+    }}) : null,
     state.fileEditor.open ? renderFileEditorModal(props) : null,
     state.pullRequestForm.open ? renderPullRequestModal(props) : null,
   ]));
@@ -405,6 +411,7 @@ function renderInspectorSidebar(props) {
     onToggleDrawerSection,
     onToggleRightDrawer,
     onUpdatePiAuthForm,
+    onOpenAuthModal,
   } = props;
 
   const toggleButton = createElement("button", {
@@ -433,6 +440,7 @@ function renderInspectorSidebar(props) {
       onRefreshPiAuth,
       onUpdatePiAuthForm,
       onSavePiAuthProvider,
+      onOpenAuthModal,
     }),
     renderDrawerSection({
       id: "right-skills",
@@ -507,59 +515,21 @@ function renderAuthCenterPanel(piAuth, handlers = {}) {
   };
   const providers = status.providers && typeof status.providers === "object" ? status.providers : {};
   const providerEntries = Object.entries(providers).sort(([left], [right]) => left.localeCompare(right));
-  const selectedProvider = status.selectedProvider || (piAuthProviders[0] && piAuthProviders[0].key) || "";
-  const providerSelect = createElement("select", {
-    disabled: status.saving,
-    name: "piAuthProvider",
-  }, piAuthProviders.map((provider) => createElement("option", {
-    selected: provider.key === selectedProvider,
-    value: provider.key,
-  }, provider.label)));
-  providerSelect.addEventListener("change", () => {
-    if (handlers.onUpdatePiAuthForm) {
-      handlers.onUpdatePiAuthForm({selectedProvider: providerSelect.value});
-    }
-  });
-
-  const keyInput = createElement("input", {
-    autocomplete: "off",
-    disabled: status.saving,
-    name: "piAuthApiKey",
-    placeholder: "sk-...",
-    type: "password",
-    value: status.apiKey || "",
-  });
-  keyInput.addEventListener("input", () => {
-    if (handlers.onUpdatePiAuthForm) {
-      handlers.onUpdatePiAuthForm({apiKey: keyInput.value});
-    }
-  });
-
-  const form = createElement("form", {className: "auth-center-form"}, [
-    createElement("label", {}, [
-      createElement("span", {}, "Provider"),
-      providerSelect,
-    ]),
-    createElement("label", {}, [
-      createElement("span", {}, "API key"),
-      keyInput,
-    ]),
-    createElement("button", {
-      disabled: status.saving || !handlers.onSavePiAuthProvider,
-      type: "submit",
-    }, status.saving ? "Saving..." : "Save API key"),
-  ]);
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (handlers.onSavePiAuthProvider) handlers.onSavePiAuthProvider();
-  });
 
   const refreshButton = createElement("button", {
-    className: "secondary auth-center-refresh",
+    className: "secondary auth-center-refresh icon-button",
     disabled: status.loading || status.saving || !handlers.onRefreshPiAuth,
     type: "button",
-  }, status.loading ? "Refreshing..." : "Refresh");
+    ariaLabel: "Refresh",
+  }, createLucideIcon(RefreshCw));
   if (handlers.onRefreshPiAuth) refreshButton.addEventListener("click", handlers.onRefreshPiAuth);
+
+  const addButton = createElement("button", {
+    className: "secondary auth-center-add icon-button",
+    type: "button",
+    ariaLabel: "Add",
+  }, createLucideIcon(Plus));
+  if (handlers.onOpenAuthModal) addButton.addEventListener("click", handlers.onOpenAuthModal);
 
   return renderDrawerSection({
     id: "right-authentication",
@@ -567,10 +537,9 @@ function renderAuthCenterPanel(piAuth, handlers = {}) {
     className: "auth-center-panel",
     state: handlers.state,
     onToggleDrawerSection: handlers.onToggleDrawerSection,
-    actions: [refreshButton],
+    actions: [refreshButton, addButton],
     children: [
       createElement("p", {className: "subtle"}, "User-scoped Pi auth providers. API keys saved here are materialized into ~/.pi/agent/auth.json for new sessions; CLI /login changes sync back after runner refresh."),
-      form,
       status.error ? createElement("p", {className: "empty"}, status.error) : null,
       status.message ? createElement("p", {className: "subtle"}, status.message) : null,
       providerEntries.length ? createElement("div", {className: "auth-provider-list"}, providerEntries.map(([provider, value]) => renderAuthProviderRow(provider, value))) :
@@ -1239,7 +1208,7 @@ function renderSessionModal({state, onCloseSessionModal, onCreateSession}) {
         ariaLabel: "Close",
         className: "icon-button close-button secondary",
         type: "button",
-      }, "+"),
+      }, createLucideIcon(X)),
     ]),
     form,
   ]);

@@ -27,12 +27,14 @@ In general, keep docs edits focused on the current change. If the docs have beco
 Keep changes scoped to the existing structure:
 
 - Frontend state and handlers live in `src/main.js`.
-- DOM rendering lives in `src/ui/render.js`.
+- DOM rendering lives in `src/ui/render.js` and component-specific files in `src/ui/`.
+- UI Component Index: See `docs/ui-components.md` for a mapping of UI components, their file locations, and purposes.
 - Shared frontend styling lives in `src/styles.css`.
 - Session image choices live in `src/config/sessionImages.js`.
 - API client calls live in `src/services/api.js`.
 - Cloud Functions backend logic lives in `functions/index.js`.
 - Runtime container code lives in `session-runner/`.
+- **Monolith Prevention**: For new features, break functionality into smaller, focused files rather than adding to large monoliths like `src/ui/render.js` or `src/main.js`.
 
 For frontend changes, run `npm run build` before handing off when feasible. For runtime container changes, validate the container path and document whether existing Cloud Run services need a new revision.
 
