@@ -45,6 +45,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const terminalSession = createTerminalSession();
+let packageOperationLock = null;
 
 app.use(express.json());
 app.use(
@@ -95,6 +96,58 @@ app.get("/git/status", async (req, res) => {
   } catch (error) {
     console.error("git status failed", error);
     res.status(500).json({error: "git_status_failed"});
+  }
+});
+
+app.get("/pi/packages", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: true}, listWorkspacePiPackages));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_list_failed");
+  }
+});
+
+app.post("/pi/packages/install", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: false}, () => installWorkspacePiPackage(req.body || {})));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_install_failed");
+  }
+});
+
+app.post("/pi/packages/remove", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: false}, () => removeWorkspacePiPackage(req.body || {})));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_remove_failed");
+  }
+});
+
+app.post("/pi/packages/update", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: false}, () => updateWorkspacePiPackages(req.body || {})));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_update_failed");
   }
 });
 
@@ -412,6 +465,22 @@ function createArchiveSyncTargets() {
       restoreOnStartup: true,
     },
     {
+      name: "workspace-pi-npm",
+      mode: "directory",
+      localPath: path.join(workspaceDir, ".pi", "npm"),
+      remotePath: archiveRemotePath("workspace-pi-npm.tar.gz"),
+      ensureLocalPath: false,
+      restoreOnStartup: true,
+    },
+    {
+      name: "workspace-pi-git",
+      mode: "directory",
+      localPath: path.join(workspaceDir, ".pi", "git"),
+      remotePath: archiveRemotePath("workspace-pi-git.tar.gz"),
+      ensureLocalPath: false,
+      restoreOnStartup: true,
+    },
+    {
       name: "root-pi",
       mode: "directory",
       localPath: process.env.PI_HOME_DIR || "/root/.pi",
@@ -502,9 +571,24 @@ async function restoreGithubGitArchiveIfPresent() {
   try {
     await fs.promises.mkdir(target.localPath, {recursive: true});
     await extractStorageArchive(file, target);
-    return true;
+    if (await hasValidGithubGitArchiveRestore()) {
+      return true;
+    }
+    console.warn("cached .git archive did not restore a valid repository; falling back to clone");
+    await fs.promises.rm(target.localPath, {recursive: true, force: true});
+    return false;
   } catch (error) {
     throw new Error(`git archive restore failed: ${compactErrorMessage(error.message || error)}`);
+  }
+}
+
+async function hasValidGithubGitArchiveRestore() {
+  try {
+    const gitDir = await runGitCommand(["rev-parse", "--git-dir"], {captureStdout: true});
+    const head = await runGitCommand(["rev-parse", "--verify", "HEAD"], {captureStdout: true});
+    return Boolean(gitDir && head);
+  } catch {
+    return false;
   }
 }
 
@@ -873,6 +957,284 @@ function toTarPath(localPath) {
   return `./${path.relative(workspaceDir, localPath).split(path.sep).join("/")}`;
 }
 
+function sendPiPackageError(res, error, fallbackCode) {
+  if (error && error.code === "package_operation_busy") {
+    res.status(409).json({error: "package_operation_busy", busy: true});
+    return;
+  }
+  if (error && error.code === "invalid_package_source") {
+    res.status(400).json({error: "invalid_package_source"});
+    return;
+  }
+  if (error && error.code === "unsupported_package_source") {
+    res.status(400).json({error: "unsupported_package_source"});
+    return;
+  }
+  console.error(`${fallbackCode.replace(/_/g, " ")}`, error);
+  res.status(500).json({error: fallbackCode});
+}
+
+async function withPackageOperationLock(options, operation) {
+  while (packageOperationLock) {
+    if (!options || !options.read) {
+      const busyError = new Error("package_operation_busy");
+      busyError.code = "package_operation_busy";
+      throw busyError;
+    }
+    await packageOperationLock.catch(() => {});
+  }
+
+  let releaseLock;
+  const currentLock = new Promise((resolve) => {
+    releaseLock = resolve;
+  });
+  packageOperationLock = currentLock;
+  try {
+    return await operation();
+  } finally {
+    releaseLock();
+    if (packageOperationLock === currentLock) {
+      packageOperationLock = null;
+    }
+  }
+}
+
+async function listWorkspacePiPackages() {
+  const settingsPath = path.join(workspaceDir, ".pi", "settings.json");
+  const userSettingsPath = path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "settings.json");
+  const settings = await readJsonFile(settingsPath, {});
+  const userSettings = await readJsonFile(userSettingsPath, {});
+  const packages = await listPiPackageSettingsEntries(settings, "workspace");
+  const userPackages = await listPiPackageSettingsEntries(userSettings, "user");
+
+  return {
+    ok: true,
+    scope: "workspace",
+    settingsPath,
+    packages,
+    userPackages,
+  };
+}
+
+async function listPiPackageSettingsEntries(settings, scope) {
+  const packages = Array.isArray(settings.packages) ? settings.packages : [];
+  return Promise.all(packages
+      .map((entry) => normalizePiPackageSettingsEntry(entry, scope))
+      .filter(Boolean)
+      .map(async (entry) => ({
+        ...entry,
+        installedPath: await resolveInstalledPiPackagePath(entry.source, scope),
+      })));
+}
+
+async function installWorkspacePiPackage(body) {
+  const source = normalizePiMutationPackageSource(body.source);
+  await runPiCommand(["install", "-l", source]);
+  await syncUp({includeArchives: true});
+  return {
+    ok: true,
+    action: "install",
+    source,
+    packages: (await listWorkspacePiPackages()).packages,
+  };
+}
+
+async function removeWorkspacePiPackage(body) {
+  const source = normalizePiMutationPackageSource(body.source);
+  await runPiCommand(["remove", "-l", source]);
+  await syncUp({includeArchives: true});
+  return {
+    ok: true,
+    action: "remove",
+    source,
+    packages: (await listWorkspacePiPackages()).packages,
+  };
+}
+
+async function updateWorkspacePiPackages(body) {
+  const source = body.source ? normalizePiMutationPackageSource(body.source) : "";
+  const args = source ? ["update", "--extension", source] : ["update", "--extensions"];
+  await runPiCommand(args);
+  await syncUp({includeArchives: true});
+  return {
+    ok: true,
+    action: "update",
+    source: source || null,
+    packages: (await listWorkspacePiPackages()).packages,
+  };
+}
+
+async function readJsonFile(filePath, fallback) {
+  try {
+    const raw = await fs.promises.readFile(filePath, "utf8");
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+
+function normalizePiMutationPackageSource(source) {
+  const normalized = String(source || "").trim();
+  if (!normalized || normalized.length > 2048 || /[\u0000-\u001f\u007f]/.test(normalized)) {
+    const error = new Error("invalid_package_source");
+    error.code = "invalid_package_source";
+    throw error;
+  }
+  if (hasPackageSourceCredentials(normalized)) {
+    const error = new Error("invalid_package_source");
+    error.code = "invalid_package_source";
+    throw error;
+  }
+  const parsed = classifyPiPackageSource(normalized);
+  if (parsed.type !== "npm" && parsed.type !== "git") {
+    const error = new Error("unsupported_package_source");
+    error.code = "unsupported_package_source";
+    throw error;
+  }
+  if (parsed.type === "npm" && !/^(@[^/]+\/[^@/]+|[^@/]+)(?:@[^\s/]+)?$/.test(normalized.slice("npm:".length))) {
+    const error = new Error("invalid_package_source");
+    error.code = "invalid_package_source";
+    throw error;
+  }
+  return normalized;
+}
+
+function hasPackageSourceCredentials(source) {
+  const candidate = source.startsWith("git+") ? source.slice("git+".length) : source;
+  try {
+    const parsed = new URL(candidate.startsWith("git:") ? candidate.slice("git:".length) : candidate);
+    return Boolean(parsed.username || parsed.password);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function runPiCommand(args) {
+  const child = spawn("pi", args, {
+    cwd: workspaceDir,
+    stdio: ["ignore", "ignore", "pipe"],
+    env: process.env,
+  });
+  const stderr = collectStderr(child);
+  try {
+    await waitForChild(child, stderr, `pi ${args[0]}`);
+  } catch (error) {
+    throw new Error(compactErrorMessage(error.message || error) || "pi_command_failed");
+  }
+}
+
+function normalizePiPackageSettingsEntry(entry, scope = "workspace") {
+  const source = typeof entry === "string" ? entry : entry && typeof entry.source === "string" ? entry.source : "";
+  const safeSource = redactPackageSource(source.trim());
+  if (!safeSource) return null;
+
+  const filters = typeof entry === "object" && entry && !Array.isArray(entry) ? {...entry} : {};
+  delete filters.source;
+  Object.keys(filters).forEach((key) => {
+    if (filters[key] === undefined || filters[key] === null) delete filters[key];
+  });
+
+  return {
+    source: safeSource,
+    scope,
+    type: classifyPiPackageSource(safeSource).type,
+    installedPath: null,
+    filtered: Object.keys(filters).length > 0,
+  };
+}
+
+function redactPackageSource(source) {
+  if (!source) return "";
+  const gitPrefix = source.startsWith("git+") ? "git+" : "";
+  const candidate = gitPrefix ? source.slice(gitPrefix.length) : source;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.username || parsed.password) {
+      parsed.username = "";
+      parsed.password = "";
+      return `${gitPrefix}${parsed.toString()}`;
+    }
+  } catch (error) {
+    // Non-URL package sources are expected for npm and git shorthand packages.
+  }
+  return source;
+}
+
+async function resolveInstalledPiPackagePath(source, scope = "workspace") {
+  const parsed = classifyPiPackageSource(source);
+  const root = scope === "user" ? path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent") : path.join(workspaceDir, ".pi");
+  if (parsed.type === "npm" && parsed.name) {
+    return existingManagedPackagePath(path.join(root, "npm", "node_modules"), [parsed.name]);
+  }
+  if (parsed.type === "git" && parsed.host && parsed.gitPath) {
+    return existingManagedPackagePath(path.join(root, "git"), [parsed.host, ...parsed.gitPath.split("/")]);
+  }
+  if (parsed.type === "local" && parsed.localPath) {
+    const resolved = resolveWorkspacePackagePath(parsed.localPath);
+    return resolved && await pathExists(resolved) ? resolved : null;
+  }
+  return null;
+}
+
+async function existingManagedPackagePath(root, parts) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedPath = path.resolve(resolvedRoot, ...parts);
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) return null;
+  return await pathExists(resolvedPath) ? resolvedPath : null;
+}
+
+function classifyPiPackageSource(source) {
+  if (source.startsWith("npm:")) {
+    const spec = source.slice("npm:".length).trim();
+    const npmMatch = spec.match(/^(@[^/]+\/[^@]+|[^@]+)(?:@(.+))?$/);
+    return {type: "npm", name: npmMatch ? npmMatch[1] : spec};
+  }
+
+  const gitSource = parsePiGitPackageSource(source);
+  if (gitSource) return {type: "git", ...gitSource};
+
+  return {type: "local", localPath: source};
+}
+
+function parsePiGitPackageSource(source) {
+  const withoutGitPrefix = source.startsWith("git:") ? source.slice("git:".length) : source;
+  const withoutGitPlus = withoutGitPrefix.startsWith("git+") ? withoutGitPrefix.slice("git+".length) : withoutGitPrefix;
+  const withoutRef = withoutGitPlus.split("#")[0];
+
+  const sshMatch = withoutRef.match(/^git@([^:]+):(.+)$/);
+  if (sshMatch) return buildPiGitPackageSource(sshMatch[1], sshMatch[2]);
+
+  const githubShorthand = withoutRef.match(/^github:([^/]+\/.+)$/);
+  if (githubShorthand) return buildPiGitPackageSource("github.com", githubShorthand[1]);
+
+  try {
+    const parsed = new URL(withoutRef);
+    if (["git:", "https:", "http:", "ssh:"].includes(parsed.protocol)) {
+      return buildPiGitPackageSource(parsed.hostname, parsed.pathname.replace(/^\/+/, ""));
+    }
+  } catch (error) {
+    // Not a URL-shaped git source.
+  }
+
+  return null;
+}
+
+function buildPiGitPackageSource(host, gitPath) {
+  const normalizedHost = String(host || "").toLowerCase();
+  const normalizedPath = normalizeRelativeWorkspacePath(String(gitPath || "").replace(/\.git$/, ""));
+  const parts = normalizedPath.split("/").filter(Boolean);
+  if (!normalizedHost || !parts.length || parts.some((part) => part === "." || part === "..")) return null;
+  return {host: normalizedHost, gitPath: parts.join("/")};
+}
+
+function resolveWorkspacePackagePath(packagePath) {
+  const resolvedRoot = path.resolve(workspaceDir);
+  const resolvedPath = path.resolve(resolvedRoot, packagePath);
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) return null;
+  return resolvedPath;
+}
+
 async function waitForChild(child, stderr, label) {
   const code = await new Promise((resolve, reject) => {
     child.on("error", reject);
@@ -920,10 +1282,14 @@ async function pathExists(localPath) {
 function shouldIgnoreWorkspacePath(relativePath) {
   const normalizedPath = normalizeRelativeWorkspacePath(relativePath);
   const parts = normalizedPath.split("/").filter(Boolean);
-  if (parts.includes("node_modules") || parts[0] === internalStorageDir) {
+  if (parts.includes("node_modules") || parts[0] === internalStorageDir || isWorkspacePiPackageCachePath(parts)) {
     return true;
   }
   return workspaceSyncPolicyExclude.some((pattern) => matchesSyncPolicyPattern(normalizedPath, pattern));
+}
+
+function isWorkspacePiPackageCachePath(parts) {
+  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
 }
 
 function normalizeRelativeWorkspacePath(relativePath) {

@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Menu,
   PanelLeftClose,
+  PanelRightClose,
   RefreshCw,
   Save,
   SquareStop,
@@ -90,12 +91,21 @@ export function renderAppShell(root, props) {
     state.error ? createElement("div", {className: "error"}, state.error) : null,
     renderSessionList(state, props),
   ];
+  const shellClassName = [
+    state.drawerCollapsed ? "drawer-collapsed" : "",
+    state.rightDrawerCollapsed ? "right-drawer-collapsed" : "",
+  ].filter(Boolean).join(" ");
 
   replaceChildren(root, createElement("div", {className: "app"}, [
     renderTopbar(props),
-    createElement("main", {className: state.drawerCollapsed ? "drawer-collapsed" : ""}, [
+    createElement("main", {className: shellClassName}, [
       renderSidebar(props),
       createElement("section", {className: "workspace"}, workspaceContent),
+      renderInspectorSidebar({
+        ...props,
+        selectedWorkspace,
+        selectedSession,
+      }),
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
     state.fileEditor.open ? renderFileEditorModal(props) : null,
@@ -375,6 +385,192 @@ function renderSidebar(props) {
       ]),
       renderDrawerSessionList(state, onSelectSession, onStopSession, onDeleteSession),
     ]),
+  ]);
+}
+
+function renderInspectorSidebar(props) {
+  const {state, selectedSession, onRefreshPiPackages, onToggleRightDrawer} = props;
+
+  const toggleButton = createElement("button", {
+    "aria-expanded": String(!state.rightDrawerCollapsed),
+    ariaLabel: state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector",
+    className: "drawer-toggle secondary",
+    title: state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector",
+    type: "button",
+  }, renderIcon(state.rightDrawerCollapsed ? Menu : PanelRightClose));
+  toggleButton.addEventListener("click", onToggleRightDrawer);
+
+  if (state.rightDrawerCollapsed) {
+    return createElement("aside", {className: "drawer inspector collapsed"}, [
+      toggleButton,
+    ]);
+  }
+
+  return createElement("aside", {className: "drawer inspector"}, [
+    createElement("div", {className: "drawer-header"}, [
+      createElement("h2", {}, "Inspector"),
+      toggleButton,
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Authentication Center"),
+      ]),
+      createElement("p", {className: "empty"}, "tbd"),
+    ]),
+    createElement("section", {className: "drawer-section"}, [
+      createElement("div", {className: "drawer-section-heading"}, [
+        createElement("h3", {}, "Skills"),
+      ]),
+      createElement("p", {className: "empty"}, "tbd"),
+    ]),
+    renderExtensionsPanel(selectedSession, state.piPackages, {
+      onRefreshPiPackages,
+      onUpdatePiInstallSource: props.onUpdatePiInstallSource,
+      onInstallPiPackage: props.onInstallPiPackage,
+      onRemovePiPackage: props.onRemovePiPackage,
+      onUpdatePiPackage: props.onUpdatePiPackage,
+    }),
+  ]);
+}
+
+function renderExtensionsPanel(session, piPackages, handlers = {}) {
+  const status = piPackages || {loading: false, error: "", unavailable: false, data: null};
+  const packages = status.data && Array.isArray(status.data.packages) ? status.data.packages : [];
+  const knownPackages = status.data && Array.isArray(status.data.knownPackages) ? status.data.knownPackages : [];
+  const userPackages = status.data && Array.isArray(status.data.userPackages) ? status.data.userPackages : [];
+  const refreshButton = createElement("button", {
+    className: "secondary",
+    disabled: status.loading || status.installing || !handlers.onRefreshPiPackages,
+    type: "button",
+  }, status.loading ? "Refreshing..." : "Refresh");
+  if (handlers.onRefreshPiPackages) {
+    refreshButton.addEventListener("click", handlers.onRefreshPiPackages);
+  }
+  const updateAllButton = createElement("button", {
+    className: "secondary",
+    disabled: status.loading || status.installing || !handlers.onUpdatePiPackage || !packages.length,
+    type: "button",
+  }, status.installing ? "Working..." : "Update all");
+  if (handlers.onUpdatePiPackage) {
+    updateAllButton.addEventListener("click", () => handlers.onUpdatePiPackage());
+  }
+
+  let body;
+  if (!session) {
+    body = createElement("p", {className: "empty"}, "Start or select an active session to inspect workspace-local Pi extensions.");
+  } else if (status.loading) {
+    body = createElement("p", {className: "empty"}, "Loading workspace extensions...");
+  } else if (status.error) {
+    body = createElement("p", {className: "empty"}, status.error);
+  } else if (!packages.length && !knownPackages.length && !userPackages.length) {
+    body = createElement("p", {className: "empty"}, "No workspace-local Pi packages are configured. Packages installed with `pi install -l ...` will appear here after refresh.");
+  } else {
+    body = createElement("div", {className: "package-list"}, [
+      ...packages.map((packageInfo) => renderPackageRow(packageInfo, {
+        installed: true,
+        busy: status.installing,
+        onRemovePiPackage: handlers.onRemovePiPackage,
+        onUpdatePiPackage: handlers.onUpdatePiPackage,
+      })),
+      userPackages.length ? createElement("div", {className: "package-subsection"}, [
+        createElement("h4", {}, "User-scoped packages"),
+        createElement("p", {className: "subtle"}, "Installed for Pi in this session user scope, not automatically installed in this workspace."),
+        ...userPackages.map((packageInfo) => renderPackageRow(packageInfo, {
+          installed: false,
+          scopeLabel: "user-scoped",
+          busy: status.installing,
+          onInstallPiPackage: handlers.onInstallPiPackage,
+        })),
+      ]) : null,
+      knownPackages.length ? createElement("div", {className: "package-subsection"}, [
+        createElement("h4", {}, "Known packages"),
+        createElement("p", {className: "subtle"}, "Packages observed in your other workspaces. Use Install to add one to this workspace."),
+        ...knownPackages.map((packageInfo) => renderPackageRow(packageInfo, {
+          installed: false,
+          busy: status.installing,
+          onInstallPiPackage: handlers.onInstallPiPackage,
+        })),
+      ]) : null,
+    ]);
+  }
+
+  return createElement("section", {className: "drawer-section extensions-panel"}, [
+    createElement("div", {className: "drawer-section-heading"}, [
+      createElement("h3", {}, "Extensions"),
+      createElement("div", {className: "git-status-actions"}, [updateAllButton, refreshButton]),
+    ]),
+    createElement("p", {className: "subtle"}, "Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh."),
+    session ? renderPackageInstallForm(status, handlers) : null,
+    status.installMessage ? createElement("p", {className: "subtle"}, status.installMessage) : null,
+    body,
+  ]);
+}
+
+function renderPackageInstallForm(status, handlers) {
+  const input = createElement("input", {
+    autocomplete: "off",
+    disabled: status.loading || status.installing,
+    placeholder: "npm:@scope/package or git:https://...",
+    type: "text",
+    value: status.installSource || "",
+  });
+  if (handlers.onUpdatePiInstallSource) {
+    input.addEventListener("input", () => handlers.onUpdatePiInstallSource(input.value));
+  }
+  const button = createElement("button", {
+    disabled: status.loading || status.installing || !handlers.onInstallPiPackage || !(status.installSource || "").trim(),
+    type: "submit",
+  }, status.installing ? "Installing..." : "Install");
+  const form = createElement("form", {className: "package-install-form"}, [input, button]);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (handlers.onInstallPiPackage) handlers.onInstallPiPackage(input.value);
+  });
+  return form;
+}
+
+function renderPackageRow(packageInfo, options = {}) {
+  const source = packageInfo.source || "unknown package";
+  const installed = options.installed !== false;
+  const meta = [
+    packageInfo.type || "package",
+    installed ? packageInfo.scope || "workspace" : options.scopeLabel || "known",
+    installed && packageInfo.filtered ? "filtered" : installed ? "unfiltered" : null,
+  ].filter(Boolean).join(" · ");
+  const installButton = createElement("button", {
+    className: "secondary",
+    disabled: options.busy || !options.onInstallPiPackage,
+    type: "button",
+  }, options.busy ? "Installing..." : "Install");
+  if (options.onInstallPiPackage) {
+    installButton.addEventListener("click", () => options.onInstallPiPackage(source));
+  }
+  const updateButton = createElement("button", {
+    className: "secondary",
+    disabled: options.busy || !options.onUpdatePiPackage,
+    type: "button",
+  }, options.busy ? "Working..." : "Update");
+  if (options.onUpdatePiPackage) {
+    updateButton.addEventListener("click", () => options.onUpdatePiPackage(source));
+  }
+  const removeButton = createElement("button", {
+    className: "secondary",
+    disabled: options.busy || !options.onRemovePiPackage,
+    type: "button",
+  }, options.busy ? "Working..." : "Remove");
+  if (options.onRemovePiPackage) {
+    removeButton.addEventListener("click", () => options.onRemovePiPackage(source));
+  }
+  return createElement("div", {className: `package-row ${installed ? "" : "known-package-row"}`}, [
+    createElement("div", {className: "package-row-main"}, [
+      createElement("strong", {}, source),
+      createElement("span", {className: "subtle"}, meta),
+      installed ? packageInfo.installedPath ?
+        createElement("code", {className: "package-path"}, packageInfo.installedPath) :
+        createElement("span", {className: "subtle"}, "Configured; install path not present in the current runner.") :
+        createElement("span", {className: "subtle"}, "Not installed in this workspace."),
+    ]),
+    createElement("div", {className: "package-row-actions"}, [installed ? updateButton : null, installed ? removeButton : installButton]),
   ]);
 }
 
@@ -1091,13 +1287,6 @@ function renderSessionDetail(session, {
   state,
   onResizeSession,
   onRestartSession,
-  onPullGit,
-  onPushGit,
-  onStageGitPath,
-  onUnstageGitPath,
-  onUpdateGitCommitMessage,
-  onCommitGit,
-  onOpenPullRequest,
 }) {
   const cpuSelect = renderSelect("resizeCpu", cpuOptions, session.resources.cpu);
   const memorySelect = renderSelect(
@@ -1147,21 +1336,6 @@ function renderSessionDetail(session, {
         restartButton,
       ]),
     ]),
-    createElement("div", {className: "details"}, [
-      metric("Status", session.status),
-      metric("Region", session.region || ""),
-      metric("Service", session.serviceId || ""),
-      metric("Updated", formatDate(session.updatedAt)),
-    ]),
-    renderGitStatusPanel(session, state.gitStatus, {
-      onPullGit,
-      onPushGit,
-      onStageGitPath,
-      onUnstageGitPath,
-      onUpdateGitCommitMessage,
-      onCommitGit,
-      onOpenPullRequest,
-    }),
   ]);
 }
 

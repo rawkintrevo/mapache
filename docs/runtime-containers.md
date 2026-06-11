@@ -43,6 +43,8 @@ Installed OS packages currently include:
 
 `make` and `g++` are present because `node-pty` and terminal-adjacent dependencies may require native build support during image construction.
 
+Pi package installs can also require npm, git, and native build tooling depending on the package. The planned web extension manager runs package operations inside the active runner rather than on the client device, so it uses the same runtime toolchain that Pi uses in the terminal.
+
 ## Terminal Runtime
 
 The container runs `session-runner/server.js`.
@@ -83,6 +85,8 @@ It also adds search tools for terminal-first coding workflows:
 - `ripgrep`
 
 The image sets `TERMINAL_COMMAND=pi`, so new browser terminal connections open Pi directly instead of a login shell.
+
+The planned extension manager targets `pi-basic` first. For v1, package listing and package mutations can require a running `pi-basic` session so the manager can operate on the same `/workspace/.pi/settings.json` and package cache directories that Pi uses.
 
 Build and push the image with:
 
@@ -154,6 +158,13 @@ High-cardinality runtime directories are not synced as individual Cloud Storage 
 - `/workspace/.git` for GitHub-backed workspaces
 - `/root/.pi`
 
+The Pi extension manager extends this model to workspace-local Pi package cache directories:
+
+- `/workspace/.pi/npm` archived as `.mapahce-internal/archives/workspace-pi-npm.tar.gz`
+- `/workspace/.pi/git` archived as `.mapahce-internal/archives/workspace-pi-git.tar.gz`
+
+The portable package declaration file, `/workspace/.pi/settings.json`, remains normal workspace file state. Package install directories are runtime cache state and are archived under `.mapahce-internal/archives/` instead of uploaded object-by-object. Normal workspace sync skips `.pi/npm/` and `.pi/git/`, while the Files API and editor routes hide those cache paths and the internal archive objects.
+
 The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted.
 
 `/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
@@ -166,6 +177,8 @@ This keeps dependency installs, Git metadata, and Pi Agent state available witho
 
 The detailed GitHub workspace architecture, including one-active-session enforcement and cache semantics, lives in [github-workspaces.md](./github-workspaces.md).
 
+The planned Pi extension manager architecture, including workspace-local package scope, package catalog metadata, write locations, and active-session behavior, lives in [pi-extension-manager.md](./pi-extension-manager.md).
+
 ### GitHub Workspace Reconstruction
 
 GitHub-backed workspaces should reconstruct `/workspace` in this order:
@@ -176,7 +189,7 @@ GitHub-backed workspaces should reconstruct `/workspace` in this order:
 4. Restore other archive-backed runtime directories such as `node_modules` and `/root/.pi`.
 5. Validate and publish Git runtime state before serving the terminal.
 
-The current runner implementation now follows that startup order for GitHub workspaces. It first checks for a cached `.git` archive under the hidden archive prefix and restores it when present. If no cached Git archive exists, it clones the repository and uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. Public repos still clone anonymously. Private connected repos now clone with a short-lived GitHub App installation token supplied by the backend at provisioning time, passed through a temporary `GIT_ASKPASS` script so the token is not embedded into the repo remote config or workspace files. After Git state is available, the runner restores cached worktree files, restores the other archive-backed directories such as `node_modules` and `/root/.pi`, resolves the current `HEAD` commit, and writes runtime metadata back to both the session document and workspace `source` fields. That update is limited to runtime-derived fields such as resolved branch/commit and source status so user-selected repo settings are not overwritten. Missing `.git` cache is handled as a normal clone fallback. Failure logs now identify whether startup broke during Git archive restore, clone, checkout, or later cache/worktree restore, while user-facing runtime status still distinguishes clone auth, repo-not-found, network, and later sync failures.
+The current runner implementation now follows that startup order for GitHub workspaces. It first checks for a cached `.git` archive under the hidden archive prefix and restores it when present. If no cached Git archive exists, or the archive restores without a valid `HEAD`, it clones the repository and uses `GITHUB_REQUESTED_BRANCH` for branch-targeted clones when no exact commit is pinned, then forces `git checkout` to `GITHUB_REQUESTED_COMMIT` when an exact commit is provided. Public repos still clone anonymously. Private connected repos now clone with a short-lived GitHub App installation token supplied by the backend at provisioning time, passed through a temporary `GIT_ASKPASS` script so the token is not embedded into the repo remote config or workspace files. After Git state is available, the runner restores cached worktree files, restores the other archive-backed directories such as `node_modules` and `/root/.pi`, resolves the current `HEAD` commit, and writes runtime metadata back to both the session document and workspace `source` fields. That update is limited to runtime-derived fields such as resolved branch/commit and source status so user-selected repo settings are not overwritten. Missing or invalid `.git` cache is handled as a normal clone fallback. Failure logs now identify whether startup broke during Git archive restore, clone, checkout, or later cache/worktree restore, while user-facing runtime status still distinguishes clone auth, repo-not-found, network, and later sync failures.
 
 Deleted worktree files are important here. A GitHub workspace cannot rely on upload-only file sync. If a file was deleted locally, the cached copy in Cloud Storage must be removed or invalidated so it does not reappear on the next restore.
 
@@ -199,6 +212,8 @@ Stopping a running session from the sidebar calls the backend stop route for tha
 Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
 
 The runner also exposes protected Git endpoints that use the same token gate. `GET /git/status` derives branch, commit, ahead/behind, dirty counts, conflicted state, and changed file entries from Git commands inside `/workspace`. `POST /git/pull` runs a fixed fetch/pull flow for GitHub workspaces and returns updated Git state afterward. `POST /git/stage` and `POST /git/unstage` accept validated workspace-relative paths only, so the backend/UI can stage or unstage changed files without exposing arbitrary command execution. `POST /git/commit` accepts a validated commit message, rejects empty commits, and returns updated Git state plus the committed head SHA. `POST /git/push` pushes the current branch when runner credentials are configured, currently via `GITHUB_PUSH_TOKEN` and optional `GITHUB_PUSH_USERNAME`; if those credentials are missing, the endpoint returns a clear auth-not-configured error instead of logging secrets. For blank workspaces these endpoints return a structured non-Git response instead of pretending Cloud Storage state is a repository.
+
+The planned package endpoints should follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies package list/install/remove/update requests to the runner with its protected token. The runner should serialize package operations and operate on workspace-local Pi settings by default.
 
 For GitHub workspaces, this final sync is especially important because it is the last chance to persist local working tree changes and refreshed `.git` archive state before the Cloud Run service disappears.
 
@@ -236,7 +251,20 @@ New sessions use the image selected in the modal. Existing sessions keep their c
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to new GitHub workspace source env vars and sync-policy env vars. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, or `WORKSPACE_SYNC_POLICY_*` env vars; they need a new revision or a recreated session service before runner changes that depend on those variables will take effect.
+The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi package manager endpoints, and Pi package archive targets. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/packages*` runner routes, or `.pi/npm`/`.pi/git` archive behavior; they need a new revision or a recreated session service before runner changes that depend on those variables or routes will take effect.
+
+When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+Expected package-manager write locations:
+
+- Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
+- Workspace package cache archives: `{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
+- User-scoped Pi home archive: `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`
+- User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
 
 ## Design Decisions
 
@@ -248,5 +276,6 @@ The same rule applies to new GitHub workspace source env vars and sync-policy en
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
 - GitHub workspaces should archive `/workspace/.git` instead of exposing it through normal file sync. That keeps Git state resumable without treating Cloud Storage as a Git database.
+- Workspace-local Pi package install directories should use archive-backed sync while `/workspace/.pi/settings.json` remains normal workspace configuration.
 - GitHub workspaces should allow only one active session at a time until the app has an explicit multi-session Git isolation model.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.

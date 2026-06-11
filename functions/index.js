@@ -164,6 +164,26 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "GET" && route.name === "piPackages") {
+      res.json(await listPiPackages(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "piPackageInstall") {
+      res.json(await installPiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "piPackageRemove") {
+      res.json(await removePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "piPackageUpdate") {
+      res.json(await updatePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "githubRepos") {
       res.json(await listConnectedRepos(user.uid));
       return;
@@ -305,6 +325,41 @@ function routeRequest(path) {
     parts[4] === "git-open-pr"
   ) {
     return {name: "gitOpenPr", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-packages"
+  ) {
+    return {name: "piPackages", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-packages" &&
+    parts[5] === "install"
+  ) {
+    return {name: "piPackageInstall", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-packages" &&
+    parts[5] === "remove"
+  ) {
+    return {name: "piPackageRemove", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-packages" &&
+    parts[5] === "update"
+  ) {
+    return {name: "piPackageUpdate", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
@@ -872,6 +927,113 @@ async function pushGit(uid, workspaceId, sessionId) {
   if (!session.serviceUrl) throw httpError(409, "session_not_running");
   if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
   return requestRunnerGitPush(session);
+}
+
+async function installPiPackage(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const packageSource = normalizePiPackageSource(payload.source);
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_package_install_unsupported");
+  const result = await requestRunnerPiPackageInstall(session, {source: packageSource.source});
+  await mergeInstalledPiPackageCatalogEntry(uid, workspaceId, packageSource.source);
+  return result;
+}
+
+async function mergeInstalledPiPackageCatalogEntry(uid, workspaceId, source) {
+  const normalized = normalizePiPackageSource(source);
+  const ref = piPackageCatalogCollection(uid).doc(piPackageCatalogDocId(normalized.identity));
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    transaction.set(ref, piPackageCatalogRecord(source, workspaceId, {
+      includeCreatedAt: !snap.exists,
+      incrementInstallCount: true,
+    }), {merge: true});
+  });
+}
+
+async function removePiPackage(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const packageSource = normalizePiPackageSource(payload.source);
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_package_remove_unsupported");
+  return requestRunnerPiPackageRemove(session, {source: packageSource.source});
+}
+
+async function updatePiPackage(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const packageSource = payload.source ? normalizePiPackageSource(payload.source) : null;
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_package_update_unsupported");
+  return requestRunnerPiPackageUpdate(session, packageSource ? {source: packageSource.source} : {});
+}
+
+async function listPiPackages(uid, workspaceId, sessionId) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_package_listing_unsupported");
+  const data = await requestRunnerPiPackages(session);
+  await recordObservedPiPackages(uid, workspaceId, data).catch((error) => {
+    logger.warn("observed package catalog update failed", {workspaceId, sessionId, error: error.message || error});
+  });
+  const knownPackages = await listKnownPiPackages(uid, data).catch((error) => {
+    logger.warn("known package catalog read failed", {workspaceId, sessionId, error: error.message || error});
+    return [];
+  });
+  return {...data, knownPackages};
+}
+
+async function listKnownPiPackages(uid, data) {
+  const configuredSources = new Set((data && Array.isArray(data.packages) ? data.packages : [])
+      .map((packageInfo) => packageInfo && packageInfo.source)
+      .filter(Boolean));
+  const snap = await piPackageCatalogCollection(uid).get();
+  return snap.docs
+      .map((doc) => ({id: doc.id, ...doc.data()}))
+      .filter((packageInfo) => packageInfo.source && !configuredSources.has(packageInfo.source))
+      .map((packageInfo) => ({
+        source: packageInfo.source,
+        identity: packageInfo.identity || "",
+        type: packageInfo.type || "",
+        favorite: Boolean(packageInfo.favorite),
+        lastWorkspaceId: packageInfo.lastWorkspaceId || "",
+        installCount: Number(packageInfo.installCount || 0),
+      }))
+      .sort((left, right) => left.source.localeCompare(right.source));
+}
+
+async function recordObservedPiPackages(uid, workspaceId, data) {
+  const packages = data && Array.isArray(data.packages) ? data.packages : [];
+  const results = await Promise.allSettled(packages.map((packageInfo) => (
+    mergeObservedPiPackageCatalogEntry(uid, workspaceId, packageInfo && packageInfo.source)
+  )));
+  results
+      .filter((result) => result.status === "rejected")
+      .forEach((result) => logger.warn("skipped observed package catalog entry", {
+        workspaceId,
+        error: result.reason && result.reason.message ? result.reason.message : result.reason,
+      }));
+}
+
+async function mergeObservedPiPackageCatalogEntry(uid, workspaceId, source) {
+  if (!source) return null;
+  const normalized = normalizePiPackageSource(source);
+  const ref = piPackageCatalogCollection(uid).doc(piPackageCatalogDocId(normalized.identity));
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    transaction.set(ref, piPackageCatalogRecord(source, workspaceId, {
+      includeCreatedAt: !snap.exists,
+      incrementInstallCount: false,
+    }), {merge: true});
+  });
+  return normalized;
 }
 
 async function openPullRequest(uid, workspaceId, sessionId, payload) {
@@ -2148,6 +2310,51 @@ async function requestRunnerGitOpenPr(session, body) {
   });
 }
 
+async function requestRunnerPiPackages(session) {
+  return requestRunnerJson(session, "/pi/packages", {
+    notFoundError: "runner_package_listing_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_package_read_failed",
+    unavailableError: "runner_package_list_unavailable",
+  });
+}
+
+async function requestRunnerPiPackageInstall(session, body) {
+  return requestRunnerJson(session, "/pi/packages/install", {
+    method: "POST",
+    body,
+    notFoundError: "runner_package_install_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_package_install_failed",
+    unavailableError: "runner_package_install_unavailable",
+    timeoutMs: 120000,
+  });
+}
+
+async function requestRunnerPiPackageRemove(session, body) {
+  return requestRunnerJson(session, "/pi/packages/remove", {
+    method: "POST",
+    body,
+    notFoundError: "runner_package_remove_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_package_remove_failed",
+    unavailableError: "runner_package_remove_unavailable",
+    timeoutMs: 120000,
+  });
+}
+
+async function requestRunnerPiPackageUpdate(session, body) {
+  return requestRunnerJson(session, "/pi/packages/update", {
+    method: "POST",
+    body,
+    notFoundError: "runner_package_update_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_package_update_failed",
+    unavailableError: "runner_package_update_unavailable",
+    timeoutMs: 120000,
+  });
+}
+
 async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
@@ -2163,6 +2370,9 @@ async function requestRunnerJson(session, routePath, options = {}) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 404 && options.notFoundError) {
+        throw httpError(options.notFoundStatus || 503, options.notFoundError);
+      }
       throw httpError(
           response.status === 404 ? 503 : response.status,
           cleanName(data.error || options.failureError || "runner_request_failed") ||
@@ -2267,7 +2477,7 @@ function timestampMillis(value) {
 function storageFileToClientFile(file, queryPrefix) {
   const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
   if (!relativePath || relativePath.endsWith("/")) return null;
-  if (relativePath === INTERNAL_STORAGE_DIR || relativePath.startsWith(`${INTERNAL_STORAGE_DIR}/`)) {
+  if (isHiddenWorkspaceFilePath(relativePath)) {
     return null;
   }
   if (relativePath.endsWith(`/${DIRECTORY_MARKER_FILE}`)) {
@@ -2303,6 +2513,109 @@ async function workspaceStorageFile(uid, workspaceId, path) {
   };
 }
 
+function normalizePiPackageSource(value) {
+  const source = String(value || "").trim();
+  if (!source || /[\u0000-\u001f\u007f]/.test(source)) {
+    throw httpError(400, "invalid_package_source");
+  }
+  if (source.startsWith("npm:")) {
+    return normalizeNpmPackageSource(source);
+  }
+  const gitSource = normalizeGitPackageSource(source);
+  if (gitSource) return gitSource;
+  throw httpError(400, "unsupported_package_source");
+}
+
+function normalizeNpmPackageSource(source) {
+  const spec = source.slice("npm:".length).trim();
+  const match = spec.match(/^(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)(?:@([^\s/]+))?$/i);
+  if (!match) throw httpError(400, "invalid_package_source");
+  const name = match[1].toLowerCase();
+  return {
+    source,
+    type: "npm",
+    identity: `npm:${name}`,
+    name,
+    pinned: Boolean(match[2]),
+  };
+}
+
+function normalizeGitPackageSource(source) {
+  const parsed = parseGitPackageSource(source);
+  if (!parsed) return null;
+  return {
+    source,
+    type: "git",
+    identity: `git:${parsed.host}/${parsed.path}`,
+    host: parsed.host,
+    path: parsed.path,
+    pinned: Boolean(parsed.ref),
+  };
+}
+
+function parseGitPackageSource(source) {
+  const withoutGitPrefix = source.startsWith("git:") ? source.slice("git:".length) : source;
+  const withoutGitPlus = withoutGitPrefix.startsWith("git+") ? withoutGitPrefix.slice("git+".length) : withoutGitPrefix;
+  const [withoutRef, ref = ""] = withoutGitPlus.split("#");
+
+  const sshMatch = withoutRef.match(/^git@([^:]+):(.+)$/);
+  if (sshMatch) return buildGitPackageSource(sshMatch[1], sshMatch[2], ref);
+
+  const githubShorthand = withoutRef.match(/^github:([^/]+\/.+)$/);
+  if (githubShorthand) return buildGitPackageSource("github.com", githubShorthand[1], ref);
+
+  try {
+    const parsed = new URL(withoutRef);
+    if (parsed.username || parsed.password) throw httpError(400, "package_source_must_not_include_credentials");
+    if (["git:", "https:", "ssh:"].includes(parsed.protocol)) {
+      return buildGitPackageSource(parsed.hostname, parsed.pathname.replace(/^\/+/, ""), ref || parsed.hash.replace(/^#/, ""));
+    }
+  } catch (error) {
+    if (error && error.status) throw error;
+  }
+
+  return null;
+}
+
+function buildGitPackageSource(host, gitPath, ref = "") {
+  const normalizedHost = String(host || "").trim().toLowerCase();
+  const normalizedPath = String(gitPath || "").trim().replace(/\.git$/, "");
+  const parts = normalizeStoragePrefix(normalizedPath).split("/").filter(Boolean);
+  if (!normalizedHost || !parts.length || parts.some((part) => part === "." || part === "..")) {
+    throw httpError(400, "invalid_package_source");
+  }
+  if (!/^[a-z0-9.-]+$/i.test(normalizedHost)) throw httpError(400, "invalid_package_source");
+  return {host: normalizedHost, path: parts.join("/"), ref: String(ref || "").trim()};
+}
+
+function piPackageCatalogCollection(uid) {
+  return db.collection("users").doc(uid).collection("piPackageCatalog");
+}
+
+function piPackageCatalogDocId(identity) {
+  return encodeURIComponent(identity);
+}
+
+function piPackageCatalogRecord(source, workspaceId, options = {}) {
+  const normalized = normalizePiPackageSource(source);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  return {
+    identity: normalized.identity,
+    type: normalized.type,
+    source: normalized.source,
+    updatedAt: now,
+    lastWorkspaceId: cleanName(workspaceId || ""),
+    installCount: admin.firestore.FieldValue.increment(options.incrementInstallCount ? 1 : 0),
+    ...(options.includeCreatedAt ? {createdAt: now, favorite: false} : {}),
+  };
+}
+
+async function mergePiPackageCatalogEntry(uid, workspaceId, source, options = {}) {
+  const record = piPackageCatalogRecord(source, workspaceId, options);
+  await piPackageCatalogCollection(uid).doc(piPackageCatalogDocId(record.identity)).set(record, {merge: true});
+  return record;
+}
+
 function normalizeWorkspaceFilePath(value) {
   const path = String(value || "").replace(/^\/+|\/+$/g, "");
   const parts = path.split("/").filter(Boolean);
@@ -2312,10 +2625,16 @@ function normalizeWorkspaceFilePath(value) {
   if (parts.includes(DIRECTORY_MARKER_FILE)) {
     throw httpError(400, "invalid_file_path");
   }
-  if (parts[0] === INTERNAL_STORAGE_DIR) {
+  if (isHiddenWorkspaceFilePath(parts.join("/"))) {
     throw httpError(400, "invalid_file_path");
   }
   return parts.join("/");
+}
+
+function isHiddenWorkspaceFilePath(relativePath) {
+  const parts = String(relativePath || "").split("/").filter(Boolean);
+  if (parts[0] === INTERNAL_STORAGE_DIR) return true;
+  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
 }
 
 function normalizeGitActionPayloadPaths(payload) {

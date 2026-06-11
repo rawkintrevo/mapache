@@ -37,6 +37,15 @@ const state = {
     commitMessage: "",
     canOpenPr: false,
   },
+  piPackages: {
+    loading: false,
+    installing: false,
+    error: "",
+    unavailable: false,
+    data: null,
+    installSource: "",
+    installMessage: "",
+  },
   pullRequestForm: {
     open: false,
     title: "",
@@ -52,6 +61,7 @@ const state = {
     attempted: false,
   },
   drawerCollapsed: false,
+  rightDrawerCollapsed: true,
   sessionModalOpen: false,
   busy: false,
   error: "",
@@ -82,6 +92,7 @@ async function start() {
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
         resetGitStatus();
+        resetPiPackages();
         render();
         return;
       }
@@ -104,6 +115,7 @@ function render() {
     onSignOut: signOut,
     onRefresh: refreshAll,
     onToggleDrawer: toggleDrawer,
+    onToggleRightDrawer: toggleRightDrawer,
     onCreateWorkspace: createWorkspace,
     onSelectWorkspace: selectWorkspace,
     onOpenSessionModal: openSessionModal,
@@ -126,6 +138,11 @@ function render() {
     onUnstageGitPath: unstageGitPath,
     onUpdateGitCommitMessage: updateGitCommitMessage,
     onCommitGit: commitGit,
+    onRefreshPiPackages: refreshPiPackages,
+    onUpdatePiInstallSource: updatePiInstallSource,
+    onInstallPiPackage: installPiPackage,
+    onRemovePiPackage: removePiPackage,
+    onUpdatePiPackage: updatePiPackage,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -148,6 +165,18 @@ function resetGitStatus() {
   resetPullRequestForm();
 }
 
+function resetPiPackages() {
+  state.piPackages = {
+    loading: false,
+    installing: false,
+    error: "",
+    unavailable: false,
+    data: null,
+    installSource: "",
+    installMessage: "",
+  };
+}
+
 function resetPullRequestForm() {
   state.pullRequestForm = {
     open: false,
@@ -161,6 +190,11 @@ function resetPullRequestForm() {
 
 function toggleDrawer() {
   state.drawerCollapsed = !state.drawerCollapsed;
+  render();
+}
+
+function toggleRightDrawer() {
+  state.rightDrawerCollapsed = !state.rightDrawerCollapsed;
   render();
 }
 
@@ -180,9 +214,11 @@ async function refreshAll() {
     if (previousWorkspaceId !== state.selectedWorkspaceId) {
       resetWorkspaceFiles();
       resetGitStatus();
+      resetPiPackages();
     }
     await loadSessions();
     await loadGitStatus();
+    await loadPiPackages();
     await loadWorkspaceFiles();
   });
 }
@@ -196,6 +232,7 @@ async function loadSessions() {
   state.sessions = data.sessions || [];
   state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
   await loadGitStatus();
+  await loadPiPackages();
 }
 
 async function loadWorkspaceFiles() {
@@ -260,6 +297,83 @@ function friendlyRepoPickerError(error) {
   return message;
 }
 
+function friendlyPiPackageError(error) {
+  const message = error.message || "Could not load extensions.";
+  if (message === "no_active_session" || message === "session_not_running") {
+    return "Start an active pi-basic session to inspect workspace extensions.";
+  }
+  if (message === "runner_package_listing_unsupported") {
+    return "This session runner does not support extension listing yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_list_unavailable") {
+    return "The session runner is unavailable. Try refreshing after the terminal is ready.";
+  }
+  if (message === "pi_package_read_failed" || message === "pi_package_list_failed") {
+    return "The runner could not read workspace Pi package settings.";
+  }
+  return message;
+}
+
+function friendlyPiInstallError(error) {
+  const message = error.message || "Could not install extension.";
+  if (message === "invalid_package_source" || message === "unsupported_package_source") {
+    return "Enter a supported npm: or git package source.";
+  }
+  if (message === "package_operation_busy") {
+    return "Another package operation is already running. Try again in a moment.";
+  }
+  if (message === "runner_package_install_unsupported") {
+    return "This session runner does not support extension installs yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_install_unavailable") {
+    return "The session runner is unavailable. Try again after the terminal is ready.";
+  }
+  if (message === "pi_package_install_failed") {
+    return "Pi could not install that package source.";
+  }
+  return message;
+}
+
+function friendlyPiRemoveError(error) {
+  const message = error.message || "Could not remove extension.";
+  if (message === "invalid_package_source" || message === "unsupported_package_source") {
+    return "That package source is not valid for removal.";
+  }
+  if (message === "package_operation_busy") {
+    return "Another package operation is already running. Try again in a moment.";
+  }
+  if (message === "runner_package_remove_unsupported") {
+    return "This session runner does not support extension removal yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_remove_unavailable") {
+    return "The session runner is unavailable. Try again after the terminal is ready.";
+  }
+  if (message === "pi_package_remove_failed") {
+    return "Pi could not remove that package source.";
+  }
+  return message;
+}
+
+function friendlyPiUpdateError(error) {
+  const message = error.message || "Could not update extension.";
+  if (message === "invalid_package_source" || message === "unsupported_package_source") {
+    return "That package source is not valid for update.";
+  }
+  if (message === "package_operation_busy") {
+    return "Another package operation is already running. Try again in a moment.";
+  }
+  if (message === "runner_package_update_unsupported") {
+    return "This session runner does not support extension updates yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_update_unavailable") {
+    return "The session runner is unavailable. Try again after the terminal is ready.";
+  }
+  if (message === "pi_package_update_failed") {
+    return "Pi could not update the selected package source.";
+  }
+  return message;
+}
+
 async function createWorkspace(payload) {
   await runBusy(async () => {
     const data = await state.api.createWorkspace({
@@ -278,9 +392,11 @@ async function selectWorkspace(workspaceId) {
   state.sessionModalOpen = false;
   resetWorkspaceFiles();
   resetGitStatus();
+  resetPiPackages();
   await runBusy(async () => {
     await loadSessions();
     await loadGitStatus();
+    await loadPiPackages();
     await loadWorkspaceFiles();
   });
 }
@@ -305,17 +421,185 @@ async function createSession(payload) {
     state.sessions = next.sessions || [];
     state.sessionModalOpen = false;
     await loadGitStatus();
+    await loadPiPackages();
   });
 }
 
 async function selectSession(sessionId) {
   state.selectedSessionId = sessionId;
   await loadGitStatus();
+  await loadPiPackages();
   render();
 }
 
 async function refreshWorkspaceFiles() {
   await runBusy(loadWorkspaceFiles);
+}
+
+async function refreshPiPackages() {
+  await loadPiPackages();
+}
+
+function updatePiInstallSource(source) {
+  state.piPackages = {
+    ...state.piPackages,
+    installSource: source,
+    installMessage: "",
+    error: "",
+  };
+  render();
+}
+
+async function installPiPackage(source) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const packageSource = String(source || state.piPackages.installSource || "").trim();
+  if (!workspaceId || !sessionId || !packageSource) {
+    state.piPackages = {
+      ...state.piPackages,
+      error: packageSource ? "Start an active session before installing." : "Enter an npm: or git package source.",
+    };
+    render();
+    return;
+  }
+
+  state.piPackages = {
+    ...state.piPackages,
+    installing: true,
+    error: "",
+    installMessage: "Installing package...",
+  };
+  render();
+
+  try {
+    await state.api.installPiPackage(workspaceId, sessionId, packageSource);
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      installSource: "",
+      installMessage: "Package installed into this workspace.",
+    };
+    await loadPiPackages();
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      error: friendlyPiInstallError(error),
+      installMessage: "",
+    };
+    render();
+  }
+}
+
+async function removePiPackage(source) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const packageSource = String(source || "").trim();
+  if (!workspaceId || !sessionId || !packageSource) return;
+
+  state.piPackages = {
+    ...state.piPackages,
+    installing: true,
+    error: "",
+    installMessage: "Removing package...",
+  };
+  render();
+
+  try {
+    await state.api.removePiPackage(workspaceId, sessionId, packageSource);
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      installMessage: "Package removed from this workspace.",
+    };
+    await loadPiPackages();
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      error: friendlyPiRemoveError(error),
+      installMessage: "",
+    };
+    render();
+  }
+}
+
+async function updatePiPackage(source = "") {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const packageSource = String(source || "").trim();
+  if (!workspaceId || !sessionId) return;
+
+  state.piPackages = {
+    ...state.piPackages,
+    installing: true,
+    error: "",
+    installMessage: packageSource ? "Updating package..." : "Updating workspace packages...",
+  };
+  render();
+
+  try {
+    await state.api.updatePiPackage(workspaceId, sessionId, packageSource);
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      installMessage: packageSource ? "Package update complete." : "Workspace package update complete.",
+    };
+    await loadPiPackages();
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      error: friendlyPiUpdateError(error),
+      installMessage: "",
+    };
+    render();
+  }
+}
+
+async function loadPiPackages() {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) {
+    state.piPackages = {
+      ...state.piPackages,
+      loading: false,
+      error: "Select or start an active session to inspect extensions.",
+      unavailable: true,
+      data: null,
+    };
+    render();
+    return;
+  }
+
+  state.piPackages = {
+    ...state.piPackages,
+    loading: true,
+    error: "",
+    unavailable: false,
+    data: state.piPackages.data || null,
+  };
+  render();
+
+  try {
+    const data = await state.api.getPiPackages(workspaceId, sessionId);
+    state.piPackages = {
+      ...state.piPackages,
+      loading: false,
+      error: "",
+      unavailable: false,
+      data: data || {packages: []},
+    };
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      loading: false,
+      error: friendlyPiPackageError(error),
+      unavailable: true,
+      data: null,
+    };
+  }
+  render();
 }
 
 async function loadGitStatus() {
