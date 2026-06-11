@@ -142,6 +142,7 @@ function render() {
     onUpdatePiInstallSource: updatePiInstallSource,
     onInstallPiPackage: installPiPackage,
     onRemovePiPackage: removePiPackage,
+    onUpdatePiPackage: updatePiPackage,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -353,6 +354,26 @@ function friendlyPiRemoveError(error) {
   return message;
 }
 
+function friendlyPiUpdateError(error) {
+  const message = error.message || "Could not update extension.";
+  if (message === "invalid_package_source" || message === "unsupported_package_source") {
+    return "That package source is not valid for update.";
+  }
+  if (message === "package_operation_busy") {
+    return "Another package operation is already running. Try again in a moment.";
+  }
+  if (message === "runner_package_update_unsupported") {
+    return "This session runner does not support extension updates yet. Restart or recreate the session after deployment.";
+  }
+  if (message === "runner_package_update_unavailable") {
+    return "The session runner is unavailable. Try again after the terminal is ready.";
+  }
+  if (message === "pi_package_update_failed") {
+    return "Pi could not update the selected package source.";
+  }
+  return message;
+}
+
 async function createWorkspace(payload) {
   await runBusy(async () => {
     const data = await state.api.createWorkspace({
@@ -497,6 +518,39 @@ async function removePiPackage(source) {
       ...state.piPackages,
       installing: false,
       error: friendlyPiRemoveError(error),
+      installMessage: "",
+    };
+    render();
+  }
+}
+
+async function updatePiPackage(source = "") {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  const packageSource = String(source || "").trim();
+  if (!workspaceId || !sessionId) return;
+
+  state.piPackages = {
+    ...state.piPackages,
+    installing: true,
+    error: "",
+    installMessage: packageSource ? "Updating package..." : "Updating workspace packages...",
+  };
+  render();
+
+  try {
+    await state.api.updatePiPackage(workspaceId, sessionId, packageSource);
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      installMessage: packageSource ? "Package update complete." : "Workspace package update complete.",
+    };
+    await loadPiPackages();
+  } catch (error) {
+    state.piPackages = {
+      ...state.piPackages,
+      installing: false,
+      error: friendlyPiUpdateError(error),
       installMessage: "",
     };
     render();

@@ -179,6 +179,11 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "POST" && route.name === "piPackageUpdate") {
+      res.json(await updatePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "githubRepos") {
       res.json(await listConnectedRepos(user.uid));
       return;
@@ -346,6 +351,15 @@ function routeRequest(path) {
     parts[5] === "remove"
   ) {
     return {name: "piPackageRemove", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-packages" &&
+    parts[5] === "update"
+  ) {
+    return {name: "piPackageUpdate", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
@@ -947,6 +961,16 @@ async function removePiPackage(uid, workspaceId, sessionId, payload) {
   if (!session.serviceUrl) throw httpError(409, "no_active_session");
   if (!session.shutdownToken) throw httpError(501, "runner_package_remove_unsupported");
   return requestRunnerPiPackageRemove(session, {source: packageSource.source});
+}
+
+async function updatePiPackage(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const packageSource = payload.source ? normalizePiPackageSource(payload.source) : null;
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_package_update_unsupported");
+  return requestRunnerPiPackageUpdate(session, packageSource ? {source: packageSource.source} : {});
 }
 
 async function listPiPackages(uid, workspaceId, sessionId) {
@@ -2315,6 +2339,18 @@ async function requestRunnerPiPackageRemove(session, body) {
     notFoundStatus: 501,
     failureError: "pi_package_remove_failed",
     unavailableError: "runner_package_remove_unavailable",
+    timeoutMs: 120000,
+  });
+}
+
+async function requestRunnerPiPackageUpdate(session, body) {
+  return requestRunnerJson(session, "/pi/packages/update", {
+    method: "POST",
+    body,
+    notFoundError: "runner_package_update_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_package_update_failed",
+    unavailableError: "runner_package_update_unavailable",
     timeoutMs: 120000,
   });
 }
