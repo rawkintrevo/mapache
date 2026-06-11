@@ -5,6 +5,7 @@ This document serves as an index for significant UI components in the applicatio
 | Component | File Path | Purpose |
 | :--- | :--- | :--- |
 | `AuthModal` | `src/ui/authModal.js` | Displays the modal for adding new authentication providers and API keys. |
+| `WorkspaceModal`| `src/ui/workspaceModal.js` | Displays the modal for creating a new workspace. |
 | `AuthCenterPanel` | `src/ui/render.js` | Displays the "Authentication Center" in the inspector sidebar, showing active providers. |
 | `SessionModal` | `src/ui/render.js` | Displays the modal for creating a new session. |
 | `FileEditorModal`| `src/ui/render.js` | Displays the file editor modal. |

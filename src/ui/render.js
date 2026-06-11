@@ -17,6 +17,7 @@ import {
 } from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
 import {renderAddAuthModal} from "./authModal.js";
+import {renderWorkspaceModal} from "./workspaceModal.js";
 import {sessionImages} from "../config/sessionImages.js";
 import {piAuthProviderLabel, piAuthProviders} from "../config/piAuthProviders.js";
 
@@ -111,6 +112,16 @@ export function renderAppShell(root, props) {
       }),
     ]),
     state.sessionModalOpen ? renderSessionModal(props) : null,
+    state.workspaceModalOpen ? renderWorkspaceModal({
+      ...props,
+      onClose: props.onCloseWorkspaceModal,
+      onCreateWorkspace: (payload) => {
+        props.onCreateWorkspace(payload);
+        props.onCloseWorkspaceModal();
+      },
+      repoPicker: props.state.repoPicker,
+      onConnectGithub: props.onConnectGithub,
+    }) : null,
     state.authModalOpen ? renderAddAuthModal({onClose: props.onCloseAuthModal, onSave: (provider, key) => {
       props.onUpdatePiAuthForm({selectedProvider: provider, apiKey: key});
       props.onSavePiAuthProvider();
@@ -170,6 +181,7 @@ function renderSidebar(props) {
     onToggleDrawer,
     onToggleDrawerSection,
     onToggleWorkspaceFileDir,
+    onOpenWorkspaceModal,
   } = props;
 
   const toggleButton = createElement("button", {
@@ -186,176 +198,6 @@ function renderSidebar(props) {
       toggleButton,
     ]);
   }
-
-  const nameInput = createElement("input", {
-    autocomplete: "off",
-    name: "name",
-    placeholder: "default",
-    required: true,
-  });
-  const sourceBlankInput = createElement("input", {
-    checked: true,
-    name: "workspaceSource",
-    type: "radio",
-    value: "blank",
-  });
-  const sourceGithubInput = createElement("input", {
-    name: "workspaceSource",
-    type: "radio",
-    value: "github",
-  });
-  const repoUrlInput = createElement("input", {
-    autocomplete: "off",
-    name: "repoUrl",
-    placeholder: "https://github.com/owner/repo",
-    type: "url",
-  });
-  const branchInput = createElement("input", {
-    autocomplete: "off",
-    name: "branch",
-    placeholder: "main",
-  });
-  const repoPicker = state.repoPicker || {loading: false, error: "", repos: [], attempted: false};
-
-  const repoSelect = createElement("select", {
-    disabled: repoPicker.loading || !repoPicker.repos.length,
-    name: "connectedRepo",
-  }, [
-    createElement("option", {value: ""}, repoPicker.loading ? "Loading..." : "Select a repository"),
-    ...(repoPicker.repos || []).map((repo) => createElement("option", {
-      value: JSON.stringify({
-        mode: "connected",
-        owner: repo.owner || "",
-        repo: repo.name || "",
-        fullName: repo.fullName || "",
-        installationId: repo.installationId || "",
-        repoId: repo.repoId || "",
-        repoUrl: repo.cloneUrl || repo.repoUrl || "",
-        defaultBranch: repo.defaultBranch || "",
-        private: Boolean(repo.private),
-        visibility: repo.visibility || (repo.private ? "private" : "public") || "public",
-      }),
-    }, repo.fullName || `${repo.owner || ""}/${repo.name || ""}`)),
-  ]);
-
-  const repoPickerSection = createElement("div", {className: "repo-picker hidden"}, [
-    createElement("label", {}, [
-      createElement("span", {}, "Connected repository"),
-      repoSelect,
-    ]),
-    createGithubConnectButton({repoPicker, onConnectGithub}),
-    repoPicker.error === "github_app_not_configured" ?
-      createElement("p", {className: "subtle repo-picker-fallback"}, "GitHub App not configured. Enter a public repository URL below.") :
-      repoPicker.error ?
-      createElement("p", {className: "subtle repo-picker-fallback"}, repoPicker.error) :
-      null,
-  ]);
-
-  const githubFields = createElement("div", {className: "workspace-source-fields hidden"}, [
-    createElement("label", {}, [
-      createElement("span", {}, "GitHub repo URL"),
-      repoUrlInput,
-    ]),
-    createElement("label", {}, [
-      createElement("span", {}, "Branch (optional)"),
-      branchInput,
-    ]),
-  ]);
-  const form = createElement("form", {className: "workspace-create"}, [
-    createElement("label", {}, [
-      createElement("span", {}, "Workspace"),
-      nameInput,
-    ]),
-    createElement("div", {className: "workspace-source-choice"}, [
-      createElement("label", {className: "source-choice"}, [
-        sourceBlankInput,
-        createElement("span", {}, "Blank"),
-      ]),
-      createElement("label", {className: "source-choice"}, [
-        sourceGithubInput,
-        createElement("span", {}, "GitHub"),
-      ]),
-    ]),
-    repoPickerSection,
-    githubFields,
-    createElement("button", {
-      disabled: state.busy,
-      type: "submit",
-    }, "Create"),
-  ]);
-  const parseConnectedRepoValue = () => {
-    if (!repoSelect.value) return null;
-    try {
-      return JSON.parse(repoSelect.value);
-    } catch (error) {
-      return null;
-    }
-  };
-  const syncSourceFields = () => {
-    const githubSelected = sourceGithubInput.checked;
-    githubFields.classList.toggle("hidden", !githubSelected);
-    repoPickerSection.classList.toggle("hidden", !githubSelected);
-    repoUrlInput.required = githubSelected;
-    repoUrlInput.disabled = !githubSelected;
-    branchInput.disabled = !githubSelected;
-
-    if (githubSelected && onLoadConnectedRepos && !repoPicker.loading && !repoPicker.attempted) {
-      onLoadConnectedRepos();
-    }
-  };
-  const syncConnectedRepoSelection = () => {
-    const connectedRepo = parseConnectedRepoValue();
-    if (!connectedRepo) return;
-    if (connectedRepo.repoUrl) {
-      repoUrlInput.value = connectedRepo.repoUrl;
-    }
-    if (!branchInput.value.trim() && connectedRepo.defaultBranch) {
-      branchInput.value = connectedRepo.defaultBranch;
-    }
-  };
-  sourceBlankInput.addEventListener("change", syncSourceFields);
-  sourceGithubInput.addEventListener("change", syncSourceFields);
-  repoSelect.addEventListener("change", syncConnectedRepoSelection);
-  repoUrlInput.addEventListener("input", () => {
-    const connectedRepo = parseConnectedRepoValue();
-    if (!connectedRepo) return;
-    if (repoUrlInput.value.trim() !== (connectedRepo.repoUrl || "")) {
-      repoSelect.value = "";
-    }
-  });
-  syncSourceFields();
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    let source;
-    if (sourceGithubInput.checked) {
-      const connectedRepo = parseConnectedRepoValue();
-      if (connectedRepo) {
-        source = {
-          type: "github",
-          mode: "connected",
-          repoUrl: connectedRepo.repoUrl || repoUrlInput.value.trim(),
-          owner: connectedRepo.owner || "",
-          repo: connectedRepo.repo || "",
-          repoId: connectedRepo.repoId || undefined,
-          installationId: connectedRepo.installationId || undefined,
-          visibility: connectedRepo.visibility || undefined,
-          requestedBranch: branchInput.value.trim() || connectedRepo.defaultBranch || undefined,
-        };
-      } else {
-        source = {
-          type: "github",
-          repoUrl: repoUrlInput.value.trim(),
-          requestedBranch: branchInput.value.trim() || undefined,
-        };
-      }
-    } else {
-      source = {type: "blank"};
-    }
-    onCreateWorkspace({
-      name: nameInput.value.trim() || "Default workspace",
-      source,
-    });
-  });
 
   const list = state.workspaces.length ?
     state.workspaces.map((workspace) => renderWorkspaceRow(
@@ -377,8 +219,16 @@ function renderSidebar(props) {
       title: "Workspaces",
       state,
       onToggleDrawerSection,
+      actions: [(() => {
+        const button = createElement("button", {
+          className: "secondary icon-button",
+          type: "button",
+          ariaLabel: "Add Workspace",
+        }, createLucideIcon(Plus));
+        button.addEventListener("click", onOpenWorkspaceModal);
+        return button;
+      })()],
       children: [
-        form,
         createElement("div", {className: "list"}, list),
       ],
     }),

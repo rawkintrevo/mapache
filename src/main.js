@@ -134,6 +134,8 @@ function render() {
     onSelectWorkspace: selectWorkspace,
     onOpenSessionModal: openSessionModal,
     onCloseSessionModal: closeSessionModal,
+    onOpenWorkspaceModal: openWorkspaceModal,
+    onCloseWorkspaceModal: closeWorkspaceModal,
     onCreateSession: createSession,
     onSelectSession: selectSession,
     onRefreshWorkspaceFiles: refreshWorkspaceFiles,
@@ -450,6 +452,16 @@ function openSessionModal() {
 
 function closeSessionModal() {
   state.sessionModalOpen = false;
+  render();
+}
+
+function openWorkspaceModal() {
+  state.workspaceModalOpen = true;
+  render();
+}
+
+function closeWorkspaceModal() {
+  state.workspaceModalOpen = false;
   render();
 }
 
