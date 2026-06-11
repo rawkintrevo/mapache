@@ -120,7 +120,7 @@ Suggested fields:
 
 The exact `source` string should be preserved because pinned npm versions and pinned git refs affect behavior. The derived `identity` is for grouping and deduplication. For example, `npm:@foo/bar` and `npm:@foo/bar@1.2.3` are related but not identical install requests.
 
-The catalog lets the UI show "known but not installed in this workspace" packages with an `Install` action. Catalog entries must not cause automatic installation into new workspaces.
+The catalog lets the UI show "known but not installed in this workspace" packages with an `Install` action. Catalog entries must not cause automatic installation into new workspaces. Read-only package listing may observe the active workspace's configured packages and merge those sources into this catalog; catalog write failures should be logged but should not break the package list response.
 
 ## Write Locations
 

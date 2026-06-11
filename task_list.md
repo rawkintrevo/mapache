@@ -108,12 +108,13 @@ Before implementation tasks, read:
   - Validation rejects unsupported or unsafe package source strings.
   - Completed: 2026-06-11. Added backend helpers for npm/git package source normalization, identity derivation, encoded user catalog document IDs, merge records, and unsafe/unsupported source rejection.
 
-- [ ] 8. **Populate catalog from observed workspace packages** - medium (gpt-5.4)
+- [x] 8. **Populate catalog from observed workspace packages** - medium (gpt-5.4)
   - Acceptance criteria:
   - Listing workspace packages records or updates known package catalog entries for the user.
   - Catalog update does not install packages into other workspaces.
   - Exact source strings are preserved for pinned npm versions and pinned git refs.
   - Existing workspace package listing behavior remains correct if catalog writes fail.
+  - Completed: 2026-06-11. Workspace package listing now merges observed npm/git sources into the user catalog with preserved source strings and logs catalog write failures without failing the listing response.
 
 - [ ] 9. **Show known packages not installed in current workspace** - medium (gpt-5.4)
   - Acceptance criteria:

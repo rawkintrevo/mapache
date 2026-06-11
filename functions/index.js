@@ -893,7 +893,38 @@ async function listPiPackages(uid, workspaceId, sessionId) {
   const session = {id: sessionId, ...sessionSnap.data()};
   if (!session.serviceUrl) throw httpError(409, "no_active_session");
   if (!session.shutdownToken) throw httpError(501, "runner_package_listing_unsupported");
-  return requestRunnerPiPackages(session);
+  const data = await requestRunnerPiPackages(session);
+  await recordObservedPiPackages(uid, workspaceId, data).catch((error) => {
+    logger.warn("observed package catalog update failed", {workspaceId, sessionId, error: error.message || error});
+  });
+  return data;
+}
+
+async function recordObservedPiPackages(uid, workspaceId, data) {
+  const packages = data && Array.isArray(data.packages) ? data.packages : [];
+  const results = await Promise.allSettled(packages.map((packageInfo) => (
+    mergeObservedPiPackageCatalogEntry(uid, workspaceId, packageInfo && packageInfo.source)
+  )));
+  results
+      .filter((result) => result.status === "rejected")
+      .forEach((result) => logger.warn("skipped observed package catalog entry", {
+        workspaceId,
+        error: result.reason && result.reason.message ? result.reason.message : result.reason,
+      }));
+}
+
+async function mergeObservedPiPackageCatalogEntry(uid, workspaceId, source) {
+  if (!source) return null;
+  const normalized = normalizePiPackageSource(source);
+  const ref = piPackageCatalogCollection(uid).doc(piPackageCatalogDocId(normalized.identity));
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    transaction.set(ref, piPackageCatalogRecord(source, workspaceId, {
+      includeCreatedAt: !snap.exists,
+      incrementInstallCount: false,
+    }), {merge: true});
+  });
+  return normalized;
 }
 
 async function openPullRequest(uid, workspaceId, sessionId, payload) {
