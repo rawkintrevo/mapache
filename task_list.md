@@ -47,13 +47,14 @@ Before implementation tasks, read:
 
 ## Tasks
 
-- [ ] 1. **Document the extension manager architecture** - easy (gpt-5.4-mini)
+- [x] 1. **Document the extension manager architecture** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Add focused docs describing workspace-local Pi package management.
   - Document where package declarations, installed package code, package catalog metadata, and operation status are written.
   - Document active-session requirement for v1.
   - Document that web management is additive to Pi TUI/CLI tooling.
   - Update overview/runtime docs to point to the new architecture notes.
+  - Completed: 2026-06-11. Added `docs/pi-extension-manager.md` and linked it from overview/runtime docs, covering workspace-local package scope, write locations, active-session v1 behavior, package catalog metadata, archive-backed package caches, and additive Pi tooling behavior.
 
 - [ ] 2. **Add workspace Pi package archive targets** - medium (gpt-5.4)
   - Acceptance criteria:
