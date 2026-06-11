@@ -571,9 +571,24 @@ async function restoreGithubGitArchiveIfPresent() {
   try {
     await fs.promises.mkdir(target.localPath, {recursive: true});
     await extractStorageArchive(file, target);
-    return true;
+    if (await hasValidGithubGitArchiveRestore()) {
+      return true;
+    }
+    console.warn("cached .git archive did not restore a valid repository; falling back to clone");
+    await fs.promises.rm(target.localPath, {recursive: true, force: true});
+    return false;
   } catch (error) {
     throw new Error(`git archive restore failed: ${compactErrorMessage(error.message || error)}`);
+  }
+}
+
+async function hasValidGithubGitArchiveRestore() {
+  try {
+    const gitDir = await runGitCommand(["rev-parse", "--git-dir"], {captureStdout: true});
+    const head = await runGitCommand(["rev-parse", "--verify", "HEAD"], {captureStdout: true});
+    return Boolean(gitDir && head);
+  } catch {
+    return false;
   }
 }
 
