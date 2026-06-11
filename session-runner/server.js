@@ -98,6 +98,20 @@ app.get("/git/status", async (req, res) => {
   }
 });
 
+app.get("/pi/packages", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await listWorkspacePiPackages());
+  } catch (error) {
+    console.error("pi package list failed", error);
+    res.status(500).json({error: "pi_package_list_failed"});
+  }
+});
+
 app.post("/git/pull", async (req, res) => {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
@@ -887,6 +901,146 @@ async function findGitArchiveEntries(dir) {
 
 function toTarPath(localPath) {
   return `./${path.relative(workspaceDir, localPath).split(path.sep).join("/")}`;
+}
+
+async function listWorkspacePiPackages() {
+  const settingsPath = path.join(workspaceDir, ".pi", "settings.json");
+  const settings = await readJsonFile(settingsPath, {});
+  const packages = Array.isArray(settings.packages) ? settings.packages : [];
+  const normalizedPackages = await Promise.all(packages
+      .map(normalizePiPackageSettingsEntry)
+      .filter(Boolean)
+      .map(async (entry) => ({
+        ...entry,
+        installedPath: await resolveInstalledPiPackagePath(entry.source),
+      })));
+
+  return {
+    ok: true,
+    scope: "workspace",
+    settingsPath,
+    packages: normalizedPackages,
+  };
+}
+
+async function readJsonFile(filePath, fallback) {
+  try {
+    const raw = await fs.promises.readFile(filePath, "utf8");
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+
+function normalizePiPackageSettingsEntry(entry) {
+  const source = typeof entry === "string" ? entry : entry && typeof entry.source === "string" ? entry.source : "";
+  const safeSource = redactPackageSource(source.trim());
+  if (!safeSource) return null;
+
+  const filters = typeof entry === "object" && entry && !Array.isArray(entry) ? {...entry} : {};
+  delete filters.source;
+  Object.keys(filters).forEach((key) => {
+    if (filters[key] === undefined || filters[key] === null) delete filters[key];
+  });
+
+  return {
+    source: safeSource,
+    scope: "workspace",
+    type: classifyPiPackageSource(safeSource).type,
+    installedPath: null,
+    filtered: Object.keys(filters).length > 0,
+  };
+}
+
+function redactPackageSource(source) {
+  if (!source) return "";
+  const gitPrefix = source.startsWith("git+") ? "git+" : "";
+  const candidate = gitPrefix ? source.slice(gitPrefix.length) : source;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.username || parsed.password) {
+      parsed.username = "";
+      parsed.password = "";
+      return `${gitPrefix}${parsed.toString()}`;
+    }
+  } catch (error) {
+    // Non-URL package sources are expected for npm and git shorthand packages.
+  }
+  return source;
+}
+
+async function resolveInstalledPiPackagePath(source) {
+  const parsed = classifyPiPackageSource(source);
+  if (parsed.type === "npm" && parsed.name) {
+    return existingManagedPackagePath(path.join(workspaceDir, ".pi", "npm", "node_modules"), [parsed.name]);
+  }
+  if (parsed.type === "git" && parsed.host && parsed.gitPath) {
+    return existingManagedPackagePath(path.join(workspaceDir, ".pi", "git"), [parsed.host, ...parsed.gitPath.split("/")]);
+  }
+  if (parsed.type === "local" && parsed.localPath) {
+    const resolved = resolveWorkspacePackagePath(parsed.localPath);
+    return resolved && await pathExists(resolved) ? resolved : null;
+  }
+  return null;
+}
+
+async function existingManagedPackagePath(root, parts) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedPath = path.resolve(resolvedRoot, ...parts);
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) return null;
+  return await pathExists(resolvedPath) ? resolvedPath : null;
+}
+
+function classifyPiPackageSource(source) {
+  if (source.startsWith("npm:")) {
+    const spec = source.slice("npm:".length).trim();
+    const npmMatch = spec.match(/^(@[^/]+\/[^@]+|[^@]+)(?:@(.+))?$/);
+    return {type: "npm", name: npmMatch ? npmMatch[1] : spec};
+  }
+
+  const gitSource = parsePiGitPackageSource(source);
+  if (gitSource) return {type: "git", ...gitSource};
+
+  return {type: "local", localPath: source};
+}
+
+function parsePiGitPackageSource(source) {
+  const withoutGitPrefix = source.startsWith("git:") ? source.slice("git:".length) : source;
+  const withoutGitPlus = withoutGitPrefix.startsWith("git+") ? withoutGitPrefix.slice("git+".length) : withoutGitPrefix;
+  const withoutRef = withoutGitPlus.split("#")[0];
+
+  const sshMatch = withoutRef.match(/^git@([^:]+):(.+)$/);
+  if (sshMatch) return buildPiGitPackageSource(sshMatch[1], sshMatch[2]);
+
+  const githubShorthand = withoutRef.match(/^github:([^/]+\/.+)$/);
+  if (githubShorthand) return buildPiGitPackageSource("github.com", githubShorthand[1]);
+
+  try {
+    const parsed = new URL(withoutRef);
+    if (["git:", "https:", "http:", "ssh:"].includes(parsed.protocol)) {
+      return buildPiGitPackageSource(parsed.hostname, parsed.pathname.replace(/^\/+/, ""));
+    }
+  } catch (error) {
+    // Not a URL-shaped git source.
+  }
+
+  return null;
+}
+
+function buildPiGitPackageSource(host, gitPath) {
+  const normalizedHost = String(host || "").toLowerCase();
+  const normalizedPath = normalizeRelativeWorkspacePath(String(gitPath || "").replace(/\.git$/, ""));
+  const parts = normalizedPath.split("/").filter(Boolean);
+  if (!normalizedHost || !parts.length || parts.some((part) => part === "." || part === "..")) return null;
+  return {host: normalizedHost, gitPath: parts.join("/")};
+}
+
+function resolveWorkspacePackagePath(packagePath) {
+  const resolvedRoot = path.resolve(workspaceDir);
+  const resolvedPath = path.resolve(resolvedRoot, packagePath);
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) return null;
+  return resolvedPath;
 }
 
 async function waitForChild(child, stderr, label) {
