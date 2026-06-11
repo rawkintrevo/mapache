@@ -164,6 +164,11 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "GET" && route.name === "piPackages") {
+      res.json(await listPiPackages(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "githubRepos") {
       res.json(await listConnectedRepos(user.uid));
       return;
@@ -305,6 +310,14 @@ function routeRequest(path) {
     parts[4] === "git-open-pr"
   ) {
     return {name: "gitOpenPr", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-packages"
+  ) {
+    return {name: "piPackages", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
@@ -872,6 +885,15 @@ async function pushGit(uid, workspaceId, sessionId) {
   if (!session.serviceUrl) throw httpError(409, "session_not_running");
   if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
   return requestRunnerGitPush(session);
+}
+
+async function listPiPackages(uid, workspaceId, sessionId) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_package_listing_unsupported");
+  return requestRunnerPiPackages(session);
 }
 
 async function openPullRequest(uid, workspaceId, sessionId, payload) {
@@ -2148,6 +2170,15 @@ async function requestRunnerGitOpenPr(session, body) {
   });
 }
 
+async function requestRunnerPiPackages(session) {
+  return requestRunnerJson(session, "/pi/packages", {
+    notFoundError: "runner_package_listing_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_package_read_failed",
+    unavailableError: "runner_package_list_unavailable",
+  });
+}
+
 async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
@@ -2163,6 +2194,9 @@ async function requestRunnerJson(session, routePath, options = {}) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 404 && options.notFoundError) {
+        throw httpError(options.notFoundStatus || 503, options.notFoundError);
+      }
       throw httpError(
           response.status === 404 ? 503 : response.status,
           cleanName(data.error || options.failureError || "runner_request_failed") ||
