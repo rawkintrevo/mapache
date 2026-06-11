@@ -432,6 +432,7 @@ function renderInspectorSidebar(props) {
 function renderExtensionsPanel(session, piPackages, handlers = {}) {
   const status = piPackages || {loading: false, error: "", unavailable: false, data: null};
   const packages = status.data && Array.isArray(status.data.packages) ? status.data.packages : [];
+  const knownPackages = status.data && Array.isArray(status.data.knownPackages) ? status.data.knownPackages : [];
   const refreshButton = createElement("button", {
     className: "secondary",
     disabled: status.loading || !handlers.onRefreshPiPackages,
@@ -448,10 +449,17 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
     body = createElement("p", {className: "empty"}, "Loading workspace extensions...");
   } else if (status.error) {
     body = createElement("p", {className: "empty"}, status.error);
-  } else if (!packages.length) {
+  } else if (!packages.length && !knownPackages.length) {
     body = createElement("p", {className: "empty"}, "No workspace-local Pi packages are configured. Packages installed with `pi install -l ...` will appear here after refresh.");
   } else {
-    body = createElement("div", {className: "package-list"}, packages.map(renderPackageRow));
+    body = createElement("div", {className: "package-list"}, [
+      ...packages.map((packageInfo) => renderPackageRow(packageInfo, {installed: true})),
+      knownPackages.length ? createElement("div", {className: "package-subsection"}, [
+        createElement("h4", {}, "Known packages"),
+        createElement("p", {className: "subtle"}, "Packages observed in your other workspaces. Use Install to add one to this workspace when install support is enabled."),
+        ...knownPackages.map((packageInfo) => renderPackageRow(packageInfo, {installed: false})),
+      ]) : null,
+    ]);
   }
 
   return createElement("section", {className: "drawer-section extensions-panel"}, [
@@ -464,21 +472,30 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
   ]);
 }
 
-function renderPackageRow(packageInfo) {
+function renderPackageRow(packageInfo, options = {}) {
   const source = packageInfo.source || "unknown package";
+  const installed = options.installed !== false;
   const meta = [
     packageInfo.type || "package",
-    packageInfo.scope || "workspace",
-    packageInfo.filtered ? "filtered" : "unfiltered",
+    installed ? packageInfo.scope || "workspace" : "known",
+    installed && packageInfo.filtered ? "filtered" : installed ? "unfiltered" : null,
   ].filter(Boolean).join(" · ");
-  return createElement("div", {className: "package-row"}, [
+  const installButton = createElement("button", {
+    className: "secondary",
+    disabled: true,
+    title: "Install support is added in a later package-manager task.",
+    type: "button",
+  }, "Install");
+  return createElement("div", {className: `package-row ${installed ? "" : "known-package-row"}`}, [
     createElement("div", {className: "package-row-main"}, [
       createElement("strong", {}, source),
       createElement("span", {className: "subtle"}, meta),
-      packageInfo.installedPath ?
+      installed ? packageInfo.installedPath ?
         createElement("code", {className: "package-path"}, packageInfo.installedPath) :
-        createElement("span", {className: "subtle"}, "Configured; install path not present in the current runner."),
+        createElement("span", {className: "subtle"}, "Configured; install path not present in the current runner.") :
+        createElement("span", {className: "subtle"}, "Not installed in this workspace."),
     ]),
+    installed ? null : createElement("div", {className: "package-row-actions"}, [installButton]),
   ]);
 }
 

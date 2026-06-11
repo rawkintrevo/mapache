@@ -116,13 +116,14 @@ Before implementation tasks, read:
   - Existing workspace package listing behavior remains correct if catalog writes fail.
   - Completed: 2026-06-11. Workspace package listing now merges observed npm/git sources into the user catalog with preserved source strings and logs catalog write failures without failing the listing response.
 
-- [ ] 9. **Show known packages not installed in current workspace** - medium (gpt-5.4)
+- [x] 9. **Show known packages not installed in current workspace** - medium (gpt-5.4)
   - Acceptance criteria:
   - Extensions panel shows user-known packages from Firestore that are not configured in the active workspace.
   - Known packages have an `Install` action but are not installed automatically.
   - Installed/configured workspace packages remain visually distinct from known packages.
   - The UI can later support favorites without changing the catalog shape.
   - `npm run build` passes.
+  - Completed: 2026-06-11. Backend package listing now includes catalog-backed `knownPackages`, and the Extensions panel shows them separately as known/not-installed rows with an install affordance for the later install flow.
 
 - [ ] 10. **Add runner package operation lock** - easy (gpt-5.4-mini)
   - Acceptance criteria:
