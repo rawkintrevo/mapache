@@ -936,10 +936,14 @@ async function pathExists(localPath) {
 function shouldIgnoreWorkspacePath(relativePath) {
   const normalizedPath = normalizeRelativeWorkspacePath(relativePath);
   const parts = normalizedPath.split("/").filter(Boolean);
-  if (parts.includes("node_modules") || parts[0] === internalStorageDir) {
+  if (parts.includes("node_modules") || parts[0] === internalStorageDir || isWorkspacePiPackageCachePath(parts)) {
     return true;
   }
   return workspaceSyncPolicyExclude.some((pattern) => matchesSyncPolicyPattern(normalizedPath, pattern));
+}
+
+function isWorkspacePiPackageCachePath(parts) {
+  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
 }
 
 function normalizeRelativeWorkspacePath(relativePath) {

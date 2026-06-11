@@ -163,7 +163,7 @@ The Pi extension manager extends this model to workspace-local Pi package cache 
 - `/workspace/.pi/npm` archived as `.mapahce-internal/archives/workspace-pi-npm.tar.gz`
 - `/workspace/.pi/git` archived as `.mapahce-internal/archives/workspace-pi-git.tar.gz`
 
-The portable package declaration file, `/workspace/.pi/settings.json`, remains normal workspace file state. Package install directories are runtime cache state and are archived under `.mapahce-internal/archives/` instead of uploaded object-by-object.
+The portable package declaration file, `/workspace/.pi/settings.json`, remains normal workspace file state. Package install directories are runtime cache state and are archived under `.mapahce-internal/archives/` instead of uploaded object-by-object. Normal workspace sync skips `.pi/npm/` and `.pi/git/`, while the Files API and editor routes hide those cache paths and the internal archive objects.
 
 The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted.
 
