@@ -47,6 +47,7 @@ export function AppShell(props) {
           selectedSession={selectedSession}
           state={state}
           onInstallPiPackage={props.onInstallPiPackage}
+          onDeletePiAuthProvider={props.onDeletePiAuthProvider}
           onOpenAuthModal={props.onOpenAuthModal}
           onRefreshPiAuth={props.onRefreshPiAuth}
           onRefreshPiPackages={props.onRefreshPiPackages}

@@ -59,11 +59,11 @@ Styling lives in `src/styles.css`. The interface uses restrained operational sty
 
 Session image choices live in `src/config/sessionImages.js`. This is the frontend source of truth for the container image dropdown in the create-session modal.
 
-Pi API-key provider choices for the Authentication Center live in `src/config/piAuthProviders.js`. The web UI can add/update API-key entries only; entries created by the Pi CLI/TUI are still displayed after the runner syncs `~/.pi/agent/auth.json` back to Firebase.
+Pi provider choices for the Authentication Center live in `src/config/piAuthProviders.js`. Most providers use API-key entries. The OpenAI ChatGPT Plus/Pro (Codex) provider uses OpenAI's device-code flow and saves an OAuth entry under Pi's `openai-codex` auth key. Configured providers can be deleted per provider from the Authentication Center. Entries created by the Pi CLI/TUI are still displayed after the runner syncs `~/.pi/agent/auth.json` back to Firebase.
 
 ## Backend Flow
 
-The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`.
+The frontend calls `src/services/api.js`, which sends authenticated JSON requests to `/api/**`. The Authentication Center uses these APIs to save API-key providers and to run OpenAI Codex subscription login. The active web flow starts OpenAI device login, displays the user code and OpenAI verification link, and polls/exchanges the completed authorization into the stored Pi OAuth credential shape.
 
 `functions/index.js` handles user, workspace, and session operations. Creating a workspace writes explicit source metadata so later flows can distinguish a blank workspace from a GitHub-backed one. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, resource limits, owner UID, and workspace storage prefix. GitHub sessions also need source metadata so the runner can reconstruct `/workspace` from Git and cache state. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status. Deleting a session uses the same service cleanup path first, then removes the session document from the workspace session list.
 

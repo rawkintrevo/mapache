@@ -23,11 +23,14 @@ export function ModalStack(props) {
       ) : null}
       {state.authModalOpen ? (
         <AuthModal
+          piAuth={state.piAuth}
           onClose={props.onCloseAuthModal}
           onSave={(provider, apiKey) => {
             props.onUpdatePiAuthForm({selectedProvider: provider, apiKey});
             props.onSavePiAuthProvider();
           }}
+          onStartOpenAiCodexDeviceLogin={props.onStartOpenAiCodexDeviceLogin}
+          onUpdate={props.onUpdatePiAuthForm}
         />
       ) : null}
       {state.fileEditor.open ? (

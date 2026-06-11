@@ -25,7 +25,7 @@ This document serves as an index for significant UI components in the applicatio
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
-| `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding new authentication providers and API keys. |
+| `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding authentication providers, including API keys and the OpenAI Codex subscription device-code login flow. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new workspace. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a new session. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |

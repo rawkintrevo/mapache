@@ -12,6 +12,7 @@ COPY server.js ./
 RUN mkdir -p /workspace /root/.pi
 ENV PORT=8080
 ENV WORKSPACE_DIR=/workspace
+ENV PI_CODING_AGENT_DIR=/root/.pi/agent
 
 EXPOSE 8080
 CMD ["npm", "start"]

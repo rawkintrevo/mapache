@@ -720,7 +720,7 @@ async function syncWorktreeDown() {
 }
 
 async function syncUp(options = {}) {
-  await synchronizePiAuth({materialize: false});
+  await synchronizePiAuth({materialize: true});
   if (!bucketName || !prefix) return;
   const {directories, files} = await walkWorkspace(workspaceDir);
   const desiredRemotePaths = new Set();
@@ -856,10 +856,12 @@ async function synchronizePiAuth(options = {}) {
   const remoteAuth = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
   if (!Object.keys(remoteAuth).length && !Object.keys(localAuth).length) return;
 
-  await writePiAuthFile({
+  const mergedAuth = {
     ...localAuth,
     ...remoteAuth,
-  });
+  };
+  await writePiAuthFile(mergedAuth);
+  console.log(`pi auth materialized ${Object.keys(mergedAuth).length} provider(s) to ${piAuthFilePath()}`);
 }
 
 async function readPiAuthFile() {

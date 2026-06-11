@@ -31,6 +31,16 @@ const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
 );
 const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 const INTERNAL_STORAGE_DIR = ".mapahce-internal";
+const OPENAI_CODEX_PROVIDER = "openai-codex";
+const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
+const OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
+const OPENAI_CODEX_SCOPE = "openid profile email offline_access";
+const OPENAI_CODEX_DEVICE_USER_CODE_URL = "https://auth.openai.com/api/accounts/deviceauth/usercode";
+const OPENAI_CODEX_DEVICE_TOKEN_URL = "https://auth.openai.com/api/accounts/deviceauth/token";
+const OPENAI_CODEX_DEVICE_VERIFICATION_URI = "https://auth.openai.com/codex/device";
+const OPENAI_CODEX_DEVICE_REDIRECT_URI = "https://auth.openai.com/deviceauth/callback";
+const OPENAI_CODEX_ACCOUNT_CLAIM_PATH = "https://api.openai.com/auth";
 const PI_AUTH_API_KEY_PROVIDERS = new Set([
   "anthropic",
   "ant-ling",
@@ -99,6 +109,21 @@ exports.api = onRequest({
 
     if (req.method === "PUT" && route.name === "piAuthProvider") {
       res.json(await savePiAuthProvider(user.uid, route.provider, req.body || {}));
+      return;
+    }
+
+    if (req.method === "DELETE" && route.name === "piAuthProvider") {
+      res.json(await deletePiAuthProvider(user.uid, route.provider));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "openAiCodexDeviceCode" && route.action === "start") {
+      res.json(await startOpenAiCodexDeviceCode());
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "openAiCodexDeviceCode" && route.action === "complete") {
+      res.json(await completeOpenAiCodexDeviceCode(user.uid, req.body || {}));
       return;
     }
 
@@ -277,6 +302,16 @@ function routeRequest(path) {
   if (parts.length === 1 && parts[0] === "pi-auth") return {name: "piAuth"};
   if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
     return {name: "piAuthProvider", provider: parts[2]};
+  }
+  if (
+    parts.length === 5 &&
+
+    parts[0] === "pi-auth" &&
+    parts[1] === "providers" &&
+    parts[2] === OPENAI_CODEX_PROVIDER &&
+    parts[3] === "device-code"
+  ) {
+    return {name: "openAiCodexDeviceCode", action: parts[4]};
   }
   if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
@@ -470,6 +505,28 @@ async function getPiAuth(uid) {
 async function savePiAuthProvider(uid, provider, payload) {
   const providerKey = normalizePiAuthProviderKey(provider);
   const apiKey = normalizePiAuthApiKey(payload && payload.key);
+  await savePiAuthCredential(uid, providerKey, {type: "api_key", key: apiKey});
+  return getPiAuth(uid);
+}
+
+async function deletePiAuthProvider(uid, provider) {
+  const providerKey = normalizePiAuthStoredProviderKey(provider);
+  const ref = piAuthDoc(uid);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const current = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
+    delete current[providerKey];
+    transaction.set(ref, {
+      providers: current,
+      updatedAt: now,
+      ...(snap.exists ? {} : {createdAt: now}),
+    }, {merge: true});
+  });
+  return getPiAuth(uid);
+}
+
+async function savePiAuthCredential(uid, providerKey, credential) {
   const ref = piAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
@@ -478,13 +535,238 @@ async function savePiAuthProvider(uid, provider, payload) {
     transaction.set(ref, {
       providers: {
         ...current,
-        [providerKey]: {type: "api_key", key: apiKey},
+        [providerKey]: normalizePlainObject(credential),
       },
       updatedAt: now,
       ...(snap.exists ? {} : {createdAt: now}),
     }, {merge: true});
   });
-  return getPiAuth(uid);
+}
+
+async function startOpenAiCodexOAuth(uid, payload) {
+  const returnTo = normalizeOpenAiCodexReturnTo(payload.returnTo);
+  const redirectUri = `${new URL(returnTo).origin}/api/pi-auth/providers/${OPENAI_CODEX_PROVIDER}/callback`;
+  const state = crypto.randomBytes(16).toString("hex");
+  const verifier = base64Url(crypto.randomBytes(32));
+  const challenge = base64Url(crypto.createHash("sha256").update(verifier).digest());
+  const expiresAt = Date.now() + 15 * 60 * 1000;
+
+  await openAiCodexOAuthStateDoc(state).set({
+    uid,
+    verifier,
+    redirectUri,
+    returnTo,
+    expiresAt,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const url = new URL(OPENAI_CODEX_AUTHORIZE_URL);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", OPENAI_CODEX_CLIENT_ID);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("scope", OPENAI_CODEX_SCOPE);
+  url.searchParams.set("code_challenge", challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("state", state);
+  url.searchParams.set("id_token_add_organizations", "true");
+  url.searchParams.set("codex_cli_simplified_flow", "true");
+  url.searchParams.set("originator", "pi");
+
+  return {authUrl: url.toString(), redirectUri};
+}
+
+async function handleOpenAiCodexOAuthCallback(req, res) {
+  const state = String(req.query.state || "").trim();
+  const code = String(req.query.code || "").trim();
+  const providerError = String(req.query.error || "").trim();
+  const ref = openAiCodexOAuthStateDoc(state);
+  const snap = state ? await ref.get() : null;
+  const record = snap && snap.exists ? snap.data() : null;
+  const returnTo = record?.returnTo || "/";
+
+  try {
+    if (!record) throw httpError(400, "openai_codex_oauth_state_not_found");
+    if (Number(record.expiresAt || 0) < Date.now()) throw httpError(400, "openai_codex_oauth_state_expired");
+    if (providerError) throw httpError(400, `openai_codex_oauth_error: ${providerError}`);
+    if (!code) throw httpError(400, "openai_codex_oauth_missing_code");
+
+    const oauth = await exchangeOpenAiCodexAuthorizationCode(code, record.verifier, record.redirectUri);
+    await savePiAuthCredential(record.uid, OPENAI_CODEX_PROVIDER, {type: "oauth", ...oauth});
+    await ref.delete().catch(() => {});
+    res.redirect(303, appendQuery(returnTo, {openAiCodexLogin: "success"}));
+  } catch (error) {
+    logger.error("openai codex oauth callback failed", error);
+    await ref.delete().catch(() => {});
+    res.redirect(303, appendQuery(returnTo, {
+      openAiCodexLogin: "error",
+      error: publicErrorMessage(error),
+    }));
+  }
+}
+
+async function startOpenAiCodexDeviceCode() {
+  const response = await fetch(OPENAI_CODEX_DEVICE_USER_CODE_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({client_id: OPENAI_CODEX_CLIENT_ID}),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw httpError(502, `openai_codex_device_code_failed${text ? `: ${text}` : ""}`);
+  }
+
+  const data = await response.json();
+  const intervalSeconds = typeof data.interval === "string" ? Number(data.interval.trim()) : data.interval;
+  if (!data.device_auth_id || !data.user_code || !Number.isFinite(intervalSeconds)) {
+    throw httpError(502, "openai_codex_device_code_invalid_response");
+  }
+
+  return {
+    deviceAuthId: data.device_auth_id,
+    userCode: data.user_code,
+    verificationUri: OPENAI_CODEX_DEVICE_VERIFICATION_URI,
+    intervalSeconds: Math.max(1, intervalSeconds),
+    expiresInSeconds: 15 * 60,
+  };
+}
+
+async function completeOpenAiCodexDeviceCode(uid, payload) {
+  const deviceAuthId = cleanOpenAiCodexDeviceField(payload.deviceAuthId);
+  const userCode = cleanOpenAiCodexDeviceField(payload.userCode);
+  if (!deviceAuthId || !userCode) throw httpError(400, "invalid_openai_codex_device_code");
+
+  const tokenResponse = await fetch(OPENAI_CODEX_DEVICE_TOKEN_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({device_auth_id: deviceAuthId, user_code: userCode}),
+  });
+
+  if (!tokenResponse.ok) {
+    if (tokenResponse.status === 403 || tokenResponse.status === 404) {
+      return {status: "pending"};
+    }
+    const text = await tokenResponse.text().catch(() => "");
+    const errorCode = parseOpenAiCodexErrorCode(text);
+    if (errorCode === "deviceauth_authorization_pending" || errorCode === "slow_down") {
+      return {status: "pending"};
+    }
+    throw httpError(502, `openai_codex_device_poll_failed${text ? `: ${text}` : ""}`);
+  }
+
+  const deviceToken = await tokenResponse.json();
+  if (!deviceToken.authorization_code || !deviceToken.code_verifier) {
+    throw httpError(502, "openai_codex_device_token_invalid_response");
+  }
+
+  const oauth = await exchangeOpenAiCodexAuthorizationCode(
+      deviceToken.authorization_code,
+      deviceToken.code_verifier,
+  );
+  await savePiAuthCredential(uid, OPENAI_CODEX_PROVIDER, {type: "oauth", ...oauth});
+  return {status: "complete", ...(await getPiAuth(uid))};
+}
+
+async function exchangeOpenAiCodexAuthorizationCode(code, verifier, redirectUri = OPENAI_CODEX_DEVICE_REDIRECT_URI) {
+  const response = await fetch(OPENAI_CODEX_TOKEN_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: OPENAI_CODEX_CLIENT_ID,
+      code,
+      code_verifier: verifier,
+      redirect_uri: redirectUri,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw httpError(502, `openai_codex_token_exchange_failed${text ? `: ${text}` : ""}`);
+  }
+
+  const data = await response.json();
+  if (!data.access_token || !data.refresh_token || typeof data.expires_in !== "number") {
+    throw httpError(502, "openai_codex_token_invalid_response");
+  }
+
+  const accountId = openAiCodexAccountId(data.access_token);
+  if (!accountId) throw httpError(502, "openai_codex_missing_account_id");
+  return {
+    access: data.access_token,
+    refresh: data.refresh_token,
+    expires: Date.now() + data.expires_in * 1000,
+    accountId,
+  };
+}
+
+function normalizeOpenAiCodexReturnTo(value) {
+  const text = String(value || "").trim();
+  try {
+    const url = new URL(text);
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error("invalid protocol");
+    url.hash = "";
+    return url.toString();
+  } catch (error) {
+    throw httpError(400, "invalid_openai_codex_return_url");
+  }
+}
+
+function openAiCodexOAuthStateDoc(state) {
+  return db.collection("oauthStates").doc(`${OPENAI_CODEX_PROVIDER}-${state}`);
+}
+
+function base64Url(buffer) {
+  return Buffer.from(buffer)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+}
+
+function appendQuery(url, params) {
+  try {
+    const parsed = new URL(url);
+    Object.entries(params).forEach(([key, value]) => parsed.searchParams.set(key, String(value || "")));
+    return parsed.toString();
+  } catch (error) {
+    const query = new URLSearchParams(params).toString();
+    return `/?${query}`;
+  }
+}
+
+function publicErrorMessage(error) {
+  return error?.publicMessage || error?.message || "openai_codex_oauth_failed";
+}
+
+function cleanOpenAiCodexDeviceField(value) {
+  const text = String(value || "").trim();
+  if (!text || /[\u0000-\u001f\u007f]/.test(text) || text.length > 2048) return "";
+  return text;
+}
+
+function parseOpenAiCodexErrorCode(text) {
+  try {
+    const data = JSON.parse(text || "{}");
+    const error = data && data.error;
+    if (typeof error === "string") return error;
+    if (error && typeof error.code === "string") return error.code;
+  } catch (error) {
+    return "";
+  }
+  return "";
+}
+
+function openAiCodexAccountId(accessToken) {
+  try {
+    const parts = String(accessToken || "").split(".");
+    if (parts.length !== 3) return "";
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const claim = payload && payload[OPENAI_CODEX_ACCOUNT_CLAIM_PATH];
+    return typeof claim?.chatgpt_account_id === "string" ? claim.chatgpt_account_id : "";
+  } catch (error) {
+    return "";
+  }
 }
 
 async function listWorkspaces(uid) {
@@ -2204,6 +2486,7 @@ async function sessionRunnerEnv(session, options = {}) {
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
     {name: "PI_HOME_STORAGE_BUCKET", value: session.piHomeStorageBucket || DEFAULT_BUCKET || ""},
     {name: "PI_HOME_STORAGE_PREFIX", value: session.piHomeStoragePrefix || piHomeStoragePrefix(session.ownerUid)},
+    {name: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent"},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
@@ -2694,8 +2977,16 @@ function normalizePlainValue(value) {
 }
 
 function normalizePiAuthProviderKey(value) {
-  const provider = cleanName(value);
+  const provider = normalizePiAuthStoredProviderKey(value);
   if (!PI_AUTH_API_KEY_PROVIDERS.has(provider)) {
+    throw httpError(400, "invalid_pi_auth_provider");
+  }
+  return provider;
+}
+
+function normalizePiAuthStoredProviderKey(value) {
+  const provider = cleanName(value);
+  if (!provider || provider.length > 256 || /[\u0000-\u001f\u007f]/.test(provider)) {
     throw httpError(400, "invalid_pi_auth_provider");
   }
   return provider;

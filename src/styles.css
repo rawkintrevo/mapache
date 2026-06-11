@@ -773,10 +773,23 @@ main.drawer-collapsed.right-drawer-collapsed {
 }
 
 .auth-provider-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.auth-provider-row .auth-provider-meta {
+  grid-column: 1 / -1;
+}
+
+.auth-provider-delete {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 30px;
+  padding: 6px 10px;
 }
 
 .auth-provider-row strong,
@@ -800,6 +813,29 @@ main.drawer-collapsed.right-drawer-collapsed {
   padding: 2px 6px;
   border-radius: 999px;
   background: #eef2f6;
+}
+
+.auth-oauth-flow,
+.auth-device-code {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-device-code {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.auth-device-code-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-device-code strong {
+  font-size: 28px;
+  letter-spacing: 0.12em;
 }
 
 .package-install-form,

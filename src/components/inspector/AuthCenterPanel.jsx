@@ -8,7 +8,7 @@ function maskSecret(value) {
   return `${text.slice(0, 4)}…${text.slice(-4)}`;
 }
 
-function AuthProviderRow({provider, value}) {
+function AuthProviderRow({provider, value, disabled, onDelete}) {
   const credential = value && typeof value === "object" ? value : {};
   const type = credential.type || "unknown";
   const keyValue = Object.prototype.hasOwnProperty.call(credential, "key") ? String(credential.key || "") : "";
@@ -25,11 +25,26 @@ function AuthProviderRow({provider, value}) {
         {keyValue ? <span>{maskSecret(keyValue)}</span> : null}
         {fields.map((field) => <span key={field}>{field}</span>)}
       </div>
+      <button
+        className="secondary auth-provider-delete"
+        disabled={disabled || !onDelete}
+        type="button"
+        onClick={() => onDelete?.(provider)}
+      >
+        Delete
+      </button>
     </div>
   );
 }
 
-export function AuthCenterPanel({piAuth, state, onOpenAuthModal, onRefreshPiAuth, onToggleDrawerSection}) {
+export function AuthCenterPanel({
+  piAuth,
+  state,
+  onDeletePiAuthProvider,
+  onOpenAuthModal,
+  onRefreshPiAuth,
+  onToggleDrawerSection,
+}) {
   const status = piAuth || {
     loading: false,
     saving: false,
@@ -77,7 +92,13 @@ export function AuthCenterPanel({piAuth, state, onOpenAuthModal, onRefreshPiAuth
       {providerEntries.length ? (
         <div className="auth-provider-list">
           {providerEntries.map(([provider, value]) => (
-            <AuthProviderRow key={provider} provider={provider} value={value} />
+            <AuthProviderRow
+              disabled={status.loading || status.saving}
+              key={provider}
+              provider={provider}
+              value={value}
+              onDelete={onDeletePiAuthProvider}
+            />
           ))}
         </div>
       ) : (

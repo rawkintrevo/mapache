@@ -27,7 +27,13 @@ import {
   updatePullRequestFormState,
 } from "./workflows/git.js";
 import {connectGithubState, loadConnectedReposState} from "./workflows/githubConnection.js";
-import {loadPiAuthState, savePiAuthProviderState, updatePiAuthFormState} from "./workflows/piAuth.js";
+import {
+  deletePiAuthProviderState,
+  loadPiAuthState,
+  savePiAuthProviderState,
+  startOpenAiCodexDeviceLoginState,
+  updatePiAuthFormState,
+} from "./workflows/piAuth.js";
 import {
   installPiPackageState,
   loadPiPackagesState,
@@ -115,8 +121,10 @@ function render() {
     onUpdatePiInstallSource: updatePiInstallSource,
     onInstallPiPackage: installPiPackage,
     onRefreshPiAuth: refreshPiAuth,
+    onDeletePiAuthProvider: deletePiAuthProvider,
     onUpdatePiAuthForm: updatePiAuthForm,
     onSavePiAuthProvider: savePiAuthProvider,
+    onStartOpenAiCodexDeviceLogin: startOpenAiCodexDeviceLogin,
     onRemovePiPackage: removePiPackage,
     onUpdatePiPackage: updatePiPackage,
     onOpenAuthModal: openAuthModal,
@@ -318,6 +326,19 @@ async function loadPiAuth(options = {}) {
 
 function updatePiAuthForm(patch) {
   updatePiAuthFormState(state, patch);
+  render();
+}
+
+async function deletePiAuthProvider(provider) {
+  const providerKey = String(provider || "").trim();
+  if (!providerKey) return;
+  const ok = window.confirm(`Delete Pi auth provider ${providerKey}? New sessions will no longer receive this credential.`);
+  if (!ok) return;
+  await deletePiAuthProviderState({state, provider: providerKey, render});
+}
+
+async function startOpenAiCodexDeviceLogin() {
+  await startOpenAiCodexDeviceLoginState({state, render});
 }
 
 async function savePiAuthProvider() {

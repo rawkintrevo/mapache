@@ -48,6 +48,7 @@ export function createPiAuthState(overrides = {}) {
     providers: {},
     selectedProvider: "anthropic",
     apiKey: "",
+    openAiCodexDevice: null,
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@ export function RightDrawer({
   selectedSession,
   state,
   onInstallPiPackage,
+  onDeletePiAuthProvider,
   onOpenAuthModal,
   onRefreshPiAuth,
   onRefreshPiPackages,
@@ -41,6 +42,7 @@ export function RightDrawer({
       <AuthCenterPanel
         piAuth={state.piAuth}
         state={state}
+        onDeletePiAuthProvider={onDeletePiAuthProvider}
         onOpenAuthModal={onOpenAuthModal}
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}

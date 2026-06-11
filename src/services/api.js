@@ -7,6 +7,21 @@ export function createApiClient(getToken) {
         `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
         {method: "PUT", body: {key}},
     ),
+    deletePiAuthProvider: (provider) => request(
+        getToken,
+        `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
+        {method: "DELETE"},
+    ),
+    startOpenAiCodexDeviceLogin: () => request(
+        getToken,
+        "/api/pi-auth/providers/openai-codex/device-code/start",
+        {method: "POST", body: {}},
+    ),
+    completeOpenAiCodexDeviceLogin: (deviceAuthId, userCode) => request(
+        getToken,
+        "/api/pi-auth/providers/openai-codex/device-code/complete",
+        {method: "POST", body: {deviceAuthId, userCode}},
+    ),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
     createWorkspace: (body) => request(getToken, "/api/workspaces", {
       method: "POST",
