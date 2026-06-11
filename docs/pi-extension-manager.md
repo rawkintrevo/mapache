@@ -98,8 +98,10 @@ The cross-workspace package memory belongs in Firestore under the authenticated 
 Suggested path:
 
 ```text
-users/{uid}/piPackageCatalog/{packageIdentity}
+users/{uid}/piPackageCatalog/{encodedPackageIdentity}
 ```
+
+The document id is a URL-encoded form of the derived identity so git identities can contain `/` while the stored `identity` field remains readable.
 
 Suggested fields:
 
@@ -108,8 +110,8 @@ Suggested fields:
   source: "npm:@foo/bar@1.2.3",
   identity: "npm:@foo/bar",
   type: "npm",
-  firstSeenAt: Timestamp,
-  lastUsedAt: Timestamp,
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
   installCount: 3,
   lastWorkspaceId: "workspace-id",
   favorite: false
