@@ -251,7 +251,20 @@ New sessions use the image selected in the modal. Existing sessions keep their c
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to new GitHub workspace source env vars and sync-policy env vars. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, or `WORKSPACE_SYNC_POLICY_*` env vars; they need a new revision or a recreated session service before runner changes that depend on those variables will take effect.
+The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi package manager endpoints, and Pi package archive targets. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/packages*` runner routes, or `.pi/npm`/`.pi/git` archive behavior; they need a new revision or a recreated session service before runner changes that depend on those variables or routes will take effect.
+
+When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+Expected package-manager write locations:
+
+- Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
+- Workspace package cache archives: `{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
+- User-scoped Pi home archive: `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`
+- User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
 
 ## Design Decisions
 

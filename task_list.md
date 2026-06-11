@@ -222,6 +222,7 @@ Before implementation tasks, read:
   - Completed: 2026-06-11. Added package catalog helper test coverage for npm/scoped/pinned sources, git shorthand/URL sources, invalid source rejection, encoded catalog IDs, and catalog merge fields.
 
 - [ ] 21. **Run end-to-end package manager regression checks** - human
+  - Blocked: 2026-06-11. Requires a live authenticated `pi-basic` session and manual verification across workspaces; leaving for human execution.
   - Acceptance criteria:
   - Create or use a `pi-basic` session.
   - Install an npm package from the web UI and verify it appears in `/workspace/.pi/settings.json`.
@@ -230,9 +231,10 @@ Before implementation tasks, read:
   - Stop/restart the session and verify package settings and package cache restore.
   - Verify a package installed in one workspace appears as known-but-not-installed in another workspace.
 
-- [ ] 22. **Document deployment and existing-session behavior** - easy (gpt-5.4-mini)
+- [x] 22. **Document deployment and existing-session behavior** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Runtime docs explain that existing Cloud Run sessions need a new revision or recreation for package manager endpoints and archive targets.
   - Docs include build/deploy commands with explicit `--project pi-agents-cloud` where applicable.
   - Docs note that `functions/` changes should be deployed before handoff in normal implementation work unless explicitly skipped.
   - Docs list the expected storage and Firestore write locations.
+  - Completed: 2026-06-11. Runtime docs now call out existing-session recreation/new revision requirements for package endpoints/archive targets, explicit functions deploy command, and expected Storage/Firestore write locations.
