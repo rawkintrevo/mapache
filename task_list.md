@@ -170,13 +170,14 @@ Before implementation tasks, read:
   - Errors are structured and safe to display.
   - Completed: 2026-06-11. Added protected runner `POST /pi/packages/remove` using `pi remove -l` under the package operation lock, followed by settings/archive sync and structured errors.
 
-- [ ] 15. **Add backend and frontend remove flow** - medium (gpt-5.4)
+- [x] 15. **Add backend and frontend remove flow** - medium (gpt-5.4)
   - Acceptance criteria:
   - Backend exposes authenticated package remove route with ownership checks.
   - Frontend package rows include remove action for workspace-installed packages.
   - UI refreshes package state after removal.
   - Known package catalog still offers removed packages as installable in the current workspace.
   - `npm run build` passes.
+  - Completed: 2026-06-11. Added authenticated backend remove proxy and frontend remove actions for workspace-installed packages, with refresh/error handling while known catalog packages remain installable.
 
 - [ ] 16. **Add runner package update support** - medium (gpt-5.4)
   - Acceptance criteria:
