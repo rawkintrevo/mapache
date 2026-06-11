@@ -133,7 +133,7 @@ Before implementation tasks, read:
   - Lock failures cannot leave the runner permanently busy.
   - Completed: 2026-06-11. Added an in-memory runner package operation lock; list operations run under the lock and future concurrent mutations can return stable `package_operation_busy` errors without leaving the runner locked.
 
-- [ ] 11. **Add runner workspace-local package install support** - medium (gpt-5.4)
+- [x] 11. **Add runner workspace-local package install support** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner exposes a token-protected install endpoint.
   - Endpoint installs npm and git package sources into workspace-local Pi settings, equivalent to `pi install -l`.
@@ -141,6 +141,7 @@ Before implementation tasks, read:
   - Operation updates `.pi/settings.json` and package cache directories.
   - Operation triggers or schedules archive sync for `.pi/npm` and `.pi/git`.
   - Errors are structured and do not expose credentials.
+  - Completed: 2026-06-11. Added protected runner `POST /pi/packages/install` using `pi install -l` under the package operation lock, validating npm/git sources and forcing settings/archive sync after install.
 
 - [ ] 12. **Add backend package install route** - medium (gpt-5.4)
   - Acceptance criteria:
