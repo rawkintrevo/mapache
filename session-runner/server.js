@@ -138,6 +138,19 @@ app.post("/pi/packages/remove", async (req, res) => {
   }
 });
 
+app.post("/pi/packages/update", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withPackageOperationLock({read: false}, () => updateWorkspacePiPackages(req.body || {})));
+  } catch (error) {
+    sendPiPackageError(res, error, "pi_package_update_failed");
+  }
+});
+
 app.post("/git/pull", async (req, res) => {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
@@ -1011,6 +1024,19 @@ async function removeWorkspacePiPackage(body) {
     ok: true,
     action: "remove",
     source,
+    packages: (await listWorkspacePiPackages()).packages,
+  };
+}
+
+async function updateWorkspacePiPackages(body) {
+  const source = body.source ? normalizePiMutationPackageSource(body.source) : "";
+  const args = source ? ["update", "--extension", source] : ["update", "--extensions"];
+  await runPiCommand(args);
+  await syncUp({includeArchives: true});
+  return {
+    ok: true,
+    action: "update",
+    source: source || null,
     packages: (await listWorkspacePiPackages()).packages,
   };
 }

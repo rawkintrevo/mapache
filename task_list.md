@@ -179,13 +179,14 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-11. Added authenticated backend remove proxy and frontend remove actions for workspace-installed packages, with refresh/error handling while known catalog packages remain installable.
 
-- [ ] 16. **Add runner package update support** - medium (gpt-5.4)
+- [x] 16. **Add runner package update support** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner exposes token-protected update endpoints for all packages and a selected package.
   - Update behavior follows Pi package semantics, including pinned npm versions and pinned git refs.
   - Operation uses the package operation lock.
   - Operation triggers or schedules archive sync for package cache directories.
   - Errors are structured and safe to display.
+  - Completed: 2026-06-11. Added protected runner package update endpoint supporting update-all via `pi update --extensions` and update-one via `pi update --extension <source>` under the package operation lock with archive sync.
 
 - [ ] 17. **Add backend and frontend update flow** - medium (gpt-5.4)
   - Acceptance criteria:
