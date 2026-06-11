@@ -205,12 +205,13 @@ Before implementation tasks, read:
   - UI offers a clear path to install the same source workspace-locally.
   - Completed: 2026-06-11. Runner listing now includes `/root/.pi/agent/settings.json` packages as `userPackages`, and the Extensions panel shows them separately with workspace-local install actions.
 
-- [ ] 19. **Add package operation status persistence if needed** - medium (gpt-5.4)
+- [x] 19. **Add package operation status persistence if needed** - medium (gpt-5.4)
   - Acceptance criteria:
   - If synchronous runner calls are insufficient, add Firestore operation records under the workspace or session.
   - Operation records include action, source, status, timestamps, and safe error message.
   - Frontend can recover operation status after reload.
   - If not needed, document the decision and leave this task marked complete with rationale.
+  - Completed: 2026-06-11. Determined Firestore operation persistence is not needed for v1 because package operations are synchronous runner calls with ephemeral UI status; documented the deferred decision.
 
 - [ ] 20. **Add regression coverage for package source validation and catalog writes** - easy (gpt-5.4-mini)
   - Acceptance criteria:
