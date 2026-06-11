@@ -125,12 +125,13 @@ Before implementation tasks, read:
   - `npm run build` passes.
   - Completed: 2026-06-11. Backend package listing now includes catalog-backed `knownPackages`, and the Extensions panel shows them separately as known/not-installed rows with an install affordance for the later install flow.
 
-- [ ] 10. **Add runner package operation lock** - easy (gpt-5.4-mini)
+- [x] 10. **Add runner package operation lock** - easy (gpt-5.4-mini)
   - Acceptance criteria:
   - Runner serializes package list/install/remove/update operations.
   - Concurrent mutation attempts receive a stable busy response.
   - Read operations either wait for the lock or return a clearly marked busy state.
   - Lock failures cannot leave the runner permanently busy.
+  - Completed: 2026-06-11. Added an in-memory runner package operation lock; list operations run under the lock and future concurrent mutations can return stable `package_operation_busy` errors without leaving the runner locked.
 
 - [ ] 11. **Add runner workspace-local package install support** - medium (gpt-5.4)
   - Acceptance criteria:
