@@ -82,13 +82,14 @@ Before implementation tasks, read:
   - Blank/no-package state returns a stable empty response.
   - Completed: 2026-06-11. Added protected `GET /pi/packages` runner endpoint that reads workspace-local Pi settings, returns stable package metadata with scope/type/filter/install-path information, and handles missing settings as an empty package list.
 
-- [ ] 5. **Add backend read-only package proxy route** - medium (gpt-5.4)
+- [x] 5. **Add backend read-only package proxy route** - medium (gpt-5.4)
   - Acceptance criteria:
   - Cloud Functions exposes an authenticated route to list packages for an active session.
   - Route verifies workspace and session ownership.
   - Route requires a live runner URL and protected runner token.
   - Errors distinguish no active session, unsupported runner, runner unavailable, and package read failure.
   - No package code or secrets are returned.
+  - Completed: 2026-06-11. Added authenticated `GET /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages` proxy with workspace/session ownership checks, live runner/token requirements, and stable unsupported/unavailable/read-failure errors.
 
 - [ ] 6. **Add frontend read-only Extensions panel** - medium (gpt-5.4)
   - Acceptance criteria:

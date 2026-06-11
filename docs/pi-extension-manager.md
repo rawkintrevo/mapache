@@ -254,7 +254,11 @@ When practical, the runner should use Pi's exported package manager APIs rather 
 
 ## Backend API Shape
 
-Cloud Functions should expose authenticated `/api/**` routes that proxy package operations to an active runner.
+Cloud Functions should expose authenticated `/api/**` routes that proxy package operations to an active runner. The initial read-only route is:
+
+```text
+GET /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages
+```
 
 The backend is responsible for:
 
