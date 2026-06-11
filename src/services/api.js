@@ -96,6 +96,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages/remove`,
         {method: "POST", body: {source}},
     ),
+    updatePiPackage: (workspaceId, sessionId, source = "") => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages/update`,
+        {method: "POST", body: source ? {source} : {}},
+    ),
     getConnectedRepos: () => request(getToken, "/api/github/repos"),
     getGithubConnectUrl: () => request(
         getToken,

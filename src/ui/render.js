@@ -428,6 +428,7 @@ function renderInspectorSidebar(props) {
       onUpdatePiInstallSource: props.onUpdatePiInstallSource,
       onInstallPiPackage: props.onInstallPiPackage,
       onRemovePiPackage: props.onRemovePiPackage,
+      onUpdatePiPackage: props.onUpdatePiPackage,
     }),
   ]);
 }
@@ -443,6 +444,14 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
   }, status.loading ? "Refreshing..." : "Refresh");
   if (handlers.onRefreshPiPackages) {
     refreshButton.addEventListener("click", handlers.onRefreshPiPackages);
+  }
+  const updateAllButton = createElement("button", {
+    className: "secondary",
+    disabled: status.loading || status.installing || !handlers.onUpdatePiPackage || !packages.length,
+    type: "button",
+  }, status.installing ? "Working..." : "Update all");
+  if (handlers.onUpdatePiPackage) {
+    updateAllButton.addEventListener("click", () => handlers.onUpdatePiPackage());
   }
 
   let body;
@@ -460,6 +469,7 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
         installed: true,
         busy: status.installing,
         onRemovePiPackage: handlers.onRemovePiPackage,
+        onUpdatePiPackage: handlers.onUpdatePiPackage,
       })),
       knownPackages.length ? createElement("div", {className: "package-subsection"}, [
         createElement("h4", {}, "Known packages"),
@@ -476,7 +486,7 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
   return createElement("section", {className: "drawer-section extensions-panel"}, [
     createElement("div", {className: "drawer-section-heading"}, [
       createElement("h3", {}, "Extensions"),
-      refreshButton,
+      createElement("div", {className: "git-status-actions"}, [updateAllButton, refreshButton]),
     ]),
     createElement("p", {className: "subtle"}, "Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh."),
     session ? renderPackageInstallForm(status, handlers) : null,
@@ -524,6 +534,14 @@ function renderPackageRow(packageInfo, options = {}) {
   if (options.onInstallPiPackage) {
     installButton.addEventListener("click", () => options.onInstallPiPackage(source));
   }
+  const updateButton = createElement("button", {
+    className: "secondary",
+    disabled: options.busy || !options.onUpdatePiPackage,
+    type: "button",
+  }, options.busy ? "Working..." : "Update");
+  if (options.onUpdatePiPackage) {
+    updateButton.addEventListener("click", () => options.onUpdatePiPackage(source));
+  }
   const removeButton = createElement("button", {
     className: "secondary",
     disabled: options.busy || !options.onRemovePiPackage,
@@ -541,7 +559,7 @@ function renderPackageRow(packageInfo, options = {}) {
         createElement("span", {className: "subtle"}, "Configured; install path not present in the current runner.") :
         createElement("span", {className: "subtle"}, "Not installed in this workspace."),
     ]),
-    createElement("div", {className: "package-row-actions"}, [installed ? removeButton : installButton]),
+    createElement("div", {className: "package-row-actions"}, [installed ? updateButton : null, installed ? removeButton : installButton]),
   ]);
 }
 

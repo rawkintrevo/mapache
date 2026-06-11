@@ -188,13 +188,14 @@ Before implementation tasks, read:
   - Errors are structured and safe to display.
   - Completed: 2026-06-11. Added protected runner package update endpoint supporting update-all via `pi update --extensions` and update-one via `pi update --extension <source>` under the package operation lock with archive sync.
 
-- [ ] 17. **Add backend and frontend update flow** - medium (gpt-5.4)
+- [x] 17. **Add backend and frontend update flow** - medium (gpt-5.4)
   - Acceptance criteria:
   - Backend exposes authenticated package update route with ownership checks.
   - Frontend supports update-all and update-one where available.
   - UI shows busy/error/success states and refreshes after update.
   - Pinned package behavior is not misrepresented.
   - `npm run build` passes.
+  - Completed: 2026-06-11. Added authenticated backend update proxy and frontend update-all/update-one controls with busy/error/success states and post-update refresh while relying on Pi's pinned package semantics.
 
 - [ ] 18. **Detect and surface user-scoped Pi packages** - easy (gpt-5.4-mini)
   - Acceptance criteria:
