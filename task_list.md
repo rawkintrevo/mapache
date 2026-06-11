@@ -143,13 +143,14 @@ Before implementation tasks, read:
   - Errors are structured and do not expose credentials.
   - Completed: 2026-06-11. Added protected runner `POST /pi/packages/install` using `pi install -l` under the package operation lock, validating npm/git sources and forcing settings/archive sync after install.
 
-- [ ] 12. **Add backend package install route** - medium (gpt-5.4)
+- [x] 12. **Add backend package install route** - medium (gpt-5.4)
   - Acceptance criteria:
   - Cloud Functions exposes an authenticated install route for active sessions.
   - Route validates package source and supported type before proxying to the runner.
   - Route verifies workspace/session ownership and active runner availability.
   - Successful install updates the user's package catalog.
   - Failure responses are stable for frontend display.
+  - Completed: 2026-06-11. Added authenticated backend install proxy with source validation, runner ownership/availability checks, stable install errors, and successful catalog update.
 
 - [ ] 13. **Add frontend package install flow** - medium (gpt-5.4)
   - Acceptance criteria:
