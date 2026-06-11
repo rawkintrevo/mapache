@@ -204,7 +204,7 @@ Suggested operation fields:
 }
 ```
 
-Operation records are optional for v1. If runner calls return promptly enough and the frontend does not need reload recovery for in-flight installs, operation status can remain ephemeral.
+Operation records are optional for v1. Current package operations are synchronous runner calls with in-memory UI busy/error/success state and no reload recovery for in-flight work. That is sufficient for the v1 install/remove/update flow, so Firestore operation records are intentionally deferred until operations become asynchronous or need reload recovery.
 
 ### Browser / Client Device
 
