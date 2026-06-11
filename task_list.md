@@ -73,13 +73,14 @@ Before implementation tasks, read:
   - Runtime docs describe the visibility and sync rules.
   - Completed: 2026-06-11. Normal sync now skips `.pi/npm/` and `.pi/git/`, Cloud Functions hides them from file listings/editor paths, and runtime docs describe visibility rules.
 
-- [ ] 4. **Add runner read-only Pi package listing endpoint** - medium (gpt-5.4)
+- [x] 4. **Add runner read-only Pi package listing endpoint** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner exposes a token-protected endpoint for workspace-local Pi packages.
   - Endpoint reads `/workspace/.pi/settings.json` through Pi-compatible settings/package logic when practical.
   - Response includes configured package source, scope, installed path when present, and whether the package is filtered.
   - Packages installed via terminal with `pi install -l ...` appear after refresh.
   - Blank/no-package state returns a stable empty response.
+  - Completed: 2026-06-11. Added protected `GET /pi/packages` runner endpoint that reads workspace-local Pi settings, returns stable package metadata with scope/type/filter/install-path information, and handles missing settings as an empty package list.
 
 - [ ] 5. **Add backend read-only package proxy route** - medium (gpt-5.4)
   - Acceptance criteria:
