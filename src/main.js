@@ -46,6 +46,15 @@ const state = {
     installSource: "",
     installMessage: "",
   },
+  piAuth: {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    providers: {},
+    selectedProvider: "anthropic",
+    apiKey: "",
+  },
   pullRequestForm: {
     open: false,
     title: "",
@@ -62,6 +71,7 @@ const state = {
   },
   drawerCollapsed: false,
   rightDrawerCollapsed: true,
+  collapsedDrawerSections: new Set(),
   sessionModalOpen: false,
   busy: false,
   error: "",
@@ -91,8 +101,10 @@ async function start() {
         state.profile = null;
         state.selectedWorkspaceId = null;
         state.selectedSessionId = null;
+        state.collapsedDrawerSections = new Set();
         resetGitStatus();
         resetPiPackages();
+        resetPiAuth();
         render();
         return;
       }
@@ -116,6 +128,7 @@ function render() {
     onRefresh: refreshAll,
     onToggleDrawer: toggleDrawer,
     onToggleRightDrawer: toggleRightDrawer,
+    onToggleDrawerSection: toggleDrawerSection,
     onCreateWorkspace: createWorkspace,
     onSelectWorkspace: selectWorkspace,
     onOpenSessionModal: openSessionModal,
@@ -141,6 +154,9 @@ function render() {
     onRefreshPiPackages: refreshPiPackages,
     onUpdatePiInstallSource: updatePiInstallSource,
     onInstallPiPackage: installPiPackage,
+    onRefreshPiAuth: refreshPiAuth,
+    onUpdatePiAuthForm: updatePiAuthForm,
+    onSavePiAuthProvider: savePiAuthProvider,
     onRemovePiPackage: removePiPackage,
     onUpdatePiPackage: updatePiPackage,
     onOpenPullRequest: openPullRequestModal,
@@ -177,6 +193,18 @@ function resetPiPackages() {
   };
 }
 
+function resetPiAuth() {
+  state.piAuth = {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    providers: {},
+    selectedProvider: "anthropic",
+    apiKey: "",
+  };
+}
+
 function resetPullRequestForm() {
   state.pullRequestForm = {
     open: false,
@@ -195,6 +223,15 @@ function toggleDrawer() {
 
 function toggleRightDrawer() {
   state.rightDrawerCollapsed = !state.rightDrawerCollapsed;
+  render();
+}
+
+function toggleDrawerSection(sectionId) {
+  if (state.collapsedDrawerSections.has(sectionId)) {
+    state.collapsedDrawerSections.delete(sectionId);
+  } else {
+    state.collapsedDrawerSections.add(sectionId);
+  }
   render();
 }
 
@@ -219,6 +256,7 @@ async function refreshAll() {
     await loadSessions();
     await loadGitStatus();
     await loadPiPackages();
+    await loadPiAuth();
     await loadWorkspaceFiles();
   });
 }
@@ -438,6 +476,96 @@ async function refreshWorkspaceFiles() {
 
 async function refreshPiPackages() {
   await loadPiPackages();
+}
+
+async function refreshPiAuth() {
+  await loadPiAuth({showMessage: true});
+}
+
+async function loadPiAuth(options = {}) {
+  if (!state.api) return;
+  state.piAuth = {
+    ...state.piAuth,
+    loading: true,
+    error: "",
+    message: options.showMessage ? "Refreshing authentication providers..." : state.piAuth.message,
+  };
+  render();
+  try {
+    const data = await state.api.getPiAuth();
+    state.piAuth = {
+      ...state.piAuth,
+      loading: false,
+      error: "",
+      message: options.showMessage ? "Authentication providers refreshed." : "",
+      providers: data.providers || {},
+    };
+  } catch (error) {
+    state.piAuth = {
+      ...state.piAuth,
+      loading: false,
+      error: friendlyPiAuthError(error),
+      message: "",
+    };
+  }
+  render();
+}
+
+function updatePiAuthForm(patch) {
+  state.piAuth = {
+    ...state.piAuth,
+    ...patch,
+    error: "",
+    message: "",
+  };
+}
+
+async function savePiAuthProvider() {
+  const provider = String(state.piAuth.selectedProvider || "").trim();
+  const apiKey = String(state.piAuth.apiKey || "").trim();
+  if (!provider || !apiKey) {
+    state.piAuth = {
+      ...state.piAuth,
+      error: provider ? "Enter an API key." : "Choose a provider.",
+      message: "",
+    };
+    render();
+    return;
+  }
+
+  state.piAuth = {
+    ...state.piAuth,
+    saving: true,
+    error: "",
+    message: "Saving API key...",
+  };
+  render();
+  try {
+    const data = await state.api.savePiAuthProvider(provider, apiKey);
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      error: "",
+      message: "API key saved. New sessions will materialize it into Pi auth.json.",
+      providers: data.providers || state.piAuth.providers || {},
+      apiKey: "",
+    };
+  } catch (error) {
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      error: friendlyPiAuthError(error),
+      message: "",
+    };
+  }
+  render();
+}
+
+function friendlyPiAuthError(error) {
+  const message = error.message || "Could not update Pi authentication.";
+  if (message === "invalid_pi_auth_provider") return "Choose a supported API key provider.";
+  if (message === "invalid_pi_auth_key") return "Enter a valid API key value.";
+  return message;
 }
 
 function updatePiInstallSource(source) {

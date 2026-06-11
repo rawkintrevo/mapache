@@ -203,6 +203,38 @@ main.drawer-collapsed.right-drawer-collapsed {
   min-width: 0;
 }
 
+.drawer-section.is-collapsed {
+  gap: 0;
+}
+
+.drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.drawer-section-title h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-center-panel .drawer-section-heading .drawer-section-toggle {
+  min-height: 26px;
+  padding: 0;
+}
+
+.drawer-section-toggle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
 .drawer-section-heading h3 {
   margin: 0;
   color: var(--muted);
@@ -727,9 +759,47 @@ main.drawer-collapsed.right-drawer-collapsed {
   gap: 10px;
 }
 
-.extensions-panel .drawer-section-heading button {
+.extensions-panel .drawer-section-heading .git-status-actions button,
+.auth-center-panel .drawer-section-heading .auth-center-refresh {
   min-height: 30px;
   padding: 6px 10px;
+}
+
+.auth-center-form,
+.auth-provider-list,
+.auth-provider-row {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-provider-row {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.auth-provider-row strong,
+.auth-provider-key {
+  overflow-wrap: anywhere;
+}
+
+.auth-provider-key,
+.auth-provider-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-provider-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.auth-provider-meta span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef2f6;
 }
 
 .package-install-form,

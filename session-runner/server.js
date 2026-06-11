@@ -17,6 +17,7 @@ const bucketName = process.env.STORAGE_BUCKET || "";
 const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
 const piHomeBucketName = process.env.PI_HOME_STORAGE_BUCKET || bucketName;
 const piHomePrefix = normalizePrefix(process.env.PI_HOME_STORAGE_PREFIX || "");
+const ownerUid = process.env.OWNER_UID || "";
 const workspaceId = process.env.WORKSPACE_ID || "";
 const sessionId = process.env.SESSION_ID || "";
 const shutdownToken = process.env.SESSION_SHUTDOWN_TOKEN || "";
@@ -420,6 +421,7 @@ ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${workspaceSourceMode}, sync policy mode: ${workspaceSyncPolicyMode}`);
       await prepareWorkspaceSource();
+      await synchronizePiAuth({materialize: true});
     })
     .then(() => {
       let lastArchiveSync = 0;
@@ -718,6 +720,7 @@ async function syncWorktreeDown() {
 }
 
 async function syncUp(options = {}) {
+  await synchronizePiAuth({materialize: false});
   if (!bucketName || !prefix) return;
   const {directories, files} = await walkWorkspace(workspaceDir);
   const desiredRemotePaths = new Set();
@@ -833,6 +836,88 @@ async function syncArchivesUp() {
       throw error;
     }
   }));
+}
+
+async function synchronizePiAuth(options = {}) {
+  if (!ownerUid) return;
+  const ref = db.collection("users").doc(ownerUid).collection("private").doc("piAuth");
+  const localAuth = await readPiAuthFile();
+
+  if (Object.keys(localAuth).length) {
+    await ref.set({
+      providers: localAuth,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
+
+  if (!options.materialize) return;
+
+  const snap = await ref.get();
+  const remoteAuth = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
+  if (!Object.keys(remoteAuth).length && !Object.keys(localAuth).length) return;
+
+  await writePiAuthFile({
+    ...localAuth,
+    ...remoteAuth,
+  });
+}
+
+async function readPiAuthFile() {
+  const authPath = piAuthFilePath();
+  try {
+    const content = await fs.promises.readFile(authPath, "utf8");
+    return normalizePiAuthProviders(JSON.parse(content));
+  } catch (error) {
+    if (error && error.code === "ENOENT") return {};
+    console.warn("pi auth read failed", compactErrorMessage(error.message || error));
+    return {};
+  }
+}
+
+async function writePiAuthFile(auth) {
+  const authPath = piAuthFilePath();
+  await fs.promises.mkdir(path.dirname(authPath), {recursive: true});
+  await fs.promises.writeFile(authPath, `${JSON.stringify(normalizePiAuthProviders(auth), null, 2)}\n`, {
+    mode: 0o600,
+  });
+  await fs.promises.chmod(authPath, 0o600).catch(() => {});
+}
+
+function piAuthFilePath() {
+  return path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "auth.json");
+}
+
+function normalizePiAuthProviders(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.entries(value).reduce((acc, [provider, credential]) => {
+    const key = normalizeAuthObjectKey(provider);
+    if (!key || !credential || typeof credential !== "object" || Array.isArray(credential)) return acc;
+    acc[key] = normalizePlainAuthObject(credential);
+    return acc;
+  }, {});
+}
+
+function normalizePlainAuthObject(value) {
+  return Object.entries(value || {}).reduce((acc, [key, item]) => {
+    const cleanKey = normalizeAuthObjectKey(key);
+    if (!cleanKey) return acc;
+    const normalized = normalizePlainAuthValue(item);
+    if (normalized !== undefined) acc[cleanKey] = normalized;
+    return acc;
+  }, {});
+}
+
+function normalizePlainAuthValue(value) {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (Array.isArray(value)) {
+    return value.map(normalizePlainAuthValue).filter((entry) => entry !== undefined);
+  }
+  if (value && typeof value === "object") return normalizePlainAuthObject(value);
+  return undefined;
+}
+
+function normalizeAuthObjectKey(value) {
+  return String(value || "").trim().slice(0, 256);
 }
 
 async function findArchiveFile(target) {

@@ -6,7 +6,7 @@ Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud terminal
 
 The app lets an authenticated user create workspaces and run terminal sessions inside Cloud Run containers. The frontend is intentionally operational rather than marketing-oriented: after sign-in, users manage workspaces, sessions, and the active browser terminal.
 
-The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Navigation lives in a collapsible drawer with separate Workspaces, Files, and Sessions sections, and the right-side drawer now holds the placeholder sections `Authentication Center`, `Skills`, and `Extensions` so future contextual tools can live beside the terminal without taking over the main workspace area. On desktop, the app shell is viewport-height and the left drawer, main workspace area, and right drawer scroll independently so long drawer content does not lengthen the whole page. Session creation is available from the active workspace row or from the Sessions section action in the drawer.
+The current selected-session experience prioritizes the terminal. When a session is selected, the main workspace panel renders the terminal first and does not show workspace setup content above it. Navigation lives in a collapsible drawer with individually collapsible Workspaces, Files, and Sessions sections, and the right-side drawer now holds individually collapsible placeholder sections `Authentication Center`, `Skills`, and `Extensions` so future contextual tools can live beside the terminal without taking over the main workspace area. On desktop, the app shell is viewport-height and the left drawer, main workspace area, and right drawer scroll independently so long drawer content does not lengthen the whole page. Session creation is available from the active workspace row or from the Sessions section action in the drawer.
 
 The app now has an explicit architectural split between blank workspaces and GitHub-backed workspaces. Blank workspaces continue to treat Cloud Storage as their durable source of truth. GitHub workspaces treat GitHub as durable and use Cloud Storage as a resumability/cache layer. The detailed design lives in [github-workspaces.md](./github-workspaces.md).
 
@@ -56,6 +56,8 @@ Rendering lives in `src/ui/render.js`. It uses small DOM helpers from `src/ui/ut
 Styling lives in `src/styles.css`. The interface uses restrained operational styling: dense drawer lists, compact controls, 8px-or-less radii for panels/cards, a terminal-first selected-session view, and collapsible left/right drawers for navigation and inspection.
 
 Session image choices live in `src/config/sessionImages.js`. This is the frontend source of truth for the container image dropdown in the create-session modal.
+
+Pi API-key provider choices for the Authentication Center live in `src/config/piAuthProviders.js`. The web UI can add/update API-key entries only; entries created by the Pi CLI/TUI are still displayed after the runner syncs `~/.pi/agent/auth.json` back to Firebase.
 
 ## Backend Flow
 

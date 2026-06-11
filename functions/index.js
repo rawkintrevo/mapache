@@ -31,6 +31,37 @@ const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
 );
 const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 const INTERNAL_STORAGE_DIR = ".mapahce-internal";
+const PI_AUTH_API_KEY_PROVIDERS = new Set([
+  "anthropic",
+  "ant-ling",
+  "azure-openai-responses",
+  "openai",
+  "deepseek",
+  "nvidia",
+  "google",
+  "mistral",
+  "groq",
+  "cerebras",
+  "cloudflare-ai-gateway",
+  "cloudflare-workers-ai",
+  "xai",
+  "openrouter",
+  "vercel-ai-gateway",
+  "zai",
+  "zai-coding-cn",
+  "opencode",
+  "opencode-go",
+  "huggingface",
+  "fireworks",
+  "together",
+  "kimi-coding",
+  "minimax",
+  "minimax-cn",
+  "xiaomi",
+  "xiaomi-token-plan-cn",
+  "xiaomi-token-plan-ams",
+  "xiaomi-token-plan-sgp",
+]);
 
 exports.api = onRequest({
   cors: true,
@@ -58,6 +89,16 @@ exports.api = onRequest({
 
     if (req.method === "GET" && route.name === "me") {
       res.json({user});
+      return;
+    }
+
+    if (req.method === "GET" && route.name === "piAuth") {
+      res.json(await getPiAuth(user.uid));
+      return;
+    }
+
+    if (req.method === "PUT" && route.name === "piAuthProvider") {
+      res.json(await savePiAuthProvider(user.uid, route.provider, req.body || {}));
       return;
     }
 
@@ -233,6 +274,10 @@ exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
 function routeRequest(path) {
   const parts = path.replace(/^\/api\/?/, "/").split("/").filter(Boolean);
   if (parts.length === 1 && parts[0] === "me") return {name: "me"};
+  if (parts.length === 1 && parts[0] === "pi-auth") return {name: "piAuth"};
+  if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
+    return {name: "piAuthProvider", provider: parts[2]};
+  }
   if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
     return {name: "workspaceFiles", workspaceId: parts[1]};
@@ -414,6 +459,32 @@ async function upsertUser(token) {
   });
 
   return toClientDoc(await ref.get());
+}
+
+async function getPiAuth(uid) {
+  const snap = await piAuthDoc(uid).get();
+  const data = snap.exists ? snap.data() : {};
+  return {providers: normalizePiAuthProviders(data.providers)};
+}
+
+async function savePiAuthProvider(uid, provider, payload) {
+  const providerKey = normalizePiAuthProviderKey(provider);
+  const apiKey = normalizePiAuthApiKey(payload && payload.key);
+  const ref = piAuthDoc(uid);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const current = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
+    transaction.set(ref, {
+      providers: {
+        ...current,
+        [providerKey]: {type: "api_key", key: apiKey},
+      },
+      updatedAt: now,
+      ...(snap.exists ? {} : {createdAt: now}),
+    }, {merge: true});
+  });
+  return getPiAuth(uid);
 }
 
 async function listWorkspaces(uid) {
@@ -2126,6 +2197,7 @@ async function buildCloudRunService(workspace, session) {
 async function sessionRunnerEnv(session, options = {}) {
   const env = [
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
+    {name: "OWNER_UID", value: session.ownerUid || ""},
     {name: "WORKSPACE_ID", value: session.workspaceId || ""},
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
@@ -2586,6 +2658,55 @@ function buildGitPackageSource(host, gitPath, ref = "") {
   }
   if (!/^[a-z0-9.-]+$/i.test(normalizedHost)) throw httpError(400, "invalid_package_source");
   return {host: normalizedHost, path: parts.join("/"), ref: String(ref || "").trim()};
+}
+
+function piAuthDoc(uid) {
+  return db.collection("users").doc(uid).collection("private").doc("piAuth");
+}
+
+function normalizePiAuthProviders(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.entries(value).reduce((acc, [provider, credential]) => {
+    const key = cleanName(provider);
+    if (!key || !credential || typeof credential !== "object" || Array.isArray(credential)) return acc;
+    acc[key] = normalizePlainObject(credential);
+    return acc;
+  }, {});
+}
+
+function normalizePlainObject(value) {
+  return Object.entries(value || {}).reduce((acc, [key, item]) => {
+    const cleanKey = cleanName(key);
+    if (!cleanKey) return acc;
+    const normalized = normalizePlainValue(item);
+    if (normalized !== undefined) acc[cleanKey] = normalized;
+    return acc;
+  }, {});
+}
+
+function normalizePlainValue(value) {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (Array.isArray(value)) {
+    return value.map(normalizePlainValue).filter((entry) => entry !== undefined);
+  }
+  if (value && typeof value === "object") return normalizePlainObject(value);
+  return undefined;
+}
+
+function normalizePiAuthProviderKey(value) {
+  const provider = cleanName(value);
+  if (!PI_AUTH_API_KEY_PROVIDERS.has(provider)) {
+    throw httpError(400, "invalid_pi_auth_provider");
+  }
+  return provider;
+}
+
+function normalizePiAuthApiKey(value) {
+  const key = String(value || "").trim();
+  if (!key || /[\u0000-\u001f\u007f]/.test(key) || key.length > 4096) {
+    throw httpError(400, "invalid_pi_auth_key");
+  }
+  return key;
 }
 
 function piPackageCatalogCollection(uid) {

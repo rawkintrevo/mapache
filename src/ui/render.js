@@ -16,6 +16,7 @@ import {
 } from "lucide";
 import {createElement, formatDate, replaceChildren} from "./utils.js";
 import {sessionImages} from "../config/sessionImages.js";
+import {piAuthProviderLabel, piAuthProviders} from "../config/piAuthProviders.js";
 
 const cpuOptions = ["1", "2", "4"];
 const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
@@ -161,6 +162,7 @@ function renderSidebar(props) {
     onDeleteSession,
     onStopSession,
     onToggleDrawer,
+    onToggleDrawerSection,
     onToggleWorkspaceFileDir,
   } = props;
 
@@ -364,32 +366,46 @@ function renderSidebar(props) {
       createElement("h2", {}, "Navigation"),
       toggleButton,
     ]),
-    createElement("section", {className: "drawer-section"}, [
-      createElement("div", {className: "drawer-section-heading"}, [
-        createElement("h3", {}, "Workspaces"),
-      ]),
-      form,
-      createElement("div", {className: "list"}, list),
-    ]),
-    createElement("section", {className: "drawer-section"}, [
-      createElement("div", {className: "drawer-section-heading"}, [
-        createElement("h3", {}, "Files"),
-        createFilesRefreshButton(state, onRefreshWorkspaceFiles),
-      ]),
-      renderWorkspaceFileTree(state, onToggleWorkspaceFileDir, onSelectWorkspaceFile),
-    ]),
-    createElement("section", {className: "drawer-section"}, [
-      createElement("div", {className: "drawer-section-heading"}, [
-        createElement("h3", {}, "Sessions"),
-        createSessionButton(state, onOpenSessionModal),
-      ]),
-      renderDrawerSessionList(state, onSelectSession, onStopSession, onDeleteSession),
-    ]),
+    renderDrawerSection({
+      id: "left-workspaces",
+      title: "Workspaces",
+      state,
+      onToggleDrawerSection,
+      children: [
+        form,
+        createElement("div", {className: "list"}, list),
+      ],
+    }),
+    renderDrawerSection({
+      id: "left-files",
+      title: "Files",
+      state,
+      onToggleDrawerSection,
+      actions: [createFilesRefreshButton(state, onRefreshWorkspaceFiles)],
+      children: [renderWorkspaceFileTree(state, onToggleWorkspaceFileDir, onSelectWorkspaceFile)],
+    }),
+    renderDrawerSection({
+      id: "left-sessions",
+      title: "Sessions",
+      state,
+      onToggleDrawerSection,
+      actions: [createSessionButton(state, onOpenSessionModal)],
+      children: [renderDrawerSessionList(state, onSelectSession, onStopSession, onDeleteSession)],
+    }),
   ]);
 }
 
 function renderInspectorSidebar(props) {
-  const {state, selectedSession, onRefreshPiPackages, onToggleRightDrawer} = props;
+  const {
+    state,
+    selectedSession,
+    onRefreshPiAuth,
+    onRefreshPiPackages,
+    onSavePiAuthProvider,
+    onToggleDrawerSection,
+    onToggleRightDrawer,
+    onUpdatePiAuthForm,
+  } = props;
 
   const toggleButton = createElement("button", {
     "aria-expanded": String(!state.rightDrawerCollapsed),
@@ -411,19 +427,23 @@ function renderInspectorSidebar(props) {
       createElement("h2", {}, "Inspector"),
       toggleButton,
     ]),
-    createElement("section", {className: "drawer-section"}, [
-      createElement("div", {className: "drawer-section-heading"}, [
-        createElement("h3", {}, "Authentication Center"),
-      ]),
-      createElement("p", {className: "empty"}, "tbd"),
-    ]),
-    createElement("section", {className: "drawer-section"}, [
-      createElement("div", {className: "drawer-section-heading"}, [
-        createElement("h3", {}, "Skills"),
-      ]),
-      createElement("p", {className: "empty"}, "tbd"),
-    ]),
+    renderAuthCenterPanel(state.piAuth, {
+      state,
+      onToggleDrawerSection,
+      onRefreshPiAuth,
+      onUpdatePiAuthForm,
+      onSavePiAuthProvider,
+    }),
+    renderDrawerSection({
+      id: "right-skills",
+      title: "Skills",
+      state,
+      onToggleDrawerSection,
+      children: [createElement("p", {className: "empty"}, "tbd")],
+    }),
     renderExtensionsPanel(selectedSession, state.piPackages, {
+      state,
+      onToggleDrawerSection,
       onRefreshPiPackages,
       onUpdatePiInstallSource: props.onUpdatePiInstallSource,
       onInstallPiPackage: props.onInstallPiPackage,
@@ -431,6 +451,157 @@ function renderInspectorSidebar(props) {
       onUpdatePiPackage: props.onUpdatePiPackage,
     }),
   ]);
+}
+
+function renderDrawerSection({
+  id,
+  title,
+  state,
+  onToggleDrawerSection,
+  actions = [],
+  children = [],
+  className = "",
+}) {
+  const collapsedSections = state && state.collapsedDrawerSections instanceof Set ?
+    state.collapsedDrawerSections :
+    new Set();
+  const collapsed = collapsedSections.has(id);
+  const toggleButton = createElement("button", {
+    "aria-expanded": String(!collapsed),
+    ariaLabel: `${collapsed ? "Expand" : "Collapse"} ${title}`,
+    className: "drawer-section-toggle secondary",
+    title: collapsed ? `Expand ${title}` : `Collapse ${title}`,
+    type: "button",
+  }, renderIcon(collapsed ? ChevronRight : ChevronDown));
+  if (onToggleDrawerSection) {
+    toggleButton.addEventListener("click", () => onToggleDrawerSection(id));
+  }
+
+  return createElement("section", {
+    className: [
+      "drawer-section",
+      collapsed ? "is-collapsed" : "",
+      className,
+    ].filter(Boolean).join(" "),
+  }, [
+    createElement("div", {className: "drawer-section-heading"}, [
+      createElement("div", {className: "drawer-section-title"}, [
+        toggleButton,
+        createElement("h3", {}, title),
+      ]),
+      ...actions,
+    ]),
+    ...(collapsed ? [] : children),
+  ]);
+}
+
+function renderAuthCenterPanel(piAuth, handlers = {}) {
+  const status = piAuth || {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    providers: {},
+    selectedProvider: "anthropic",
+    apiKey: "",
+  };
+  const providers = status.providers && typeof status.providers === "object" ? status.providers : {};
+  const providerEntries = Object.entries(providers).sort(([left], [right]) => left.localeCompare(right));
+  const selectedProvider = status.selectedProvider || (piAuthProviders[0] && piAuthProviders[0].key) || "";
+  const providerSelect = createElement("select", {
+    disabled: status.saving,
+    name: "piAuthProvider",
+  }, piAuthProviders.map((provider) => createElement("option", {
+    selected: provider.key === selectedProvider,
+    value: provider.key,
+  }, provider.label)));
+  providerSelect.addEventListener("change", () => {
+    if (handlers.onUpdatePiAuthForm) {
+      handlers.onUpdatePiAuthForm({selectedProvider: providerSelect.value});
+    }
+  });
+
+  const keyInput = createElement("input", {
+    autocomplete: "off",
+    disabled: status.saving,
+    name: "piAuthApiKey",
+    placeholder: "sk-...",
+    type: "password",
+    value: status.apiKey || "",
+  });
+  keyInput.addEventListener("input", () => {
+    if (handlers.onUpdatePiAuthForm) {
+      handlers.onUpdatePiAuthForm({apiKey: keyInput.value});
+    }
+  });
+
+  const form = createElement("form", {className: "auth-center-form"}, [
+    createElement("label", {}, [
+      createElement("span", {}, "Provider"),
+      providerSelect,
+    ]),
+    createElement("label", {}, [
+      createElement("span", {}, "API key"),
+      keyInput,
+    ]),
+    createElement("button", {
+      disabled: status.saving || !handlers.onSavePiAuthProvider,
+      type: "submit",
+    }, status.saving ? "Saving..." : "Save API key"),
+  ]);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (handlers.onSavePiAuthProvider) handlers.onSavePiAuthProvider();
+  });
+
+  const refreshButton = createElement("button", {
+    className: "secondary auth-center-refresh",
+    disabled: status.loading || status.saving || !handlers.onRefreshPiAuth,
+    type: "button",
+  }, status.loading ? "Refreshing..." : "Refresh");
+  if (handlers.onRefreshPiAuth) refreshButton.addEventListener("click", handlers.onRefreshPiAuth);
+
+  return renderDrawerSection({
+    id: "right-authentication",
+    title: "Authentication Center",
+    className: "auth-center-panel",
+    state: handlers.state,
+    onToggleDrawerSection: handlers.onToggleDrawerSection,
+    actions: [refreshButton],
+    children: [
+      createElement("p", {className: "subtle"}, "User-scoped Pi auth providers. API keys saved here are materialized into ~/.pi/agent/auth.json for new sessions; CLI /login changes sync back after runner refresh."),
+      form,
+      status.error ? createElement("p", {className: "empty"}, status.error) : null,
+      status.message ? createElement("p", {className: "subtle"}, status.message) : null,
+      providerEntries.length ? createElement("div", {className: "auth-provider-list"}, providerEntries.map(([provider, value]) => renderAuthProviderRow(provider, value))) :
+        createElement("p", {className: "empty"}, "No Pi auth providers saved yet."),
+    ],
+  });
+}
+
+function renderAuthProviderRow(provider, value) {
+  const credential = value && typeof value === "object" ? value : {};
+  const type = credential.type || "unknown";
+  const keyValue = Object.prototype.hasOwnProperty.call(credential, "key") ? String(credential.key || "") : "";
+  const fields = Object.keys(credential).filter((field) => field !== "key" && field !== "type").sort();
+  return createElement("div", {className: "auth-provider-row"}, [
+    createElement("div", {}, [
+      createElement("strong", {}, piAuthProviderLabel(provider)),
+      createElement("span", {className: "auth-provider-key"}, provider),
+    ]),
+    createElement("div", {className: "auth-provider-meta"}, [
+      createElement("span", {}, type),
+      keyValue ? createElement("span", {}, maskSecret(keyValue)) : null,
+      ...fields.map((field) => createElement("span", {}, field)),
+    ]),
+  ]);
+}
+
+function maskSecret(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  if (text.length <= 8) return "••••";
+  return `${text.slice(0, 4)}…${text.slice(-4)}`;
 }
 
 function renderExtensionsPanel(session, piPackages, handlers = {}) {
@@ -494,16 +665,20 @@ function renderExtensionsPanel(session, piPackages, handlers = {}) {
     ]);
   }
 
-  return createElement("section", {className: "drawer-section extensions-panel"}, [
-    createElement("div", {className: "drawer-section-heading"}, [
-      createElement("h3", {}, "Extensions"),
-      createElement("div", {className: "git-status-actions"}, [updateAllButton, refreshButton]),
-    ]),
-    createElement("p", {className: "subtle"}, "Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh."),
-    session ? renderPackageInstallForm(status, handlers) : null,
-    status.installMessage ? createElement("p", {className: "subtle"}, status.installMessage) : null,
-    body,
-  ]);
+  return renderDrawerSection({
+    id: "right-extensions",
+    title: "Extensions",
+    className: "extensions-panel",
+    state: handlers.state,
+    onToggleDrawerSection: handlers.onToggleDrawerSection,
+    actions: [createElement("div", {className: "git-status-actions"}, [updateAllButton, refreshButton])],
+    children: [
+      createElement("p", {className: "subtle"}, "Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh."),
+      session ? renderPackageInstallForm(status, handlers) : null,
+      status.installMessage ? createElement("p", {className: "subtle"}, status.installMessage) : null,
+      body,
+    ],
+  });
 }
 
 function renderPackageInstallForm(status, handlers) {

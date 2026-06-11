@@ -1,6 +1,12 @@
 export function createApiClient(getToken) {
   return {
     getMe: () => request(getToken, "/api/me"),
+    getPiAuth: () => request(getToken, "/api/pi-auth"),
+    savePiAuthProvider: (provider, key) => request(
+        getToken,
+        `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
+        {method: "PUT", body: {key}},
+    ),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
     createWorkspace: (body) => request(getToken, "/api/workspaces", {
       method: "POST",
