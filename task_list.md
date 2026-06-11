@@ -56,13 +56,14 @@ Before implementation tasks, read:
   - Update overview/runtime docs to point to the new architecture notes.
   - Completed: 2026-06-11. Added `docs/pi-extension-manager.md` and linked it from overview/runtime docs, covering workspace-local package scope, write locations, active-session v1 behavior, package catalog metadata, archive-backed package caches, and additive Pi tooling behavior.
 
-- [ ] 2. **Add workspace Pi package archive targets** - medium (gpt-5.4)
+- [x] 2. **Add workspace Pi package archive targets** - medium (gpt-5.4)
   - Acceptance criteria:
   - Runner treats `/workspace/.pi/npm` and `/workspace/.pi/git` as archive-backed runtime cache directories.
   - `.pi/settings.json` remains normal workspace file sync state.
   - Archive objects live under `.mapahce-internal/archives/`.
   - Existing `node_modules`, `.git`, and `/root/.pi` archive behavior remains intact.
   - `node --check session-runner/server.js` passes.
+  - Completed: 2026-06-11. Added archive targets for `/workspace/.pi/npm` and `/workspace/.pi/git`, storing them under `.mapahce-internal/archives/` while leaving `/workspace/.pi/settings.json` in normal workspace sync.
 
 - [ ] 3. **Hide workspace Pi package cache paths from normal file surfaces** - easy (gpt-5.4-mini)
   - Acceptance criteria:
