@@ -9,9 +9,17 @@ export function Topbar({state, onRefresh}) {
         <h1>Mapache Tools</h1>
       </div>
       <div className="topbar-actions">
-        <Button disabled={state.busy} variant="secondary" onClick={onRefresh}>
+        <a className="topbar-link" href="/community/blog">Blog</a>
+        <a className="topbar-link" href="/community/docs/intro/">Docs</a>
+        <Button
+          aria-label="Refresh app state"
+          disabled={state.busy}
+          icon
+          title={state.busy ? "Working..." : "Refresh"}
+          variant="secondary"
+          onClick={onRefresh}
+        >
           <RefreshCw aria-hidden="true" />
-          {state.busy ? "Working..." : "Refresh"}
         </Button>
       </div>
     </header>

@@ -234,6 +234,24 @@ h1 {
   min-width: 0;
 }
 
+.topbar-link {
+  color: var(--color-text-main);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.topbar-link:hover {
+  color: var(--color-accent);
+}
+
+.topbar-link:focus-visible {
+  outline: 3px solid rgba(20, 125, 100, 0.28);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 main {
   display: grid;
   grid-template-columns: minmax(280px, 380px) minmax(0, 1fr) minmax(280px, 360px);
@@ -2191,6 +2209,12 @@ h2 {
 
   .topbar {
     padding: 14px;
+  }
+
+  .topbar-actions {
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .drawer,
