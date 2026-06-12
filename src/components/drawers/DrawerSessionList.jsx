@@ -1,3 +1,6 @@
+import {Square, Trash2} from "lucide-react";
+import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
+
 export function DrawerSessionList({state, onDeleteSession, onSelectSession, onStopSession}) {
   if (!state.selectedWorkspaceId) {
     return <p className="empty">Select a workspace to view sessions.</p>;
@@ -8,48 +11,51 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
   }
 
   return (
-    <div className="list">
-      {state.sessions.map((session) => (
-        <div className={`row session-row ${session.id === state.selectedSessionId ? "active" : ""}`} key={session.id}>
-          <button className="session-select" type="button" onClick={() => onSelectSession(session.id)}>
-            <span className="session-title">
-              <span>{session.name}</span>
-              <span className="pill">{session.status}</span>
-            </span>
-            <span className="subtle">{session.resources.cpu} CPU / {session.resources.memory}</span>
-          </button>
-          <div className="session-row-actions">
-            {session.status === "running" ? (
-              <button
-                aria-label={`Stop ${session.name}`}
-                className="session-action-button secondary"
-                disabled={state.busy}
-                title={`Stop ${session.name}`}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onStopSession(session.id);
-                }}
-              >
-                ■
-              </button>
-            ) : null}
-            <button
-              aria-label={`Delete ${session.name}`}
-              className="session-action-button secondary danger"
+    <DrawerList>
+      {state.sessions.map((session) => {
+        const actions = [];
+        if (session.status === "running") {
+          actions.push(
+            <DrawerListActionButton
               disabled={state.busy}
-              title={`Delete ${session.name}`}
-              type="button"
+              icon={<Square aria-hidden="true" />}
+              key="stop"
+              label={`Stop ${session.name}`}
+              title={`Stop ${session.name}`}
               onClick={(event) => {
                 event.stopPropagation();
-                onDeleteSession(session.id);
+                onStopSession(session.id);
               }}
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
+            />,
+          );
+        }
+        actions.push(
+          <DrawerListActionButton
+            disabled={state.busy}
+            icon={<Trash2 aria-hidden="true" />}
+            key="delete"
+            label={`Delete ${session.name}`}
+            title={`Delete ${session.name}`}
+            tone="danger"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteSession(session.id);
+            }}
+          />,
+        );
+
+        return (
+          <DrawerListItem
+            actions={actions}
+            active={session.id === state.selectedSessionId}
+            badge={session.status}
+            key={session.id}
+            meta={`${session.resources.cpu} CPU / ${session.resources.memory}`}
+            title={session.name}
+            onSelect={() => onSelectSession(session.id)}
+          />
+        );
+      })}
+    </DrawerList>
   );
 }

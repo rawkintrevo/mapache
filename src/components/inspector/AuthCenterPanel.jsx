@@ -1,4 +1,7 @@
+import {Plus, RefreshCw, Trash2} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
+import {Button} from "../common/Button.jsx";
+import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
 
 function maskSecret(value) {
@@ -14,26 +17,32 @@ function AuthProviderRow({provider, value, disabled, onDelete}) {
   const keyValue = Object.prototype.hasOwnProperty.call(credential, "key") ? String(credential.key || "") : "";
   const fields = Object.keys(credential).filter((field) => field !== "key" && field !== "type").sort();
 
-  return (
-    <div className="auth-provider-row">
-      <div>
-        <strong>{piAuthProviderLabel(provider)}</strong>
-        <span className="auth-provider-key">{provider}</span>
-      </div>
-      <div className="auth-provider-meta">
+  const detail = (
+    <>
+      <span className="drawer-list-row__code">{provider}</span>
+      <div className="drawer-list-row__meta">
         <span>{type}</span>
         {keyValue ? <span>{maskSecret(keyValue)}</span> : null}
         {fields.map((field) => <span key={field}>{field}</span>)}
       </div>
-      <button
-        className="secondary auth-provider-delete"
-        disabled={disabled || !onDelete}
-        type="button"
-        onClick={() => onDelete?.(provider)}
-      >
-        Delete
-      </button>
-    </div>
+    </>
+  );
+
+  return (
+    <DrawerListItem
+      actions={[
+        <DrawerListActionButton
+          disabled={disabled || !onDelete}
+          icon={<Trash2 aria-hidden="true" />}
+          key="delete"
+          label={`Delete ${piAuthProviderLabel(provider)}`}
+          tone="danger"
+          onClick={() => onDelete?.(provider)}
+        />,
+      ]}
+      detail={detail}
+      title={piAuthProviderLabel(provider)}
+    />
   );
 }
 
@@ -58,25 +67,31 @@ export function AuthCenterPanel({
   return (
     <DrawerSection
       actions={[
-        <button
+        <Button
           aria-label="Refresh"
-          className="secondary auth-center-refresh icon-button"
+          className="auth-center-refresh"
           disabled={status.loading || status.saving || !onRefreshPiAuth}
+          icon={true}
           key="refresh-auth"
-          type="button"
+          size="compact"
+          tooltip="Refresh"
+          variant="secondary"
           onClick={onRefreshPiAuth}
         >
-          ↻
-        </button>,
-        <button
+          <RefreshCw aria-hidden="true" />
+        </Button>,
+        <Button
           aria-label="Add"
-          className="secondary auth-center-add icon-button"
+          className="auth-center-add"
+          icon={true}
           key="add-auth"
-          type="button"
+          size="compact"
+          tooltip="Add"
+          variant="secondary"
           onClick={onOpenAuthModal}
         >
-          +
-        </button>,
+          <Plus aria-hidden="true" />
+        </Button>,
       ]}
       className="auth-center-panel"
       id="right-authentication"
@@ -90,7 +105,7 @@ export function AuthCenterPanel({
       {status.error ? <p className="empty">{status.error}</p> : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
       {providerEntries.length ? (
-        <div className="auth-provider-list">
+        <DrawerList>
           {providerEntries.map(([provider, value]) => (
             <AuthProviderRow
               disabled={status.loading || status.saving}
@@ -100,7 +115,7 @@ export function AuthCenterPanel({
               onDelete={onDeletePiAuthProvider}
             />
           ))}
-        </div>
+        </DrawerList>
       ) : (
         <p className="empty">No Pi auth providers saved yet.</p>
       )}

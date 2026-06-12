@@ -1,4 +1,6 @@
+import {RotateCcw} from "lucide-react";
 import {useRef} from "react";
+import {Button} from "../common/Button.jsx";
 
 const cpuOptions = ["1", "2", "4"];
 const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
@@ -53,10 +55,11 @@ export function SessionDetail({busy, session, onResizeSession, onRestartSession}
           </select>
         </label>
         <div className="session-actions">
-          <button disabled={busy} type="button" onClick={handleResize}>Resize</button>
-          <button className="secondary" disabled={busy} type="button" onClick={() => onRestartSession(session.id)}>
+          <Button disabled={busy} onClick={handleResize}>Resize</Button>
+          <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
+            <RotateCcw aria-hidden="true" />
             Restart
-          </button>
+          </Button>
         </div>
       </form>
     </div>

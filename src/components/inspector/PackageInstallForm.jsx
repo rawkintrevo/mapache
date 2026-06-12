@@ -1,3 +1,6 @@
+import {Download} from "lucide-react";
+import {Button} from "../common/Button.jsx";
+
 export function PackageInstallForm({status, onInstallPiPackage, onUpdatePiInstallSource}) {
   const source = status.installSource || "";
 
@@ -17,12 +20,13 @@ export function PackageInstallForm({status, onInstallPiPackage, onUpdatePiInstal
         value={source}
         onChange={(event) => onUpdatePiInstallSource?.(event.target.value)}
       />
-      <button
+      <Button
         disabled={status.loading || status.installing || !onInstallPiPackage || !source.trim()}
         type="submit"
       >
+        <Download aria-hidden="true" />
         {status.installing ? "Installing..." : "Install"}
-      </button>
+      </Button>
     </form>
   );
 }

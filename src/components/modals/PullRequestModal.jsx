@@ -1,3 +1,5 @@
+import {X} from "lucide-react";
+import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 export function PullRequestModal({formState, onClose, onSubmit, onUpdate}) {
@@ -8,7 +10,9 @@ export function PullRequestModal({formState, onClose, onSubmit, onUpdate}) {
       <section aria-modal="true" className="modal-panel pull-request-panel" role="dialog">
         <div className="modal-heading">
           <h2>Open pull request</h2>
-          <button aria-label="Close pull request dialog" className="icon-button secondary" type="button" onClick={onClose}>×</button>
+          <Button aria-label="Close pull request dialog" icon={true} tooltip="Close pull request dialog" variant="secondary" onClick={onClose}>
+            <X aria-hidden="true" />
+          </Button>
         </div>
         <p className="subtle">If the current branch is the default branch, a new mapache/&lt;description&gt; branch will be created before opening the PR.</p>
         {state.error ? <div className="error">{state.error}</div> : null}
@@ -21,8 +25,8 @@ export function PullRequestModal({formState, onClose, onSubmit, onUpdate}) {
         <div className="toolbar">
           <div />
           <div className="session-actions">
-            <button className="secondary" type="button" onClick={onClose}>Cancel</button>
-            <button type="button" onClick={onSubmit}>Open PR</button>
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button onClick={onSubmit}>Open PR</Button>
           </div>
         </div>
       </section>

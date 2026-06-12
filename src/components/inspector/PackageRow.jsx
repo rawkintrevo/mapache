@@ -1,3 +1,6 @@
+import {Download, Trash2} from "lucide-react";
+import {DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
+
 export function PackageRow({
   busy,
   installed = true,
@@ -14,37 +17,49 @@ export function PackageRow({
     installed && packageInfo.filtered ? "filtered" : installed ? "unfiltered" : null,
   ].filter(Boolean).join(" · ");
 
+  const detail = installed ? (
+    packageInfo.installedPath ? (
+      <code className="drawer-list-row__code">{packageInfo.installedPath}</code>
+    ) : (
+      <span className="subtle">Configured; install path not present in the current runner.</span>
+    )
+  ) : (
+    <span className="subtle">Not installed in this workspace.</span>
+  );
+
+  const actions = installed ? [
+    <DrawerListActionButton
+      disabled={busy || !onUpdatePiPackage}
+      icon={<Download aria-hidden="true" />}
+      key="update"
+      label={`Update ${source}`}
+      onClick={() => onUpdatePiPackage?.(source)}
+    />,
+    <DrawerListActionButton
+      disabled={busy || !onRemovePiPackage}
+      icon={<Trash2 aria-hidden="true" />}
+      key="remove"
+      label={`Remove ${source}`}
+      tone="danger"
+      onClick={() => onRemovePiPackage?.(source)}
+    />,
+  ] : [
+    <DrawerListActionButton
+      disabled={busy || !onInstallPiPackage}
+      icon={<Download aria-hidden="true" />}
+      key="install"
+      label={`Install ${source}`}
+      onClick={() => onInstallPiPackage?.(source)}
+    />,
+  ];
+
   return (
-    <div className={`package-row ${installed ? "" : "known-package-row"}`}>
-      <div className="package-row-main">
-        <strong>{source}</strong>
-        <span className="subtle">{meta}</span>
-        {installed ? (
-          packageInfo.installedPath ? (
-            <code className="package-path">{packageInfo.installedPath}</code>
-          ) : (
-            <span className="subtle">Configured; install path not present in the current runner.</span>
-          )
-        ) : (
-          <span className="subtle">Not installed in this workspace.</span>
-        )}
-      </div>
-      <div className="package-row-actions">
-        {installed ? (
-          <>
-            <button className="secondary" disabled={busy || !onUpdatePiPackage} type="button" onClick={() => onUpdatePiPackage?.(source)}>
-              {busy ? "Working..." : "Update"}
-            </button>
-            <button className="secondary" disabled={busy || !onRemovePiPackage} type="button" onClick={() => onRemovePiPackage?.(source)}>
-              {busy ? "Working..." : "Remove"}
-            </button>
-          </>
-        ) : (
-          <button className="secondary" disabled={busy || !onInstallPiPackage} type="button" onClick={() => onInstallPiPackage?.(source)}>
-            {busy ? "Installing..." : "Install"}
-          </button>
-        )}
-      </div>
-    </div>
+    <DrawerListItem
+      actions={actions}
+      className={installed ? "" : "known-package-row"}
+      detail={detail}
+      meta={meta}
+      title={source}
+    />
   );
 }

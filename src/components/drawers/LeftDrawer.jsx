@@ -1,7 +1,9 @@
+import {PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-react";
 import {DrawerSessionList} from "./DrawerSessionList.jsx";
 import {DrawerSection} from "./DrawerSection.jsx";
 import {UserMenu} from "./UserMenu.jsx";
 import {WorkspaceDrawerList} from "./WorkspaceDrawerList.jsx";
+import {Button} from "../common/Button.jsx";
 import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
 
 export function LeftDrawer({
@@ -22,16 +24,18 @@ export function LeftDrawer({
   onToggleWorkspaceFileDir,
 }) {
   const toggleButton = (
-    <button
+    <Button
       aria-expanded={String(!state.drawerCollapsed)}
       aria-label={state.drawerCollapsed ? "Expand drawer" : "Collapse drawer"}
-      className="drawer-toggle secondary"
+      className="drawer-toggle"
+      icon={true}
       title={state.drawerCollapsed ? "Expand drawer" : "Collapse drawer"}
-      type="button"
+      tooltip={state.drawerCollapsed ? "Expand drawer" : "Collapse drawer"}
+      variant="secondary"
       onClick={onToggleDrawer}
     >
-      <span aria-hidden="true" className="icon">{state.drawerCollapsed ? "☰" : "‹"}</span>
-    </button>
+      {state.drawerCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+    </Button>
   );
 
   if (state.drawerCollapsed) {
@@ -47,15 +51,17 @@ export function LeftDrawer({
         </div>
         <DrawerSection
           actions={[
-            <button
+            <Button
               aria-label="Add Workspace"
-              className="secondary icon-button"
+              icon={true}
               key="add-workspace"
-              type="button"
+              size="compact"
+              tooltip="Add Workspace"
+              variant="secondary"
               onClick={onOpenWorkspaceModal}
             >
-              +
-            </button>,
+              <Plus aria-hidden="true" />
+            </Button>,
           ]}
           id="left-workspaces"
           state={state}
@@ -72,17 +78,19 @@ export function LeftDrawer({
         </DrawerSection>
         <DrawerSection
           actions={[
-            <button
+            <Button
               aria-label="Refresh files"
-              className="icon-button compact secondary"
               disabled={state.busy || !state.selectedWorkspaceId}
+              icon={true}
               key="refresh-files"
+              size="compact"
               title="Refresh files"
-              type="button"
+              tooltip="Refresh files"
+              variant="secondary"
               onClick={onRefreshWorkspaceFiles}
             >
-              ↻
-            </button>,
+              <RefreshCw aria-hidden="true" />
+            </Button>,
           ]}
           id="left-files"
           state={state}
@@ -97,17 +105,19 @@ export function LeftDrawer({
         </DrawerSection>
         <DrawerSection
           actions={[
-            <button
+            <Button
               aria-label="Create session"
-              className="icon-button compact"
               disabled={state.busy || !state.selectedWorkspaceId}
+              icon={true}
               key="create-session"
+              size="compact"
               title="Create session"
-              type="button"
+              tooltip="Create session"
+              variant="secondary"
               onClick={onOpenSessionModal}
             >
-              +
-            </button>,
+              <Plus aria-hidden="true" />
+            </Button>,
           ]}
           id="left-sessions"
           state={state}

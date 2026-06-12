@@ -1,4 +1,6 @@
+import {LogOut, RefreshCw, User} from "lucide-react";
 import {useState} from "react";
+import {Button} from "../common/Button.jsx";
 
 function userLabel(state) {
   return (state.profile && (state.profile.displayName || state.profile.email)) ||
@@ -53,6 +55,7 @@ export function UserMenu({state, onRefresh, onShowProfile, onSignOut}) {
                   setOpen(false);
                 }}
               >
+                <User aria-hidden="true" />
                 Profile
               </button>
             </li>
@@ -64,6 +67,7 @@ export function UserMenu({state, onRefresh, onShowProfile, onSignOut}) {
                 type="button"
                 onClick={onRefresh}
               >
+                <RefreshCw aria-hidden="true" />
                 {state.busy ? "Working..." : "Refresh"}
               </button>
             </li>
@@ -75,22 +79,23 @@ export function UserMenu({state, onRefresh, onShowProfile, onSignOut}) {
                 type="button"
                 onClick={onSignOut}
               >
+                <LogOut aria-hidden="true" />
                 Sign out
               </button>
             </li>
           </ul>
         </div>
       ) : null}
-      <button
+      <Button
         aria-expanded={String(open)}
         aria-haspopup="menu"
-        className="drawer-user-button secondary"
-        type="button"
+        className="drawer-user-button"
+        variant="secondary"
         onClick={() => setOpen((value) => !value)}
       >
         <Avatar label={label} photo={photo} />
         <span>{label}</span>
-      </button>
+      </Button>
     </div>
   );
 }

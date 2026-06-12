@@ -1,4 +1,6 @@
+import {Save, X} from "lucide-react";
 import {piAuthProviders} from "../../config/piAuthProviders.js";
+import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 const OPENAI_CODEX_PROVIDER = "openai-codex";
@@ -20,7 +22,9 @@ export function AuthModal({
       <section aria-labelledby="auth-modal-title" aria-modal="true" className="modal-panel" role="dialog">
         <div className="modal-heading">
           <h2 id="auth-modal-title">Add Authentication Provider</h2>
-          <button aria-label="Close" className="icon-button close-button secondary" type="button" onClick={onClose}>×</button>
+          <Button aria-label="Close" icon={true} tooltip="Close" variant="secondary" onClick={onClose}>
+            <X aria-hidden="true" />
+          </Button>
         </div>
         <form
           className="modal-form"
@@ -65,9 +69,10 @@ export function AuthModal({
           {piAuth.error ? <p className="empty">{piAuth.error}</p> : null}
           {piAuth.message ? <p className="subtle">{piAuth.message}</p> : null}
           <div className="modal-actions">
-            <button className="primary" disabled={piAuth.saving} type="submit">
+            <Button disabled={piAuth.saving} type="submit">
+              {!isOpenAiCodex ? <Save aria-hidden="true" /> : null}
               {isOpenAiCodex ? "Start Device Login" : "Save"}
-            </button>
+            </Button>
           </div>
         </form>
       </section>

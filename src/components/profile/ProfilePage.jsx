@@ -1,4 +1,6 @@
+import {LogOut, RefreshCw} from "lucide-react";
 import {useState} from "react";
+import {Button} from "../common/Button.jsx";
 
 function profileValue(value, fallback = "—") {
   return value ? String(value) : fallback;
@@ -115,26 +117,26 @@ export function ProfilePage({state, onRefresh, onSignOut}) {
             <p className="subtle">Allocated Cloud Run resources from terminal sessions.</p>
           </div>
           <div className="profile-usage-tabs" role="tablist" aria-label="Runner usage ranges">
-            <button
+            <Button
               aria-selected={usageTab === "lifetime"}
               className={usageTab === "lifetime" ? "profile-usage-tab active" : "profile-usage-tab"}
               id="profile-usage-tab-lifetime"
               role="tab"
-              type="button"
+              variant="secondary"
               onClick={() => setUsageTab("lifetime")}
             >
               Lifetime
-            </button>
-            <button
+            </Button>
+            <Button
               aria-selected={usageTab === "last30Days"}
               className={usageTab === "last30Days" ? "profile-usage-tab active" : "profile-usage-tab"}
               id="profile-usage-tab-last30Days"
               role="tab"
-              type="button"
+              variant="secondary"
               onClick={() => setUsageTab("last30Days")}
             >
               Last 30 Days
-            </button>
+            </Button>
           </div>
           <div
             aria-labelledby={usageTab === "last30Days" ? "profile-usage-tab-last30Days" : "profile-usage-tab-lifetime"}
@@ -157,12 +159,14 @@ export function ProfilePage({state, onRefresh, onSignOut}) {
           </p>
         </section>
         <div className="profile-actions">
-          <button className="secondary" disabled={state.busy} type="button" onClick={onRefresh}>
+          <Button disabled={state.busy} variant="secondary" onClick={onRefresh}>
+            <RefreshCw aria-hidden="true" />
             {state.busy ? "Working..." : "Refresh profile"}
-          </button>
-          <button className="secondary" disabled={state.busy} type="button" onClick={onSignOut}>
+          </Button>
+          <Button disabled={state.busy} variant="secondary" onClick={onSignOut}>
+            <LogOut aria-hidden="true" />
             Sign out
-          </button>
+          </Button>
         </div>
       </div>
     </section>

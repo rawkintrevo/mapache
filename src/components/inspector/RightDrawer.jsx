@@ -1,4 +1,6 @@
+import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
 
@@ -17,16 +19,18 @@ export function RightDrawer({
   onUpdatePiPackage,
 }) {
   const toggleButton = (
-    <button
+    <Button
       aria-expanded={String(!state.rightDrawerCollapsed)}
       aria-label={state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector"}
-      className="drawer-toggle secondary"
+      className="drawer-toggle"
+      icon={true}
       title={state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector"}
-      type="button"
+      tooltip={state.rightDrawerCollapsed ? "Expand inspector" : "Collapse inspector"}
+      variant="secondary"
       onClick={onToggleRightDrawer}
     >
-      <span aria-hidden="true" className="icon">{state.rightDrawerCollapsed ? "☰" : "›"}</span>
-    </button>
+      {state.rightDrawerCollapsed ? <PanelRightOpen aria-hidden="true" /> : <PanelRightClose aria-hidden="true" />}
+    </Button>
   );
 
   if (state.rightDrawerCollapsed) {

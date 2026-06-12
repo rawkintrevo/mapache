@@ -1,3 +1,5 @@
+import {Button} from "../common/Button.jsx";
+
 function StoryWords({text}) {
   let letterIndex = 0;
 
@@ -41,7 +43,7 @@ export function AuthScreen({onSignIn}) {
         <p aria-label={closingText} className="auth-panel-message">
           <StoryWords text={closingText} />
         </p>
-        <button type="button" onClick={onSignIn}>Sign in with Google</button>
+        <Button onClick={onSignIn}>Sign in with Google</Button>
       </section>
     </div>
   );

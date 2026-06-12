@@ -1,5 +1,7 @@
+import {Save, X} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {formatDate} from "../../utils/formatDate.js";
+import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 export function FileEditorDialog({editor, onClose, onSave, onUpdateContent}) {
@@ -18,7 +20,9 @@ export function FileEditorDialog({editor, onClose, onSave, onUpdateContent}) {
             <h2 id="file-editor-title">{editor.name || "File"}</h2>
             <span>{editor.path}</span>
           </div>
-          <button aria-label="Close editor" className="icon-button secondary" title="Close editor" type="button" onClick={onClose}>×</button>
+          <Button aria-label="Close editor" icon={true} title="Close editor" tooltip="Close editor" variant="secondary" onClick={onClose}>
+            <X aria-hidden="true" />
+          </Button>
         </div>
         {editor.error ? <div className="error">{editor.error}</div> : null}
         {editor.loading ? (
@@ -48,10 +52,10 @@ export function FileEditorDialog({editor, onClose, onSave, onUpdateContent}) {
         )}
         <div className="file-editor-actions">
           {editor.updatedAt ? <span className="subtle">Updated {formatDate(editor.updatedAt)}</span> : <span className="subtle" />}
-          <button className="file-editor-save" disabled={editor.loading || editor.saving} type="button" onClick={() => onSave(content)}>
-            <span aria-hidden="true" className="icon">✓</span>
+          <Button className="file-editor-save" disabled={editor.loading || editor.saving} onClick={() => onSave(content)}>
+            <Save aria-hidden="true" />
             <span>{editor.saving ? "Saving" : "Save"}</span>
-          </button>
+          </Button>
         </div>
       </section>
     </ModalBackdrop>

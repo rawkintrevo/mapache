@@ -1,3 +1,6 @@
+import {RefreshCw} from "lucide-react";
+import {Button} from "../common/Button.jsx";
+
 export function Topbar({state, onRefresh}) {
   return (
     <header className="topbar">
@@ -6,9 +9,10 @@ export function Topbar({state, onRefresh}) {
         <h1>Mapache Tools</h1>
       </div>
       <div className="topbar-actions">
-        <button className="secondary" disabled={state.busy} type="button" onClick={onRefresh}>
+        <Button disabled={state.busy} variant="secondary" onClick={onRefresh}>
+          <RefreshCw aria-hidden="true" />
           {state.busy ? "Working..." : "Refresh"}
-        </button>
+        </Button>
       </div>
     </header>
   );

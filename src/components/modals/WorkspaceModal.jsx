@@ -1,3 +1,5 @@
+import {Plus, X} from "lucide-react";
+import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 export function WorkspaceModal({onClose, onCreateWorkspace}) {
@@ -6,7 +8,9 @@ export function WorkspaceModal({onClose, onCreateWorkspace}) {
       <section aria-labelledby="workspace-modal-title" aria-modal="true" className="modal-panel" role="dialog">
         <div className="modal-heading">
           <h2 id="workspace-modal-title">Create Workspace</h2>
-          <button aria-label="Close" className="icon-button close-button secondary" type="button" onClick={onClose}>×</button>
+          <Button aria-label="Close" icon={true} tooltip="Close" variant="secondary" onClick={onClose}>
+            <X aria-hidden="true" />
+          </Button>
         </div>
         <form
           className="modal-form"
@@ -27,7 +31,10 @@ export function WorkspaceModal({onClose, onCreateWorkspace}) {
             <label className="source-choice"><input defaultChecked name="workspaceSource" type="radio" value="blank" /><span>Blank</span></label>
             <label className="source-choice"><input name="workspaceSource" type="radio" value="github" /><span>GitHub</span></label>
           </div>
-          <button className="primary" type="submit">Create Workspace</button>
+          <Button type="submit">
+            <Plus aria-hidden="true" />
+            Create Workspace
+          </Button>
         </form>
       </section>
     </ModalBackdrop>

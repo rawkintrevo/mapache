@@ -1,10 +1,13 @@
+import {Download, RefreshCw} from "lucide-react";
+import {Button} from "../common/Button.jsx";
+import {DrawerList} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
 import {PackageInstallForm} from "./PackageInstallForm.jsx";
 import {PackageRow} from "./PackageRow.jsx";
 
 function PackageList({knownPackages, packages, status, userPackages, onInstallPiPackage, onRemovePiPackage, onUpdatePiPackage}) {
   return (
-    <div className="package-list">
+    <DrawerList className="package-list">
       {packages.map((packageInfo) => (
         <PackageRow
           busy={status.installing}
@@ -46,7 +49,7 @@ function PackageList({knownPackages, packages, status, userPackages, onInstallPi
           ))}
         </div>
       ) : null}
-    </div>
+    </DrawerList>
   );
 }
 
@@ -88,22 +91,28 @@ export function ExtensionsPanel({
     <DrawerSection
       actions={[
         <div className="git-status-actions" key="package-actions">
-          <button
-            className="secondary"
+          <Button
+            aria-label="Update all"
             disabled={status.loading || status.installing || !onUpdatePiPackage || !packages.length}
-            type="button"
+            icon={true}
+            size="compact"
+            tooltip="Update all"
+            variant="secondary"
             onClick={() => onUpdatePiPackage?.()}
           >
-            {status.installing ? "Working..." : "Update all"}
-          </button>
-          <button
-            className="secondary"
+            <Download aria-hidden="true" />
+          </Button>
+          <Button
+            aria-label="Refresh"
             disabled={status.loading || status.installing || !onRefreshPiPackages}
-            type="button"
+            icon={true}
+            size="compact"
+            tooltip="Refresh"
+            variant="secondary"
             onClick={onRefreshPiPackages}
           >
-            {status.loading ? "Refreshing..." : "Refresh"}
-          </button>
+            <RefreshCw aria-hidden="true" />
+          </Button>
         </div>,
       ]}
       className="extensions-panel"
