@@ -3023,19 +3023,23 @@ function resourceLimits(resources) {
 }
 
 function isIdleSession(session, now) {
-  if (Number(session.activeSocketCount || 0) > 0) return false;
-  const idleTimeoutMinutes = positiveNumber(
-      session.idleTimeoutMinutes,
+  const idleTimeoutMinutes = Math.min(
+      positiveNumber(session.idleTimeoutMinutes, DEFAULT_IDLE_TIMEOUT_MINUTES),
       DEFAULT_IDLE_TIMEOUT_MINUTES,
   );
-  const idleSince = timestampMillis(
-      session.lastDisconnectedAt ||
-      session.lastActivityAt ||
-      session.updatedAt ||
+  const idleSince = latestTimestampMillis(
+      session.lastActivityAt,
+      session.lastConnectedAt,
+      session.lastDisconnectedAt,
+      session.updatedAt,
       session.createdAt,
   );
   if (!idleSince) return false;
   return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
+}
+
+function latestTimestampMillis(...values) {
+  return values.reduce((latest, value) => Math.max(latest, timestampMillis(value)), 0);
 }
 
 function timestampMillis(value) {

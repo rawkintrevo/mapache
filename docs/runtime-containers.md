@@ -236,11 +236,11 @@ Sessions automatically stop after a period without a connected browser terminal.
 - `idleTimeoutMinutes`
 - `shutdownToken`
 
-The default idle timeout is 60 minutes and can be changed for new sessions with the Cloud Functions environment variable `SESSION_IDLE_TIMEOUT_MINUTES`.
+The default idle timeout is 60 minutes and can be changed for new sessions with the Cloud Functions environment variable `SESSION_IDLE_TIMEOUT_MINUTES`. The reaper caps each session's effective timeout at the current backend default, so older session records with a larger stored `idleTimeoutMinutes` value do not keep containers alive longer than the active default.
 
-The scheduled Cloud Function `reapIdleSessions` runs every 5 minutes. It scans running session documents, treats a session as idle when `activeSocketCount` is `0` and the latest disconnect or activity timestamp is older than `idleTimeoutMinutes`, then reuses the same Cloud Run deletion flow as manual stop. Idle-stopped sessions are marked with `stopReason: "idle_timeout"` and `autoStoppedAt`.
+The scheduled Cloud Function `reapIdleSessions` runs every 5 minutes. It scans running session documents, treats a session as idle when the latest terminal activity timestamp is older than `idleTimeoutMinutes`, then reuses the same Cloud Run deletion flow as manual stop. Terminal activity includes terminal connect, disconnect, user input, and shell output; `activeSocketCount` is still recorded for visibility, but it is not allowed to keep a silent container alive forever. Idle-stopped sessions are marked with `stopReason: "idle_timeout"` and `autoStoppedAt`.
 
-Idle is defined as no connected terminal client, not no shell output. A long-running command continues while the browser terminal remains connected. If the browser is closed or disconnected past the timeout, the session service is deleted.
+Idle is defined as no terminal I/O or connection lifecycle activity. A long-running command that continues producing output keeps the session active. If the browser is left open without terminal I/O past the timeout, or is closed/disconnected past the timeout, the session service is deleted.
 
 ## Existing Sessions vs New Sessions
 

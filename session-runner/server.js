@@ -314,6 +314,7 @@ function createTerminalSession() {
       appendToBuffer(data);
       broadcast({type: "data", data});
       appendHistory("stdout", data);
+      markTerminalActivity();
     });
 
     term.onExit(({exitCode: code}) => {
