@@ -55,6 +55,10 @@ export function friendlyPiAuthError(error) {
 export function friendlyFilesError(error) {
   const message = error.message || "Could not load files.";
   if (message === "not_found") return "Files API is not deployed yet.";
+  if (message === "empty_file_upload") return "Choose a non-empty file to upload.";
+  if (message === "file_too_large") return "That file is too large for this workspace file action.";
+  if (message === "invalid_file_path") return "That filename cannot be uploaded.";
+  if (message === "workspace_storage_not_configured") return "Workspace storage is not configured.";
   return message;
 }
 

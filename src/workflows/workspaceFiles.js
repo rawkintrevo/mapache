@@ -16,6 +16,32 @@ export async function loadWorkspaceFilesState(state) {
   }
 }
 
+export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render}) {
+  const selectedFiles = Array.from(files || []).filter(Boolean);
+  if (!state.selectedWorkspaceId || !selectedFiles.length) return;
+
+  state.workspaceFilesUploading = true;
+  state.workspaceFilesUploadMessage = `Uploading ${selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files`}...`;
+  state.workspaceFilesError = "";
+  render();
+
+  try {
+    for (const file of selectedFiles) {
+      await state.api.uploadWorkspaceFile(state.selectedWorkspaceId, file);
+    }
+    state.workspaceFilesUploadMessage = selectedFiles.length === 1 ?
+      `Uploaded ${selectedFiles[0].name}.` :
+      `Uploaded ${selectedFiles.length} files.`;
+    await loadWorkspaceFiles();
+  } catch (error) {
+    state.workspaceFilesError = friendlyFilesError(error);
+    state.workspaceFilesUploadMessage = "";
+  } finally {
+    state.workspaceFilesUploading = false;
+  }
+  render();
+}
+
 export function toggleWorkspaceFileDirState(state, path) {
   const next = new Set(state.expandedFilePaths);
   if (next.has(path)) {

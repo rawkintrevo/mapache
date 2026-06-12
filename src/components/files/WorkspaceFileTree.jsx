@@ -54,20 +54,39 @@ function Files({depth, files, options}) {
 }
 
 export function WorkspaceFileTree({state, onSelectWorkspaceFile, onToggleWorkspaceFileDir}) {
+  const uploadStatus = state.workspaceFilesUploadMessage ? (
+    <p className="file-status">{state.workspaceFilesUploadMessage}</p>
+  ) : null;
+
   if (!state.selectedWorkspaceId) {
     return <p className="empty">Select a workspace to view files.</p>;
   }
 
   if (state.workspaceFilesWorkspaceId !== state.selectedWorkspaceId) {
-    return <p className="empty">Refresh files for this workspace.</p>;
+    return (
+      <>
+        {uploadStatus}
+        <p className="empty">Refresh files for this workspace.</p>
+      </>
+    );
   }
 
   if (state.workspaceFilesError) {
-    return <p className="file-error">{state.workspaceFilesError}</p>;
+    return (
+      <>
+        {uploadStatus}
+        <p className="file-error">{state.workspaceFilesError}</p>
+      </>
+    );
   }
 
   if (!state.workspaceFiles.length) {
-    return <p className="empty">No files synced yet.</p>;
+    return (
+      <>
+        {uploadStatus}
+        <p className="empty">No files synced yet.</p>
+      </>
+    );
   }
 
   const tree = buildFileTree(state.workspaceFiles);
@@ -80,6 +99,7 @@ export function WorkspaceFileTree({state, onSelectWorkspaceFile, onToggleWorkspa
 
   return (
     <div className="file-tree">
+      {uploadStatus}
       <FileNodes childrenMap={tree.children} options={options} />
       <Files depth={0} files={tree.files} options={options} />
       {state.workspaceFilesTruncated ? <p className="empty">Showing first 500 files.</p> : null}

@@ -30,6 +30,8 @@ export function resetFileEditor(state) {
 export function resetWorkspaceFiles(state) {
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
+  state.workspaceFilesUploading = false;
+  state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
   state.workspaceFilesWorkspaceId = state.selectedWorkspaceId;
   state.expandedFilePaths = new Set();
@@ -42,6 +44,8 @@ export function resetSignedOutState(state) {
   state.sessions = [];
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
+  state.workspaceFilesUploading = false;
+  state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
   state.workspaceFilesWorkspaceId = null;
   state.expandedFilePaths = new Set();

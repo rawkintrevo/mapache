@@ -79,6 +79,8 @@ The planned Extensions panel will call authenticated backend routes that proxy t
 
 Clicking a file opens a modal editor. The editor loads text content with `GET /api/workspaces/{workspaceId}/file?path={path}` and saves text content with `PUT /api/workspaces/{workspaceId}/file?path={path}`. Both endpoints verify workspace ownership, normalize the requested relative path under the workspace storage prefix, reject directory marker paths, reject internal runner cache paths, and cap editor reads/writes at 1 MiB. Editor modal state lives in `src/main.js`; the textarea updates that state without re-rendering on every keystroke so typing remains stable while the syntax-highlight backing layer updates in place.
 
+The Files drawer header also has a compact upload action. It opens the browser file picker and sends each selected file as a raw `POST /api/workspaces/{workspaceId}/file?path={filename}` request. The backend uses the same workspace ownership and path validation as the editor, stores the uploaded bytes in Cloud Storage under the workspace prefix, and caps individual uploads at 10 MiB. Uploaded files appear in the sidebar after the workflow refreshes the file listing. For blank workspaces the uploaded object is immediately durable workspace state; for GitHub workspaces it is cached working-tree state until the user commits and pushes through Git.
+
 The backend already accepts `payload.image` for session creation. If no image is passed, it falls back to `SESSION_RUNNER_IMAGE`.
 
 ## Current Design Decisions

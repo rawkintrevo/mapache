@@ -40,6 +40,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
         {method: "PUT", body: {content}},
     ),
+    uploadWorkspaceFile: (workspaceId, file) => uploadFile(
+        getToken,
+        `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(file.name)}`,
+        file,
+    ),
     getSessions: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions`,
@@ -128,6 +133,24 @@ export function createApiClient(getToken) {
         `/api/github/connect?returnTo=${encodeURIComponent(window.location.href)}`,
     ),
   };
+}
+
+async function uploadFile(getToken, path, file) {
+  const token = await getToken();
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || response.statusText || "Request failed");
+  }
+  return data;
 }
 
 async function request(getToken, path, options = {}) {

@@ -84,6 +84,8 @@ export function createInitialState() {
     sessions: [],
     workspaceFiles: [],
     workspaceFilesError: "",
+    workspaceFilesUploading: false,
+    workspaceFilesUploadMessage: "",
     workspaceFilesTruncated: false,
     workspaceFilesWorkspaceId: null,
     expandedFilePaths: new Set(),

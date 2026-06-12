@@ -163,6 +163,18 @@ textarea {
   resize: vertical;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -1680,6 +1692,14 @@ main.drawer-collapsed.right-drawer-collapsed {
   background: #fff3f2;
   color: var(--danger);
   font-size: 13px;
+  font-weight: 700;
+}
+
+.file-status {
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 700;
 }
 

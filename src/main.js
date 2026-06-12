@@ -54,6 +54,7 @@ import {
   selectWorkspaceFileState,
   toggleWorkspaceFileDirState,
   updateFileEditorContentState,
+  uploadWorkspaceFilesState,
 } from "./workflows/workspaceFiles.js";
 
 const state = createInitialState();
@@ -107,6 +108,7 @@ function render() {
     onCreateSession: createSession,
     onSelectSession: selectSession,
     onRefreshWorkspaceFiles: refreshWorkspaceFiles,
+    onUploadWorkspaceFiles: uploadWorkspaceFiles,
     onSelectWorkspaceFile: selectWorkspaceFile,
     onCloseFileEditor: closeFileEditor,
     onUpdateFileEditorContent: updateFileEditorContent,
@@ -341,6 +343,10 @@ async function selectSession(sessionId) {
 
 async function refreshWorkspaceFiles() {
   await runBusy(loadWorkspaceFiles);
+}
+
+async function uploadWorkspaceFiles(files) {
+  await uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render});
 }
 
 async function refreshPiPackages() {

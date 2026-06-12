@@ -1,3 +1,4 @@
+import {useRef} from "react";
 import {PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-react";
 import {DrawerSessionList} from "./DrawerSessionList.jsx";
 import {DrawerSection} from "./DrawerSection.jsx";
@@ -13,6 +14,7 @@ export function LeftDrawer({
   onOpenWorkspaceModal,
   onRefresh,
   onRefreshWorkspaceFiles,
+  onUploadWorkspaceFiles,
   onSelectSession,
   onSelectWorkspace,
   onSelectWorkspaceFile,
@@ -23,6 +25,7 @@ export function LeftDrawer({
   onToggleDrawerSection,
   onToggleWorkspaceFileDir,
 }) {
+  const fileInputRef = useRef(null);
   const toggleButton = (
     <Button
       aria-expanded={String(!state.drawerCollapsed)}
@@ -79,8 +82,21 @@ export function LeftDrawer({
         <DrawerSection
           actions={[
             <Button
+              aria-label="Upload file"
+              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
+              icon={true}
+              key="upload-file"
+              size="compact"
+              title="Upload file"
+              tooltip="Upload file"
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Plus aria-hidden="true" />
+            </Button>,
+            <Button
               aria-label="Refresh files"
-              disabled={state.busy || !state.selectedWorkspaceId}
+              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
               icon={true}
               key="refresh-files"
               size="compact"
@@ -97,6 +113,17 @@ export function LeftDrawer({
           title="Files"
           onToggleDrawerSection={onToggleDrawerSection}
         >
+          <input
+            ref={fileInputRef}
+            className="visually-hidden"
+            multiple={true}
+            tabIndex={-1}
+            type="file"
+            onChange={(event) => {
+              onUploadWorkspaceFiles?.(event.target.files);
+              event.target.value = "";
+            }}
+          />
           <WorkspaceFileTree
             state={state}
             onSelectWorkspaceFile={onSelectWorkspaceFile}

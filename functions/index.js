@@ -31,6 +31,8 @@ const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
 );
 const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 const INTERNAL_STORAGE_DIR = ".mapahce-internal";
+const MAX_WORKSPACE_TEXT_FILE_BYTES = 1024 * 1024;
+const MAX_WORKSPACE_UPLOAD_BYTES = 10 * 1024 * 1024;
 const OPENAI_CODEX_PROVIDER = "openai-codex";
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
@@ -149,6 +151,11 @@ exports.api = onRequest({
 
     if (req.method === "PUT" && route.name === "workspaceFile") {
       res.json(await saveWorkspaceFile(user.uid, route.workspaceId, req.query.path, req.body || {}));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "workspaceFile") {
+      res.status(201).json(await uploadWorkspaceFile(user.uid, route.workspaceId, req.query.path, req));
       return;
     }
 
@@ -1243,7 +1250,7 @@ async function readWorkspaceFile(uid, workspaceId, path) {
 
   const [metadata] = await file.getMetadata();
   const size = Number(metadata.size || 0);
-  if (size > 1024 * 1024) throw httpError(413, "file_too_large");
+  if (size > MAX_WORKSPACE_TEXT_FILE_BYTES) throw httpError(413, "file_too_large");
 
   const [buffer] = await file.download();
   return {
@@ -1259,12 +1266,30 @@ async function readWorkspaceFile(uid, workspaceId, path) {
 async function saveWorkspaceFile(uid, workspaceId, path, payload) {
   const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
   const content = String(payload.content ?? "");
-  if (Buffer.byteLength(content, "utf8") > 1024 * 1024) {
+  if (Buffer.byteLength(content, "utf8") > MAX_WORKSPACE_TEXT_FILE_BYTES) {
     throw httpError(413, "file_too_large");
   }
 
   await file.save(content, {
     contentType: contentTypeForPath(relativePath),
+    resumable: false,
+  });
+
+  const [metadata] = await file.getMetadata();
+  return {
+    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
+async function uploadWorkspaceFile(uid, workspaceId, path, req) {
+  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
+  const buffer = workspaceUploadBuffer(req);
+  if (!buffer.length) throw httpError(400, "empty_file_upload");
+  if (buffer.length > MAX_WORKSPACE_UPLOAD_BYTES) throw httpError(413, "file_too_large");
+
+  await file.save(buffer, {
+    contentType: cleanContentType(req.get("content-type")) || contentTypeForPath(relativePath),
     resumable: false,
   });
 
@@ -3330,6 +3355,19 @@ function contentTypeForPath(path) {
     yml: "application/yaml; charset=utf-8",
   };
   return contentTypes[extension] || "text/plain; charset=utf-8";
+}
+
+function cleanContentType(value) {
+  const contentType = String(value || "").trim();
+  if (!contentType || /[\r\n\u0000-\u001f\u007f]/.test(contentType)) return "";
+  return contentType.slice(0, 255);
+}
+
+function workspaceUploadBuffer(req) {
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody;
+  if (Buffer.isBuffer(req.body)) return req.body;
+  if (typeof req.body === "string") return Buffer.from(req.body);
+  return Buffer.alloc(0);
 }
 
 function toClientDoc(doc) {
