@@ -4,8 +4,8 @@ This document serves as an index for significant UI components in the applicatio
 
 | Component | File Path | Purpose |
 | :--- | :--- | :--- |
-| `App` | `src/App.jsx` | React root component that routes between the `/` landing/auth screen, fatal error, and the signed-in `/app` shell. |
-| `AuthScreen` | `src/components/auth/AuthScreen.jsx` | React landing page for public or signed-out users, with a sign-in action or app-open action for signed-in users at `/`. |
+| `App` | `src/App.jsx` | React root component that routes between the `/` landing page, fatal error, and the signed-in `/app` shell. |
+| `LandingPageScreen` | `src/components/auth/LandingPageScreen.jsx` | React landing page for public or signed-out users, with a sign-in action or app-open action for signed-in users at `/`. |
 | `Button` | `src/components/common/Button.jsx` | Shared button component for semantic variants, icon sizing, and icon-only tooltips. |
 | `FatalError` | `src/components/common/FatalError.jsx` | React configuration/startup error screen. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | React signed-in shell that owns the app wrapper, top bar, grid layout, drawers, workspace panel, and modal stack. |
