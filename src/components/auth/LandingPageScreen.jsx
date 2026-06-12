@@ -178,26 +178,17 @@ function AuthCenterVisual() {
 
 function TransparencyVisual() {
   return (
-    <div className="landing-billing" aria-label="Transparent usage and cost dashboard">
-      <header>
-        <span>Mapache Tools // User Metrics Profile</span>
-      </header>
-      <div className="landing-meter">
-        <span style={{"--meter-width": "74%"}} />
+    <div className="landing-open-carousel" aria-label="Transparent usage screenshot and Marlboro rewards comparison">
+      <div className="landing-open-carousel__track">
+        <figure className="landing-open-carousel__slide">
+          <img src="/usage_screenshot.jpg" alt="Mapache Tools runner usage metrics screen" />
+          <figcaption>Actual runner usage screen</figcaption>
+        </figure>
+        <figure className="landing-open-carousel__slide">
+          <img src="/marlboro_velomobile.jpg" alt="Marlboro Rewards velomobile redemption image" />
+          <figcaption>Marlboro Rewards conversion benchmark</figcaption>
+        </figure>
       </div>
-      <dl>
-        <div>
-          <dt>Last 30 Days Cloud Run Compute</dt>
-          <dd>$2.48</dd>
-        </div>
-        <div>
-          <dt>Current Usage Metric</dt>
-          <dd>845 Marlboro Rewards Points</dd>
-        </div>
-      </dl>
-      <p>
-        Early open access friend build: disregard the point tracker. The maintainer is picking up the tab.
-      </p>
     </div>
   );
 }
@@ -269,13 +260,32 @@ export function LandingPageScreen({onOpenApp, onSignIn, user}) {
       </section>
 
       <section className="landing-section landing-section--open" aria-labelledby="landing-open-title">
-        <div className="landing-copy">
-          <SectionEyebrow>Built in the open</SectionEyebrow>
-          <h2 id="landing-open-title">No enterprise markups. Just raw, serverless pennies.</h2>
-          <p>
-            Mapache Tools is built in the open by a developer who needed a better way to test agents without melting a
-            local rig. The product tracks the literal serverless compute and storage it costs to run your containers,
-            without arbitrary platform markups.
+        <div className="landing-copy landing-open-copy">
+          <p className="landing-eyebrow landing-open-copy__rotator">
+            <span className="landing-open-copy__item landing-open-copy__item--usage">Built in the open</span>
+            <span className="landing-open-copy__item landing-open-copy__item--velomobile">
+              Help me realize my dream
+            </span>
+          </p>
+          <h2 id="landing-open-title" className="landing-open-copy__rotator">
+            <span className="landing-open-copy__item landing-open-copy__item--usage">
+              No enterprise markups. Just raw, serverless pennies.
+            </span>
+            <span className="landing-open-copy__item landing-open-copy__item--velomobile">
+              The Marlboro Rally Cross Velomobile
+            </span>
+          </h2>
+          <p className="landing-open-copy__rotator landing-open-copy__body">
+            <span className="landing-open-copy__item landing-open-copy__item--usage">
+              Mapache Tools is built in the open by a developer who needed a better way to test agents without melting a
+              local rig. The product tracks the literal serverless compute and storage it costs to run your containers,
+              without arbitrary platform markups.
+            </span>
+            <span className="landing-open-copy__item landing-open-copy__item--velomobile">
+              To be clear this is not an actual Marlboro Bucks Prize (I don't smoke anymore and when I did I smoked
+              Lucky Strikes) but an actual dream I had where a wierd naked Native American guided me through the desert
+              where I met Jim Morrison who instructed me to bribe Marbalro to give me a rally cross velomobile.
+            </span>
           </p>
           <div className="landing-actions">
             <Button onClick={action}>{actionLabel}</Button>
