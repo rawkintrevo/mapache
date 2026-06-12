@@ -98,7 +98,7 @@ exports.api = onRequest({
     const user = await requireUser(req);
 
     if (req.method === "GET" && route.name === "me") {
-      res.json({user});
+      res.json({user: await userWithUsage(user)});
       return;
     }
 
@@ -494,6 +494,194 @@ async function upsertUser(token) {
   });
 
   return toClientDoc(await ref.get());
+}
+
+async function userWithUsage(user) {
+  return {
+    ...user,
+    usage: await getUserSessionUsage(user.uid),
+  };
+}
+
+async function getUserSessionUsage(uid) {
+  const now = Date.now();
+  const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+  const totals = createUsageTotals();
+  const last30Days = createUsageTotals();
+
+  const [ledgerSnap, sessionDocs] = await Promise.all([
+    db.collection("users").doc(uid).collection("sessionUsage").get(),
+    listUserSessionDocs(uid),
+  ]);
+
+  ledgerSnap.docs.forEach((doc) => {
+    const entry = doc.data();
+    addUsageTotals(totals, entry);
+    addUsageTotals(last30Days, prorateUsageEntry(entry, thirtyDaysAgo, now));
+  });
+
+  sessionDocs.forEach((doc) => {
+    const session = doc.data();
+    if (session.usageAccountedAt) return;
+    const entry = sessionUsageEntry(doc.id, session, now);
+    if (!entry) return;
+    addUsageTotals(totals, entry);
+    addUsageTotals(last30Days, prorateUsageEntry(entry, thirtyDaysAgo, now));
+  });
+
+  return {
+    lifetime: roundUsageTotals(totals),
+    last30Days: roundUsageTotals(last30Days),
+  };
+}
+
+async function listUserSessionDocs(uid) {
+  try {
+    const snap = await db.collectionGroup("sessions")
+        .where("ownerUid", "==", uid)
+        .get();
+    return snap.docs;
+  } catch (error) {
+    if (!isMissingIndexError(error)) throw error;
+    logger.warn("sessions collection group index not ready; falling back to workspace session scan", {
+      uid,
+      error: error.message,
+    });
+    return listUserSessionDocsByWorkspace(uid);
+  }
+}
+
+async function listUserSessionDocsByWorkspace(uid) {
+  const workspaceSnap = await db.collection("workspaces")
+      .where("ownerUid", "==", uid)
+      .get();
+  const sessionSnaps = await Promise.all(
+      workspaceSnap.docs.map((doc) => doc.ref.collection("sessions").get()),
+  );
+  return sessionSnaps.flatMap((snap) => snap.docs);
+}
+
+function isMissingIndexError(error) {
+  const message = cleanName(error && error.message).toLowerCase();
+  return error && (error.code === 9 || error.code === "failed-precondition") &&
+    message.includes("index");
+}
+
+function createUsageTotals() {
+  return {
+    cpuSeconds: 0,
+    memoryGbSeconds: 0,
+    runtimeSeconds: 0,
+    sessionCount: 0,
+  };
+}
+
+function addUsageTotals(target, usage) {
+  if (!usage) return;
+  target.cpuSeconds += Number(usage.cpuSeconds || 0);
+  target.memoryGbSeconds += Number(usage.memoryGbSeconds || 0);
+  target.runtimeSeconds += Number(usage.runtimeSeconds || 0);
+  target.sessionCount += Number(usage.sessionCount || 0) || (usage.runtimeSeconds > 0 ? 1 : 0);
+}
+
+function roundUsageTotals(totals) {
+  return {
+    cpuSeconds: Math.round(totals.cpuSeconds),
+    memoryGbSeconds: Math.round(totals.memoryGbSeconds),
+    runtimeSeconds: Math.round(totals.runtimeSeconds),
+    sessionCount: Math.round(totals.sessionCount),
+  };
+}
+
+function sessionUsageEntry(sessionId, session, fallbackEndMs = Date.now()) {
+  const startedMs = timestampMillis(session.createdAt);
+  if (!startedMs) return null;
+
+  const endedMs = timestampMillis(session.stoppedAt) ||
+    (isTerminalSessionStatus(session.status) ? timestampMillis(session.updatedAt) : 0) ||
+    fallbackEndMs;
+  if (!endedMs || endedMs <= startedMs) return null;
+
+  const intervalStartMs = Math.max(startedMs, timestampMillis(session.usageAccruedAt) || startedMs);
+  const intervalSeconds = Math.max(0, (endedMs - intervalStartMs) / 1000);
+  const cpu = parseCpuCount(session.resources && session.resources.cpu);
+  const memoryGb = parseMemoryGb(session.resources && session.resources.memory);
+  const runtimeSeconds = (endedMs - startedMs) / 1000;
+  const accruedCpuSeconds = Number(session.usageAccruedCpuSeconds || 0);
+  const accruedMemoryGbSeconds = Number(session.usageAccruedMemoryGbSeconds || 0);
+
+  return {
+    sessionId,
+    workspaceId: cleanName(session.workspaceId || ""),
+    startedAt: admin.firestore.Timestamp.fromMillis(startedMs),
+    endedAt: admin.firestore.Timestamp.fromMillis(endedMs),
+    cpu,
+    memoryGb,
+    runtimeSeconds,
+    cpuSeconds: accruedCpuSeconds + (intervalSeconds * cpu),
+    memoryGbSeconds: accruedMemoryGbSeconds + (intervalSeconds * memoryGb),
+    sessionCount: 1,
+  };
+}
+
+function accrueSessionUsage(session, accruedAt) {
+  const current = sessionUsageEntry(
+      cleanName(session.runnerSessionId || ""),
+      session,
+      accruedAt.toMillis(),
+  );
+
+  return {
+    usageAccruedAt: accruedAt,
+    usageAccruedCpuSeconds: current ? current.cpuSeconds : Number(session.usageAccruedCpuSeconds || 0),
+    usageAccruedMemoryGbSeconds: current ?
+      current.memoryGbSeconds :
+      Number(session.usageAccruedMemoryGbSeconds || 0),
+    usageAccruedRuntimeSeconds: current ?
+      current.runtimeSeconds :
+      Number(session.usageAccruedRuntimeSeconds || 0),
+  };
+}
+
+function prorateUsageEntry(entry, windowStartMs, windowEndMs) {
+  const startedMs = timestampMillis(entry.startedAt);
+  const endedMs = timestampMillis(entry.endedAt);
+  if (!startedMs || !endedMs || endedMs <= windowStartMs || startedMs >= windowEndMs) {
+    return null;
+  }
+
+  const overlapStart = Math.max(startedMs, windowStartMs);
+  const overlapEnd = Math.min(endedMs, windowEndMs);
+  const overlapSeconds = Math.max(0, (overlapEnd - overlapStart) / 1000);
+  const runtimeSeconds = Number(entry.runtimeSeconds || 0);
+  const ratio = runtimeSeconds > 0 ? Math.min(1, overlapSeconds / runtimeSeconds) : 0;
+
+  return {
+    runtimeSeconds: overlapSeconds,
+    cpuSeconds: Number(entry.cpuSeconds || 0) * ratio,
+    memoryGbSeconds: Number(entry.memoryGbSeconds || 0) * ratio,
+    sessionCount: overlapSeconds > 0 ? 1 : 0,
+  };
+}
+
+function sessionUsageRecord(sessionRef, session, endedAt) {
+  if (!session || session.usageAccountedAt || !session.ownerUid) return null;
+  const entry = sessionUsageEntry(sessionRef.id, session, endedAt.toMillis());
+  if (!entry) return null;
+
+  const userUsageRef = db.collection("users")
+      .doc(session.ownerUid)
+      .collection("sessionUsage")
+      .doc(sessionRef.id);
+
+  return {
+    ref: userUsageRef,
+    data: {
+      ...entry,
+      ownerUid: session.ownerUid,
+      recordedAt: endedAt,
+    },
+  };
 }
 
 async function getPiAuth(uid) {
@@ -1123,6 +1311,10 @@ async function createSession(uid, workspaceId, payload) {
     lastActivityAt: now,
     lastConnectedAt: null,
     lastDisconnectedAt: null,
+    usageAccruedAt: now,
+    usageAccruedCpuSeconds: 0,
+    usageAccruedMemoryGbSeconds: 0,
+    usageAccruedRuntimeSeconds: 0,
     autoStoppedAt: null,
     stopReason: null,
     shutdownToken: crypto.randomBytes(24).toString("hex"),
@@ -1171,10 +1363,12 @@ function isTerminalSessionStatus(status) {
 async function resizeSession(uid, workspaceId, sessionId, payload) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
   const resources = normalizeResources(payload);
+  const resizedAt = admin.firestore.Timestamp.now();
   await sessionRef.update({
+    ...accrueSessionUsage(sessionSnap.data(), resizedAt),
     resources,
     status: "resizing",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: resizedAt,
   });
   await patchSessionService(sessionRef, {...sessionSnap.data(), resources});
   return toClientDoc(await sessionRef.get());
@@ -2409,7 +2603,7 @@ async function patchSessionService(sessionRef, session, options = {}) {
 
 async function deleteSessionService(sessionRef, session, options = {}) {
   if (!session.serviceName) {
-    await markSessionStopped(sessionRef, options.reason);
+    await markSessionStopped(sessionRef, session, options.reason);
     return true;
   }
 
@@ -2419,11 +2613,11 @@ async function deleteSessionService(sessionRef, session, options = {}) {
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const response = await client.request({url, method: "DELETE"});
     await waitForOperation(client, response.data);
-    await markSessionStopped(sessionRef, options.reason);
+    await markSessionStopped(sessionRef, session, options.reason);
     return true;
   } catch (error) {
     if (isGoogleNotFound(error)) {
-      await markSessionStopped(sessionRef, options.reason);
+      await markSessionStopped(sessionRef, session, options.reason);
       return true;
     }
 
@@ -2436,18 +2630,28 @@ async function deleteSessionService(sessionRef, session, options = {}) {
   }
 }
 
-async function markSessionStopped(sessionRef, reason) {
+async function markSessionStopped(sessionRef, session, reason) {
+  const stoppedAt = admin.firestore.Timestamp.now();
+  const usageRecord = sessionUsageRecord(sessionRef, session, stoppedAt);
   const stopped = {
     status: "stopped",
     activeSocketCount: 0,
     serviceUrl: null,
-    stoppedAt: admin.firestore.FieldValue.serverTimestamp(),
+    stoppedAt,
     lastError: null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: stoppedAt,
   };
   if (reason) stopped.stopReason = reason;
   if (reason === "idle_timeout") {
-    stopped.autoStoppedAt = admin.firestore.FieldValue.serverTimestamp();
+    stopped.autoStoppedAt = stoppedAt;
+  }
+  if (usageRecord) {
+    stopped.usageAccountedAt = stoppedAt;
+    const batch = db.batch();
+    batch.set(usageRecord.ref, usageRecord.data, {merge: true});
+    batch.update(sessionRef, stopped);
+    await batch.commit();
+    return;
   }
   await sessionRef.update(stopped);
 }
@@ -2791,6 +2995,24 @@ function normalizeResources(payload) {
     cpu: cleanName(payload.cpu || DEFAULT_CPU),
     memory: cleanName(payload.memory || DEFAULT_MEMORY),
   };
+}
+
+function parseCpuCount(value) {
+  const number = Number.parseFloat(cleanName(value || DEFAULT_CPU));
+  return Number.isFinite(number) && number > 0 ? number : Number.parseFloat(DEFAULT_CPU) || 1;
+}
+
+function parseMemoryGb(value) {
+  const raw = cleanName(value || DEFAULT_MEMORY).toLowerCase();
+  const match = raw.match(/^([0-9]+(?:\.[0-9]+)?)(ki|mi|gi|ti|k|m|g|t)?$/);
+  if (!match) return parseMemoryGb(DEFAULT_MEMORY) || 1;
+  const number = Number.parseFloat(match[1]);
+  if (!Number.isFinite(number) || number <= 0) return parseMemoryGb(DEFAULT_MEMORY) || 1;
+  const unit = match[2] || "g";
+  if (unit === "ki" || unit === "k") return number / (1024 * 1024);
+  if (unit === "mi" || unit === "m") return number / 1024;
+  if (unit === "ti" || unit === "t") return number * 1024;
+  return number;
 }
 
 function resourceLimits(resources) {
