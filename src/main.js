@@ -95,6 +95,7 @@ function render() {
     onToggleDrawerSection: toggleDrawerSection,
     onCreateWorkspace: createWorkspace,
     onSelectWorkspace: selectWorkspace,
+    onShowProfile: showProfile,
     onOpenSessionModal: openSessionModal,
     onCloseSessionModal: closeSessionModal,
     onOpenWorkspaceModal: openWorkspaceModal,
@@ -244,6 +245,7 @@ async function createWorkspace(payload) {
 }
 
 async function selectWorkspace(workspaceId) {
+  state.activePage = "workspace";
   state.selectedWorkspaceId = workspaceId;
   state.sessionModalOpen = false;
   resetWorkspaceFiles();
@@ -255,6 +257,12 @@ async function selectWorkspace(workspaceId) {
     await loadPiPackages();
     await loadWorkspaceFiles();
   });
+}
+
+function showProfile() {
+  state.activePage = "profile";
+  state.sessionModalOpen = false;
+  render();
 }
 
 function openSessionModal() {
@@ -302,6 +310,7 @@ async function createSession(payload) {
 }
 
 async function selectSession(sessionId) {
+  state.activePage = "workspace";
   state.selectedSessionId = sessionId;
   await loadGitStatus();
   await loadPiPackages();

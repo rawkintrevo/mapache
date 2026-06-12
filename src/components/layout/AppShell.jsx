@@ -1,6 +1,7 @@
 import {LeftDrawer} from "../drawers/LeftDrawer.jsx";
 import {RightDrawer} from "../inspector/RightDrawer.jsx";
 import {ModalStack} from "../modals/ModalStack.jsx";
+import {ProfilePage} from "../profile/ProfilePage.jsx";
 import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
 import {Topbar} from "./Topbar.jsx";
 
@@ -26,23 +27,30 @@ export function AppShell(props) {
           onDeleteSession={props.onDeleteSession}
           onOpenSessionModal={props.onOpenSessionModal}
           onOpenWorkspaceModal={props.onOpenWorkspaceModal}
+          onRefresh={props.onRefresh}
           onRefreshWorkspaceFiles={props.onRefreshWorkspaceFiles}
           onSelectSession={props.onSelectSession}
           onSelectWorkspace={props.onSelectWorkspace}
+          onShowProfile={props.onShowProfile}
           onSelectWorkspaceFile={props.onSelectWorkspaceFile}
+          onSignOut={props.onSignOut}
           onStopSession={props.onStopSession}
           onToggleDrawer={props.onToggleDrawer}
           onToggleDrawerSection={props.onToggleDrawerSection}
           onToggleWorkspaceFileDir={props.onToggleWorkspaceFileDir}
         />
-        <WorkspacePanel
-          selectedSession={selectedSession}
-          selectedWorkspace={selectedWorkspace}
-          state={state}
-          onResizeSession={props.onResizeSession}
-          onRestartSession={props.onRestartSession}
-          onSelectSession={props.onSelectSession}
-        />
+        {state.activePage === "profile" ? (
+          <ProfilePage state={state} onRefresh={props.onRefresh} onSignOut={props.onSignOut} />
+        ) : (
+          <WorkspacePanel
+            selectedSession={selectedSession}
+            selectedWorkspace={selectedWorkspace}
+            state={state}
+            onResizeSession={props.onResizeSession}
+            onRestartSession={props.onRestartSession}
+            onSelectSession={props.onSelectSession}
+          />
+        )}
         <RightDrawer
           selectedSession={selectedSession}
           state={state}

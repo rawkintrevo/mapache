@@ -9,11 +9,13 @@ This document serves as an index for significant UI components in the applicatio
 | `FatalError` | `src/components/common/FatalError.jsx` | React configuration/startup error screen. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | React signed-in shell that owns the app wrapper, top bar, grid layout, drawers, workspace panel, and modal stack. |
 | `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, user label, refresh, and sign-out controls. |
-| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspaces, files, and sessions. |
+| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspaces, files, sessions, and the pinned user menu. |
 | `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
 | `WorkspaceDrawerList` | `src/components/drawers/WorkspaceDrawerList.jsx` | React workspace list used by the left drawer. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including stop/delete actions. |
 | `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable workspace file tree used by the left drawer. |
+| `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |
+| `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details and account actions. |
 | `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing user-scoped Pi auth providers. |
 | `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for workspace-local Pi packages. |

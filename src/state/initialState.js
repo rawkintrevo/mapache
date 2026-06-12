@@ -91,6 +91,7 @@ export function createInitialState() {
     fileEditor: createFileEditorState(),
     selectedWorkspaceId: null,
     selectedSessionId: null,
+    activePage: "workspace",
     gitStatus: createGitStatusState(),
     piPackages: createPiPackagesState(),
     piAuth: createPiAuthState(),
