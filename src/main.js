@@ -62,7 +62,10 @@ const rootElement = document.querySelector("#root");
 const reactRoot = createRoot(rootElement);
 let fatalError = null;
 
+const APP_PATH = "/app";
+
 start();
+window.addEventListener("popstate", render);
 
 async function start() {
   try {
@@ -86,7 +89,8 @@ async function start() {
 }
 
 function render() {
-  const appProps = state.user ? {
+  const isAppRoute = isAppPath();
+  const appProps = state.user && isAppRoute ? {
     state,
     onSignOut: signOut,
     onRefresh: refreshAll,
@@ -141,9 +145,27 @@ function render() {
   reactRoot.render(h(App, {
     appProps,
     fatalError,
-    onSignIn: signIn,
+    isAppRoute,
+    onOpenApp: openApp,
+    onSignIn: signInAndOpenApp,
     user: state.user,
   }));
+}
+
+function isAppPath(pathname = window.location.pathname) {
+  return pathname === APP_PATH || pathname.startsWith(`${APP_PATH}/`);
+}
+
+function openApp() {
+  if (!isAppPath()) {
+    window.history.pushState({}, "", APP_PATH);
+  }
+  render();
+}
+
+async function signInAndOpenApp() {
+  await signIn();
+  openApp();
 }
 
 function resetGitStatus() {

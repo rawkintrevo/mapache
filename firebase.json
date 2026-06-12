@@ -38,6 +38,18 @@
         "function": "api"
       },
       {
+        "source": "/community/**",
+        "destination": "/community/index.html"
+      },
+      {
+        "source": "/app",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/app/**",
+        "destination": "/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

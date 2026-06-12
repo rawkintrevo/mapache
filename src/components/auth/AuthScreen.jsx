@@ -22,10 +22,12 @@ function StoryWords({text}) {
   ));
 }
 
-export function AuthScreen({onSignIn}) {
+export function AuthScreen({onOpenApp, onSignIn, user}) {
   const storyText = "Once, I got so angry at Anthropic for ruining all the open souce foundations...";
   const followupText = "that I made Mapache Tools using only rage and spite.";
   const closingText = "I hope you enjoy it.";
+  const action = user ? onOpenApp : onSignIn;
+  const actionLabel = user ? "Open app" : "Sign in with Google";
 
   return (
     <div className="auth">
@@ -43,7 +45,7 @@ export function AuthScreen({onSignIn}) {
         <p aria-label={closingText} className="auth-panel-message">
           <StoryWords text={closingText} />
         </p>
-        <Button onClick={onSignIn}>Sign in with Google</Button>
+        <Button onClick={action}>{actionLabel}</Button>
       </section>
     </div>
   );

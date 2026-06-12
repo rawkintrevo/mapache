@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build:main": "vite build",
+    "build:community": "cd community && npm run build",
+    "move:community": "mkdir -p dist/community && cp -r community/build/* dist/community/",
+    "build": "npm run build:main && npm run build:community && npm run move:community",
     "preview": "vite preview"
   },
   "dependencies": {

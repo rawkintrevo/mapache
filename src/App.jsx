@@ -2,13 +2,13 @@ import {AuthScreen} from "./components/auth/AuthScreen.jsx";
 import {FatalError} from "./components/common/FatalError.jsx";
 import {AppShell} from "./components/layout/AppShell.jsx";
 
-export function App({appProps, fatalError, onSignIn, user}) {
+export function App({appProps, fatalError, isAppRoute, onOpenApp, onSignIn, user}) {
   if (fatalError) {
     return <FatalError error={fatalError} />;
   }
 
-  if (!user) {
-    return <AuthScreen onSignIn={onSignIn} />;
+  if (!isAppRoute || !user) {
+    return <AuthScreen onOpenApp={onOpenApp} onSignIn={onSignIn} user={user} />;
   }
 
   return <AppShell {...appProps} />;
