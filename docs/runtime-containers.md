@@ -133,6 +133,25 @@ When preview is enabled, the runner exposes:
 
 HTML responses from the static preview receive a small development logger script when `PREVIEW_INJECT_LOGGER=true`. It forwards `console.log`, `console.info`, `console.warn`, `console.error`, `window.onerror`, and unhandled promise rejections to the runner log buffer. QA agents can combine these logs with Playwright screenshots and interaction checks without needing to scrape the terminal.
 
+Agents can switch the preview gateway from static-file serving to a local app/API server by writing `/workspace/.mapache/preview.json`:
+
+```json
+{
+  "mode": "proxy",
+  "upstream": "http://127.0.0.1:3000"
+}
+```
+
+Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or the configured `staticRoot`.
+
+On startup, `pi-web` seeds three workspace-local Pi skills when they are missing:
+
+- `mapache-preview-build`
+- `mapache-api-hosting`
+- `mapache-preview-qa`
+
+These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-web` sessions. Existing user-edited skills with the same names are not overwritten.
+
 Build and push the image with:
 
 ```bash

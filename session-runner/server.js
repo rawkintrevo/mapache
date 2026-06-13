@@ -36,6 +36,7 @@ const runnerCapabilities = parseRunnerCapabilities();
 const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
 const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
 const previewStaticRoot = path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build"));
+const previewConfigPath = path.join(workspaceDir, ".mapache", "preview.json");
 const previewInjectLogger = previewEnabled && envFlag(process.env.PREVIEW_INJECT_LOGGER, true);
 const previewLogLimit = positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500);
 const previewLogs = [];
@@ -108,12 +109,16 @@ if (previewEnabled) {
     });
   });
 
-  app.get(`${previewBasePath}/*`, async (req, res) => {
-    await servePreviewStatic(req, res);
+  app.all(`${previewBasePath}/*`, async (req, res) => {
+    await servePreview(req, res);
   });
 
   app.get(previewBasePath, (req, res) => {
     res.redirect(`${previewBasePath}/`);
+  });
+
+  app.all(previewBasePath, async (req, res) => {
+    await servePreview(req, res);
   });
 }
 
@@ -512,17 +517,23 @@ function previewCapabilityStatus() {
 }
 
 async function previewStatus() {
-  const indexPath = path.join(previewStaticRoot, "index.html");
+  const config = await readPreviewConfig();
+  const staticRoot = config.staticRoot || previewStaticRoot;
+  const indexPath = path.join(staticRoot, "index.html");
   const indexExists = await pathExists(indexPath);
-  const rootExists = await pathExists(previewStaticRoot);
+  const rootExists = await pathExists(staticRoot);
+  const upstreamReady = config.mode === "proxy" ? await previewUpstreamReady(config.upstream) : false;
   return {
     ok: true,
-    mode: "static",
-    ready: indexExists,
+    mode: config.mode,
+    ready: config.mode === "proxy" ? upstreamReady : indexExists,
     url: `${previewBasePath}/`,
-    staticRoot: previewStaticRoot,
+    staticRoot,
     rootExists,
     indexExists,
+    upstream: config.mode === "proxy" ? config.upstream : null,
+    upstreamReady,
+    configPath: previewConfigPath,
     logs: {
       count: previewLogs.length,
       limit: previewLogLimit,
@@ -539,23 +550,152 @@ async function pathExists(filePath) {
   }
 }
 
-async function servePreviewStatic(req, res) {
+async function servePreview(req, res) {
+  const config = await readPreviewConfig();
+  if (config.mode === "proxy") {
+    await proxyPreviewRequest(req, res, config);
+    return;
+  }
+  await servePreviewStatic(req, res, config);
+}
+
+async function readPreviewConfig() {
+  const fallback = {
+    mode: "static",
+    staticRoot: previewStaticRoot,
+    upstream: "",
+  };
+  try {
+    const raw = await fs.promises.readFile(previewConfigPath, "utf8");
+    const parsed = JSON.parse(raw);
+    const mode = parsed.mode === "proxy" ? "proxy" : "static";
+    const staticRoot = normalizePreviewStaticRoot(parsed.staticRoot) || previewStaticRoot;
+    const upstream = normalizePreviewUpstream(parsed.upstream);
+    return {
+      mode: mode === "proxy" && upstream ? "proxy" : "static",
+      staticRoot,
+      upstream,
+    };
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function normalizePreviewStaticRoot(value) {
+  const clean = normalizeEnvString(value);
+  if (!clean) return "";
+  const resolved = path.isAbsolute(clean) ? path.resolve(clean) : path.resolve(workspaceDir, clean);
+  return safePathInRoot(workspaceDir, resolved) ? resolved : "";
+}
+
+function normalizePreviewUpstream(value) {
+  const clean = normalizeEnvString(value);
+  if (!clean) return "";
+  try {
+    const parsed = new URL(clean);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    if (!["127.0.0.1", "localhost", "::1"].includes(parsed.hostname)) return "";
+    parsed.hash = "";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch (error) {
+    return "";
+  }
+}
+
+async function previewUpstreamReady(upstream) {
+  if (!upstream) return false;
+  return new Promise((resolve) => {
+    const url = new URL(upstream);
+    const request = (url.protocol === "https:" ? require("https") : require("http")).request({
+      hostname: url.hostname,
+      method: "GET",
+      path: `${url.pathname || "/"}${url.search || ""}`,
+      port: url.port || (url.protocol === "https:" ? 443 : 80),
+      protocol: url.protocol,
+      timeout: 1500,
+    }, (response) => {
+      response.resume();
+      resolve(true);
+    });
+    request.on("error", () => resolve(false));
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.end();
+  });
+}
+
+async function proxyPreviewRequest(req, res, config) {
+  const upstream = normalizePreviewUpstream(config.upstream);
+  if (!upstream) {
+    res.status(502).send("preview upstream is not configured");
+    return;
+  }
+
+  const upstreamUrl = new URL(upstream);
+  const relativePath = req.params[0] || "";
+  const requestPath = joinProxyPath(upstreamUrl.pathname, relativePath, req.url);
+  const client = upstreamUrl.protocol === "https:" ? require("https") : require("http");
+  const headers = {...req.headers, host: upstreamUrl.host};
+  if (req.body && Object.keys(req.body).length) {
+    delete headers["content-length"];
+  }
+  const proxyReq = client.request({
+    headers,
+    hostname: upstreamUrl.hostname,
+    method: req.method,
+    path: requestPath,
+    port: upstreamUrl.port || (upstreamUrl.protocol === "https:" ? 443 : 80),
+    protocol: upstreamUrl.protocol,
+  }, (proxyRes) => {
+    const headers = {...proxyRes.headers, "cache-control": "no-store"};
+    res.writeHead(proxyRes.statusCode || 502, headers);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on("error", (error) => {
+    appendPreviewLog({
+      level: "error",
+      args: [`Preview upstream request failed: ${error.message}`],
+      href: `${previewBasePath}/${relativePath}`,
+    });
+    if (!res.headersSent) res.status(502).send("preview upstream unavailable");
+  });
+
+  if (req.body && Object.keys(req.body).length) {
+    proxyReq.end(JSON.stringify(req.body));
+    return;
+  }
+  req.pipe(proxyReq);
+}
+
+function joinProxyPath(upstreamBasePath, relativePath, originalUrl) {
+  const queryIndex = originalUrl.indexOf("?");
+  const query = queryIndex >= 0 ? originalUrl.slice(queryIndex) : "";
+  const base = upstreamBasePath && upstreamBasePath !== "/" ? upstreamBasePath.replace(/\/+$/, "") : "";
+  const cleanRelative = `/${String(relativePath || "").replace(/^\/+/, "")}`;
+  return `${base}${cleanRelative}${query}`;
+}
+
+async function servePreviewStatic(req, res, config) {
+  const staticRoot = config.staticRoot || previewStaticRoot;
   const requestedPath = safePreviewPath(req.params[0] || "index.html");
   if (!requestedPath) {
     res.status(400).send("invalid preview path");
     return;
   }
 
-  let filePath = path.join(previewStaticRoot, requestedPath);
+  let filePath = path.join(staticRoot, requestedPath);
   if (await isDirectory(filePath)) {
     filePath = path.join(filePath, "index.html");
   }
   if (!await pathExists(filePath)) {
     if (shouldServePreviewIndexFallback(req, requestedPath)) {
-      filePath = path.join(previewStaticRoot, "index.html");
+      filePath = path.join(staticRoot, "index.html");
     }
   }
-  if (!safePathInRoot(previewStaticRoot, filePath) || !await pathExists(filePath)) {
+  if (!safePathInRoot(staticRoot, filePath) || !await pathExists(filePath)) {
     res.status(404).send("preview file not found");
     return;
   }
@@ -732,6 +872,7 @@ ensureWorkspace()
       console.log(`workspace source mode: ${workspaceSourceMode}, sync policy mode: ${workspaceSyncPolicyMode}`);
       await prepareWorkspaceSource();
       await synchronizePiAuth({materialize: true});
+      await seedDefaultPiWebSkills();
     })
     .then(() => {
       let lastArchiveSync = 0;
@@ -1502,6 +1643,197 @@ async function updateWorkspacePiPackages(body) {
     source: source || null,
     packages: (await listWorkspacePiPackages()).packages,
   };
+}
+
+async function seedDefaultPiWebSkills() {
+  if (!runnerCapabilities.preview) return;
+
+  const skillsPath = path.join(workspaceDir, ".pi", "skills");
+  await fs.promises.mkdir(skillsPath, {recursive: true});
+
+  for (const skill of defaultPiWebSkills()) {
+    const skillDir = path.join(skillsPath, skill.name);
+    const skillPath = path.join(skillDir, "SKILL.md");
+    if (await pathExists(skillPath)) continue;
+    await fs.promises.mkdir(skillDir, {recursive: true});
+    await fs.promises.writeFile(skillPath, skill.content, "utf8");
+  }
+}
+
+function defaultPiWebSkills() {
+  return [
+    {
+      name: "mapache-preview-build",
+      content: buildPiSkillMarkdown({
+        name: "mapache-preview-build",
+        description: "Build static web output where the Mapache pi-web preview canvas can serve it.",
+        content: `Use this skill when building a static website or static frontend bundle in a Mapache pi-web session.
+
+## Contract
+
+- The preview gateway serves static files from /workspace/build by default.
+- The preview is ready when /workspace/build/index.html exists.
+- The browser preview URL is available as $MAPACHE_PREVIEW_URL.
+- The local runner control URL is available as $MAPACHE_RUNNER_URL.
+
+## Build Steps
+
+1. Build or copy the final static site into /workspace/build.
+2. Make sure the entry point is /workspace/build/index.html.
+3. Check readiness with: curl "$MAPACHE_RUNNER_URL/preview/status"
+4. Open or QA the site at $MAPACHE_PREVIEW_URL.
+
+## Common Frameworks
+
+For Vite, prefer:
+
+\`\`\`bash
+npm run build -- --outDir build
+\`\`\`
+
+or set build.outDir = "build" in vite.config.js.
+
+For projects that output to dist, out, or public, either configure the framework to emit build directly or copy the generated output into /workspace/build.
+
+## Rules
+
+- Do not put source files only in build; put the generated browser-loadable output there.
+- Do not assume dist is visible in the preview unless .mapache/preview.json changes the static root.
+- Prefer relative asset paths or configure the app base path so assets load correctly under /preview/.`,
+      }),
+    },
+    {
+      name: "mapache-api-hosting",
+      content: buildPiSkillMarkdown({
+        name: "mapache-api-hosting",
+        description: "Host an app or API behind the Mapache pi-web preview gateway.",
+        content: `Use this skill when a preview needs a running server, API routes, server-rendered app, or function emulator instead of only static files.
+
+## Contract
+
+The runner can proxy /preview/* to a local HTTP server when the workspace contains /workspace/.mapache/preview.json:
+
+\`\`\`json
+{
+  "mode": "proxy",
+  "upstream": "http://127.0.0.1:3000"
+}
+\`\`\`
+
+Only localhost upstreams are accepted. Use 127.0.0.1 or localhost.
+
+## Server Steps
+
+1. Start the app or API server on a local port, usually 127.0.0.1:3000.
+2. Write /workspace/.mapache/preview.json with mode "proxy" and the upstream URL.
+3. Check readiness with: curl "$MAPACHE_RUNNER_URL/preview/status"
+4. Test through the gateway with: curl "$MAPACHE_PREVIEW_URL"
+
+## Examples
+
+Vite dev server:
+
+\`\`\`bash
+npm run dev -- --host 127.0.0.1 --port 3000
+\`\`\`
+
+Express or Node API:
+
+\`\`\`bash
+HOST=127.0.0.1 PORT=3000 npm start
+\`\`\`
+
+Function framework:
+
+\`\`\`bash
+npx functions-framework --target=app --host=127.0.0.1 --port=3000
+\`\`\`
+
+## Return To Static Mode
+
+Remove /workspace/.mapache/preview.json or write:
+
+\`\`\`json
+{
+  "mode": "static",
+  "staticRoot": "build"
+}
+\`\`\`
+
+## Rules
+
+- Keep servers bound to localhost.
+- Do not expose secret-bearing debug endpoints in the preview.
+- Use $MAPACHE_PREVIEW_URL for QA, because it exercises the same route the user sees in the Preview canvas.`,
+      }),
+    },
+    {
+      name: "mapache-preview-qa",
+      content: buildPiSkillMarkdown({
+        name: "mapache-preview-qa",
+        description: "QA a Mapache pi-web preview with status checks, console logs, screenshots, and Playwright.",
+        content: `Use this skill after building a site or starting a preview server in a Mapache pi-web session.
+
+## Contract
+
+- Preview URL: $MAPACHE_PREVIEW_URL
+- Runner URL: $MAPACHE_RUNNER_URL
+- QA artifact directory: $MAPACHE_QA_DIR
+- Browser console/error logs: $MAPACHE_RUNNER_URL/preview/logs
+- Preview status: $MAPACHE_RUNNER_URL/preview/status
+
+## QA Steps
+
+1. Create the QA directory: mkdir -p "$MAPACHE_QA_DIR/latest"
+2. Confirm preview readiness: curl "$MAPACHE_RUNNER_URL/preview/status"
+3. Load the page with Playwright, capture screenshots, and collect console/page errors.
+4. Check runner-side browser logs: curl "$MAPACHE_RUNNER_URL/preview/logs"
+5. Write findings to $MAPACHE_QA_DIR/latest/report.md and $MAPACHE_QA_DIR/latest/report.json.
+
+## Minimal Playwright Screenshot
+
+\`\`\`bash
+node - <<'EOF'
+const { chromium } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
+
+(async () => {
+  const qaDir = process.env.MAPACHE_QA_DIR || '/workspace/.mapache/qa';
+  const outDir = path.join(qaDir, 'latest');
+  fs.mkdirSync(outDir, { recursive: true });
+  const browser = await chromium.launch({
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium',
+    args: ['--no-sandbox']
+  });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const events = [];
+  page.on('console', (msg) => events.push({ type: 'console', level: msg.type(), text: msg.text() }));
+  page.on('pageerror', (error) => events.push({ type: 'pageerror', text: error.message }));
+  await page.goto(process.env.MAPACHE_PREVIEW_URL, { waitUntil: 'networkidle' });
+  await page.screenshot({ path: path.join(outDir, 'home-desktop.png'), fullPage: true });
+  fs.writeFileSync(path.join(outDir, 'events.json'), JSON.stringify(events, null, 2));
+  await browser.close();
+})();
+EOF
+\`\`\`
+
+## What To Look For
+
+- Blank screens or missing primary content.
+- Console errors, unhandled promise rejections, failed network requests, and broken assets.
+- Layout clipping or overlap at desktop and mobile viewport sizes.
+- Buttons and navigation that do not respond.
+- Forms that cannot be completed or fail without useful feedback.
+
+## Rules
+
+- Save screenshots and reports under $MAPACHE_QA_DIR/latest.
+- Prefer testing through $MAPACHE_PREVIEW_URL, not direct localhost upstream ports.
+- Treat console errors as actionable unless they are clearly third-party noise and documented in the report.`,
+      }),
+    },
+  ];
 }
 
 async function listWorkspacePiSkills() {

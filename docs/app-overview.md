@@ -12,7 +12,7 @@ The current selected-session experience prioritizes the terminal. When a session
 
 The app now has an explicit architectural split between blank workspaces and GitHub-backed workspaces. Blank workspaces continue to treat Cloud Storage as their durable source of truth. GitHub workspaces treat GitHub as durable and use Cloud Storage as a resumability/cache layer. The detailed design lives in [github-workspaces.md](./github-workspaces.md).
 
-The Pi skills manager uses the right-side `Skills` drawer as an additive web surface over Pi's documented skill discovery. Workspace-local skills are Markdown files under `/workspace/.pi/skills/{skill-name}/SKILL.md`; no separate plugin registration is required. The detailed design lives in [pi-skills-manager.md](./pi-skills-manager.md).
+The Pi skills manager uses the right-side `Skills` drawer as an additive web surface over Pi's documented skill discovery. Workspace-local skills are Markdown files under `/workspace/.pi/skills/{skill-name}/SKILL.md`; no separate plugin registration is required. The `pi-web` runner seeds default preview/API/QA skills into that same workspace-local skill tree when they are missing. The detailed design lives in [pi-skills-manager.md](./pi-skills-manager.md).
 
 The planned Pi extension manager will use the right-side `Extensions` drawer as an additive web surface over Pi's existing package tooling. Workspace-local packages are the default: package declarations live in `/workspace/.pi/settings.json`, installed package code is runtime cache state, and packages installed from inside Pi with `pi install -l ...` should appear in the web UI after refresh. The detailed design lives in [pi-extension-manager.md](./pi-extension-manager.md).
 

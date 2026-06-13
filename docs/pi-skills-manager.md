@@ -36,6 +36,22 @@ The endpoints operate inside `/workspace`, then run normal workspace sync so `.p
 
 Skills do not use archive-backed sync. Unlike Pi packages, skills are small Markdown files and should remain visible in normal workspace file state.
 
+## Runner-Seeded Skills
+
+The `pi-web` runner seeds web-workflow skills during startup after workspace restore and before the Pi terminal process starts. Seeded skills are ordinary workspace-local skill files under:
+
+```text
+/workspace/.pi/skills/{skill-name}/SKILL.md
+```
+
+Current `pi-web` seeded skills are:
+
+- `mapache-preview-build`: explains how to build static output to `/workspace/build`.
+- `mapache-api-hosting`: explains how to run a localhost app/API server and proxy `/preview/*` to it with `/workspace/.mapache/preview.json`.
+- `mapache-preview-qa`: explains how to use preview status, browser logs, screenshots, and Playwright QA artifacts under `$MAPACHE_QA_DIR`.
+
+The runner creates these files only when missing. User-edited files with the same names are not overwritten.
+
 ## Backend API
 
 Cloud Functions proxies authenticated requests to the active runner:
