@@ -17,9 +17,10 @@ export function WorkspaceModal({onClose, onCreateWorkspace}) {
           onSubmit={(event) => {
             event.preventDefault();
             const formData = new FormData(event.currentTarget);
+            const sourceType = String(formData.get("workspaceSource") || "blank");
             onCreateWorkspace({
               name: formData.get("name"),
-              source: formData.get("workspaceSource"),
+              source: {type: sourceType},
               repoUrl: formData.get("repoUrl"),
               branch: formData.get("branch"),
             });

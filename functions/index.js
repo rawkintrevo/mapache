@@ -1057,9 +1057,21 @@ async function createWorkspace(uid, payload) {
 }
 
 async function normalizeWorkspaceSourcePayload(uid, payload) {
-  const source = payload && Object.prototype.hasOwnProperty.call(payload, "source") ? payload.source : undefined;
+  let source = payload && Object.prototype.hasOwnProperty.call(payload, "source") ? payload.source : undefined;
   if (source === undefined || source === null || source === "") {
     return {type: "blank"};
+  }
+  if (typeof source === "string") {
+    const sourceType = cleanName(source).toLowerCase();
+    if (!sourceType || sourceType === "blank") {
+      return {type: "blank"};
+    }
+    source = {
+      type: sourceType,
+      repoUrl: payload && (payload.repoUrl || payload.url),
+      requestedBranch: payload && (payload.requestedBranch || payload.branch),
+      requestedCommit: payload && (payload.requestedCommit || payload.commit),
+    };
   }
   if (typeof source !== "object" || Array.isArray(source)) {
     throw httpError(400, "invalid_workspace_source");
