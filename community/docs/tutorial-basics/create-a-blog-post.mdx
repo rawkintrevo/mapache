@@ -2,33 +2,27 @@
 sidebar_position: 3
 ---
 
-# Create a Blog Post
+# Connect Authentication
 
-Docusaurus creates a **page for each blog post**, but also a **blog index page**, a **tag system**, an **RSS** feed...
+Mapache separates global credential storage from workspace access. Store secrets
+once, then explicitly enable them only where a project needs them.
 
-## Create your first Post
+## Add a Provider
 
-Create a file at `blog/2021-02-28-greetings.md`:
+1. Open the Authentication Center.
+2. Add the provider credentials in your profile.
+3. Return to the workspace.
+4. Toggle the provider on for that workspace.
+5. Restart or relaunch sessions that need the new auth surface.
 
-```md title="blog/2021-02-28-greetings.md"
----
-slug: greetings
-title: Greetings!
-authors:
-  - name: Joel Marcey
-    title: Co-creator of Docusaurus 1
-    url: https://github.com/JoelMarcey
-    image_url: https://github.com/JoelMarcey.png
-  - name: Sébastien Lorber
-    title: Docusaurus maintainer
-    url: https://sebastienlorber.com
-    image_url: https://github.com/slorber.png
-tags: [greetings]
----
+## What Gets Generated
 
-Congratulations, you have made your first post!
+Mapache formats workspace-specific auth files and environment values for the
+selected providers. Agents and terminal commands read those generated files from
+inside the runner instead of reaching into your browser profile directly.
 
-Feel free to play around and edit this post as much as you like.
-```
+## Operational Rule
 
-A new blog post is now available at [http://localhost:3000/blog/greetings](http://localhost:3000/blog/greetings).
+If two projects need different credentials, use two workspaces. The boundary is
+the feature: it keeps agent experiments from inheriting access they did not ask
+for.

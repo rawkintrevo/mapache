@@ -1,8 +1,8 @@
 {
-  "label": "Tutorial - Basics",
+  "label": "Core Workflows",
   "position": 2,
   "link": {
     "type": "generated-index",
-    "description": "5 minutes to learn the most important Docusaurus concepts."
+    "description": "The main Mapache workflows for creating workspaces, launching sessions, and keeping changes verifiable."
   }
 }

@@ -1,30 +1,395 @@
-/**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
- */
-
-/* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  color-scheme: light;
+  --mapache-bg: #f7f8fa;
+  --mapache-panel: #ffffff;
+  --mapache-panel-strong: #101820;
+  --mapache-text: #17212b;
+  --mapache-muted: #667085;
+  --mapache-border: #d9dee7;
+  --mapache-accent: #147d64;
+  --mapache-accent-dark: #0f5f4c;
+  --mapache-danger: #b42318;
+  --mapache-code: #0d1117;
+  --mapache-code-text: #d6deeb;
+  --ifm-color-primary: #147d64;
+  --ifm-color-primary-dark: #0f5f4c;
+  --ifm-color-primary-darker: #0d5544;
+  --ifm-color-primary-darkest: #0a4437;
+  --ifm-color-primary-light: #1a9679;
+  --ifm-color-primary-lighter: #20a887;
+  --ifm-color-primary-lightest: #39b99d;
+  --ifm-background-color: var(--mapache-bg);
+  --ifm-navbar-background-color: var(--mapache-panel);
+  --ifm-footer-background-color: var(--mapache-panel-strong);
+  --ifm-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ifm-heading-font-weight: 800;
+  --ifm-heading-color: var(--mapache-text);
+  --ifm-font-color-base: var(--mapache-text);
+  --ifm-font-color-secondary: var(--mapache-muted);
+  --ifm-link-color: var(--mapache-accent);
+  --ifm-link-hover-color: var(--mapache-accent-dark);
+  --ifm-border-color: var(--mapache-border);
+  --ifm-card-border-radius: 8px;
+  --ifm-button-border-radius: 6px;
+  --ifm-code-background: #eef2f6;
+  --ifm-code-color: var(--mapache-text);
   --ifm-code-font-size: 95%;
+  --ifm-navbar-height: 64px;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
+  color-scheme: dark;
+  --mapache-bg: #0d1117;
+  --mapache-panel: #101820;
+  --mapache-panel-strong: #080b0f;
+  --mapache-text: #f8fafc;
+  --mapache-muted: #98a2b3;
+  --mapache-border: #27313d;
+  --mapache-accent: #39b99d;
+  --mapache-accent-dark: #77dcc8;
+  --ifm-background-color: var(--mapache-bg);
+  --ifm-navbar-background-color: var(--mapache-panel);
+  --ifm-footer-background-color: var(--mapache-panel-strong);
+  --ifm-heading-color: var(--mapache-text);
+  --ifm-font-color-base: var(--mapache-text);
+  --ifm-font-color-secondary: var(--mapache-muted);
+  --ifm-code-background: #17212b;
+  --ifm-code-color: #d6deeb;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+body {
+  background: var(--mapache-bg);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--mapache-border);
+  box-shadow: none;
+}
+
+.navbar__brand {
+  gap: 12px;
+  color: var(--mapache-text);
+  font-weight: 800;
+}
+
+.navbar__logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background: var(--mapache-panel-strong);
+}
+
+.navbar__logo img {
+  width: 22px;
+  height: 22px;
+}
+
+.navbar__item,
+.navbar__link {
+  color: var(--mapache-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+  color: var(--mapache-accent);
+}
+
+.button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button--primary {
+  background: var(--mapache-accent);
+  color: #ffffff;
+}
+
+.button--primary:hover {
+  background: var(--mapache-accent-dark);
+  color: #ffffff;
+}
+
+.button--secondary {
+  background: #eef2f6;
+  color: var(--mapache-text);
+}
+
+.button--secondary:hover {
+  background: #e1e7ef;
+  color: var(--mapache-text);
+}
+
+[data-theme='dark'] .button--secondary {
+  background: #17212b;
+  color: var(--mapache-text);
+}
+
+[data-theme='dark'] .button--secondary:hover {
+  background: #1d2936;
+}
+
+.button:focus-visible,
+.navbar__link:focus-visible,
+.menu__link:focus-visible,
+.pagination-nav__link:focus-visible {
+  outline: 3px solid rgba(20, 125, 100, 0.28);
+  outline-offset: 2px;
+}
+
+.main-wrapper {
+  background: var(--mapache-bg);
+}
+
+.theme-doc-markdown,
+.theme-blog-post-page article,
+.theme-blog-list-page article {
+  color: var(--mapache-text);
+}
+
+.theme-doc-markdown {
+  padding: 24px;
+  border: 1px solid var(--mapache-border);
+  border-radius: 8px;
+  background: var(--mapache-panel);
+}
+
+.theme-doc-markdown h1,
+.theme-blog-post-page h1,
+.theme-blog-list-page h2 {
+  letter-spacing: 0;
+}
+
+.theme-doc-markdown h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.05;
+}
+
+.theme-doc-markdown h2 {
+  padding-top: 10px;
+  border-top: 1px solid var(--mapache-border);
+  font-size: 24px;
+}
+
+.theme-doc-markdown p,
+.theme-doc-markdown li,
+.theme-blog-post-page p,
+.theme-blog-list-page p,
+.theme-blog-post-page li {
+  color: var(--mapache-muted);
+  line-height: 1.65;
+}
+
+.theme-doc-markdown strong,
+.theme-blog-post-page strong,
+.theme-blog-list-page strong {
+  color: var(--mapache-text);
+}
+
+.breadcrumbs {
+  margin-bottom: 16px;
+}
+
+.breadcrumbs__link {
+  border-radius: 6px;
+  color: var(--mapache-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link,
+.breadcrumbs__link:hover {
+  color: var(--mapache-accent);
+}
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--mapache-border) !important;
+  background: var(--mapache-panel);
+}
+
+.menu {
+  padding: 16px 12px;
+}
+
+.menu__link {
+  border-radius: 6px;
+  color: var(--mapache-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.menu__link:hover,
+.menu__link--active {
+  background: #e9f6f2;
+  color: var(--mapache-accent-dark);
+}
+
+[data-theme='dark'] .menu__link:hover,
+[data-theme='dark'] .menu__link--active {
+  background: rgb(57 185 157 / 14%);
+  color: var(--mapache-accent-dark);
+}
+
+.table-of-contents {
+  border-left: 1px solid var(--mapache-border);
+}
+
+.table-of-contents__link {
+  color: var(--mapache-muted);
+  font-size: 13px;
+}
+
+.table-of-contents__link--active,
+.table-of-contents__link:hover {
+  color: var(--mapache-accent);
+}
+
+.theme-code-block,
+.prism-code {
+  border-radius: 8px;
+}
+
+.theme-code-block {
+  border: 1px solid var(--mapache-border);
+  box-shadow: none !important;
+}
+
+code {
+  border: 0;
+  border-radius: 6px;
+}
+
+.card,
+.pagination-nav__link,
+.theme-admonition {
+  border: 1px solid var(--mapache-border);
+  border-radius: 8px;
+  background: var(--mapache-panel);
+  box-shadow: none;
+}
+
+[class*='generatedIndexPage'] {
+  padding: 24px;
+  border: 1px solid var(--mapache-border);
+  border-radius: 8px;
+  background: var(--mapache-panel);
+}
+
+.card {
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.card:hover {
+  border-color: rgb(20 125 100 / 42%);
+  transform: translateY(-1px);
+}
+
+.card__header h2,
+.card__header h3 {
+  color: var(--mapache-text);
+}
+
+.card__body {
+  color: var(--mapache-muted);
+}
+
+.pagination-nav {
+  gap: 12px;
+}
+
+.pagination-nav__label {
+  color: var(--mapache-text);
+}
+
+.pagination-nav__sublabel {
+  color: var(--mapache-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.theme-blog-list-page article,
+.theme-blog-post-page article {
+  padding: 24px;
+  border: 1px solid var(--mapache-border);
+  border-radius: 8px;
+  background: var(--mapache-panel);
+}
+
+.theme-blog-list-page article + article {
+  margin-top: 20px;
+}
+
+.theme-blog-list-page header h2,
+.theme-blog-post-page header h1 {
+  margin-bottom: 10px;
+  color: var(--mapache-text);
+  line-height: 1.08;
+}
+
+.theme-blog-list-page header h2 a,
+.theme-blog-post-page header h1 {
+  color: var(--mapache-text);
+}
+
+.theme-blog-list-page header h2 a:hover {
+  color: var(--mapache-accent);
+}
+
+.avatar__name,
+.avatar__subtitle,
+.theme-blog-date,
+.theme-blog-read-time {
+  color: var(--mapache-muted);
+}
+
+.avatar__name {
+  font-weight: 800;
+}
+
+.avatar__photo {
+  border-radius: 7px;
+  background: var(--mapache-panel-strong);
+}
+
+[class*='tag_'],
+[class*='tags_'] a,
+.theme-doc-version-badge {
+  border: 0;
+  border-radius: 999px;
+  background: #e9f6f2;
+  color: var(--mapache-accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+[data-theme='dark'] [class*='tag_'],
+[data-theme='dark'] [class*='tags_'] a,
+[data-theme='dark'] .theme-doc-version-badge {
+  background: rgb(57 185 157 / 14%);
+  color: var(--mapache-accent-dark);
+}
+
+.footer {
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.footer__title {
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.footer__link-item,
+.footer__copyright {
+  color: #cbd5e1;
 }

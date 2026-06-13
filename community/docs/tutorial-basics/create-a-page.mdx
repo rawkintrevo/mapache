@@ -2,42 +2,31 @@
 sidebar_position: 1
 ---
 
-# Create a Page
+# Create a Workspace
 
-Add **Markdown or React** files to `src/pages` to create a **standalone page**:
+A workspace is the project boundary for a repository, auth settings, file sync,
+and session history. Treat it like a disposable development environment with a
+stable connection to the code you care about.
 
-- `src/pages/index.js` → `localhost:3000/`
-- `src/pages/foo.md` → `localhost:3000/foo`
-- `src/pages/foo/bar.js` → `localhost:3000/foo/bar`
+## Before You Start
 
-## Create your first React Page
+- Have the Git repository URL ready.
+- Decide which credentials the workspace should be allowed to use.
+- Pick the runtime image that best matches the project.
 
-Create a file at `src/pages/my-react-page.js`:
+## Create the Workspace
 
-```jsx title="src/pages/my-react-page.js"
-import React from 'react';
-import Layout from '@theme/Layout';
+1. Open Mapache Tools.
+2. Select **New Workspace**.
+3. Paste the repository URL.
+4. Confirm the source summary.
+5. Save the workspace.
 
-export default function MyReactPage() {
-  return (
-    <Layout>
-      <h1>My React page</h1>
-      <p>This is a React page</p>
-    </Layout>
-  );
-}
-```
+The workspace appears in the left drawer. From there you can launch sessions,
+refresh repository state, and inspect generated files.
 
-A new page is now available at [http://localhost:3000/my-react-page](http://localhost:3000/my-react-page).
+## Keep It Scoped
 
-## Create your first Markdown Page
-
-Create a file at `src/pages/my-markdown-page.md`:
-
-```mdx title="src/pages/my-markdown-page.md"
-# My Markdown page
-
-This is a Markdown page
-```
-
-A new page is now available at [http://localhost:3000/my-markdown-page](http://localhost:3000/my-markdown-page).
+Create separate workspaces when projects need different credentials, dependency
+sets, or agent skills. Sharing one workspace across unrelated projects makes it
+harder to reason about auth exposure and runtime drift.

@@ -11,7 +11,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Mapache Tools Community',
-  // tagline: 'Mapache Tools for Dummies',
+  tagline: 'Docs, guides, and operating notes for serverless agent workspaces.',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -25,10 +25,8 @@ const config = {
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/community/',
 
-  // GitHub pages deployment config.
-  // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'facebook', // Usually your GitHub org/user name.
-  projectName: 'docusaurus', // Usually your repo name.
+  organizationName: 'rawkintrevo',
+  projectName: 'mapahce',
 
   onBrokenLinks: 'throw',
 
@@ -47,10 +45,8 @@ const config = {
       ({
         docs: {
           sidebarPath: './sidebars.js',
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
+            'https://github.com/rawkintrevo/mapahce/tree/main/community/',
         },
         blog: {
           showReadingTime: true,
@@ -58,11 +54,8 @@ const config = {
             type: ['rss', 'atom'],
             xslt: true,
           },
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
-          // Useful options to enforce blogging best practices
+            'https://github.com/rawkintrevo/mapahce/tree/main/community/',
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
           onUntruncatedBlogPosts: 'warn',
@@ -78,14 +71,14 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       // Replace with your project's social card
-      image: 'img/docusaurus-social-card.jpg',
+      image: 'img/logo.svg',
       colorMode: {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: 'My Site',
+        title: 'Mapache',
         logo: {
-          alt: 'My Site Logo',
+          alt: 'Mapache Tools logo',
           src: 'img/logo.svg',
         },
         items: [
@@ -93,11 +86,16 @@ const config = {
             type: 'docSidebar',
             sidebarId: 'tutorialSidebar',
             position: 'left',
-            label: 'Tutorial',
+            label: 'Docs',
           },
           {to: '/blog', label: 'Blog', position: 'left'},
           {
-            href: 'https://github.com/facebook/docusaurus',
+            href: 'https://mapache.tools/',
+            label: 'Open App',
+            position: 'right',
+          },
+          {
+            href: 'https://github.com/rawkintrevo/mapahce',
             label: 'GitHub',
             position: 'right',
           },
@@ -110,8 +108,12 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'Tutorial',
+                label: 'Quick Start',
                 to: '/docs/intro',
+              },
+              {
+                label: 'Guides',
+                to: '/docs/tutorial-basics/create-a-document',
               },
             ],
           },
@@ -119,16 +121,12 @@ const config = {
             title: 'Community',
             items: [
               {
-                label: 'Stack Overflow',
-                href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+                label: 'Development Blog',
+                to: '/blog',
               },
               {
-                label: 'Discord',
-                href: 'https://discordapp.com/invite/docusaurus',
-              },
-              {
-                label: 'X',
-                href: 'https://x.com/docusaurus',
+                label: 'GitHub',
+                href: 'https://github.com/rawkintrevo/mapahce',
               },
             ],
           },
@@ -136,17 +134,17 @@ const config = {
             title: 'More',
             items: [
               {
-                label: 'Blog',
-                to: '/blog',
+                label: 'Open App',
+                href: 'https://mapache.tools/',
               },
               {
-                label: 'GitHub',
-                href: 'https://github.com/facebook/docusaurus',
+                label: 'Main Repository',
+                href: 'https://github.com/rawkintrevo/mapahce',
               },
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} My Project, Inc. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Mapache Tools. Built with Docusaurus.`,
       },
       prism: {
         theme: prismThemes.github,

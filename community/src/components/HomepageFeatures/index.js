@@ -4,47 +4,45 @@ import styles from './styles.module.css';
 
 const FeatureList = [
   {
-    title: 'Easy to Use',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    eyebrow: 'Workspace docs',
+    title: 'Launch isolated agent sessions',
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        Connect a repository, choose a runtime image, and start a Cloud Run backed
+        workspace without rebuilding your local machine around each agent.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    eyebrow: 'Runtime notes',
+    title: 'Understand the container boundary',
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        The docs explain runner image choices, workspace file sync, terminal
+        behavior, and the operational assumptions behind serverless sessions.
       </>
     ),
   },
   {
-    title: 'Powered by React',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    eyebrow: 'Auth center',
+    title: 'Keep credentials workspace scoped',
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        Store provider credentials in your profile, then enable only the secrets
+        each workspace needs through predictable generated files and variables.
       </>
     ),
   },
 ];
 
-function Feature({Svg, title, description}) {
+function Feature({eyebrow, title, description}) {
   return (
-    <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
+    <div className={clsx('col col--4', styles.featureColumn)}>
+      <article className={styles.featureCard}>
+        <span>{eyebrow}</span>
         <Heading as="h3">{title}</Heading>
         <p>{description}</p>
-      </div>
+      </article>
     </div>
   );
 }

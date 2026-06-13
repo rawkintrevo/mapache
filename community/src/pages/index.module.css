@@ -1,23 +1,154 @@
-/**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
- */
-
 .heroBanner {
-  padding: 4rem 0;
-  text-align: center;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+  align-items: center;
+  gap: 32px;
+  min-height: calc(100vh - var(--ifm-navbar-height));
+  padding: 48px clamp(24px, 5vw, 72px);
+  color: var(--mapache-text);
+  background:
+    linear-gradient(110deg, rgb(247 248 250 / 82%) 0%, rgb(247 248 250 / 68%) 52%, rgb(247 248 250 / 46%) 100%),
+    url("https://mapache.tools/jumbotron.gif") center / cover no-repeat;
+  border-bottom: 1px solid var(--mapache-border);
+  text-align: left;
   position: relative;
   overflow: hidden;
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
-  }
+.heroBanner :global(.container) {
+  width: 100%;
+  max-width: 720px;
+  margin: 0;
+  padding: 0;
+}
+
+.heroBanner :global(.hero__title) {
+  max-width: 720px;
+  margin: 0;
+  color: var(--mapache-text);
+  font-size: clamp(40px, 6vw, 74px);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.heroBanner :global(.hero__subtitle) {
+  max-width: 680px;
+  margin: 18px 0 0;
+  color: #41505f;
+  font-size: clamp(16px, 1.4vw, 20px);
+  line-height: 1.6;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  color: var(--mapache-accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .buttons {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.heroVisual {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgb(23 33 43 / 12%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 28px 80px rgb(16 24 32 / 14%);
+}
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 210px;
+  padding: 16px;
+  border: 1px solid var(--mapache-border);
+  border-radius: 8px;
+  background: var(--mapache-panel);
+}
+
+.panel:nth-child(2) {
+  grid-row: span 2;
+}
+
+.panel span {
+  color: var(--mapache-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.panel strong {
+  color: var(--mapache-text);
+  font-size: 18px;
+}
+
+.panel code {
+  display: block;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #eef2f6;
+  color: var(--mapache-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.panelDark {
+  min-height: 434px;
+  border-color: rgb(255 255 255 / 12%);
+  background: #0d1117;
+}
+
+.panelDark span {
+  color: #98a2b3;
+}
+
+.panelDark code {
+  background: rgb(255 255 255 / 7%);
+  color: #d6deeb;
+}
+
+.success {
+  color: #86efac !important;
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding: 56px 20px;
+  }
+
+  .heroVisual {
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .panelDark {
+    min-height: 0;
+  }
+
+  .panel:nth-child(2) {
+    grid-row: auto;
+  }
+}
+
+@media screen and (max-width: 520px) {
+  .buttons :global(.button) {
+    width: 100%;
+  }
 }

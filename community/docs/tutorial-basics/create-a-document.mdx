@@ -2,56 +2,31 @@
 sidebar_position: 2
 ---
 
-# Create a Document
+# Launch a Session
 
-Documents are **groups of pages** connected through:
+A session is the live runner for a workspace. It gives you a terminal-first
+environment backed by a configured container image and Cloud Run service.
 
-- a **sidebar**
-- **previous/next navigation**
-- **versioning**
+## Choose an Image
 
-## Create your first Doc
+Session image choices are configured by the app. Pick the smallest image that
+contains the language runtime and tools the project needs. Heavier images are
+useful for agent stacks with preinstalled CLIs, but they take longer to build
+and maintain.
 
-Create a Markdown file at `docs/hello.md`:
+## Start the Runner
 
-```md title="docs/hello.md"
-# Hello
+1. Select a workspace.
+2. Choose **New Session**.
+3. Select the runtime image.
+4. Launch the session.
+5. Wait for the terminal to attach.
 
-This is my **first Docusaurus document**!
-```
+The terminal, file tree, and agent commands operate inside the workspace
+boundary. If the runner image changes, launch a new session so Cloud Run gets a
+fresh revision.
 
-A new document is now available at [http://localhost:3000/docs/hello](http://localhost:3000/docs/hello).
+## Stop Idle Work
 
-## Configure the Sidebar
-
-Docusaurus automatically **creates a sidebar** from the `docs` folder.
-
-Add metadata to customize the sidebar label and position:
-
-```md title="docs/hello.md" {1-4}
----
-sidebar_label: 'Hi!'
-sidebar_position: 3
----
-
-# Hello
-
-This is my **first Docusaurus document**!
-```
-
-It is also possible to create your sidebar explicitly in `sidebars.js`:
-
-```js title="sidebars.js"
-export default {
-  tutorialSidebar: [
-    'intro',
-    // highlight-next-line
-    'hello',
-    {
-      type: 'category',
-      label: 'Tutorial',
-      items: ['tutorial-basics/create-a-document'],
-    },
-  ],
-};
-```
+Stop sessions when active work is finished. Mapache is designed around
+serverless runners, so keeping idle containers around is unnecessary cost.

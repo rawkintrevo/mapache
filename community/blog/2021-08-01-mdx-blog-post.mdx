@@ -1,24 +1,19 @@
 ---
-slug: mdx-blog-post
-title: MDX Blog Post
-authors: [slorber]
-tags: [docusaurus]
+slug: auth-center-notes
+title: Auth Center Notes
+authors: [mapache]
+tags: [auth, workspaces]
+date: 2026-06-12
 ---
 
-Blog posts support [Docusaurus Markdown features](https://docusaurus.io/docs/markdown-features), such as [MDX](https://mdxjs.com/).
-
-:::tip
-
-Use the power of React to create interactive blog posts.
-
-:::
+Agents need credentials, but credentials should not become ambient machine
+state. The Authentication Center keeps that distinction visible.
 
 {/* truncate */}
 
-For example, use JSX to create an interactive button:
+Store provider credentials in your profile, then enable them per workspace. The
+runner receives generated files and environment values only for the providers
+that workspace can use.
 
-```js
-<button onClick={() => alert('button clicked!')}>Click me!</button>
-```
-
-<button onClick={() => alert('button clicked!')}>Click me!</button>
+This is intentionally more explicit than a global `.env` file. If a project
+does not need a provider, the session should not inherit it.

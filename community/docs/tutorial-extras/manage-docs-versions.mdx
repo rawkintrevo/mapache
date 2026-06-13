@@ -2,54 +2,31 @@
 sidebar_position: 1
 ---
 
-# Manage Docs Versions
+# Maintain the Community Site
 
-Docusaurus can manage multiple versions of your docs.
+The community site is a Docusaurus package under `community/`. Keep it visually
+aligned with the webapp and keep operational copy focused on Mapache workflows.
 
-## Create a docs version
-
-Release a version 1.0 of your project:
+## Local Development
 
 ```bash
-npm run docusaurus docs:version 1.0
+cd community
+npm run start
 ```
 
-The `docs` folder is copied into `versioned_docs/version-1.0` and `versions.json` is created.
+## Production Build
 
-Your docs now have 2 versions:
-
-- `1.0` at `http://localhost:3000/docs/` for the version 1.0 docs
-- `current` at `http://localhost:3000/docs/next/` for the **upcoming, unreleased docs**
-
-## Add a Version Dropdown
-
-To navigate seamlessly across versions, add a version dropdown.
-
-Modify the `docusaurus.config.js` file:
-
-```js title="docusaurus.config.js"
-export default {
-  themeConfig: {
-    navbar: {
-      items: [
-        // highlight-start
-        {
-          type: 'docsVersionDropdown',
-        },
-        // highlight-end
-      ],
-    },
-  },
-};
+```bash
+cd community
+npm run build
 ```
 
-The docs version dropdown appears in your navbar:
+The build emits static files under `community/build`. Broken links are treated
+as build failures, so update routes and footer links together.
 
-![Docs Version Dropdown](./img/docsVersionDropdown.png)
+## Style Rules
 
-## Update an existing version
-
-It is possible to edit versioned docs in their respective folder:
-
-- `versioned_docs/version-1.0/hello.md` updates `http://localhost:3000/docs/hello`
-- `docs/hello.md` updates `http://localhost:3000/docs/next/hello`
+- Reuse the Mapache tokens in `community/src/css/custom.css`.
+- Prefer compact panels, 6-8px radii, and developer-tool density.
+- Avoid starter Docusaurus illustrations and generic tutorial language.
+- Keep docs changes narrow and connected to real product behavior.

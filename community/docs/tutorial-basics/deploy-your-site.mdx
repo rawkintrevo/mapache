@@ -2,30 +2,34 @@
 sidebar_position: 5
 ---
 
-# Deploy your site
+# Verify and Deploy
 
-Docusaurus is a **static-site-generator** (also called **[Jamstack](https://jamstack.org/)**).
+Every non-trivial change should leave a clear verification trail. Run checks
+inside the relevant package before handing off or deploying.
 
-It builds your site as simple **static HTML, JavaScript and CSS files**.
+## Frontend Build
 
-## Build your site
-
-Build your site **for production**:
+Run the app build from the repository root:
 
 ```bash
 npm run build
 ```
 
-The static files are generated in the `build` folder.
+## Community Build
 
-## Deploy your site
-
-Test your production build locally:
+Run the community site build from the Docusaurus package:
 
 ```bash
-npm run serve
+cd community
+npm run build
 ```
 
-The `build` folder is now served at [http://localhost:3000/](http://localhost:3000/).
+## Cloud Resources
 
-You can now deploy the `build` folder **almost anywhere** easily, **for free** or very small cost (read the **[Deployment Guide](https://docusaurus.io/docs/deployment)**).
+This repository deploys to the `pi-agents-cloud` Firebase and GCP project. Use
+explicit project flags on remote commands so local gcloud defaults cannot deploy
+to the wrong project.
+
+```bash
+gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
+```

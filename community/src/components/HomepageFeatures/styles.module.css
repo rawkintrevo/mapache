@@ -1,11 +1,50 @@
 .features {
   display: flex;
   align-items: center;
-  padding: 2rem 0;
+  padding: 48px 0;
   width: 100%;
+  background: var(--mapache-bg);
+  border-bottom: 1px solid var(--mapache-border);
 }
 
-.featureSvg {
-  height: 200px;
-  width: 200px;
+.featureColumn {
+  display: flex;
+}
+
+.featureCard {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 240px;
+  width: 100%;
+  padding: 20px;
+  border: 1px solid var(--mapache-border);
+  border-radius: 8px;
+  background: var(--mapache-panel);
+}
+
+.featureCard span {
+  color: var(--mapache-accent);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.featureCard h3 {
+  margin: 0;
+  color: var(--mapache-text);
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.featureCard p {
+  margin: 0;
+  color: var(--mapache-muted);
+  line-height: 1.55;
+}
+
+@media screen and (max-width: 996px) {
+  .featureColumn + .featureColumn {
+    margin-top: 16px;
+  }
 }

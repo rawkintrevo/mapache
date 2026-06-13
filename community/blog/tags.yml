@@ -1,19 +1,19 @@
-facebook:
-  label: Facebook
-  permalink: /facebook
-  description: Facebook tag description
+workspaces:
+  label: Workspaces
+  permalink: /workspaces
+  description: Workspace design, isolation, and session notes.
 
-hello:
-  label: Hello
-  permalink: /hello
-  description: Hello tag description
+runtime:
+  label: Runtime
+  permalink: /runtime
+  description: Container image, Cloud Run, and terminal behavior.
 
-docusaurus:
-  label: Docusaurus
-  permalink: /docusaurus
-  description: Docusaurus tag description
+auth:
+  label: Auth
+  permalink: /auth
+  description: Credential scoping and provider integration notes.
 
-hola:
-  label: Hola
-  permalink: /hola
-  description: Hola tag description
+community:
+  label: Community
+  permalink: /community
+  description: Updates about the Mapache community site and docs.

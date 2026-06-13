@@ -2,46 +2,42 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# Quick Start
 
-Let's discover **Docusaurus in less than 5 minutes**.
+Mapache Tools runs coding agents in isolated, Git-linked serverless workspaces.
+Use the webapp when a project needs its own runtime image, credential set, and
+terminal session without polluting your local machine.
 
-## Getting Started
+## Start a Workspace
 
-Get started by **creating a new site**.
+1. Open the Mapache Tools app.
+2. Create or select a workspace.
+3. Connect the Git repository you want the agent to work in.
+4. Choose a session image for the project.
+5. Launch the workspace session.
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+Each session provisions a Cloud Run backed runner with a terminal-first workflow,
+workspace file sync, and browser-visible state.
 
-### What you'll need
+## Scope Credentials
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
+Store provider credentials in your profile, then enable only the providers a
+workspace needs. Mapache writes the generated auth files and environment values
+inside the workspace boundary so different projects can use different auth
+surfaces safely.
 
-## Generate a new site
+## Verify Changes
 
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
-
-```bash
-npm init docusaurus@latest my-website classic
-```
-
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
-
-The command also installs all necessary dependencies you need to run Docusaurus.
-
-## Start your site
-
-Run the development server:
+Inside a session, use the terminal to run the project checks that matter for the
+current change. For frontend work in this repository, run:
 
 ```bash
-cd my-website
-npm run start
+npm run build
 ```
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
+For community site work, run:
 
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
-
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+```bash
+cd community
+npm run build
+```

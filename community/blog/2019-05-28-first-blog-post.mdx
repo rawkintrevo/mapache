@@ -1,12 +1,20 @@
 ---
-slug: first-blog-post
-title: First Blog Post
-authors: [slorber, yangshun]
-tags: [hola, docusaurus]
+slug: workspace-boundaries
+title: Workspace Boundaries Are the Product
+authors: [mapache]
+tags: [workspaces, auth]
+date: 2026-06-12
 ---
 
-Lorem ipsum dolor sit amet...
+Mapache starts from a practical premise: coding agents are easier to trust when
+each project has a clear boundary.
 
 {/* truncate */}
 
-...consectetur adipiscing elit. Pellentesque elementum dignissim ultricies. Fusce rhoncus ipsum tempor eros aliquam consequat. Lorem ipsum dolor sit amet
+A workspace ties together a repository, runtime image, session history, and
+explicitly enabled credentials. That boundary keeps project-specific auth,
+dependency state, and generated files from leaking into unrelated work.
+
+The goal is not to hide the terminal. It is to make the terminal safer to use by
+placing it inside a serverless environment that was created for the project in
+front of you.

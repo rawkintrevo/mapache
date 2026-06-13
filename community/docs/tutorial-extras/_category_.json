@@ -1,7 +1,8 @@
 {
-  "label": "Tutorial - Extras",
+  "label": "Operations",
   "position": 3,
   "link": {
-    "type": "generated-index"
+    "type": "generated-index",
+    "description": "Operational notes for publishing, versioning, and maintaining the community documentation."
   }
 }
