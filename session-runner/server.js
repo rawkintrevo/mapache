@@ -47,6 +47,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const terminalSession = createTerminalSession();
 let packageOperationLock = null;
+let skillOperationLock = null;
 
 app.use(express.json());
 app.use(
@@ -149,6 +150,45 @@ app.post("/pi/packages/update", async (req, res) => {
     res.json(await withPackageOperationLock({read: false}, () => updateWorkspacePiPackages(req.body || {})));
   } catch (error) {
     sendPiPackageError(res, error, "pi_package_update_failed");
+  }
+});
+
+app.get("/pi/skills", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withSkillOperationLock({read: true}, listWorkspacePiSkills));
+  } catch (error) {
+    sendPiSkillError(res, error, "pi_skill_list_failed");
+  }
+});
+
+app.post("/pi/skills", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withSkillOperationLock({read: false}, () => saveWorkspacePiSkill(req.body || {})));
+  } catch (error) {
+    sendPiSkillError(res, error, "pi_skill_save_failed");
+  }
+});
+
+app.post("/pi/skills/delete", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await withSkillOperationLock({read: false}, () => deleteWorkspacePiSkill(req.body || {})));
+  } catch (error) {
+    sendPiSkillError(res, error, "pi_skill_delete_failed");
   }
 });
 
@@ -1062,6 +1102,24 @@ function sendPiPackageError(res, error, fallbackCode) {
   res.status(500).json({error: fallbackCode});
 }
 
+function sendPiSkillError(res, error, fallbackCode) {
+  if (error && error.code === "skill_operation_busy") {
+    res.status(409).json({error: "skill_operation_busy", busy: true});
+    return;
+  }
+  if (error && [
+    "invalid_skill_name",
+    "invalid_skill_description",
+    "invalid_skill_content",
+    "skill_not_found",
+  ].includes(error.code)) {
+    res.status(error.code === "skill_not_found" ? 404 : 400).json({error: error.code});
+    return;
+  }
+  console.error(`${fallbackCode.replace(/_/g, " ")}`, error);
+  res.status(500).json({error: fallbackCode});
+}
+
 async function withPackageOperationLock(options, operation) {
   while (packageOperationLock) {
     if (!options || !options.read) {
@@ -1083,6 +1141,31 @@ async function withPackageOperationLock(options, operation) {
     releaseLock();
     if (packageOperationLock === currentLock) {
       packageOperationLock = null;
+    }
+  }
+}
+
+async function withSkillOperationLock(options, operation) {
+  while (skillOperationLock) {
+    if (!options || !options.read) {
+      const busyError = new Error("skill_operation_busy");
+      busyError.code = "skill_operation_busy";
+      throw busyError;
+    }
+    await skillOperationLock.catch(() => {});
+  }
+
+  let releaseLock;
+  const currentLock = new Promise((resolve) => {
+    releaseLock = resolve;
+  });
+  skillOperationLock = currentLock;
+  try {
+    return await operation();
+  } finally {
+    releaseLock();
+    if (skillOperationLock === currentLock) {
+      skillOperationLock = null;
     }
   }
 }
@@ -1150,6 +1233,181 @@ async function updateWorkspacePiPackages(body) {
     source: source || null,
     packages: (await listWorkspacePiPackages()).packages,
   };
+}
+
+async function listWorkspacePiSkills() {
+  const skillsPath = path.join(workspaceDir, ".pi", "skills");
+  const skills = [];
+  const entries = await safeReadDir(skillsPath);
+
+  for (const entry of entries) {
+    const entryPath = path.join(skillsPath, entry.name);
+    if (entry.isFile() && entry.name.endsWith(".md")) {
+      const content = await readSkillMarkdown(entryPath);
+      skills.push(skillSummaryFromMarkdown(content, {
+        path: `.pi/skills/${entry.name}`,
+        kind: "file",
+        editable: true,
+        fallbackName: entry.name.replace(/\.md$/i, ""),
+      }));
+      continue;
+    }
+    if (entry.isDirectory()) {
+      const skillPath = path.join(entryPath, "SKILL.md");
+      if (await pathExists(skillPath)) {
+        const content = await readSkillMarkdown(skillPath);
+        skills.push(skillSummaryFromMarkdown(content, {
+          path: `.pi/skills/${entry.name}/SKILL.md`,
+          kind: "directory",
+          editable: true,
+          fallbackName: entry.name,
+        }));
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    scope: "workspace",
+    skillsPath,
+    skills: skills.sort((left, right) => left.name.localeCompare(right.name)),
+  };
+}
+
+async function saveWorkspacePiSkill(body) {
+  const name = normalizePiSkillName(body.name);
+  const description = normalizePiSkillDescription(body.description);
+  const instructions = normalizePiSkillContent(body.content || body.instructions || "");
+  const skillsPath = path.join(workspaceDir, ".pi", "skills");
+  const skillDir = path.join(skillsPath, name);
+  const skillPath = path.join(skillDir, "SKILL.md");
+  await fs.promises.mkdir(skillDir, {recursive: true});
+  const markdown = buildPiSkillMarkdown({name, description, content: instructions});
+  await fs.promises.writeFile(skillPath, markdown, "utf8");
+  await syncUp({includeArchives: false});
+  return {
+    ok: true,
+    action: "save",
+    skill: skillSummaryFromMarkdown(markdown, {
+      path: `.pi/skills/${name}/SKILL.md`,
+      kind: "directory",
+      editable: true,
+      fallbackName: name,
+    }),
+    skills: (await listWorkspacePiSkills()).skills,
+  };
+}
+
+async function deleteWorkspacePiSkill(body) {
+  const name = normalizePiSkillName(body.name);
+  const skillsPath = path.join(workspaceDir, ".pi", "skills");
+  const skillDir = path.join(skillsPath, name);
+  const skillPath = path.join(skillDir, "SKILL.md");
+  if (!await pathExists(skillPath)) {
+    const rootMdPath = path.join(skillsPath, `${name}.md`);
+    if (!await pathExists(rootMdPath)) {
+      const error = new Error("skill_not_found");
+      error.code = "skill_not_found";
+      throw error;
+    }
+    await fs.promises.unlink(rootMdPath);
+  } else {
+    await fs.promises.rm(skillDir, {recursive: true, force: true});
+  }
+  await syncUp({includeArchives: false});
+  return {
+    ok: true,
+    action: "delete",
+    name,
+    skills: (await listWorkspacePiSkills()).skills,
+  };
+}
+
+async function safeReadDir(directoryPath) {
+  try {
+    return await fs.promises.readdir(directoryPath, {withFileTypes: true});
+  } catch (error) {
+    if (error && error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function readSkillMarkdown(skillPath) {
+  const stat = await fs.promises.stat(skillPath);
+  if (stat.size > 256 * 1024) {
+    const error = new Error("invalid_skill_content");
+    error.code = "invalid_skill_content";
+    throw error;
+  }
+  return fs.promises.readFile(skillPath, "utf8");
+}
+
+function skillSummaryFromMarkdown(markdown, options = {}) {
+  const frontmatter = parseSkillFrontmatter(markdown);
+  const name = safePiSkillName(frontmatter.name || options.fallbackName || "");
+  const description = String(frontmatter.description || "").trim().slice(0, 1024);
+  return {
+    name,
+    description,
+    path: options.path || "",
+    kind: options.kind || "file",
+    editable: Boolean(options.editable),
+    content: markdown,
+  };
+}
+
+function parseSkillFrontmatter(markdown) {
+  const match = String(markdown || "").match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) return {};
+  return match[1].split("\n").reduce((acc, line) => {
+    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!field) return acc;
+    acc[field[1]] = field[2].replace(/^['\"]|['\"]$/g, "").trim();
+    return acc;
+  }, {});
+}
+
+function safePiSkillName(value) {
+  try {
+    return normalizePiSkillName(value);
+  } catch (error) {
+    return "unnamed-skill";
+  }
+}
+
+function normalizePiSkillName(value) {
+  const name = String(value || "").trim().toLowerCase();
+  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+    const error = new Error("invalid_skill_name");
+    error.code = "invalid_skill_name";
+    throw error;
+  }
+  return name;
+}
+
+function normalizePiSkillDescription(value) {
+  const description = String(value || "").trim();
+  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) {
+    const error = new Error("invalid_skill_description");
+    error.code = "invalid_skill_description";
+    throw error;
+  }
+  return description;
+}
+
+function normalizePiSkillContent(value) {
+  const content = String(value || "").trim();
+  if (!content || content.length > 128 * 1024 || /\u0000/.test(content)) {
+    const error = new Error("invalid_skill_content");
+    error.code = "invalid_skill_content";
+    throw error;
+  }
+  return content;
+}
+
+function buildPiSkillMarkdown({name, description, content}) {
+  const body = String(content || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+  return `---\nname: ${name}\ndescription: ${description.replace(/\n/g, " ")}\n---\n\n${body}\n`;
 }
 
 async function readJsonFile(filePath, fallback) {

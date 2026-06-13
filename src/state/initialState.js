@@ -39,6 +39,24 @@ export function createPiPackagesState(overrides = {}) {
   };
 }
 
+export function createPiSkillsState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    unavailable: false,
+    data: null,
+    form: {
+      name: "",
+      description: "",
+      content: "# New Skill\n\nAdd instructions for pi here.",
+      editing: false,
+    },
+    ...overrides,
+  };
+}
+
 export function createPiAuthState(overrides = {}) {
   return {
     loading: false,
@@ -96,6 +114,7 @@ export function createInitialState() {
     activePage: "workspace",
     gitStatus: createGitStatusState(),
     piPackages: createPiPackagesState(),
+    piSkills: createPiSkillsState(),
     piAuth: createPiAuthState(),
     pullRequestForm: createPullRequestFormState(),
     repoPicker: createRepoPickerState(),

@@ -1841,7 +1841,8 @@ main.drawer-collapsed.right-drawer-collapsed {
 
 .git-status-body,
 .git-file-list,
-.package-list {
+.package-list,
+.skill-list {
   display: grid;
   gap: 10px;
 }
@@ -1881,13 +1882,26 @@ main.drawer-collapsed.right-drawer-collapsed {
 }
 
 .package-install-form,
-.package-subsection {
+.package-subsection,
+.skill-form {
   display: grid;
   gap: 8px;
 }
 
 .package-install-form {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.skill-form textarea {
+  min-height: 150px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.skill-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .package-subsection {

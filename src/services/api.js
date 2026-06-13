@@ -127,6 +127,20 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages/update`,
         {method: "POST", body: source ? {source} : {}},
     ),
+    getPiSkills: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-skills`,
+    ),
+    savePiSkill: (workspaceId, sessionId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-skills`,
+        {method: "POST", body},
+    ),
+    deletePiSkill: (workspaceId, sessionId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-skills/delete`,
+        {method: "POST", body: {name}},
+    ),
     getConnectedRepos: () => request(getToken, "/api/github/repos"),
     getGithubConnectUrl: () => request(
         getToken,

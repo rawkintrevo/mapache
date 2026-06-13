@@ -86,6 +86,8 @@ It also adds search tools for terminal-first coding workflows:
 
 The image sets `TERMINAL_COMMAND=pi`, so new browser terminal connections open Pi directly instead of a login shell.
 
+The skills manager targets `pi-basic` first. Skill listing and mutations require a running session so the manager can write the same `/workspace/.pi/skills/{skill-name}/SKILL.md` files that Pi discovers at startup.
+
 The planned extension manager targets `pi-basic` first. For v1, package listing and package mutations can require a running `pi-basic` session so the manager can operate on the same `/workspace/.pi/settings.json` and package cache directories that Pi uses.
 
 Build and push the image with:
@@ -221,6 +223,8 @@ Usage reads depend on collection group indexes in `firestore.indexes.json`. The 
 
 The runner also exposes protected Git endpoints that use the same token gate. `GET /git/status` derives branch, commit, ahead/behind, dirty counts, conflicted state, and changed file entries from Git commands inside `/workspace`. `POST /git/pull` runs a fixed fetch/pull flow for GitHub workspaces and returns updated Git state afterward. `POST /git/stage` and `POST /git/unstage` accept validated workspace-relative paths only, so the backend/UI can stage or unstage changed files without exposing arbitrary command execution. `POST /git/commit` accepts a validated commit message, rejects empty commits, and returns updated Git state plus the committed head SHA. `POST /git/push` pushes the current branch when runner credentials are configured, currently via `GITHUB_PUSH_TOKEN` and optional `GITHUB_PUSH_USERNAME`; if those credentials are missing, the endpoint returns a clear auth-not-configured error instead of logging secrets. For blank workspaces these endpoints return a structured non-Git response instead of pretending Cloud Storage state is a repository.
 
+The skill endpoints follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies skill list/save/delete requests to the runner with its protected token. The runner serializes skill file mutations, writes Markdown under `/workspace/.pi/skills`, and runs normal workspace sync afterward.
+
 The planned package endpoints should follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies package list/install/remove/update requests to the runner with its protected token. The runner should serialize package operations and operate on workspace-local Pi settings by default.
 
 For GitHub workspaces, this final sync is especially important because it is the last chance to persist local working tree changes and refreshed `.git` archive state before the Cloud Run service disappears.
@@ -259,7 +263,7 @@ New sessions use the image selected in the modal. Existing sessions keep their c
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi package manager endpoints, and Pi package archive targets. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/packages*` runner routes, or `.pi/npm`/`.pi/git` archive behavior; they need a new revision or a recreated session service before runner changes that depend on those variables or routes will take effect.
+The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, and Pi package archive targets. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, or `.pi/npm`/`.pi/git` archive behavior; they need a new revision or a recreated session service before runner changes that depend on those variables or routes will take effect.
 
 When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
 
@@ -284,6 +288,7 @@ Expected package-manager write locations:
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
 - GitHub workspaces should archive `/workspace/.git` instead of exposing it through normal file sync. That keeps Git state resumable without treating Cloud Storage as a Git database.
+- Workspace-local Pi skills should remain ordinary workspace Markdown files under `/workspace/.pi/skills`.
 - Workspace-local Pi package install directories should use archive-backed sync while `/workspace/.pi/settings.json` remains normal workspace configuration.
 - GitHub workspaces should allow only one active session at a time until the app has an explicit multi-session Git isolation model.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.

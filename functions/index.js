@@ -257,6 +257,21 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "GET" && route.name === "piSkills") {
+      res.json(await listPiSkills(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "piSkills") {
+      res.json(await savePiSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "piSkillDelete") {
+      res.json(await deletePiSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "githubRepos") {
       res.json(await listConnectedRepos(user.uid));
       return;
@@ -447,6 +462,23 @@ function routeRequest(path) {
     parts[5] === "update"
   ) {
     return {name: "piPackageUpdate", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-skills"
+  ) {
+    return {name: "piSkills", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-skills" &&
+    parts[5] === "delete"
+  ) {
+    return {name: "piSkillDelete", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
@@ -1560,6 +1592,35 @@ async function listPiPackages(uid, workspaceId, sessionId) {
     return [];
   });
   return {...data, knownPackages};
+}
+
+async function listPiSkills(uid, workspaceId, sessionId) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_skill_listing_unsupported");
+  return requestRunnerPiSkills(session);
+}
+
+async function savePiSkill(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const skill = normalizePiSkillPayload(payload);
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_skill_save_unsupported");
+  return requestRunnerPiSkillSave(session, skill);
+}
+
+async function deletePiSkill(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const skillName = normalizePiSkillName(payload.name);
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!session.shutdownToken) throw httpError(501, "runner_skill_delete_unsupported");
+  return requestRunnerPiSkillDelete(session, {name: skillName});
 }
 
 async function listKnownPiPackages(uid, data) {
@@ -2939,6 +3000,39 @@ async function requestRunnerPiPackageUpdate(session, body) {
   });
 }
 
+async function requestRunnerPiSkills(session) {
+  return requestRunnerJson(session, "/pi/skills", {
+    notFoundError: "runner_skill_listing_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_skill_list_failed",
+    unavailableError: "runner_skill_list_unavailable",
+  });
+}
+
+async function requestRunnerPiSkillSave(session, body) {
+  return requestRunnerJson(session, "/pi/skills", {
+    method: "POST",
+    body,
+    notFoundError: "runner_skill_save_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_skill_save_failed",
+    unavailableError: "runner_skill_save_unavailable",
+    timeoutMs: 30000,
+  });
+}
+
+async function requestRunnerPiSkillDelete(session, body) {
+  return requestRunnerJson(session, "/pi/skills/delete", {
+    method: "POST",
+    body,
+    notFoundError: "runner_skill_delete_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_skill_delete_failed",
+    unavailableError: "runner_skill_delete_unavailable",
+    timeoutMs: 30000,
+  });
+}
+
 async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
@@ -3117,6 +3211,38 @@ async function workspaceStorageFile(uid, workspaceId, path) {
     file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
     relativePath,
   };
+}
+
+function normalizePiSkillPayload(payload) {
+  return {
+    name: normalizePiSkillName(payload && payload.name),
+    description: normalizePiSkillDescription(payload && payload.description),
+    content: normalizePiSkillContent(payload && (payload.content || payload.instructions)),
+  };
+}
+
+function normalizePiSkillName(value) {
+  const name = String(value || "").trim().toLowerCase();
+  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+    throw httpError(400, "invalid_skill_name");
+  }
+  return name;
+}
+
+function normalizePiSkillDescription(value) {
+  const description = String(value || "").trim();
+  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) {
+    throw httpError(400, "invalid_skill_description");
+  }
+  return description;
+}
+
+function normalizePiSkillContent(value) {
+  const content = String(value || "").trim();
+  if (!content || content.length > 128 * 1024 || /\u0000/.test(content)) {
+    throw httpError(400, "invalid_skill_content");
+  }
+  return content;
 }
 
 function normalizePiPackageSource(value) {

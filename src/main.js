@@ -10,6 +10,7 @@ import {
   resetGitStatus as resetGitStatusState,
   resetPiAuth as resetPiAuthState,
   resetPiPackages as resetPiPackagesState,
+  resetPiSkills as resetPiSkillsState,
   resetPullRequestForm as resetPullRequestFormState,
   resetSignedOutState,
   resetWorkspaceFiles as resetWorkspaceFilesState,
@@ -41,6 +42,14 @@ import {
   updatePiInstallSourceState,
   updatePiPackageState,
 } from "./workflows/piPackages.js";
+import {
+  cancelPiSkillEditState,
+  deletePiSkillState,
+  editPiSkillState,
+  loadPiSkillsState,
+  savePiSkillState,
+  updatePiSkillFormState,
+} from "./workflows/piSkills.js";
 import {
   deleteSessionState,
   resizeSessionState,
@@ -127,6 +136,12 @@ function render() {
     onRefreshPiPackages: refreshPiPackages,
     onUpdatePiInstallSource: updatePiInstallSource,
     onInstallPiPackage: installPiPackage,
+    onRefreshPiSkills: refreshPiSkills,
+    onUpdatePiSkillForm: updatePiSkillForm,
+    onEditPiSkill: editPiSkill,
+    onCancelPiSkillEdit: cancelPiSkillEdit,
+    onSavePiSkill: savePiSkill,
+    onDeletePiSkill: deletePiSkill,
     onRefreshPiAuth: refreshPiAuth,
     onDeletePiAuthProvider: deletePiAuthProvider,
     onUpdatePiAuthForm: updatePiAuthForm,
@@ -182,6 +197,10 @@ function resetPiAuth() {
   resetPiAuthState(state);
 }
 
+function resetPiSkills() {
+  resetPiSkillsState(state);
+}
+
 function resetPullRequestForm() {
   resetPullRequestFormState(state);
 }
@@ -222,10 +241,12 @@ async function refreshAll() {
       resetWorkspaceFiles();
       resetGitStatus();
       resetPiPackages();
+      resetPiSkills();
     }
     await loadSessions();
     await loadGitStatus();
     await loadPiPackages();
+    await loadPiSkills();
     await loadPiAuth();
     await loadWorkspaceFiles();
   });
@@ -241,6 +262,7 @@ async function loadSessions() {
   state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
   await loadGitStatus();
   await loadPiPackages();
+  await loadPiSkills();
 }
 
 async function loadWorkspaceFiles() {
@@ -275,10 +297,12 @@ async function selectWorkspace(workspaceId) {
   resetWorkspaceFiles();
   resetGitStatus();
   resetPiPackages();
+  resetPiSkills();
   await runBusy(async () => {
     await loadSessions();
     await loadGitStatus();
     await loadPiPackages();
+    await loadPiSkills();
     await loadWorkspaceFiles();
   });
 }
@@ -330,6 +354,7 @@ async function createSession(payload) {
     state.sessionModalOpen = false;
     await loadGitStatus();
     await loadPiPackages();
+    await loadPiSkills();
   });
 }
 
@@ -338,6 +363,7 @@ async function selectSession(sessionId) {
   state.selectedSessionId = sessionId;
   await loadGitStatus();
   await loadPiPackages();
+  await loadPiSkills();
   render();
 }
 
@@ -351,6 +377,37 @@ async function uploadWorkspaceFiles(files) {
 
 async function refreshPiPackages() {
   await loadPiPackages();
+}
+
+async function refreshPiSkills() {
+  await loadPiSkills();
+}
+
+function updatePiSkillForm(patch) {
+  updatePiSkillFormState(state, patch);
+  render();
+}
+
+function editPiSkill(skill) {
+  editPiSkillState(state, skill);
+  render();
+}
+
+function cancelPiSkillEdit() {
+  cancelPiSkillEditState(state);
+  render();
+}
+
+async function savePiSkill() {
+  await savePiSkillState({state, loadPiSkills, render});
+}
+
+async function deletePiSkill(name) {
+  const skillName = String(name || "").trim();
+  if (!skillName) return;
+  const ok = window.confirm(`Delete Pi skill ${skillName}? This removes .pi/skills/${skillName}/SKILL.md from the workspace.`);
+  if (!ok) return;
+  await deletePiSkillState({state, name: skillName, loadPiSkills, render});
 }
 
 async function refreshPiAuth() {
@@ -401,6 +458,10 @@ async function updatePiPackage(source = "") {
 
 async function loadPiPackages() {
   await loadPiPackagesState({state, resetPiPackages, render});
+}
+
+async function loadPiSkills() {
+  await loadPiSkillsState({state, render});
 }
 
 async function loadGitStatus() {

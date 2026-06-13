@@ -1,22 +1,28 @@
 import {PanelRightClose, PanelRightOpen} from "lucide-react";
-import {DrawerSection} from "../drawers/DrawerSection.jsx";
 import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
+import {SkillsPanel} from "./SkillsPanel.jsx";
 
 export function RightDrawer({
   selectedSession,
   state,
   onInstallPiPackage,
+  onCancelPiSkillEdit,
   onDeletePiAuthProvider,
+  onDeletePiSkill,
+  onEditPiSkill,
   onOpenAuthModal,
   onRefreshPiAuth,
   onRefreshPiPackages,
+  onRefreshPiSkills,
   onRemovePiPackage,
+  onSavePiSkill,
   onToggleDrawerSection,
   onToggleRightDrawer,
   onUpdatePiInstallSource,
   onUpdatePiPackage,
+  onUpdatePiSkillForm,
 }) {
   const toggleButton = (
     <Button
@@ -51,9 +57,18 @@ export function RightDrawer({
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}
       />
-      <DrawerSection id="right-skills" state={state} title="Skills" onToggleDrawerSection={onToggleDrawerSection}>
-        <p className="empty">tbd</p>
-      </DrawerSection>
+      <SkillsPanel
+        piSkills={state.piSkills}
+        selectedSession={selectedSession}
+        state={state}
+        onCancelPiSkillEdit={onCancelPiSkillEdit}
+        onDeletePiSkill={onDeletePiSkill}
+        onEditPiSkill={onEditPiSkill}
+        onRefreshPiSkills={onRefreshPiSkills}
+        onSavePiSkill={onSavePiSkill}
+        onToggleDrawerSection={onToggleDrawerSection}
+        onUpdatePiSkillForm={onUpdatePiSkillForm}
+      />
       <ExtensionsPanel
         piPackages={state.piPackages}
         selectedSession={selectedSession}

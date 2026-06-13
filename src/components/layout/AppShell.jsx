@@ -56,15 +56,21 @@ export function AppShell(props) {
           selectedSession={selectedSession}
           state={state}
           onInstallPiPackage={props.onInstallPiPackage}
+          onCancelPiSkillEdit={props.onCancelPiSkillEdit}
           onDeletePiAuthProvider={props.onDeletePiAuthProvider}
+          onDeletePiSkill={props.onDeletePiSkill}
+          onEditPiSkill={props.onEditPiSkill}
           onOpenAuthModal={props.onOpenAuthModal}
           onRefreshPiAuth={props.onRefreshPiAuth}
           onRefreshPiPackages={props.onRefreshPiPackages}
+          onRefreshPiSkills={props.onRefreshPiSkills}
           onRemovePiPackage={props.onRemovePiPackage}
           onToggleDrawerSection={props.onToggleDrawerSection}
           onToggleRightDrawer={props.onToggleRightDrawer}
+          onSavePiSkill={props.onSavePiSkill}
           onUpdatePiInstallSource={props.onUpdatePiInstallSource}
           onUpdatePiPackage={props.onUpdatePiPackage}
+          onUpdatePiSkillForm={props.onUpdatePiSkillForm}
         />
       </main>
       <ModalStack {...props} />

@@ -12,6 +12,8 @@ The current selected-session experience prioritizes the terminal. When a session
 
 The app now has an explicit architectural split between blank workspaces and GitHub-backed workspaces. Blank workspaces continue to treat Cloud Storage as their durable source of truth. GitHub workspaces treat GitHub as durable and use Cloud Storage as a resumability/cache layer. The detailed design lives in [github-workspaces.md](./github-workspaces.md).
 
+The Pi skills manager uses the right-side `Skills` drawer as an additive web surface over Pi's documented skill discovery. Workspace-local skills are Markdown files under `/workspace/.pi/skills/{skill-name}/SKILL.md`; no separate plugin registration is required. The detailed design lives in [pi-skills-manager.md](./pi-skills-manager.md).
+
 The planned Pi extension manager will use the right-side `Extensions` drawer as an additive web surface over Pi's existing package tooling. Workspace-local packages are the default: package declarations live in `/workspace/.pi/settings.json`, installed package code is runtime cache state, and packages installed from inside Pi with `pi install -l ...` should appear in the web UI after refresh. The detailed design lives in [pi-extension-manager.md](./pi-extension-manager.md).
 
 ## Main Components
@@ -75,6 +77,8 @@ The user profile page displays lifetime and trailing-30-day allocated CPU second
 
 The sidebar Files section calls `GET /api/workspaces/{workspaceId}/files`. The backend first verifies workspace ownership, then lists objects in the workspace's configured Cloud Storage bucket and `storagePrefix`. The React frontend renders the returned flat paths as an expandable tree; folder expansion state lives in `src/main.js` and is passed into `src/components/files/WorkspaceFileTree.jsx`. For blank workspaces, this is the durable workspace state. For GitHub workspaces, this is a cached view of the most recently synced working tree, not the canonical repository remote state.
 
+The Skills panel calls authenticated backend routes that proxy to a running `pi-basic` runner. Skill listing and mutations require an active session so the web UI writes the same `/workspace/.pi/skills` tree Pi sees inside the terminal, then syncs those Markdown files as ordinary workspace state. A running Pi agent may need to be restarted to rescan newly saved skills.
+
 The planned Extensions panel will call authenticated backend routes that proxy to a running `pi-basic` runner. For v1, package listing and mutations can require an active session because Pi package installs are runtime operations that need the workspace filesystem, npm/git tooling, and the same project-local settings Pi sees inside the terminal.
 
 Clicking a file opens a modal editor. The editor loads text content with `GET /api/workspaces/{workspaceId}/file?path={path}` and saves text content with `PUT /api/workspaces/{workspaceId}/file?path={path}`. Both endpoints verify workspace ownership, normalize the requested relative path under the workspace storage prefix, reject directory marker paths, reject internal runner cache paths, and cap editor reads/writes at 1 MiB. Editor modal state lives in `src/main.js`; the textarea updates that state without re-rendering on every keystroke so typing remains stable while the syntax-highlight backing layer updates in place.
@@ -92,6 +96,7 @@ The backend already accepts `payload.image` for session creation. If no image is
 - Use Firebase Hosting rewrites for `/api/**`, so the deployed frontend can call the API without hard-coding Cloud Function URLs. Hosting also rewrites `/app` and `/app/**` to the Vite frontend shell while keeping `/community/**` pointed at the Docusaurus build.
 - Treat workspace source mode as an explicit domain concept. Blank workspaces use Cloud Storage as durable state; GitHub workspaces use GitHub as durable state and Cloud Storage as resumability/cache.
 - Enforce one active session at a time for GitHub workspaces so two runners cannot race on cached `.git` state and worktree sync.
+- Keep Pi skill management additive to terminal tooling. The web Skills panel writes normal Markdown files under `.pi/skills`, matching Pi's discovery rules.
 - Keep Pi package management additive to terminal tooling. The web Extensions panel should read and write the same workspace-local Pi settings as `pi install -l ...`, while cross-workspace package memory lives in Firestore as metadata.
 
 ## Deployment
