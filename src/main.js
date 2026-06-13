@@ -244,9 +244,6 @@ async function refreshAll() {
       resetPiSkills();
     }
     await loadSessions();
-    await loadGitStatus();
-    await loadPiPackages();
-    await loadPiSkills();
     await loadPiAuth();
     await loadWorkspaceFiles();
   });
@@ -260,9 +257,7 @@ async function loadSessions() {
   const data = await state.api.getSessions(state.selectedWorkspaceId);
   state.sessions = data.sessions || [];
   state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
-  await loadGitStatus();
-  await loadPiPackages();
-  await loadPiSkills();
+  await loadSelectedSessionPanels();
 }
 
 async function loadWorkspaceFiles() {
@@ -352,18 +347,14 @@ async function createSession(payload) {
     const next = await state.api.getSessions(state.selectedWorkspaceId);
     state.sessions = next.sessions || [];
     state.sessionModalOpen = false;
-    await loadGitStatus();
-    await loadPiPackages();
-    await loadPiSkills();
+    await loadSelectedSessionPanels();
   });
 }
 
 async function selectSession(sessionId) {
   state.activePage = "workspace";
   state.selectedSessionId = sessionId;
-  await loadGitStatus();
-  await loadPiPackages();
-  await loadPiSkills();
+  await loadSelectedSessionPanels();
   render();
 }
 
@@ -462,6 +453,19 @@ async function loadPiPackages() {
 
 async function loadPiSkills() {
   await loadPiSkillsState({state, render});
+}
+
+async function loadSelectedSessionPanels() {
+  if (!getSelectedSession()?.serviceUrl) {
+    resetGitStatus();
+    resetPiPackages();
+    resetPiSkills();
+    render();
+    return;
+  }
+  await loadGitStatus();
+  await loadPiPackages();
+  await loadPiSkills();
 }
 
 async function loadGitStatus() {
