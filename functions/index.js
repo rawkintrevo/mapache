@@ -23,6 +23,26 @@ const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
 const DEFAULT_CPU = process.env.SESSION_CPU || "1";
 const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
+const RUNNER_IMAGE_CAPABILITIES = {
+  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest": {
+    terminal: true,
+    preview: false,
+    previewQa: false,
+    functions: false,
+  },
+  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic": {
+    terminal: true,
+    preview: false,
+    previewQa: false,
+    functions: false,
+  },
+  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web": {
+    terminal: true,
+    preview: true,
+    previewQa: true,
+    functions: true,
+  },
+};
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
 const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
@@ -1343,6 +1363,8 @@ async function createSession(uid, workspaceId, payload) {
       DEFAULT_IDLE_TIMEOUT_MINUTES,
   );
   const serviceId = `session-${sessionRef.id.toLowerCase()}`;
+  const image = cleanName(payload.image || DEFAULT_IMAGE);
+  const capabilities = runnerImageCapabilities(image);
   const session = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -1355,7 +1377,8 @@ async function createSession(uid, workspaceId, payload) {
     name: cleanName(payload.name || "Terminal session"),
     status: DEFAULT_IMAGE ? "provisioning" : "needs_image",
     region,
-    image: cleanName(payload.image || DEFAULT_IMAGE),
+    image,
+    capabilities,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
@@ -1407,6 +1430,15 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
 
 function isGithubWorkspace(workspace) {
   return workspace && workspace.source && workspace.source.type === "github";
+}
+
+function runnerImageCapabilities(image) {
+  return RUNNER_IMAGE_CAPABILITIES[cleanName(image)] || {
+    terminal: true,
+    preview: false,
+    previewQa: false,
+    functions: false,
+  };
 }
 
 function isActiveGithubWorkspaceSession(session) {
@@ -2767,6 +2799,7 @@ async function buildCloudRunService(workspace, session) {
 }
 
 async function sessionRunnerEnv(session, options = {}) {
+  const capabilities = session.capabilities || runnerImageCapabilities(session.image);
   const env = [
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "OWNER_UID", value: session.ownerUid || ""},
@@ -2781,8 +2814,22 @@ async function sessionRunnerEnv(session, options = {}) {
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},
+    {name: "RUNNER_CAPABILITIES", value: JSON.stringify(capabilities)},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];
+
+  if (capabilities.preview) {
+    env.push(
+        {name: "PREVIEW_ENABLED", value: "true"},
+        {name: "PREVIEW_BASE_PATH", value: "/preview"},
+        {name: "PREVIEW_STATIC_ROOT", value: "/workspace/build"},
+        {name: "PREVIEW_INJECT_LOGGER", value: "true"},
+        {name: "PREVIEW_LOG_LIMIT", value: "500"},
+        {name: "MAPACHE_RUNNER_URL", value: "http://127.0.0.1:8080"},
+        {name: "MAPACHE_PREVIEW_URL", value: "http://127.0.0.1:8080/preview/"},
+        {name: "MAPACHE_QA_DIR", value: "/workspace/.mapache/qa"},
+    );
+  }
 
   if (cleanName(session.sourceType) === "github") {
     env.push(

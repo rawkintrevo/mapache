@@ -1,0 +1,35 @@
+FROM node:24-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fd-find fonts-liberation git gzip openssh-client python3 make g++ ripgrep tar \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://pi.dev/install.sh | sh
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev \
+  && npm install -g @playwright/test
+COPY server.js ./
+
+RUN mkdir -p /workspace /root/.pi /workspace/.mapache/qa
+ENV PORT=8080
+ENV WORKSPACE_DIR=/workspace
+ENV PI_CODING_AGENT_DIR=/root/.pi/agent
+ENV TERMINAL_COMMAND=pi
+ENV PREVIEW_ENABLED=true
+ENV PREVIEW_BASE_PATH=/preview
+ENV PREVIEW_STATIC_ROOT=/workspace/build
+ENV PREVIEW_INJECT_LOGGER=true
+ENV PREVIEW_LOG_LIMIT=500
+ENV MAPACHE_RUNNER_URL=http://127.0.0.1:8080
+ENV MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/
+ENV MAPACHE_QA_DIR=/workspace/.mapache/qa
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_PATH=/usr/local/lib/node_modules
+ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true}
+
+EXPOSE 8080
+CMD ["npm", "start"]

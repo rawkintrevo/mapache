@@ -32,6 +32,14 @@ const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_S
 const archiveSyncTargets = createArchiveSyncTargets();
 const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
 const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
+const runnerCapabilities = parseRunnerCapabilities();
+const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
+const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
+const previewStaticRoot = path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build"));
+const previewInjectLogger = previewEnabled && envFlag(process.env.PREVIEW_INJECT_LOGGER, true);
+const previewLogLimit = positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500);
+const previewLogs = [];
+const previewLogStreams = new Set();
 const githubRepoUrl = normalizeEnvString(process.env.GITHUB_REPO_URL);
 const githubRequestedBranch = normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH);
 const githubRequestedCommit = normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT);
@@ -62,6 +70,52 @@ app.get("/", (req, res) => {
 app.get("/healthz", (req, res) => {
   res.json({ok: true, workspaceId, sessionId, bucketName, prefix});
 });
+
+app.get("/capabilities", (req, res) => {
+  res.json({
+    ok: true,
+    capabilities: runnerCapabilities,
+    preview: previewCapabilityStatus(),
+  });
+});
+
+if (previewEnabled) {
+  app.get(`${previewBasePath}/status`, async (req, res) => {
+    res.json(await previewStatus());
+  });
+
+  app.get(`${previewBasePath}/logs`, (req, res) => {
+    res.json({ok: true, logs: previewLogs});
+  });
+
+  app.post(`${previewBasePath}/logs`, (req, res) => {
+    const entry = appendPreviewLog(req.body || {});
+    res.json({ok: true, entry});
+  });
+
+  app.get(`${previewBasePath}/logs/stream`, (req, res) => {
+    res.writeHead(200, {
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Content-Type": "text/event-stream",
+    });
+    for (const entry of previewLogs) {
+      res.write(`data: ${JSON.stringify(entry)}\n\n`);
+    }
+    previewLogStreams.add(res);
+    req.on("close", () => {
+      previewLogStreams.delete(res);
+    });
+  });
+
+  app.get(`${previewBasePath}/*`, async (req, res) => {
+    await servePreviewStatic(req, res);
+  });
+
+  app.get(previewBasePath, (req, res) => {
+    res.redirect(`${previewBasePath}/`);
+  });
+}
 
 app.post("/shutdown", async (req, res) => {
   if (!hasRunnerAccess(req)) {
@@ -428,13 +482,228 @@ function shouldReplayTerminal(request) {
   }
 }
 
+function parseRunnerCapabilities() {
+  const fallback = {terminal: true, preview: false, previewQa: false, functions: false};
+  try {
+    return {...fallback, ...JSON.parse(process.env.RUNNER_CAPABILITIES || "{}")};
+  } catch (error) {
+    console.error("invalid RUNNER_CAPABILITIES, using fallback", error);
+    return fallback;
+  }
+}
+
+function envFlag(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
+}
+
+function normalizePreviewBasePath(value) {
+  const clean = `/${String(value || "/preview").replace(/^\/+|\/+$/g, "")}`;
+  return clean === "/" ? "/preview" : clean;
+}
+
+function previewCapabilityStatus() {
+  return {
+    enabled: previewEnabled,
+    basePath: previewBasePath,
+    staticRoot: previewStaticRoot,
+    injectLogger: previewInjectLogger,
+  };
+}
+
+async function previewStatus() {
+  const indexPath = path.join(previewStaticRoot, "index.html");
+  const indexExists = await pathExists(indexPath);
+  const rootExists = await pathExists(previewStaticRoot);
+  return {
+    ok: true,
+    mode: "static",
+    ready: indexExists,
+    url: `${previewBasePath}/`,
+    staticRoot: previewStaticRoot,
+    rootExists,
+    indexExists,
+    logs: {
+      count: previewLogs.length,
+      limit: previewLogLimit,
+    },
+  };
+}
+
+async function pathExists(filePath) {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function servePreviewStatic(req, res) {
+  const requestedPath = safePreviewPath(req.params[0] || "index.html");
+  if (!requestedPath) {
+    res.status(400).send("invalid preview path");
+    return;
+  }
+
+  let filePath = path.join(previewStaticRoot, requestedPath);
+  if (await isDirectory(filePath)) {
+    filePath = path.join(filePath, "index.html");
+  }
+  if (!await pathExists(filePath)) {
+    if (shouldServePreviewIndexFallback(req, requestedPath)) {
+      filePath = path.join(previewStaticRoot, "index.html");
+    }
+  }
+  if (!safePathInRoot(previewStaticRoot, filePath) || !await pathExists(filePath)) {
+    res.status(404).send("preview file not found");
+    return;
+  }
+
+  const contentType = contentTypeForPreviewPath(filePath);
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Content-Type", contentType);
+  if (previewInjectLogger && contentType.startsWith("text/html")) {
+    const html = await fs.promises.readFile(filePath, "utf8");
+    res.send(injectPreviewLogger(html));
+    return;
+  }
+  res.sendFile(filePath);
+}
+
+function safePreviewPath(value) {
+  const clean = String(value || "").replace(/\\/g, "/").replace(/^\/+/, "");
+  const normalized = path.posix.normalize(clean);
+  if (!normalized || normalized === ".") return "index.html";
+  if (normalized === ".." || normalized.startsWith("../")) return "";
+  return normalized;
+}
+
+function shouldServePreviewIndexFallback(req, requestedPath) {
+  if (!path.extname(requestedPath)) return true;
+  return String(req.get("accept") || "").includes("text/html");
+}
+
+async function isDirectory(filePath) {
+  try {
+    const stat = await fs.promises.stat(filePath);
+    return stat.isDirectory();
+  } catch (error) {
+    return false;
+  }
+}
+
+function safePathInRoot(root, filePath) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedPath = path.resolve(filePath);
+  return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${path.sep}`);
+}
+
+function contentTypeForPreviewPath(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  const types = {
+    ".css": "text/css; charset=utf-8",
+    ".gif": "image/gif",
+    ".html": "text/html; charset=utf-8",
+    ".ico": "image/x-icon",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain; charset=utf-8",
+    ".webp": "image/webp",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+  };
+  return types[extension] || "application/octet-stream";
+}
+
+function injectPreviewLogger(html) {
+  const script = `<script>
+(() => {
+  if (window.__mapachePreviewLoggerInstalled) return;
+  window.__mapachePreviewLoggerInstalled = true;
+  const endpoint = ${JSON.stringify(`${previewBasePath}/logs`)};
+  const send = (level, args) => {
+    const payload = {
+      level,
+      args: Array.from(args || []).map((item) => {
+        try {
+          return typeof item === "string" ? item : JSON.stringify(item);
+        } catch (error) {
+          return String(item);
+        }
+      }),
+      href: location.href,
+      at: new Date().toISOString()
+    };
+    fetch(endpoint, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(() => {});
+  };
+  for (const level of ["log", "info", "warn", "error"]) {
+    const original = console[level];
+    console[level] = (...args) => {
+      send(level, args);
+      original.apply(console, args);
+    };
+  }
+  window.addEventListener("error", (event) => {
+    send("error", [event.message, event.filename + ":" + event.lineno + ":" + event.colno]);
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    send("error", ["Unhandled rejection", event.reason]);
+  });
+})();
+</script>`;
+  if (html.includes("</head>")) return html.replace("</head>", `${script}</head>`);
+  if (html.includes("</body>")) return html.replace("</body>", `${script}</body>`);
+  return `${script}${html}`;
+}
+
+function appendPreviewLog(body) {
+  const entry = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    level: normalizePreviewLogLevel(body.level),
+    args: Array.isArray(body.args) ? body.args.map((item) => String(item).slice(0, 2000)) : [],
+    href: String(body.href || "").slice(0, 2000),
+    at: body.at || new Date().toISOString(),
+    receivedAt: new Date().toISOString(),
+  };
+  previewLogs.push(entry);
+  if (previewLogs.length > previewLogLimit) {
+    previewLogs.splice(0, previewLogs.length - previewLogLimit);
+  }
+  for (const stream of previewLogStreams) {
+    stream.write(`data: ${JSON.stringify(entry)}\n\n`);
+  }
+  return entry;
+}
+
+function normalizePreviewLogLevel(level) {
+  const value = String(level || "log").toLowerCase();
+  return ["log", "info", "warn", "error"].includes(value) ? value : "log";
+}
+
 function spawnTerminal(command) {
   return pty.spawn(command.file, command.args, {
     name: "xterm-256color",
     cols: 100,
     rows: 32,
     cwd: workspaceDir,
-    env: {...process.env, TERM: "xterm-256color"},
+    env: {
+      ...process.env,
+      MAPACHE_RUNNER_URL: `http://127.0.0.1:${port}`,
+      MAPACHE_PREVIEW_URL: `http://127.0.0.1:${port}${previewBasePath}/`,
+      MAPACHE_QA_DIR: path.join(workspaceDir, ".mapache", "qa"),
+      TERM: "xterm-256color",
+    },
   });
 }
 

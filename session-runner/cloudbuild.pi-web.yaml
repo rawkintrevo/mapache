@@ -1,0 +1,15 @@
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.pi-web
+      - -t
+      - ${_IMAGE}
+      - .
+
+images:
+  - ${_IMAGE}

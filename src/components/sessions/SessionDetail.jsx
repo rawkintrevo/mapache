@@ -1,5 +1,5 @@
 import {RotateCcw} from "lucide-react";
-import {useRef} from "react";
+import {useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
 
 const cpuOptions = ["1", "2", "4"];
@@ -11,6 +11,10 @@ function formatMemory(value) {
 
 export function SessionDetail({busy, session, onResizeSession, onRestartSession}) {
   const formRef = useRef(null);
+  const [activeCanvas, setActiveCanvas] = useState("terminal");
+  const capabilities = session.capabilities || {};
+  const hasPreview = Boolean(capabilities.preview && session.serviceUrl);
+  const previewUrl = hasPreview ? `${session.serviceUrl.replace(/\/+$/, "")}/preview/` : "";
 
   const handleResize = () => {
     const form = formRef.current;
@@ -24,8 +28,45 @@ export function SessionDetail({busy, session, onResizeSession, onRestartSession}
 
   return (
     <div className="session-detail">
-      <div className="terminal-shell">
-        {session.serviceUrl ? (
+      {capabilities.preview ? (
+        <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
+          <Button
+            aria-selected={activeCanvas === "terminal"}
+            role="tab"
+            variant={activeCanvas === "terminal" ? "primary" : "secondary"}
+            onClick={() => setActiveCanvas("terminal")}
+          >
+            Terminal
+          </Button>
+          <Button
+            aria-selected={activeCanvas === "preview"}
+            disabled={!session.serviceUrl}
+            role="tab"
+            variant={activeCanvas === "preview" ? "primary" : "secondary"}
+            onClick={() => setActiveCanvas("preview")}
+          >
+            Preview
+          </Button>
+        </div>
+      ) : null}
+      <div className="canvas-shell">
+        {activeCanvas === "preview" && capabilities.preview ? (
+          hasPreview ? (
+            <iframe
+              sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
+              src={previewUrl}
+              title={`Preview ${session.name}`}
+            />
+          ) : (
+            <div className="terminal-placeholder">
+              <p>
+                Preview is waiting for the runner URL.
+                <br />
+                <code>{session.lastError || session.status}</code>
+              </p>
+            </div>
+          )
+        ) : session.serviceUrl ? (
           <iframe
             allow="clipboard-read; clipboard-write"
             src={session.serviceUrl}

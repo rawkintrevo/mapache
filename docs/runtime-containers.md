@@ -16,7 +16,13 @@ The `pi-basic` runner image is built from `session-runner/Dockerfile.pi-basic` a
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic
 ```
 
-The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner and `pi-basic`.
+The `pi-web` runner image is built from `session-runner/Dockerfile.pi-web` and published as:
+
+```text
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web
+```
+
+The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner, `pi-basic`, and `pi-web`, each with explicit capability metadata.
 
 ## Base Environment
 
@@ -95,6 +101,43 @@ Build and push the image with:
 ```bash
 gcloud builds submit session-runner \
   --config session-runner/cloudbuild.pi-basic.yaml
+```
+
+## Pi Web Runtime
+
+`session-runner/Dockerfile.pi-web` is the web-development runner. It starts from the same Pi-oriented shape as `pi-basic`, then adds Chromium and globally installed Playwright test tooling for browser QA. The image sets the runner capability contract to:
+
+```json
+{"terminal":true,"preview":true,"previewQa":true,"functions":true}
+```
+
+The shared runner server still owns the terminal, sync, protected shutdown, Git, skill, and package endpoints. Web behavior is enabled by environment:
+
+- `PREVIEW_ENABLED=true`
+- `PREVIEW_BASE_PATH=/preview`
+- `PREVIEW_STATIC_ROOT=/workspace/build`
+- `PREVIEW_INJECT_LOGGER=true`
+- `PREVIEW_LOG_LIMIT=500`
+- `MAPACHE_RUNNER_URL=http://127.0.0.1:8080`
+- `MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/`
+- `MAPACHE_QA_DIR=/workspace/.mapache/qa`
+
+When preview is enabled, the runner exposes:
+
+- `GET /capabilities` for live runtime capability discovery.
+- `GET /preview/status` for static preview readiness.
+- `GET /preview/logs` for the in-memory browser console log ring buffer.
+- `GET /preview/logs/stream` for server-sent browser console log events.
+- `POST /preview/logs` for the injected browser logger.
+- `GET /preview/*` for static files under `/workspace/build` with SPA fallback to `index.html`.
+
+HTML responses from the static preview receive a small development logger script when `PREVIEW_INJECT_LOGGER=true`. It forwards `console.log`, `console.info`, `console.warn`, `console.error`, `window.onerror`, and unhandled promise rejections to the runner log buffer. QA agents can combine these logs with Playwright screenshots and interaction checks without needing to scrape the terminal.
+
+Build and push the image with:
+
+```bash
+gcloud builds submit session-runner \
+  --config session-runner/cloudbuild.pi-web.yaml
 ```
 
 ## Workspace Sync
