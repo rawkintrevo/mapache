@@ -6,8 +6,10 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
 } from "firebase/auth";
+import {getFirestore} from "firebase/firestore";
 
 let auth;
+let firestore;
 
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyA0A772IU-qiva6p_zV1mD70uN8BtvP8to",
@@ -20,7 +22,12 @@ const defaultFirebaseConfig = {
 export async function initializeFirebase() {
   const app = initializeApp(await getFirebaseConfig());
   auth = getAuth(app);
+  firestore = getFirestore(app);
   return auth;
+}
+
+export function getFirestoreDb() {
+  return firestore;
 }
 
 export function watchAuth(authInstance, callback) {

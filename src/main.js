@@ -2,8 +2,9 @@ import "./styles.css";
 import {createElement as h} from "react";
 import {createRoot} from "react-dom/client";
 import {App} from "./App.jsx";
-import {initializeFirebase, signIn, signOut, watchAuth} from "./services/auth.js";
+import {getFirestoreDb, initializeFirebase, signIn, signOut, watchAuth} from "./services/auth.js";
 import {createApiClient} from "./services/api.js";
+import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
 import {
   resetFileEditor as resetFileEditorState,
@@ -71,6 +72,8 @@ const state = createInitialState();
 const rootElement = document.querySelector("#root");
 const reactRoot = createRoot(rootElement);
 let fatalError = null;
+let unsubscribeSessions = null;
+let sessionsListenerWorkspaceId = null;
 
 const APP_PATH = "/app";
 
@@ -85,6 +88,7 @@ async function start() {
       state.api = user ? createApiClient(() => user.getIdToken()) : null;
       state.error = "";
       if (!user) {
+        detachSessionListener();
         resetSignedOutState(state);
         render();
         return;
@@ -250,13 +254,74 @@ async function refreshAll() {
 }
 
 async function loadSessions() {
+  detachSessionListener();
   state.sessions = [];
   state.selectedSessionId = null;
   if (!state.selectedWorkspaceId) return;
 
-  const data = await state.api.getSessions(state.selectedWorkspaceId);
-  state.sessions = data.sessions || [];
-  state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
+  await attachSessionListener(state.selectedWorkspaceId);
+}
+
+function attachSessionListener(workspaceId) {
+  const db = getFirestoreDb();
+  sessionsListenerWorkspaceId = workspaceId;
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    unsubscribeSessions = listenToWorkspaceSessions(
+        db,
+        workspaceId,
+        (sessions) => {
+          const selectedSessionChanged = applySessionSnapshot(workspaceId, sessions);
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+          void refreshSelectedSessionPanelsAfterSnapshot(selectedSessionChanged);
+          render();
+        },
+        (error) => {
+          if (sessionsListenerWorkspaceId !== workspaceId) return;
+          state.error = error.message || "Session listener failed";
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+          render();
+        },
+    );
+  });
+}
+
+function detachSessionListener() {
+  if (unsubscribeSessions) {
+    unsubscribeSessions();
+  }
+  unsubscribeSessions = null;
+  sessionsListenerWorkspaceId = null;
+}
+
+function applySessionSnapshot(workspaceId, sessions) {
+  if (sessionsListenerWorkspaceId !== workspaceId || state.selectedWorkspaceId !== workspaceId) {
+    return false;
+  }
+
+  const previousSession = getSelectedSession();
+  const previousSessionId = state.selectedSessionId;
+  const previousServiceUrl = previousSession?.serviceUrl || "";
+  state.sessions = sessions;
+
+  if (!state.sessions.some((session) => session.id === state.selectedSessionId)) {
+    state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
+  }
+
+  const nextSession = getSelectedSession();
+  return previousSessionId !== state.selectedSessionId ||
+    previousServiceUrl !== (nextSession?.serviceUrl || "");
+}
+
+async function refreshSelectedSessionPanelsAfterSnapshot(selectedSessionChanged) {
+  if (!selectedSessionChanged) return;
   await loadSelectedSessionPanels();
 }
 
@@ -344,8 +409,6 @@ async function createSession(payload) {
   await runBusy(async () => {
     const data = await state.api.createSession(state.selectedWorkspaceId, payload);
     state.selectedSessionId = data.session.id;
-    const next = await state.api.getSessions(state.selectedWorkspaceId);
-    state.sessions = next.sessions || [];
     state.sessionModalOpen = false;
     await loadSelectedSessionPanels();
   });
