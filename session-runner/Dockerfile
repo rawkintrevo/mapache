@@ -1,8 +1,11 @@
 FROM node:24-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl git gzip openssh-client python3 make g++ tar \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl fd-find git gzip openssh-client python3 make g++ ripgrep tar \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
   && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://pi.dev/install.sh | sh
 
 WORKDIR /app
 COPY package*.json ./
@@ -13,6 +16,8 @@ RUN mkdir -p /workspace /root/.pi
 ENV PORT=8080
 ENV WORKSPACE_DIR=/workspace
 ENV PI_CODING_AGENT_DIR=/root/.pi/agent
+ENV TERMINAL_COMMAND=pi
+ENV TERMINAL_ARGS='["-c"]'
 
 EXPOSE 8080
 CMD ["npm", "start"]

@@ -37,19 +37,27 @@ Installed OS packages currently include:
 - `bash`
 - `ca-certificates`
 - `curl`
+- `fd-find`, exposed as `fd` with a symlink to Debian's `fdfind` binary
 - `git`
 - `gzip`
 - `openssh-client`
 - `python3`
 - `make`
 - `g++`
+- `ripgrep`
 - `tar`
 
 `curl` is intentionally installed by default because users expect it in the browser terminal, and installing it manually inside ephemeral sessions is a poor default experience.
 
 `make` and `g++` are present because `node-pty` and terminal-adjacent dependencies may require native build support during image construction.
 
-Pi package installs can also require npm, git, and native build tooling depending on the package. The planned web extension manager runs package operations inside the active runner rather than on the client device, so it uses the same runtime toolchain that Pi uses in the terminal.
+The default image now installs Pi Agents with:
+
+```bash
+curl -fsSL https://pi.dev/install.sh | sh
+```
+
+Pi package installs can also require npm, git, search tools, and native build tooling depending on the package. The web extension manager runs package operations inside the active runner rather than on the client device, so it uses the same runtime toolchain that Pi uses in the terminal.
 
 ## Terminal Runtime
 
@@ -63,34 +71,28 @@ This persistence is scoped to the current Cloud Run container instance. A Cloud 
 
 The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update `activeSocketCount`, `lastConnectedAt`, `lastDisconnectedAt`, and `lastActivityAt`; terminal input updates `lastActivityAt` with a short debounce to avoid one Firestore write per keystroke.
 
-By default, that process is the login shell:
+By default, that process is Pi resume mode:
 
 ```text
-bash -l
+pi -c
 ```
 
-Runtime images can set `TERMINAL_COMMAND` and optional JSON-array `TERMINAL_ARGS` to open a different terminal program. The `pi-basic` image sets:
+Runtime images can set `TERMINAL_COMMAND` and optional JSON-array `TERMINAL_ARGS` to open a different terminal program. The default, `pi-basic`, and `pi-web` images set:
 
 ```text
 TERMINAL_COMMAND=pi
+TERMINAL_ARGS=["-c"]
 ```
+
+Pi resumes from the latest saved JSONL entry. Mid-turn process, stream, or PTY state is not durable; if a Cloud Run instance stops during an active turn, the next terminal starts from the last completed Pi session entry. Users who want a fresh Pi conversation can type `/new` in the Pi TUI.
 
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
 
 ## Pi Basic Runtime
 
-`session-runner/Dockerfile.pi-basic` starts from the same base image and package set as the default runner, then installs Pi Agents with:
+`session-runner/Dockerfile.pi-basic` starts from the same Pi-oriented base image and package set as the default runner.
 
-```bash
-curl -fsSL https://pi.dev/install.sh | sh
-```
-
-It also adds search tools for terminal-first coding workflows:
-
-- `fd-find`, exposed as `fd` with a symlink to Debian's `fdfind` binary
-- `ripgrep`
-
-The image sets `TERMINAL_COMMAND=pi`, so new browser terminal connections open Pi directly instead of a login shell.
+The image sets `TERMINAL_COMMAND=pi` and `TERMINAL_ARGS=["-c"]`, so new browser terminal connections open Pi in resume mode instead of a login shell or fresh conversation.
 
 The skills manager targets `pi-basic` first. Skill listing and mutations require a running session so the manager can write the same `/workspace/.pi/skills/{skill-name}/SKILL.md` files that Pi discovers at startup.
 
@@ -325,7 +327,7 @@ New sessions use the image selected in the modal. Existing sessions keep their c
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, and Pi package archive targets. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, or `.pi/npm`/`.pi/git` archive behavior; they need a new revision or a recreated session service before runner changes that depend on those variables or routes will take effect.
+The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, and terminal defaults. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, or image `ENV` values will take effect.
 
 When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
 

@@ -2765,7 +2765,9 @@ function terminalCommand() {
 
 function terminalArgs() {
   try {
-    const value = JSON.parse(process.env.TERMINAL_ARGS || "[]");
+    const raw = String(process.env.TERMINAL_ARGS || "[]").trim();
+    const json = raw.replace(/^'([\s\S]*)'$/, "$1");
+    const value = JSON.parse(json || "[]");
     return Array.isArray(value) ? value.map((item) => String(item)) : [];
   } catch (error) {
     console.error("invalid TERMINAL_ARGS, using no arguments", error);
