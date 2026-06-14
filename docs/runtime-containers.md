@@ -59,6 +59,19 @@ curl -fsSL https://pi.dev/install.sh | sh
 
 Pi package installs can also require npm, git, search tools, and native build tooling depending on the package. The web extension manager runs package operations inside the active runner rather than on the client device, so it uses the same runtime toolchain that Pi uses in the terminal.
 
+## Runner Server Layout
+
+The container entry point is still `session-runner/server.js`, but it is now a bootstrap/router layer rather than the full runtime implementation. Feature code lives under `session-runner/lib/`:
+
+- `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
+- `preview.js` owns the pi-web static/proxy preview gateway and browser log buffer.
+- `workspace.js` owns workspace restore, Cloud Storage sync, archive sync, GitHub workspace reconstruction, and Pi auth materialization.
+- `git.js` owns Git status/actions and GitHub clone/push auth helpers.
+- `pi.js` owns workspace-local Pi package and skill management.
+- `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
+
+Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`.
+
 ## Terminal Runtime
 
 The container runs `session-runner/server.js`.

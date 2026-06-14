@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY server.js ./
+COPY lib ./lib
 
 RUN mkdir -p /workspace /root/.pi
 ENV PORT=8080

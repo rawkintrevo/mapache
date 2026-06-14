@@ -12,6 +12,7 @@ COPY package*.json ./
 RUN npm install --omit=dev \
   && npm install -g @playwright/test
 COPY server.js ./
+COPY lib ./lib
 
 RUN mkdir -p /workspace /root/.pi /workspace/.mapache/qa
 ENV PORT=8080
