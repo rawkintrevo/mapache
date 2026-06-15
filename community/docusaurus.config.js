@@ -45,8 +45,6 @@ const config = {
       ({
         docs: {
           sidebarPath: './sidebars.js',
-          editUrl:
-            'https://github.com/rawkintrevo/mapahce/tree/main/community/',
         },
         blog: {
           showReadingTime: true,
@@ -54,8 +52,6 @@ const config = {
             type: ['rss', 'atom'],
             xslt: true,
           },
-          editUrl:
-            'https://github.com/rawkintrevo/mapahce/tree/main/community/',
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
           onUntruncatedBlogPosts: 'warn',
