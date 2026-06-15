@@ -49,34 +49,85 @@ https://pi-agents-cloud.web.app/
    SESSION_RUNNER_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
    SESSION_BUCKET=YOUR_BUCKET_NAME
    SESSION_REGION=us-central1
+   FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com
+   SESSION_RUNNER_SERVICE_ACCOUNT=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com
    ```
 
    `functions/.env` is ignored by git by default.
 
-5. Give the Functions service account permissions:
+5. Create least-privilege service accounts:
 
    ```bash
+   gcloud iam service-accounts create mapache-api \
+     --display-name="Mapache API function" \
+     --project pi-agents-cloud
+
+   gcloud iam service-accounts create mapache-runner \
+     --display-name="Mapache session runner" \
+     --project pi-agents-cloud
+   ```
+
+6. Grant the Functions service account only the permissions needed to manage session services and app data:
+
+   ```bash
+   API_SA=mapache-api@pi-agents-cloud.iam.gserviceaccount.com
+   RUNNER_SA=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com
+
    gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+     --member="serviceAccount:${API_SA}" \
      --role="roles/run.admin"
-   gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
-     --role="roles/iam.serviceAccountUser"
-   ```
 
-6. Give the Cloud Run runtime service account access to Firestore and Storage:
+   gcloud iam service-accounts add-iam-policy-binding "${RUNNER_SA}" \
+     --member="serviceAccount:${API_SA}" \
+     --role="roles/iam.serviceAccountUser" \
+     --project pi-agents-cloud
 
-   ```bash
    gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+     --member="serviceAccount:${API_SA}" \
      --role="roles/datastore.user"
-   gsutil iam ch serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com:objectAdmin gs://YOUR_BUCKET_NAME
+
+   gcloud projects add-iam-policy-binding pi-agents-cloud \
+     --member="serviceAccount:${API_SA}" \
+     --role="roles/secretmanager.secretAccessor"
+
+   gsutil iam ch serviceAccount:${API_SA}:objectAdmin gs://YOUR_BUCKET_NAME
    ```
 
-7. Deploy:
+7. Grant the runner service account only the runtime data permissions:
 
    ```bash
-   firebase deploy
+   RUNNER_SA=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com
+
+   gcloud projects add-iam-policy-binding pi-agents-cloud \
+     --member="serviceAccount:${RUNNER_SA}" \
+     --role="roles/datastore.user"
+
+   gsutil iam ch serviceAccount:${RUNNER_SA}:objectAdmin gs://YOUR_BUCKET_NAME
+   ```
+
+8. Remove broad grants from the default Compute Engine service account after the new service accounts are deployed and verified:
+
+   ```bash
+   PROJECT_NUMBER="$(gcloud projects describe pi-agents-cloud --format='value(projectNumber)')"
+   DEFAULT_COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+   gcloud projects remove-iam-policy-binding pi-agents-cloud \
+     --member="serviceAccount:${DEFAULT_COMPUTE_SA}" \
+     --role="roles/editor"
+
+   gcloud projects remove-iam-policy-binding pi-agents-cloud \
+     --member="serviceAccount:${DEFAULT_COMPUTE_SA}" \
+     --role="roles/run.admin"
+
+   gcloud projects remove-iam-policy-binding pi-agents-cloud \
+     --member="serviceAccount:${DEFAULT_COMPUTE_SA}" \
+     --role="roles/datastore.user"
+   ```
+
+9. Deploy:
+
+   ```bash
+   firebase deploy --project pi-agents-cloud
    ```
 
 ## Local development

@@ -350,6 +350,10 @@ session-<lowercase-session-id>
 
 Cloud Run resource limits are derived from the session's CPU and memory settings.
 
+Each session service must run as the dedicated runner service account configured by the Cloud Functions environment variable `SESSION_RUNNER_SERVICE_ACCOUNT`. The backend sets Cloud Run `template.serviceAccount` on create, resize, and restart. If that variable is missing, session provisioning fails closed instead of allowing Cloud Run to fall back to the project's default Compute Engine service account.
+
+The runner service account should have only the runtime data permissions it needs, currently Firestore user access and object admin access to the configured workspace bucket. The Functions service account should be separate, configured with `FUNCTION_SERVICE_ACCOUNT`, and granted Cloud Run administration plus `roles/iam.serviceAccountUser` only on the runner service account. Do not grant `roles/editor` to the default Compute Engine service account for this flow.
+
 Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped. Deleting a session from the sidebar uses the same service deletion path for any still-running service, then removes the session document from Firestore so it no longer appears in the workspace session list.
 
 Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
@@ -400,7 +404,7 @@ New sessions use the image key selected in the modal and resolved by the backend
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, and terminal defaults. Existing Cloud Run services do not automatically gain `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, or image `ENV` values will take effect.
+The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, or image `ENV` values will take effect.
 
 When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
 

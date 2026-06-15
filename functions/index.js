@@ -6,7 +6,7 @@ const {GoogleAuth} = require("google-auth-library");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {setGlobalOptions} = require("firebase-functions/v2");
-const {defineSecret} = require("firebase-functions/params");
+const {defineSecret, defineString} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const {
   resolveRunnerImage,
@@ -19,7 +19,13 @@ const {
 } = require("./appAllowList.helpers");
 
 admin.initializeApp();
-setGlobalOptions({maxInstances: 10, region: process.env.FUNCTION_REGION || "us-central1"});
+const FUNCTION_SERVICE_ACCOUNT = defineString("FUNCTION_SERVICE_ACCOUNT");
+const globalOptions = {
+  maxInstances: 10,
+  region: process.env.FUNCTION_REGION || "us-central1",
+  serviceAccount: FUNCTION_SERVICE_ACCOUNT,
+};
+setGlobalOptions(globalOptions);
 
 const db = admin.firestore();
 const auth = new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
@@ -34,6 +40,9 @@ const DEFAULT_CPU = process.env.SESSION_CPU || "1";
 const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
+const DEFAULT_RUNNER_SERVICE_ACCOUNT = normalizeServiceAccountEmail(
+    process.env.SESSION_RUNNER_SERVICE_ACCOUNT || "",
+);
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
 const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
     process.env.RUNNER_SHUTDOWN_TIMEOUT_MS,
@@ -1404,6 +1413,7 @@ async function createSession(uid, workspaceId, payload) {
     image: runnerImage.image,
     imageKey: runnerImage.key,
     capabilities: runnerImage.capabilities,
+    serviceAccount: DEFAULT_RUNNER_SERVICE_ACCOUNT || null,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
@@ -2697,10 +2707,12 @@ async function patchSessionService(sessionRef, session, options = {}) {
   }
 
   try {
+    const serviceAccount = requireRunnerServiceAccount();
     const client = await auth.getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = {
       template: {
+        serviceAccount,
         containers: [{
           image: session.image,
           resources: {limits: resourceLimits(session.resources)},
@@ -2711,8 +2723,8 @@ async function patchSessionService(sessionRef, session, options = {}) {
       },
     };
     const updateMask = options.restart ?
-      "template.containers" :
-      "template.containers.resources.limits";
+      "template.containers,template.serviceAccount" :
+      "template.containers.resources.limits,template.serviceAccount";
     const response = await client.request({
       url: `${url}?updateMask=${encodeURIComponent(updateMask)}`,
       method: "PATCH",
@@ -2791,8 +2803,10 @@ async function markSessionStopped(sessionRef, session, reason) {
 }
 
 async function buildCloudRunService(workspace, session) {
+  const serviceAccount = requireRunnerServiceAccount();
   return {
     template: {
+      serviceAccount,
       scaling: {
         minInstanceCount: 0,
         maxInstanceCount: 1,
@@ -2812,6 +2826,13 @@ async function buildCloudRunService(workspace, session) {
       }],
     },
   };
+}
+
+function requireRunnerServiceAccount() {
+  if (!DEFAULT_RUNNER_SERVICE_ACCOUNT) {
+    throw new Error("Set SESSION_RUNNER_SERVICE_ACCOUNT to a least-privilege Cloud Run runtime service account before provisioning sessions.");
+  }
+  return DEFAULT_RUNNER_SERVICE_ACCOUNT;
 }
 
 async function sessionRunnerEnv(session, options = {}) {
@@ -3580,6 +3601,15 @@ function serialize(value) {
 
 function cleanName(value) {
   return String(value || "").trim().slice(0, 256);
+}
+
+function normalizeServiceAccountEmail(value) {
+  const email = cleanName(value).toLowerCase();
+  if (!email) return "";
+  if (!/^[a-z0-9][a-z0-9._-]*@[a-z0-9-]+\.iam\.gserviceaccount\.com$/.test(email)) {
+    throw new Error(`Invalid service account email: ${email}`);
+  }
+  return email;
 }
 
 function positiveNumber(value, fallback) {
