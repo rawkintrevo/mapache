@@ -6,6 +6,7 @@ import {getFirestoreDb, initializeFirebase, signIn, signOut, watchAuth} from "./
 import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
+import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
   resetFileEditor as resetFileEditorState,
   resetGitStatus as resetGitStatusState,
@@ -656,7 +657,7 @@ async function runBusy(task) {
   try {
     await task();
   } catch (error) {
-    state.error = error.message || "Request failed";
+    state.error = friendlyGlobalError(error);
   } finally {
     state.busy = false;
     render();

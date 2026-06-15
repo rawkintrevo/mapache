@@ -28,7 +28,22 @@ The planned Pi extension manager will use the right-side `Extensions` drawer as 
 
 ## Firestore Ownership Model
 
-Firebase Auth is the source of user identity. On authenticated API requests, `functions/index.js` verifies the Firebase ID token and upserts a profile document at `users/{uid}` before serving workspace/session data.
+Firebase Auth is the source of user identity. On authenticated API requests, `functions/index.js` verifies the Firebase ID token, checks the optional app-level allow list in Firestore, and upserts a profile document at `users/{uid}` before serving workspace/session data.
+
+The allow list lives at `appConfig/access`. It is disabled when the document is missing or `enabled` is not `true`. When enabled, entries can be supplied through `entries`, `allowedEmails`, and/or `allowedUids`. `entries` accepts Firebase user emails and/or UIDs as strings. Email entries are case-insensitive; UID entries are exact. Prefix `entries` values with `email:` or `uid:` when the type should be explicit:
+
+```js
+// appConfig/access
+{
+  enabled: true,
+  entries: ["email:alice@example.com", "uid:firebase-auth-uid"],
+  allowedEmails: ["bob@example.com"],
+  allowedUids: ["another-firebase-auth-uid"],
+  updatedAt: Timestamp
+}
+```
+
+Users who authenticate successfully but are not on the list receive `app_access_not_allowed` from authenticated `/api/**` routes. The GitHub OAuth callback route remains unauthenticated because it is entered from GitHub before returning to the signed-in app.
 
 User documents have this shape:
 

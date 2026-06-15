@@ -6,6 +6,14 @@ export function friendlyRepoPickerError(error) {
   return message;
 }
 
+export function friendlyGlobalError(error) {
+  const message = error.message || "Request failed";
+  if (message === "app_access_not_allowed") {
+    return "This account is not on the Mapache Tools allow list.";
+  }
+  return message;
+}
+
 export function friendlyPiPackageError(error) {
   const message = error.message || "Could not load extensions.";
   if (message === "no_active_session" || message === "session_not_running") return "Start an active pi-basic session to inspect workspace extensions.";

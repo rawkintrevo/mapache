@@ -12,12 +12,18 @@ const {
   resolveRunnerImage,
   runnerImageCapabilities,
 } = require("./runnerImages.helpers");
+const {
+  appAllowListStatus,
+  isAppAllowListConfigured,
+  isFirebaseTokenAllowed,
+} = require("./appAllowList.helpers");
 
 admin.initializeApp();
 setGlobalOptions({maxInstances: 10, region: process.env.FUNCTION_REGION || "us-central1"});
 
 const db = admin.firestore();
 const auth = new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
+const APP_ACCESS_CONFIG_REF = db.collection("appConfig").doc("access");
 const GITHUB_APP_ID_SECRET = defineSecret("GITHUB_APP_ID");
 const GITHUB_APP_CLIENT_ID_SECRET = defineSecret("GITHUB_APP_CLIENT_ID");
 const GITHUB_APP_CLIENT_SECRET_SECRET = defineSecret("GITHUB_APP_CLIENT_SECRET");
@@ -508,7 +514,22 @@ async function requireUser(req) {
   } catch (error) {
     throw httpError(401, "invalid_auth_token", error);
   }
+  const appAllowListConfig = await getAppAllowListConfig();
+  if (!isFirebaseTokenAllowed(token, appAllowListConfig)) {
+    logger.warn("authenticated user rejected by app allow list", {
+      uid: token.uid,
+      email: token.email || "",
+      allowListConfigured: isAppAllowListConfigured(appAllowListConfig),
+      allowListEntryCount: appAllowListStatus(appAllowListConfig).entryCount,
+    });
+    throw httpError(403, "app_access_not_allowed");
+  }
   return upsertUser(token);
+}
+
+async function getAppAllowListConfig() {
+  const snap = await APP_ACCESS_CONFIG_REF.get();
+  return snap.exists ? snap.data() : {};
 }
 
 async function upsertUser(token) {
