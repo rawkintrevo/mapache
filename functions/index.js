@@ -42,6 +42,13 @@ const RUNNER_IMAGE_CAPABILITIES = {
     previewQa: true,
     functions: true,
   },
+  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64": {
+    terminal: true,
+    preview: true,
+    previewQa: false,
+    functions: false,
+    n64: true,
+  },
 };
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
@@ -1450,6 +1457,7 @@ function runnerImageCapabilities(image) {
     preview: false,
     previewQa: false,
     functions: false,
+    n64: false,
   };
 }
 
@@ -2835,6 +2843,7 @@ async function sessionRunnerEnv(session, options = {}) {
         {name: "PREVIEW_ENABLED", value: "true"},
         {name: "PREVIEW_BASE_PATH", value: "/preview"},
         {name: "PREVIEW_STATIC_ROOT", value: "/workspace/build"},
+        capabilities.n64 ? {name: "PREVIEW_N64_ROM_PATH", value: "/workspace/build/game.z64"} : null,
         {name: "PREVIEW_INJECT_LOGGER", value: "true"},
         {name: "PREVIEW_LOG_LIMIT", value: "500"},
         {name: "MAPACHE_RUNNER_URL", value: "http://127.0.0.1:8080"},

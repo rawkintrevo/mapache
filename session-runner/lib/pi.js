@@ -131,13 +131,14 @@ function createPiService({config, syncUp}) {
     };
   }
 
-  async function seedDefaultPiWebSkills() {
-    if (!config.runnerCapabilities.preview) return;
+  async function seedDefaultRuntimeSkills() {
+    const skills = defaultRuntimeSkills(config.runnerCapabilities);
+    if (!skills.length) return;
 
     const skillsPath = path.join(config.workspaceDir, ".pi", "skills");
     await fs.promises.mkdir(skillsPath, {recursive: true});
 
-    for (const skill of defaultPiWebSkills()) {
+    for (const skill of skills) {
       const skillDir = path.join(skillsPath, skill.name);
       const skillPath = path.join(skillDir, "SKILL.md");
       if (await pathExists(skillPath)) continue;
@@ -297,7 +298,7 @@ function createPiService({config, syncUp}) {
     listWorkspacePiSkills,
     removeWorkspacePiPackage,
     saveWorkspacePiSkill,
-    seedDefaultPiWebSkills,
+    seedDefaultRuntimeSkills,
     updateWorkspacePiPackages,
     withPackageOperationLock,
     withSkillOperationLock,
@@ -337,6 +338,12 @@ function sendPiSkillError(res, error, fallbackCode) {
   }
   console.error(`${fallbackCode.replace(/_/g, " ")}`, error);
   res.status(500).json({error: fallbackCode});
+}
+
+function defaultRuntimeSkills(capabilities = {}) {
+  if (capabilities.n64) return defaultPiN64Skills();
+  if (capabilities.preview) return defaultPiWebSkills();
+  return [];
 }
 
 function defaultPiWebSkills() {
@@ -510,6 +517,85 @@ EOF
 - Save screenshots and reports under $MAPACHE_QA_DIR/latest.
 - Prefer testing through $MAPACHE_PREVIEW_URL, not direct localhost upstream ports.
 - Treat console errors as actionable unless they are clearly third-party noise and documented in the report.`,
+      }),
+    },
+  ];
+}
+
+function defaultPiN64Skills() {
+  return [
+    {
+      name: "mapache-n64-build",
+      content: buildPiSkillMarkdown({
+        name: "mapache-n64-build",
+        description: "Build and package Nintendo 64 homebrew ROM artifacts for the pi-n64 preview.",
+        content: `Use this skill when creating or updating Nintendo 64 homebrew in a Mapache pi-n64 session.
+
+## Contract
+
+- The workspace uses the libdragon SDK and MIPS N64 toolchain installed in the runner.
+- The preview looks for the primary ROM at /workspace/build/game.z64.
+- Build commands should run from /workspace unless the project has its own documented subdirectory.
+- The local runner control URL is available as $MAPACHE_RUNNER_URL.
+
+## Build Steps
+
+1. Inspect the project Makefile or build script before changing commands.
+2. Build the ROM with the project's existing command, usually make.
+3. Create /workspace/build if it does not exist.
+4. Copy or emit the playable ROM to /workspace/build/game.z64.
+5. Check readiness with: curl "$MAPACHE_RUNNER_URL/preview/status"
+
+## New Project Defaults
+
+For a new libdragon project, prefer a small Makefile that includes the installed libdragon n64.mk file and produces a .z64 ROM. Keep source files outside /workspace/build and treat build as generated output.
+
+## Rules
+
+- Build only homebrew ROMs owned by the workspace.
+- Do not use proprietary Nintendo SDK files, leaked headers, commercial ROMs, or assets without permission.
+- Keep the final ROM path stable so the Preview tab and QA scripts can find it.`,
+      }),
+    },
+    {
+      name: "mapache-n64-preview",
+      content: buildPiSkillMarkdown({
+        name: "mapache-n64-preview",
+        description: "Use the Mapache pi-n64 browser emulator preview contract for ROM artifacts.",
+        content: `Use this skill after building a Nintendo 64 homebrew ROM in a Mapache pi-n64 session.
+
+## Contract
+
+- Preview URL: $MAPACHE_PREVIEW_URL
+- Status endpoint: $MAPACHE_RUNNER_URL/preview/status
+- ROM endpoint: $MAPACHE_RUNNER_URL/preview/rom.z64
+- Expected ROM file: /workspace/build/game.z64
+- The Preview tab loads the ROM through the Mapache EmulatorJS shell when the ROM exists.
+
+## Preview Steps
+
+1. Confirm /workspace/build/game.z64 exists.
+2. Check status: curl "$MAPACHE_RUNNER_URL/preview/status"
+3. Open $MAPACHE_PREVIEW_URL to run the ROM in the browser emulator shell.
+4. Use $MAPACHE_RUNNER_URL/preview/rom.z64 as the stable ROM URL for downloads or external emulator checks.
+
+## Optional Preview Config
+
+Write /workspace/.mapache/preview.json to override the ROM path or emulator core:
+
+\`\`\`json
+{
+  "mode": "n64",
+  "rom": "build/custom.z64",
+  "core": "mupen64plus_next"
+}
+\`\`\`
+
+Accepted core values are "n64", "mupen64plus_next", and "parallel-n64".
+
+## Notes
+
+The browser preview is useful for fast iteration, but it does not claim hardware accuracy. Validate serious compatibility with a modern native N64 emulator or real hardware.`,
       }),
     },
   ];

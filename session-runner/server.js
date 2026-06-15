@@ -271,7 +271,7 @@ workspace.ensureWorkspace()
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
       await workspace.synchronizePiAuth({materialize: true});
-      await pi.seedDefaultPiWebSkills();
+      await pi.seedDefaultRuntimeSkills();
     })
     .then(() => {
       startSyncLoop();

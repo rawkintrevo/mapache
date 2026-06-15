@@ -22,7 +22,13 @@ The `pi-web` runner image is built from `session-runner/Dockerfile.pi-web` and p
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web
 ```
 
-The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner, `pi-basic`, and `pi-web`, each with explicit capability metadata.
+The `pi-n64` runner image is built from `session-runner/Dockerfile.pi-n64` and published as:
+
+```text
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64
+```
+
+The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner, `pi-basic`, `pi-web`, and `pi-n64`, each with explicit capability metadata.
 
 ## Base Environment
 
@@ -64,7 +70,7 @@ Pi package installs can also require npm, git, search tools, and native build to
 The container entry point is still `session-runner/server.js`, but it is now a bootstrap/router layer rather than the full runtime implementation. Feature code lives under `session-runner/lib/`:
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
-- `preview.js` owns the pi-web static/proxy preview gateway and browser log buffer.
+- `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
 - `workspace.js` owns workspace restore, Cloud Storage sync, archive sync, GitHub workspace reconstruction, and Pi auth materialization.
 - `git.js` owns Git status/actions and GitHub clone/push auth helpers.
 - `pi.js` owns workspace-local Pi package and skill management.
@@ -90,7 +96,7 @@ By default, that process is Pi resume mode:
 pi -c
 ```
 
-Runtime images can set `TERMINAL_COMMAND` and optional JSON-array `TERMINAL_ARGS` to open a different terminal program. The default, `pi-basic`, and `pi-web` images set:
+Runtime images can set `TERMINAL_COMMAND` and optional JSON-array `TERMINAL_ARGS` to open a different terminal program. The default, `pi-basic`, `pi-web`, and `pi-n64` images set:
 
 ```text
 TERMINAL_COMMAND=pi
@@ -172,6 +178,58 @@ Build and push the image with:
 ```bash
 gcloud builds submit session-runner \
   --config session-runner/cloudbuild.pi-web.yaml
+```
+
+## Pi N64 Runtime
+
+`session-runner/Dockerfile.pi-n64` is the Nintendo 64 homebrew runner. It starts from the same Pi-oriented shape as `pi-basic`, then installs the libdragon prebuilt MIPS64 toolchain Debian package, builds libdragon from the `trunk` branch, and installs libdragon and its host tools into `/opt/libdragon`.
+
+The image sets the runner capability contract to:
+
+```json
+{"terminal":true,"preview":true,"previewQa":false,"functions":false,"n64":true}
+```
+
+The shared runner server still owns the terminal, sync, protected shutdown, Git, skill, and package endpoints. N64 behavior is enabled by environment:
+
+- `PREVIEW_ENABLED=true`
+- `PREVIEW_BASE_PATH=/preview`
+- `PREVIEW_STATIC_ROOT=/workspace/build`
+- `PREVIEW_N64_ROM_PATH=/workspace/build/game.z64`
+- `MAPACHE_RUNNER_URL=http://127.0.0.1:8080`
+- `MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/`
+- `N64_INST=/opt/libdragon`
+
+When the runner has the `n64` capability, the preview gateway defaults to `mode: "n64"` if `/workspace/.mapache/preview.json` is missing. In N64 mode:
+
+- `GET /preview/` serves a Mapache-owned EmulatorJS shell. If the ROM exists, the shell loads the ROM from `/preview/rom.z64`; if it does not, the page shows a waiting state with the expected path.
+- `GET /preview/rom.z64` serves the ROM at `PREVIEW_N64_ROM_PATH`.
+- `GET /preview/status` reports `mode: "n64"`, the selected emulator core, whether the ROM exists, its byte size, and the ROM URL.
+
+Agents can override the ROM path and emulator core by writing `/workspace/.mapache/preview.json`:
+
+```json
+{
+  "mode": "n64",
+  "rom": "build/custom.z64",
+  "core": "mupen64plus_next"
+}
+```
+
+Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; invalid values fall back to `n64`. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks.
+
+On startup, `pi-n64` seeds two workspace-local Pi skills when they are missing:
+
+- `mapache-n64-build`: explains how to build/package a homebrew ROM to `/workspace/build/game.z64`.
+- `mapache-n64-preview`: explains the N64 browser emulator shell, status endpoint, ROM endpoint, and optional core override.
+
+These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-n64` sessions. Existing user-edited skills with the same names are not overwritten.
+
+Build and push the image with:
+
+```bash
+gcloud builds submit session-runner \
+  --config session-runner/cloudbuild.pi-n64.yaml
 ```
 
 ## Workspace Sync

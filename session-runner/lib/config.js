@@ -19,7 +19,7 @@ function normalizePreviewBasePath(value) {
 }
 
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false};
+  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false};
   try {
     return {...fallback, ...JSON.parse(process.env.RUNNER_CAPABILITIES || "{}")};
   } catch (error) {
@@ -63,6 +63,7 @@ function createConfig() {
     previewEnabled,
     previewInjectLogger: previewEnabled && envFlag(process.env.PREVIEW_INJECT_LOGGER, true),
     previewLogLimit: positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500),
+    previewN64RomPath: path.resolve(process.env.PREVIEW_N64_ROM_PATH || path.join(workspaceDir, "build", "game.z64")),
     previewStaticRoot: path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
     runnerCapabilities,
     sessionId: process.env.SESSION_ID || "",

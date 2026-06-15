@@ -1,0 +1,45 @@
+FROM node:24-bookworm-slim
+
+ENV N64_INST=/opt/libdragon
+ENV PATH=/opt/libdragon/bin:$PATH
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl fd-find git gzip libpng-dev make g++ openssh-client pkg-config python3 ripgrep tar zlib1g-dev \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://pi.dev/install.sh | sh
+
+RUN curl -fsSL -o /tmp/gcc-toolchain-mips64-x86_64.deb \
+    https://github.com/DragonMinded/libdragon/releases/download/toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb \
+  && dpkg -i /tmp/gcc-toolchain-mips64-x86_64.deb \
+  && rm -f /tmp/gcc-toolchain-mips64-x86_64.deb \
+  && git clone --depth 1 --branch trunk https://github.com/DragonMinded/libdragon.git /opt/libdragon-src \
+  && cd /opt/libdragon-src \
+  && ./build.sh \
+  && rm -rf /opt/libdragon-src
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY server.js ./
+COPY lib ./lib
+
+RUN mkdir -p /workspace /root/.pi /workspace/build
+ENV PORT=8080
+ENV WORKSPACE_DIR=/workspace
+ENV PI_CODING_AGENT_DIR=/root/.pi/agent
+ENV TERMINAL_COMMAND=pi
+ENV TERMINAL_ARGS='["-c"]'
+ENV PREVIEW_ENABLED=true
+ENV PREVIEW_BASE_PATH=/preview
+ENV PREVIEW_STATIC_ROOT=/workspace/build
+ENV PREVIEW_N64_ROM_PATH=/workspace/build/game.z64
+ENV PREVIEW_INJECT_LOGGER=false
+ENV PREVIEW_LOG_LIMIT=500
+ENV MAPACHE_RUNNER_URL=http://127.0.0.1:8080
+ENV MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/
+ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":false,"functions":false,"n64":true}
+
+EXPOSE 8080
+CMD ["npm", "start"]

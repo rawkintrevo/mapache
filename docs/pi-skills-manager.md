@@ -38,7 +38,7 @@ Skills do not use archive-backed sync. Unlike Pi packages, skills are small Mark
 
 ## Runner-Seeded Skills
 
-The `pi-web` runner seeds web-workflow skills during startup after workspace restore and before the Pi terminal process starts. Seeded skills are ordinary workspace-local skill files under:
+Some curated runners seed workflow skills during startup after workspace restore and before the Pi terminal process starts. Seeded skills are ordinary workspace-local skill files under:
 
 ```text
 /workspace/.pi/skills/{skill-name}/SKILL.md
@@ -49,6 +49,11 @@ Current `pi-web` seeded skills are:
 - `mapache-preview-build`: explains how to build static output to `/workspace/build`.
 - `mapache-api-hosting`: explains how to run a localhost app/API server and proxy `/preview/*` to it with `/workspace/.mapache/preview.json`.
 - `mapache-preview-qa`: explains how to use preview status, browser logs, screenshots, and Playwright QA artifacts under `$MAPACHE_QA_DIR`.
+
+Current `pi-n64` seeded skills are:
+
+- `mapache-n64-build`: explains how to build/package Nintendo 64 homebrew ROM artifacts to `/workspace/build/game.z64`.
+- `mapache-n64-preview`: explains the N64 EmulatorJS preview shell, status endpoint, ROM endpoint, and optional emulator core override.
 
 The runner creates these files only when missing. User-edited files with the same names are not overwritten.
 
