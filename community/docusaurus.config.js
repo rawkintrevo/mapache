@@ -26,7 +26,7 @@ const config = {
   baseUrl: '/community/',
 
   organizationName: 'rawkintrevo',
-  projectName: 'mapahce',
+  projectName: 'mapache',
 
   onBrokenLinks: 'throw',
 
