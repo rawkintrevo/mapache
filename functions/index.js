@@ -8,6 +8,10 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {setGlobalOptions} = require("firebase-functions/v2");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
+const {
+  resolveRunnerImage,
+  runnerImageCapabilities,
+} = require("./runnerImages.helpers");
 
 admin.initializeApp();
 setGlobalOptions({maxInstances: 10, region: process.env.FUNCTION_REGION || "us-central1"});
@@ -23,33 +27,6 @@ const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
 const DEFAULT_CPU = process.env.SESSION_CPU || "1";
 const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
-const RUNNER_IMAGE_CAPABILITIES = {
-  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest": {
-    terminal: true,
-    preview: false,
-    previewQa: false,
-    functions: false,
-  },
-  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic": {
-    terminal: true,
-    preview: false,
-    previewQa: false,
-    functions: false,
-  },
-  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web": {
-    terminal: true,
-    preview: true,
-    previewQa: true,
-    functions: true,
-  },
-  "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64": {
-    terminal: true,
-    preview: true,
-    previewQa: false,
-    functions: false,
-    n64: true,
-  },
-};
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
 const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
@@ -1382,8 +1359,15 @@ async function createSession(uid, workspaceId, payload) {
       DEFAULT_IDLE_TIMEOUT_MINUTES,
   );
   const serviceId = `session-${sessionRef.id.toLowerCase()}`;
-  const image = cleanName(payload.image || DEFAULT_IMAGE);
-  const capabilities = runnerImageCapabilities(image);
+  let runnerImage;
+  try {
+    runnerImage = resolveRunnerImage(payload, DEFAULT_IMAGE);
+  } catch (error) {
+    if (error && error.code === "invalid_runner_image") {
+      throw httpError(400, "invalid_runner_image", error);
+    }
+    throw error;
+  }
   const session = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -1394,10 +1378,11 @@ async function createSession(uid, workspaceId, payload) {
     piHomeStoragePrefix: piHomeStoragePrefix(uid),
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
-    status: DEFAULT_IMAGE ? "provisioning" : "needs_image",
+    status: runnerImage.canProvision ? "provisioning" : "needs_image",
     region,
-    image,
-    capabilities,
+    image: runnerImage.image,
+    imageKey: runnerImage.key,
+    capabilities: runnerImage.capabilities,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
@@ -1420,7 +1405,7 @@ async function createSession(uid, workspaceId, payload) {
     createdAt: now,
     updatedAt: now,
     restartedAt: null,
-    lastError: DEFAULT_IMAGE ? null : "Set SESSION_RUNNER_IMAGE before provisioning Cloud Run sessions.",
+    lastError: runnerImage.canProvision ? null : "Set SESSION_RUNNER_IMAGE before provisioning Cloud Run sessions.",
   };
 
   if (isGithubWorkspace(workspace)) {
@@ -1429,7 +1414,7 @@ async function createSession(uid, workspaceId, payload) {
     await sessionRef.set(session);
   }
 
-  if (DEFAULT_IMAGE || payload.image) {
+  if (runnerImage.canProvision) {
     await provisionSessionService(workspace, sessionRef, session);
   }
 
@@ -1449,16 +1434,6 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
 
 function isGithubWorkspace(workspace) {
   return workspace && workspace.source && workspace.source.type === "github";
-}
-
-function runnerImageCapabilities(image) {
-  return RUNNER_IMAGE_CAPABILITIES[cleanName(image)] || {
-    terminal: true,
-    preview: false,
-    previewQa: false,
-    functions: false,
-    n64: false,
-  };
 }
 
 function isActiveGithubWorkspaceSession(session) {

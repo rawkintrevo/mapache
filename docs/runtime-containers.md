@@ -28,7 +28,9 @@ The `pi-n64` runner image is built from `session-runner/Dockerfile.pi-n64` and p
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64
 ```
 
-The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner, `pi-basic`, `pi-web`, and `pi-n64`, each with explicit capability metadata.
+The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner, `pi-basic`, `pi-web`, and `pi-n64`, each with explicit capability metadata and a stable `imageKey`.
+
+The backend is authoritative for image selection. `functions/runnerImages.helpers.js` contains the curated server-side image catalog. Session creation accepts `imageKey` and maps it to the catalog entry before provisioning Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
 
 ## Base Environment
 
@@ -338,7 +340,7 @@ The current runner implementation now does that reconciliation for GitHub worksp
 
 ## Provisioning
 
-When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected image. The image value comes from the create-session payload when present, or from the backend `SESSION_RUNNER_IMAGE` default.
+When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected curated image. The create-session payload should include `imageKey`; the backend resolves that key through `functions/runnerImages.helpers.js` and stores both `imageKey` and the resolved `image` URI on the session. If no image key is present, the backend uses the operator-controlled `SESSION_RUNNER_IMAGE` default. Direct user-provided image URIs are not accepted unless they exactly match a curated catalog image for legacy client compatibility.
 
 Each session service is named with the session id:
 
@@ -394,7 +396,7 @@ gcloud run services update SERVICE_NAME \
   --project pi-agents-cloud
 ```
 
-New sessions use the image selected in the modal. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
+New sessions use the image key selected in the modal and resolved by the backend. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
@@ -418,7 +420,7 @@ Expected package-manager write locations:
 - Browser terminals should use a real terminal emulator. The app uses xterm.js so terminal programs and shell formatting render correctly.
 - The runner keeps the PTY alive across WebSocket disconnects so frontend re-renders, iframe reloads, and brief network drops do not discard in-progress terminal work.
 - Idle shutdown is controlled by Cloud Functions instead of browser timers so abandoned sessions are cleaned up even after the browser is closed.
-- Runtime image selection is user-facing but config-controlled. This prevents arbitrary image entry in the UI while keeping the path open for curated images.
+- Runtime image selection is user-facing but backend-enforced. The UI exposes curated image keys, and Cloud Functions rejects arbitrary image URIs from normal session creation. Bring-your-own-image support, if added later, should be a separate permission-gated untrusted-workload path rather than an extension of the normal image selector.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.

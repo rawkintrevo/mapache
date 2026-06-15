@@ -63,7 +63,7 @@ React UI is organized under `src/components/` with one component per file where 
 
 Styling lives in `src/styles.css`. The interface uses restrained operational styling: dense drawer lists, compact controls, 8px-or-less radii for panels/cards, a terminal-first selected-session view, and collapsible left/right drawers for navigation and inspection.
 
-Session image choices live in `src/config/sessionImages.js`. This is the frontend source of truth for the container image dropdown in the create-session modal, including image capability metadata such as `preview` and `previewQa`. Cloud Functions stores matching capability metadata on new session records so the React session detail can show only the canvases supported by the selected image.
+Session image choices live in `src/config/sessionImages.js` for the create-session modal, but the frontend config is not a security boundary. Cloud Functions resolves submitted `imageKey` values against its own curated runner image catalog and rejects arbitrary user-supplied image URIs. Older clients that submit one of the exact curated image URIs still resolve to the matching key. Cloud Functions stores matching capability metadata on new session records so the React session detail can show only the canvases supported by the selected image.
 
 Pi provider choices for the Authentication Center live in `src/config/piAuthProviders.js`. Most providers use API-key entries. The OpenAI ChatGPT Plus/Pro (Codex) provider uses OpenAI's device-code flow and saves an OAuth entry under Pi's `openai-codex` auth key. Configured providers can be deleted per provider from the Authentication Center. Entries created by the Pi CLI/TUI are still displayed after the runner syncs `~/.pi/agent/auth.json` back to Firebase.
 
@@ -85,7 +85,7 @@ Clicking a file opens a modal editor. The editor loads text content with `GET /a
 
 The Files drawer header also has a compact upload action. It opens the browser file picker and sends each selected file as a raw `POST /api/workspaces/{workspaceId}/file?path={filename}` request. The backend uses the same workspace ownership and path validation as the editor, stores the uploaded bytes in Cloud Storage under the workspace prefix, and caps individual uploads at 10 MiB. Uploaded files appear in the sidebar after the workflow refreshes the file listing. For blank workspaces the uploaded object is immediately durable workspace state; for GitHub workspaces it is cached working-tree state until the user commits and pushes through Git.
 
-The backend already accepts `payload.image` for session creation. If no image is passed, it falls back to `SESSION_RUNNER_IMAGE`.
+The backend accepts `payload.imageKey` for session creation and maps it to a curated image URI server-side. Raw `payload.image` values are supported only as a legacy compatibility path when they exactly match a curated image. Unknown user-supplied image URIs are rejected with `invalid_runner_image`. If no image key is passed, the backend falls back to the operator-configured `SESSION_RUNNER_IMAGE`.
 
 ## Current Design Decisions
 
@@ -108,4 +108,4 @@ Frontend changes are deployed with:
 firebase deploy --only hosting --project pi-agents-cloud
 ```
 
-Runner container changes require a Cloud Build push and then a Cloud Run service update for existing sessions. New sessions use whatever image the create-session flow passes or the backend default.
+Runner container changes require a Cloud Build push and then a Cloud Run service update for existing sessions. New sessions use the curated image key selected in the modal, resolved by the backend, or the backend default.

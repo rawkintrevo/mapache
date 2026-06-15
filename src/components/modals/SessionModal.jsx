@@ -27,7 +27,7 @@ export function SessionModal({busy, onClose, onCreateSession}) {
             const formData = new FormData(event.currentTarget);
             onCreateSession({
               name: String(formData.get("name") || "").trim() || "Terminal session",
-              image: formData.get("image"),
+              imageKey: formData.get("imageKey"),
               cpu: formData.get("cpu"),
               memory: formData.get("memory"),
             });
@@ -36,8 +36,8 @@ export function SessionModal({busy, onClose, onCreateSession}) {
           <label><span>Name</span><input autoComplete="off" name="name" placeholder="shell" required /></label>
           <label>
             <span>Container image</span>
-            <select name="image" defaultValue={sessionImages[0]?.value}>
-              {sessionImages.map((image) => <option key={image.value} value={image.value}>{image.label}</option>)}
+            <select name="imageKey" defaultValue={sessionImages[0]?.key}>
+              {sessionImages.map((image) => <option key={image.key} value={image.key}>{image.label}</option>)}
             </select>
           </label>
           <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
