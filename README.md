@@ -1,181 +1,54 @@
 # Mapache Tools
 
-Firebase + Cloud Run scaffold for browser-managed cloud terminal sessions.
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Hosted app](https://img.shields.io/badge/app-mapache.tools-111827)](https://mapache.tools)
+[![Docs](https://img.shields.io/badge/docs-community-2563eb)](https://mapache.tools/community/)
+[![Issues](https://img.shields.io/github/issues/rawkintrevo/mapahce)](https://github.com/rawkintrevo/mapahce/issues)
+[![GitHub last commit](https://img.shields.io/github/last-commit/rawkintrevo/mapahce)](https://github.com/rawkintrevo/mapahce/commits)
+[![GitHub repo size](https://img.shields.io/github/repo-size/rawkintrevo/mapahce)](https://github.com/rawkintrevo/mapahce)
+[![Built with React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=111827)](https://react.dev/)
+[![Built with Firebase](https://img.shields.io/badge/Firebase-hosted-ffca28?logo=firebase&logoColor=111827)](https://firebase.google.com/)
+[![Runs on Cloud Run](https://img.shields.io/badge/Cloud_Run-sessions-4285f4?logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
+
+Browser-managed cloud TUI sessions.
+
+Mapache Tools is the source repository for [mapache.tools](https://mapache.tools), a hosted workspace for launching and managing cloud terminal sessions from the browser.
+
+The project is built in the open. The hosted app is the supported way to use Mapache Tools.
+
+## What It Is
+
+Mapache Tools gives you browser-accessible terminal sessions backed by cloud runtime containers. It is built for fast, disposable, agent-friendly workspaces where the terminal stays central and the browser provides the surrounding controls.
+
+The current product direction is focused on vibe-coding N64 games from cloud TUI sessions. A demo GIF belongs here soon.
+
+## Links
+
+- App: [mapache.tools](https://mapache.tools)
+- User docs and blog: [mapache.tools/community](https://mapache.tools/community/)
+- Issues and feature requests: [GitHub Issues](https://github.com/rawkintrevo/mapahce/issues)
+
+## Project Status
+
+Mapache Tools is actively developed as the source for the hosted product at [mapache.tools](https://mapache.tools).
+
+Issues, feature requests, and bug reports are welcome. Pull requests are not being accepted at this time.
+
+## Repository Contents
+
+- `src/`: React frontend for the hosted app.
+- `functions/`: Firebase Cloud Functions API.
+- `session-runner/`: Runtime container code for browser-accessible terminal sessions.
+- `community/`: User documentation and blog site served under `/community/`.
+- `docs/`: Maintainer-oriented architecture and implementation notes.
+
+## Contact
+
+- Open an issue: [github.com/rawkintrevo/mapahce/issues](https://github.com/rawkintrevo/mapahce/issues)
+- Email: [trevor@ata.systems](mailto:trevor@ata.systems)
+- Discord: `rawkintrevo`
+- Community docs and blog: [mapache.tools/community](https://mapache.tools/community/)
 
 ## License
 
-This repository is licensed under Business Source License 1.1. See [LICENSE](./LICENSE) for the full text and [NOTICE](./NOTICE) for the project notice. The current change date is June 10, 2030, after which the code converts to GNU AGPLv3-or-later.
-
-## Deployed at
-
-https://pi-agents-cloud.web.app/
-
-## Pieces
-
-- Firebase Hosting serves the Vite-built console from `dist/`.
-- Firebase Auth uses Google sign-in.
-- Firestore stores user profiles, workspaces, sessions, and terminal history.
-- Cloud Functions exposes `/api/**` for workspace/session management.
-- `session-runner/` is the Cloud Run container that serves a WebSocket terminal and syncs `/workspace` to Cloud Storage.
-
-## Required setup
-
-1. Enable these APIs in the `pi-agents-cloud` Google Cloud project:
-   - Cloud Run Admin API
-   - Cloud Build API
-   - Artifact Registry API
-   - Firestore API
-   - Cloud Storage API
-
-2. Create or choose a Storage bucket for workspace files.
-
-3. Build and push the runner image:
-
-   ```bash
-   gcloud artifacts repositories create pi-agents --repository-format=docker --location=us-central1
-   gcloud builds submit session-runner --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
-   ```
-
-   To publish the optional `pi-basic` runtime shown in the session image
-   dropdown:
-
-   ```bash
-   gcloud builds submit session-runner --config session-runner/cloudbuild.pi-basic.yaml
-   ```
-
-4. Configure Functions environment variables in `functions/.env`:
-
-   ```bash
-   SESSION_RUNNER_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
-   SESSION_BUCKET=YOUR_BUCKET_NAME
-   SESSION_REGION=us-central1
-   FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com
-   SESSION_RUNNER_SERVICE_ACCOUNT=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com
-   ```
-
-   `functions/.env` is ignored by git by default.
-
-5. Create least-privilege service accounts:
-
-   ```bash
-   gcloud iam service-accounts create mapache-api \
-     --display-name="Mapache API function" \
-     --project pi-agents-cloud
-
-   gcloud iam service-accounts create mapache-runner \
-     --display-name="Mapache session runner" \
-     --project pi-agents-cloud
-   ```
-
-6. Grant the Functions service account only the permissions needed to manage session services and app data:
-
-   ```bash
-   API_SA=mapache-api@pi-agents-cloud.iam.gserviceaccount.com
-   RUNNER_SA=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com
-
-   gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${API_SA}" \
-     --role="roles/run.admin"
-
-   gcloud iam service-accounts add-iam-policy-binding "${RUNNER_SA}" \
-     --member="serviceAccount:${API_SA}" \
-     --role="roles/iam.serviceAccountUser" \
-     --project pi-agents-cloud
-
-   gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${API_SA}" \
-     --role="roles/datastore.user"
-
-   gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${API_SA}" \
-     --role="roles/secretmanager.secretAccessor"
-
-   gsutil iam ch serviceAccount:${API_SA}:objectAdmin gs://YOUR_BUCKET_NAME
-   ```
-
-7. Grant the runner service account only the runtime data permissions:
-
-   ```bash
-   RUNNER_SA=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com
-
-   gcloud projects add-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${RUNNER_SA}" \
-     --role="roles/datastore.user"
-
-   gsutil iam ch serviceAccount:${RUNNER_SA}:objectAdmin gs://YOUR_BUCKET_NAME
-   ```
-
-8. Remove broad grants from the default Compute Engine service account after the new service accounts are deployed and verified:
-
-   ```bash
-   PROJECT_NUMBER="$(gcloud projects describe pi-agents-cloud --format='value(projectNumber)')"
-   DEFAULT_COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-
-   gcloud projects remove-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${DEFAULT_COMPUTE_SA}" \
-     --role="roles/editor"
-
-   gcloud projects remove-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${DEFAULT_COMPUTE_SA}" \
-     --role="roles/run.admin"
-
-   gcloud projects remove-iam-policy-binding pi-agents-cloud \
-     --member="serviceAccount:${DEFAULT_COMPUTE_SA}" \
-     --role="roles/datastore.user"
-   ```
-
-9. Deploy:
-
-   ```bash
-   firebase deploy --project pi-agents-cloud
-   ```
-
-## Local development
-
-Install root dependencies and start the Vite frontend:
-
-```bash
-npm install
-npm run dev
-```
-
-By default, the local Vite server proxies `/api/**` to the deployed Firebase
-Hosting API at `https://pi-agents-cloud.web.app`, so login and workspace calls
-work without local emulators.
-
-To use the Firebase Functions emulator instead:
-
-```bash
-VITE_API_PROXY_TARGET=http://127.0.0.1:5001/pi-agents-cloud/us-central1/api npm run dev
-```
-
-For local Vite auth config, create `.env.local` with:
-
-```bash
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=pi-agents-cloud.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=pi-agents-cloud
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-```
-
-When deployed to Firebase Hosting, the app falls back to `/__/firebase/init.json`.
-
-Run the Firebase emulators:
-
-```bash
-firebase emulators:start
-```
-
-Run the terminal runner locally:
-
-```bash
-cd session-runner
-npm install
-STORAGE_BUCKET=YOUR_BUCKET_NAME STORAGE_PREFIX=workspaces/dev/default WORKSPACE_ID=dev SESSION_ID=dev npm start
-```
-
-## Notes
-
-`SESSION_RUNNER_IMAGE` and `SESSION_BUCKET` are intentionally read from environment variables. If `SESSION_RUNNER_IMAGE` is missing, session records are still created with `needs_image` status so the UI can be tested before Cloud Run provisioning is configured.
+This project is licensed under the terms in [LICENSE](./LICENSE).
