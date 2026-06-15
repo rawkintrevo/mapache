@@ -220,7 +220,7 @@ Agents can override the ROM path and emulator core by writing `/workspace/.mapac
 }
 ```
 
-Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `parallel_n64`, or the documented alias `parallel-n64`; invalid values fall back to `n64`. Existing configs that name `mupen64plus_next` are accepted but normalized to `parallel_n64` because Mupen can fail to initialize browser WebGL for libdragon homebrew previews. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM and status links include the same signed token so EmulatorJS subresource fetches do not depend on third-party iframe cookies.
+Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; the older `parallel_n64` spelling is accepted and normalized to EmulatorJS's documented `parallel-n64` core id. Invalid values fall back to `n64`, which uses EmulatorJS's default N64 core. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM and status links include the same signed token so EmulatorJS subresource fetches do not depend on third-party iframe cookies.
 
 On startup, `pi-n64` seeds two workspace-local Pi skills when they are missing:
 

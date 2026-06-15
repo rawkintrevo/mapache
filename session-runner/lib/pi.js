@@ -591,7 +591,7 @@ Write /workspace/.mapache/preview.json to override the ROM path or emulator core
 }
 \`\`\`
 
-Accepted core values are "n64", "parallel_n64", and the alias "parallel-n64". Existing configs that use "mupen64plus_next" are accepted but normalized to "parallel_n64" for browser preview reliability.
+Accepted core values are "n64", "mupen64plus_next", and "parallel-n64". The older "parallel_n64" spelling is accepted and normalized to EmulatorJS's documented "parallel-n64" core id. Use "n64" first for broad browser compatibility; it lets EmulatorJS select the default N64 core.
 
 ## Notes
 
