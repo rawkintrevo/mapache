@@ -3,9 +3,9 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Hosted app](https://img.shields.io/badge/app-mapache.tools-111827)](https://mapache.tools)
 [![Docs](https://img.shields.io/badge/docs-community-2563eb)](https://mapache.tools/community/)
-[![Issues](https://img.shields.io/github/issues/rawkintrevo/mapahce)](https://github.com/rawkintrevo/mapahce/issues)
-[![GitHub last commit](https://img.shields.io/github/last-commit/rawkintrevo/mapahce)](https://github.com/rawkintrevo/mapahce/commits)
-[![GitHub repo size](https://img.shields.io/github/repo-size/rawkintrevo/mapahce)](https://github.com/rawkintrevo/mapahce)
+[![Issues](https://img.shields.io/github/issues/rawkintrevo/mapache)](https://github.com/rawkintrevo/mapache/issues)
+[![GitHub last commit](https://img.shields.io/github/last-commit/rawkintrevo/mapache)](https://github.com/rawkintrevo/mapache/commits)
+[![GitHub repo size](https://img.shields.io/github/repo-size/rawkintrevo/mapache)](https://github.com/rawkintrevo/mapache)
 [![Built with React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=111827)](https://react.dev/)
 [![Built with Firebase](https://img.shields.io/badge/Firebase-hosted-ffca28?logo=firebase&logoColor=111827)](https://firebase.google.com/)
 [![Runs on Cloud Run](https://img.shields.io/badge/Cloud_Run-sessions-4285f4?logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
@@ -26,7 +26,7 @@ The current product direction is focused on vibe-coding N64 games from cloud TUI
 
 - App: [mapache.tools](https://mapache.tools)
 - User docs and blog: [mapache.tools/community](https://mapache.tools/community/)
-- Issues and feature requests: [GitHub Issues](https://github.com/rawkintrevo/mapahce/issues)
+- Issues and feature requests: [GitHub Issues](https://github.com/rawkintrevo/mapache/issues)
 
 ## Project Status
 
@@ -44,7 +44,7 @@ Issues, feature requests, and bug reports are welcome. Pull requests are not bei
 
 ## Contact
 
-- Open an issue: [github.com/rawkintrevo/mapahce/issues](https://github.com/rawkintrevo/mapahce/issues)
+- Open an issue: [github.com/rawkintrevo/mapache/issues](https://github.com/rawkintrevo/mapache/issues)
 - Email: [trevor@ata.systems](mailto:trevor@ata.systems)
 - Discord: `rawkintrevo`
 - Community docs and blog: [mapache.tools/community](https://mapache.tools/community/)
