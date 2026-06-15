@@ -159,8 +159,9 @@ function createPreviewService(config) {
 
   function normalizeN64EmulatorCore(value) {
     const clean = normalizeEnvString(value).toLowerCase();
+    if (clean === "mupen64plus_next") return "parallel_n64";
     if (clean === "parallel-n64") return "parallel_n64";
-    if (["mupen64plus_next", "parallel_n64", "n64"].includes(clean)) return clean;
+    if (["parallel_n64", "n64"].includes(clean)) return clean;
     return "n64";
   }
 
