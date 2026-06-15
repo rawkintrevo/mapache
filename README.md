@@ -10,6 +10,8 @@
 [![Built with Firebase](https://img.shields.io/badge/Firebase-hosted-ffca28?logo=firebase&logoColor=111827)](https://firebase.google.com/)
 [![Runs on Cloud Run](https://img.shields.io/badge/Cloud_Run-sessions-4285f4?logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 
+![A raccoon making wise decisions](docs/tools.png)
+
 Browser-managed cloud TUI sessions.
 
 Mapache Tools is the source repository for [mapache.tools](https://mapache.tools), a hosted workspace for launching and managing cloud terminal sessions from the browser.
