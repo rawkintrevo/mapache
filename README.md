@@ -20,7 +20,7 @@ The project is built in the open. The hosted app is the supported way to use Map
 
 Mapache Tools gives you browser-accessible terminal sessions backed by cloud runtime containers. It is built for fast, disposable, agent-friendly workspaces where the terminal stays central and the browser provides the surrounding controls.
 
-It is useful for cloud-hosted development workflows, agent experiments, and playful side quests like vibe-coding N64 games from a TUI session.
+It is useful for cloud-hosted development workflows, agent experiments. Also you can vibe code n64 games to trick your 4 year old into learning stuff. 
 
 ## Links
 
