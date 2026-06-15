@@ -591,7 +591,7 @@ Write /workspace/.mapache/preview.json to override the ROM path or emulator core
 }
 \`\`\`
 
-Accepted core values are "n64", "mupen64plus_next", and "parallel-n64".
+Accepted core values are "n64", "mupen64plus_next", "parallel_n64", and the alias "parallel-n64".
 
 ## Notes
 

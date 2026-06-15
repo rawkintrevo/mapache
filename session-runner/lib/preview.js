@@ -159,7 +159,8 @@ function createPreviewService(config) {
 
   function normalizeN64EmulatorCore(value) {
     const clean = normalizeEnvString(value).toLowerCase();
-    if (["mupen64plus_next", "parallel-n64", "n64"].includes(clean)) return clean;
+    if (clean === "parallel-n64") return "parallel_n64";
+    if (["mupen64plus_next", "parallel_n64", "n64"].includes(clean)) return clean;
     return "n64";
   }
 
@@ -308,6 +309,7 @@ function createPreviewService(config) {
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.send(n64PreviewHtml({
+        accessToken: req.mapacheAccessToken,
         emulatorCore: previewConfig.emulatorCore,
         ready: Boolean(romStat),
         romPath: previewConfig.romPath,
@@ -368,11 +370,13 @@ function createPreviewService(config) {
     return types[extension] || "application/octet-stream";
   }
 
-  function n64PreviewHtml({emulatorCore, ready, romPath, romSize, romUrl, statusUrl}) {
+  function n64PreviewHtml({accessToken, emulatorCore, ready, romPath, romSize, romUrl, statusUrl}) {
     const title = ready ? "Mapache N64 Preview" : "Waiting for N64 ROM";
     const escapedRomPath = escapeHtml(romPath);
     const sizeText = ready ? `${Math.round(romSize / 1024)} KiB` : "not found";
     const core = normalizeN64EmulatorCore(emulatorCore);
+    const signedRomUrl = appendAccessToken(romUrl, accessToken);
+    const signedStatusUrl = appendAccessToken(statusUrl, accessToken);
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -407,8 +411,8 @@ function createPreviewService(config) {
         <p>ROM: <code>${escapedRomPath}</code> · ${escapeHtml(sizeText)} · core: <code>${escapeHtml(core)}</code></p>
       </div>
       <div class="actions">
-        <a href="${escapeHtml(romUrl)}">Download ROM</a>
-        <a class="secondary" href="${escapeHtml(statusUrl)}">Status</a>
+        <a href="${escapeHtml(signedRomUrl)}">Download ROM</a>
+        <a class="secondary" href="${escapeHtml(signedStatusUrl)}">Status</a>
       </div>
     </header>
     ${ready ? `<div id="game"></div>` : `<section class="empty">
@@ -421,7 +425,7 @@ function createPreviewService(config) {
     window.EJS_player = "#game";
     window.EJS_core = ${JSON.stringify(core)};
     window.EJS_gameName = "Mapache N64 ROM";
-    window.EJS_gameUrl = ${JSON.stringify(romUrl)};
+    window.EJS_gameUrl = ${JSON.stringify(signedRomUrl)};
     window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
     window.EJS_startOnLoaded = true;
     window.EJS_volume = 0.35;
@@ -433,6 +437,13 @@ function createPreviewService(config) {
   <script src="https://cdn.emulatorjs.org/stable/data/loader.js" onerror="document.getElementById('game').innerHTML = '<section class=&quot;empty&quot;><h1>Emulator failed to load</h1><p>The ROM is available for download, but the EmulatorJS CDN could not be loaded from this browser session.</p></section>';"></script>` : ""}
 </body>
 </html>`;
+  }
+
+  function appendAccessToken(url, accessToken) {
+    const token = normalizeEnvString(accessToken);
+    if (!token) return url;
+    const separator = String(url || "").includes("?") ? "&" : "?";
+    return `${url}${separator}mapache_access=${encodeURIComponent(token)}`;
   }
 
   function escapeHtml(value) {

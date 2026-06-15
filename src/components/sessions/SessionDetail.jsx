@@ -77,6 +77,7 @@ export function SessionDetail({busy, session, workspaceId, onGetSessionAccessUrl
         {activeCanvas === "preview" && capabilities.preview ? (
           hasPreview ? (
             <iframe
+              allow="clipboard-read; clipboard-write; screen-wake-lock"
               sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
               src={accessUrls.previewUrl}
               title={`Preview ${session.name}`}

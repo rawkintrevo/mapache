@@ -220,7 +220,7 @@ Agents can override the ROM path and emulator core by writing `/workspace/.mapac
 }
 ```
 
-Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; invalid values fall back to `n64`. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks.
+Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, `parallel_n64`, or the documented alias `parallel-n64`; invalid values fall back to `n64`. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM and status links include the same signed token so EmulatorJS subresource fetches do not depend on third-party iframe cookies.
 
 On startup, `pi-n64` seeds two workspace-local Pi skills when they are missing:
 
@@ -355,6 +355,27 @@ Cloud Run resource limits are derived from the session's CPU and memory settings
 Each session service must run as the dedicated runner service account configured by the Cloud Functions environment variable `SESSION_RUNNER_SERVICE_ACCOUNT`. The backend sets Cloud Run `template.serviceAccount` on create, resize, and restart. If that variable is missing, session provisioning fails closed instead of allowing Cloud Run to fall back to the project's default Compute Engine service account.
 
 The runner service account should have only the runtime data permissions it needs, currently Firestore user access and object admin access to the configured workspace bucket. The Functions service account should be separate, configured with `FUNCTION_SERVICE_ACCOUNT`, and granted Cloud Run administration plus `roles/iam.serviceAccountUser` only on the runner service account. Do not grant `roles/editor` to the default Compute Engine service account for this flow.
+
+The service identities involved in provisioning also need pull access to the Artifact Registry repository that stores the curated runner images. Without `roles/artifactregistry.reader`, session provisioning can fail while creating a revision with `artifactregistry.repositories.downloadArtifacts` denied, even when the image tag exists. Grant it at repository scope to the Functions service account that creates Cloud Run services, the runner service account assigned to session revisions, and the Cloud Run service agent:
+
+```bash
+PROJECT_NUMBER="$(gcloud projects describe pi-agents-cloud --format='value(projectNumber)')"
+gcloud artifacts repositories add-iam-policy-binding pi-agents \
+  --location us-central1 \
+  --project pi-agents-cloud \
+  --member "serviceAccount:mapache-api@pi-agents-cloud.iam.gserviceaccount.com" \
+  --role roles/artifactregistry.reader
+gcloud artifacts repositories add-iam-policy-binding pi-agents \
+  --location us-central1 \
+  --project pi-agents-cloud \
+  --member "serviceAccount:mapache-runner@pi-agents-cloud.iam.gserviceaccount.com" \
+  --role roles/artifactregistry.reader
+gcloud artifacts repositories add-iam-policy-binding pi-agents \
+  --location us-central1 \
+  --project pi-agents-cloud \
+  --member "serviceAccount:service-${PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com" \
+  --role roles/artifactregistry.reader
+```
 
 Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped. Deleting a session from the sidebar uses the same service deletion path for any still-running service, then removes the session document from Firestore so it no longer appears in the workspace session list.
 
