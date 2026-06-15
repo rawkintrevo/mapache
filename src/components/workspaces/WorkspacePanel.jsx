@@ -6,6 +6,7 @@ export function WorkspacePanel({
   selectedSession,
   selectedWorkspace,
   state,
+  onGetSessionAccessUrls,
   onResizeSession,
   onRestartSession,
   onSelectSession,
@@ -16,6 +17,8 @@ export function WorkspacePanel({
         <SessionDetail
           busy={state.busy}
           session={selectedSession}
+          workspaceId={state.selectedWorkspaceId}
+          onGetSessionAccessUrls={onGetSessionAccessUrls}
           onResizeSession={onResizeSession}
           onRestartSession={onRestartSession}
         />

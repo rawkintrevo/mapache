@@ -52,6 +52,11 @@ const DIRECTORY_MARKER_FILE = ".mapahce-directory";
 const INTERNAL_STORAGE_DIR = ".mapahce-internal";
 const MAX_WORKSPACE_TEXT_FILE_BYTES = 1024 * 1024;
 const MAX_WORKSPACE_UPLOAD_BYTES = 10 * 1024 * 1024;
+// Browser iframe access is separate from backend-only runner management tokens.
+const SESSION_BROWSER_ACCESS_TTL_MS = positiveNumber(
+    process.env.SESSION_BROWSER_ACCESS_TTL_MS,
+    8 * 60 * 60 * 1000,
+);
 const OPENAI_CODEX_PROVIDER = "openai-codex";
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
@@ -218,6 +223,11 @@ exports.api = onRequest({
 
     if (req.method === "DELETE" && route.name === "session") {
       res.json(await deleteSession(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "sessionAccess") {
+      res.json(await createSessionAccessUrls(user.uid, route.workspaceId, route.sessionId));
       return;
     }
 
@@ -390,6 +400,14 @@ function routeRequest(path) {
     parts[4] === "stop"
   ) {
     return {name: "stopSession", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "access-url"
+  ) {
+    return {name: "sessionAccess", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (
     parts.length === 5 &&
@@ -1433,6 +1451,7 @@ async function createSession(uid, workspaceId, payload) {
     autoStoppedAt: null,
     stopReason: null,
     shutdownToken: crypto.randomBytes(24).toString("hex"),
+    browserAccessTokenSecret: crypto.randomBytes(32).toString("hex"),
     createdAt: now,
     updatedAt: now,
     restartedAt: null,
@@ -1450,6 +1469,45 @@ async function createSession(uid, workspaceId, payload) {
   }
 
   return toClientDoc(await sessionRef.get());
+}
+
+async function createSessionAccessUrls(uid, workspaceId, sessionId) {
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "session_not_running");
+  if (!session.browserAccessTokenSecret) {
+    throw httpError(409, "session_requires_restart_for_browser_access");
+  }
+
+  const expiresAtMs = Date.now() + SESSION_BROWSER_ACCESS_TTL_MS;
+  const token = signSessionBrowserAccessToken(session, expiresAtMs);
+  const baseUrl = session.serviceUrl.replace(/\/+$/, "");
+  const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
+  const previewUrl = appendQuery(`${baseUrl}/preview/`, "mapache_access", token);
+  return {
+    ok: true,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    terminalUrl,
+    previewUrl,
+  };
+}
+
+function signSessionBrowserAccessToken(session, expiresAtMs) {
+  const payload = Buffer.from(JSON.stringify({
+    exp: Math.floor(expiresAtMs / 1000),
+    sid: session.runnerSessionId || session.id || "",
+  })).toString("base64url");
+  const signature = crypto
+      .createHmac("sha256", session.browserAccessTokenSecret)
+      .update(payload)
+      .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function appendQuery(url, key, value) {
+  const parsed = new URL(url);
+  parsed.searchParams.set(key, value);
+  return parsed.toString();
 }
 
 async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
@@ -1491,13 +1549,16 @@ async function resizeSession(uid, workspaceId, sessionId, payload) {
 
 async function restartSession(uid, workspaceId, sessionId) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = sessionSnap.data();
+  const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
   await sessionRef.update({
     status: "restarting",
+    browserAccessTokenSecret,
     restartNonce: Date.now().toString(),
     restartedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await patchSessionService(sessionRef, sessionSnap.data(), {restart: true});
+  await patchSessionService(sessionRef, {...session, browserAccessTokenSecret}, {restart: true});
   return toClientDoc(await sessionRef.get());
 }
 
@@ -2848,6 +2909,7 @@ async function sessionRunnerEnv(session, options = {}) {
     {name: "PI_HOME_STORAGE_PREFIX", value: session.piHomeStoragePrefix || piHomeStoragePrefix(session.ownerUid)},
     {name: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent"},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
+    {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},

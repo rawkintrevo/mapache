@@ -66,6 +66,7 @@ function createConfig() {
     previewN64RomPath: path.resolve(process.env.PREVIEW_N64_ROM_PATH || path.join(workspaceDir, "build", "game.z64")),
     previewStaticRoot: path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
     runnerCapabilities,
+    sessionBrowserTokenSecret: normalizeEnvString(process.env.SESSION_BROWSER_TOKEN_SECRET),
     sessionId: process.env.SESSION_ID || "",
     shutdownToken: process.env.SESSION_SHUTDOWN_TOKEN || "",
     syncIntervalMs: Number(process.env.SYNC_INTERVAL_MS || 30000),

@@ -47,6 +47,7 @@ export function AppShell(props) {
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
+            onGetSessionAccessUrls={props.onGetSessionAccessUrls}
             onResizeSession={props.onResizeSession}
             onRestartSession={props.onRestartSession}
             onSelectSession={props.onSelectSession}

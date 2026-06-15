@@ -88,6 +88,8 @@ The frontend calls `src/services/api.js`, which sends authenticated JSON request
 
 `functions/index.js` handles user, workspace, and session operations. Creating a workspace writes explicit source metadata so later flows can distinguish a blank workspace from a GitHub-backed one. The preferred create-workspace payload is `source: {type: "blank"}` or a GitHub source object; the backend also accepts the older `source: "blank"` payload so deployed clients do not fail validation. Creating a session writes the session document, then provisions a Cloud Run service for that session when an image is available. Session records include the Cloud Run service name, public URL, selected image, image capabilities, resource limits, owner UID, and workspace storage prefix. GitHub sessions also need source metadata so the runner can reconstruct `/workspace` from Git and cache state. Stopping a running session deletes its per-session Cloud Run service and leaves the Firestore session record with `stopped` status. Deleting a session uses the same service cleanup path first, then removes the session document from the workspace session list.
 
+The frontend does not iframe the raw Cloud Run session URL directly. For each selected running session, it calls `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/access-url`; the backend verifies workspace/session ownership and returns finite-lifetime terminal and preview URLs signed with the session's browser-access secret. The runner validates those URLs before serving terminal, preview, health, and capability browser surfaces. This browser-access secret is separate from `SESSION_SHUTDOWN_TOKEN`, which remains reserved for backend-to-runner management calls.
+
 Cloud Functions and per-session runners use separate service accounts. `FUNCTION_SERVICE_ACCOUNT` selects the API function identity that manages Cloud Run services and app data. `SESSION_RUNNER_SERVICE_ACCOUNT` selects the runtime identity assigned to each session service through Cloud Run `template.serviceAccount`; provisioning fails closed when it is not configured so sessions do not fall back to the default Compute Engine service account.
 
 The user profile page displays lifetime and trailing-30-day allocated CPU seconds and memory GiB-seconds from `/api/me`. No quota enforcement is attached to those counters.
@@ -126,3 +128,5 @@ firebase deploy --only hosting --project pi-agents-cloud
 ```
 
 Runner container changes require a Cloud Build push and then a Cloud Run service update for existing sessions. New sessions use the curated image key selected in the modal, resolved by the backend, or the backend default.
+
+Browser-token enforcement is implemented in the runner image and requires `SESSION_BROWSER_TOKEN_SECRET` in the Cloud Run service environment. New sessions receive this automatically after the Functions deployment. Existing sessions need a restart or recreation after the runner image and Functions changes are deployed.

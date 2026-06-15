@@ -74,6 +74,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}`,
         {method: "DELETE"},
     ),
+    getSessionAccessUrls: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/access-url`,
+        {method: "POST", body: {}},
+    ),
     getGitStatus: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,

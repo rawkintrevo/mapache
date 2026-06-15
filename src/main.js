@@ -121,6 +121,7 @@ function render() {
     onCloseWorkspaceModal: closeWorkspaceModal,
     onCreateSession: createSession,
     onSelectSession: selectSession,
+    onGetSessionAccessUrls: getSessionAccessUrls,
     onRefreshWorkspaceFiles: refreshWorkspaceFiles,
     onUploadWorkspaceFiles: uploadWorkspaceFiles,
     onSelectWorkspaceFile: selectWorkspaceFile,
@@ -648,6 +649,10 @@ async function deleteSession(sessionId) {
     await deleteSessionState(state, sessionId);
     await loadGitStatus();
   });
+}
+
+async function getSessionAccessUrls(workspaceId, sessionId) {
+  return state.api.getSessionAccessUrls(workspaceId, sessionId);
 }
 
 async function runBusy(task) {

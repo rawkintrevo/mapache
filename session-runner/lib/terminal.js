@@ -174,7 +174,8 @@ function terminalArgs() {
   }
 }
 
-function renderTerminalPage() {
+function renderTerminalPage(options = {}) {
+  const accessToken = String(options.accessToken || "");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -253,7 +254,9 @@ function renderTerminalPage() {
       function connectTerminal() {
         const protocol = location.protocol === "https:" ? "wss://" : "ws://";
         const replay = replayOnConnect ? "1" : "0";
-        socket = new WebSocket(protocol + location.host + "/terminal?replay=" + replay);
+        const accessToken = ${JSON.stringify(accessToken)};
+        const tokenParam = accessToken ? "&mapache_access=" + encodeURIComponent(accessToken) : "";
+        socket = new WebSocket(protocol + location.host + "/terminal?replay=" + replay + tokenParam);
         replayOnConnect = false;
 
         socket.addEventListener("open", () => {

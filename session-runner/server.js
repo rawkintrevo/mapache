@@ -2,6 +2,7 @@
 
 const path = require("path");
 const http = require("http");
+const crypto = require("crypto");
 const express = require("express");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
@@ -35,11 +36,11 @@ app.use(
     express.static(path.join(__dirname, "node_modules", "@xterm", "xterm")),
 );
 
-app.get("/", (req, res) => {
-  res.type("html").send(renderTerminalPage());
+app.get("/", requireBrowserAccess, (req, res) => {
+  res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken}));
 });
 
-app.get("/healthz", (req, res) => {
+app.get("/healthz", requireBrowserAccess, (req, res) => {
   res.json({
     ok: true,
     workspaceId: config.workspaceId,
@@ -49,7 +50,7 @@ app.get("/healthz", (req, res) => {
   });
 });
 
-app.get("/capabilities", (req, res) => {
+app.get("/capabilities", requireBrowserAccess, (req, res) => {
   res.json({
     ok: true,
     capabilities: config.runnerCapabilities,
@@ -58,6 +59,8 @@ app.get("/capabilities", (req, res) => {
 });
 
 if (config.previewEnabled) {
+  app.use(config.previewBasePath, requireBrowserAccess);
+
   app.get(`${config.previewBasePath}/status`, async (req, res) => {
     res.json(await preview.status());
   });
@@ -255,6 +258,11 @@ app.post("/git/open-pr", async (req, res) => {
 });
 
 wss.on("connection", (socket, request) => {
+  if (!hasBrowserAccess(request)) {
+    socket.close(1008, "unauthorized");
+    return;
+  }
+
   terminalSession.attach(socket, shouldReplayTerminal(request));
 
   socket.on("message", (raw) => {
@@ -324,4 +332,79 @@ function startSyncLoop() {
 
 function hasRunnerAccess(req) {
   return Boolean(config.shutdownToken) && req.get("x-shutdown-token") === config.shutdownToken;
+}
+
+function requireBrowserAccess(req, res, next) {
+  if (!hasBrowserAccess(req)) {
+    res.status(404).type("text").send("not_found");
+    return;
+  }
+  res.set("Cache-Control", "no-store");
+  res.set("Referrer-Policy", "no-referrer");
+  if (req.mapacheAccessToken) {
+    res.cookie("mapache_access", req.mapacheAccessToken, {
+      httpOnly: true,
+      maxAge: browserAccessTokenMaxAgeMs(req.mapacheAccessToken),
+      sameSite: "none",
+      secure: true,
+    });
+  }
+  next();
+}
+
+function hasBrowserAccess(req) {
+  const token = browserAccessToken(req);
+  if (!token || !verifyBrowserAccessToken(token)) return false;
+  req.mapacheAccessToken = token;
+  return true;
+}
+
+function browserAccessToken(req) {
+  try {
+    const url = new URL(req.url || "/", "http://localhost");
+    const queryToken = url.searchParams.get("mapache_access");
+    if (queryToken) return queryToken;
+  } catch (error) {
+    return "";
+  }
+
+  const cookie = req.headers && req.headers.cookie || "";
+  const match = cookie.match(/(?:^|;\s*)mapache_access=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+function verifyBrowserAccessToken(token) {
+  if (!config.sessionBrowserTokenSecret) return false;
+  const parts = String(token || "").split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+  const expected = crypto
+      .createHmac("sha256", config.sessionBrowserTokenSecret)
+      .update(parts[0])
+      .digest("base64url");
+  if (!timingSafeEqual(parts[1], expected)) return false;
+
+  const payload = parseBrowserAccessPayload(parts[0]);
+  if (!payload || payload.sid !== config.sessionId) return false;
+  return Number(payload.exp || 0) > Math.floor(Date.now() / 1000);
+}
+
+function parseBrowserAccessPayload(value) {
+  try {
+    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+  } catch (error) {
+    return null;
+  }
+}
+
+function browserAccessTokenMaxAgeMs(token) {
+  const payload = parseBrowserAccessPayload(String(token || "").split(".")[0] || "");
+  const expMs = Number(payload && payload.exp || 0) * 1000;
+  return Math.max(0, Math.min(expMs - Date.now(), 24 * 60 * 60 * 1000));
+}
+
+function timingSafeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }

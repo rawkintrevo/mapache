@@ -1,5 +1,5 @@
 import {RotateCcw} from "lucide-react";
-import {useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
 
 const cpuOptions = ["1", "2", "4"];
@@ -9,12 +9,36 @@ function formatMemory(value) {
   return value.replace("Gi", " GiB");
 }
 
-export function SessionDetail({busy, session, onResizeSession, onRestartSession}) {
+export function SessionDetail({busy, session, workspaceId, onGetSessionAccessUrls, onResizeSession, onRestartSession}) {
   const formRef = useRef(null);
   const [activeCanvas, setActiveCanvas] = useState("terminal");
+  const [accessUrls, setAccessUrls] = useState(null);
+  const [accessError, setAccessError] = useState("");
   const capabilities = session.capabilities || {};
-  const hasPreview = Boolean(capabilities.preview && session.serviceUrl);
-  const previewUrl = hasPreview ? `${session.serviceUrl.replace(/\/+$/, "")}/preview/` : "";
+  const hasRunnerUrl = Boolean(session.serviceUrl);
+  const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
+  const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAccessUrls(null);
+    setAccessError("");
+    if (!workspaceId || !session.id || !session.serviceUrl || !onGetSessionAccessUrls) return undefined;
+
+    onGetSessionAccessUrls(workspaceId, session.id)
+        .then((urls) => {
+          if (cancelled) return;
+          setAccessUrls(urls);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setAccessError(error.message || "session_access_unavailable");
+        });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, session.id, session.serviceUrl, onGetSessionAccessUrls]);
 
   const handleResize = () => {
     const form = formRef.current;
@@ -40,7 +64,7 @@ export function SessionDetail({busy, session, onResizeSession, onRestartSession}
           </Button>
           <Button
             aria-selected={activeCanvas === "preview"}
-            disabled={!session.serviceUrl}
+            disabled={!hasRunnerUrl}
             role="tab"
             variant={activeCanvas === "preview" ? "primary" : "secondary"}
             onClick={() => setActiveCanvas("preview")}
@@ -54,30 +78,30 @@ export function SessionDetail({busy, session, onResizeSession, onRestartSession}
           hasPreview ? (
             <iframe
               sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts"
-              src={previewUrl}
+              src={accessUrls.previewUrl}
               title={`Preview ${session.name}`}
             />
           ) : (
             <div className="terminal-placeholder">
               <p>
-                Preview is waiting for the runner URL.
+                Preview is waiting for session access.
                 <br />
-                <code>{session.lastError || session.status}</code>
+                <code>{accessError || session.lastError || session.status}</code>
               </p>
             </div>
           )
-        ) : session.serviceUrl ? (
+        ) : hasTerminal ? (
           <iframe
             allow="clipboard-read; clipboard-write"
-            src={session.serviceUrl}
+            src={accessUrls.terminalUrl}
             title={`Terminal ${session.name}`}
           />
         ) : (
           <div className="terminal-placeholder">
             <p>
-              Cloud Run URL is not ready.
+              Terminal access is not ready.
               <br />
-              <code>{session.lastError || session.status}</code>
+              <code>{accessError || session.lastError || session.status}</code>
             </p>
           </div>
         )}
