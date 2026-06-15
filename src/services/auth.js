@@ -7,9 +7,11 @@ import {
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import {getFirestore} from "firebase/firestore";
+import {getStorage} from "firebase/storage";
 
 let auth;
 let firestore;
+let storage;
 
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyA0A772IU-qiva6p_zV1mD70uN8BtvP8to",
@@ -23,11 +25,16 @@ export async function initializeFirebase() {
   const app = initializeApp(await getFirebaseConfig());
   auth = getAuth(app);
   firestore = getFirestore(app);
+  storage = getStorage(app);
   return auth;
 }
 
 export function getFirestoreDb() {
   return firestore;
+}
+
+export function getFirebaseStorage() {
+  return storage;
 }
 
 export function watchAuth(authInstance, callback) {

@@ -1,4 +1,8 @@
 import {createFileEditorState} from "../state/initialState.js";
+import {
+  shouldUploadWorkspaceFileDirect,
+  uploadWorkspaceFileDirect,
+} from "../services/workspaceStorage.js";
 import {resetFileEditor as resetFileEditorState} from "../state/resetters.js";
 import {friendlyFilesError} from "../utils/friendlyErrors.js";
 
@@ -27,7 +31,17 @@ export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFile
 
   try {
     for (const file of selectedFiles) {
-      await state.api.uploadWorkspaceFile(state.selectedWorkspaceId, file);
+      const selectedWorkspace = state.workspaces.find(
+          (workspace) => workspace.id === state.selectedWorkspaceId,
+      );
+      if (shouldUploadWorkspaceFileDirect(file)) {
+        await uploadWorkspaceFileDirect(selectedWorkspace, file, (progress) => {
+          state.workspaceFilesUploadMessage = `Uploading ${file.name} (${progress.percent}%)...`;
+          render();
+        });
+      } else {
+        await state.api.uploadWorkspaceFile(state.selectedWorkspaceId, file);
+      }
     }
     state.workspaceFilesUploadMessage = selectedFiles.length === 1 ?
       `Uploaded ${selectedFiles[0].name}.` :
