@@ -148,7 +148,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
       const relative = normalizeRelativeWorkspacePath(path.relative(config.workspaceDir, localPath));
       const remotePath = workspaceRemotePath(relative);
       desiredRemotePaths.add(remotePath);
-      await storage.bucket(config.bucketName).upload(localPath, {destination: remotePath});
+      await syncFileUpPreservingNewerRemote(localPath, remotePath);
     }));
 
     if (git.isGithubWorkspace()) {
@@ -182,6 +182,29 @@ function createWorkspaceService({admin, config, db, git, storage}) {
 
   function workspaceRemotePath(relativePath) {
     return `${config.prefix}/${normalizeRelativeWorkspacePath(relativePath)}`.replace(/\/+/g, "/");
+  }
+
+  async function syncFileUpPreservingNewerRemote(localPath, remotePath) {
+    const file = storage.bucket(config.bucketName).file(remotePath);
+    if (await remoteObjectNewerThanLocal(file, localPath)) {
+      await fs.promises.mkdir(path.dirname(localPath), {recursive: true});
+      await file.download({destination: localPath});
+      return;
+    }
+    await storage.bucket(config.bucketName).upload(localPath, {destination: remotePath});
+  }
+
+  async function remoteObjectNewerThanLocal(file, localPath) {
+    try {
+      const [metadata] = await file.getMetadata();
+      const localStat = await fs.promises.stat(localPath);
+      const remoteUpdatedMs = Date.parse(metadata.updated || metadata.timeCreated || "");
+      if (!Number.isFinite(remoteUpdatedMs)) return false;
+      return remoteUpdatedMs > localStat.mtimeMs + 1000;
+    } catch (error) {
+      if (error && (error.code === 404 || error.code === "ENOENT")) return false;
+      throw error;
+    }
   }
 
   function normalizeRemoteWorkspacePath(remotePath) {
