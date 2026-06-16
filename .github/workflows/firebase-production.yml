@@ -53,7 +53,11 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PI_AGENTS_CLOUD }}
           project_id: pi-agents-cloud
 
+      - name: Write Firebase Functions deploy parameters
+        run: |
+          printf '%s\n' \
+            'FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com' \
+            > functions/.env.pi-agents-cloud
+
       - name: Deploy Firebase production
-        env:
-          FUNCTION_SERVICE_ACCOUNT: mapache-api@pi-agents-cloud.iam.gserviceaccount.com
         run: npx firebase-tools@latest deploy --only hosting,functions,firestore,storage --project pi-agents-cloud --force
