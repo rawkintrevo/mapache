@@ -5,7 +5,7 @@ const path = require("path");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
 
-function createTerminalSession({admin, config, activity}) {
+function createTerminalSession({admin, config, activity, onTerminalExit}) {
   const sockets = new Set();
   let term = null;
   let outputBuffer = "";
@@ -59,6 +59,12 @@ function createTerminalSession({admin, config, activity}) {
       closeSockets();
       term = null;
       clearPiSessionBindingScan();
+      Promise.resolve(onTerminalExit ? onTerminalExit({command, exitCode: code}) : null)
+          .catch((error) => {
+            const message = error && error.message ? error.message : error;
+            console.error("terminal exit hook failed", message);
+            activity.appendHistory("system", `exit hook failed: ${message}`);
+          });
     });
 
     return term;

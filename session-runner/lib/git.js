@@ -10,6 +10,11 @@ const {
 } = require("./utils");
 
 function createGitService({config, activity}) {
+  let automationBranch = "";
+  let automationBaseBranch = "";
+  let automationBaseCommit = "";
+  let automationPullRequest = null;
+
   function isGithubWorkspace() {
     return config.workspaceSourceMode === "github";
   }
@@ -70,6 +75,107 @@ function createGitService({config, activity}) {
       branch: branch || null,
       commit: commit || config.githubRequestedCommit || null,
     };
+  }
+
+  function shouldAutomateGithubPullRequest() {
+    return isGithubWorkspace() &&
+      config.terminalKind === "pi" &&
+      Boolean(config.githubAutomationToken && config.githubRepoOwner && config.githubRepoName);
+  }
+
+  async function prepareGithubAutomationBranch() {
+    if (!shouldAutomateGithubPullRequest()) return null;
+
+    automationBaseBranch = await resolveAutomationBaseBranch();
+    automationBaseCommit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
+    console.log(`preparing GitHub automation branch from ${automationBaseBranch || automationBaseCommit || "HEAD"}`);
+
+    await runGitCommand(["reset", "--hard", "HEAD"]);
+    await runGitCommand(["clean", "-fd"]);
+
+    if (automationBaseBranch) {
+      await withGithubAutomationAuth((env) => runGitCommand(["fetch", "origin", automationBaseBranch, "--prune"], {env}));
+      await runGitCommand(["checkout", "-B", automationBaseBranch, `origin/${automationBaseBranch}`]);
+    }
+
+    await runGitCommand(["reset", "--hard", "HEAD"]);
+    await runGitCommand(["clean", "-fd"]);
+
+    automationBaseCommit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
+    automationBranch = await uniqueAutomationBranchName();
+    await runGitCommand(["checkout", "-b", automationBranch]);
+    await configureAutomationCommitIdentity();
+    await activity.updateSessionActivity({
+      githubAutomationBranch: automationBranch,
+      githubAutomationBaseBranch: automationBaseBranch || null,
+      githubAutomationBaseCommit: automationBaseCommit || null,
+      githubAutomationStatus: "ready",
+      githubAutomationError: null,
+    });
+    console.log(`checked out ${automationBranch}`);
+    return {
+      branch: automationBranch,
+      baseBranch: automationBaseBranch || null,
+      baseCommit: automationBaseCommit || null,
+    };
+  }
+
+  async function finalizeGithubAutomationBranch(exitCode) {
+    if (!shouldAutomateGithubPullRequest() || !automationBranch) {
+      return {ok: true, skipped: true, reason: "github_automation_not_enabled"};
+    }
+    if (automationPullRequest) {
+      return {ok: true, skipped: true, reason: "github_automation_already_finalized", pullRequest: automationPullRequest};
+    }
+
+    await activity.updateSessionActivity({
+      githubAutomationStatus: "finalizing",
+      githubAutomationFinishedAt: null,
+      githubAutomationError: null,
+    });
+
+    try {
+      await runGitCommand(["add", "-A"]);
+      const status = await runGitCommand(["status", "--porcelain=1"], {captureStdout: true});
+      if (!status) {
+        await activity.updateSessionActivity({
+          githubAutomationStatus: "no_changes",
+          githubAutomationFinishedAt: new Date().toISOString(),
+        });
+        console.log("github automation found no changes; skipping PR");
+        return {ok: true, skipped: true, reason: "no_changes"};
+      }
+
+      const message = buildAutomationCommitMessage();
+      await runGitCommand(["commit", "-m", message]);
+      await withGithubAutomationAuth((env) => (
+        runGitCommand(["push", "--set-upstream", "origin", `HEAD:${automationBranch}`], {env})
+      ));
+
+      const pullRequest = await createGithubAutomationPullRequest({
+        title: message,
+        body: buildAutomationPullRequestBody({exitCode}),
+        head: automationBranch,
+        base: automationBaseBranch,
+      });
+      automationPullRequest = pullRequest;
+      await activity.updateSessionActivity({
+        githubAutomationStatus: "pull_request_opened",
+        githubAutomationFinishedAt: new Date().toISOString(),
+        githubAutomationPullRequestNumber: Number(pullRequest.number || 0) || null,
+        githubAutomationPullRequestUrl: normalizeEnvString(pullRequest.html_url),
+      });
+      console.log(`github automation opened PR ${pullRequest.html_url || `#${pullRequest.number}`}`);
+      return {ok: true, pullRequest};
+    } catch (error) {
+      const message = compactErrorMessage(error && error.message ? error.message : error);
+      await activity.updateSessionActivity({
+        githubAutomationStatus: "failed",
+        githubAutomationFinishedAt: new Date().toISOString(),
+        githubAutomationError: message,
+      });
+      throw error;
+    }
   }
 
   async function recordGithubCloneFailure(error) {
@@ -210,6 +316,111 @@ function createGitService({config, activity}) {
       action: "push",
       push,
     };
+  }
+
+  async function resolveAutomationBaseBranch() {
+    const candidates = [
+      config.githubRequestedBranch,
+      await runGitCommand(["branch", "--show-current"], {captureStdout: true}).catch(() => ""),
+    ].map((value) => normalizeEnvString(value)).filter(Boolean);
+
+    for (const branch of candidates) {
+      if (await remoteBranchExists(branch)) return branch;
+    }
+    return candidates[0] || "";
+  }
+
+  async function remoteBranchExists(branch) {
+    if (!branch) return false;
+    const output = await withGithubAutomationAuth((env) => (
+      runGitCommand(["ls-remote", "--heads", "origin", branch], {captureStdout: true, env})
+    )).catch(() => "");
+    return Boolean(output);
+  }
+
+  async function uniqueAutomationBranchName() {
+    const base = `mapache/${normalizeBranchDescription(config.sessionName)}`;
+    const suffix = normalizeBranchDescription(config.sessionId).slice(0, 12);
+    const branch = suffix ? `${base}-${suffix}` : base;
+    let candidate = branch;
+    for (let index = 2; await branchExists(candidate); index += 1) {
+      candidate = `${branch}-${index}`;
+    }
+    return candidate;
+  }
+
+  async function branchExists(branch) {
+    const localBranch = await runGitCommand(["branch", "--list", branch], {captureStdout: true});
+    if (localBranch) return true;
+    return remoteBranchExists(branch);
+  }
+
+  async function configureAutomationCommitIdentity() {
+    const name = await runGitCommand(["config", "--get", "user.name"], {captureStdout: true}).catch(() => "");
+    if (!name) {
+      await runGitCommand(["config", "user.name", "Mapache Agent"]);
+    }
+    const email = await runGitCommand(["config", "--get", "user.email"], {captureStdout: true}).catch(() => "");
+    if (!email) {
+      await runGitCommand(["config", "user.email", "mapache-agent@users.noreply.github.com"]);
+    }
+  }
+
+  async function withGithubAutomationAuth(task) {
+    return withGitAskPassAuth({
+      token: config.githubAutomationToken,
+      username: config.githubAutomationUsername,
+      userEnvName: "GITHUB_AUTOMATION_USERNAME",
+      tokenEnvName: "GITHUB_AUTOMATION_TOKEN",
+      askPassFilePrefix: "mapahce-git-automation-askpass",
+    }, task);
+  }
+
+  async function createGithubAutomationPullRequest({title, body, head, base}) {
+    if (!base) {
+      throw new Error("github_automation_missing_base_branch");
+    }
+    const response = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(config.githubRepoOwner)}/${encodeURIComponent(config.githubRepoName)}/pulls`,
+        {
+          method: "POST",
+          headers: {
+            "accept": "application/vnd.github+json",
+            "authorization": `Bearer ${config.githubAutomationToken}`,
+            "content-type": "application/json",
+            "user-agent": "mapahce-session-runner",
+            "x-github-api-version": "2022-11-28",
+          },
+          body: JSON.stringify({
+            title,
+            body,
+            head,
+            base,
+            draft: false,
+          }),
+        },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(`github_pull_request_create_failed: ${githubApiErrorMessage(data) || response.status}`);
+    }
+    return data;
+  }
+
+  function buildAutomationCommitMessage() {
+    return `Mapache changes for ${normalizeCommitTitle(config.sessionName)}`;
+  }
+
+  function buildAutomationPullRequestBody({exitCode}) {
+    return [
+      "## Summary",
+      "- Automated changes from a Mapache Pi session.",
+      "",
+      "## Session",
+      `- Session: ${config.sessionName}`,
+      `- Exit code: ${exitCode == null ? "unknown" : exitCode}`,
+      automationBaseCommit ? `- Base commit: ${automationBaseCommit}` : "",
+    ].filter((line) => line !== "").join("\n");
   }
 
   async function pullGitAction() {
@@ -363,9 +574,11 @@ function createGitService({config, activity}) {
     checkoutRequestedCommit,
     cloneGithubWorkspace,
     commitGitChanges,
+    finalizeGithubAutomationBranch,
     getGitStatusSummary,
     isBlankWorkspace,
     isGithubWorkspace,
+    prepareGithubAutomationBranch,
     prepareGitPullRequest,
     publishGithubResolvedMetadata,
     pullGitAction,
@@ -377,6 +590,29 @@ function createGitService({config, activity}) {
     stageGitPaths,
     unstageGitPaths,
   };
+}
+
+function normalizeBranchDescription(value) {
+  return normalizeEnvString(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "session";
+}
+
+function normalizeCommitTitle(value) {
+  return normalizeEnvString(value).replace(/\s+/g, " ").slice(0, 160) || "Mapache session";
+}
+
+function githubApiErrorMessage(value) {
+  if (!value || typeof value !== "object") return "";
+  const message = normalizeEnvString(value.message || "");
+  const detail = Array.isArray(value.errors) ? value.errors.map((entry) => {
+    if (!entry || typeof entry !== "object") return normalizeEnvString(entry);
+    return normalizeEnvString(entry.message || entry.code || entry.field || entry.resource);
+  }).filter(Boolean)[0] : "";
+  return [message, detail].filter(Boolean).join(": ");
 }
 
 function classifyGithubCloneFailure(message) {

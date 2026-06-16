@@ -34,6 +34,7 @@ Under **Permissions**, expand **Repository permissions** and set:
 | Permission | Access |
 |------------|--------|
 | Contents | Read & write |
+| Issues | Read & write |
 | Metadata | Read-only (default) |
 | Pull requests | Read & write |
 

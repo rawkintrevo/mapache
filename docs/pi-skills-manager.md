@@ -44,6 +44,10 @@ Some curated runners seed workflow skills during startup after workspace restore
 /workspace/.pi/skills/{skill-name}/SKILL.md
 ```
 
+All Pi runners seed:
+
+- `mapache-github-issue`: explains how to work from a GitHub issue number by reading the issue and comments through the GitHub API, asking clarifying questions or decision questions when needed, and then implementing the scoped change.
+
 Current `pi-web` seeded skills are:
 
 - `mapache-preview-build`: explains how to build static output to `/workspace/build`.

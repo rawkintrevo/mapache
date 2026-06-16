@@ -3042,8 +3042,10 @@ async function sessionRunnerEnv(session, options = {}) {
     },
     {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
     {name: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent"},
+    {name: "SESSION_NAME", value: cleanName(session.name || "Terminal session")},
     {name: "TERMINAL_COMMAND", value: terminal.command},
     {name: "TERMINAL_ARGS", value: JSON.stringify(terminal.args)},
+    {name: "TERMINAL_KIND", value: cleanName(session.terminalKind || "pi") || "pi"},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
@@ -3088,7 +3090,7 @@ async function sessionRunnerEnv(session, options = {}) {
         },
     );
 
-    env.push(...await buildGithubCloneEnv(session));
+    env.push(...await buildGithubAuthEnv(session));
   }
 
   return env.filter(Boolean);
@@ -3104,7 +3106,7 @@ function terminalCommandEnv(session) {
   };
 }
 
-async function buildGithubCloneEnv(session) {
+async function buildGithubAuthEnv(session) {
   if (cleanName(session.sourceType) !== "github") {
     return [];
   }
@@ -3113,20 +3115,25 @@ async function buildGithubCloneEnv(session) {
     return [];
   }
 
-  if (cleanName(session.sourceVisibility) !== "private") {
-    return [];
-  }
-
   const installationId = cleanGithubNumericId(session.sourceInstallationId);
   if (!installationId) {
-    throw httpError(503, "github_clone_auth_unavailable");
+    throw httpError(503, "github_auth_unavailable");
   }
 
   const tokenResponse = await createGithubInstallationToken(installationId);
-  return [
-    {name: "GITHUB_CLONE_USERNAME", value: "x-access-token"},
-    {name: "GITHUB_CLONE_TOKEN", value: tokenResponse.token},
+  const env = [
+    {name: "GITHUB_AUTOMATION_USERNAME", value: "x-access-token"},
+    {name: "GITHUB_AUTOMATION_TOKEN", value: tokenResponse.token},
   ];
+
+  if (cleanName(session.sourceVisibility) === "private") {
+    env.push(
+        {name: "GITHUB_CLONE_USERNAME", value: "x-access-token"},
+        {name: "GITHUB_CLONE_TOKEN", value: tokenResponse.token},
+    );
+  }
+
+  return env;
 }
 
 function sessionSourceMetadata(workspace) {

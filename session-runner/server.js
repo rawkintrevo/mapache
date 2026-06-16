@@ -28,7 +28,16 @@ const git = createGitService({config, activity});
 const preview = createPreviewService(config);
 const workspace = createWorkspaceService({admin, config, db, git, storage});
 const pi = createPiService({config, syncUp: workspace.syncUp});
-const terminalSession = createTerminalSession({admin, config, activity});
+const terminalSession = createTerminalSession({
+  admin,
+  config,
+  activity,
+  onTerminalExit: async ({command, exitCode}) => {
+    if (path.basename(String(command && command.file || "")) !== "pi") return;
+    await git.finalizeGithubAutomationBranch(exitCode);
+    await workspace.syncUp({includeArchives: true});
+  },
+});
 
 app.use(express.json());
 app.use(
@@ -279,6 +288,7 @@ workspace.ensureWorkspace()
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
       await workspace.synchronizePiAuth({materialize: true});
+      await git.prepareGithubAutomationBranch();
       await pi.seedDefaultRuntimeSkills();
     })
     .then(() => {

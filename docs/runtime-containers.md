@@ -115,6 +115,8 @@ TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
+For connected GitHub workspaces, non-shell Pi sessions also prepare a clean automation branch before the terminal process starts. The runner resets the restored worktree to the selected base branch, removes untracked non-ignored files, checks out a unique branch named `mapache/<session-name-kebab>-<session-id>`, and records that branch on the session document. When the Pi terminal process exits, the runner stages all workspace changes, commits them with a Mapache-authored commit, pushes the branch with the short-lived GitHub App installation token, and opens a pull request back to the base branch. If there are no changes, the runner records `githubAutomationStatus: "no_changes"` and does not create a commit or PR. Shell sessions and non-connected GitHub workspaces keep the manual Git controls behavior only.
+
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
 
 ## Pi Basic Runtime
@@ -175,7 +177,9 @@ Agents can switch the preview gateway from static-file serving to a local app/AP
 
 Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or the configured `staticRoot`.
 
-On startup, `pi-web` seeds three workspace-local Pi skills when they are missing:
+On startup, all Pi runners seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, asking clarifying or decision questions when needed, and then implementing the scoped change.
+
+On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 
 - `mapache-preview-build`
 - `mapache-api-hosting`
@@ -229,7 +233,7 @@ Agents can override the ROM path and emulator core by writing `/workspace/.mapac
 
 Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; the older `parallel_n64` spelling is accepted and normalized to EmulatorJS's documented `parallel-n64` core id. Invalid values fall back to `n64`, which uses EmulatorJS's default N64 core. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM, status, and log links include the same signed token so EmulatorJS subresource fetches and browser log capture do not depend on third-party iframe cookies.
 
-On startup, `pi-n64` seeds two workspace-local Pi skills when they are missing:
+On startup, `pi-n64` also seeds two workspace-local Pi skills when they are missing:
 
 - `mapache-n64-build`: explains how to build/package a homebrew ROM to `/workspace/build/game.z64`.
 - `mapache-n64-preview`: explains the N64 browser emulator shell, status endpoint, ROM endpoint, and optional core override.
