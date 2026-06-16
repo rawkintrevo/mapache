@@ -548,7 +548,33 @@ function defaultPiN64Skills() {
 
 ## New Project Defaults
 
-For a new libdragon project, prefer a small Makefile that includes the installed libdragon n64.mk file and produces a .z64 ROM. Keep source files outside /workspace/build and treat build as generated output.
+For a new libdragon project, prefer a small Makefile that includes the installed libdragon n64.mk file and produces a root .z64 ROM, then copy that ROM to /workspace/build/game.z64. Keep source files outside /workspace/build and treat build as generated output. Do not make the primary libdragon ROM target itself live under build/, because libdragon's n64.mk uses BUILD_DIR internally and that can produce paths like build/build/game.elf.
+
+Minimal Makefile shape:
+
+\`\`\`make
+all: game.z64
+.PHONY: all
+
+BUILD_DIR = build
+include $(N64_INST)/include/n64.mk
+
+OBJS = $(BUILD_DIR)/main.o
+
+game.z64: N64_ROM_TITLE = "Mapache N64"
+$(BUILD_DIR)/game.elf: $(OBJS)
+
+preview: game.z64
+	mkdir -p /workspace/build
+	cp game.z64 /workspace/build/game.z64
+.PHONY: preview
+
+clean:
+	rm -rf $(BUILD_DIR) *.z64
+.PHONY: clean
+
+-include $(wildcard $(BUILD_DIR)/*.d)
+\`\`\`
 
 ## Rules
 

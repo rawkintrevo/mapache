@@ -19,6 +19,45 @@ RUN curl -fsSL -o /tmp/gcc-toolchain-mips64-x86_64.deb \
   && ./build.sh \
   && rm -rf /opt/libdragon-src
 
+RUN test -f /opt/libdragon/include/n64.mk \
+  && test -x /opt/libdragon/bin/n64tool \
+  && test -x /opt/libdragon/bin/mkdfs \
+  && test -x /opt/libdragon/bin/mips64-elf-gcc \
+  && mkdir -p /tmp/n64-smoke \
+  && printf '%s\n' \
+    'all: smoke.z64' \
+    '.PHONY: all' \
+    '' \
+    'BUILD_DIR = build' \
+    'include $(N64_INST)/include/n64.mk' \
+    '' \
+    'OBJS = $(BUILD_DIR)/smoke.o' \
+    '' \
+    'smoke.z64: N64_ROM_TITLE = "Mapache N64 Smoke"' \
+    '$(BUILD_DIR)/smoke.elf: $(OBJS)' \
+    '' \
+    'clean:' \
+    '	rm -rf $(BUILD_DIR) *.z64' \
+    '.PHONY: clean' \
+    '' \
+    '-include $(wildcard $(BUILD_DIR)/*.d)' \
+    > /tmp/n64-smoke/Makefile \
+  && printf '%s\n' \
+    '#include <libdragon.h>' \
+    '' \
+    'int main(void) {' \
+    '    console_init();' \
+    '    console_set_render_mode(RENDER_MANUAL);' \
+    '    while (1) {' \
+    '        console_clear();' \
+    '        console_render();' \
+    '    }' \
+    '}' \
+    > /tmp/n64-smoke/smoke.c \
+  && make -C /tmp/n64-smoke \
+  && test -s /tmp/n64-smoke/smoke.z64 \
+  && rm -rf /tmp/n64-smoke
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev

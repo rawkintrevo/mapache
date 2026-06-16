@@ -186,7 +186,7 @@ gcloud builds submit session-runner \
 
 ## Pi N64 Runtime
 
-`session-runner/Dockerfile.pi-n64` is the Nintendo 64 homebrew runner. It starts from the same Pi-oriented shape as `pi-basic`, then installs the libdragon prebuilt MIPS64 toolchain Debian package, builds libdragon from the `trunk` branch, and installs libdragon and its host tools into `/opt/libdragon`.
+`session-runner/Dockerfile.pi-n64` is the Nintendo 64 homebrew runner. It starts from the same Pi-oriented shape as `pi-basic`, then installs the libdragon prebuilt MIPS64 toolchain Debian package, builds libdragon from the `trunk` branch, and installs libdragon and its host tools into `/opt/libdragon`. The image build includes a smoke check that verifies `/opt/libdragon/include/n64.mk`, required libdragon host tools, and a minimal ROM compile through the same `include $(N64_INST)/include/n64.mk` path used by workspace projects. The seeded build skill documents the same Makefile shape: produce a root `.z64` target and then copy it to `/workspace/build/game.z64`, rather than making the primary libdragon target live under `build/`.
 
 The image sets the runner capability contract to:
 
