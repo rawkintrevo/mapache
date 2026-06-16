@@ -127,6 +127,12 @@ Frontend changes are deployed with:
 firebase deploy --only hosting --project pi-agents-cloud
 ```
 
+GitHub Actions also deploys Firebase automatically:
+
+- Pull requests from branches in this repository run `.github/workflows/firebase-preview.yml`, install the root, `community/`, and `functions/` dependencies, run the Functions tests, build the app, and deploy a Firebase Hosting preview channel that expires after 14 days.
+- Pushes to `main` run `.github/workflows/firebase-production.yml`, perform the same install/test/build checks, and deploy Hosting, Cloud Functions, Firestore, and Storage to the `pi-agents-cloud` project.
+- Both workflows expect the repository secret `FIREBASE_SERVICE_ACCOUNT_PI_AGENTS_CLOUD` to contain a Firebase/GCP service account JSON key with deploy access to `pi-agents-cloud`.
+
 Runner container changes require a Cloud Build push and then a Cloud Run service update for existing sessions. New sessions use the curated image key selected in the modal, resolved by the backend, or the backend default.
 
 Browser-token enforcement is implemented in the runner image and requires `SESSION_BROWSER_TOKEN_SECRET` in the Cloud Run service environment. New sessions receive this automatically after the Functions deployment. Existing sessions need a restart or recreation after the runner image and Functions changes are deployed.

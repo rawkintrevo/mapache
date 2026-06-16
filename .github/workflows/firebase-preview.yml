@@ -1,0 +1,56 @@
+name: Firebase Preview
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: firebase-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Build and deploy preview
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            community/package-lock.json
+            functions/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install community dependencies
+        run: npm ci --prefix community
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Test functions
+        run: npm --prefix functions test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Deploy Firebase Hosting preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PI_AGENTS_CLOUD }}
+          projectId: pi-agents-cloud
+          expires: 14d

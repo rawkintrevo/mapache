@@ -1,0 +1,57 @@
+name: Firebase Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            community/package-lock.json
+            functions/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install community dependencies
+        run: npm ci --prefix community
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Test functions
+        run: npm --prefix functions test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PI_AGENTS_CLOUD }}
+          project_id: pi-agents-cloud
+
+      - name: Deploy Firebase production
+        run: npx firebase-tools@latest deploy --only hosting,functions,firestore,storage --project pi-agents-cloud --force
