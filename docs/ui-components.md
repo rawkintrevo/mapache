@@ -31,7 +31,7 @@ This document serves as an index for significant UI components in the applicatio
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding authentication providers, including API keys and the OpenAI Codex subscription device-code login flow. |
-| `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank or GitHub-backed workspace, including repository URL and optional branch fields. |
+| `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank or GitHub-backed workspace, including the GitHub App connected repository picker, repository URL fallback, and optional branch field. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a new session. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |

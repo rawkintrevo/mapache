@@ -14,11 +14,14 @@ export function ModalStack(props) {
       ) : null}
       {state.workspaceModalOpen ? (
         <WorkspaceModal
+          repoPicker={state.repoPicker}
           onClose={props.onCloseWorkspaceModal}
+          onConnectGithub={props.onConnectGithub}
           onCreateWorkspace={(payload) => {
             props.onCreateWorkspace(payload);
             props.onCloseWorkspaceModal();
           }}
+          onLoadConnectedRepos={props.onLoadConnectedRepos}
         />
       ) : null}
       {state.authModalOpen ? (
