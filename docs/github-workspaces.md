@@ -206,7 +206,7 @@ The enforcement point should live in the backend. The frontend can show a better
 
 ## Git Controls UI
 
-GitHub-backed sessions expose repository actions in the selected-session view, directly under the terminal and session controls. The panel is shown only for live sessions in workspaces whose source metadata is GitHub-backed, with session `sourceType: "github"` as a fallback signal, so blank workspace sessions do not show repository controls. It reads Git status from the runner and offers pull, stage/unstage, commit, push, and pull request actions; pull request creation is limited to connected GitHub App repositories where the backend can mint installation-scoped credentials.
+GitHub-backed sessions expose repository actions in the selected-session view, directly under the terminal and session controls. The panel is shown only for live sessions in workspaces whose source metadata is GitHub-backed, with session `sourceType: "github"` as a fallback signal, so blank workspace sessions do not show repository controls. It reads Git status from the runner and offers pull, stage/unstage, commit, push, and pull request actions. Connected GitHub App repositories push through short-lived installation-scoped credentials minted by the backend and passed to the runner for that single action; public URL workspaces still need runner-provided push credentials. Pull request creation is limited to connected GitHub App repositories for the same reason.
 
 ## Runner Reconstruction Flow
 
@@ -289,6 +289,8 @@ Expected control surface:
 - open pull request
 
 The Git panel should read live state from the active session through runner-backed APIs. It should not infer Git status from Cloud Storage alone.
+
+For connected GitHub App workspaces, the normal push action should mint a short-lived installation token in Cloud Functions and send it only in the protected runner request body. The runner uses that token through temporary `GIT_ASKPASS` environment variables for the push command and must not persist it in remote URLs, workspace files, Cloud Storage, or session metadata. Public URL workspaces can still use runner-provided `GITHUB_PUSH_TOKEN` credentials when the deployment explicitly configures them.
 
 ### Pull request creation flow
 

@@ -241,7 +241,7 @@ app.post("/git/commit", async (req, res) => {
 });
 
 app.post("/git/push", async (req, res) => {
-  await handleGitAction(req, res, "git push failed", "git_push_failed", () => git.pushGitChanges(), {
+  await handleGitAction(req, res, "git push failed", "git_push_failed", () => git.pushGitChanges(req.body || {}), {
     compactError: true,
   });
 });

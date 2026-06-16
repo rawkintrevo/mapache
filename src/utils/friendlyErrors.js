@@ -122,6 +122,7 @@ export function friendlyGitStatusError(error) {
   if (message === "runner_git_push_unavailable") return "Git push is temporarily unavailable.";
   if (message === "runner_git_open_pr_unavailable") return "Pull request creation is temporarily unavailable.";
   if (message === "github_auth_not_configured") return "GitHub auth is not configured for push.";
+  if (message === "github_push_auth_unavailable") return "Reconnect GitHub before pushing from this workspace.";
   if (message === "github_pr_requires_connected_repo") return "Pull requests are only supported for connected GitHub repositories.";
   if (message === "missing_pr_branch_description") return "Add a short branch description before opening a PR from the default branch.";
   if (message === "git_pr_branch_name_conflict") return "That mapache/<description> branch name already exists. Choose a different description.";

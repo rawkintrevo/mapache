@@ -179,15 +179,21 @@ function createGitService({config, activity}) {
     };
   }
 
-  async function pushGitChanges() {
+  async function pushGitChanges(auth = {}) {
     const branch = await runGitCommand(["branch", "--show-current"], {captureStdout: true});
     if (!branch) {
       throw new Error("git_push_no_current_branch");
     }
 
+    const pushAuth = normalizeGitPushAuthPayload(auth);
     let push = {ok: true, message: "", branch};
     try {
-      await withGitPushAuth((env) => runGitCommand(["push", "origin", `HEAD:${branch}`], {env}));
+      const runPush = (env) => runGitCommand(["push", "origin", `HEAD:${branch}`], {env});
+      if (pushAuth.pushToken) {
+        await withGitPushPayloadAuth(pushAuth, runPush);
+      } else {
+        await withGitPushAuth(runPush);
+      }
     } catch (error) {
       if (String(error && error.message || "") === "github_auth_not_configured") {
         throw error;
@@ -513,6 +519,14 @@ function normalizeGitPullRequestPayload(payload) {
   return {
     baseBranch: normalizeGitBranchName(value.baseBranch, {required: true}),
     workingBranchName: normalizeGitBranchName(value.workingBranchName),
+    pushUsername: normalizeEnvString(value.pushUsername) || "x-access-token",
+    pushToken: normalizeEnvString(value.pushToken),
+  };
+}
+
+function normalizeGitPushAuthPayload(payload) {
+  const value = payload && typeof payload === "object" ? payload : {};
+  return {
     pushUsername: normalizeEnvString(value.pushUsername) || "x-access-token",
     pushToken: normalizeEnvString(value.pushToken),
   };

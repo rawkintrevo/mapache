@@ -1692,6 +1692,17 @@ async function pushGit(uid, workspaceId, sessionId) {
   const session = {id: sessionId, ...sessionSnap.data()};
   if (!session.serviceUrl) throw httpError(409, "session_not_running");
   if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
+  if (cleanName(session.sourceType) === "github" && cleanName(session.sourceMode) === "connected") {
+    const installationId = cleanGithubNumericId(session.sourceInstallationId);
+    if (!installationId) {
+      throw httpError(503, "github_push_auth_unavailable");
+    }
+    const tokenResponse = await createGithubInstallationToken(installationId);
+    return requestRunnerGitPush(session, {
+      pushToken: tokenResponse.token,
+      pushUsername: "x-access-token",
+    });
+  }
   return requestRunnerGitPush(session);
 }
 
@@ -3162,9 +3173,10 @@ async function requestRunnerGitCommit(session, body) {
   });
 }
 
-async function requestRunnerGitPush(session) {
+async function requestRunnerGitPush(session, body) {
   return requestRunnerJson(session, "/git/push", {
     method: "POST",
+    body,
     unavailableError: "runner_git_push_unavailable",
   });
 }
