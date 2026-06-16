@@ -40,6 +40,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
         {method: "PUT", body: {content}},
     ),
+    getWorkspaceFileDownloadUrl: (workspaceId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/file/download-url?path=${encodeURIComponent(path)}`,
+        {method: "POST", body: {}},
+    ),
     uploadWorkspaceFile: (workspaceId, file) => uploadFile(
         getToken,
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(file.name)}`,

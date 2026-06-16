@@ -1,6 +1,5 @@
 import {createFileEditorState} from "../state/initialState.js";
 import {
-  downloadWorkspaceFileDirect,
   shouldUploadWorkspaceFileDirect,
   uploadWorkspaceFileDirect,
 } from "../services/workspaceStorage.js";
@@ -69,16 +68,16 @@ export async function downloadWorkspaceFileState({state, render}) {
   render();
 
   try {
-    const {blob, filename} = await downloadWorkspaceFileDirect(selectedWorkspace, path);
-    const objectUrl = URL.createObjectURL(blob);
+    if (!selectedWorkspace?.storagePrefix) throw new Error("workspace_storage_not_configured");
+    const {filename, url} = await state.api.getWorkspaceFileDownloadUrl(state.selectedWorkspaceId, path);
     const link = document.createElement("a");
-    link.href = objectUrl;
-    link.download = filename;
+    link.href = url;
+    link.download = filename || path.split("/").pop() || "download";
+    link.rel = "noopener";
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(objectUrl);
-    state.workspaceFilesUploadMessage = `Downloaded ${filename}.`;
+    state.workspaceFilesUploadMessage = `Started download for ${filename || path.split("/").pop()}.`;
   } catch (error) {
     state.workspaceFilesError = friendlyFilesError(error);
     state.workspaceFilesUploadMessage = "";

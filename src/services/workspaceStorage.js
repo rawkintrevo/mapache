@@ -1,4 +1,4 @@
-import {getBlob, ref, uploadBytesResumable} from "firebase/storage";
+import {ref, uploadBytesResumable} from "firebase/storage";
 
 import {getFirebaseStorage} from "./auth.js";
 
@@ -43,22 +43,6 @@ export async function uploadWorkspaceFileDirect(workspace, file, onProgress) {
   });
 }
 
-export async function downloadWorkspaceFileDirect(workspace, path) {
-  const storage = getFirebaseStorage();
-  const storagePrefix = normalizeStoragePrefix(workspace?.storagePrefix || "");
-  const relativePath = normalizeWorkspaceFilePath(path);
-
-  if (!storage || !storagePrefix) throw new Error("workspace_storage_not_configured");
-  if (!relativePath) throw new Error("invalid_file_path");
-
-  const objectRef = ref(storage, `${storagePrefix}/${relativePath}`);
-  const blob = await getBlob(objectRef);
-  return {
-    blob,
-    filename: relativePath.split("/").pop() || "download",
-  };
-}
-
 function normalizeStoragePrefix(prefix) {
   return String(prefix).replace(/^\/+|\/+$/g, "");
 }
@@ -68,12 +52,4 @@ function normalizeUploadFilename(name) {
   if (!filename || filename === "." || filename === "..") return "";
   if (filename.includes("/") || filename.includes("\\")) return "";
   return filename;
-}
-
-function normalizeWorkspaceFilePath(value) {
-  const clean = String(value || "").replace(/\\/g, "/").replace(/^\/+/, "").trim();
-  if (!clean || clean.endsWith("/")) return "";
-  const parts = clean.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..")) return "";
-  return parts.join("/");
 }

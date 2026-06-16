@@ -183,6 +183,11 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "POST" && route.name === "workspaceFileDownloadUrl") {
+      res.json(await createWorkspaceFileDownloadUrl(user.uid, route.workspaceId, req.query.path));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "sessions") {
       res.json({sessions: await listSessions(user.uid, route.workspaceId)});
       return;
@@ -370,6 +375,9 @@ function routeRequest(path) {
   }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "file") {
     return {name: "workspaceFile", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "file" && parts[3] === "download-url") {
+    return {name: "workspaceFileDownloadUrl", workspaceId: parts[1]};
   }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
     return {name: "sessions", workspaceId: parts[1]};
@@ -1393,6 +1401,28 @@ async function uploadWorkspaceFile(uid, workspaceId, path, req) {
   return {
     file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
     updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
+async function createWorkspaceFileDownloadUrl(uid, workspaceId, path) {
+  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
+  const [exists] = await file.exists();
+  if (!exists) throw httpError(404, "file_not_found");
+
+  const expiresAtMs = Date.now() + 10 * 60 * 1000;
+  const filename = relativePath.split("/").pop() || "download";
+  const [url] = await file.getSignedUrl({
+    action: "read",
+    expires: expiresAtMs,
+    responseDisposition: `attachment; filename="${safeContentDispositionFilename(filename)}"`,
+    version: "v4",
+  });
+
+  return {
+    ok: true,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    filename,
+    url,
   };
 }
 
@@ -3634,6 +3664,10 @@ function cleanContentType(value) {
   const contentType = String(value || "").trim();
   if (!contentType || /[\r\n\u0000-\u001f\u007f]/.test(contentType)) return "";
   return contentType.slice(0, 255);
+}
+
+function safeContentDispositionFilename(value) {
+  return String(value || "download").replace(/["\\\r\n\u0000-\u001f\u007f]/g, "_").slice(0, 200) || "download";
 }
 
 function workspaceUploadBuffer(req) {
