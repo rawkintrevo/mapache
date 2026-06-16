@@ -278,7 +278,7 @@ function createPreviewService(config) {
     res.setHeader("Content-Type", contentType);
     if (config.previewInjectLogger && contentType.startsWith("text/html")) {
       const html = await fs.promises.readFile(filePath, "utf8");
-      res.send(injectPreviewLogger(html));
+      res.send(injectPreviewLogger(html, req.mapacheAccessToken));
       return;
     }
     res.sendFile(filePath);
@@ -377,6 +377,7 @@ function createPreviewService(config) {
     const core = normalizeN64EmulatorCore(emulatorCore);
     const signedRomUrl = appendAccessToken(romUrl, accessToken);
     const signedStatusUrl = appendAccessToken(statusUrl, accessToken);
+    const loggerScript = previewLoggerScript(accessToken);
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -421,6 +422,7 @@ function createPreviewService(config) {
       <p>The emulator shell will load <code>${escapeHtml(romUrl)}</code> after the ROM exists.</p>
     </section>`}
   </main>
+  ${loggerScript}
   ${ready ? `<script>
     window.EJS_player = "#game";
     window.EJS_core = ${JSON.stringify(core)};
@@ -454,22 +456,34 @@ function createPreviewService(config) {
         .replace(/"/g, "&quot;");
   }
 
-  function injectPreviewLogger(html) {
-    const script = `<script>
+  function injectPreviewLogger(html, accessToken) {
+    const script = previewLoggerScript(accessToken);
+    if (html.includes("</head>")) return html.replace("</head>", `${script}</head>`);
+    if (html.includes("</body>")) return html.replace("</body>", `${script}</body>`);
+    return `${script}${html}`;
+  }
+
+  function previewLoggerScript(accessToken) {
+    const endpoint = appendAccessToken(`${config.previewBasePath}/logs`, accessToken);
+    return `<script>
 (() => {
   if (window.__mapachePreviewLoggerInstalled) return;
   window.__mapachePreviewLoggerInstalled = true;
-  const endpoint = ${JSON.stringify(`${config.previewBasePath}/logs`)};
+  const endpoint = ${JSON.stringify(endpoint)};
+  const serialize = (item) => {
+    if (typeof item === "string") return item;
+    if (item instanceof Error) return item.stack || item.message || String(item);
+    try {
+      const json = JSON.stringify(item);
+      return typeof json === "string" ? json : String(item);
+    } catch (error) {
+      return String(item);
+    }
+  };
   const send = (level, args) => {
     const payload = {
       level,
-      args: Array.from(args || []).map((item) => {
-        try {
-          return typeof item === "string" ? item : JSON.stringify(item);
-        } catch (error) {
-          return String(item);
-        }
-      }),
+      args: Array.from(args || []).map(serialize),
       href: location.href,
       at: new Date().toISOString()
     };
@@ -495,9 +509,6 @@ function createPreviewService(config) {
   });
 })();
 </script>`;
-    if (html.includes("</head>")) return html.replace("</head>", `${script}</head>`);
-    if (html.includes("</body>")) return html.replace("</body>", `${script}</body>`);
-    return `${script}${html}`;
   }
 
   return {

@@ -594,6 +594,7 @@ clean:
 
 - Preview URL: $MAPACHE_PREVIEW_URL
 - Status endpoint: $MAPACHE_RUNNER_URL/preview/status
+- Browser log endpoint: $MAPACHE_RUNNER_URL/preview/logs
 - ROM endpoint: $MAPACHE_RUNNER_URL/preview/rom.z64
 - Expected ROM file: /workspace/build/game.z64
 - The Preview tab loads the ROM through the Mapache EmulatorJS shell when the ROM exists.
@@ -603,7 +604,8 @@ clean:
 1. Confirm /workspace/build/game.z64 exists.
 2. Check status: curl "$MAPACHE_RUNNER_URL/preview/status"
 3. Open $MAPACHE_PREVIEW_URL to run the ROM in the browser emulator shell.
-4. Use $MAPACHE_RUNNER_URL/preview/rom.z64 as the stable ROM URL for downloads or external emulator checks.
+4. Check browser-side emulator shell logs: curl "$MAPACHE_RUNNER_URL/preview/logs"
+5. Use $MAPACHE_RUNNER_URL/preview/rom.z64 as the stable ROM URL for downloads or external emulator checks.
 
 ## Optional Preview Config
 

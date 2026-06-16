@@ -209,6 +209,7 @@ When the runner has the `n64` capability, the preview gateway defaults to `mode:
 - `GET /preview/` serves a Mapache-owned EmulatorJS shell. If the ROM exists, the shell loads the ROM from `/preview/rom.z64`; if it does not, the page shows a waiting state with the expected path.
 - `GET /preview/rom.z64` serves the ROM at `PREVIEW_N64_ROM_PATH`.
 - `GET /preview/status` reports `mode: "n64"`, the selected emulator core, whether the ROM exists, its byte size, and the ROM URL.
+- `GET /preview/logs` reports browser console output, window errors, and unhandled rejections from the Mapache-owned emulator shell. The shell posts logs to a token-signed endpoint so log capture does not depend on third-party iframe cookies.
 
 Agents can override the ROM path and emulator core by writing `/workspace/.mapache/preview.json`:
 
@@ -220,7 +221,7 @@ Agents can override the ROM path and emulator core by writing `/workspace/.mapac
 }
 ```
 
-Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; the older `parallel_n64` spelling is accepted and normalized to EmulatorJS's documented `parallel-n64` core id. Invalid values fall back to `n64`, which uses EmulatorJS's default N64 core. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM and status links include the same signed token so EmulatorJS subresource fetches do not depend on third-party iframe cookies.
+Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; the older `parallel_n64` spelling is accepted and normalized to EmulatorJS's documented `parallel-n64` core id. Invalid values fall back to `n64`, which uses EmulatorJS's default N64 core. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM, status, and log links include the same signed token so EmulatorJS subresource fetches and browser log capture do not depend on third-party iframe cookies.
 
 On startup, `pi-n64` seeds two workspace-local Pi skills when they are missing:
 
