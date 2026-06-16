@@ -132,6 +132,8 @@ GitHub Actions also deploys Firebase automatically:
 - Pull requests from branches in this repository run `.github/workflows/firebase-preview.yml`, install the root, `community/`, and `functions/` dependencies, run the Functions tests, build the app, and deploy a Firebase Hosting preview channel that expires after 14 days.
 - Pushes to `main` run `.github/workflows/firebase-production.yml`, perform the same install/test/build checks, and deploy Hosting, Cloud Functions, Firestore, and Storage to the `pi-agents-cloud` project.
 - Both workflows expect the repository secret `FIREBASE_SERVICE_ACCOUNT_PI_AGENTS_CLOUD` to contain a Firebase/GCP service account JSON key with deploy access to `pi-agents-cloud`.
+- The deploy service account also needs Secret Manager metadata and version access (`roles/secretmanager.viewer` and `roles/secretmanager.secretAccessor`) because the API function binds Firebase Functions secrets such as `GITHUB_APP_ID`.
+- The production workflow exports `FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com` during `firebase deploy` because the API function uses that Firebase Functions parameter as its Cloud Functions runtime identity. Non-interactive CI deploys fail if this value is absent from the environment or dotenv files.
 
 Runner container changes require a Cloud Build push and then a Cloud Run service update for existing sessions. New sessions use the curated image key selected in the modal, resolved by the backend, or the backend default.
 
