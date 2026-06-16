@@ -7,20 +7,38 @@ export function WorkspacePanel({
   selectedWorkspace,
   state,
   onGetSessionAccessUrls,
+  onCommitGit,
+  onOpenPullRequest,
+  onPullGit,
+  onPushGit,
   onResizeSession,
   onRestartSession,
   onSelectSession,
+  onStageGitPath,
+  onUnstageGitPath,
+  onUpdateGitCommitMessage,
 }) {
+  const isGithubWorkspace = selectedWorkspace?.source?.type === "github" || selectedSession?.sourceType === "github";
+
   if (selectedSession) {
     return (
       <section className="workspace">
         <SessionDetail
           busy={state.busy}
+          gitStatus={state.gitStatus}
+          isGithubWorkspace={isGithubWorkspace}
           session={selectedSession}
           workspaceId={state.selectedWorkspaceId}
+          onCommitGit={onCommitGit}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
+          onOpenPullRequest={onOpenPullRequest}
+          onPullGit={onPullGit}
+          onPushGit={onPushGit}
           onResizeSession={onResizeSession}
           onRestartSession={onRestartSession}
+          onStageGitPath={onStageGitPath}
+          onUnstageGitPath={onUnstageGitPath}
+          onUpdateGitCommitMessage={onUpdateGitCommitMessage}
         />
       </section>
     );

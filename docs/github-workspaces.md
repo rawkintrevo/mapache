@@ -203,6 +203,10 @@ The GitHub flow adds a stricter session policy and different reconstruction orde
 
 The enforcement point should live in the backend. The frontend can show a better error message, but it should not be trusted to guarantee the single-session invariant.
 
+## Git Controls UI
+
+GitHub-backed sessions expose repository actions in the selected-session view, directly under the terminal and session controls. The panel is shown only for live sessions in workspaces whose source metadata is GitHub-backed, with session `sourceType: "github"` as a fallback signal, so blank workspace sessions do not show repository controls. It reads Git status from the runner and offers pull, stage/unstage, commit, push, and pull request actions; pull request creation is limited to connected GitHub App repositories where the backend can mint installation-scoped credentials.
+
 ## Runner Reconstruction Flow
 
 The runner should rebuild `/workspace` in phases.

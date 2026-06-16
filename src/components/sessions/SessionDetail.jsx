@@ -1,6 +1,7 @@
 import {RotateCcw} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
+import {GitStatusPanel} from "./GitStatusPanel.jsx";
 
 const cpuOptions = ["1", "2", "4"];
 const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
@@ -9,7 +10,23 @@ function formatMemory(value) {
   return value.replace("Gi", " GiB");
 }
 
-export function SessionDetail({busy, session, workspaceId, onGetSessionAccessUrls, onResizeSession, onRestartSession}) {
+export function SessionDetail({
+  busy,
+  gitStatus,
+  isGithubWorkspace,
+  session,
+  workspaceId,
+  onCommitGit,
+  onGetSessionAccessUrls,
+  onOpenPullRequest,
+  onPullGit,
+  onPushGit,
+  onResizeSession,
+  onRestartSession,
+  onStageGitPath,
+  onUnstageGitPath,
+  onUpdateGitCommitMessage,
+}) {
   const formRef = useRef(null);
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [accessUrls, setAccessUrls] = useState(null);
@@ -18,6 +35,7 @@ export function SessionDetail({busy, session, workspaceId, onGetSessionAccessUrl
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
+  const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +146,20 @@ export function SessionDetail({busy, session, workspaceId, onGetSessionAccessUrl
           </Button>
         </div>
       </form>
+      {showGitStatus ? (
+        <GitStatusPanel
+          busy={busy}
+          gitStatus={gitStatus}
+          session={session}
+          onCommitGit={onCommitGit}
+          onOpenPullRequest={onOpenPullRequest}
+          onPullGit={onPullGit}
+          onPushGit={onPushGit}
+          onStageGitPath={onStageGitPath}
+          onUnstageGitPath={onUnstageGitPath}
+          onUpdateGitCommitMessage={onUpdateGitCommitMessage}
+        />
+      ) : null}
     </div>
   );
 }

@@ -48,10 +48,17 @@ export function AppShell(props) {
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
+            onCommitGit={props.onCommitGit}
             onGetSessionAccessUrls={props.onGetSessionAccessUrls}
+            onOpenPullRequest={props.onOpenPullRequest}
+            onPullGit={props.onPullGit}
+            onPushGit={props.onPushGit}
             onResizeSession={props.onResizeSession}
             onRestartSession={props.onRestartSession}
             onSelectSession={props.onSelectSession}
+            onStageGitPath={props.onStageGitPath}
+            onUnstageGitPath={props.onUnstageGitPath}
+            onUpdateGitCommitMessage={props.onUpdateGitCommitMessage}
           />
         )}
         <RightDrawer

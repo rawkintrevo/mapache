@@ -1839,13 +1839,15 @@ main.drawer-collapsed.right-drawer-collapsed {
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fbfcfd;
 }
 
 .git-status-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1948,10 +1950,12 @@ main.drawer-collapsed.right-drawer-collapsed {
 .git-file-meta strong {
   overflow: hidden;
   text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .git-file-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1969,7 +1973,7 @@ main.drawer-collapsed.right-drawer-collapsed {
 }
 
 .git-status-details {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .metric {
@@ -2248,6 +2252,20 @@ h2 {
 
   .details {
     grid-template-columns: 1fr;
+  }
+
+  .git-commit-form,
+  .git-file-row {
+    grid-template-columns: 1fr;
+  }
+
+  .git-file-row {
+    display: grid;
+  }
+
+  .git-status-actions,
+  .git-file-actions {
+    justify-content: flex-start;
   }
 
   .profile-details div,
