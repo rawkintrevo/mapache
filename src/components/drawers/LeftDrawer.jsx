@@ -1,5 +1,5 @@
 import {useRef} from "react";
-import {PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-react";
+import {Download, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-react";
 import {DrawerSessionList} from "./DrawerSessionList.jsx";
 import {DrawerSection} from "./DrawerSection.jsx";
 import {UserMenu} from "./UserMenu.jsx";
@@ -14,6 +14,7 @@ export function LeftDrawer({
   onOpenWorkspaceModal,
   onRefresh,
   onRefreshWorkspaceFiles,
+  onDownloadWorkspaceFile,
   onUploadWorkspaceFiles,
   onSelectSession,
   onSelectWorkspace,
@@ -93,6 +94,19 @@ export function LeftDrawer({
               onClick={() => fileInputRef.current?.click()}
             >
               <Plus aria-hidden="true" />
+            </Button>,
+            <Button
+              aria-label="Download selected file"
+              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceFilePath}
+              icon={true}
+              key="download-file"
+              size="compact"
+              title="Download selected file"
+              tooltip="Download selected file"
+              variant="secondary"
+              onClick={onDownloadWorkspaceFile}
+            >
+              <Download aria-hidden="true" />
             </Button>,
             <Button
               aria-label="Refresh files"

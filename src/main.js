@@ -60,6 +60,7 @@ import {
 } from "./workflows/sessionLifecycle.js";
 import {
   closeFileEditorState,
+  downloadWorkspaceFileState,
   loadWorkspaceFilesState,
   saveFileEditorState,
   selectWorkspaceFileState,
@@ -123,6 +124,7 @@ function render() {
     onSelectSession: selectSession,
     onGetSessionAccessUrls: getSessionAccessUrls,
     onRefreshWorkspaceFiles: refreshWorkspaceFiles,
+    onDownloadWorkspaceFile: downloadWorkspaceFile,
     onUploadWorkspaceFiles: uploadWorkspaceFiles,
     onSelectWorkspaceFile: selectWorkspaceFile,
     onCloseFileEditor: closeFileEditor,
@@ -429,6 +431,10 @@ async function refreshWorkspaceFiles() {
 
 async function uploadWorkspaceFiles(files) {
   await uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render});
+}
+
+async function downloadWorkspaceFile() {
+  await downloadWorkspaceFileState({state, render});
 }
 
 async function refreshPiPackages() {

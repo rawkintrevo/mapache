@@ -1,5 +1,6 @@
 import {createFileEditorState} from "../state/initialState.js";
 import {
+  downloadWorkspaceFileDirect,
   shouldUploadWorkspaceFileDirect,
   uploadWorkspaceFileDirect,
 } from "../services/workspaceStorage.js";
@@ -52,6 +53,35 @@ export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFile
     state.workspaceFilesUploadMessage = "";
   } finally {
     state.workspaceFilesUploading = false;
+  }
+  render();
+}
+
+export async function downloadWorkspaceFileState({state, render}) {
+  const path = state.selectedWorkspaceFilePath;
+  if (!state.selectedWorkspaceId || !path) return;
+
+  const selectedWorkspace = state.workspaces.find(
+      (workspace) => workspace.id === state.selectedWorkspaceId,
+  );
+  state.workspaceFilesUploadMessage = `Downloading ${path.split("/").pop()}...`;
+  state.workspaceFilesError = "";
+  render();
+
+  try {
+    const {blob, filename} = await downloadWorkspaceFileDirect(selectedWorkspace, path);
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    state.workspaceFilesUploadMessage = `Downloaded ${filename}.`;
+  } catch (error) {
+    state.workspaceFilesError = friendlyFilesError(error);
+    state.workspaceFilesUploadMessage = "";
   }
   render();
 }

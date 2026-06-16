@@ -29,6 +29,7 @@ export function AppShell(props) {
           onOpenWorkspaceModal={props.onOpenWorkspaceModal}
           onRefresh={props.onRefresh}
           onRefreshWorkspaceFiles={props.onRefreshWorkspaceFiles}
+          onDownloadWorkspaceFile={props.onDownloadWorkspaceFile}
           onUploadWorkspaceFiles={props.onUploadWorkspaceFiles}
           onSelectSession={props.onSelectSession}
           onSelectWorkspace={props.onSelectWorkspace}
