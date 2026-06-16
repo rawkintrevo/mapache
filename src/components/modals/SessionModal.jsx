@@ -10,7 +10,7 @@ function formatMemory(value) {
   return value.replace("Gi", " GiB");
 }
 
-export function SessionModal({busy, onClose, onCreateSession}) {
+export function SessionModal({busy, error = "", onClose, onCreateSession}) {
   return (
     <ModalBackdrop onClose={onClose}>
       <section aria-labelledby="session-modal-title" aria-modal="true" className="modal-panel" role="dialog">
@@ -20,6 +20,7 @@ export function SessionModal({busy, onClose, onCreateSession}) {
             <X aria-hidden="true" />
           </Button>
         </div>
+        {error ? <div className="error">{error}</div> : null}
         <form
           className="toolbar"
           onSubmit={(event) => {

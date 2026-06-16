@@ -1465,6 +1465,7 @@ async function createSession(uid, workspaceId, payload) {
     region,
     image: runnerImage.image,
     imageKey: runnerImage.key,
+    terminalKind: runnerImage.terminalKind || "pi",
     capabilities: runnerImage.capabilities,
     serviceAccount: DEFAULT_RUNNER_SERVICE_ACCOUNT || null,
     serviceId,
@@ -1548,7 +1549,10 @@ function appendQuery(url, key, value) {
 async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(sessionCollection(workspaceId));
-    const activeSession = snap.docs.find((doc) => isActiveGithubWorkspaceSession(doc.data()));
+    const activeSession = snap.docs.find((doc) => {
+      const active = doc.data();
+      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+    });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
     }
@@ -1562,6 +1566,10 @@ function isGithubWorkspace(workspace) {
 
 function isActiveGithubWorkspaceSession(session) {
   return !isTerminalSessionStatus(session && session.status);
+}
+
+function isShellSession(session) {
+  return cleanName(session && session.terminalKind) === "shell";
 }
 
 function isTerminalSessionStatus(status) {
@@ -2945,6 +2953,7 @@ function requireRunnerServiceAccount() {
 
 async function sessionRunnerEnv(session, options = {}) {
   const capabilities = session.capabilities || runnerImageCapabilities(session.image);
+  const terminal = terminalCommandEnv(session);
   const env = [
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "OWNER_UID", value: session.ownerUid || ""},
@@ -2962,8 +2971,8 @@ async function sessionRunnerEnv(session, options = {}) {
     },
     {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
     {name: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent"},
-    {name: "TERMINAL_COMMAND", value: "pi"},
-    {name: "TERMINAL_ARGS", value: JSON.stringify(["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || ""), "-c"])},
+    {name: "TERMINAL_COMMAND", value: terminal.command},
+    {name: "TERMINAL_ARGS", value: JSON.stringify(terminal.args)},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
@@ -3012,6 +3021,16 @@ async function sessionRunnerEnv(session, options = {}) {
   }
 
   return env.filter(Boolean);
+}
+
+function terminalCommandEnv(session) {
+  if (isShellSession(session)) {
+    return {command: "bash", args: ["-l"]};
+  }
+  return {
+    command: "pi",
+    args: ["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || ""), "-c"],
+  };
 }
 
 async function buildGithubCloneEnv(session) {

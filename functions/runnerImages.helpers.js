@@ -5,7 +5,8 @@ const DEFAULT_RUNNER_IMAGE_KEY = "default";
 const RUNNER_IMAGES = {
   [DEFAULT_RUNNER_IMAGE_KEY]: {
     key: DEFAULT_RUNNER_IMAGE_KEY,
-    label: "Default runner",
+    label: "Shell",
+    terminalKind: "shell",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
     capabilities: {
       terminal: true,
@@ -17,6 +18,7 @@ const RUNNER_IMAGES = {
   "pi-basic": {
     key: "pi-basic",
     label: "pi-basic",
+    terminalKind: "pi",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
     capabilities: {
       terminal: true,
@@ -28,6 +30,7 @@ const RUNNER_IMAGES = {
   "pi-web": {
     key: "pi-web",
     label: "pi-web",
+    terminalKind: "pi",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web",
     capabilities: {
       terminal: true,
@@ -39,6 +42,7 @@ const RUNNER_IMAGES = {
   "pi-n64": {
     key: "pi-n64",
     label: "pi-n64",
+    terminalKind: "pi",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
     capabilities: {
       terminal: true,
@@ -116,6 +120,7 @@ function resolvedRunnerImage(runnerImage) {
   return {
     key: runnerImage.key,
     image: runnerImage.image,
+    terminalKind: runnerImage.terminalKind || "pi",
     capabilities: cloneCapabilities(runnerImage.capabilities),
     canProvision: true,
   };

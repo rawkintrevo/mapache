@@ -28,7 +28,7 @@ The `pi-n64` runner image is built from `session-runner/Dockerfile.pi-n64` and p
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64
 ```
 
-The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default runner, `pi-basic`, `pi-web`, and `pi-n64`, each with explicit capability metadata and a stable `imageKey`.
+The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `pi-web`, and `pi-n64`, each with explicit capability metadata and a stable `imageKey`.
 
 The backend is authoritative for image selection. `functions/runnerImages.helpers.js` contains the curated server-side image catalog. Session creation accepts `imageKey` and maps it to the catalog entry before provisioning Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
 
@@ -94,17 +94,23 @@ This persistence is scoped to the current Cloud Run container instance. A Cloud 
 
 The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update `activeSocketCount`, `lastConnectedAt`, `lastDisconnectedAt`, and `lastActivityAt`; terminal input updates `lastActivityAt` with a short debounce to avoid one Firestore write per keystroke.
 
-By default, that process is Pi resume mode:
+For the default shell runner, that process is a login shell:
+
+```text
+bash -l
+```
+
+For Pi runners, that process is Pi resume mode:
 
 ```text
 pi -c
 ```
 
-Runtime images can set `TERMINAL_COMMAND` and optional JSON-array `TERMINAL_ARGS` to open a different terminal program. The default, `pi-basic`, `pi-web`, and `pi-n64` images set:
+Cloud Functions sets `TERMINAL_COMMAND` and JSON-array `TERMINAL_ARGS` when provisioning each session. The default shell runner receives `TERMINAL_COMMAND=bash` and `TERMINAL_ARGS=["-l"]`; `pi-basic`, `pi-web`, and `pi-n64` receive:
 
 ```text
 TERMINAL_COMMAND=pi
-TERMINAL_ARGS=["-c"]
+TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 ```
 
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
@@ -349,7 +355,9 @@ The current runner implementation now does that reconciliation for GitHub worksp
 
 ## Provisioning
 
-When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected curated image. The create-session payload should include `imageKey`; the backend resolves that key through `functions/runnerImages.helpers.js` and stores both `imageKey` and the resolved `image` URI on the session. If no image key is present, the backend uses the operator-controlled `SESSION_RUNNER_IMAGE` default. Direct user-provided image URIs are not accepted unless they exactly match a curated catalog image for legacy client compatibility.
+When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected curated image. The create-session payload should include `imageKey`; the backend resolves that key through `functions/runnerImages.helpers.js` and stores `imageKey`, the resolved `image` URI, and `terminalKind` on the session. If no image key is present, the backend uses the operator-controlled `SESSION_RUNNER_IMAGE` default. Direct user-provided image URIs are not accepted unless they exactly match a curated catalog image for legacy client compatibility.
+
+GitHub workspaces still enforce one active Pi/agent session at a time so two agents cannot race on cached Git state. Shell-kind sessions are allowed alongside an active Pi session because they do not attach to the same Pi conversation state. They still share the workspace files and Git checkout, so user edits from the shell can race with agent edits at the normal filesystem and sync layers.
 
 Each session service is named with the session id:
 

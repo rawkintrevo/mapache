@@ -1,8 +1,9 @@
 export const sessionImages = [
   {
     key: "default",
-    label: "Default runner",
+    label: "Shell",
     value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    terminalKind: "shell",
     capabilities: {
       terminal: true,
       preview: false,
@@ -14,6 +15,7 @@ export const sessionImages = [
     key: "pi-basic",
     label: "pi-basic",
     value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
+    terminalKind: "pi",
     capabilities: {
       terminal: true,
       preview: false,
@@ -25,6 +27,7 @@ export const sessionImages = [
     key: "pi-web",
     label: "pi-web",
     value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web",
+    terminalKind: "pi",
     capabilities: {
       terminal: true,
       preview: true,
@@ -36,6 +39,7 @@ export const sessionImages = [
     key: "pi-n64",
     label: "pi-n64",
     value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
+    terminalKind: "pi",
     capabilities: {
       terminal: true,
       preview: true,

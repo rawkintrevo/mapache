@@ -26,7 +26,7 @@ Primary goals:
 Non-goals for the first implementation:
 
 - Full multi-user collaboration in one workspace.
-- Multiple active writer sessions for one GitHub workspace.
+- Multiple active Pi/agent writer sessions for one GitHub workspace.
 - Arbitrary Git provider support beyond GitHub.
 - Replacing GitHub pull requests, branch protection, or merge policy with custom app logic.
 
@@ -51,9 +51,10 @@ GitHub workspaces add repository source metadata and change the persistence cont
 - GitHub is the canonical source of repository history.
 - The runner restores cached state when present, otherwise clones the repository.
 - Cloud Storage preserves resumable state, not the canonical project history.
-- Only one active session is allowed per GitHub workspace at a time.
+- Only one active Pi/agent session is allowed per GitHub workspace at a time.
+- Shell-kind sessions may run alongside an active Pi session for manual access.
 
-The one-session rule is deliberate. Two running containers writing the same cached `.git` state and working tree would produce nondeterministic results and silent corruption risk. If multi-session GitHub workspaces are needed later, they should use per-session branches, worktrees, or another isolation boundary.
+The one-agent-session rule is deliberate. Two running agents writing the same cached `.git` state and working tree would produce nondeterministic results and silent corruption risk. Shell sessions are an exception for manual inspection and intervention; they do not share Pi conversation state, but user edits in the shell can still race with agent edits in the shared worktree. If broader multi-session GitHub workspaces are needed later, they should use per-session branches, worktrees, or another isolation boundary.
 
 ## Source of Truth Model
 
@@ -193,15 +194,15 @@ The current flow remains:
 The GitHub flow adds a stricter session policy and different reconstruction order:
 
 1. Backend verifies the workspace is GitHub-backed.
-2. Backend checks whether another session for that workspace is already active.
-3. If an active session exists, session creation fails with a stable user-facing error.
-   Active means any non-terminal session state that could still own or mutate the cached Git/worktree state, such as `provisioning`, `running`, `resizing`, `restarting`, `stopping`, `update_failed`, or `stop_failed`.
+2. Backend checks whether another non-shell session for that workspace is already active when the requested session is also non-shell.
+3. If an active non-shell session exists and the requested session is non-shell, session creation fails with a stable user-facing error.
+   Active means any non-terminal session state that could still own or mutate the cached Git/worktree state, such as `provisioning`, `running`, `resizing`, `restarting`, `stopping`, `update_failed`, or `stop_failed`. Shell-kind sessions are exempt from this guard so users can keep manual shell access alongside a Pi session.
 4. If not, backend creates the session document with source metadata.
 5. Backend provisions the Cloud Run service and passes source metadata in env vars.
 6. Runner reconstructs `/workspace` from cache and/or Git.
 7. Runner starts the terminal process.
 
-The enforcement point should live in the backend. The frontend can show a better error message, but it should not be trusted to guarantee the single-session invariant.
+The enforcement point should live in the backend. The frontend can show a better error message, but it should not be trusted to guarantee the active agent-session invariant.
 
 ## Git Controls UI
 
@@ -369,7 +370,7 @@ It is not safe for GitHub workspaces once `.git` cache and working tree cache be
 - `.git` archive upload
 - final shutdown sync
 
-The first GitHub implementation should therefore enforce a single active writer session per workspace. Later expansion to multiple sessions should only happen with explicit isolation, such as per-session worktrees or branch sandboxes.
+The first GitHub implementation should therefore enforce a single active Pi/agent writer session per workspace while allowing shell-kind sessions for manual access. Later expansion to multiple agent sessions should only happen with explicit isolation, such as per-session worktrees or branch sandboxes.
 
 ## Deployment Implications
 

@@ -10,7 +10,12 @@ export function ModalStack(props) {
   return (
     <>
       {state.sessionModalOpen ? (
-        <SessionModal busy={state.busy} onClose={props.onCloseSessionModal} onCreateSession={props.onCreateSession} />
+        <SessionModal
+          busy={state.busy}
+          error={state.error}
+          onClose={props.onCloseSessionModal}
+          onCreateSession={props.onCreateSession}
+        />
       ) : null}
       {state.workspaceModalOpen ? (
         <WorkspaceModal

@@ -18,6 +18,7 @@ function code(fn) {
 const webImage = resolveRunnerImage({imageKey: "pi-web"});
 assert.strictEqual(webImage.key, "pi-web");
 assert.strictEqual(webImage.image, "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web");
+assert.strictEqual(webImage.terminalKind, "pi");
 assert.deepStrictEqual(webImage.capabilities, {
   terminal: true,
   preview: true,
@@ -26,6 +27,10 @@ assert.deepStrictEqual(webImage.capabilities, {
   n64: false,
 });
 assert.strictEqual(webImage.canProvision, true);
+
+const shellImage = resolveRunnerImage({imageKey: "default"});
+assert.strictEqual(shellImage.key, "default");
+assert.strictEqual(shellImage.terminalKind, "shell");
 
 const legacyImage = resolveRunnerImage({
   image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
