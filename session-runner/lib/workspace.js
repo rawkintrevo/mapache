@@ -377,7 +377,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
   }
 
   async function extractStorageArchive(file, target) {
-    const tar = spawn("tar", ["-xzf", "-", "-C", target.localPath], {
+    const tar = spawn("tar", [...tarExcludeArgs(target), "-xzf", "-", "-C", target.localPath], {
       stdio: ["pipe", "ignore", "pipe"],
     });
     const stderr = collectStderr(tar);
@@ -388,7 +388,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
   }
 
   async function uploadDirectoryArchive(file, target) {
-    const tar = spawn("tar", ["-czf", "-", "-C", target.localPath, "."], {
+    const tar = spawn("tar", [...tarExcludeArgs(target), "-czf", "-", "-C", target.localPath, "."], {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stderr = collectStderr(tar);
@@ -503,6 +503,28 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     return `${config.piHomePrefix}/${fileName}`.replace(/\/+/g, "/");
   }
 
+  function piSessionArchiveRemotePath(fileName) {
+    if (!config.piSessionStoragePrefix) return "";
+    return `${config.piSessionStoragePrefix}/${fileName}`.replace(/\/+/g, "/");
+  }
+
+  function tarExcludeArgs(target) {
+    return (target.exclude || []).map((pattern) => `--exclude=${pattern}`);
+  }
+
+  function piHomeArchiveExcludes() {
+    return [
+      "agent/sessions",
+      "agent/sessions/*",
+      "./agent/sessions",
+      "./agent/sessions/*",
+      "agent/mapache-sessions",
+      "agent/mapache-sessions/*",
+      "./agent/mapache-sessions",
+      "./agent/mapache-sessions/*",
+    ];
+  }
+
   function createArchiveSyncTargets() {
     const targets = [
       {
@@ -539,6 +561,16 @@ function createWorkspaceService({admin, config, db, git, storage}) {
           bucketName: config.bucketName,
           remotePath: archiveRemotePath("root-pi.tar.gz"),
         }],
+        exclude: piHomeArchiveExcludes(),
+        ensureLocalPath: true,
+        restoreOnStartup: true,
+      },
+      {
+        name: "pi-session",
+        mode: "directory",
+        localPath: config.piSessionDir,
+        bucketName: config.piSessionStorageBucket,
+        remotePath: piSessionArchiveRemotePath("pi-session.tar.gz"),
         ensureLocalPath: true,
         restoreOnStartup: true,
       },

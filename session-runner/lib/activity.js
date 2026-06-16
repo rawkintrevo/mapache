@@ -44,8 +44,23 @@ function createActivityService({admin, db, config}) {
         .catch((error) => console.error("workspace source update failed", error));
   }
 
+  async function updatePiSessionBinding(updates) {
+    if (!workspaceId || !sessionId) return;
+    await db.collection("workspaces")
+        .doc(workspaceId)
+        .collection("sessions")
+        .doc(sessionId)
+        .update({
+          ...updates,
+          piSessionBoundAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        .catch((error) => console.error("pi session binding update failed", error));
+  }
+
   return {
     appendHistory,
+    updatePiSessionBinding,
     updateSessionActivity,
     updateWorkspaceSourceState,
   };

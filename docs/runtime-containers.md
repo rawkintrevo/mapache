@@ -107,7 +107,7 @@ TERMINAL_COMMAND=pi
 TERMINAL_ARGS=["-c"]
 ```
 
-Pi resumes from the latest saved JSONL entry. Mid-turn process, stream, or PTY state is not durable; if a Cloud Run instance stops during an active turn, the next terminal starts from the last completed Pi session entry. Users who want a fresh Pi conversation can type `/new` in the Pi TUI.
+Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
 
@@ -247,6 +247,10 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 - `STORAGE_PREFIX`
 - `PI_HOME_STORAGE_BUCKET`
 - `PI_HOME_STORAGE_PREFIX`
+- `PI_SESSION_DIR`
+- `PI_SESSION_STORAGE_BUCKET`
+- `PI_SESSION_STORAGE_PREFIX`
+- `PI_SESSION_JSONL_PATH`
 - `WORKSPACE_ID`
 - `SESSION_ID`
 - `SYNC_INTERVAL_MS`, defaulting to `30000`
@@ -313,7 +317,9 @@ The runner restores these directories from gzip-compressed tar archives during s
 
 `/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
-`/root/.pi` is user-scoped so Pi auth and agent state follow the authenticated user across workspaces. The backend passes `PI_HOME_STORAGE_BUCKET` and `PI_HOME_STORAGE_PREFIX`; new sessions store the archive under `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`. During restore, the runner first checks the user-scoped archive and then falls back to the old workspace-scoped archive path so existing auth can migrate on the next archive upload.
+`/root/.pi` is user-scoped only for shared Pi home state such as auth and settings. The root Pi archive explicitly excludes `agent/sessions/` and `agent/mapache-sessions/` so Pi conversation JSONLs do not follow the authenticated user across workspaces or app sessions. The backend passes `PI_HOME_STORAGE_BUCKET` and `PI_HOME_STORAGE_PREFIX`; new sessions store the filtered archive under `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`. During restore, the runner first checks the user-scoped archive and then falls back to the old workspace-scoped archive path so existing auth can migrate on the next archive upload, but session JSONLs from that legacy archive are still excluded during extraction.
+
+Each Cloud session also receives a session-scoped Pi conversation archive. The backend stores `piSessionDir`, `piSessionStorageBucket`, and `piSessionStoragePrefix` on the session document and passes them as `PI_SESSION_DIR`, `PI_SESSION_STORAGE_BUCKET`, and `PI_SESSION_STORAGE_PREFIX`. The runner launches Pi with `--session-dir $PI_SESSION_DIR -c`, archives that directory separately as `pi-session.tar.gz`, and updates the session document with `piSessionJsonlPath`/`piSessionJsonlRelativePath` after Pi creates the JSONL. This makes a brand-new Cloud session start fresh while the same Cloud session resumes across tab/device changes and Cloud Run restarts.
 
 Pi provider auth is also mirrored in Firestore at `users/{uid}/private/piAuth` under a `providers` map whose entries match Pi's `~/.pi/agent/auth.json` object shape exactly (`providerKey -> credential object`). The backend API writes web-added API keys as `{type: "api_key", key: "..."}`. It also supports OpenAI ChatGPT Plus/Pro Codex subscription login through OpenAI's device-code flow and saves the completed credential under `openai-codex` as `{type: "oauth", access, refresh, expires, accountId}`. The runner receives `OWNER_UID`, reads any restored/local `auth.json` entries into that Firestore map, and materializes the merged Firestore providers back into `~/.pi/agent/auth.json` with `0600` permissions on startup and during periodic sync. The backend also sets `PI_CODING_AGENT_DIR=/root/.pi/agent` so Pi resolves auth storage to the same file path. This makes CLI/TUI `/login` additions visible to the web UI after runner sync while letting web-added credentials appear in already-running sessions after the runner sync interval.
 
@@ -440,7 +446,8 @@ Expected package-manager write locations:
 
 - Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
 - Workspace package cache archives: `{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
-- User-scoped Pi home archive: `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`
+- User-scoped filtered Pi home archive: `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`
+- Session-scoped Pi conversation archive: `{workspace.storagePrefix}/.mapahce-internal/sessions/{sessionId}/pi-session/pi-session.tar.gz`
 - User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
 
 ## Design Decisions
@@ -452,6 +459,7 @@ Expected package-manager write locations:
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
 - Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
+- Pi auth/settings may be user-scoped, but Pi conversation JSONLs must be session-scoped. New app sessions start with a fresh Pi conversation; the same app session can resume that conversation from its own archive.
 - GitHub workspaces should archive `/workspace/.git` instead of exposing it through normal file sync. That keeps Git state resumable without treating Cloud Storage as a Git database.
 - Workspace-local Pi skills should remain ordinary workspace Markdown files under `/workspace/.pi/skills`.
 - Workspace-local Pi package install directories should use archive-backed sync while `/workspace/.pi/settings.json` remains normal workspace configuration.

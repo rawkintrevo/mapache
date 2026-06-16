@@ -34,6 +34,10 @@ function createConfig() {
   const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
   const piHomeBucketName = process.env.PI_HOME_STORAGE_BUCKET || bucketName;
   const piHomePrefix = normalizePrefix(process.env.PI_HOME_STORAGE_PREFIX || "");
+  const piSessionDir = normalizeEnvString(process.env.PI_SESSION_DIR) ||
+    path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "mapache-sessions", process.env.SESSION_ID || "session");
+  const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
+  const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
@@ -56,6 +60,10 @@ function createConfig() {
     ownerUid: process.env.OWNER_UID || "",
     piHomeBucketName,
     piHomePrefix,
+    piSessionDir,
+    piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
+    piSessionStorageBucket,
+    piSessionStoragePrefix,
     port: Number(process.env.PORT || 8080),
     prefix,
     previewBasePath,

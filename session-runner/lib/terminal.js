@@ -1,5 +1,6 @@
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
@@ -10,6 +11,9 @@ function createTerminalSession({admin, config, activity}) {
   let outputBuffer = "";
   let activityTimer = null;
   let pendingActivity = null;
+  let piSessionScanTimer = null;
+  let piSessionScanAttempts = 0;
+  let publishedPiJsonlPath = "";
 
   return {
     attach(socket, replayOutput) {
@@ -36,10 +40,11 @@ function createTerminalSession({admin, config, activity}) {
 
     outputBuffer = "";
 
-    const command = terminalCommand();
+    const command = terminalCommand(config);
     term = spawnTerminal(command, config);
 
     activity.appendHistory("system", `opened ${command.display}`);
+    schedulePiSessionBindingScan(command);
 
     term.onData((data) => {
       appendToBuffer(data);
@@ -53,6 +58,7 @@ function createTerminalSession({admin, config, activity}) {
       broadcast({type: "exit", exitCode: code});
       closeSockets();
       term = null;
+      clearPiSessionBindingScan();
     });
 
     return term;
@@ -104,6 +110,41 @@ function createTerminalSession({admin, config, activity}) {
       activity.updateSessionActivity(activityUpdate);
     }, config.activityWriteDebounceMs);
   }
+
+  function schedulePiSessionBindingScan(command) {
+    if (!isPiCommand(command.file) || !config.piSessionDir) return;
+    piSessionScanAttempts = 0;
+    scanPiSessionBinding();
+  }
+
+  function clearPiSessionBindingScan() {
+    if (piSessionScanTimer) clearTimeout(piSessionScanTimer);
+    piSessionScanTimer = null;
+  }
+
+  async function scanPiSessionBinding() {
+    piSessionScanAttempts += 1;
+    try {
+      const latest = await findLatestJsonl(config.piSessionDir);
+      if (latest && latest.path !== publishedPiJsonlPath) {
+        publishedPiJsonlPath = latest.path;
+        await activity.updatePiSessionBinding({
+          piSessionDir: config.piSessionDir,
+          piSessionJsonlPath: latest.path,
+          piSessionJsonlRelativePath: path.relative(config.piSessionDir, latest.path).split(path.sep).join("/"),
+          piSessionJsonlSize: latest.size,
+          piSessionStorageBucket: config.piSessionStorageBucket || config.bucketName || "",
+          piSessionStoragePrefix: config.piSessionStoragePrefix || "",
+        });
+      }
+    } catch (error) {
+      console.error("pi session binding scan failed", error);
+    }
+
+    if (piSessionScanAttempts < 24) {
+      piSessionScanTimer = setTimeout(scanPiSessionBinding, 5000);
+    }
+  }
 }
 
 function shouldReplayTerminal(request) {
@@ -151,15 +192,94 @@ function sendTerminalMessage(socket, message) {
   socket.send(JSON.stringify(message));
 }
 
-function terminalCommand() {
+function terminalCommand(config = {}) {
   const command = String(process.env.TERMINAL_COMMAND || "").trim();
   if (command) {
-    const args = terminalArgs();
+    const args = normalizePiTerminalArgs(command, terminalArgs(), config);
     return {file: command, args, display: [command, ...args].join(" ")};
   }
 
   const shell = process.env.SHELL || "bash";
   return {file: shell, args: ["-l"], display: `${shell} -l`};
+}
+
+function normalizePiTerminalArgs(command, args, config = {}) {
+  if (!isPiCommand(command)) return args;
+
+  const explicitSessionPath = String(config.piSessionJsonlPath || process.env.PI_SESSION_JSONL_PATH || "").trim();
+  if (explicitSessionPath && pathExistsSync(explicitSessionPath) && !hasPiArg(args, ["--session", "--fork", "--no-session"])) {
+    return ["--session", explicitSessionPath, ...stripPiSessionScopeArgs(args)];
+  }
+
+  const existingSessionIndex = args.findIndex((arg) => arg === "--session");
+  if (existingSessionIndex >= 0) {
+    const existingSessionPath = args[existingSessionIndex + 1] || "";
+    if (pathExistsSync(existingSessionPath)) return args;
+    if (config.piSessionDir) return withPiSessionDir(stripPiSessionScopeArgs(args), config.piSessionDir);
+  }
+
+  if (hasPiArg(args, ["--session-dir", "--fork", "--no-session"])) return args;
+  if (!config.piSessionDir) return args;
+  return withPiSessionDir(args, config.piSessionDir);
+}
+
+function withPiSessionDir(args, sessionDir) {
+  const scopedArgs = ["--session-dir", sessionDir, ...args];
+  return hasPiArg(scopedArgs, ["-c", "--continue", "-r", "--resume"]) ? scopedArgs : [...scopedArgs, "-c"];
+}
+
+function stripPiSessionScopeArgs(args) {
+  const result = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (["--session", "--session-dir"].includes(arg)) {
+      index += 1;
+      continue;
+    }
+    if (["-c", "--continue", "-r", "--resume"].includes(arg)) continue;
+    result.push(arg);
+  }
+  return result;
+}
+
+function hasPiArg(args, names) {
+  return args.some((arg) => names.includes(arg));
+}
+
+function isPiCommand(command) {
+  return path.basename(String(command || "")) === "pi";
+}
+
+function pathExistsSync(value) {
+  try {
+    return Boolean(value) && fs.existsSync(value);
+  } catch {
+    return false;
+  }
+}
+
+async function findLatestJsonl(rootDir) {
+  const files = await findJsonlFiles(rootDir);
+  return files.sort((left, right) => right.mtimeMs - left.mtimeMs)[0] || null;
+}
+
+async function findJsonlFiles(dir) {
+  let entries;
+  try {
+    entries = await fs.promises.readdir(dir, {withFileTypes: true});
+  } catch (error) {
+    if (error && error.code === "ENOENT") return [];
+    throw error;
+  }
+
+  const results = await Promise.all(entries.map(async (entry) => {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return findJsonlFiles(entryPath);
+    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) return [];
+    const stat = await fs.promises.stat(entryPath);
+    return [{path: entryPath, mtimeMs: stat.mtimeMs, size: stat.size}];
+  }));
+  return results.flat();
 }
 
 function terminalArgs() {

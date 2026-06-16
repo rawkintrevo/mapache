@@ -1454,6 +1454,11 @@ async function createSession(uid, workspaceId, payload) {
     workspaceStoragePrefix: workspace.storagePrefix,
     piHomeStorageBucket: DEFAULT_BUCKET || workspace.bucket,
     piHomeStoragePrefix: piHomeStoragePrefix(uid),
+    piSessionDir: piSessionDir(sessionRef.id),
+    piSessionStorageBucket: workspace.bucket || DEFAULT_BUCKET,
+    piSessionStoragePrefix: piSessionStoragePrefix(workspace.storagePrefix, sessionRef.id),
+    piSessionJsonlPath: null,
+    piSessionJsonlRelativePath: null,
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
     status: runnerImage.canProvision ? "provisioning" : "needs_image",
@@ -2759,6 +2764,18 @@ function piHomeStoragePrefix(uid) {
   return cleanUid ? `users/${cleanUid}/.mapahce-internal/pi-home` : "";
 }
 
+function piSessionDir(sessionId) {
+  const cleanSessionId = cleanName(sessionId);
+  return cleanSessionId ? `/root/.pi/agent/mapache-sessions/${cleanSessionId}` : "/root/.pi/agent/mapache-sessions/session";
+}
+
+function piSessionStoragePrefix(workspaceStoragePrefix, sessionId) {
+  const cleanPrefix = String(workspaceStoragePrefix || "").replace(/^\/+|\/+$/g, "");
+  const cleanSessionId = cleanName(sessionId);
+  if (!cleanPrefix || !cleanSessionId) return "";
+  return `${cleanPrefix}/${INTERNAL_STORAGE_DIR}/sessions/${cleanSessionId}/pi-session`;
+}
+
 async function provisionSessionService(workspace, sessionRef, session) {
   try {
     const client = await auth.getClient();
@@ -2937,7 +2954,16 @@ async function sessionRunnerEnv(session, options = {}) {
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
     {name: "PI_HOME_STORAGE_BUCKET", value: session.piHomeStorageBucket || DEFAULT_BUCKET || ""},
     {name: "PI_HOME_STORAGE_PREFIX", value: session.piHomeStoragePrefix || piHomeStoragePrefix(session.ownerUid)},
+    {name: "PI_SESSION_DIR", value: session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "")},
+    {name: "PI_SESSION_STORAGE_BUCKET", value: session.piSessionStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {
+      name: "PI_SESSION_STORAGE_PREFIX",
+      value: session.piSessionStoragePrefix || piSessionStoragePrefix(session.workspaceStoragePrefix, session.runnerSessionId || session.id || ""),
+    },
+    {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
     {name: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent"},
+    {name: "TERMINAL_COMMAND", value: "pi"},
+    {name: "TERMINAL_ARGS", value: JSON.stringify(["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || ""), "-c"])},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
