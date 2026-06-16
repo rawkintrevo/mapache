@@ -6,7 +6,7 @@ import {getFirestoreDb, initializeFirebase, signIn, signOut, watchAuth} from "./
 import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
-import {friendlyGlobalError} from "./utils/friendlyErrors.js";
+import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
 import {
   resetFileEditor as resetFileEditorState,
   resetGitStatus as resetGitStatusState,
@@ -343,15 +343,35 @@ async function connectGithub() {
 
 async function createWorkspace(payload) {
   await runBusy(async () => {
-    const data = await state.api.createWorkspace({
-      name: payload.name,
-      source: payload.source,
-    });
+    let data;
+    try {
+      data = await state.api.createWorkspace({
+        name: payload.name,
+        source: normalizeCreateWorkspaceSource(payload),
+      });
+    } catch (error) {
+      throw new Error(friendlyWorkspaceError(error));
+    }
     state.selectedWorkspaceId = data.workspace.id;
     state.selectedSessionId = null;
     resetWorkspaceFiles();
     await refreshAll();
   });
+}
+
+function normalizeCreateWorkspaceSource(payload = {}) {
+  const source = payload.source && typeof payload.source === "object" ? payload.source : {};
+  const sourceType = String(source.type || payload.source || "blank").trim().toLowerCase();
+  if (sourceType !== "github") {
+    return {type: "blank"};
+  }
+
+  return {
+    ...source,
+    type: "github",
+    repoUrl: source.repoUrl || payload.repoUrl || "",
+    requestedBranch: source.requestedBranch || payload.branch || "",
+  };
 }
 
 async function selectWorkspace(workspaceId) {

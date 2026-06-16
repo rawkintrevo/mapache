@@ -14,6 +14,20 @@ export function friendlyGlobalError(error) {
   return message;
 }
 
+export function friendlyWorkspaceError(error) {
+  const message = error.message || "Could not create workspace.";
+  if (message === "missing_github_repo_url") return "Enter a GitHub repository URL.";
+  if (message === "invalid_github_repo_url") return "Enter a valid GitHub repository URL, for example https://github.com/owner/repo.";
+  if (message === "github_repo_url_must_use_https") return "Use an https:// GitHub repository URL.";
+  if (message === "github_repo_url_must_not_include_credentials") return "Remove credentials from the GitHub repository URL.";
+  if (message === "unsupported_github_repo_host") return "Only github.com repository URLs are supported.";
+  if (message === "github_connected_repo_forbidden") return "That repository is not available through your GitHub connection.";
+  if (message === "github_installation_forbidden") return "Reconnect GitHub before creating a workspace from that repository.";
+  if (message === "github_app_not_configured") return "GitHub workspace creation is not configured on the server.";
+  if (message === "invalid_workspace_source_commit") return "Use a valid 7-40 character Git commit SHA.";
+  return message;
+}
+
 export function friendlyPiPackageError(error) {
   const message = error.message || "Could not load extensions.";
   if (message === "no_active_session" || message === "session_not_running") return "Start an active pi-basic session to inspect workspace extensions.";
