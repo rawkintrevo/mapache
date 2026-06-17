@@ -20,6 +20,7 @@ const {
 
 admin.initializeApp();
 const FUNCTION_SERVICE_ACCOUNT = defineString("FUNCTION_SERVICE_ACCOUNT");
+const SESSION_RUNNER_SERVICE_ACCOUNT = defineString("SESSION_RUNNER_SERVICE_ACCOUNT");
 const globalOptions = {
   maxInstances: 10,
   region: process.env.FUNCTION_REGION || "us-central1",
@@ -40,9 +41,6 @@ const DEFAULT_CPU = process.env.SESSION_CPU || "1";
 const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
-const DEFAULT_RUNNER_SERVICE_ACCOUNT = normalizeServiceAccountEmail(
-    process.env.SESSION_RUNNER_SERVICE_ACCOUNT || "",
-);
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
 const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
     process.env.RUNNER_SHUTDOWN_TIMEOUT_MS,
@@ -713,9 +711,9 @@ function sessionUsageEntry(sessionId, session, fallbackEndMs = Date.now()) {
   const intervalSeconds = Math.max(0, (endedMs - intervalStartMs) / 1000);
   const cpu = parseCpuCount(session.resources && session.resources.cpu);
   const memoryGb = parseMemoryGb(session.resources && session.resources.memory);
-  const runtimeSeconds = (endedMs - startedMs) / 1000;
   const accruedCpuSeconds = Number(session.usageAccruedCpuSeconds || 0);
   const accruedMemoryGbSeconds = Number(session.usageAccruedMemoryGbSeconds || 0);
+  const accruedRuntimeSeconds = Number(session.usageAccruedRuntimeSeconds || 0);
 
   return {
     sessionId,
@@ -724,7 +722,7 @@ function sessionUsageEntry(sessionId, session, fallbackEndMs = Date.now()) {
     endedAt: admin.firestore.Timestamp.fromMillis(endedMs),
     cpu,
     memoryGb,
-    runtimeSeconds,
+    runtimeSeconds: accruedRuntimeSeconds + intervalSeconds,
     cpuSeconds: accruedCpuSeconds + (intervalSeconds * cpu),
     memoryGbSeconds: accruedMemoryGbSeconds + (intervalSeconds * memoryGb),
     sessionCount: 1,
@@ -1527,7 +1525,7 @@ async function createSession(uid, workspaceId, payload) {
     imageKey: runnerImage.key,
     terminalKind: runnerImage.terminalKind || "pi",
     capabilities: runnerImage.capabilities,
-    serviceAccount: DEFAULT_RUNNER_SERVICE_ACCOUNT || null,
+    serviceAccount: runnerServiceAccountValue() || null,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
@@ -1620,6 +1618,20 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
   });
 }
 
+async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session) {
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(sessionCollection(workspaceId));
+    const activeSession = snap.docs.find((doc) => {
+      if (doc.id === sessionId) return false;
+      const active = doc.data();
+      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+    });
+    if (activeSession) {
+      throw httpError(409, "This GitHub workspace already has an active session. Stop it before restarting this one.");
+    }
+  });
+}
+
 function isGithubWorkspace(workspace) {
   return workspace && workspace.source && workspace.source.type === "github";
 }
@@ -1634,6 +1646,17 @@ function isShellSession(session) {
 
 function isTerminalSessionStatus(status) {
   return ["stopped", "provision_failed", "needs_image"].includes(cleanName(status));
+}
+
+function shouldRecreateSessionServiceOnRestart(session) {
+  if (isTerminalSessionStatus(session && session.status)) return true;
+  if (cleanName(session && session.status) !== "update_failed") return false;
+  if (!session.serviceUrl) return true;
+
+  const lastError = String(session.lastError || "").toLowerCase();
+  return lastError.includes("\"code\":404") ||
+    lastError.includes("does not exist") ||
+    lastError.includes("not found");
 }
 
 async function resizeSession(uid, workspaceId, sessionId, payload) {
@@ -1651,17 +1674,62 @@ async function resizeSession(uid, workspaceId, sessionId, payload) {
 }
 
 async function restartSession(uid, workspaceId, sessionId) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const workspace = await requireWorkspace(uid, workspaceId);
+  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   const session = sessionSnap.data();
+  if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+
+  const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
+  if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
+    await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session);
+  }
+
+  const restartedAt = admin.firestore.Timestamp.now();
   const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
-  await sessionRef.update({
-    status: "restarting",
+  const restartNonce = Date.now().toString();
+  const restartUpdate = {
+    status: recreatingSessionService ? "provisioning" : "restarting",
     browserAccessTokenSecret,
-    restartNonce: Date.now().toString(),
-    restartedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await patchSessionService(sessionRef, {...session, browserAccessTokenSecret}, {restart: true});
+    restartNonce,
+    restartedAt,
+    stoppedAt: null,
+    autoStoppedAt: null,
+    stopReason: null,
+    serviceUrl: null,
+    lastError: null,
+    updatedAt: restartedAt,
+  };
+
+  if (recreatingSessionService) {
+    Object.assign(restartUpdate, {
+      ...accrueSessionUsage(session, restartedAt),
+      usageAccountedAt: null,
+      activeSocketCount: 0,
+    });
+  }
+
+  await sessionRef.update(restartUpdate);
+
+  const restartedSession = {
+    ...session,
+    ...restartUpdate,
+    browserAccessTokenSecret,
+    restartNonce,
+    workspaceId,
+    workspaceStorageBucket: session.workspaceStorageBucket || workspace.bucket || DEFAULT_BUCKET,
+    workspaceStoragePrefix: session.workspaceStoragePrefix || workspace.storagePrefix,
+    serviceId: session.serviceId || `session-${sessionId.toLowerCase()}`,
+    serviceName: session.serviceName || cloudRunServiceName(session.region || DEFAULT_REGION, session.serviceId || `session-${sessionId.toLowerCase()}`),
+  };
+
+  if (recreatingSessionService) {
+    await provisionSessionService(workspace, sessionRef, restartedSession);
+  } else {
+    await patchSessionService(sessionRef, restartedSession, {restart: true});
+  }
+
   return toClientDoc(await sessionRef.get());
 }
 
@@ -2894,7 +2962,7 @@ async function patchSessionService(sessionRef, session, options = {}) {
   }
 
   try {
-    const serviceAccount = requireRunnerServiceAccount();
+    const serviceAccount = requireRunnerServiceAccount(session);
     const client = await auth.getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = {
@@ -2990,7 +3058,7 @@ async function markSessionStopped(sessionRef, session, reason) {
 }
 
 async function buildCloudRunService(workspace, session) {
-  const serviceAccount = requireRunnerServiceAccount();
+  const serviceAccount = requireRunnerServiceAccount(session);
   return {
     template: {
       serviceAccount,
@@ -3015,11 +3083,21 @@ async function buildCloudRunService(workspace, session) {
   };
 }
 
-function requireRunnerServiceAccount() {
-  if (!DEFAULT_RUNNER_SERVICE_ACCOUNT) {
+function runnerServiceAccountValue() {
+  return normalizeServiceAccountEmail(
+      process.env.SESSION_RUNNER_SERVICE_ACCOUNT ||
+      SESSION_RUNNER_SERVICE_ACCOUNT.value() ||
+      "",
+  );
+}
+
+function requireRunnerServiceAccount(session = {}) {
+  const serviceAccount = runnerServiceAccountValue() ||
+    normalizeServiceAccountEmail(session.serviceAccount || "");
+  if (!serviceAccount) {
     throw new Error("Set SESSION_RUNNER_SERVICE_ACCOUNT to a least-privilege Cloud Run runtime service account before provisioning sessions.");
   }
-  return DEFAULT_RUNNER_SERVICE_ACCOUNT;
+  return serviceAccount;
 }
 
 async function sessionRunnerEnv(session, options = {}) {
