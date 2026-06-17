@@ -75,7 +75,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
 - `workspace.js` owns workspace restore, Cloud Storage sync, archive sync, GitHub workspace reconstruction, and Pi auth materialization.
 - `git.js` owns Git status/actions and GitHub clone/push auth helpers.
-- `pi.js` owns workspace-local Pi package and skill management.
+- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`.

@@ -90,10 +90,11 @@ Before implementation tasks, read:
   - Add tests for payload validation and stable user-facing errors.
   - Completed: 2026-06-17 - Extracted `functions/pi.service.js` for Pi auth storage, OpenAI Codex device/OAuth helpers, package catalog/proxy behavior, skill proxy behavior, and payload validation with focused tests for validators and stable route errors.
 
-- [ ] 11. **Split runner Pi service** - medium
+- [x] 11. **Split runner Pi service** - medium
   - Split `session-runner/lib/pi.js` into package service, skill service, seeded skill loading, and validation helpers.
   - Keep runner endpoint behavior unchanged.
   - Add focused tests for package source and skill validation if practical.
+  - Completed: 2026-06-17 - Split runner Pi package operations, skill CRUD, seeded skill file creation, and shared validation helpers into focused modules with runner tests.
 
 - [ ] 12. **Move seeded skill Markdown out of JS strings** - medium
   - Store default seeded skill content as Markdown files under `session-runner/`.
