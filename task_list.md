@@ -80,9 +80,10 @@ Before implementation tasks, read:
   - Add direct tests for service account selection, image capability metadata, env construction, and failure messages.
   - Completed: 2026-06-17 - Extracted `functions/cloudRun.service.js` for Cloud Run create/patch/delete, service-account resolution, resource limits, shutdown/delete behavior, and runner env construction with direct helper tests.
 
-- [ ] 9. **Extract GitHub backend helpers** - medium
+- [x] 9. **Extract GitHub backend helpers** - medium
   - Move GitHub OAuth/App token/repository/PR helpers out of `functions/index.js`.
   - Add tests for normalization, token permission parsing, branch naming, and API error mapping.
+  - Completed: 2026-06-17 - Extracted `functions/github.service.js` for GitHub OAuth/App token, connected repository, source metadata, runner auth env, and pull request helper behavior with focused pure helper tests.
 
 - [ ] 10. **Extract Pi backend proxy helpers** - medium
   - Move Pi auth, package, and skill proxy behavior out of `functions/index.js`.
