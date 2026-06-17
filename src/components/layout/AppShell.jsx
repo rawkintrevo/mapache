@@ -25,6 +25,7 @@ export function AppShell(props) {
         <LeftDrawer
           state={state}
           onDeleteSession={props.onDeleteSession}
+          onDeleteWorkspace={props.onDeleteWorkspace}
           onOpenSessionModal={props.onOpenSessionModal}
           onOpenWorkspaceModal={props.onOpenWorkspaceModal}
           onRefresh={props.onRefresh}

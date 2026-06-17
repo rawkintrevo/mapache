@@ -163,6 +163,11 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "DELETE" && route.name === "workspace") {
+      res.json(await deleteWorkspace(user.uid, route.workspaceId));
+      return;
+    }
+
     if (req.method === "GET" && route.name === "workspaceFiles") {
       res.json(await listWorkspaceFiles(user.uid, route.workspaceId));
       return;
@@ -370,6 +375,9 @@ function routeRequest(path) {
     return {name: "openAiCodexDeviceCode", action: parts[4]};
   }
   if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
+  if (parts.length === 2 && parts[0] === "workspaces") {
+    return {name: "workspace", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
     return {name: "workspaceFiles", workspaceId: parts[1]};
   }
@@ -1063,6 +1071,37 @@ async function listWorkspaces(uid) {
   return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
 }
 
+async function deleteWorkspace(uid, workspaceId) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
+  const workspaceSnap = await workspaceRef.get();
+  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+  const workspace = {id: workspaceSnap.id, ...workspaceSnap.data()};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+
+  const sessionSnap = await sessionCollection(workspaceId).get();
+  for (const sessionDoc of sessionSnap.docs) {
+    const session = sessionDoc.data() || {};
+    if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+    await sessionDoc.ref.update({
+      status: "deleting",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const serviceDeleted = await deleteSessionService(sessionDoc.ref, session, {reason: "workspace_deleted"});
+    if (!serviceDeleted) throw httpError(502, "workspace_delete_failed");
+  }
+
+  await deleteWorkspaceStorageIfUnshared(uid, workspace);
+  if (typeof db.recursiveDelete === "function") {
+    await db.recursiveDelete(workspaceRef);
+  } else {
+    for (const sessionDoc of sessionSnap.docs) {
+      await sessionDoc.ref.delete();
+    }
+    await workspaceRef.delete();
+  }
+  return {ok: true};
+}
+
 async function createWorkspace(uid, payload) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const name = cleanName(payload.name || "Default workspace");
@@ -1323,6 +1362,27 @@ async function listSessions(uid, workspaceId) {
       .orderBy("updatedAt", "desc")
       .get();
   return snap.docs.map(toClientDoc);
+}
+
+async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
+  const bucketName = workspace.bucket || DEFAULT_BUCKET;
+  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
+  if (!bucketName || !prefix) return;
+
+  const sameOwnerSnap = await db.collection("workspaces")
+      .where("ownerUid", "==", uid)
+      .get();
+  const shared = sameOwnerSnap.docs.some((doc) => {
+    if (doc.id === workspace.id) return false;
+    const data = doc.data() || {};
+    return (data.bucket || DEFAULT_BUCKET) === bucketName && normalizeStoragePrefix(data.storagePrefix || "") === prefix;
+  });
+  if (shared) {
+    logger.warn("skipping shared workspace storage deletion", {workspaceId: workspace.id, bucketName, prefix});
+    return;
+  }
+
+  await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
 }
 
 async function listWorkspaceFiles(uid, workspaceId) {
