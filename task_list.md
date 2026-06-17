@@ -102,9 +102,10 @@ Before implementation tasks, read:
   - Keep the "create only when missing" behavior.
   - Completed: 2026-06-17 - Moved default Pi seeded skills into `session-runner/seeded-skills/`, loaded them from the runner seed service, and covered file-backed seeding with runner tests.
 
-- [ ] 13. **Split runner Git service** - medium
+- [x] 13. **Split runner Git service** - medium
   - Separate command execution, status parsing, branch/commit validation, push auth, and PR helpers.
   - Add tests for porcelain parsing and branch/payload validation.
+  - Completed: 2026-06-17 - Split runner Git command/auth/status/validation/PR helpers into focused modules and added runner tests for porcelain parsing plus Git branch/path/payload validation.
 
 - [ ] 14. **Split runner workspace service** - medium
   - Separate sync, archive handling, GitHub workspace restore, and Pi home persistence.
