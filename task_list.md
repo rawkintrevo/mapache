@@ -107,9 +107,10 @@ Before implementation tasks, read:
   - Add tests for porcelain parsing and branch/payload validation.
   - Completed: 2026-06-17 - Split runner Git command/auth/status/validation/PR helpers into focused modules and added runner tests for porcelain parsing plus Git branch/path/payload validation.
 
-- [ ] 14. **Split runner workspace service** - medium
+- [x] 14. **Split runner workspace service** - medium
   - Separate sync, archive handling, GitHub workspace restore, and Pi home persistence.
   - Add tests around path filtering and archive target selection.
+  - Completed: 2026-06-17 - Split runner workspace orchestration into path filtering, archive handling, GitHub restore, and Pi auth persistence modules with focused runner tests.
 
 - [ ] 15. **Reduce frontend state fan-out from `src/main.js`** - large
   - Extract cohesive controllers/hooks for selected workspace/session state, modal state, right-drawer panels, and file editor state.

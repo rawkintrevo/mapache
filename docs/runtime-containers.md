@@ -73,7 +73,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
-- `workspace.js` owns workspace restore, Cloud Storage sync, archive sync, GitHub workspace reconstruction, and Pi auth materialization.
+- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, and Pi auth/home materialization lives in `workspacePiAuth.service.js`.
 - `git.js` composes runner Git behavior. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it.
 - `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, default seeded skill Markdown lives under `session-runner/seeded-skills/`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
