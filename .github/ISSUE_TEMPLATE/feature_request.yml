@@ -1,0 +1,87 @@
+name: Feature request
+description: Propose a user-visible improvement or new capability.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please do not include secrets, credentials, proprietary code, or confidential information.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What user need, workflow gap, or maintenance problem should this solve?
+      placeholder: As a ..., I want ..., so that ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired behavior or result. Avoid prescribing implementation unless necessary.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete conditions that would make this issue complete.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Pick the closest area.
+      options:
+        - Frontend UI
+        - Session creation or workspace flow
+        - Terminal, PTY, WebSocket, or sync
+        - Runtime container
+        - GitHub integration
+        - Firebase, Cloud Functions, Firestore, Storage, or Hosting
+        - Documentation
+        - Unknown or other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why are they less suitable?
+      placeholder: |
+        1. Approach: ...
+           Pros: ...
+           Cons: ...
+           Rationale for not choosing it: ...
+    validations:
+      required: false
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and risks
+      description: Who is affected? Note compatibility, deployment, security, privacy, or operational concerns.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add links, screenshots, mockups, examples, or related issues.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I removed or redacted secrets, credentials, proprietary code, and confidential information.
+          required: true

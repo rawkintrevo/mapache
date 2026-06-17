@@ -1,0 +1,96 @@
+name: Bug report
+description: Report a reproducible problem in Mapache.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do not include secrets, credentials, proprietary code, or confidential information.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect to happen instead?
+      placeholder: Mapache did X, but I expected Y.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reliable sequence of actions that reproduces the issue.
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Run ...
+        4. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What did Mapache do?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should Mapache have done?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Pick the closest area.
+      options:
+        - Frontend UI
+        - Session creation or workspace flow
+        - Terminal, PTY, WebSocket, or sync
+        - Runtime container
+        - GitHub integration
+        - Firebase, Cloud Functions, Firestore, Storage, or Hosting
+        - Documentation
+        - Unknown or other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include browser, OS, account/project context, runner image, or other relevant details.
+      placeholder: |
+        Browser:
+        OS:
+        Mapache environment:
+        Runner image, if relevant:
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or recordings
+      description: Add relevant output. Redact tokens, cookies, API keys, project secrets, and private data.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: Is there a known workaround or recovery path?
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I removed or redacted secrets, credentials, proprietary code, and confidential information.
+          required: true
