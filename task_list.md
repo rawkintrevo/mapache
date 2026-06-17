@@ -75,9 +75,10 @@ Before implementation tasks, read:
   - [x] Issue #45: 2026-06-17 - Extracted workspace CRUD and Cloud Storage file services with focused tests.
   - Completed: 2026-06-17 - Followed the non-overlapping issue #42-#45 backend decomposition slices; Cloud Run, GitHub, and Pi-specific extractions continue in tasks 8-10.
 
-- [ ] 8. **Extract Cloud Run provisioning helpers** - medium
+- [x] 8. **Extract Cloud Run provisioning helpers** - medium
   - Move Cloud Run service build/patch/delete/service-account logic out of `functions/index.js`.
   - Add direct tests for service account selection, image capability metadata, env construction, and failure messages.
+  - Completed: 2026-06-17 - Extracted `functions/cloudRun.service.js` for Cloud Run create/patch/delete, service-account resolution, resource limits, shutdown/delete behavior, and runner env construction with direct helper tests.
 
 - [ ] 9. **Extract GitHub backend helpers** - medium
   - Move GitHub OAuth/App token/repository/PR helpers out of `functions/index.js`.
