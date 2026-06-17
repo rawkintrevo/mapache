@@ -1,0 +1,79 @@
+name: Maintenance task
+description: Track internal maintenance, refactoring, documentation, or operational work.
+title: "chore: "
+labels:
+  - maintenance
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for internal work that is not primarily a bug report or feature request.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be true when this task is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope, and what is explicitly out of scope?
+      placeholder: |
+        In scope:
+        - ...
+
+        Out of scope:
+        - ...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete completion checks.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Frontend UI
+        - Session creation or workspace flow
+        - Terminal, PTY, WebSocket, or sync
+        - Runtime container
+        - GitHub integration
+        - Firebase, Cloud Functions, Firestore, Storage, or Hosting
+        - Documentation
+        - Repository maintenance
+        - Unknown or other
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Suggested approach
+      description: Optional implementation notes, constraints, or links to relevant docs.
+    validations:
+      required: false
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and follow-up
+      description: Note migration, deployment, compatibility, testing, or documentation concerns.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I removed or redacted secrets, credentials, proprietary code, and confidential information.
+          required: true
