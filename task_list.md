@@ -85,9 +85,10 @@ Before implementation tasks, read:
   - Add tests for normalization, token permission parsing, branch naming, and API error mapping.
   - Completed: 2026-06-17 - Extracted `functions/github.service.js` for GitHub OAuth/App token, connected repository, source metadata, runner auth env, and pull request helper behavior with focused pure helper tests.
 
-- [ ] 10. **Extract Pi backend proxy helpers** - medium
+- [x] 10. **Extract Pi backend proxy helpers** - medium
   - Move Pi auth, package, and skill proxy behavior out of `functions/index.js`.
   - Add tests for payload validation and stable user-facing errors.
+  - Completed: 2026-06-17 - Extracted `functions/pi.service.js` for Pi auth storage, OpenAI Codex device/OAuth helpers, package catalog/proxy behavior, skill proxy behavior, and payload validation with focused tests for validators and stable route errors.
 
 - [ ] 11. **Split runner Pi service** - medium
   - Split `session-runner/lib/pi.js` into package service, skill service, seeded skill loading, and validation helpers.
