@@ -8,15 +8,13 @@ import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
 import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
 import {
-  resetFileEditor as resetFileEditorState,
   resetGitStatus as resetGitStatusState,
-  resetPiAuth as resetPiAuthState,
-  resetPiPackages as resetPiPackagesState,
-  resetPiSkills as resetPiSkillsState,
-  resetPullRequestForm as resetPullRequestFormState,
   resetSignedOutState,
-  resetWorkspaceFiles as resetWorkspaceFilesState,
 } from "./state/resetters.js";
+import {createDrawerController} from "./controllers/drawerController.js";
+import {createModalController} from "./controllers/modalController.js";
+import {createPiPanelsController} from "./controllers/piPanelsController.js";
+import {createWorkspaceFilesController} from "./controllers/workspaceFilesController.js";
 import {
   closePullRequestModalState,
   commitGitState,
@@ -31,44 +29,11 @@ import {
 } from "./workflows/git.js";
 import {connectGithubState, loadConnectedReposState} from "./workflows/githubConnection.js";
 import {
-  deletePiAuthProviderState,
-  loadPiAuthState,
-  savePiAuthProviderState,
-  saveSessionPiAuthSelectionState,
-  startOpenAiCodexDeviceLoginState,
-  updatePiAuthFormState,
-} from "./workflows/piAuth.js";
-import {
-  installPiPackageState,
-  loadPiPackagesState,
-  removePiPackageState,
-  updatePiInstallSourceState,
-  updatePiPackageState,
-} from "./workflows/piPackages.js";
-import {
-  cancelPiSkillEditState,
-  deletePiSkillState,
-  editPiSkillState,
-  loadPiSkillsState,
-  savePiSkillState,
-  updatePiSkillFormState,
-} from "./workflows/piSkills.js";
-import {
   deleteSessionState,
   resizeSessionState,
   restartSessionState,
   stopSessionState,
 } from "./workflows/sessionLifecycle.js";
-import {
-  closeFileEditorState,
-  downloadWorkspaceFileState,
-  loadWorkspaceFilesState,
-  saveFileEditorState,
-  selectWorkspaceFileState,
-  toggleWorkspaceFileDirState,
-  updateFileEditorContentState,
-  uploadWorkspaceFilesState,
-} from "./workflows/workspaceFiles.js";
 
 const state = createInitialState();
 
@@ -79,6 +44,55 @@ let unsubscribeSessions = null;
 let sessionsListenerWorkspaceId = null;
 
 const APP_PATH = "/app";
+
+const drawerController = createDrawerController({state, render});
+const workspaceFilesController = createWorkspaceFilesController({state, render, runBusy});
+const piPanelsController = createPiPanelsController({state, render});
+const modalController = createModalController({
+  state,
+  render,
+  loadPiAuth: piPanelsController.loadPiAuth,
+});
+const handlers = {
+  app: {
+    refreshAll,
+    signOut,
+  },
+  drawer: drawerController,
+  files: workspaceFilesController,
+  git: {
+    closePullRequestModal,
+    commitGit,
+    openPullRequestModal,
+    pullGit,
+    pushGit,
+    stageGitPath,
+    submitPullRequest,
+    unstageGitPath,
+    updateGitCommitMessage,
+    updatePullRequestForm,
+  },
+  github: {
+    connectGithub,
+    loadConnectedRepos,
+  },
+  modals: modalController,
+  pi: piPanelsController,
+  sessions: {
+    createSession,
+    deleteSession,
+    getSessionAccessUrls,
+    resizeSession,
+    restartSession,
+    selectSession,
+    stopSession,
+  },
+  workspaces: {
+    createWorkspace,
+    deleteWorkspace,
+    selectWorkspace,
+  },
+};
 
 start();
 window.addEventListener("popstate", render);
@@ -109,67 +123,7 @@ function render() {
   const isAppRoute = isAppPath();
   const appProps = state.user && isAppRoute ? {
     state,
-    onSignOut: signOut,
-    onRefresh: refreshAll,
-    onToggleDrawer: toggleDrawer,
-    onToggleRightDrawer: toggleRightDrawer,
-    onToggleDrawerSection: toggleDrawerSection,
-    onCreateWorkspace: createWorkspace,
-    onDeleteWorkspace: deleteWorkspace,
-    onSelectWorkspace: selectWorkspace,
-    onShowProfile: showProfile,
-    onOpenSessionModal: openSessionModal,
-    onCloseSessionModal: closeSessionModal,
-    onOpenWorkspaceModal: openWorkspaceModal,
-    onCloseWorkspaceModal: closeWorkspaceModal,
-    onCreateSession: createSession,
-    onSelectSession: selectSession,
-    onGetSessionAccessUrls: getSessionAccessUrls,
-    onRefreshWorkspaceFiles: refreshWorkspaceFiles,
-    onDownloadWorkspaceFile: downloadWorkspaceFile,
-    onUploadWorkspaceFiles: uploadWorkspaceFiles,
-    onSelectWorkspaceFile: selectWorkspaceFile,
-    onCloseFileEditor: closeFileEditor,
-    onUpdateFileEditorContent: updateFileEditorContent,
-    onSaveFileEditor: saveFileEditor,
-    onToggleWorkspaceFileDir: toggleWorkspaceFileDir,
-    onResizeSession: resizeSession,
-    onRestartSession: restartSession,
-    onStopSession: stopSession,
-    onDeleteSession: deleteSession,
-    onPullGit: pullGit,
-    onPushGit: pushGit,
-    onStageGitPath: stageGitPath,
-    onUnstageGitPath: unstageGitPath,
-    onUpdateGitCommitMessage: updateGitCommitMessage,
-    onCommitGit: commitGit,
-    onRefreshPiPackages: refreshPiPackages,
-    onUpdatePiInstallSource: updatePiInstallSource,
-    onInstallPiPackage: installPiPackage,
-    onRefreshPiSkills: refreshPiSkills,
-    onUpdatePiSkillForm: updatePiSkillForm,
-    onEditPiSkill: editPiSkill,
-    onCancelPiSkillEdit: cancelPiSkillEdit,
-    onSavePiSkill: savePiSkill,
-    onDeletePiSkill: deletePiSkill,
-    onRefreshPiAuth: refreshPiAuth,
-    onDeletePiAuthProvider: deletePiAuthProvider,
-    onUpdatePiAuthForm: updatePiAuthForm,
-    onSavePiAuthProvider: savePiAuthProvider,
-    onStartOpenAiCodexDeviceLogin: startOpenAiCodexDeviceLogin,
-    onRemovePiPackage: removePiPackage,
-    onUpdatePiPackage: updatePiPackage,
-    onOpenAuthModal: openAuthModal,
-    onCloseAuthModal: closeAuthModal,
-    onOpenPiAuthManage: openPiAuthManageModal,
-    onClosePiAuthManageModal: closePiAuthManageModal,
-    onSaveSessionPiAuthSelection: saveSessionPiAuthSelection,
-    onOpenPullRequest: openPullRequestModal,
-    onClosePullRequest: closePullRequestModal,
-    onUpdatePullRequestForm: updatePullRequestForm,
-    onSubmitPullRequest: submitPullRequest,
-    onLoadConnectedRepos: loadConnectedRepos,
-    onConnectGithub: connectGithub,
+    handlers,
   } : null;
 
   reactRoot.render(h(App, {
@@ -203,38 +157,11 @@ function resetGitStatus() {
 }
 
 function resetPiPackages() {
-  resetPiPackagesState(state);
-}
-
-function resetPiAuth() {
-  resetPiAuthState(state);
+  piPanelsController.resetPiPackages();
 }
 
 function resetPiSkills() {
-  resetPiSkillsState(state);
-}
-
-function resetPullRequestForm() {
-  resetPullRequestFormState(state);
-}
-
-function toggleDrawer() {
-  state.drawerCollapsed = !state.drawerCollapsed;
-  render();
-}
-
-function toggleRightDrawer() {
-  state.rightDrawerCollapsed = !state.rightDrawerCollapsed;
-  render();
-}
-
-function toggleDrawerSection(sectionId) {
-  if (state.collapsedDrawerSections.has(sectionId)) {
-    state.collapsedDrawerSections.delete(sectionId);
-  } else {
-    state.collapsedDrawerSections.add(sectionId);
-  }
-  render();
+  piPanelsController.resetPiSkills();
 }
 
 async function refreshAll() {
@@ -251,14 +178,14 @@ async function refreshAll() {
       state.selectedWorkspaceId = state.workspaces[0] ? state.workspaces[0].id : null;
     }
     if (previousWorkspaceId !== state.selectedWorkspaceId) {
-      resetWorkspaceFiles();
+      workspaceFilesController.resetWorkspaceFiles();
       resetGitStatus();
       resetPiPackages();
       resetPiSkills();
     }
     await loadSessions();
-    await loadPiAuth();
-    await loadWorkspaceFiles();
+    await piPanelsController.loadPiAuth();
+    await workspaceFilesController.loadWorkspaceFiles();
   });
 }
 
@@ -334,10 +261,6 @@ async function refreshSelectedSessionPanelsAfterSnapshot(selectedSessionChanged)
   await loadSelectedSessionPanels();
 }
 
-async function loadWorkspaceFiles() {
-  await loadWorkspaceFilesState(state);
-}
-
 async function loadConnectedRepos() {
   await loadConnectedReposState({state, render});
 }
@@ -359,7 +282,7 @@ async function createWorkspace(payload) {
     }
     state.selectedWorkspaceId = data.workspace.id;
     state.selectedSessionId = null;
-    resetWorkspaceFiles();
+    workspaceFilesController.resetWorkspaceFiles();
     await refreshAll();
   });
 }
@@ -390,7 +313,7 @@ async function deleteWorkspace(workspaceId) {
     if (state.selectedWorkspaceId === workspaceId) {
       state.selectedWorkspaceId = null;
       state.selectedSessionId = null;
-      resetWorkspaceFiles();
+      workspaceFilesController.resetWorkspaceFiles();
       resetGitStatus();
       resetPiPackages();
       resetPiSkills();
@@ -403,65 +326,17 @@ async function selectWorkspace(workspaceId) {
   state.activePage = "workspace";
   state.selectedWorkspaceId = workspaceId;
   state.sessionModalOpen = false;
-  resetWorkspaceFiles();
+  workspaceFilesController.resetWorkspaceFiles();
   resetGitStatus();
   resetPiPackages();
   resetPiSkills();
   await runBusy(async () => {
     await loadSessions();
     await loadGitStatus();
-    await loadPiPackages();
-    await loadPiSkills();
-    await loadWorkspaceFiles();
+    await piPanelsController.loadPiPackages();
+    await piPanelsController.loadPiSkills();
+    await workspaceFilesController.loadWorkspaceFiles();
   });
-}
-
-function showProfile() {
-  state.activePage = "profile";
-  state.sessionModalOpen = false;
-  render();
-}
-
-function openSessionModal() {
-  if (!state.selectedWorkspaceId) return;
-  state.sessionModalOpen = true;
-  render();
-}
-
-function closeSessionModal() {
-  state.sessionModalOpen = false;
-  render();
-}
-
-function openWorkspaceModal() {
-  state.workspaceModalOpen = true;
-  render();
-}
-
-function closeWorkspaceModal() {
-  state.workspaceModalOpen = false;
-  render();
-}
-
-function openAuthModal() {
-  state.authModalOpen = true;
-  render();
-}
-
-function closeAuthModal() {
-  state.authModalOpen = false;
-  render();
-}
-
-function openPiAuthManageModal() {
-  state.piAuthManageModalOpen = true;
-  if (!state.piAuth.loading) loadPiAuth();
-  render();
-}
-
-function closePiAuthManageModal() {
-  state.piAuthManageModalOpen = false;
-  render();
 }
 
 async function createSession(payload) {
@@ -481,112 +356,6 @@ async function selectSession(sessionId) {
   render();
 }
 
-async function refreshWorkspaceFiles() {
-  await runBusy(loadWorkspaceFiles);
-}
-
-async function uploadWorkspaceFiles(files) {
-  await uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render});
-}
-
-async function downloadWorkspaceFile() {
-  await downloadWorkspaceFileState({state, render});
-}
-
-async function refreshPiPackages() {
-  await loadPiPackages();
-}
-
-async function refreshPiSkills() {
-  await loadPiSkills();
-}
-
-function updatePiSkillForm(patch) {
-  updatePiSkillFormState(state, patch);
-  render();
-}
-
-function editPiSkill(skill) {
-  editPiSkillState(state, skill);
-  render();
-}
-
-function cancelPiSkillEdit() {
-  cancelPiSkillEditState(state);
-  render();
-}
-
-async function savePiSkill() {
-  await savePiSkillState({state, loadPiSkills, render});
-}
-
-async function deletePiSkill(name) {
-  const skillName = String(name || "").trim();
-  if (!skillName) return;
-  const ok = window.confirm(`Delete Pi skill ${skillName}? This removes .pi/skills/${skillName}/SKILL.md from the workspace.`);
-  if (!ok) return;
-  await deletePiSkillState({state, name: skillName, loadPiSkills, render});
-}
-
-async function refreshPiAuth() {
-  await loadPiAuth({showMessage: true});
-}
-
-async function loadPiAuth(options = {}) {
-  await loadPiAuthState({state, render, options});
-}
-
-function updatePiAuthForm(patch) {
-  updatePiAuthFormState(state, patch);
-  render();
-}
-
-async function deletePiAuthProvider(provider) {
-  const providerKey = String(provider || "").trim();
-  if (!providerKey) return;
-  const ok = window.confirm(`Delete Pi auth provider ${providerKey}? New sessions will no longer receive this credential.`);
-  if (!ok) return;
-  await deletePiAuthProviderState({state, provider: providerKey, render});
-}
-
-async function startOpenAiCodexDeviceLogin() {
-  await startOpenAiCodexDeviceLoginState({state, render});
-}
-
-async function savePiAuthProvider() {
-  await savePiAuthProviderState({state, render});
-}
-
-async function saveSessionPiAuthSelection(selection) {
-  const session = state.sessions.find((item) => item.id === state.selectedSessionId);
-  await saveSessionPiAuthSelectionState({state, session, selection, render});
-}
-
-function updatePiInstallSource(source) {
-  updatePiInstallSourceState(state, source);
-  render();
-}
-
-async function installPiPackage(source) {
-  await installPiPackageState({state, source, loadPiPackages, render});
-}
-
-async function removePiPackage(source) {
-  await removePiPackageState({state, source, loadPiPackages, render});
-}
-
-async function updatePiPackage(source = "") {
-  await updatePiPackageState({state, source, loadPiPackages, render});
-}
-
-async function loadPiPackages() {
-  await loadPiPackagesState({state, resetPiPackages, render});
-}
-
-async function loadPiSkills() {
-  await loadPiSkillsState({state, render});
-}
-
 async function loadSelectedSessionPanels() {
   if (!getSelectedSession()?.serviceUrl) {
     resetGitStatus();
@@ -596,42 +365,12 @@ async function loadSelectedSessionPanels() {
     return;
   }
   await loadGitStatus();
-  await loadPiPackages();
-  await loadPiSkills();
+  await piPanelsController.loadPiPackages();
+  await piPanelsController.loadPiSkills();
 }
 
 async function loadGitStatus() {
   await loadGitStatusState({state, getSelectedSession, resetGitStatus, render});
-}
-
-function toggleWorkspaceFileDir(path) {
-  toggleWorkspaceFileDirState(state, path);
-  render();
-}
-
-async function selectWorkspaceFile(path) {
-  await selectWorkspaceFileState({state, path, render});
-}
-
-function closeFileEditor() {
-  closeFileEditorState(state);
-  render();
-}
-
-function updateFileEditorContent(content) {
-  updateFileEditorContentState(state, content);
-}
-
-async function saveFileEditor(content) {
-  await saveFileEditorState({state, content, loadWorkspaceFiles, render});
-}
-
-function resetWorkspaceFiles() {
-  resetWorkspaceFilesState(state);
-}
-
-function resetFileEditor() {
-  resetFileEditorState(state);
 }
 
 async function pullGit() {

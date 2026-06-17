@@ -6,7 +6,8 @@ import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
 import {Topbar} from "./Topbar.jsx";
 
 export function AppShell(props) {
-  const {state} = props;
+  const {handlers, state} = props;
+  const {app, drawer, files, git, modals, pi, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -20,71 +21,72 @@ export function AppShell(props) {
 
   return (
     <div className="app">
-      <Topbar state={state} onRefresh={props.onRefresh} onSignOut={props.onSignOut} />
+      <Topbar state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
       <main className={shellClassName}>
         <LeftDrawer
           state={state}
-          onDeleteSession={props.onDeleteSession}
-          onDeleteWorkspace={props.onDeleteWorkspace}
-          onOpenSessionModal={props.onOpenSessionModal}
-          onOpenWorkspaceModal={props.onOpenWorkspaceModal}
-          onRefresh={props.onRefresh}
-          onRefreshWorkspaceFiles={props.onRefreshWorkspaceFiles}
-          onDownloadWorkspaceFile={props.onDownloadWorkspaceFile}
-          onUploadWorkspaceFiles={props.onUploadWorkspaceFiles}
-          onSelectSession={props.onSelectSession}
-          onSelectWorkspace={props.onSelectWorkspace}
-          onShowProfile={props.onShowProfile}
-          onSelectWorkspaceFile={props.onSelectWorkspaceFile}
-          onSignOut={props.onSignOut}
-          onStopSession={props.onStopSession}
-          onToggleDrawer={props.onToggleDrawer}
-          onToggleDrawerSection={props.onToggleDrawerSection}
-          onToggleWorkspaceFileDir={props.onToggleWorkspaceFileDir}
+          onDeleteSession={sessions.deleteSession}
+          onDeleteWorkspace={workspaces.deleteWorkspace}
+          onOpenSessionModal={modals.openSessionModal}
+          onOpenWorkspaceModal={modals.openWorkspaceModal}
+          onRefresh={app.refreshAll}
+          onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}
+          onDownloadWorkspaceFile={files.downloadWorkspaceFile}
+          onUploadWorkspaceFiles={files.uploadWorkspaceFiles}
+          onSelectSession={sessions.selectSession}
+          onSelectWorkspace={workspaces.selectWorkspace}
+          onShowProfile={modals.showProfile}
+          onSelectWorkspaceFile={files.selectWorkspaceFile}
+          onSignOut={app.signOut}
+          onStopSession={sessions.stopSession}
+          onToggleDrawer={drawer.toggleDrawer}
+          onToggleDrawerSection={drawer.toggleDrawerSection}
+          onToggleWorkspaceFileDir={files.toggleWorkspaceFileDir}
         />
         {state.activePage === "profile" ? (
-          <ProfilePage state={state} onRefresh={props.onRefresh} onSignOut={props.onSignOut} />
+          <ProfilePage state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
         ) : (
           <WorkspacePanel
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
-            onCommitGit={props.onCommitGit}
-            onGetSessionAccessUrls={props.onGetSessionAccessUrls}
-            onOpenPullRequest={props.onOpenPullRequest}
-            onPullGit={props.onPullGit}
-            onPushGit={props.onPushGit}
-            onResizeSession={props.onResizeSession}
-            onRestartSession={props.onRestartSession}
-            onSelectSession={props.onSelectSession}
-            onStageGitPath={props.onStageGitPath}
-            onUnstageGitPath={props.onUnstageGitPath}
-            onUpdateGitCommitMessage={props.onUpdateGitCommitMessage}
+            onCommitGit={git.commitGit}
+            onGetSessionAccessUrls={sessions.getSessionAccessUrls}
+            onOpenPiAuthManage={modals.openPiAuthManageModal}
+            onOpenPullRequest={git.openPullRequestModal}
+            onPullGit={git.pullGit}
+            onPushGit={git.pushGit}
+            onResizeSession={sessions.resizeSession}
+            onRestartSession={sessions.restartSession}
+            onSelectSession={sessions.selectSession}
+            onStageGitPath={git.stageGitPath}
+            onUnstageGitPath={git.unstageGitPath}
+            onUpdateGitCommitMessage={git.updateGitCommitMessage}
           />
         )}
         <RightDrawer
           selectedSession={selectedSession}
           state={state}
-          onInstallPiPackage={props.onInstallPiPackage}
-          onCancelPiSkillEdit={props.onCancelPiSkillEdit}
-          onDeletePiAuthProvider={props.onDeletePiAuthProvider}
-          onDeletePiSkill={props.onDeletePiSkill}
-          onEditPiSkill={props.onEditPiSkill}
-          onOpenAuthModal={props.onOpenAuthModal}
-          onOpenPiAuthManage={props.onOpenPiAuthManage}
-          onRefreshPiAuth={props.onRefreshPiAuth}
-          onRefreshPiPackages={props.onRefreshPiPackages}
-          onRefreshPiSkills={props.onRefreshPiSkills}
-          onRemovePiPackage={props.onRemovePiPackage}
-          onToggleDrawerSection={props.onToggleDrawerSection}
-          onToggleRightDrawer={props.onToggleRightDrawer}
-          onSavePiSkill={props.onSavePiSkill}
-          onUpdatePiInstallSource={props.onUpdatePiInstallSource}
-          onUpdatePiPackage={props.onUpdatePiPackage}
-          onUpdatePiSkillForm={props.onUpdatePiSkillForm}
+          onInstallPiPackage={pi.installPiPackage}
+          onCancelPiSkillEdit={pi.cancelPiSkillEdit}
+          onDeletePiAuthProvider={pi.deletePiAuthProvider}
+          onDeletePiSkill={pi.deletePiSkill}
+          onEditPiSkill={pi.editPiSkill}
+          onOpenAuthModal={modals.openAuthModal}
+          onOpenPiAuthManage={modals.openPiAuthManageModal}
+          onRefreshPiAuth={pi.refreshPiAuth}
+          onRefreshPiPackages={pi.refreshPiPackages}
+          onRefreshPiSkills={pi.refreshPiSkills}
+          onRemovePiPackage={pi.removePiPackage}
+          onToggleDrawerSection={drawer.toggleDrawerSection}
+          onToggleRightDrawer={drawer.toggleRightDrawer}
+          onSavePiSkill={pi.savePiSkill}
+          onUpdatePiInstallSource={pi.updatePiInstallSource}
+          onUpdatePiPackage={pi.updatePiPackage}
+          onUpdatePiSkillForm={pi.updatePiSkillForm}
         />
       </main>
-      <ModalStack {...props} selectedSession={selectedSession} />
+      <ModalStack handlers={handlers} selectedSession={selectedSession} state={state} />
     </div>
   );
 }

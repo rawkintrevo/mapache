@@ -112,9 +112,10 @@ Before implementation tasks, read:
   - Add tests around path filtering and archive target selection.
   - Completed: 2026-06-17 - Split runner workspace orchestration into path filtering, archive handling, GitHub restore, and Pi auth persistence modules with focused runner tests.
 
-- [ ] 15. **Reduce frontend state fan-out from `src/main.js`** - large
+- [x] 15. **Reduce frontend state fan-out from `src/main.js`** - large
   - Extract cohesive controllers/hooks for selected workspace/session state, modal state, right-drawer panels, and file editor state.
   - Keep React component APIs smaller so simple UI edits do not require touching the main app coordinator.
+  - Completed: 2026-06-17 - Added focused drawer, modal, right-drawer Pi panel, and workspace file/editor controllers; `AppShell` and `ModalStack` now receive grouped handlers instead of a long flat callback prop surface.
 
 - [ ] 16. **Plan CSS decomposition** - medium
   - Audit `src/styles.css` and decide whether to use component-local CSS files, CSS modules, or a hybrid.
