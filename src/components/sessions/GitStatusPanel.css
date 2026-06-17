@@ -1,0 +1,83 @@
+.git-status-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.git-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.git-status-body,
+.git-file-list {
+  display: grid;
+  gap: 10px;
+}
+
+.git-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.git-file-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.git-file-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.git-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.git-commit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.git-status-panel textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+}
+
+.git-status-details {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+@media (max-width: 620px) {
+  .git-commit-form,
+  .git-file-row {
+    grid-template-columns: 1fr;
+  }
+
+  .git-file-row {
+    display: grid;
+  }
+
+  .git-status-actions,
+  .git-file-actions {
+    justify-content: flex-start;
+  }
+}

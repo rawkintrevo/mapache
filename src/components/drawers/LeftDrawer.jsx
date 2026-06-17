@@ -1,3 +1,4 @@
+import "./Drawers.css";
 import {useRef} from "react";
 import {Download, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-react";
 import {DrawerSessionList} from "./DrawerSessionList.jsx";

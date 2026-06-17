@@ -1,3 +1,4 @@
+import "./Topbar.css";
 import {RefreshCw} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 

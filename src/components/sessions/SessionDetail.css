@@ -1,0 +1,50 @@
+.session-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.session-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.canvas-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-tabs .button {
+  min-height: 34px;
+}
+
+.canvas-shell {
+  min-height: 360px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--code);
+  border: 1px solid #1f2937;
+}
+
+.canvas-shell iframe,
+.terminal-placeholder {
+  width: 100%;
+  height: min(62vh, 720px);
+  min-height: 360px;
+  border: 0;
+}
+
+.terminal-placeholder {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--code-text);
+  text-align: center;
+}
+
+.terminal-placeholder code {
+  color: #7dd3fc;
+}

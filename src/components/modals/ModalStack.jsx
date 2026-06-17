@@ -1,3 +1,4 @@
+import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
 import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";

@@ -1,3 +1,4 @@
+import "./SessionDetail.css";
 import {RotateCcw} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";

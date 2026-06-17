@@ -34,6 +34,11 @@ Refactor existing CSS `:root` variables into semantic functional names:
 ### CSS Naming Convention
 Adopt the **BEM (Block Element Modifier)** methodology to ensure modular, readable, and scalable CSS. This will help prevent naming collisions and make component styles more predictable.
 
+### CSS File Ownership
+Global CSS is layered from `src/styles.css`, which imports `src/styles/tokens.css`, `src/styles/base.css`, `src/styles/primitives.css`, and `src/styles/layout.css`. Keep design tokens, element defaults, shared controls, reusable primitives, and app-shell layout in those global files.
+
+Component-owned selectors live beside their React component as plain CSS sidecars and are imported by that component. Use grouped sidecars only when related components intentionally share a local vocabulary, such as drawers, inspector panels, or modal surfaces. Do not introduce CSS Modules unless a future migration covers the whole touched component family.
+
 ### Iconography
 The application will standardize on **Lucide** for all UI iconography to ensure visual consistency and accessibility.
 

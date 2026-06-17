@@ -1,3 +1,5 @@
+import "../drawers/Drawers.css";
+import "./InspectorPanels.css";
 import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";

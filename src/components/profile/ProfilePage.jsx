@@ -1,3 +1,4 @@
+import "./ProfilePage.css";
 import {LogOut, RefreshCw} from "lucide-react";
 import {useState} from "react";
 import {Button} from "../common/Button.jsx";
