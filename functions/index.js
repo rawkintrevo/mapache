@@ -1,65 +1,71 @@
 "use strict";
 
-const admin = require("firebase-admin");
 const crypto = require("crypto");
-const {GoogleAuth} = require("google-auth-library");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {setGlobalOptions} = require("firebase-functions/v2");
-const {defineSecret, defineString} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
+const {
+  admin,
+  auth,
+  db,
+} = require("./backendContext");
+const {
+  DEFAULT_BUCKET,
+  DEFAULT_CPU,
+  DEFAULT_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_IMAGE,
+  DEFAULT_MEMORY,
+  DEFAULT_REGION,
+  DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS,
+  GITHUB_APP_CLIENT_ID_SECRET,
+  GITHUB_APP_CLIENT_SECRET_SECRET,
+  GITHUB_APP_ID_SECRET,
+  GITHUB_APP_PRIVATE_KEY_SECRET,
+  INTERNAL_STORAGE_DIR,
+  SESSION_BROWSER_ACCESS_TTL_MS,
+  SESSION_RUNNER_SERVICE_ACCOUNT,
+} = require("./backendConfig");
+const {
+  cleanName,
+  cloudRunServiceName,
+  defaultPreviewStaticRoot,
+  httpError,
+  isGoogleNotFound,
+  latestTimestampMillis,
+  normalizeServiceAccountEmail,
+  normalizeStoragePrefix,
+  positiveNumber,
+  publicGoogleError,
+  toClientDoc,
+  userPath,
+} = require("./backendUtils.helpers");
 const {
   resolveRunnerImage,
   runnerImageCapabilities,
 } = require("./runnerImages.helpers");
 const {
-  appAllowListStatus,
-  isAppAllowListConfigured,
-  isFirebaseTokenAllowed,
-} = require("./appAllowList.helpers");
-const {
   OPENAI_CODEX_PROVIDER,
   routeRequest: apiRouteRequest,
 } = require("./apiRoutes.helpers");
 const {dispatchApiRoute} = require("./apiDispatch.helpers");
+const {requireUser} = require("./auth.service");
+const {
+  accrueSessionUsage,
+  isTerminalSessionStatus,
+  sessionUsageRecord,
+  userWithUsage,
+} = require("./userUsage.service");
+const {
+  createWorkspaceService,
+  normalizeWorkspaceFilePath,
+  requireWorkspace,
+} = require("./workspace.service");
 
-admin.initializeApp();
-const FUNCTION_SERVICE_ACCOUNT = defineString("FUNCTION_SERVICE_ACCOUNT");
-const SESSION_RUNNER_SERVICE_ACCOUNT = defineString("SESSION_RUNNER_SERVICE_ACCOUNT");
-const globalOptions = {
-  maxInstances: 10,
-  region: process.env.FUNCTION_REGION || "us-central1",
-  serviceAccount: FUNCTION_SERVICE_ACCOUNT,
-};
-setGlobalOptions(globalOptions);
-
-const db = admin.firestore();
-const auth = new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
-const APP_ACCESS_CONFIG_REF = db.collection("appConfig").doc("access");
-const GITHUB_APP_ID_SECRET = defineSecret("GITHUB_APP_ID");
-const GITHUB_APP_CLIENT_ID_SECRET = defineSecret("GITHUB_APP_CLIENT_ID");
-const GITHUB_APP_CLIENT_SECRET_SECRET = defineSecret("GITHUB_APP_CLIENT_SECRET");
-const GITHUB_APP_PRIVATE_KEY_SECRET = defineSecret("GITHUB_APP_PRIVATE_KEY");
-
-const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
-const DEFAULT_CPU = process.env.SESSION_CPU || "1";
-const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
-const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
-const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
-const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
-const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
-    process.env.RUNNER_SHUTDOWN_TIMEOUT_MS,
-    120000,
-);
-const DIRECTORY_MARKER_FILE = ".mapahce-directory";
-const INTERNAL_STORAGE_DIR = ".mapahce-internal";
-const MAX_WORKSPACE_TEXT_FILE_BYTES = 1024 * 1024;
-const MAX_WORKSPACE_UPLOAD_BYTES = 10 * 1024 * 1024;
-// Browser iframe access is separate from backend-only runner management tokens.
-const SESSION_BROWSER_ACCESS_TTL_MS = positiveNumber(
-    process.env.SESSION_BROWSER_ACCESS_TTL_MS,
-    8 * 60 * 60 * 1000,
-);
+const workspaceService = createWorkspaceService({
+  deleteSessionService,
+  isConnectedGithubSourcePayload,
+  normalizeConnectedGithubSourcePayload,
+});
 
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
@@ -110,14 +116,14 @@ const API_HANDLERS = {
   deletePiAuthEntry,
   startOpenAiCodexDeviceCode,
   completeOpenAiCodexDeviceCode,
-  listWorkspaces,
-  createWorkspace,
-  deleteWorkspace,
-  listWorkspaceFiles,
-  readWorkspaceFile,
-  saveWorkspaceFile,
-  uploadWorkspaceFile,
-  createWorkspaceFileDownloadUrl,
+  listWorkspaces: workspaceService.listWorkspaces,
+  createWorkspace: workspaceService.createWorkspace,
+  deleteWorkspace: workspaceService.deleteWorkspace,
+  listWorkspaceFiles: workspaceService.listWorkspaceFiles,
+  readWorkspaceFile: workspaceService.readWorkspaceFile,
+  saveWorkspaceFile: workspaceService.saveWorkspaceFile,
+  uploadWorkspaceFile: workspaceService.uploadWorkspaceFile,
+  createWorkspaceFileDownloadUrl: workspaceService.createWorkspaceFileDownloadUrl,
   listSessions,
   createSession,
   resizeSession,
@@ -203,252 +209,6 @@ exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
   failed.forEach((result) => logger.error("idle session stop failed", result.reason));
   logger.info("idle session reap complete", {checked: snap.size, stopped, failed: failed.length});
 });
-
-async function requireUser(req) {
-  const header = req.get("authorization") || "";
-  const match = header.match(/^Bearer (.+)$/);
-  if (!match) {
-    throw httpError(401, "missing_auth_token");
-  }
-  let token;
-  try {
-    token = await admin.auth().verifyIdToken(match[1]);
-  } catch (error) {
-    throw httpError(401, "invalid_auth_token", error);
-  }
-  const appAllowListConfig = await getAppAllowListConfig();
-  if (!isFirebaseTokenAllowed(token, appAllowListConfig)) {
-    logger.warn("authenticated user rejected by app allow list", {
-      uid: token.uid,
-      email: token.email || "",
-      allowListConfigured: isAppAllowListConfigured(appAllowListConfig),
-      allowListEntryCount: appAllowListStatus(appAllowListConfig).entryCount,
-    });
-    throw httpError(403, "app_access_not_allowed");
-  }
-  return upsertUser(token);
-}
-
-async function getAppAllowListConfig() {
-  const snap = await APP_ACCESS_CONFIG_REF.get();
-  return snap.exists ? snap.data() : {};
-}
-
-async function upsertUser(token) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const ref = db.collection("users").doc(token.uid);
-  const profile = {
-    uid: token.uid,
-    email: cleanName(token.email || ""),
-    displayName: cleanName(token.name || ""),
-    photoURL: cleanName(token.picture || ""),
-    providerIds: providerIdsFromToken(token),
-    lastSignedInAt: now,
-    updatedAt: now,
-  };
-
-  await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(ref);
-    if (snap.exists) {
-      transaction.update(ref, profile);
-      return;
-    }
-    transaction.set(ref, {
-      ...profile,
-      createdAt: now,
-    });
-  });
-
-  return toClientDoc(await ref.get());
-}
-
-async function userWithUsage(user) {
-  return {
-    ...user,
-    usage: await getUserSessionUsage(user.uid),
-  };
-}
-
-async function getUserSessionUsage(uid) {
-  const now = Date.now();
-  const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
-  const totals = createUsageTotals();
-  const last30Days = createUsageTotals();
-
-  const [ledgerSnap, sessionDocs] = await Promise.all([
-    db.collection("users").doc(uid).collection("sessionUsage").get(),
-    listUserSessionDocs(uid),
-  ]);
-
-  ledgerSnap.docs.forEach((doc) => {
-    const entry = doc.data();
-    addUsageTotals(totals, entry);
-    addUsageTotals(last30Days, prorateUsageEntry(entry, thirtyDaysAgo, now));
-  });
-
-  sessionDocs.forEach((doc) => {
-    const session = doc.data();
-    if (session.usageAccountedAt) return;
-    const entry = sessionUsageEntry(doc.id, session, now);
-    if (!entry) return;
-    addUsageTotals(totals, entry);
-    addUsageTotals(last30Days, prorateUsageEntry(entry, thirtyDaysAgo, now));
-  });
-
-  return {
-    lifetime: roundUsageTotals(totals),
-    last30Days: roundUsageTotals(last30Days),
-  };
-}
-
-async function listUserSessionDocs(uid) {
-  try {
-    const snap = await db.collectionGroup("sessions")
-        .where("ownerUid", "==", uid)
-        .get();
-    return snap.docs;
-  } catch (error) {
-    if (!isMissingIndexError(error)) throw error;
-    logger.warn("sessions collection group index not ready; falling back to workspace session scan", {
-      uid,
-      error: error.message,
-    });
-    return listUserSessionDocsByWorkspace(uid);
-  }
-}
-
-async function listUserSessionDocsByWorkspace(uid) {
-  const workspaceSnap = await db.collection("workspaces")
-      .where("ownerUid", "==", uid)
-      .get();
-  const sessionSnaps = await Promise.all(
-      workspaceSnap.docs.map((doc) => doc.ref.collection("sessions").get()),
-  );
-  return sessionSnaps.flatMap((snap) => snap.docs);
-}
-
-function isMissingIndexError(error) {
-  const message = cleanName(error && error.message).toLowerCase();
-  return error && (error.code === 9 || error.code === "failed-precondition") &&
-    message.includes("index");
-}
-
-function createUsageTotals() {
-  return {
-    cpuSeconds: 0,
-    memoryGbSeconds: 0,
-    runtimeSeconds: 0,
-    sessionCount: 0,
-  };
-}
-
-function addUsageTotals(target, usage) {
-  if (!usage) return;
-  target.cpuSeconds += Number(usage.cpuSeconds || 0);
-  target.memoryGbSeconds += Number(usage.memoryGbSeconds || 0);
-  target.runtimeSeconds += Number(usage.runtimeSeconds || 0);
-  target.sessionCount += Number(usage.sessionCount || 0) || (usage.runtimeSeconds > 0 ? 1 : 0);
-}
-
-function roundUsageTotals(totals) {
-  return {
-    cpuSeconds: Math.round(totals.cpuSeconds),
-    memoryGbSeconds: Math.round(totals.memoryGbSeconds),
-    runtimeSeconds: Math.round(totals.runtimeSeconds),
-    sessionCount: Math.round(totals.sessionCount),
-  };
-}
-
-function sessionUsageEntry(sessionId, session, fallbackEndMs = Date.now()) {
-  const startedMs = timestampMillis(session.createdAt);
-  if (!startedMs) return null;
-
-  const endedMs = timestampMillis(session.stoppedAt) ||
-    (isTerminalSessionStatus(session.status) ? timestampMillis(session.updatedAt) : 0) ||
-    fallbackEndMs;
-  if (!endedMs || endedMs <= startedMs) return null;
-
-  const intervalStartMs = Math.max(startedMs, timestampMillis(session.usageAccruedAt) || startedMs);
-  const intervalSeconds = Math.max(0, (endedMs - intervalStartMs) / 1000);
-  const cpu = parseCpuCount(session.resources && session.resources.cpu);
-  const memoryGb = parseMemoryGb(session.resources && session.resources.memory);
-  const accruedCpuSeconds = Number(session.usageAccruedCpuSeconds || 0);
-  const accruedMemoryGbSeconds = Number(session.usageAccruedMemoryGbSeconds || 0);
-  const accruedRuntimeSeconds = Number(session.usageAccruedRuntimeSeconds || 0);
-
-  return {
-    sessionId,
-    workspaceId: cleanName(session.workspaceId || ""),
-    startedAt: admin.firestore.Timestamp.fromMillis(startedMs),
-    endedAt: admin.firestore.Timestamp.fromMillis(endedMs),
-    cpu,
-    memoryGb,
-    runtimeSeconds: accruedRuntimeSeconds + intervalSeconds,
-    cpuSeconds: accruedCpuSeconds + (intervalSeconds * cpu),
-    memoryGbSeconds: accruedMemoryGbSeconds + (intervalSeconds * memoryGb),
-    sessionCount: 1,
-  };
-}
-
-function accrueSessionUsage(session, accruedAt) {
-  const current = sessionUsageEntry(
-      cleanName(session.runnerSessionId || ""),
-      session,
-      accruedAt.toMillis(),
-  );
-
-  return {
-    usageAccruedAt: accruedAt,
-    usageAccruedCpuSeconds: current ? current.cpuSeconds : Number(session.usageAccruedCpuSeconds || 0),
-    usageAccruedMemoryGbSeconds: current ?
-      current.memoryGbSeconds :
-      Number(session.usageAccruedMemoryGbSeconds || 0),
-    usageAccruedRuntimeSeconds: current ?
-      current.runtimeSeconds :
-      Number(session.usageAccruedRuntimeSeconds || 0),
-  };
-}
-
-function prorateUsageEntry(entry, windowStartMs, windowEndMs) {
-  const startedMs = timestampMillis(entry.startedAt);
-  const endedMs = timestampMillis(entry.endedAt);
-  if (!startedMs || !endedMs || endedMs <= windowStartMs || startedMs >= windowEndMs) {
-    return null;
-  }
-
-  const overlapStart = Math.max(startedMs, windowStartMs);
-  const overlapEnd = Math.min(endedMs, windowEndMs);
-  const overlapSeconds = Math.max(0, (overlapEnd - overlapStart) / 1000);
-  const runtimeSeconds = Number(entry.runtimeSeconds || 0);
-  const ratio = runtimeSeconds > 0 ? Math.min(1, overlapSeconds / runtimeSeconds) : 0;
-
-  return {
-    runtimeSeconds: overlapSeconds,
-    cpuSeconds: Number(entry.cpuSeconds || 0) * ratio,
-    memoryGbSeconds: Number(entry.memoryGbSeconds || 0) * ratio,
-    sessionCount: overlapSeconds > 0 ? 1 : 0,
-  };
-}
-
-function sessionUsageRecord(sessionRef, session, endedAt) {
-  if (!session || session.usageAccountedAt || !session.ownerUid) return null;
-  const entry = sessionUsageEntry(sessionRef.id, session, endedAt.toMillis());
-  if (!entry) return null;
-
-  const userUsageRef = db.collection("users")
-      .doc(session.ownerUid)
-      .collection("sessionUsage")
-      .doc(sessionRef.id);
-
-  return {
-    ref: userUsageRef,
-    data: {
-      ...entry,
-      ownerUid: session.ownerUid,
-      recordedAt: endedAt,
-    },
-  };
-}
 
 async function getPiAuth(uid) {
   const snap = await piAuthDoc(uid).get();
@@ -774,137 +534,6 @@ function openAiCodexAccountId(accessToken) {
   }
 }
 
-async function listWorkspaces(uid) {
-  const snap = await db.collection("workspaces")
-      .where("ownerUid", "==", uid)
-      .get();
-  return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
-}
-
-async function deleteWorkspace(uid, workspaceId) {
-  const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  const workspaceSnap = await workspaceRef.get();
-  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  const workspace = {id: workspaceSnap.id, ...workspaceSnap.data()};
-  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-
-  const sessionSnap = await sessionCollection(workspaceId).get();
-  for (const sessionDoc of sessionSnap.docs) {
-    const session = sessionDoc.data() || {};
-    if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
-    await sessionDoc.ref.update({
-      status: "deleting",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    const serviceDeleted = await deleteSessionService(sessionDoc.ref, session, {reason: "workspace_deleted"});
-    if (!serviceDeleted) throw httpError(502, "workspace_delete_failed");
-  }
-
-  await deleteWorkspaceStorageIfUnshared(uid, workspace);
-  if (typeof db.recursiveDelete === "function") {
-    await db.recursiveDelete(workspaceRef);
-  } else {
-    for (const sessionDoc of sessionSnap.docs) {
-      await sessionDoc.ref.delete();
-    }
-    await workspaceRef.delete();
-  }
-  return {ok: true};
-}
-
-async function createWorkspace(uid, payload) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const name = cleanName(payload.name || "Default workspace");
-  const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
-  const source = await normalizeWorkspaceSourcePayload(uid, payload);
-  const doc = {
-    ownerUid: uid,
-    userPath: userPath(uid),
-    name,
-    bucket,
-    source: source.type === "blank" ? {
-      type: "blank",
-      status: "ready",
-      statusMessage: null,
-      resolvedBranch: null,
-      resolvedCommit: null,
-    } : {
-      ...source,
-      status: "pending",
-      statusMessage: null,
-      resolvedBranch: null,
-      resolvedCommit: null,
-    },
-    syncPolicy: normalizeWorkspaceSyncPolicy(source),
-    storagePrefix: `workspaces/${uid}/${slugify(name)}`,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const ref = await db.collection("workspaces").add(doc);
-  const snap = await ref.get();
-  return toClientDoc(snap);
-}
-
-async function normalizeWorkspaceSourcePayload(uid, payload) {
-  let source = payload && Object.prototype.hasOwnProperty.call(payload, "source") ? payload.source : undefined;
-  if (source === undefined || source === null || source === "") {
-    return {type: "blank"};
-  }
-  if (typeof source === "string") {
-    const sourceType = cleanName(source).toLowerCase();
-    if (!sourceType || sourceType === "blank") {
-      return {type: "blank"};
-    }
-    source = {
-      type: sourceType,
-      repoUrl: payload && (payload.repoUrl || payload.url),
-      requestedBranch: payload && (payload.requestedBranch || payload.branch),
-      requestedCommit: payload && (payload.requestedCommit || payload.commit),
-    };
-  }
-  if (typeof source !== "object" || Array.isArray(source)) {
-    throw httpError(400, "invalid_workspace_source");
-  }
-
-  const rawType = source.type == null ? (source.repoUrl || source.url ? "github" : "") : source.type;
-  const type = cleanName(rawType).toLowerCase();
-  if (!type) {
-    throw httpError(400, "invalid_workspace_source_type");
-  }
-  if (type === "blank") {
-    return {type: "blank"};
-  }
-  if (type !== "github") {
-    throw httpError(400, "unsupported_workspace_source_type");
-  }
-
-  const requestedBranch = cleanName(source.requestedBranch || source.branch || "");
-  const requestedCommit = cleanName(source.requestedCommit || source.commit || "");
-  if (requestedCommit && !/^[0-9a-f]{7,40}$/i.test(requestedCommit)) {
-    throw httpError(400, "invalid_workspace_source_commit");
-  }
-
-  if (isConnectedGithubSourcePayload(source)) {
-    return normalizeConnectedGithubSourcePayload(uid, source, {
-      requestedBranch,
-      requestedCommit,
-    });
-  }
-
-  const repoUrl = normalizePublicGitHubRepoUrl(source.repoUrl || source.url || "");
-  const {owner, repo, cloneUrl} = parsePublicGitHubRepoUrl(repoUrl);
-  return {
-    type: "github",
-    mode: "public",
-    repoUrl: cloneUrl,
-    owner,
-    repo,
-    requestedBranch: requestedBranch || null,
-    requestedCommit: requestedCommit || null,
-    visibility: "public",
-  };
-}
-
 function isConnectedGithubSourcePayload(source) {
   const mode = cleanName(source && source.mode).toLowerCase();
   if (mode === "connected") {
@@ -987,213 +616,12 @@ async function requireGithubInstallationForUser(uid, installationId) {
   return installation;
 }
 
-function normalizeWorkspaceSyncPolicy(source) {
-  if (!source || source.type !== "github") {
-    return {
-      mode: "blank",
-      exclude: [],
-    };
-  }
-
-  return {
-    mode: "github-cache",
-    exclude: [
-      ".git/",
-      "node_modules/",
-      "dist/",
-      "build/",
-      ".next/",
-      ".mapahce-internal/",
-    ],
-  };
-}
-
-function normalizePublicGitHubRepoUrl(value) {
-  if (typeof value !== "string" && typeof value !== "number") {
-    throw httpError(400, "missing_github_repo_url");
-  }
-  return String(value).trim();
-}
-
-function parsePublicGitHubRepoUrl(value) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch (error) {
-    throw httpError(400, "invalid_github_repo_url", error);
-  }
-
-  if (url.protocol !== "https:") {
-    throw httpError(400, "github_repo_url_must_use_https");
-  }
-  if (url.username || url.password) {
-    throw httpError(400, "github_repo_url_must_not_include_credentials");
-  }
-
-  const host = url.hostname.toLowerCase().replace(/^www\./, "");
-  if (host !== "github.com") {
-    throw httpError(400, "unsupported_github_repo_host");
-  }
-  if (url.search || url.hash) {
-    throw httpError(400, "invalid_github_repo_url");
-  }
-
-  const parts = url.pathname.split("/").filter(Boolean);
-  if (parts.length !== 2) {
-    throw httpError(400, "invalid_github_repo_url");
-  }
-
-  let owner;
-  let repoPath;
-  try {
-    owner = decodeURIComponent(parts[0]).trim();
-    repoPath = decodeURIComponent(parts[1]).trim();
-  } catch (error) {
-    throw httpError(400, "invalid_github_repo_url", error);
-  }
-  const repo = repoPath.endsWith(".git") ? repoPath.slice(0, -4) : repoPath;
-  if (!owner || !repo) {
-    throw httpError(400, "invalid_github_repo_url");
-  }
-  if (owner.includes("/") || repo.includes("/")) {
-    throw httpError(400, "invalid_github_repo_url");
-  }
-
-  return {
-    owner,
-    repo,
-    cloneUrl: `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}.git`,
-  };
-}
-
 async function listSessions(uid, workspaceId) {
   await requireWorkspace(uid, workspaceId);
   const snap = await sessionCollection(workspaceId)
       .orderBy("updatedAt", "desc")
       .get();
   return snap.docs.map(toClientDoc);
-}
-
-async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  if (!bucketName || !prefix) return;
-
-  const sameOwnerSnap = await db.collection("workspaces")
-      .where("ownerUid", "==", uid)
-      .get();
-  const shared = sameOwnerSnap.docs.some((doc) => {
-    if (doc.id === workspace.id) return false;
-    const data = doc.data() || {};
-    return (data.bucket || DEFAULT_BUCKET) === bucketName && normalizeStoragePrefix(data.storagePrefix || "") === prefix;
-  });
-  if (shared) {
-    logger.warn("skipping shared workspace storage deletion", {workspaceId: workspace.id, bucketName, prefix});
-    return;
-  }
-
-  await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
-}
-
-async function listWorkspaceFiles(uid, workspaceId) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  if (!bucketName || !prefix) return {files: [], truncated: false};
-
-  const queryPrefix = `${prefix}/`;
-  const [files, nextQuery] = await admin.storage().bucket(bucketName).getFiles({
-    autoPaginate: false,
-    maxResults: 500,
-    prefix: queryPrefix,
-  });
-
-  return {
-    files: files
-        .map((file) => storageFileToClientFile(file, queryPrefix))
-        .filter(Boolean)
-        .sort((left, right) => left.path.localeCompare(right.path)),
-    truncated: Boolean(nextQuery),
-  };
-}
-
-async function readWorkspaceFile(uid, workspaceId, path) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const [exists] = await file.exists();
-  if (!exists) throw httpError(404, "file_not_found");
-
-  const [metadata] = await file.getMetadata();
-  const size = Number(metadata.size || 0);
-  if (size > MAX_WORKSPACE_TEXT_FILE_BYTES) throw httpError(413, "file_too_large");
-
-  const [buffer] = await file.download();
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    content: buffer.toString("utf8"),
-    contentType: metadata.contentType || "text/plain",
-    size,
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function saveWorkspaceFile(uid, workspaceId, path, payload) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const content = String(payload.content ?? "");
-  if (Buffer.byteLength(content, "utf8") > MAX_WORKSPACE_TEXT_FILE_BYTES) {
-    throw httpError(413, "file_too_large");
-  }
-
-  await file.save(content, {
-    contentType: contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function uploadWorkspaceFile(uid, workspaceId, path, req) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const buffer = workspaceUploadBuffer(req);
-  if (!buffer.length) throw httpError(400, "empty_file_upload");
-  if (buffer.length > MAX_WORKSPACE_UPLOAD_BYTES) throw httpError(413, "file_too_large");
-
-  await file.save(buffer, {
-    contentType: cleanContentType(req.get("content-type")) || contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceFileDownloadUrl(uid, workspaceId, path) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const [exists] = await file.exists();
-  if (!exists) throw httpError(404, "file_not_found");
-
-  const expiresAtMs = Date.now() + 10 * 60 * 1000;
-  const filename = relativePath.split("/").pop() || "download";
-  const [url] = await file.getSignedUrl({
-    action: "read",
-    expires: expiresAtMs,
-    responseDisposition: `attachment; filename="${safeContentDispositionFilename(filename)}"`,
-    version: "v4",
-  });
-
-  return {
-    ok: true,
-    expiresAt: new Date(expiresAtMs).toISOString(),
-    filename,
-    url,
-  };
 }
 
 async function createSession(uid, workspaceId, payload) {
@@ -1354,10 +782,6 @@ function isActiveGithubWorkspaceSession(session) {
 
 function isShellSession(session) {
   return cleanName(session && session.terminalKind) === "shell";
-}
-
-function isTerminalSessionStatus(status) {
-  return ["stopped", "provision_failed", "needs_image"].includes(cleanName(status));
 }
 
 function shouldRecreateSessionServiceOnRestart(session) {
@@ -2605,14 +2029,6 @@ function isGithubInstallationNotFoundError(error) {
   return Boolean(error && error.status === 404 && error.publicMessage === "github_installation_not_found");
 }
 
-async function requireWorkspace(uid, workspaceId) {
-  const snap = await db.collection("workspaces").doc(workspaceId).get();
-  if (!snap.exists) throw httpError(404, "workspace_not_found");
-  const data = snap.data();
-  if (data.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-  return {id: snap.id, ...data};
-}
-
 async function requireSession(uid, workspaceId, sessionId) {
   await requireWorkspace(uid, workspaceId);
   const sessionRef = sessionCollection(workspaceId).doc(sessionId);
@@ -2625,19 +2041,6 @@ async function requireSession(uid, workspaceId, sessionId) {
 
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
-}
-
-function providerIdsFromToken(token) {
-  const firebase = token.firebase || {};
-  const ids = Object.keys(firebase.identities || {}).filter((id) => id !== "email");
-  if (firebase.sign_in_provider && !ids.includes(firebase.sign_in_provider)) {
-    ids.unshift(firebase.sign_in_provider);
-  }
-  return ids;
-}
-
-function userPath(uid) {
-  return `users/${uid}`;
 }
 
 function piHomeStoragePrefix(uid) {
@@ -3241,24 +2644,6 @@ function normalizeResources(payload) {
   };
 }
 
-function parseCpuCount(value) {
-  const number = Number.parseFloat(cleanName(value || DEFAULT_CPU));
-  return Number.isFinite(number) && number > 0 ? number : Number.parseFloat(DEFAULT_CPU) || 1;
-}
-
-function parseMemoryGb(value) {
-  const raw = cleanName(value || DEFAULT_MEMORY).toLowerCase();
-  const match = raw.match(/^([0-9]+(?:\.[0-9]+)?)(ki|mi|gi|ti|k|m|g|t)?$/);
-  if (!match) return parseMemoryGb(DEFAULT_MEMORY) || 1;
-  const number = Number.parseFloat(match[1]);
-  if (!Number.isFinite(number) || number <= 0) return parseMemoryGb(DEFAULT_MEMORY) || 1;
-  const unit = match[2] || "g";
-  if (unit === "ki" || unit === "k") return number / (1024 * 1024);
-  if (unit === "mi" || unit === "m") return number / 1024;
-  if (unit === "ti" || unit === "t") return number * 1024;
-  return number;
-}
-
 function resourceLimits(resources) {
   return {
     cpu: resources.cpu,
@@ -3280,62 +2665,6 @@ function isIdleSession(session, now) {
   );
   if (!idleSince) return false;
   return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
-}
-
-function latestTimestampMillis(...values) {
-  return values.reduce((latest, value) => Math.max(latest, timestampMillis(value)), 0);
-}
-
-function timestampMillis(value) {
-  if (!value) return 0;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (typeof value.toDate === "function") return value.toDate().getTime();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-  if (typeof value === "number") return value;
-  return 0;
-}
-
-function storageFileToClientFile(file, queryPrefix) {
-  const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
-  if (!relativePath || relativePath.endsWith("/")) return null;
-  if (isHiddenWorkspaceFilePath(relativePath)) {
-    return null;
-  }
-  if (relativePath.endsWith(`/${DIRECTORY_MARKER_FILE}`)) {
-    const directoryPath = relativePath.slice(0, -(`/${DIRECTORY_MARKER_FILE}`).length);
-    if (!directoryPath) return null;
-    return {
-      path: directoryPath,
-      name: directoryPath.split("/").pop(),
-      type: "directory",
-      size: 0,
-      updatedAt: "",
-    };
-  }
-  const metadata = file.metadata || {};
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    type: "file",
-    size: Number(metadata.size || 0),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function workspaceStorageFile(uid, workspaceId, path) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  const relativePath = normalizeWorkspaceFilePath(path);
-  if (!bucketName || !prefix) throw httpError(400, "workspace_storage_not_configured");
-  return {
-    file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
-    relativePath,
-  };
 }
 
 function normalizePiSkillPayload(payload) {
@@ -3596,27 +2925,6 @@ async function mergePiPackageCatalogEntry(uid, workspaceId, source, options = {}
   return record;
 }
 
-function normalizeWorkspaceFilePath(value) {
-  const path = String(value || "").replace(/^\/+|\/+$/g, "");
-  const parts = path.split("/").filter(Boolean);
-  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
-    throw httpError(400, "invalid_file_path");
-  }
-  if (parts.includes(DIRECTORY_MARKER_FILE)) {
-    throw httpError(400, "invalid_file_path");
-  }
-  if (isHiddenWorkspaceFilePath(parts.join("/"))) {
-    throw httpError(400, "invalid_file_path");
-  }
-  return parts.join("/");
-}
-
-function isHiddenWorkspaceFilePath(relativePath) {
-  const parts = String(relativePath || "").split("/").filter(Boolean);
-  if (parts[0] === INTERNAL_STORAGE_DIR) return true;
-  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
-}
-
 function normalizeGitActionPayloadPaths(payload) {
   const paths = payload && Array.isArray(payload.paths) ? payload.paths : null;
   if (!paths || !paths.length) {
@@ -3654,127 +2962,4 @@ function normalizePullRequestTitle(value) {
 
 function normalizePullRequestBody(value) {
   return String(value || "").trim().slice(0, 20000);
-}
-
-function contentTypeForPath(path) {
-  const extension = path.split(".").pop().toLowerCase();
-  const contentTypes = {
-    css: "text/css; charset=utf-8",
-    html: "text/html; charset=utf-8",
-    js: "text/javascript; charset=utf-8",
-    json: "application/json; charset=utf-8",
-    md: "text/markdown; charset=utf-8",
-    py: "text/x-python; charset=utf-8",
-    sh: "text/x-shellscript; charset=utf-8",
-    txt: "text/plain; charset=utf-8",
-    xml: "application/xml; charset=utf-8",
-    yaml: "application/yaml; charset=utf-8",
-    yml: "application/yaml; charset=utf-8",
-  };
-  return contentTypes[extension] || "text/plain; charset=utf-8";
-}
-
-function cleanContentType(value) {
-  const contentType = String(value || "").trim();
-  if (!contentType || /[\r\n\u0000-\u001f\u007f]/.test(contentType)) return "";
-  return contentType.slice(0, 255);
-}
-
-function safeContentDispositionFilename(value) {
-  return String(value || "download").replace(/["\\\r\n\u0000-\u001f\u007f]/g, "_").slice(0, 200) || "download";
-}
-
-function workspaceUploadBuffer(req) {
-  if (Buffer.isBuffer(req.rawBody)) return req.rawBody;
-  if (Buffer.isBuffer(req.body)) return req.body;
-  if (typeof req.body === "string") return Buffer.from(req.body);
-  return Buffer.alloc(0);
-}
-
-function toClientDoc(doc) {
-  return {id: doc.id, ...serialize(doc.data())};
-}
-
-function sortByUpdatedAtDesc(left, right) {
-  return Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || "");
-}
-
-function serialize(value) {
-  if (!value || typeof value !== "object") return value;
-  if (typeof value.toDate === "function") return value.toDate().toISOString();
-  if (Array.isArray(value)) return value.map(serialize);
-  return Object.entries(value).reduce((acc, [key, item]) => {
-    acc[key] = serialize(item);
-    return acc;
-  }, {});
-}
-
-function cleanName(value) {
-  return String(value || "").trim().slice(0, 256);
-}
-
-function defaultPreviewStaticRoot(capabilities = {}) {
-  return capabilities && capabilities.preview ? "/workspace/build" : null;
-}
-
-function normalizeServiceAccountEmail(value) {
-  const email = cleanName(value).toLowerCase();
-  if (!email) return "";
-  if (!/^[a-z0-9][a-z0-9._-]*@[a-z0-9-]+\.iam\.gserviceaccount\.com$/.test(email)) {
-    throw new Error(`Invalid service account email: ${email}`);
-  }
-  return email;
-}
-
-function positiveNumber(value, fallback) {
-  const number = Number(value || fallback);
-  return Number.isFinite(number) && number > 0 ? number : fallback;
-}
-
-function slugify(value) {
-  return cleanName(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
-    "workspace";
-}
-
-function normalizeStoragePrefix(value) {
-  return String(value || "").replace(/^\/+|\/+$/g, "");
-}
-
-function firebaseStorageBucket() {
-  try {
-    const config = JSON.parse(process.env.FIREBASE_CONFIG || "{}");
-    return cleanName(config.storageBucket || "");
-  } catch (error) {
-    return "";
-  }
-}
-
-function cloudRunServiceName(region, serviceId) {
-  const project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "PROJECT_ID";
-  return `projects/${project}/locations/${region}/services/${serviceId}`;
-}
-
-function publicGoogleError(error) {
-  const message = error && error.response && error.response.data ?
-    JSON.stringify(error.response.data) :
-    error.message;
-  return cleanName(message || "Cloud Run request failed.");
-}
-
-function isGoogleNotFound(error) {
-  return error && (
-    error.code === 404 ||
-    error.status === 404 ||
-    (error.response && error.response.status === 404) ||
-    (error.response && error.response.data && error.response.data.error &&
-      error.response.data.error.code === 404)
-  );
-}
-
-function httpError(status, publicMessage, cause) {
-  const error = new Error(publicMessage);
-  error.status = status;
-  error.publicMessage = publicMessage;
-  if (cause) error.cause = cause;
-  return error;
 }

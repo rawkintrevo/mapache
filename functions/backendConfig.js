@@ -1,0 +1,65 @@
+"use strict";
+
+const {setGlobalOptions} = require("firebase-functions/v2");
+const {defineSecret, defineString} = require("firebase-functions/params");
+const {
+  firebaseStorageBucket,
+  positiveNumber,
+} = require("./backendUtils.helpers");
+
+const FUNCTION_SERVICE_ACCOUNT = defineString("FUNCTION_SERVICE_ACCOUNT");
+const SESSION_RUNNER_SERVICE_ACCOUNT = defineString("SESSION_RUNNER_SERVICE_ACCOUNT");
+
+const globalOptions = {
+  maxInstances: 10,
+  region: process.env.FUNCTION_REGION || "us-central1",
+  serviceAccount: FUNCTION_SERVICE_ACCOUNT,
+};
+
+setGlobalOptions(globalOptions);
+
+const GITHUB_APP_ID_SECRET = defineSecret("GITHUB_APP_ID");
+const GITHUB_APP_CLIENT_ID_SECRET = defineSecret("GITHUB_APP_CLIENT_ID");
+const GITHUB_APP_CLIENT_SECRET_SECRET = defineSecret("GITHUB_APP_CLIENT_SECRET");
+const GITHUB_APP_PRIVATE_KEY_SECRET = defineSecret("GITHUB_APP_PRIVATE_KEY");
+
+const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
+const DEFAULT_CPU = process.env.SESSION_CPU || "1";
+const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
+const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
+const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
+const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);
+const DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS = positiveNumber(
+    process.env.RUNNER_SHUTDOWN_TIMEOUT_MS,
+    120000,
+);
+const DIRECTORY_MARKER_FILE = ".mapahce-directory";
+const INTERNAL_STORAGE_DIR = ".mapahce-internal";
+const MAX_WORKSPACE_TEXT_FILE_BYTES = 1024 * 1024;
+const MAX_WORKSPACE_UPLOAD_BYTES = 10 * 1024 * 1024;
+const SESSION_BROWSER_ACCESS_TTL_MS = positiveNumber(
+    process.env.SESSION_BROWSER_ACCESS_TTL_MS,
+    8 * 60 * 60 * 1000,
+);
+
+module.exports = {
+  DEFAULT_BUCKET,
+  DEFAULT_CPU,
+  DEFAULT_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_IMAGE,
+  DEFAULT_MEMORY,
+  DEFAULT_REGION,
+  DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS,
+  DIRECTORY_MARKER_FILE,
+  FUNCTION_SERVICE_ACCOUNT,
+  GITHUB_APP_CLIENT_ID_SECRET,
+  GITHUB_APP_CLIENT_SECRET_SECRET,
+  GITHUB_APP_ID_SECRET,
+  GITHUB_APP_PRIVATE_KEY_SECRET,
+  INTERNAL_STORAGE_DIR,
+  MAX_WORKSPACE_TEXT_FILE_BYTES,
+  MAX_WORKSPACE_UPLOAD_BYTES,
+  SESSION_BROWSER_ACCESS_TTL_MS,
+  SESSION_RUNNER_SERVICE_ACCOUNT,
+  globalOptions,
+};

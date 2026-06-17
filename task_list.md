@@ -1,17 +1,15 @@
-# Workspace-Local Pi Extension Manager Task List
+# Mapache Maintenance Task List
 
 ## Goal
 
-Add a web extension manager for Pi-based runner sessions. The manager should be additive to the existing Pi TUI/CLI tooling: users can still install, remove, update, and configure packages directly inside Pi, and the web UI should reflect those changes after refresh.
-
-Extensions are workspace-local by default. The manager should install packages into the active workspace's project-local Pi configuration, remember packages a user has used across workspaces, and offer known packages for installation into other workspaces without installing them globally by default.
+Make the repository easier to change safely after rapid feature growth. This phase focuses on cleanup, test coverage, and maintainability boundaries. `community/` remains the user-facing docs/blog surface and is intentionally out of scope for this maintenance pass unless a task explicitly says otherwise.
 
 ## Task Sizing
 
-- `easy (gpt-5.4-mini)`: narrow docs, schema, validation, focused UI, or small helper work.
-- `medium (gpt-5.4)`: runner/backend/frontend coordination, archive sync behavior, or mutating package operations.
-- `human`: product/security/account setup or a decision that requires a person.
-- If a task starts looking hard, split it before implementation.
+- `easy`: narrow file movement, metadata, docs, small script changes, or focused helper extraction.
+- `medium`: scoped refactors with tests around one subsystem.
+- `large`: broad subsystem split, multiple call sites, or new integration/e2e infrastructure.
+- `human`: product decision, issue triage, live production verification, or external service setup.
 
 ## Source Documents
 
@@ -20,221 +18,111 @@ Before implementation tasks, read:
 - `AGENTS.md`
 - `docs/app-overview.md`
 - `docs/runtime-containers.md`
-- Relevant sections of `session-runner/server.js`
-- Relevant sections of `functions/index.js`
-- Relevant sections of `src/services/api.js`, `src/main.js`, `src/ui/render.js`, and `src/styles.css`
-- Pi package docs: `https://pi.dev/docs/latest/packages`
-- Pi coding-agent package manager source when changing package behavior: `https://github.com/earendil-works/pi/tree/main/packages/coding-agent`
+- `docs/ui-components.md`
+- Any focused doc for the subsystem being changed.
 
-## Architecture Notes
+## Scope Notes
 
-- The web manager must be in addition to Pi's existing TUI/CLI tooling, not a replacement.
-- Workspace-local package declarations live in `/workspace/.pi/settings.json`.
-- Workspace-local installed npm packages live under `/workspace/.pi/npm/`.
-- Workspace-local installed git packages live under `/workspace/.pi/git/`.
-- The web UI should default to workspace-local installs, equivalent to `pi install -l ...`.
-- Packages installed from the Pi terminal with `pi install -l ...` should appear in the web manager after refresh.
-- Packages installed without `-l` write to `/root/.pi/agent/...`; these are user-scoped Pi packages and should not become the default web manager behavior.
-- Requiring an active `pi-basic` session for v1 is acceptable.
-- The runner should serialize package operations so the web manager and Pi tooling do not mutate package settings at the same time.
-- Package code should not be written to the client device. The browser initiates and displays operations only.
-- Cross-workspace package memory belongs in Firestore under the authenticated user, not in every workspace.
-- The package catalog should remember packages used in any workspace and show them as installable in other workspaces.
-- Future favorites can build on the package catalog with a `favorite` field.
-- Reuse the runner's archive-backed sync pattern for high-cardinality package install directories. Keep `.pi/settings.json` normally synced, but archive `.pi/npm` and `.pi/git` as runtime cache directories.
-- Hide `.pi/npm`, `.pi/git`, and internal archive objects from the Files UI and editor routes.
-- For GitHub workspaces, `.pi/settings.json` is portable workspace configuration and may be committed by the user. Installed package directories are runtime cache state.
+- `docs/` is developer/LLM implementation knowledge.
+- `community/` is user-facing docs and blog content; leave it alone in this phase.
+- Keep the landing page and current jumbotron asset in place for now.
+- Treat the N64 runner as a fun side project, not part of the main maintenance path. Avoid adding it to routine heavy builds unless a task is explicitly about N64.
+- The large `functions/index.js` decomposition has already been mapped into repo issues; use those issues for detailed sequencing instead of duplicating that plan here.
 
 ## Tasks
 
-- [x] 1. **Document the extension manager architecture** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Add focused docs describing workspace-local Pi package management.
-  - Document where package declarations, installed package code, package catalog metadata, and operation status are written.
-  - Document active-session requirement for v1.
-  - Document that web management is additive to Pi TUI/CLI tooling.
-  - Update overview/runtime docs to point to the new architecture notes.
-  - Completed: 2026-06-11. Added `docs/pi-extension-manager.md` and linked it from overview/runtime docs, covering workspace-local package scope, write locations, active-session v1 behavior, package catalog metadata, archive-backed package caches, and additive Pi tooling behavior.
+- [x] 1. **Archive old task artifacts** - easy
+  - Move the completed extension-manager task list to `docs/prior_task_lists/workspace-local-pi-extension-manager.md`.
+  - Move the old landing-page brief to `docs/prior_task_lists/mapache-tools-landing-page-brief.md`.
+  - Move the prior GitHub connectivity task list to `docs/prior_task_lists/github-connectivity.md`.
+  - Normalize the archive folder name to `docs/prior_task_lists/`.
 
-- [x] 2. **Add workspace Pi package archive targets** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Runner treats `/workspace/.pi/npm` and `/workspace/.pi/git` as archive-backed runtime cache directories.
-  - `.pi/settings.json` remains normal workspace file sync state.
-  - Archive objects live under `.mapahce-internal/archives/`.
-  - Existing `node_modules`, `.git`, and `/root/.pi` archive behavior remains intact.
-  - `node --check session-runner/server.js` passes.
-  - Completed: 2026-06-11. Added archive targets for `/workspace/.pi/npm` and `/workspace/.pi/git`, storing them under `.mapahce-internal/archives/` while leaving `/workspace/.pi/settings.json` in normal workspace sync.
+- [x] 2. **Document docs/community ownership boundary** - easy
+  - Update `AGENTS.md` to state that `docs/` is developer/LLM implementation knowledge.
+  - Update `AGENTS.md` to state that `community/` is user-facing docs/blog content and should be left out of developer-doc maintenance unless explicitly requested.
 
-- [x] 3. **Hide workspace Pi package cache paths from normal file surfaces** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Normal workspace sync skips object-per-file sync for `.pi/npm/` and `.pi/git/`.
-  - Files API and file editor routes do not expose `.pi/npm/`, `.pi/git/`, or related internal archive objects.
-  - `.pi/settings.json` can still appear as a normal workspace file when present.
-  - Runtime docs describe the visibility and sync rules.
-  - Completed: 2026-06-11. Normal sync now skips `.pi/npm/` and `.pi/git/`, Cloud Functions hides them from file listings/editor paths, and runtime docs describe visibility rules.
+- [x] 3. **Add a root verification script** - easy
+  - Add a root `check` script that runs Functions tests, runner syntax checks, and the full app/community build.
+  - Keep N64 image builds out of this default check.
+  - Document the command in `README.md` or the relevant developer doc.
+  - Completed: 2026-06-17 - Added root `npm run check`, session-runner syntax linting, and README usage notes.
 
-- [x] 4. **Add runner read-only Pi package listing endpoint** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Runner exposes a token-protected endpoint for workspace-local Pi packages.
-  - Endpoint reads `/workspace/.pi/settings.json` through Pi-compatible settings/package logic when practical.
-  - Response includes configured package source, scope, installed path when present, and whether the package is filtered.
-  - Packages installed via terminal with `pi install -l ...` appear after refresh.
-  - Blank/no-package state returns a stable empty response.
-  - Completed: 2026-06-11. Added protected `GET /pi/packages` runner endpoint that reads workspace-local Pi settings, returns stable package metadata with scope/type/filter/install-path information, and handles missing settings as an empty package list.
+- [x] 4. **Update CI to validate the session runner** - medium
+  - Install `session-runner/` dependencies in preview and production workflows.
+  - Run runner syntax checks in CI.
+  - Do not add heavy N64 container builds to normal PR checks.
+  - Completed: 2026-06-17 - Added session-runner dependency install and syntax lint steps to preview and production workflows.
 
-- [x] 5. **Add backend read-only package proxy route** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Cloud Functions exposes an authenticated route to list packages for an active session.
-  - Route verifies workspace and session ownership.
-  - Route requires a live runner URL and protected runner token.
-  - Errors distinguish no active session, unsupported runner, runner unavailable, and package read failure.
-  - No package code or secrets are returned.
-  - Completed: 2026-06-11. Added authenticated `GET /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-packages` proxy with workspace/session ownership checks, live runner/token requirements, and stable unsupported/unavailable/read-failure errors.
+- [x] 5. **Design the test pyramid for this repo** - medium
+  - Define where unit, integration, e2e, and nightly tests live.
+  - Identify fast PR checks versus slower nightly checks.
+  - Include an LLM-assisted regression suite design for commit or nightly runs, with deterministic guardrails and clear failure artifacts.
+  - Completed: 2026-06-17 - Added `docs/testing.md` with the repo test pyramid, PR/nightly split, and LLM regression guardrails.
 
-- [x] 6. **Add frontend read-only Extensions panel** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Existing right drawer `Extensions` section shows workspace-local installed/configured packages.
-  - Panel has refresh, loading, empty, unavailable, and error states.
-  - Panel requires an active session for v1 and explains that state without replacing Pi tooling.
-  - UI stays compact and consistent with the current operational drawer style.
-  - `npm run build` passes.
-  - Completed: 2026-06-11. Added a read-only Extensions inspector panel with refresh/loading/empty/unavailable/error states wired to the backend package listing route.
+- [x] 6. **Add route/contract tests before backend decomposition** - medium
+  - Cover `functions/index.js` route parsing and representative API contracts.
+  - Include ownership/error behavior where practical without hitting live GCP.
+  - Use these tests as the safety net for following the existing repo-issue decomposition plan.
+  - Completed: 2026-06-17 - Added API route helper coverage for route parsing, method contracts, and auth/public route expectations.
 
-- [x] 7. **Add Firestore package catalog schema helpers** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Backend has helpers to normalize package source and derive package identity for npm and git sources.
-  - Firestore package catalog lives under the authenticated user.
-  - Catalog records exact source string, derived identity, type, timestamps, last workspace id, install count, and future `favorite` field.
-  - Validation rejects unsupported or unsafe package source strings.
-  - Completed: 2026-06-11. Added backend helpers for npm/git package source normalization, identity derivation, encoded user catalog document IDs, merge records, and unsafe/unsupported source rejection.
+- [x] 7. **Follow repo issues for `functions/index.js` decomposition** - large
+  - Use existing GitHub issues as the detailed plan.
+  - Keep this task as the maintenance-list pointer rather than duplicating the issue breakdown.
+  - Preserve behavior with tests before moving code.
+  - [x] Issue #42: 2026-06-17 - Extracted route parsing and grouped dispatch helpers with contract coverage.
+  - [x] Issue #43: 2026-06-17 - Extracted backend context, config, and shared utility helpers with focused tests.
+  - [x] Issue #44: 2026-06-17 - Extracted auth/access/profile and usage accounting services with focused tests.
+  - [x] Issue #45: 2026-06-17 - Extracted workspace CRUD and Cloud Storage file services with focused tests.
+  - Completed: 2026-06-17 - Followed the non-overlapping issue #42-#45 backend decomposition slices; Cloud Run, GitHub, and Pi-specific extractions continue in tasks 8-10.
 
-- [x] 8. **Populate catalog from observed workspace packages** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Listing workspace packages records or updates known package catalog entries for the user.
-  - Catalog update does not install packages into other workspaces.
-  - Exact source strings are preserved for pinned npm versions and pinned git refs.
-  - Existing workspace package listing behavior remains correct if catalog writes fail.
-  - Completed: 2026-06-11. Workspace package listing now merges observed npm/git sources into the user catalog with preserved source strings and logs catalog write failures without failing the listing response.
+- [ ] 8. **Extract Cloud Run provisioning helpers** - medium
+  - Move Cloud Run service build/patch/delete/service-account logic out of `functions/index.js`.
+  - Add direct tests for service account selection, image capability metadata, env construction, and failure messages.
 
-- [x] 9. **Show known packages not installed in current workspace** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Extensions panel shows user-known packages from Firestore that are not configured in the active workspace.
-  - Known packages have an `Install` action but are not installed automatically.
-  - Installed/configured workspace packages remain visually distinct from known packages.
-  - The UI can later support favorites without changing the catalog shape.
-  - `npm run build` passes.
-  - Completed: 2026-06-11. Backend package listing now includes catalog-backed `knownPackages`, and the Extensions panel shows them separately as known/not-installed rows with an install affordance for the later install flow.
+- [ ] 9. **Extract GitHub backend helpers** - medium
+  - Move GitHub OAuth/App token/repository/PR helpers out of `functions/index.js`.
+  - Add tests for normalization, token permission parsing, branch naming, and API error mapping.
 
-- [x] 10. **Add runner package operation lock** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Runner serializes package list/install/remove/update operations.
-  - Concurrent mutation attempts receive a stable busy response.
-  - Read operations either wait for the lock or return a clearly marked busy state.
-  - Lock failures cannot leave the runner permanently busy.
-  - Completed: 2026-06-11. Added an in-memory runner package operation lock; list operations run under the lock and future concurrent mutations can return stable `package_operation_busy` errors without leaving the runner locked.
+- [ ] 10. **Extract Pi backend proxy helpers** - medium
+  - Move Pi auth, package, and skill proxy behavior out of `functions/index.js`.
+  - Add tests for payload validation and stable user-facing errors.
 
-- [x] 11. **Add runner workspace-local package install support** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Runner exposes a token-protected install endpoint.
-  - Endpoint installs npm and git package sources into workspace-local Pi settings, equivalent to `pi install -l`.
-  - Use Pi's exported package manager API when practical; use CLI fallback only if needed.
-  - Operation updates `.pi/settings.json` and package cache directories.
-  - Operation triggers or schedules archive sync for `.pi/npm` and `.pi/git`.
-  - Errors are structured and do not expose credentials.
-  - Completed: 2026-06-11. Added protected runner `POST /pi/packages/install` using `pi install -l` under the package operation lock, validating npm/git sources and forcing settings/archive sync after install.
+- [ ] 11. **Split runner Pi service** - medium
+  - Split `session-runner/lib/pi.js` into package service, skill service, seeded skill loading, and validation helpers.
+  - Keep runner endpoint behavior unchanged.
+  - Add focused tests for package source and skill validation if practical.
 
-- [x] 12. **Add backend package install route** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Cloud Functions exposes an authenticated install route for active sessions.
-  - Route validates package source and supported type before proxying to the runner.
-  - Route verifies workspace/session ownership and active runner availability.
-  - Successful install updates the user's package catalog.
-  - Failure responses are stable for frontend display.
-  - Completed: 2026-06-11. Added authenticated backend install proxy with source validation, runner ownership/availability checks, stable install errors, and successful catalog update.
+- [ ] 12. **Move seeded skill Markdown out of JS strings** - medium
+  - Store default seeded skill content as Markdown files under `session-runner/`.
+  - Load those files from runner code.
+  - Keep the "create only when missing" behavior.
 
-- [x] 13. **Add frontend package install flow** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Extensions panel supports installing npm and git package sources into the current workspace.
-  - Known package rows include an install button.
-  - Install form handles busy, success, validation error, and runner error states.
-  - Package list refreshes after successful install.
-  - `npm run build` passes.
-  - Completed: 2026-06-11. Added Extensions install form and known-package install buttons wired to the backend install route with busy, success, validation, runner error, and post-install refresh handling.
+- [ ] 13. **Split runner Git service** - medium
+  - Separate command execution, status parsing, branch/commit validation, push auth, and PR helpers.
+  - Add tests for porcelain parsing and branch/payload validation.
 
-- [x] 14. **Add runner package remove support** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Runner exposes a token-protected remove endpoint.
-  - Endpoint removes workspace-local package settings and installed package cache when supported by Pi package behavior.
-  - Removing one package does not remove unrelated known catalog entries.
-  - Operation triggers or schedules archive sync for package cache directories.
-  - Errors are structured and safe to display.
-  - Completed: 2026-06-11. Added protected runner `POST /pi/packages/remove` using `pi remove -l` under the package operation lock, followed by settings/archive sync and structured errors.
+- [ ] 14. **Split runner workspace service** - medium
+  - Separate sync, archive handling, GitHub workspace restore, and Pi home persistence.
+  - Add tests around path filtering and archive target selection.
 
-- [x] 15. **Add backend and frontend remove flow** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Backend exposes authenticated package remove route with ownership checks.
-  - Frontend package rows include remove action for workspace-installed packages.
-  - UI refreshes package state after removal.
-  - Known package catalog still offers removed packages as installable in the current workspace.
-  - `npm run build` passes.
-  - Completed: 2026-06-11. Added authenticated backend remove proxy and frontend remove actions for workspace-installed packages, with refresh/error handling while known catalog packages remain installable.
+- [ ] 15. **Reduce frontend state fan-out from `src/main.js`** - large
+  - Extract cohesive controllers/hooks for selected workspace/session state, modal state, right-drawer panels, and file editor state.
+  - Keep React component APIs smaller so simple UI edits do not require touching the main app coordinator.
 
-- [x] 16. **Add runner package update support** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Runner exposes token-protected update endpoints for all packages and a selected package.
-  - Update behavior follows Pi package semantics, including pinned npm versions and pinned git refs.
-  - Operation uses the package operation lock.
-  - Operation triggers or schedules archive sync for package cache directories.
-  - Errors are structured and safe to display.
-  - Completed: 2026-06-11. Added protected runner package update endpoint supporting update-all via `pi update --extensions` and update-one via `pi update --extension <source>` under the package operation lock with archive sync.
+- [ ] 16. **Plan CSS decomposition** - medium
+  - Audit `src/styles.css` and decide whether to use component-local CSS files, CSS modules, or a hybrid.
+  - Recommended direction: keep tokens/layout primitives global, move component-specific overrides beside their components, and avoid one-off global selectors where a component boundary exists.
+  - Implement incrementally by component area instead of one large rewrite.
 
-- [x] 17. **Add backend and frontend update flow** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - Backend exposes authenticated package update route with ownership checks.
-  - Frontend supports update-all and update-one where available.
-  - UI shows busy/error/success states and refreshes after update.
-  - Pinned package behavior is not misrepresented.
-  - `npm run build` passes.
-  - Completed: 2026-06-11. Added authenticated backend update proxy and frontend update-all/update-one controls with busy/error/success states and post-update refresh while relying on Pi's pinned package semantics.
+- [ ] 17. **Add frontend smoke coverage** - medium
+  - Cover route gating, signed-in shell rendering, drawer panels, session selection, and key modal flows.
+  - Prefer tests that can run in PR checks without live Cloud Run sessions.
 
-- [x] 18. **Detect and surface user-scoped Pi packages** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Runner listing can detect packages configured in `/root/.pi/agent/settings.json`.
-  - Frontend shows user-scoped packages separately from workspace-local packages.
-  - User-scoped packages are not treated as installed in the current workspace by default.
-  - UI offers a clear path to install the same source workspace-locally.
-  - Completed: 2026-06-11. Runner listing now includes `/root/.pi/agent/settings.json` packages as `userPackages`, and the Extensions panel shows them separately with workspace-local install actions.
+- [ ] 18. **Add nightly e2e coverage plan** - large
+  - Define live-environment tests for authenticated session creation, workspace files, GitHub workspaces, Pi packages, Pi skills, and runner preview.
+  - Keep these out of every PR unless they become cheap and reliable.
+  - Include failure artifacts such as screenshots, logs, and API responses.
 
-- [x] 19. **Add package operation status persistence if needed** - medium (gpt-5.4)
-  - Acceptance criteria:
-  - If synchronous runner calls are insufficient, add Firestore operation records under the workspace or session.
-  - Operation records include action, source, status, timestamps, and safe error message.
-  - Frontend can recover operation status after reload.
-  - If not needed, document the decision and leave this task marked complete with rationale.
-  - Completed: 2026-06-11. Determined Firestore operation persistence is not needed for v1 because package operations are synchronous runner calls with ephemeral UI status; documented the deferred decision.
-
-- [x] 20. **Add regression coverage for package source validation and catalog writes** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Add focused tests or test seams for source normalization and identity derivation.
-  - Cover npm, scoped npm, pinned npm, git shorthand, git URL, and invalid source cases.
-  - Cover catalog merge/update behavior.
-  - Existing relevant checks pass.
-  - Completed: 2026-06-11. Added package catalog helper test coverage for npm/scoped/pinned sources, git shorthand/URL sources, invalid source rejection, encoded catalog IDs, and catalog merge fields.
-
-- [ ] 21. **Run end-to-end package manager regression checks** - human
-  - Blocked: 2026-06-11. Requires a live authenticated `pi-basic` session and manual verification across workspaces; leaving for human execution.
-  - Acceptance criteria:
-  - Create or use a `pi-basic` session.
-  - Install an npm package from the web UI and verify it appears in `/workspace/.pi/settings.json`.
-  - Install a git package from the web UI and verify it appears in `/workspace/.pi/settings.json`.
-  - Install a package from inside Pi with `pi install -l ...` and verify the web UI shows it after refresh.
-  - Stop/restart the session and verify package settings and package cache restore.
-  - Verify a package installed in one workspace appears as known-but-not-installed in another workspace.
-
-- [x] 22. **Document deployment and existing-session behavior** - easy (gpt-5.4-mini)
-  - Acceptance criteria:
-  - Runtime docs explain that existing Cloud Run sessions need a new revision or recreation for package manager endpoints and archive targets.
-  - Docs include build/deploy commands with explicit `--project pi-agents-cloud` where applicable.
-  - Docs note that `functions/` changes should be deployed before handoff in normal implementation work unless explicitly skipped.
-  - Docs list the expected storage and Firestore write locations.
-  - Completed: 2026-06-11. Runtime docs now call out existing-session recreation/new revision requirements for package endpoints/archive targets, explicit functions deploy command, and expected Storage/Firestore write locations.
+- [ ] 19. **Review large tracked assets later** - human
+  - Leave the landing page and jumbotron unchanged for now.
+  - Revisit image compression/replacement in a separate product-facing pass.
