@@ -59,6 +59,7 @@ export function AppShell(props) {
             onSelectSession={props.onSelectSession}
             onStageGitPath={props.onStageGitPath}
             onUnstageGitPath={props.onUnstageGitPath}
+            onUpdateSessionPreviewRoot={props.onUpdateSessionPreviewRoot}
             onUpdateGitCommitMessage={props.onUpdateGitCommitMessage}
           />
         )}

@@ -58,6 +58,7 @@ import {
   resizeSessionState,
   restartSessionState,
   stopSessionState,
+  updateSessionPreviewRootState,
 } from "./workflows/sessionLifecycle.js";
 import {
   closeFileEditorState,
@@ -134,6 +135,7 @@ function render() {
     onSaveFileEditor: saveFileEditor,
     onToggleWorkspaceFileDir: toggleWorkspaceFileDir,
     onResizeSession: resizeSession,
+    onUpdateSessionPreviewRoot: updateSessionPreviewRoot,
     onRestartSession: restartSession,
     onStopSession: stopSession,
     onDeleteSession: deleteSession,
@@ -699,6 +701,10 @@ function getSelectedSession() {
 
 async function resizeSession(sessionId, payload) {
   await runBusy(() => resizeSessionState(state, sessionId, payload));
+}
+
+async function updateSessionPreviewRoot(sessionId, payload) {
+  await runBusy(() => updateSessionPreviewRootState(state, sessionId, payload));
 }
 
 async function restartSession(sessionId) {

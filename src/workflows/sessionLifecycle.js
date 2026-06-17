@@ -3,6 +3,11 @@ export async function resizeSessionState(state, sessionId, payload) {
   await refreshSessionsForSelectedWorkspace(state, sessionId);
 }
 
+export async function updateSessionPreviewRootState(state, sessionId, payload) {
+  await state.api.updateSessionPreviewRoot(state.selectedWorkspaceId, sessionId, payload);
+  await refreshSessionsForSelectedWorkspace(state, sessionId);
+}
+
 export async function restartSessionState(state, sessionId) {
   await state.api.restartSession(state.selectedWorkspaceId, sessionId);
   await refreshSessionsForSelectedWorkspace(state, sessionId);
