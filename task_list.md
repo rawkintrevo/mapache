@@ -117,10 +117,11 @@ Before implementation tasks, read:
   - Keep React component APIs smaller so simple UI edits do not require touching the main app coordinator.
   - Completed: 2026-06-17 - Added focused drawer, modal, right-drawer Pi panel, and workspace file/editor controllers; `AppShell` and `ModalStack` now receive grouped handlers instead of a long flat callback prop surface.
 
-- [ ] 16. **Plan CSS decomposition** - medium
+- [x] 16. **Plan CSS decomposition** - medium
   - Audit `src/styles.css` and decide whether to use component-local CSS files, CSS modules, or a hybrid.
   - Recommended direction: keep tokens/layout primitives global, move component-specific overrides beside their components, and avoid one-off global selectors where a component boundary exists.
   - Implement incrementally by component area instead of one large rewrite.
+  - Completed: 2026-06-17 - Added `docs/css-decomposition.md` with the stylesheet audit, hybrid plain-CSS decision, migration order, and verification expectations.
 
 - [ ] 17. **Add frontend smoke coverage** - medium
   - Cover route gating, signed-in shell rendering, drawer panels, session selection, and key modal flows.
