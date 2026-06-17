@@ -137,17 +137,22 @@ function createGitService({config, activity}) {
     try {
       await runGitCommand(["add", "-A"]);
       const status = await runGitCommand(["status", "--porcelain=1"], {captureStdout: true});
-      if (!status) {
+      if (status) {
+        const message = buildAutomationCommitMessage();
+        await runGitCommand(["commit", "-m", message]);
+      }
+
+      const commitCount = await countAutomationBranchCommits();
+      if (!commitCount) {
         await activity.updateSessionActivity({
           githubAutomationStatus: "no_changes",
           githubAutomationFinishedAt: new Date().toISOString(),
         });
-        console.log("github automation found no changes; skipping PR");
+        console.log("github automation found no changes or commits; skipping PR");
         return {ok: true, skipped: true, reason: "no_changes"};
       }
 
-      const message = buildAutomationCommitMessage();
-      await runGitCommand(["commit", "-m", message]);
+      const message = await buildAutomationPullRequestTitle();
       await withGithubAutomationAuth((env) => (
         runGitCommand(["push", "--set-upstream", "origin", `HEAD:${automationBranch}`], {env})
       ));
@@ -409,6 +414,33 @@ function createGitService({config, activity}) {
 
   function buildAutomationCommitMessage() {
     return `Mapache changes for ${normalizeCommitTitle(config.sessionName)}`;
+  }
+
+  async function buildAutomationPullRequestTitle() {
+    const baseRef = automationBaseBranch ? `origin/${automationBaseBranch}` : automationBaseCommit;
+    if (baseRef) {
+      try {
+        const subjects = await runGitCommand(["log", "--reverse", "--format=%s", `${baseRef}..HEAD`], {
+          captureStdout: true,
+        });
+        const firstSubject = String(subjects || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0];
+        if (firstSubject) return firstSubject.slice(0, 256);
+      } catch (error) {
+        // Fall back to the generic session title below.
+      }
+    }
+    return buildAutomationCommitMessage();
+  }
+
+  async function countAutomationBranchCommits() {
+    const baseRef = automationBaseBranch ? `origin/${automationBaseBranch}` : automationBaseCommit;
+    if (!baseRef) return 0;
+    try {
+      const count = await runGitCommand(["rev-list", "--count", `${baseRef}..HEAD`], {captureStdout: true});
+      return Number.parseInt(count, 10) || 0;
+    } catch (error) {
+      return 0;
+    }
   }
 
   function buildAutomationPullRequestBody({exitCode}) {

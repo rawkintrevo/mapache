@@ -46,7 +46,7 @@ Some curated runners seed workflow skills during startup after workspace restore
 
 All Pi runners seed:
 
-- `mapache-github-issue`: explains how to work from a GitHub issue number by reading the issue and comments through the GitHub API, asking clarifying questions or decision questions when needed, and then implementing the scoped change.
+- `mapache-github-issue`: explains how to work from or create GitHub issues by reading repository context, applying type and difficulty labels for new issues, confirming the base branch is up to date before editing, asking clarifying questions or decision questions when needed, implementing the scoped change, and ending with a local commit.
 
 Current `pi-web` seeded skills are:
 
