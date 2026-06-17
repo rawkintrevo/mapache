@@ -132,7 +132,8 @@ Before implementation tasks, read:
   - Define live-environment tests for authenticated session creation, workspace files, GitHub workspaces, Pi packages, Pi skills, and runner preview.
   - Keep these out of every PR unless they become cheap and reliable.
   - Include failure artifacts such as screenshots, logs, and API responses.
-
+ Moved to git issue #59
+ 
 - [ ] 19. **Review large tracked assets later** - human
   - Leave the landing page and jumbotron unchanged for now.
   - Revisit image compression/replacement in a separate product-facing pass.
