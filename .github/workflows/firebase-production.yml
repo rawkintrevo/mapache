@@ -57,7 +57,7 @@ jobs:
         run: |
           printf '%s\n' \
             'FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com' \
-            'SESSION_RUNNER_SERVICE_ACCOUNT=mapache-session-runner@pi-agents-cloud.iam.gserviceaccount.com' \
+            'SESSION_RUNNER_SERVICE_ACCOUNT=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com' \
             > functions/.env.pi-agents-cloud
 
       - name: Deploy Firebase production

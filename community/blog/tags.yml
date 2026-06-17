@@ -17,3 +17,8 @@ community:
   label: Community
   permalink: /community
   description: Updates about the Mapache community site and docs.
+
+daily:
+  label: Daily
+  permalink: /daily
+  description: Daily notes about Mapache development and design and/or rants. Good for clearing my head in the morning + SEO
