@@ -138,6 +138,20 @@ app.get("/git/status", async (req, res) => {
   }
 });
 
+app.post("/pi/auth/materialize", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await workspace.materializePiAuthNow(req.body && req.body.selection));
+  } catch (error) {
+    console.error("pi auth materialize failed", error);
+    res.status(500).json({error: "pi_auth_materialize_failed"});
+  }
+});
+
 app.get("/pi/packages", async (req, res) => {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});

@@ -8,6 +8,7 @@ export function WorkspacePanel({
   state,
   onGetSessionAccessUrls,
   onCommitGit,
+  onOpenPiAuthManage,
   onOpenPullRequest,
   onPullGit,
   onPushGit,
@@ -31,6 +32,7 @@ export function WorkspacePanel({
           workspaceId={state.selectedWorkspaceId}
           onCommitGit={onCommitGit}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
+          onOpenPiAuthManage={onOpenPiAuthManage}
           onOpenPullRequest={onOpenPullRequest}
           onPullGit={onPullGit}
           onPushGit={onPushGit}

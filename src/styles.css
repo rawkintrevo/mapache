@@ -2281,3 +2281,27 @@ h2 {
     flex: 1 1 0;
   }
 }
+
+.pi-auth-selection-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pi-auth-selection-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pi-auth-selection-row span {
+  font-weight: 600;
+}
+
+.pi-auth-selection-row select {
+  width: 100%;
+}
+
+.auth-center-manage {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}

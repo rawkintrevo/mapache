@@ -141,6 +141,11 @@ exports.api = onRequest({
       return;
     }
 
+    if (req.method === "DELETE" && route.name === "piAuthEntry") {
+      res.json(await deletePiAuthEntry(user.uid, route.entryId));
+      return;
+    }
+
     if (req.method === "POST" && route.name === "openAiCodexDeviceCode" && route.action === "start") {
       res.json(await startOpenAiCodexDeviceCode());
       return;
@@ -236,6 +241,11 @@ exports.api = onRequest({
 
     if (req.method === "POST" && route.name === "sessionAccess") {
       res.json(await createSessionAccessUrls(user.uid, route.workspaceId, route.sessionId));
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "sessionPiAuthSelection") {
+      res.json(await saveSessionPiAuthSelection(user.uid, route.workspaceId, route.sessionId, req.body || {}));
       return;
     }
 
@@ -362,6 +372,9 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
     return {name: "piAuthProvider", provider: parts[2]};
   }
+  if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "entries") {
+    return {name: "piAuthEntry", entryId: parts[2]};
+  }
   if (
     parts.length === 5 &&
 
@@ -422,6 +435,14 @@ function routeRequest(path) {
     parts[4] === "access-url"
   ) {
     return {name: "sessionAccess", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "pi-auth-selection"
+  ) {
+    return {name: "sessionPiAuthSelection", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (
     parts.length === 5 &&
@@ -792,13 +813,14 @@ function sessionUsageRecord(sessionRef, session, endedAt) {
 async function getPiAuth(uid) {
   const snap = await piAuthDoc(uid).get();
   const data = snap.exists ? snap.data() : {};
-  return {providers: normalizePiAuthProviders(data.providers)};
+  const providers = normalizePiAuthProviders(data.providers);
+  return {providers, entries: normalizePiAuthEntries(data.entries, providers)};
 }
 
 async function savePiAuthProvider(uid, provider, payload) {
   const providerKey = normalizePiAuthProviderKey(provider);
   const apiKey = normalizePiAuthApiKey(payload && payload.key);
-  await savePiAuthCredential(uid, providerKey, {type: "api_key", key: apiKey});
+  await savePiAuthCredential(uid, providerKey, {type: "api_key", key: apiKey}, payload && payload.label);
   return getPiAuth(uid);
 }
 
@@ -808,10 +830,17 @@ async function deletePiAuthProvider(uid, provider) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
-    const current = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
+    const data = snap.exists ? snap.data() : {};
+    const current = normalizePiAuthProviders(data.providers);
+    const entries = normalizePiAuthEntries(data.entries, current);
     delete current[providerKey];
+    const filteredEntries = Object.entries(entries).reduce((acc, [id, entry]) => {
+      if (entry.providerKey !== providerKey) acc[id] = entry;
+      return acc;
+    }, {});
     transaction.set(ref, {
       providers: current,
+      entries: filteredEntries,
       updatedAt: now,
       ...(snap.exists ? {} : {createdAt: now}),
     }, {merge: true});
@@ -819,16 +848,59 @@ async function deletePiAuthProvider(uid, provider) {
   return getPiAuth(uid);
 }
 
-async function savePiAuthCredential(uid, providerKey, credential) {
+async function deletePiAuthEntry(uid, entryId) {
+  const normalizedEntryId = normalizePiAuthEntryId(entryId);
   const ref = piAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
-    const current = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
+    const data = snap.exists ? snap.data() : {};
+    const providers = normalizePiAuthProviders(data.providers);
+    const entries = normalizePiAuthEntries(data.entries, providers);
+    const entry = entries[normalizedEntryId];
+    if (!entry) return;
+    delete entries[normalizedEntryId];
+    const latestForProvider = Object.values(entries)
+        .filter((item) => item.providerKey === entry.providerKey)
+        .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0];
+    const nextProviders = {...providers};
+    if (latestForProvider) nextProviders[entry.providerKey] = latestForProvider.credential;
+    else delete nextProviders[entry.providerKey];
+    transaction.set(ref, {
+      providers: nextProviders,
+      entries,
+      updatedAt: now,
+      ...(snap.exists ? {} : {createdAt: now}),
+    }, {merge: true});
+  });
+  return getPiAuth(uid);
+}
+
+async function savePiAuthCredential(uid, providerKey, credential, label = "") {
+  const ref = piAuthDoc(uid);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const data = snap.exists ? snap.data() : {};
+    const current = normalizePiAuthProviders(data.providers);
+    const entries = normalizePiAuthEntries(data.entries, current);
+    const cleanCredential = normalizePlainObject(credential);
+    const entryId = buildPiAuthEntryId(providerKey);
+    const createdAt = new Date().toISOString();
     transaction.set(ref, {
       providers: {
         ...current,
-        [providerKey]: normalizePlainObject(credential),
+        [providerKey]: cleanCredential,
+      },
+      entries: {
+        ...entries,
+        [entryId]: {
+          id: entryId,
+          providerKey,
+          label: cleanName(label) || defaultPiAuthEntryLabel(providerKey, entries),
+          credential: cleanCredential,
+          createdAt,
+        },
       },
       updatedAt: now,
       ...(snap.exists ? {} : {createdAt: now}),
@@ -1755,6 +1827,28 @@ async function deleteSession(uid, workspaceId, sessionId) {
   }
   await sessionRef.delete();
   return {ok: true};
+}
+
+
+async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload) {
+  await requireWorkspace(uid, workspaceId);
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (cleanName(session.terminalKind || "pi") !== "pi") {
+    throw httpError(400, "not_pi_session");
+  }
+  const piAuth = await getPiAuth(uid);
+  const selection = normalizePiAuthSelection(payload && payload.selection, piAuth.entries);
+  await sessionSnap.ref.set({
+    piAuthSelection: selection,
+    piAuthSelectionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+
+  let materialized = {ok: true, appliedToRunner: false, providerCount: Object.keys(selection).length};
+  if (session.serviceUrl && session.shutdownToken) {
+    materialized = await requestRunnerPiAuthMaterialize(session, {selection});
+  }
+  return {ok: true, selection, materialized};
 }
 
 async function getGitStatusSummary(uid, workspaceId, sessionId) {
@@ -3334,6 +3428,18 @@ async function requestRunnerGitOpenPr(session, body) {
   });
 }
 
+async function requestRunnerPiAuthMaterialize(session, body) {
+  return requestRunnerJson(session, "/pi/auth/materialize", {
+    method: "POST",
+    body,
+    notFoundError: "runner_pi_auth_unsupported",
+    notFoundStatus: 501,
+    failureError: "pi_auth_materialize_failed",
+    unavailableError: "runner_pi_auth_unavailable",
+    timeoutMs: 30000,
+  });
+}
+
 async function requestRunnerPiPackages(session) {
   return requestRunnerJson(session, "/pi/packages", {
     notFoundError: "runner_package_listing_unsupported",
@@ -3711,6 +3817,72 @@ function normalizePiAuthProviders(value) {
     acc[key] = normalizePlainObject(credential);
     return acc;
   }, {});
+}
+
+function normalizePiAuthEntries(value, providers = {}) {
+  const entries = value && typeof value === "object" && !Array.isArray(value) ? Object.entries(value).reduce((acc, [id, entry]) => {
+    const normalizedId = normalizePiAuthEntryId(id || entry && entry.id, {required: false});
+    if (!normalizedId || !entry || typeof entry !== "object" || Array.isArray(entry)) return acc;
+    const providerKey = normalizePiAuthStoredProviderKey(entry.providerKey || entry.provider || "");
+    const credential = normalizePlainObject(entry.credential || entry.value || {});
+    if (!providerKey || !Object.keys(credential).length) return acc;
+    acc[normalizedId] = {
+      id: normalizedId,
+      providerKey,
+      label: cleanName(entry.label || "") || piAuthProviderEntryFallbackLabel(providerKey),
+      credential,
+      createdAt: cleanName(entry.createdAt || ""),
+    };
+    return acc;
+  }, {}) : {};
+
+  Object.entries(providers || {}).forEach(([providerKey, credential]) => {
+    const hasProviderEntry = Object.values(entries).some((entry) => entry.providerKey === providerKey);
+    if (!hasProviderEntry) {
+      const id = `legacy-${providerKey}`;
+      entries[id] = {
+        id,
+        providerKey,
+        label: piAuthProviderEntryFallbackLabel(providerKey),
+        credential: normalizePlainObject(credential),
+        createdAt: "",
+      };
+    }
+  });
+  return entries;
+}
+
+function normalizePiAuthSelection(value, entries = {}) {
+  const selected = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return Object.entries(selected).reduce((acc, [provider, entryId]) => {
+    const providerKey = normalizePiAuthStoredProviderKey(provider);
+    const normalizedEntryId = normalizePiAuthEntryId(entryId, {required: false});
+    const entry = entries[normalizedEntryId];
+    if (providerKey && entry && entry.providerKey === providerKey) acc[providerKey] = normalizedEntryId;
+    return acc;
+  }, {});
+}
+
+function normalizePiAuthEntryId(value, options = {}) {
+  const id = cleanName(value);
+  if (!id && options.required === false) return "";
+  if (!id || id.length > 256 || /[^a-zA-Z0-9_.:-]/.test(id)) {
+    throw httpError(400, "invalid_pi_auth_entry");
+  }
+  return id;
+}
+
+function buildPiAuthEntryId(providerKey) {
+  return `${providerKey}-${Date.now().toString(36)}-${crypto.randomBytes(3).toString("hex")}`;
+}
+
+function defaultPiAuthEntryLabel(providerKey, entries) {
+  const count = Object.values(entries || {}).filter((entry) => entry.providerKey === providerKey).length + 1;
+  return count > 1 ? `${piAuthProviderEntryFallbackLabel(providerKey)} ${count}` : piAuthProviderEntryFallbackLabel(providerKey);
+}
+
+function piAuthProviderEntryFallbackLabel(providerKey) {
+  return providerKey;
 }
 
 function normalizePlainObject(value) {

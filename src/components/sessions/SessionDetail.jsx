@@ -144,6 +144,7 @@ export function SessionDetail({
             <RotateCcw aria-hidden="true" />
             Restart
           </Button>
+
         </div>
       </form>
       {showGitStatus ? (

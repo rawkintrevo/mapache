@@ -34,6 +34,7 @@ import {
   deletePiAuthProviderState,
   loadPiAuthState,
   savePiAuthProviderState,
+  saveSessionPiAuthSelectionState,
   startOpenAiCodexDeviceLoginState,
   updatePiAuthFormState,
 } from "./workflows/piAuth.js";
@@ -160,6 +161,9 @@ function render() {
     onUpdatePiPackage: updatePiPackage,
     onOpenAuthModal: openAuthModal,
     onCloseAuthModal: closeAuthModal,
+    onOpenPiAuthManage: openPiAuthManageModal,
+    onClosePiAuthManageModal: closePiAuthManageModal,
+    onSaveSessionPiAuthSelection: saveSessionPiAuthSelection,
     onOpenPullRequest: openPullRequestModal,
     onClosePullRequest: closePullRequestModal,
     onUpdatePullRequestForm: updatePullRequestForm,
@@ -449,6 +453,17 @@ function closeAuthModal() {
   render();
 }
 
+function openPiAuthManageModal() {
+  state.piAuthManageModalOpen = true;
+  if (!state.piAuth.loading) loadPiAuth();
+  render();
+}
+
+function closePiAuthManageModal() {
+  state.piAuthManageModalOpen = false;
+  render();
+}
+
 async function createSession(payload) {
   if (!state.selectedWorkspaceId) return;
   await runBusy(async () => {
@@ -540,6 +555,11 @@ async function startOpenAiCodexDeviceLogin() {
 
 async function savePiAuthProvider() {
   await savePiAuthProviderState({state, render});
+}
+
+async function saveSessionPiAuthSelection(selection) {
+  const session = state.sessions.find((item) => item.id === state.selectedSessionId);
+  await saveSessionPiAuthSelectionState({state, session, selection, render});
 }
 
 function updatePiInstallSource(source) {

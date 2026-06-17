@@ -71,6 +71,7 @@ export function AppShell(props) {
           onDeletePiSkill={props.onDeletePiSkill}
           onEditPiSkill={props.onEditPiSkill}
           onOpenAuthModal={props.onOpenAuthModal}
+          onOpenPiAuthManage={props.onOpenPiAuthManage}
           onRefreshPiAuth={props.onRefreshPiAuth}
           onRefreshPiPackages={props.onRefreshPiPackages}
           onRefreshPiSkills={props.onRefreshPiSkills}
@@ -83,7 +84,7 @@ export function AppShell(props) {
           onUpdatePiSkillForm={props.onUpdatePiSkillForm}
         />
       </main>
-      <ModalStack {...props} />
+      <ModalStack {...props} selectedSession={selectedSession} />
     </div>
   );
 }

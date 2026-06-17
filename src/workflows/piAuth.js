@@ -18,6 +18,7 @@ export async function loadPiAuthState({state, render, options = {}}) {
       error: "",
       message: options.showMessage ? "Authentication providers refreshed." : "",
       providers: data.providers || {},
+      entries: data.entries || {},
     };
   } catch (error) {
     state.piAuth = {
@@ -51,13 +52,16 @@ export async function deletePiAuthProviderState({state, provider, render}) {
   render();
 
   try {
-    const data = await state.api.deletePiAuthProvider(providerKey);
+    const data = providerKey.startsWith("legacy-") ?
+      await state.api.deletePiAuthProvider(providerKey.replace(/^legacy-/, "")) :
+      await state.api.deletePiAuthEntry(providerKey);
     state.piAuth = {
       ...state.piAuth,
       saving: false,
       error: "",
       message: `${providerKey} deleted. New sessions will no longer materialize it into Pi auth.json.`,
       providers: data.providers || {},
+      entries: data.entries || {},
     };
   } catch (error) {
     state.piAuth = {
@@ -132,6 +136,7 @@ async function pollOpenAiCodexLoginState({state, render}) {
         error: "",
         message: "OpenAI Codex subscription login saved. New sessions will materialize it into Pi auth.json.",
         providers: data.providers || state.piAuth.providers || {},
+        entries: data.entries || state.piAuth.entries || {},
         openAiCodexDevice: {...device, status: "complete"},
       };
       render();
@@ -185,14 +190,16 @@ export async function savePiAuthProviderState({state, render}) {
   render();
 
   try {
-    const data = await state.api.savePiAuthProvider(provider, apiKey);
+    const data = await state.api.savePiAuthProvider(provider, apiKey, state.piAuth.entryLabel || "");
     state.piAuth = {
       ...state.piAuth,
       saving: false,
       error: "",
       message: "API key saved. New sessions will materialize it into Pi auth.json.",
       providers: data.providers || state.piAuth.providers || {},
+      entries: data.entries || state.piAuth.entries || {},
       apiKey: "",
+      entryLabel: "",
       openAiCodexDevice: null,
     };
   } catch (error) {
@@ -202,6 +209,26 @@ export async function savePiAuthProviderState({state, render}) {
       error: friendlyPiAuthError(error),
       message: "",
     };
+  }
+  render();
+}
+
+export async function saveSessionPiAuthSelectionState({state, session, selection, render}) {
+  if (!state.api || !session?.workspaceId || !session?.id) return;
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving Pi auth selection..."};
+  render();
+  try {
+    const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, selection);
+    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, piAuthSelection: data.selection || selection} : item);
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      error: "",
+      message: "Pi auth selection saved. Run /reload in Pi if the active agent should reload credentials.",
+    };
+    state.piAuthManageModalOpen = false;
+  } catch (error) {
+    state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error), message: ""};
   }
   render();
 }
