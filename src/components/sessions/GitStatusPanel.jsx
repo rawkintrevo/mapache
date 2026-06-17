@@ -1,3 +1,4 @@
+import "./GitStatusPanel.css";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,

@@ -1,0 +1,155 @@
+.workspace-create {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-source-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.source-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.source-choice input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.workspace-source-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.repo-picker {
+  display: grid;
+  gap: 6px;
+}
+
+.repo-picker-fallback {
+  margin: 0;
+  font-size: 12px;
+}
+
+.github-connect-button {
+  width: 100%;
+}
+
+.auth-oauth-flow,
+.auth-device-code {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-device-code {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.auth-device-code-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auth-device-code strong {
+  font-size: 28px;
+  letter-spacing: 0.12em;
+}
+
+.modal-form textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(16, 24, 32, 0.48);
+}
+
+.modal-panel {
+  display: grid;
+  gap: 18px;
+  width: min(520px, 100%);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 22px 60px rgba(16, 24, 32, 0.28);
+}
+
+.pull-request-panel {
+  width: min(760px, 100%);
+}
+
+.modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.modal-panel .toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.modal-panel .toolbar label:nth-child(2) {
+  grid-column: 1 / -1;
+}
+
+.pi-auth-selection-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pi-auth-selection-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pi-auth-selection-row span {
+  font-weight: 600;
+}
+
+.pi-auth-selection-row select {
+  width: 100%;
+}
+
+@media (max-width: 620px) {
+  .workspace-source-choice {
+    grid-template-columns: 1fr;
+  }
+}

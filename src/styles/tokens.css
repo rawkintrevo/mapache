@@ -1,0 +1,21 @@
+:root {
+  color-scheme: light;
+  --color-bg-canvas: #f7f8fa;
+  --color-bg-panel: #ffffff;
+  --color-text-main: #17212b;
+  --color-text-muted: #667085;
+  --color-accent: #147d64;
+  --color-danger: #b42318;
+  --color-border: #d9dee7;
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --panel-strong: #101820;
+  --text: #17212b;
+  --muted: #667085;
+  --line: #d9dee7;
+  --accent: #147d64;
+  --accent-dark: #0f5f4c;
+  --danger: #b42318;
+  --code: #0d1117;
+  --code-text: #d6deeb;
+}

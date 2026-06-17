@@ -1,3 +1,4 @@
+import "./WorkspaceFileTree.css";
 import {formatDate} from "../../utils/formatDate.js";
 import {buildFileTree, countFolderFiles} from "./fileTree.js";
 import {formatBytes} from "./formatBytes.js";

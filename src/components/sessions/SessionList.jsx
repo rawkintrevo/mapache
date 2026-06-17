@@ -1,3 +1,5 @@
+import "./SessionDetail.css";
+
 export function SessionList({selectedSessionId, selectedWorkspaceId, sessions, onSelectSession}) {
   if (!selectedWorkspaceId) return null;
 

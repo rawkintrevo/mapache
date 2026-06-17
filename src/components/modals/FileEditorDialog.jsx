@@ -1,3 +1,4 @@
+import "./FileEditorDialog.css";
 import {Save, X} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {formatDate} from "../../utils/formatDate.js";

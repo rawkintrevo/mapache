@@ -1,3 +1,5 @@
+import "./AuthScreen.css";
+import "./LandingPageScreen.css";
 import {Button} from "../common/Button.jsx";
 
 const workspaceCards = [

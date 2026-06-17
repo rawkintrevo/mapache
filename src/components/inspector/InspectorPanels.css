@@ -1,0 +1,58 @@
+.auth-center-panel .drawer-section-heading .drawer-section-toggle {
+  min-height: 26px;
+  padding: 0;
+}
+
+.package-list,
+.skill-list {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-center-form {
+  display: grid;
+  gap: 8px;
+}
+
+.package-install-form,
+.package-subsection,
+.skill-form {
+  display: grid;
+  gap: 8px;
+}
+
+.package-install-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.skill-form textarea {
+  min-height: 150px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.skill-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.package-subsection {
+  margin-top: 2px;
+}
+
+.package-subsection h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.known-package-row {
+  background: #fffdf7;
+}
+
+.auth-center-manage {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}

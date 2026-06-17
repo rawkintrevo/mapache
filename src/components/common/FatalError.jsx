@@ -1,3 +1,5 @@
+import "../auth/AuthScreen.css";
+
 export function FatalError({error}) {
   return (
     <div className="auth">
