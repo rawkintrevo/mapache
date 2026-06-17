@@ -25,7 +25,7 @@ const config = {
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/community/',
 
-  organizationName: 'rawkintrevo',
+  organizationName: 'rawintrevo',
   projectName: 'mapache',
 
   onBrokenLinks: 'throw',
@@ -91,7 +91,7 @@ const config = {
             position: 'right',
           },
           {
-            href: 'https://github.com/rawkintrevo/mapahce',
+            href: 'https://github.com/rawintrevo/mapache',
             label: 'GitHub',
             position: 'right',
           },
@@ -122,7 +122,7 @@ const config = {
               },
               {
                 label: 'GitHub',
-                href: 'https://github.com/rawkintrevo/mapahce',
+                href: 'https://github.com/rawintrevo/mapache',
               },
             ],
           },
@@ -135,7 +135,7 @@ const config = {
               },
               {
                 label: 'Main Repository',
-                href: 'https://github.com/rawkintrevo/mapahce',
+                href: 'https://github.com/rawintrevo/mapache',
               },
             ],
           },

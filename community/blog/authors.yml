@@ -1,9 +1,10 @@
 mapache:
   name: Trevor Grant
-  description: rawkintrevo
-  title: Grand poobah of Mapache Tools
+  # description: rawkintrevo
+  title: Grand Poo-Bah of Mapache Tools
   url: https://mapache.tools
-  image_url: /img/rawkintrevo.png
+  image_url: https://avatars.githubusercontent.com/u/5852441?v=4
   page: true
   socials:
     github: rawkintrevo
+    
