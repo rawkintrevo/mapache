@@ -1,5 +1,13 @@
 # UI Components Index
 
+## Purpose
+
+This page maps significant React UI components to file locations and responsibilities.
+
+## Read When
+
+Read this before adding, moving, or substantially changing UI components.
+
 This document serves as an index for significant UI components in the application, helping maintainers locate functionality and understand component purpose.
 
 | Component | File Path | Purpose |
@@ -39,3 +47,9 @@ This document serves as an index for significant UI components in the applicatio
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
 
 When adding new UI components, please update this index.
+
+## Related Docs
+
+- [Frontend architecture](./frontend-architecture.md)
+- [Style guide](./STYLE_GUIDE.md)
+- [CSS decomposition](./css-decomposition.md)

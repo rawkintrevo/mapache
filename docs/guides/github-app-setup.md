@@ -146,5 +146,5 @@ Test that the app is accessible:
 After setup is complete, continue with:
 
 - [GitHub connection metadata schema](github-connection-metadata-schema.md)
-- [Task 27: Configure GitHub App secrets for Firebase/Cloud Functions](../task_list.md)
-- [Task 28: Install the GitHub App on a test repository](../task_list.md)
+- [GitHub workspace architecture](../github-workspaces.md)
+- [Deployment](../deployment.md)

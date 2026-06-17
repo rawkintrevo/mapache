@@ -1,5 +1,13 @@
 # Pi Skills Manager
 
+## Purpose
+
+This page owns the web surface for workspace-local Pi skills.
+
+## Read When
+
+Read this before changing the Skills drawer, runner skill endpoints, Cloud Functions skill proxy routes, seeded runner skills, or `.pi/skills` sync behavior.
+
 Mapache exposes a web surface for workspace-local Pi skills.
 
 Pi discovers skills from Markdown files under `.pi/skills/`. The web manager writes each skill as:
@@ -82,3 +90,10 @@ Skills can instruct the agent to perform actions. Treat skill editing as a privi
 - Validate skill names, descriptions, and content size.
 - Do not execute skill content in the browser or backend.
 - Keep skill files in workspace state so users can inspect and commit them when desired.
+
+## Related Docs
+
+- [Frontend architecture](./frontend-architecture.md)
+- [Backend API architecture](./backend-api-architecture.md)
+- [Runtime containers](./runtime-containers.md)
+- [Session runner architecture](./session-runner-architecture.md)

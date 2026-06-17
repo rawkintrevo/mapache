@@ -2,23 +2,25 @@
 
 ## Development Knowledge
 
-This repo has development knowledge in `docs/`. For non-trivial fixes or feature work, inspect `docs/` before changing code and read the pages that look relevant.
+This repo has development knowledge in `docs/`. For non-trivial fixes or feature work, start at `docs/README.md`, follow `docs/llm-reading-protocol.md`, and read the focused pages that look relevant.
 
 `docs/` is for developer-facing and LLM-facing implementation knowledge: architecture notes, runtime behavior, deployment assumptions, design decisions, and maintenance plans. The `community/` tree is for user-facing documentation and blog content served under `/community/`. Do not move developer maintenance notes into `community/`, and do not refactor `community/` as part of developer-doc cleanup unless the user explicitly asks for user-doc work.
 
-Treat these docs as part of the source of truth for implementation context. If a change alters app architecture, user workflow, runtime container behavior, deployment assumptions, or a recorded design decision, update the relevant doc in the same change.
+Treat these docs as part of the source of truth for implementation context. If a change alters app architecture, user workflow, runtime container behavior, deployment assumptions, or a recorded design decision, update the relevant doc in the same change. Use `.agents/skills/read_developer_wiki` before non-trivial implementation work and `.agents/skills/update_developer_wiki` before handoff when a wiki update is required.
 
 The docs are extensible. Add a new page when a change introduces a distinct area of development knowledge that does not fit cleanly into the existing docs.
 
 ## When Docs Must Be Updated
 
-Update `docs/` when changing any of the following:
+Follow `docs/wiki-update-protocol.md` and update `docs/` when changing any of the following:
 
 - Session creation flow, workspace/session UI layout, or terminal-first behavior.
 - Runtime container image contents, image selection config, or Cloud Run provisioning behavior.
 - Terminal rendering, PTY handling, WebSocket behavior, or workspace sync.
 - Firebase Hosting, Cloud Functions, Firestore, Cloud Storage, or deployment flow.
 - Any decision that future maintainers would need to understand before making a non-trivial fix.
+
+Run `npm run docs:check` after developer-doc edits.
 
 Small copy edits, isolated styling tweaks, and mechanical dependency updates do not need doc changes unless they affect one of the areas above.
 
@@ -36,7 +38,7 @@ Keep changes scoped to the existing structure:
 - API client calls live in `src/services/api.js`.
 - Cloud Functions backend logic lives in `functions/index.js`.
 - Runtime container code lives in `session-runner/`.
-- **Monolith Prevention**: For new features, break functionality into smaller, focused files rather than adding to large monoliths like `src/ui/render.js` or `src/main.js`.
+- **Monolith Prevention**: For new features, break functionality into smaller, focused files rather than adding to large orchestration files like `src/main.js`.
 
 For frontend changes, run `npm run build` before handing off when feasible. For runtime container changes, validate the container path and document whether existing Cloud Run services need a new revision.
 

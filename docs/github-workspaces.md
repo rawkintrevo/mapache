@@ -1,15 +1,23 @@
 # GitHub Workspaces
 
+## Purpose
+
+This page owns GitHub-backed workspace architecture, including source-of-truth boundaries, session policy, runner reconstruction, Git controls, and PR behavior.
+
+## Read When
+
+Read this before changing workspace source metadata, GitHub workspace creation, GitHub session creation, Git controls, GitHub App clone/push/PR flows, or GitHub workspace sync/cache behavior.
+
 GitHub-backed workspaces are a second workspace mode for Mapache Tools.
 
-The current app assumes that Cloud Storage is the durable source of truth for a workspace. That works well for blank workspaces, but it is the wrong model for a repository-centric workflow. A GitHub workspace changes that contract:
+Blank workspaces use Cloud Storage as the durable source of truth for workspace files. That works well for blank workspaces, but it is the wrong model for a repository-centric workflow. A GitHub workspace changes that contract:
 
 - GitHub is the durable source of truth for repository history and shared code state.
 - Cloud Storage is a resumability and cache layer for the checked-out working tree, the `.git` directory, and other runtime state that should survive a stopped session.
 - The runner reconstructs `/workspace` from Git and cache state before serving the terminal.
 - Git remains the authority for branch movement, merge behavior, conflicts, staged changes, and local commit state.
 
-This document is intentionally more detailed than the high-level app overview. It records the intended design before implementation is complete so later tasks can align on the same model.
+This document is intentionally more detailed than the high-level app overview. It records the canonical model future GitHub workspace changes should preserve.
 
 ## Goals
 
@@ -23,7 +31,7 @@ Primary goals:
 - Keep repository semantics inside Git instead of inventing parallel conflict logic in Firestore or Cloud Storage.
 - Keep blank workspaces working as they do today.
 
-Non-goals for the first implementation:
+Non-goals for the current implementation:
 
 - Full multi-user collaboration in one workspace.
 - Multiple active Pi/agent writer sessions for one GitHub workspace.
@@ -355,11 +363,9 @@ Private repository support should use short-lived GitHub App installation tokens
 - tokens should never be logged
 - tokens should never be stored in Firestore or Cloud Storage
 
-This design doc assumes that GitHub App work is a follow-on capability, not a prerequisite for the public-repo architecture.
-
 For a step-by-step guide to creating and configuring the GitHub App, see [guides/github-app-setup.md](./guides/github-app-setup.md).
 
-For the architecture decision record covering ownership, permissions, and repository scope, see [adrs/adr-0001-github-app-ownership-and-permissions.md](../../adrs/adr-0001-github-app-ownership-and-permissions.md).
+For the architecture decision record covering ownership, permissions, and repository scope, see [ADR-0001](../adrs/adr-0001-github-app-ownership-and-permissions.md).
 
 ## Why One Active Session Is Enforced
 
@@ -374,7 +380,7 @@ It is not safe for GitHub workspaces once `.git` cache and working tree cache be
 - `.git` archive upload
 - final shutdown sync
 
-The first GitHub implementation should therefore enforce a single active Pi/agent writer session per workspace while allowing shell-kind sessions for manual access. Later expansion to multiple agent sessions should only happen with explicit isolation, such as per-session worktrees or branch sandboxes.
+The implementation therefore enforces a single active Pi/agent writer session per workspace while allowing shell-kind sessions for manual access. Later expansion to multiple agent sessions should only happen with explicit isolation, such as per-session worktrees or branch sandboxes.
 
 ## Deployment Implications
 
@@ -389,4 +395,13 @@ This feature changes runner behavior, workspace sync expectations, and session p
 
 ## Relationship to the Task List
 
-This document is the architectural reference for the GitHub workspace tasks in [task_list.md](/home/rawkintrevo/gits/rawkintrevo/mapahce/task_list.md). The task list should stay implementation-sized; this page should stay explanation-sized.
+This document is the architectural reference for GitHub workspace behavior. Active task lists should stay implementation-sized; this page should stay explanation-sized.
+
+## Related Docs
+
+- [App overview](./app-overview.md)
+- [Backend API architecture](./backend-api-architecture.md)
+- [Session runner architecture](./session-runner-architecture.md)
+- [GitHub App setup guide](./guides/github-app-setup.md)
+- [GitHub connection metadata schema](./guides/github-connection-metadata-schema.md)
+- [Decision records](./decisions.md)

@@ -1,5 +1,13 @@
 # Style Guide
 
+## Purpose
+
+This page defines UI design and styling standards for the application.
+
+## Read When
+
+Read this before changing shared styling, component CSS, buttons, drawers, forms, iconography, or application layout.
+
 This document defines the design and implementation standards for the application. The goal is to unify UI inconsistencies, improve maintainability, and create a predictable developer experience.
 
 ## 1. Design Philosophy
@@ -82,3 +90,9 @@ Drawers should share a unified structure.
 ### Forms & Inputs
 *   Inputs, textareas, and selects must share the same height, border, and focus states.
 *   Labels must be styled consistently (uppercase, small, bold, muted color).
+
+## Related Docs
+
+- [CSS decomposition](./css-decomposition.md)
+- [Frontend architecture](./frontend-architecture.md)
+- [UI components](./ui-components.md)

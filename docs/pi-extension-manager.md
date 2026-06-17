@@ -1,6 +1,14 @@
 # Pi Extension Manager
 
-This document describes the intended architecture for a browser-based extension manager for Pi-based runner sessions.
+## Purpose
+
+This page owns the web surface for workspace-local Pi package management.
+
+## Read When
+
+Read this before changing the Extensions drawer, runner package endpoints, Cloud Functions package proxy routes, Pi package catalog behavior, or `.pi/settings.json` package sync behavior.
+
+This document describes the current architecture for a browser-based extension manager for Pi-based runner sessions.
 
 The feature is intentionally additive. Pi already has package management through its TUI and CLI. Mapache should provide a web surface over the same workspace-local files and package behavior, not replace the tools available inside the terminal.
 
@@ -17,7 +25,7 @@ The extension manager should:
 - Keep package code out of the browser and client device.
 - Reuse existing runner and Cloud Storage persistence patterns for high-cardinality install directories.
 
-The first implementation can require an active `pi-basic` session. Package operations are runtime operations: they can need npm, git, workspace trust, network access, and the same local filesystem state Pi sees inside the session. A live runner is the simplest correct execution boundary for v1.
+The current implementation can require an active Pi-capable session. Package operations are runtime operations: they can need npm, git, workspace trust, network access, and the same local filesystem state Pi sees inside the session. A live runner is the simplest correct execution boundary for v1.
 
 ## Non-Goals
 
@@ -384,3 +392,11 @@ These decisions can be resolved during the relevant implementation tasks:
 - Whether the runner can reliably import Pi's package manager API in the installed `pi-basic` image, or whether CLI fallback is needed.
 - How much user-scoped package detail to expose in the first frontend version.
 - Whether `.pi/settings.json` should be hidden by default in the Files UI or shown as normal project configuration.
+
+## Related Docs
+
+- [Frontend architecture](./frontend-architecture.md)
+- [Backend API architecture](./backend-api-architecture.md)
+- [Runtime containers](./runtime-containers.md)
+- [Session runner architecture](./session-runner-architecture.md)
+- [Testing](./testing.md)

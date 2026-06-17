@@ -171,7 +171,7 @@ If an installation is removed or revoked:
 - Never write token values into logs, sync archives, or file browser state
 - Prefer server-side verification of installation ownership before any token minting
 
-## Related Documents
+## Related Docs
 
 - [GitHub App setup guide](github-app-setup.md)
 - [GitHub App ownership ADR](../../adrs/adr-0001-github-app-ownership-and-permissions.md)

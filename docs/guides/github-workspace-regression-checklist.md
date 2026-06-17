@@ -1,5 +1,7 @@
 # GitHub Workspace Regression Checklist
 
+## Purpose
+
 Use this checklist before deploying changes that touch GitHub-backed workspaces.
 
 ## Workspace behavior
@@ -18,11 +20,18 @@ Use this checklist before deploying changes that touch GitHub-backed workspaces.
 
 ```bash
 npm run build
+npm run docs:check
 npm --prefix functions run lint
-node --check session-runner/server.js
+npm --prefix session-runner run lint
 ```
 
 ## Notes
 
 - Use this checklist for regression review only; it is intentionally shorter than the full design docs.
 - Existing Cloud Run services may still need a new revision to pick up runner env or sync-policy changes.
+
+## Related Docs
+
+- [GitHub workspaces](../github-workspaces.md)
+- [Runtime containers](../runtime-containers.md)
+- [Testing](../testing.md)

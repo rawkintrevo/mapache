@@ -127,7 +127,7 @@ The image sets `TERMINAL_COMMAND=pi` and `TERMINAL_ARGS=["-c"]`, so new browser 
 
 The skills manager targets `pi-basic` first. Skill listing and mutations require a running session so the manager can write the same `/workspace/.pi/skills/{skill-name}/SKILL.md` files that Pi discovers at startup.
 
-The planned extension manager targets `pi-basic` first. For v1, package listing and package mutations can require a running `pi-basic` session so the manager can operate on the same `/workspace/.pi/settings.json` and package cache directories that Pi uses.
+The extension manager targets Pi-capable runners. For v1, package listing and package mutations can require a running session so the manager can operate on the same `/workspace/.pi/settings.json` and package cache directories that Pi uses.
 
 Build and push the image with:
 
@@ -341,7 +341,7 @@ This keeps dependency installs, Git metadata, and Pi Agent state available witho
 
 The detailed GitHub workspace architecture, including one-active-session enforcement and cache semantics, lives in [github-workspaces.md](./github-workspaces.md).
 
-The planned Pi extension manager architecture, including workspace-local package scope, package catalog metadata, write locations, and active-session behavior, lives in [pi-extension-manager.md](./pi-extension-manager.md).
+The Pi extension manager architecture, including workspace-local package scope, package catalog metadata, write locations, and active-session behavior, lives in [pi-extension-manager.md](./pi-extension-manager.md).
 
 ### GitHub Workspace Reconstruction
 
@@ -420,7 +420,7 @@ The runner also exposes protected Git endpoints that use the same token gate. `G
 
 The skill endpoints follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies skill list/save/delete requests to the runner with its protected token. The runner serializes skill file mutations, writes Markdown under `/workspace/.pi/skills`, and runs normal workspace sync afterward.
 
-The planned package endpoints should follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies package list/install/remove/update requests to the runner with its protected token. The runner should serialize package operations and operate on workspace-local Pi settings by default.
+Package endpoints follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies package list/install/remove/update requests to the runner with its protected token. The runner serializes package operations and operates on workspace-local Pi settings by default.
 
 For GitHub workspaces, this final sync is especially important because it is the last chance to persist local working tree changes and refreshed `.git` archive state before the Cloud Run service disappears.
 
@@ -489,3 +489,12 @@ Expected package-manager write locations:
 - Workspace-local Pi package install directories should use archive-backed sync while `/workspace/.pi/settings.json` remains normal workspace configuration.
 - GitHub workspaces should allow only one active session at a time until the app has an explicit multi-session Git isolation model.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.
+
+## Related Docs
+
+- [Session runner architecture](./session-runner-architecture.md)
+- [Backend API architecture](./backend-api-architecture.md)
+- [GitHub workspaces](./github-workspaces.md)
+- [Pi skills manager](./pi-skills-manager.md)
+- [Pi extension manager](./pi-extension-manager.md)
+- [Deployment](./deployment.md)

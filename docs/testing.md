@@ -76,10 +76,11 @@ npm run check
 
 It runs:
 
-1. Cloud Functions unit tests.
-2. Session runner JavaScript syntax checks.
-3. Frontend smoke tests.
-4. Full Vite app and Docusaurus community build.
+1. Developer docs relative-link validation.
+2. Cloud Functions unit tests.
+3. Session runner JavaScript syntax checks.
+4. Frontend smoke tests.
+5. Full Vite app and Docusaurus community build.
 
 Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. N64 image builds, live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
@@ -114,3 +115,9 @@ Guardrails:
 - Include cleanup scenarios or deterministic post-run cleanup scripts for all created workspaces, sessions, branches, and pull requests.
 
 Commit-time LLM checks should be opt-in and local. Nightly LLM checks may run automatically once artifacts and cleanup are proven reliable.
+
+## Related Docs
+
+- [Wiki update protocol](./wiki-update-protocol.md)
+- [Deployment](./deployment.md)
+- [Subsystem map](./subsystem-map.md)
