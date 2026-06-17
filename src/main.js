@@ -114,6 +114,7 @@ function render() {
     onToggleRightDrawer: toggleRightDrawer,
     onToggleDrawerSection: toggleDrawerSection,
     onCreateWorkspace: createWorkspace,
+    onDeleteWorkspace: deleteWorkspace,
     onSelectWorkspace: selectWorkspace,
     onShowProfile: showProfile,
     onOpenSessionModal: openSessionModal,
@@ -372,6 +373,26 @@ function normalizeCreateWorkspaceSource(payload = {}) {
     repoUrl: source.repoUrl || payload.repoUrl || "",
     requestedBranch: source.requestedBranch || payload.branch || "",
   };
+}
+
+async function deleteWorkspace(workspaceId) {
+  const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
+  const name = workspace?.name || workspaceId;
+  const ok = window.confirm(`Delete workspace ${name}? Sessions will be stopped and workspace files will be removed.`);
+  if (!ok) return;
+
+  await runBusy(async () => {
+    await state.api.deleteWorkspace(workspaceId);
+    if (state.selectedWorkspaceId === workspaceId) {
+      state.selectedWorkspaceId = null;
+      state.selectedSessionId = null;
+      resetWorkspaceFiles();
+      resetGitStatus();
+      resetPiPackages();
+      resetPiSkills();
+    }
+    await refreshAll();
+  });
 }
 
 async function selectWorkspace(workspaceId) {

@@ -10,6 +10,7 @@ import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
 export function LeftDrawer({
   state,
   onDeleteSession,
+  onDeleteWorkspace,
   onOpenSessionModal,
   onOpenWorkspaceModal,
   onRefresh,
@@ -76,6 +77,7 @@ export function LeftDrawer({
             busy={state.busy}
             selectedWorkspaceId={state.selectedWorkspaceId}
             workspaces={state.workspaces}
+            onDeleteWorkspace={onDeleteWorkspace}
             onOpenSessionModal={onOpenSessionModal}
             onSelectWorkspace={onSelectWorkspace}
           />

@@ -27,6 +27,11 @@ export function createApiClient(getToken) {
       method: "POST",
       body,
     }),
+    deleteWorkspace: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}`,
+        {method: "DELETE"},
+    ),
     getWorkspaceFiles: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/files`,
