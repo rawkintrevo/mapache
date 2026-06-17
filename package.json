@@ -9,6 +9,7 @@
     "build:community": "cd community && npm run build",
     "move:community": "mkdir -p dist/community && cp -r community/build/* dist/community/",
     "build": "npm run build:main && npm run build:community && npm run move:community",
+    "check": "npm --prefix functions test && npm --prefix session-runner run lint && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
