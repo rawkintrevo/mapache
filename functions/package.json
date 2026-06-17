@@ -3,7 +3,7 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "node --check index.js",
-    "test": "node packageCatalog.helpers.test.js && node runnerImages.helpers.test.js && node appAllowList.helpers.test.js",
+    "test": "node packageCatalog.helpers.test.js && node runnerImages.helpers.test.js && node appAllowList.helpers.test.js && node apiRoutes.helpers.test.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",

@@ -17,6 +17,10 @@ const {
   isAppAllowListConfigured,
   isFirebaseTokenAllowed,
 } = require("./appAllowList.helpers");
+const {
+  OPENAI_CODEX_PROVIDER,
+  routeRequest: apiRouteRequest,
+} = require("./apiRoutes.helpers");
 
 admin.initializeApp();
 const FUNCTION_SERVICE_ACCOUNT = defineString("FUNCTION_SERVICE_ACCOUNT");
@@ -55,7 +59,7 @@ const SESSION_BROWSER_ACCESS_TTL_MS = positiveNumber(
     process.env.SESSION_BROWSER_ACCESS_TTL_MS,
     8 * 60 * 60 * 1000,
 );
-const OPENAI_CODEX_PROVIDER = "openai-codex";
+
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 const OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
@@ -112,7 +116,7 @@ exports.api = onRequest({
       return;
     }
 
-    const route = routeRequest(req.path);
+    const route = apiRouteRequest(req.path);
 
     if (req.method === "GET" && route.name === "githubCallback") {
       await handleGithubCallback(req, res);
