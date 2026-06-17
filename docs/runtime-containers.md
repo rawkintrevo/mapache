@@ -371,9 +371,19 @@ session-<lowercase-session-id>
 
 Cloud Run resource limits are derived from the session's CPU and memory settings.
 
-Each session service must run as the dedicated runner service account configured by the Cloud Functions parameter/environment value `SESSION_RUNNER_SERVICE_ACCOUNT`. The backend sets Cloud Run `template.serviceAccount` on create, resize, and restart. If that value is missing, session provisioning fails closed instead of allowing Cloud Run to fall back to the project's default Compute Engine service account. Existing session records may also carry the resolved `serviceAccount` value, which the backend can use as a fallback when recreating an older stopped session.
+Each session service must run as the dedicated runner service account configured by the Cloud Functions parameter/environment value `SESSION_RUNNER_SERVICE_ACCOUNT`. In production this is `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. The backend sets Cloud Run `template.serviceAccount` on create, resize, and restart. If that value is missing, session provisioning fails closed instead of allowing Cloud Run to fall back to the project's default Compute Engine service account. Existing session records may also carry the resolved `serviceAccount` value, which the backend can use as a fallback when recreating an older stopped session.
 
 The runner service account should have only the runtime data permissions it needs, currently Firestore user access and object admin access to the configured workspace bucket. The Functions service account should be separate, configured with `FUNCTION_SERVICE_ACCOUNT`, and granted Cloud Run administration plus `roles/iam.serviceAccountUser` only on the runner service account. Do not grant `roles/editor` to the default Compute Engine service account for this flow.
+
+The `roles/iam.serviceAccountUser` binding is required for the production API identity to set Cloud Run `template.serviceAccount`. If new session provisioning fails with `Permission 'iam.serviceaccounts.actAs' denied`, restore this binding:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  mapache-runner@pi-agents-cloud.iam.gserviceaccount.com \
+  --project pi-agents-cloud \
+  --member serviceAccount:mapache-api@pi-agents-cloud.iam.gserviceaccount.com \
+  --role roles/iam.serviceAccountUser
+```
 
 The service identities involved in provisioning also need pull access to the Artifact Registry repository that stores the curated runner images. Without `roles/artifactregistry.reader`, session provisioning can fail while creating a revision with `artifactregistry.repositories.downloadArtifacts` denied, even when the image tag exists. Grant it at repository scope to the Functions service account that creates Cloud Run services, the runner service account assigned to session revisions, and the Cloud Run service agent:
 

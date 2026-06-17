@@ -47,3 +47,5 @@ gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-
 Deploy Firebase resources with `--project pi-agents-cloud`.
 
 When `functions/` code changes, deploy Cloud Functions before handing off unless the user explicitly asks not to deploy. Report the deploy command and outcome.
+
+Production Cloud Functions must run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`, and per-session Cloud Run services must run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not change `SESSION_RUNNER_SERVICE_ACCOUNT` to `mapache-session-runner@...`; that service account does not exist in `pi-agents-cloud` and causes recurring session provisioning failures. The API service account must have `roles/iam.serviceAccountUser` on the runner service account, otherwise Cloud Run create/update calls fail with `Permission 'iam.serviceaccounts.actAs' denied`.
