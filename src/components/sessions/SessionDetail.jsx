@@ -1,26 +1,13 @@
 import {RotateCcw} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
-import {ModalBackdrop} from "../modals/ModalBackdrop.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
 
 const cpuOptions = ["1", "2", "4"];
 const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
-const previewRootOptions = [
-  {label: "build", value: "build"},
-  {label: "dist", value: "dist"},
-  {label: "out", value: "out"},
-  {label: "public", value: "public"},
-];
-const chooseOtherPreviewRoot = "__choose_other__";
 
 function formatMemory(value) {
   return value.replace("Gi", " GiB");
-}
-
-function displayPreviewRoot(value) {
-  const clean = String(value || "/workspace/build").trim();
-  return clean.startsWith("/workspace/") ? clean.slice("/workspace/".length) : clean.replace(/^\/+/, "");
 }
 
 export function SessionDetail({
@@ -39,21 +26,15 @@ export function SessionDetail({
   onStageGitPath,
   onUnstageGitPath,
   onUpdateGitCommitMessage,
-  onUpdateSessionPreviewRoot,
 }) {
   const formRef = useRef(null);
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [accessUrls, setAccessUrls] = useState(null);
   const [accessError, setAccessError] = useState("");
-  const [previewRootModalOpen, setPreviewRootModalOpen] = useState(false);
-  const [customPreviewRoot, setCustomPreviewRoot] = useState("");
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
-  const previewRoot = displayPreviewRoot(session.previewStaticRoot);
-  const hasCustomPreviewRoot = !previewRootOptions.some((option) => option.value === previewRoot);
-  const showPreviewRootControl = Boolean(session.imageKey === "pi-web" && capabilities.preview);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
 
   useEffect(() => {
@@ -85,24 +66,6 @@ export function SessionDetail({
       cpu: formData.get("resizeCpu"),
       memory: formData.get("resizeMemory"),
     });
-  };
-
-  const handlePreviewRootChange = (event) => {
-    const value = event.target.value;
-    if (value === chooseOtherPreviewRoot) {
-      setCustomPreviewRoot(previewRoot);
-      setPreviewRootModalOpen(true);
-      return;
-    }
-    onUpdateSessionPreviewRoot(session.id, {previewStaticRoot: value});
-  };
-
-  const handleCustomPreviewRootSubmit = (event) => {
-    event.preventDefault();
-    const value = customPreviewRoot.trim();
-    if (!value) return;
-    onUpdateSessionPreviewRoot(session.id, {previewStaticRoot: value});
-    setPreviewRootModalOpen(false);
   };
 
   return (
@@ -175,19 +138,6 @@ export function SessionDetail({
             {memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}
           </select>
         </label>
-        {showPreviewRootControl ? (
-          <label>
-            <span>Preview folder</span>
-            <select value={hasCustomPreviewRoot ? previewRoot : previewRoot || "build"} onChange={handlePreviewRootChange}>
-              {previewRootOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-              {hasCustomPreviewRoot ? <option value={previewRoot}>{previewRoot}</option> : null}
-              <option disabled value="">------</option>
-              <option value={chooseOtherPreviewRoot}>Choose other...</option>
-            </select>
-          </label>
-        ) : null}
         <div className="session-actions">
           <Button disabled={busy} onClick={handleResize}>Resize</Button>
           <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
@@ -197,32 +147,6 @@ export function SessionDetail({
 
         </div>
       </form>
-      {previewRootModalOpen ? (
-        <ModalBackdrop onClose={() => setPreviewRootModalOpen(false)}>
-          <form className="modal-panel preview-root-panel" onSubmit={handleCustomPreviewRootSubmit}>
-            <div className="modal-heading">
-              <div>
-                <h2>Preview folder</h2>
-                <p className="subtle">Path under /workspace</p>
-              </div>
-              <Button variant="secondary" onClick={() => setPreviewRootModalOpen(false)}>Close</Button>
-            </div>
-            <label>
-              <span>Folder path</span>
-              <input
-                autoFocus
-                placeholder="dist"
-                value={customPreviewRoot}
-                onChange={(event) => setCustomPreviewRoot(event.target.value)}
-              />
-            </label>
-            <div className="session-actions">
-              <Button disabled={busy || !customPreviewRoot.trim()} type="submit">Save</Button>
-              <Button disabled={busy} variant="secondary" onClick={() => setPreviewRootModalOpen(false)}>Cancel</Button>
-            </div>
-          </form>
-        </ModalBackdrop>
-      ) : null}
       {showGitStatus ? (
         <GitStatusPanel
           busy={busy}

@@ -2060,11 +2060,6 @@ main.drawer-collapsed.right-drawer-collapsed {
   grid-column: 1 / -1;
 }
 
-.preview-root-panel label {
-  display: grid;
-  gap: 6px;
-}
-
 .file-editor-title {
   display: grid;
   gap: 4px;

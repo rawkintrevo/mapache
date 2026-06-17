@@ -74,11 +74,6 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/resize`,
         {method: "POST", body},
     ),
-    updateSessionPreviewRoot: (workspaceId, sessionId, body) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/preview-root`,
-        {method: "POST", body},
-    ),
     restartSession: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/restart`,

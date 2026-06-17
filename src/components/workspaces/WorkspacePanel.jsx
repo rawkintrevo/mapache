@@ -18,7 +18,6 @@ export function WorkspacePanel({
   onStageGitPath,
   onUnstageGitPath,
   onUpdateGitCommitMessage,
-  onUpdateSessionPreviewRoot,
 }) {
   const isGithubWorkspace = selectedWorkspace?.source?.type === "github" || selectedSession?.sourceType === "github";
 
@@ -42,7 +41,6 @@ export function WorkspacePanel({
           onStageGitPath={onStageGitPath}
           onUnstageGitPath={onUnstageGitPath}
           onUpdateGitCommitMessage={onUpdateGitCommitMessage}
-          onUpdateSessionPreviewRoot={onUpdateSessionPreviewRoot}
         />
       </section>
     );

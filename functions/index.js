@@ -220,18 +220,6 @@ exports.api = onRequest({
       return;
     }
 
-    if (req.method === "POST" && route.name === "sessionPreviewRoot") {
-      res.json({
-        session: await updateSessionPreviewRoot(
-            user.uid,
-            route.workspaceId,
-            route.sessionId,
-            req.body || {},
-        ),
-      });
-      return;
-    }
-
     if (req.method === "POST" && route.name === "restartSession") {
       res.json({
         session: await restartSession(user.uid, route.workspaceId, route.sessionId),
@@ -423,14 +411,6 @@ function routeRequest(path) {
     parts[4] === "resize"
   ) {
     return {name: "resizeSession", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "preview-root"
-  ) {
-    return {name: "sessionPreviewRoot", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (
     parts.length === 5 &&
@@ -1617,7 +1597,6 @@ async function createSession(uid, workspaceId, payload) {
     imageKey: runnerImage.key,
     terminalKind: runnerImage.terminalKind || "pi",
     capabilities: runnerImage.capabilities,
-    previewStaticRoot: defaultPreviewStaticRoot(runnerImage.capabilities),
     serviceAccount: runnerServiceAccountValue() || null,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
@@ -1763,34 +1742,6 @@ async function resizeSession(uid, workspaceId, sessionId, payload) {
     updatedAt: resizedAt,
   });
   await patchSessionService(sessionRef, {...sessionSnap.data(), resources});
-  return toClientDoc(await sessionRef.get());
-}
-
-async function updateSessionPreviewRoot(uid, workspaceId, sessionId, payload) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = sessionSnap.data();
-  const capabilities = session.capabilities || runnerImageCapabilities(session.image);
-  if (!capabilities.preview || cleanName(session.imageKey) !== "pi-web") {
-    throw httpError(400, "preview_root_requires_pi_web");
-  }
-
-  const previewStaticRoot = normalizePreviewStaticRoot(payload && payload.previewStaticRoot);
-  await sessionRef.update({
-    previewStaticRoot,
-    status: "updating_preview",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  const updatedSession = {...session, previewStaticRoot};
-  if (session.serviceUrl) {
-    await patchSessionService(sessionRef, updatedSession, {restart: true});
-  } else {
-    await sessionRef.update({
-      status: session.status || "stopped",
-      lastError: null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
   return toClientDoc(await sessionRef.get());
 }
 
@@ -3280,7 +3231,7 @@ async function sessionRunnerEnv(session, options = {}) {
     env.push(
         {name: "PREVIEW_ENABLED", value: "true"},
         {name: "PREVIEW_BASE_PATH", value: "/preview"},
-        {name: "PREVIEW_STATIC_ROOT", value: normalizePreviewStaticRoot(session.previewStaticRoot)},
+        {name: "PREVIEW_STATIC_ROOT", value: defaultPreviewStaticRoot(capabilities)},
         capabilities.n64 ? {name: "PREVIEW_N64_ROM_PATH", value: "/workspace/build/game.z64"} : null,
         {name: "PREVIEW_INJECT_LOGGER", value: "true"},
         {name: "PREVIEW_LOG_LIMIT", value: "500"},
@@ -4124,20 +4075,6 @@ function cleanName(value) {
 
 function defaultPreviewStaticRoot(capabilities = {}) {
   return capabilities && capabilities.preview ? "/workspace/build" : null;
-}
-
-function normalizePreviewStaticRoot(value) {
-  const clean = cleanName(value || "build").replace(/\\/g, "/");
-  if (!clean) return "/workspace/build";
-  const withoutWorkspace = clean.startsWith("/workspace/") ? clean.slice("/workspace/".length) : clean.replace(/^\/+/, "");
-  if (!withoutWorkspace || withoutWorkspace.includes("\0")) {
-    throw httpError(400, "invalid_preview_static_root");
-  }
-  const parts = withoutWorkspace.split("/").filter(Boolean);
-  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
-    throw httpError(400, "invalid_preview_static_root");
-  }
-  return `/workspace/${parts.join("/")}`;
 }
 
 function normalizeServiceAccountEmail(value) {

@@ -164,7 +164,7 @@ When preview is enabled, the runner exposes:
 - `POST /preview/logs` for the injected browser logger.
 - `GET /preview/*` for static files under `/workspace/build` with SPA fallback to `index.html`.
 
-The app exposes a `pi-web`-only Preview folder control below the terminal controls. New sessions default to `/workspace/build`; users can switch common folders such as `dist`, `out`, and `public`, or enter another workspace-relative folder. Cloud Functions stores the normalized `/workspace/...` path on the session as `previewStaticRoot` and updates `PREVIEW_STATIC_ROOT` on the Cloud Run service. Because Cloud Run environment variables are revision-scoped, changing this setting creates a new revision and restarts the active runner. Stopped sessions keep the selected folder and apply it on restart.
+The `pi-web` static preview serves generated output from `/workspace/build`. The seeded `mapache-preview-build` skill instructs agents to emit browser-loadable output there and to configure relative asset bases, such as Vite's `base: "./"`, so bundled assets resolve correctly under `/preview/`.
 
 HTML responses from the static preview receive a small development logger script when `PREVIEW_INJECT_LOGGER=true`. It forwards `console.log`, `console.info`, `console.warn`, `console.error`, `window.onerror`, and unhandled promise rejections to the runner log buffer. QA agents can combine these logs with Playwright screenshots and interaction checks without needing to scrape the terminal.
 
@@ -177,7 +177,7 @@ Agents can switch the preview gateway from static-file serving to a local app/AP
 }
 ```
 
-Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from the session's configured `PREVIEW_STATIC_ROOT` or a valid `staticRoot` in `/workspace/.mapache/preview.json`.
+Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or a valid `staticRoot` in `/workspace/.mapache/preview.json`.
 
 On startup, all Pi runners seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit.
 
@@ -458,7 +458,7 @@ New sessions use the image key selected in the modal and resolved by the backend
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, configurable `PREVIEW_STATIC_ROOT`, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, user-selected preview roots, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
+The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, preview environment changes, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
 
 When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
 
