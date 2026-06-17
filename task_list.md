@@ -96,10 +96,11 @@ Before implementation tasks, read:
   - Add focused tests for package source and skill validation if practical.
   - Completed: 2026-06-17 - Split runner Pi package operations, skill CRUD, seeded skill file creation, and shared validation helpers into focused modules with runner tests.
 
-- [ ] 12. **Move seeded skill Markdown out of JS strings** - medium
+- [x] 12. **Move seeded skill Markdown out of JS strings** - medium
   - Store default seeded skill content as Markdown files under `session-runner/`.
   - Load those files from runner code.
   - Keep the "create only when missing" behavior.
+  - Completed: 2026-06-17 - Moved default Pi seeded skills into `session-runner/seeded-skills/`, loaded them from the runner seed service, and covered file-backed seeding with runner tests.
 
 - [ ] 13. **Split runner Git service** - medium
   - Separate command execution, status parsing, branch/commit validation, push auth, and PR helpers.

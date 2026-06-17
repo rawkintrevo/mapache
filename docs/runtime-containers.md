@@ -75,7 +75,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
 - `workspace.js` owns workspace restore, Cloud Storage sync, archive sync, GitHub workspace reconstruction, and Pi auth materialization.
 - `git.js` owns Git status/actions and GitHub clone/push auth helpers.
-- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
+- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, default seeded skill Markdown lives under `session-runner/seeded-skills/`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`.
@@ -179,7 +179,7 @@ Agents can switch the preview gateway from static-file serving to a local app/AP
 
 Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or a valid `staticRoot` in `/workspace/.mapache/preview.json`.
 
-On startup, all Pi runners seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit.
+On startup, all Pi runners seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit. The default seeded skill payloads are versioned as normal `SKILL.md` files under `session-runner/seeded-skills/{skill-name}/SKILL.md`; the runner copies them into `/workspace/.pi/skills/{skill-name}/SKILL.md` only when a workspace-local file is missing.
 
 On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 

@@ -4,6 +4,16 @@ const fs = require("fs");
 const path = require("path");
 const {pathExists} = require("./utils");
 
+async function resolveSeededSkillContent(skill) {
+  if (typeof skill.content === "string") return skill.content;
+  if (typeof skill.filePath === "string") {
+    return fs.promises.readFile(skill.filePath, "utf8");
+  }
+  const error = new Error("invalid_seeded_skill");
+  error.code = "invalid_seeded_skill";
+  throw error;
+}
+
 function createPiSeededSkillService({config, defaultRuntimeSkills}) {
   async function seedDefaultRuntimeSkills() {
     const skills = defaultRuntimeSkills(config.runnerCapabilities);
@@ -17,7 +27,7 @@ function createPiSeededSkillService({config, defaultRuntimeSkills}) {
       const skillPath = path.join(skillDir, "SKILL.md");
       if (await pathExists(skillPath)) continue;
       await fs.promises.mkdir(skillDir, {recursive: true});
-      await fs.promises.writeFile(skillPath, skill.content, "utf8");
+      await fs.promises.writeFile(skillPath, await resolveSeededSkillContent(skill), "utf8");
     }
   }
 
@@ -28,4 +38,5 @@ function createPiSeededSkillService({config, defaultRuntimeSkills}) {
 
 module.exports = {
   createPiSeededSkillService,
+  resolveSeededSkillContent,
 };
