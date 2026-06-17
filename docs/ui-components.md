@@ -26,7 +26,7 @@ This document serves as an index for significant UI components in the applicatio
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, resize controls, and restart controls for the selected session. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, resize controls, restart controls, and Git status placement for the selected session. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |

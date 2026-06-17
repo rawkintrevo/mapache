@@ -1525,6 +1525,10 @@ main.drawer-collapsed.right-drawer-collapsed {
   gap: 10px;
 }
 
+.toolbar label {
+  min-width: 130px;
+}
+
 .form-row label {
   flex: 1 1 0;
 }

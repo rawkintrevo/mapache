@@ -314,7 +314,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     const ref = db.collection("users").doc(config.ownerUid).collection("private").doc("piAuth");
     const snap = await ref.get();
     const data = snap.exists ? snap.data() : {};
-    const auth = buildMaterializedPiAuth(data, selection === null ? await readSessionPiAuthSelection() : normalizePiAuthSelection(selection));
+    const auth = buildMaterializedPiAuth(data, selection === null ? await readSessionPiAuthSelection() : selection);
     await writePiAuthFile(auth);
     console.log(`pi auth materialized ${Object.keys(auth).length} selected provider(s) to ${piAuthFilePath()}`);
     return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length};
@@ -324,7 +324,8 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     const providers = normalizePiAuthProviders(data && data.providers);
     const entries = normalizePiAuthEntries(data && data.entries, providers);
     if (selection && typeof selection === "object") {
-      return Object.entries(selection).reduce((acc, [providerKey, entryId]) => {
+      const normalizedSelection = normalizePiAuthSelection(selection, entries);
+      return Object.entries(normalizedSelection).reduce((acc, [providerKey, entryId]) => {
         const entry = entries[entryId];
         if (entry && entry.providerKey === providerKey) acc[providerKey] = entry.credential;
         return acc;
@@ -366,6 +367,63 @@ function createWorkspaceService({admin, config, db, git, storage}) {
       acc[key] = normalizePlainAuthObject(credential);
       return acc;
     }, {});
+  }
+
+  function normalizePiAuthEntries(value, providers = {}) {
+    const entries = value && typeof value === "object" && !Array.isArray(value) ?
+      Object.entries(value).reduce((acc, [id, entry]) => {
+        const normalizedId = normalizePiAuthEntryId(id || entry && entry.id);
+        if (!normalizedId || !entry || typeof entry !== "object" || Array.isArray(entry)) return acc;
+        const providerKey = normalizeAuthKey(entry.providerKey || entry.provider || "");
+        const credential = normalizePlainAuthObject(entry.credential || entry.value || {});
+        if (!providerKey || !Object.keys(credential).length) return acc;
+        acc[normalizedId] = {
+          id: normalizedId,
+          providerKey,
+          label: normalizeAuthKey(entry.label || "") || providerKey,
+          credential,
+          createdAt: normalizeAuthKey(entry.createdAt || ""),
+        };
+        return acc;
+      }, {}) :
+      {};
+
+    Object.entries(providers || {}).forEach(([providerKey, credential]) => {
+      const hasProviderEntry = Object.values(entries).some((entry) => entry.providerKey === providerKey);
+      if (!hasProviderEntry) {
+        const id = `legacy-${providerKey}`;
+        entries[id] = {
+          id,
+          providerKey,
+          label: providerKey,
+          credential: normalizePlainAuthObject(credential),
+          createdAt: "",
+        };
+      }
+    });
+    return entries;
+  }
+
+  function normalizePiAuthSelection(value, entries = null) {
+    const selected = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return Object.entries(selected).reduce((acc, [provider, entryId]) => {
+      const providerKey = normalizeAuthKey(provider);
+      const normalizedEntryId = normalizePiAuthEntryId(entryId);
+      if (!providerKey || !normalizedEntryId) return acc;
+      if (entries) {
+        const entry = entries[normalizedEntryId];
+        if (entry && entry.providerKey === providerKey) acc[providerKey] = normalizedEntryId;
+        return acc;
+      }
+      acc[providerKey] = normalizedEntryId;
+      return acc;
+    }, {});
+  }
+
+  function normalizePiAuthEntryId(value) {
+    const id = normalizeAuthKey(value);
+    if (!id || id.length > 256 || /[^a-zA-Z0-9_.:-]/.test(id)) return "";
+    return id;
   }
 
   function normalizePlainAuthObject(value) {

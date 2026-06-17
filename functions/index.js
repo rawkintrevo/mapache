@@ -3231,7 +3231,7 @@ async function sessionRunnerEnv(session, options = {}) {
     env.push(
         {name: "PREVIEW_ENABLED", value: "true"},
         {name: "PREVIEW_BASE_PATH", value: "/preview"},
-        {name: "PREVIEW_STATIC_ROOT", value: "/workspace/build"},
+        {name: "PREVIEW_STATIC_ROOT", value: defaultPreviewStaticRoot(capabilities)},
         capabilities.n64 ? {name: "PREVIEW_N64_ROM_PATH", value: "/workspace/build/game.z64"} : null,
         {name: "PREVIEW_INJECT_LOGGER", value: "true"},
         {name: "PREVIEW_LOG_LIMIT", value: "500"},
@@ -4071,6 +4071,10 @@ function serialize(value) {
 
 function cleanName(value) {
   return String(value || "").trim().slice(0, 256);
+}
+
+function defaultPreviewStaticRoot(capabilities = {}) {
+  return capabilities && capabilities.preview ? "/workspace/build" : null;
 }
 
 function normalizeServiceAccountEmail(value) {
