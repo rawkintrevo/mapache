@@ -52,7 +52,7 @@ Run the default verification suite from the repository root:
 npm run check
 ```
 
-This runs the Cloud Functions tests, session runner JavaScript syntax checks, and the full app plus community build. It intentionally skips N64 runtime image builds.
+This runs the Cloud Functions tests, session runner JavaScript syntax checks, frontend smoke tests, and the full app plus community build. It intentionally skips N64 runtime image builds.
 
 ## Contact
 

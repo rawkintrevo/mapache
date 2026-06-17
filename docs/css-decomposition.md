@@ -94,4 +94,4 @@ For each extraction slice, run `npm run build`. For visual-risk slices, also ins
 - modal forms, including file editor and pull request modal
 - mobile widths near 900px and 620px breakpoints
 
-Task 17 will add frontend smoke coverage for these flows so future CSS moves are safer in PR checks.
+Frontend smoke coverage now exercises route gating, drawer panels, session selection, selected-session rendering, and key modal submissions so future CSS moves are safer in PR checks.

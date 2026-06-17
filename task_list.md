@@ -123,9 +123,10 @@ Before implementation tasks, read:
   - Implement incrementally by component area instead of one large rewrite.
   - Completed: 2026-06-17 - Added `docs/css-decomposition.md` with the stylesheet audit, hybrid plain-CSS decision, migration order, and verification expectations.
 
-- [ ] 17. **Add frontend smoke coverage** - medium
+- [x] 17. **Add frontend smoke coverage** - medium
   - Cover route gating, signed-in shell rendering, drawer panels, session selection, and key modal flows.
   - Prefer tests that can run in PR checks without live Cloud Run sessions.
+  - Completed: 2026-06-17 - Added Vitest/jsdom React smoke coverage for route gating, signed-in shell/drawers, selected-session rendering, session selection, and workspace/session modal submissions; wired it into root checks and CI.
 
 - [ ] 18. **Add nightly e2e coverage plan** - large
   - Define live-environment tests for authenticated session creation, workspace files, GitHub workspaces, Pi packages, Pi skills, and runner preview.

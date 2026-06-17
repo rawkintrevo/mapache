@@ -11,13 +11,14 @@ Unit tests cover pure helpers and validation logic that can run without Firebase
 Locations:
 
 - `functions/*.helpers.test.js` for backend helper modules.
-- Future frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
+- Frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
 - Future runner helper tests should live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub.
 
 Default commands:
 
 ```bash
 npm --prefix functions test
+npm run test:frontend
 npm --prefix session-runner run lint
 ```
 
@@ -29,7 +30,7 @@ Locations:
 
 - `functions/__tests__/` for route parsing, API contract, ownership, validation, and error-response tests around `functions/index.js` and extracted backend modules.
 - `session-runner/__tests__/` for Express route contracts, token gates, preview path validation, Git command orchestration, and workspace sync behavior that can run with temporary directories and mocked services.
-- `src/__tests__/` for React workflow/component smoke tests once frontend test tooling is added.
+- `src/__tests__/` for React workflow/component smoke tests. These run with Vitest, jsdom, and React Testing Library, and should mock Firebase, runner, and API boundaries so they stay local-only.
 
 These tests should become part of `npm run check` only when they are deterministic, local-only, and fast enough for PR feedback.
 
@@ -77,9 +78,10 @@ It runs:
 
 1. Cloud Functions unit tests.
 2. Session runner JavaScript syntax checks.
-3. Full Vite app and Docusaurus community build.
+3. Frontend smoke tests.
+4. Full Vite app and Docusaurus community build.
 
-Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; then build. N64 image builds, live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
+Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. N64 image builds, live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
 ## Slower Checks
 

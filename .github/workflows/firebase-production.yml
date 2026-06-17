@@ -51,6 +51,9 @@ jobs:
       - name: Check session runner syntax
         run: npm --prefix session-runner run lint
 
+      - name: Test frontend smoke coverage
+        run: npm run test:frontend
+
       - name: Build app
         run: npm run build
 
