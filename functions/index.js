@@ -21,6 +21,7 @@ const {
   OPENAI_CODEX_PROVIDER,
   routeRequest: apiRouteRequest,
 } = require("./apiRoutes.helpers");
+const {dispatchApiRoute} = require("./apiDispatch.helpers");
 
 admin.initializeApp();
 const FUNCTION_SERVICE_ACCOUNT = defineString("FUNCTION_SERVICE_ACCOUNT");
@@ -101,6 +102,48 @@ const PI_AUTH_API_KEY_PROVIDERS = new Set([
   "xiaomi-token-plan-sgp",
 ]);
 
+const API_HANDLERS = {
+  userWithUsage,
+  getPiAuth,
+  savePiAuthProvider,
+  deletePiAuthProvider,
+  deletePiAuthEntry,
+  startOpenAiCodexDeviceCode,
+  completeOpenAiCodexDeviceCode,
+  listWorkspaces,
+  createWorkspace,
+  deleteWorkspace,
+  listWorkspaceFiles,
+  readWorkspaceFile,
+  saveWorkspaceFile,
+  uploadWorkspaceFile,
+  createWorkspaceFileDownloadUrl,
+  listSessions,
+  createSession,
+  resizeSession,
+  restartSession,
+  stopSession,
+  deleteSession,
+  createSessionAccessUrls,
+  saveSessionPiAuthSelection,
+  getGitStatusSummary,
+  pullGit,
+  stageGit,
+  unstageGit,
+  commitGit,
+  pushGit,
+  openPullRequest,
+  listPiPackages,
+  installPiPackage,
+  removePiPackage,
+  updatePiPackage,
+  listPiSkills,
+  savePiSkill,
+  deletePiSkill,
+  listConnectedRepos,
+  createGithubConnectUrl,
+};
+
 exports.api = onRequest({
   cors: true,
   secrets: [
@@ -125,215 +168,7 @@ exports.api = onRequest({
 
     const user = await requireUser(req);
 
-    if (req.method === "GET" && route.name === "me") {
-      res.json({user: await userWithUsage(user)});
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "piAuth") {
-      res.json(await getPiAuth(user.uid));
-      return;
-    }
-
-    if (req.method === "PUT" && route.name === "piAuthProvider") {
-      res.json(await savePiAuthProvider(user.uid, route.provider, req.body || {}));
-      return;
-    }
-
-    if (req.method === "DELETE" && route.name === "piAuthProvider") {
-      res.json(await deletePiAuthProvider(user.uid, route.provider));
-      return;
-    }
-
-    if (req.method === "DELETE" && route.name === "piAuthEntry") {
-      res.json(await deletePiAuthEntry(user.uid, route.entryId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "openAiCodexDeviceCode" && route.action === "start") {
-      res.json(await startOpenAiCodexDeviceCode());
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "openAiCodexDeviceCode" && route.action === "complete") {
-      res.json(await completeOpenAiCodexDeviceCode(user.uid, req.body || {}));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "workspaces") {
-      res.json({workspaces: await listWorkspaces(user.uid)});
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "workspaces") {
-      res.status(201).json({workspace: await createWorkspace(user.uid, req.body || {})});
-      return;
-    }
-
-    if (req.method === "DELETE" && route.name === "workspace") {
-      res.json(await deleteWorkspace(user.uid, route.workspaceId));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "workspaceFiles") {
-      res.json(await listWorkspaceFiles(user.uid, route.workspaceId));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "workspaceFile") {
-      res.json(await readWorkspaceFile(user.uid, route.workspaceId, req.query.path));
-      return;
-    }
-
-    if (req.method === "PUT" && route.name === "workspaceFile") {
-      res.json(await saveWorkspaceFile(user.uid, route.workspaceId, req.query.path, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "workspaceFile") {
-      res.status(201).json(await uploadWorkspaceFile(user.uid, route.workspaceId, req.query.path, req));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "workspaceFileDownloadUrl") {
-      res.json(await createWorkspaceFileDownloadUrl(user.uid, route.workspaceId, req.query.path));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "sessions") {
-      res.json({sessions: await listSessions(user.uid, route.workspaceId)});
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "sessions") {
-      res.status(201).json({
-        session: await createSession(user.uid, route.workspaceId, req.body || {}),
-      });
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "resizeSession") {
-      res.json({
-        session: await resizeSession(
-            user.uid,
-            route.workspaceId,
-            route.sessionId,
-            req.body || {},
-        ),
-      });
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "restartSession") {
-      res.json({
-        session: await restartSession(user.uid, route.workspaceId, route.sessionId),
-      });
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "stopSession") {
-      res.json({
-        session: await stopSession(user.uid, route.workspaceId, route.sessionId),
-      });
-      return;
-    }
-
-    if (req.method === "DELETE" && route.name === "session") {
-      res.json(await deleteSession(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "sessionAccess") {
-      res.json(await createSessionAccessUrls(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "sessionPiAuthSelection") {
-      res.json(await saveSessionPiAuthSelection(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "gitStatus") {
-      res.json(await getGitStatusSummary(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "gitPull") {
-      res.json(await pullGit(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "gitStage") {
-      res.json(await stageGit(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "gitUnstage") {
-      res.json(await unstageGit(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "gitCommit") {
-      res.json(await commitGit(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "gitPush") {
-      res.json(await pushGit(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "gitOpenPr") {
-      res.json(await openPullRequest(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "piPackages") {
-      res.json(await listPiPackages(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "piPackageInstall") {
-      res.json(await installPiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "piPackageRemove") {
-      res.json(await removePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "piPackageUpdate") {
-      res.json(await updatePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "piSkills") {
-      res.json(await listPiSkills(user.uid, route.workspaceId, route.sessionId));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "piSkills") {
-      res.json(await savePiSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "POST" && route.name === "piSkillDelete") {
-      res.json(await deletePiSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "githubRepos") {
-      res.json(await listConnectedRepos(user.uid));
-      return;
-    }
-
-    if (req.method === "GET" && route.name === "githubConnect") {
-      res.json(await createGithubConnectUrl(user.uid, req));
-      return;
-    }
-
-    res.status(404).json({error: "not_found"});
+    await dispatchApiRoute({route, req, res, user, handlers: API_HANDLERS});
   } catch (error) {
     logger.error("api request failed", error);
     const status = error.status || 500;
@@ -368,205 +203,6 @@ exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
   failed.forEach((result) => logger.error("idle session stop failed", result.reason));
   logger.info("idle session reap complete", {checked: snap.size, stopped, failed: failed.length});
 });
-
-function routeRequest(path) {
-  const parts = path.replace(/^\/api\/?/, "/").split("/").filter(Boolean);
-  if (parts.length === 1 && parts[0] === "me") return {name: "me"};
-  if (parts.length === 1 && parts[0] === "pi-auth") return {name: "piAuth"};
-  if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
-    return {name: "piAuthProvider", provider: parts[2]};
-  }
-  if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "entries") {
-    return {name: "piAuthEntry", entryId: parts[2]};
-  }
-  if (
-    parts.length === 5 &&
-
-    parts[0] === "pi-auth" &&
-    parts[1] === "providers" &&
-    parts[2] === OPENAI_CODEX_PROVIDER &&
-    parts[3] === "device-code"
-  ) {
-    return {name: "openAiCodexDeviceCode", action: parts[4]};
-  }
-  if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
-  if (parts.length === 2 && parts[0] === "workspaces") {
-    return {name: "workspace", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
-    return {name: "workspaceFiles", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "file") {
-    return {name: "workspaceFile", workspaceId: parts[1]};
-  }
-  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "file" && parts[3] === "download-url") {
-    return {name: "workspaceFileDownloadUrl", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
-    return {name: "sessions", workspaceId: parts[1]};
-  }
-  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "sessions") {
-    return {name: "session", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "resize"
-  ) {
-    return {name: "resizeSession", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "restart"
-  ) {
-    return {name: "restartSession", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "stop"
-  ) {
-    return {name: "stopSession", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "access-url"
-  ) {
-    return {name: "sessionAccess", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-auth-selection"
-  ) {
-    return {name: "sessionPiAuthSelection", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-status"
-  ) {
-    return {name: "gitStatus", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-pull"
-  ) {
-    return {name: "gitPull", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-stage"
-  ) {
-    return {name: "gitStage", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-unstage"
-  ) {
-    return {name: "gitUnstage", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-commit"
-  ) {
-    return {name: "gitCommit", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-push"
-  ) {
-    return {name: "gitPush", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "git-open-pr"
-  ) {
-    return {name: "gitOpenPr", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-packages"
-  ) {
-    return {name: "piPackages", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-packages" &&
-    parts[5] === "install"
-  ) {
-    return {name: "piPackageInstall", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-packages" &&
-    parts[5] === "remove"
-  ) {
-    return {name: "piPackageRemove", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-packages" &&
-    parts[5] === "update"
-  ) {
-    return {name: "piPackageUpdate", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 5 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-skills"
-  ) {
-    return {name: "piSkills", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-skills" &&
-    parts[5] === "delete"
-  ) {
-    return {name: "piSkillDelete", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
-    return {name: "githubConnect"};
-  }
-  if (parts.length === 2 && parts[0] === "github" && parts[1] === "callback") {
-    return {name: "githubCallback"};
-  }
-  if (parts.length === 2 && parts[0] === "github" && parts[1] === "repos") {
-    return {name: "githubRepos"};
-  }
-  return {name: "unknown"};
-}
 
 async function requireUser(req) {
   const header = req.get("authorization") || "";
