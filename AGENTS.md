@@ -4,6 +4,8 @@
 
 This repo has development knowledge in `docs/`. For non-trivial fixes or feature work, inspect `docs/` before changing code and read the pages that look relevant.
 
+`docs/` is for developer-facing and LLM-facing implementation knowledge: architecture notes, runtime behavior, deployment assumptions, design decisions, and maintenance plans. The `community/` tree is for user-facing documentation and blog content served under `/community/`. Do not move developer maintenance notes into `community/`, and do not refactor `community/` as part of developer-doc cleanup unless the user explicitly asks for user-doc work.
+
 Treat these docs as part of the source of truth for implementation context. If a change alters app architecture, user workflow, runtime container behavior, deployment assumptions, or a recorded design decision, update the relevant doc in the same change.
 
 The docs are extensible. Add a new page when a change introduces a distinct area of development knowledge that does not fit cleanly into the existing docs.
@@ -27,7 +29,7 @@ In general, keep docs edits focused on the current change. If the docs have beco
 Keep changes scoped to the existing structure:
 
 - Frontend state and handlers live in `src/main.js`.
-- DOM rendering lives in `src/ui/render.js` and component-specific files in `src/ui/`.
+- React rendering lives in `src/App.jsx` and component-specific files under `src/components/`.
 - UI Component Index: See `docs/ui-components.md` for a mapping of UI components, their file locations, and purposes.
 - Shared frontend styling lives in `src/styles.css`.
 - Session image choices live in `src/config/sessionImages.js`.

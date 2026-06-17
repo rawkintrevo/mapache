@@ -44,6 +44,16 @@ Issues, feature requests, and bug reports are welcome. Pull requests are not bei
 - `community/`: User documentation and blog site served under `/community/`.
 - `docs/`: Maintainer-oriented architecture and implementation notes.
 
+## Development Checks
+
+Run the default verification suite from the repository root:
+
+```bash
+npm run check
+```
+
+This runs the Cloud Functions tests, session runner JavaScript syntax checks, frontend smoke tests, and the full app plus community build. It intentionally skips N64 runtime image builds.
+
 ## Contact
 
 - Open an issue: [github.com/rawkintrevo/mapache/issues](https://github.com/rawkintrevo/mapache/issues)

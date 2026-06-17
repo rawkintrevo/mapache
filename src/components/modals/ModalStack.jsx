@@ -6,7 +6,8 @@ import {SessionModal} from "./SessionModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 
 export function ModalStack(props) {
-  const {state} = props;
+  const {handlers, state} = props;
+  const {files, git, github, modals, pi, sessions, workspaces} = handlers;
 
   return (
     <>
@@ -14,56 +15,56 @@ export function ModalStack(props) {
         <SessionModal
           busy={state.busy}
           error={state.error}
-          onClose={props.onCloseSessionModal}
-          onCreateSession={props.onCreateSession}
+          onClose={modals.closeSessionModal}
+          onCreateSession={sessions.createSession}
         />
       ) : null}
       {state.workspaceModalOpen ? (
         <WorkspaceModal
           repoPicker={state.repoPicker}
-          onClose={props.onCloseWorkspaceModal}
-          onConnectGithub={props.onConnectGithub}
+          onClose={modals.closeWorkspaceModal}
+          onConnectGithub={github.connectGithub}
           onCreateWorkspace={(payload) => {
-            props.onCreateWorkspace(payload);
-            props.onCloseWorkspaceModal();
+            workspaces.createWorkspace(payload);
+            modals.closeWorkspaceModal();
           }}
-          onLoadConnectedRepos={props.onLoadConnectedRepos}
+          onLoadConnectedRepos={github.loadConnectedRepos}
         />
       ) : null}
       {state.authModalOpen ? (
         <AuthModal
           piAuth={state.piAuth}
-          onClose={props.onCloseAuthModal}
+          onClose={modals.closeAuthModal}
           onSave={(provider, apiKey, entryLabel) => {
-            props.onUpdatePiAuthForm({selectedProvider: provider, apiKey, entryLabel});
-            props.onSavePiAuthProvider();
+            pi.updatePiAuthForm({selectedProvider: provider, apiKey, entryLabel});
+            pi.savePiAuthProvider();
           }}
-          onStartOpenAiCodexDeviceLogin={props.onStartOpenAiCodexDeviceLogin}
-          onUpdate={props.onUpdatePiAuthForm}
+          onStartOpenAiCodexDeviceLogin={pi.startOpenAiCodexDeviceLogin}
+          onUpdate={pi.updatePiAuthForm}
         />
       ) : null}
       {state.piAuthManageModalOpen ? (
         <PiAuthManageModal
           piAuth={state.piAuth}
           session={props.selectedSession}
-          onClose={props.onClosePiAuthManageModal}
-          onSave={props.onSaveSessionPiAuthSelection}
+          onClose={modals.closePiAuthManageModal}
+          onSave={pi.saveSessionPiAuthSelection}
         />
       ) : null}
       {state.fileEditor.open ? (
         <FileEditorDialog
           editor={state.fileEditor}
-          onClose={props.onCloseFileEditor}
-          onSave={props.onSaveFileEditor}
-          onUpdateContent={props.onUpdateFileEditorContent}
+          onClose={files.closeFileEditor}
+          onSave={files.saveFileEditor}
+          onUpdateContent={files.updateFileEditorContent}
         />
       ) : null}
       {state.pullRequestForm.open ? (
         <PullRequestModal
           formState={state.pullRequestForm}
-          onClose={props.onClosePullRequest}
-          onSubmit={props.onSubmitPullRequest}
-          onUpdate={props.onUpdatePullRequestForm}
+          onClose={git.closePullRequestModal}
+          onSubmit={git.submitPullRequest}
+          onUpdate={git.updatePullRequestForm}
         />
       ) : null}
     </>

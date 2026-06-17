@@ -31,6 +31,7 @@ jobs:
             package-lock.json
             community/package-lock.json
             functions/package-lock.json
+            session-runner/package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
@@ -41,8 +42,17 @@ jobs:
       - name: Install functions dependencies
         run: npm ci --prefix functions
 
+      - name: Install session runner dependencies
+        run: npm ci --prefix session-runner
+
       - name: Test functions
         run: npm --prefix functions test
+
+      - name: Check session runner syntax
+        run: npm --prefix session-runner run lint
+
+      - name: Test frontend smoke coverage
+        run: npm run test:frontend
 
       - name: Build app
         run: npm run build

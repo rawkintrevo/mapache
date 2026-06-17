@@ -73,9 +73,9 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
-- `workspace.js` owns workspace restore, Cloud Storage sync, archive sync, GitHub workspace reconstruction, and Pi auth materialization.
-- `git.js` owns Git status/actions and GitHub clone/push auth helpers.
-- `pi.js` owns workspace-local Pi package and skill management.
+- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, and Pi auth/home materialization lives in `workspacePiAuth.service.js`.
+- `git.js` composes runner Git behavior. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it.
+- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, default seeded skill Markdown lives under `session-runner/seeded-skills/`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`.
@@ -179,7 +179,7 @@ Agents can switch the preview gateway from static-file serving to a local app/AP
 
 Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or a valid `staticRoot` in `/workspace/.mapache/preview.json`.
 
-On startup, all Pi runners seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit.
+On startup, all Pi runners seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit. The default seeded skill payloads are versioned as normal `SKILL.md` files under `session-runner/seeded-skills/{skill-name}/SKILL.md`; the runner copies them into `/workspace/.pi/skills/{skill-name}/SKILL.md` only when a workspace-local file is missing.
 
 On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 
@@ -361,7 +361,7 @@ The current runner implementation now does that reconciliation for GitHub worksp
 
 ## Provisioning
 
-When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected curated image. The create-session payload should include `imageKey`; the backend resolves that key through `functions/runnerImages.helpers.js` and stores `imageKey`, the resolved `image` URI, and `terminalKind` on the session. If no image key is present, the backend uses the operator-controlled `SESSION_RUNNER_IMAGE` default. Direct user-provided image URIs are not accepted unless they exactly match a curated catalog image for legacy client compatibility.
+When a session is created, `functions/index.js` stores the session record and provisions a Cloud Run service using the selected curated image. The Cloud Run API request construction, patch/delete flows, service-account resolution, resource limit mapping, and runner environment variable construction live in `functions/cloudRun.service.js`; GitHub source metadata, short-lived installation-token env vars, connected repository normalization, and pull request API calls live in `functions/github.service.js`; Pi auth storage, OpenAI Codex subscription login, package catalog/proxy behavior, skill proxy behavior, and Pi payload validation live in `functions/pi.service.js`; session ownership and Firestore state transitions remain outside those modules. The create-session payload should include `imageKey`; the backend resolves that key through `functions/runnerImages.helpers.js` and stores `imageKey`, the resolved `image` URI, and `terminalKind` on the session. If no image key is present, the backend uses the operator-controlled `SESSION_RUNNER_IMAGE` default. Direct user-provided image URIs are not accepted unless they exactly match a curated catalog image for legacy client compatibility.
 
 GitHub workspaces still enforce one active Pi/agent session at a time so two agents cannot race on cached Git state. Shell-kind sessions are allowed alongside an active Pi session because they do not attach to the same Pi conversation state. They still share the workspace files and Git checkout, so user edits from the shell can race with agent edits at the normal filesystem and sync layers.
 
