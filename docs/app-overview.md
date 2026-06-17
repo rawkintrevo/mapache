@@ -127,7 +127,7 @@ Frontend changes are deployed with:
 firebase deploy --only hosting --project pi-agents-cloud
 ```
 
-GitHub Actions also deploys Firebase automatically:
+GitHub Actions also deploys Firebase automatically. The test pyramid and fast-versus-slow check split are documented in [testing.md](./testing.md).
 
 - Pull requests from branches in this repository run `.github/workflows/firebase-preview.yml`, install the root, `community/`, `functions/`, and `session-runner/` dependencies, run the Functions tests, run session runner JavaScript syntax checks, build the app, and deploy a Firebase Hosting preview channel that expires after 14 days.
 - Pushes to `main` run `.github/workflows/firebase-production.yml`, perform the same install/test/syntax-check/build checks, and deploy Hosting, Cloud Functions, Firestore, and Storage to the `pi-agents-cloud` project.
