@@ -2,14 +2,19 @@ export function createApiClient(getToken) {
   return {
     getMe: () => request(getToken, "/api/me"),
     getPiAuth: () => request(getToken, "/api/pi-auth"),
-    savePiAuthProvider: (provider, key) => request(
+    savePiAuthProvider: (provider, key, label = "") => request(
         getToken,
         `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
-        {method: "PUT", body: {key}},
+        {method: "PUT", body: {key, label}},
     ),
     deletePiAuthProvider: (provider) => request(
         getToken,
         `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
+        {method: "DELETE"},
+    ),
+    deletePiAuthEntry: (entryId) => request(
+        getToken,
+        `/api/pi-auth/entries/${encodeURIComponent(entryId)}`,
         {method: "DELETE"},
     ),
     startOpenAiCodexDeviceLogin: () => request(
@@ -88,6 +93,11 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/access-url`,
         {method: "POST", body: {}},
+    ),
+    saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-auth-selection`,
+        {method: "POST", body: {selection}},
     ),
     getGitStatus: (workspaceId, sessionId) => request(
         getToken,

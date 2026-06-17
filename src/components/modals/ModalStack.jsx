@@ -1,6 +1,7 @@
 import {AuthModal} from "./AuthModal.jsx";
 import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";
+import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {SessionModal} from "./SessionModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 
@@ -33,12 +34,20 @@ export function ModalStack(props) {
         <AuthModal
           piAuth={state.piAuth}
           onClose={props.onCloseAuthModal}
-          onSave={(provider, apiKey) => {
-            props.onUpdatePiAuthForm({selectedProvider: provider, apiKey});
+          onSave={(provider, apiKey, entryLabel) => {
+            props.onUpdatePiAuthForm({selectedProvider: provider, apiKey, entryLabel});
             props.onSavePiAuthProvider();
           }}
           onStartOpenAiCodexDeviceLogin={props.onStartOpenAiCodexDeviceLogin}
           onUpdate={props.onUpdatePiAuthForm}
+        />
+      ) : null}
+      {state.piAuthManageModalOpen ? (
+        <PiAuthManageModal
+          piAuth={state.piAuth}
+          session={props.selectedSession}
+          onClose={props.onClosePiAuthManageModal}
+          onSave={props.onSaveSessionPiAuthSelection}
         />
       ) : null}
       {state.fileEditor.open ? (

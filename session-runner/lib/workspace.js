@@ -284,15 +284,53 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     if (!options.materialize) return;
 
     const snap = await ref.get();
-    const remoteAuth = snap.exists ? normalizePiAuthProviders(snap.data().providers) : {};
+    const data = snap.exists ? snap.data() : {};
+    const selection = await readSessionPiAuthSelection();
+    const remoteAuth = buildMaterializedPiAuth(data, selection);
     if (!Object.keys(remoteAuth).length && !Object.keys(localAuth).length) return;
 
-    const mergedAuth = {
+    const mergedAuth = selection ? remoteAuth : {
       ...localAuth,
       ...remoteAuth,
     };
     await writePiAuthFile(mergedAuth);
     console.log(`pi auth materialized ${Object.keys(mergedAuth).length} provider(s) to ${piAuthFilePath()}`);
+  }
+
+  async function readSessionPiAuthSelection() {
+    if (!config.workspaceId || !config.sessionId) return null;
+    try {
+      const snap = await db.collection("workspaces").doc(config.workspaceId).collection("sessions").doc(config.sessionId).get();
+      const data = snap.exists ? snap.data() : {};
+      if (!Object.prototype.hasOwnProperty.call(data, "piAuthSelection")) return null;
+      return normalizePiAuthSelection(data.piAuthSelection);
+    } catch (error) {
+      console.warn("pi auth selection read failed", compactErrorMessage(error.message || error));
+      return null;
+    }
+  }
+
+  async function materializePiAuthNow(selection = null) {
+    const ref = db.collection("users").doc(config.ownerUid).collection("private").doc("piAuth");
+    const snap = await ref.get();
+    const data = snap.exists ? snap.data() : {};
+    const auth = buildMaterializedPiAuth(data, selection === null ? await readSessionPiAuthSelection() : normalizePiAuthSelection(selection));
+    await writePiAuthFile(auth);
+    console.log(`pi auth materialized ${Object.keys(auth).length} selected provider(s) to ${piAuthFilePath()}`);
+    return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length};
+  }
+
+  function buildMaterializedPiAuth(data, selection) {
+    const providers = normalizePiAuthProviders(data && data.providers);
+    const entries = normalizePiAuthEntries(data && data.entries, providers);
+    if (selection && typeof selection === "object") {
+      return Object.entries(selection).reduce((acc, [providerKey, entryId]) => {
+        const entry = entries[entryId];
+        if (entry && entry.providerKey === providerKey) acc[providerKey] = entry.credential;
+        return acc;
+      }, {});
+    }
+    return providers;
   }
 
   async function readPiAuthFile() {
@@ -599,6 +637,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     syncDown,
     syncUp,
     synchronizePiAuth,
+    materializePiAuthNow,
   };
 }
 

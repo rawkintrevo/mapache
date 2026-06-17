@@ -103,6 +103,8 @@ export function friendlyPiAuthError(error) {
   const message = error.message || "Could not update Pi authentication.";
   if (message === "invalid_pi_auth_provider") return "Choose a supported API key provider.";
   if (message === "invalid_pi_auth_key") return "Enter a valid API key value.";
+  if (message === "invalid_pi_auth_entry") return "Choose a saved authentication entry.";
+  if (message === "not_pi_session") return "Choose a Pi-based session before managing Pi auth.";
   return message;
 }
 

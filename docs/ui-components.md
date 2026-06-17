@@ -31,7 +31,8 @@ This document serves as an index for significant UI components in the applicatio
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
-| `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding authentication providers, including API keys and the OpenAI Codex subscription device-code login flow. |
+| `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
+| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved Pi auth entry per provider is materialized into the active Pi session's `auth.json`. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank or GitHub-backed workspace, including the GitHub App connected repository picker, repository URL fallback, and optional branch field. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a new session. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |

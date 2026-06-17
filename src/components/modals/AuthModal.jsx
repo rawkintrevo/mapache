@@ -14,6 +14,7 @@ export function AuthModal({
 }) {
   const selectedProvider = piAuth.selectedProvider || piAuthProviders[0]?.key || "";
   const apiKey = piAuth.apiKey || "";
+  const entryLabel = piAuth.entryLabel || "";
   const isOpenAiCodex = selectedProvider === OPENAI_CODEX_PROVIDER;
   const device = piAuth.openAiCodexDevice;
 
@@ -34,7 +35,7 @@ export function AuthModal({
               onStartOpenAiCodexDeviceLogin?.();
               return;
             }
-            onSave(selectedProvider, apiKey);
+            onSave(selectedProvider, apiKey, entryLabel);
             onClose();
           }}
         >
@@ -45,11 +46,20 @@ export function AuthModal({
             onChange={(event) => onUpdate?.({
               selectedProvider: event.target.value,
               apiKey: "",
+              entryLabel: "",
               openAiCodexDevice: null,
             })}
           >
             {piAuthProviders.map((provider) => <option key={provider.key} value={provider.key}>{provider.label}</option>)}
           </select>
+          <input
+            className="auth-key-input"
+            name="entryLabel"
+            placeholder="Entry label (optional)"
+            type="text"
+            value={entryLabel}
+            onChange={(event) => onUpdate?.({entryLabel: event.target.value})}
+          />
           {isOpenAiCodex ? (
             <OpenAiCodexLoginFields
               device={device}

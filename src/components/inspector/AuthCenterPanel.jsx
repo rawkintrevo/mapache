@@ -11,21 +11,29 @@ function maskSecret(value) {
   return `${text.slice(0, 4)}…${text.slice(-4)}`;
 }
 
-function AuthProviderRow({provider, value, disabled, onDelete}) {
-  const credential = value && typeof value === "object" ? value : {};
+function normalizeEntries(status) {
+  const entries = status.entries && typeof status.entries === "object" ? status.entries : {};
+  const providers = status.providers && typeof status.providers === "object" ? status.providers : {};
+  const normalized = Object.entries(entries).map(([id, entry]) => ({id, ...entry}));
+  const entryProviderKeys = new Set(normalized.map((entry) => entry.providerKey));
+  Object.entries(providers).forEach(([providerKey, credential]) => {
+    if (!entryProviderKeys.has(providerKey)) {
+      normalized.push({id: `legacy-${providerKey}`, providerKey, label: piAuthProviderLabel(providerKey), credential});
+    }
+  });
+  return normalized.sort((left, right) => `${left.providerKey}:${left.label}`.localeCompare(`${right.providerKey}:${right.label}`));
+}
+
+function AuthProviderRow({entry, disabled, onDelete}) {
+  const credential = entry.credential && typeof entry.credential === "object" ? entry.credential : {};
   const type = credential.type || "unknown";
   const keyValue = Object.prototype.hasOwnProperty.call(credential, "key") ? String(credential.key || "") : "";
-  const fields = Object.keys(credential).filter((field) => field !== "key" && field !== "type").sort();
-
   const detail = (
-    <>
-      <span className="drawer-list-row__code">{provider}</span>
-      <div className="drawer-list-row__meta">
-        <span>{type}</span>
-        {keyValue ? <span>{maskSecret(keyValue)}</span> : null}
-        {fields.map((field) => <span key={field}>{field}</span>)}
-      </div>
-    </>
+    <div className="drawer-list-row__meta">
+      <span>{piAuthProviderLabel(entry.providerKey)}</span>
+      <span>{type}</span>
+      {keyValue ? <span>{maskSecret(keyValue)}</span> : null}
+    </div>
   );
 
   return (
@@ -35,22 +43,31 @@ function AuthProviderRow({provider, value, disabled, onDelete}) {
           disabled={disabled || !onDelete}
           icon={<Trash2 aria-hidden="true" />}
           key="delete"
-          label={`Delete ${piAuthProviderLabel(provider)}`}
+          label={`Delete ${entry.label || piAuthProviderLabel(entry.providerKey)}`}
           tone="danger"
-          onClick={() => onDelete?.(provider)}
+          onClick={() => onDelete?.(entry.id)}
         />,
       ]}
       detail={detail}
-      title={piAuthProviderLabel(provider)}
+      title={entry.label || piAuthProviderLabel(entry.providerKey)}
     />
   );
 }
 
+function isPiBasedSession(session) {
+  const terminalKind = String(session?.terminalKind || "").toLowerCase();
+  const imageKey = String(session?.imageKey || "").toLowerCase();
+  const image = String(session?.image || "").toLowerCase();
+  return terminalKind === "pi" || imageKey.startsWith("pi-") || /session-runner:pi-/.test(image);
+}
+
 export function AuthCenterPanel({
   piAuth,
+  selectedSession,
   state,
   onDeletePiAuthProvider,
   onOpenAuthModal,
+  onOpenPiAuthManage,
   onRefreshPiAuth,
   onToggleDrawerSection,
 }) {
@@ -60,9 +77,10 @@ export function AuthCenterPanel({
     error: "",
     message: "",
     providers: {},
+    entries: {},
   };
-  const providers = status.providers && typeof status.providers === "object" ? status.providers : {};
-  const providerEntries = Object.entries(providers).sort(([left], [right]) => left.localeCompare(right));
+  const providerEntries = normalizeEntries(status);
+  const showManagePiAuth = isPiBasedSession(selectedSession);
 
   return (
     <DrawerSection
@@ -99,19 +117,25 @@ export function AuthCenterPanel({
       title="Authentication Center"
       onToggleDrawerSection={onToggleDrawerSection}
     >
-      <p className="subtle">
-        User-scoped Pi auth providers. API keys saved here are materialized into ~/.pi/agent/auth.json for new sessions; CLI /login changes sync back after runner refresh.
-      </p>
+      {showManagePiAuth ? (
+        <Button
+          className="auth-center-manage"
+          disabled={status.loading || status.saving || !onOpenPiAuthManage}
+          variant="secondary"
+          onClick={onOpenPiAuthManage}
+        >
+          Manage Pi Auth
+        </Button>
+      ) : null}
       {status.error ? <p className="empty">{status.error}</p> : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
       {providerEntries.length ? (
         <DrawerList>
-          {providerEntries.map(([provider, value]) => (
+          {providerEntries.map((entry) => (
             <AuthProviderRow
               disabled={status.loading || status.saving}
-              key={provider}
-              provider={provider}
-              value={value}
+              entry={entry}
+              key={entry.id}
               onDelete={onDeletePiAuthProvider}
             />
           ))}

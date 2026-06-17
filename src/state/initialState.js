@@ -64,8 +64,10 @@ export function createPiAuthState(overrides = {}) {
     error: "",
     message: "",
     providers: {},
+    entries: {},
     selectedProvider: "anthropic",
     apiKey: "",
+    entryLabel: "",
     openAiCodexDevice: null,
     ...overrides,
   };
@@ -123,6 +125,7 @@ export function createInitialState() {
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     authModalOpen: false,
+    piAuthManageModalOpen: false,
     busy: false,
     error: "",
   };
