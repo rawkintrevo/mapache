@@ -20,6 +20,12 @@ const ROUTE_DISPATCHERS = Object.freeze({
   profile: Object.freeze([
     ["GET", "me", namedJsonResult("user", ({handlers, user}) => handlers.userWithUsage(user))],
   ]),
+  admin: Object.freeze([
+    ["GET", "adminUsers", jsonResult(({handlers, req, user}) => handlers.listAdminUsers(user, req.query || {}))],
+    ["POST", "adminUserWhitelist", namedJsonResult("user", ({handlers, req, route, user}) => (
+      handlers.setAdminUserWhitelist(user, route.uid, Boolean(req.body && req.body.whitelisted))
+    ))],
+  ]),
   piAuth: Object.freeze([
     ["GET", "piAuth", jsonResult(({handlers, user}) => handlers.getPiAuth(user.uid))],
     ["PUT", "piAuthProvider", jsonResult(({handlers, req, route, user}) => handlers.savePiAuthProvider(user.uid, route.provider, req.body || {}))],

@@ -51,6 +51,7 @@ Keep manifests deterministic. Do not put secrets in case or script files.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-drawers.json`: Left drawer, drawer sections, inspector, refresh.
 - `cases/profile.json`: Profile and runner usage view.
+- `cases/admin.json`: Admin-only user table with whitelist and cost columns.
 - `cases/workspace-create-delete.json`: Blank workspace creation and deletion.
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
 - `cases/workspace-files-editor.json`: Workspace file create/edit/download URL.

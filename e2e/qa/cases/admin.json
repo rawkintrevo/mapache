@@ -1,0 +1,27 @@
+{
+  "id": "admin.view",
+  "title": "Admin user table",
+  "description": "Open the admin-only page and verify the paginated user table, whitelist switch column, cost columns, and user type placeholder.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/admin.view",
+  "requires": {
+    "userDoc": {
+      "uid": "qa-browser-agent",
+      "fields": {
+        "isAdmin": true
+      }
+    }
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-admin.json"},
+    {"assert": "snapshot-text", "expected": "White Listed"},
+    {"assert": "snapshot-text", "expected": "Display Name"},
+    {"assert": "snapshot-text", "expected": "Lifetime Cost"},
+    {"assert": "snapshot-text", "expected": "Last 30 Days Cost"},
+    {"assert": "snapshot-text", "expected": "User Type"},
+    {"assert": "snapshot-text", "expected": "Not Set"},
+    {"assert": "snapshot-text", "expected": "Mapache QA Agent"},
+    {"capture": "screenshot", "fileName": "admin.png"}
+  ]
+}
