@@ -22,7 +22,7 @@ test("seeds default runtime skills without overwriting existing files", async (t
       runnerCapabilities: {preview: true},
     },
     defaultRuntimeSkills(capabilities) {
-      assert.deepEqual(capabilities, {preview: true});
+      assert.deepEqual(capabilities.runnerCapabilities, {preview: true});
       return [
         {name: "existing-skill", content: "seeded replacement"},
         {name: "new-skill", content: "seeded content"},
@@ -39,6 +39,32 @@ test("seeds default runtime skills without overwriting existing files", async (t
   );
 });
 
+test("skips missing file-backed seeded skills without failing startup", async (t) => {
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-pi-missing-skills-"));
+  t.after(() => fs.rm(workspaceDir, {recursive: true, force: true}));
+
+  const service = createPiSeededSkillService({
+    config: {
+      workspaceDir,
+      runnerCapabilities: {},
+      workspaceSourceMode: "github",
+    },
+    defaultRuntimeSkills() {
+      return [
+        {
+          name: "missing-skill",
+          filePath: path.join(workspaceDir, "does-not-exist", "SKILL.md"),
+        },
+      ];
+    },
+  });
+
+  await service.seedDefaultRuntimeSkills();
+
+  const missingSkillPath = path.join(workspaceDir, ".pi", "skills", "missing-skill", "SKILL.md");
+  await assert.rejects(fs.stat(missingSkillPath), {code: "ENOENT"});
+});
+
 test("seeds default runtime skills from Markdown files", async (t) => {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-pi-file-skills-"));
   t.after(() => fs.rm(workspaceDir, {recursive: true, force: true}));
@@ -47,6 +73,7 @@ test("seeds default runtime skills from Markdown files", async (t) => {
     config: {
       workspaceDir,
       runnerCapabilities: {preview: true},
+      workspaceSourceMode: "blank",
     },
     defaultRuntimeSkills,
   });
@@ -66,22 +93,41 @@ test("seeds default runtime skills from Markdown files", async (t) => {
 });
 
 test("default runtime skill catalog selects common, preview, and n64 file-backed seeds", async () => {
-  const commonSkills = defaultRuntimeSkills({});
+  assert.deepEqual(defaultRuntimeSkills({runnerCapabilities: {}, workspaceSourceMode: "blank"}), []);
+
+  const commonSkills = defaultRuntimeSkills({runnerCapabilities: {}, workspaceSourceMode: "github"});
   assert.deepEqual(commonSkills.map((skill) => skill.name), ["mapache-github-issue"]);
   assert.ok(commonSkills.every((skill) => skill.filePath.endsWith(path.join(skill.name, "SKILL.md"))));
 
-  assert.deepEqual(defaultRuntimeSkills({preview: true}).map((skill) => skill.name), [
+  assert.deepEqual(defaultRuntimeSkills({
+    runnerCapabilities: {preview: true},
+    workspaceSourceMode: "blank",
+  }).map((skill) => skill.name), [
+    "mapache-preview-build",
+    "mapache-api-hosting",
+    "mapache-preview-qa",
+  ]);
+  assert.deepEqual(defaultRuntimeSkills({
+    runnerCapabilities: {preview: true},
+    workspaceSourceMode: "github",
+  }).map((skill) => skill.name), [
     "mapache-github-issue",
     "mapache-preview-build",
     "mapache-api-hosting",
     "mapache-preview-qa",
   ]);
-  assert.deepEqual(defaultRuntimeSkills({n64: true}).map((skill) => skill.name), [
+  assert.deepEqual(defaultRuntimeSkills({
+    runnerCapabilities: {n64: true},
+    workspaceSourceMode: "github",
+  }).map((skill) => skill.name), [
     "mapache-github-issue",
     "mapache-n64-build",
     "mapache-n64-preview",
   ]);
 
-  const contents = await Promise.all(defaultRuntimeSkills({n64: true}).map(resolveSeededSkillContent));
+  const contents = await Promise.all(defaultRuntimeSkills({
+    runnerCapabilities: {n64: true},
+    workspaceSourceMode: "github",
+  }).map(resolveSeededSkillContent));
   assert.ok(contents.every((content) => content.startsWith("---\nname: ")));
 });

@@ -16,7 +16,7 @@ async function resolveSeededSkillContent(skill) {
 
 function createPiSeededSkillService({config, defaultRuntimeSkills}) {
   async function seedDefaultRuntimeSkills() {
-    const skills = defaultRuntimeSkills(config.runnerCapabilities);
+    const skills = defaultRuntimeSkills(config);
     if (!skills.length) return;
 
     const skillsPath = path.join(config.workspaceDir, ".pi", "skills");
@@ -27,7 +27,9 @@ function createPiSeededSkillService({config, defaultRuntimeSkills}) {
       const skillPath = path.join(skillDir, "SKILL.md");
       if (await pathExists(skillPath)) continue;
       await fs.promises.mkdir(skillDir, {recursive: true});
-      await fs.promises.writeFile(skillPath, await resolveSeededSkillContent(skill), "utf8");
+      const content = await resolveSeededSkillContentIfAvailable(skill);
+      if (content === null) continue;
+      await fs.promises.writeFile(skillPath, content, "utf8");
     }
   }
 
@@ -36,7 +38,20 @@ function createPiSeededSkillService({config, defaultRuntimeSkills}) {
   };
 }
 
+async function resolveSeededSkillContentIfAvailable(skill) {
+  try {
+    return await resolveSeededSkillContent(skill);
+  } catch (error) {
+    if (error && error.code === "ENOENT" && typeof skill.filePath === "string") {
+      console.warn(`seeded skill file missing, skipping ${skill.name}: ${skill.filePath}`);
+      return null;
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   createPiSeededSkillService,
   resolveSeededSkillContent,
+  resolveSeededSkillContentIfAvailable,
 };
