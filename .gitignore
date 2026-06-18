@@ -78,4 +78,6 @@ functions/.env*
 .agents/skills/*
 !.agents/skills/qa-test/
 !.agents/skills/qa-test/**
+!.agents/skills/issue-workflow/
+!.agents/skills/issue-workflow/**
 .codex/
