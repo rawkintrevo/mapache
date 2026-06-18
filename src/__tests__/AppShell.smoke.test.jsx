@@ -162,7 +162,7 @@ function createState(overrides = {}) {
     piAuth: createPiAuthState({
       entries: {
         "entry-1": {
-          credential: {key: "sk-test-value", type: "api_key"},
+          credential: {key: "supersecretkey", type: "api_key"},
           label: "Main Anthropic",
           providerKey: "anthropic",
         },
@@ -267,7 +267,7 @@ describe("frontend smoke coverage", () => {
 
   test("renders the signed-in shell, drawer panels, and session selection wiring", async () => {
     const user = userEvent.setup();
-    const {handlers} = renderShell({selectedSessionId: session.id});
+    const {container, handlers} = renderShell({selectedSessionId: session.id});
 
     expect(screen.getByRole("heading", {name: "Navigation"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Workspaces"})).toBeInTheDocument();
@@ -278,6 +278,10 @@ describe("frontend smoke coverage", () => {
     expect(screen.getByRole("heading", {name: "Skills"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Extensions"})).toBeInTheDocument();
     expect(screen.getByText("Main Anthropic")).toBeInTheDocument();
+    expect(screen.getByText("API key")).toBeInTheDocument();
+    expect(container).not.toHaveTextContent("super");
+    expect(container).not.toHaveTextContent("tkey");
+    expect(screen.queryByText(/User-scoped Pi auth/)).not.toBeInTheDocument();
     expect(screen.getByText("preview-qa")).toBeInTheDocument();
     expect(screen.getByText("npm:@team/workspace-package")).toBeInTheDocument();
 
@@ -295,6 +299,21 @@ describe("frontend smoke coverage", () => {
     await waitFor(() => {
       expect(handlers.sessions.getSessionAccessUrls).toHaveBeenCalledWith(workspace.id, session.id);
     });
+  });
+
+  test("shows Pi auth management only for Pi-based sessions", () => {
+    renderShell({
+      selectedSessionId: "shell-session",
+      sessions: [{
+        ...session,
+        id: "shell-session",
+        imageKey: "ubuntu",
+        name: "Shell session",
+        terminalKind: "shell",
+      }],
+    });
+
+    expect(screen.queryByRole("button", {name: "Manage Pi Auth"})).not.toBeInTheDocument();
   });
 
   test("shows an accessible global action indicator while busy", () => {
