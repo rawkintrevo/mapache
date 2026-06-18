@@ -1,15 +1,8 @@
-import {Plus, RefreshCw, Trash2} from "lucide-react";
+import {KeyRound, Plus, RefreshCw, Trash2} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
 import {Button} from "../common/Button.jsx";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
-
-function maskSecret(value) {
-  const text = String(value || "");
-  if (!text) return "";
-  if (text.length <= 8) return "••••";
-  return `${text.slice(0, 4)}…${text.slice(-4)}`;
-}
 
 function normalizeEntries(status) {
   const entries = status.entries && typeof status.entries === "object" ? status.entries : {};
@@ -26,13 +19,10 @@ function normalizeEntries(status) {
 
 function AuthProviderRow({entry, disabled, onDelete}) {
   const credential = entry.credential && typeof entry.credential === "object" ? entry.credential : {};
-  const type = credential.type || "unknown";
-  const keyValue = Object.prototype.hasOwnProperty.call(credential, "key") ? String(credential.key || "") : "";
+  const type = credential.type === "oauth" ? "OAuth credential" : credential.type === "api_key" ? "API key" : "Saved credential";
   const detail = (
     <div className="drawer-list-row__meta">
-      <span>{piAuthProviderLabel(entry.providerKey)}</span>
       <span>{type}</span>
-      {keyValue ? <span>{maskSecret(keyValue)}</span> : null}
     </div>
   );
 
@@ -49,6 +39,7 @@ function AuthProviderRow({entry, disabled, onDelete}) {
         />,
       ]}
       detail={detail}
+      meta={piAuthProviderLabel(entry.providerKey)}
       title={entry.label || piAuthProviderLabel(entry.providerKey)}
     />
   );
@@ -124,6 +115,7 @@ export function AuthCenterPanel({
           variant="secondary"
           onClick={onOpenPiAuthManage}
         >
+          <KeyRound aria-hidden="true" />
           Manage Pi Auth
         </Button>
       ) : null}
