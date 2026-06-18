@@ -14,6 +14,11 @@ function assertRoute(path, expected) {
 
 assertRoute("/api/me", {name: "me"});
 assertRoute("/me", {name: "me"});
+assertRoute("/api/admin/users", {name: "adminUsers"});
+assertRoute("/api/admin/users/uid-1/whitelist", {
+  name: "adminUserWhitelist",
+  uid: "uid-1",
+});
 assertRoute("/api/qa/custom-token", {name: "qaCustomToken"});
 assertRoute("/api/pi-auth", {name: "piAuth"});
 assertRoute("/api/pi-auth/providers/anthropic", {

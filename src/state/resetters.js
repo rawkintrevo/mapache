@@ -1,4 +1,5 @@
 import {
+  createAdminState,
   createFileEditorState,
   createGitStatusState,
   createPiAuthState,
@@ -32,6 +33,10 @@ export function resetFileEditor(state) {
   state.fileEditor = createFileEditorState();
 }
 
+export function resetAdmin(state) {
+  state.admin = createAdminState();
+}
+
 export function resetWorkspaceFiles(state) {
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
@@ -57,6 +62,7 @@ export function resetSignedOutState(state) {
   state.selectedWorkspaceFilePath = "";
   resetFileEditor(state);
   state.profile = null;
+  resetAdmin(state);
   state.selectedWorkspaceId = null;
   state.selectedSessionId = null;
   state.collapsedDrawerSections = new Set();

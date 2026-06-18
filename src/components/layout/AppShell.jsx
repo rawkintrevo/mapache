@@ -1,3 +1,4 @@
+import {AdminPage} from "../admin/AdminPage.jsx";
 import {LeftDrawer} from "../drawers/LeftDrawer.jsx";
 import {RightDrawer} from "../inspector/RightDrawer.jsx";
 import {ModalStack} from "../modals/ModalStack.jsx";
@@ -7,7 +8,7 @@ import {Topbar} from "./Topbar.jsx";
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {app, drawer, files, git, modals, pi, sessions, workspaces} = handlers;
+  const {admin, app, drawer, files, git, modals, pi, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -36,6 +37,7 @@ export function AppShell(props) {
           onSelectSession={sessions.selectSession}
           onSelectWorkspace={workspaces.selectWorkspace}
           onShowProfile={modals.showProfile}
+          onShowAdmin={admin.showAdmin}
           onSelectWorkspaceFile={files.selectWorkspaceFile}
           onSignOut={app.signOut}
           onStopSession={sessions.stopSession}
@@ -43,7 +45,15 @@ export function AppShell(props) {
           onToggleDrawerSection={drawer.toggleDrawerSection}
           onToggleWorkspaceFileDir={files.toggleWorkspaceFileDir}
         />
-        {state.activePage === "profile" ? (
+        {state.activePage === "admin" ? (
+          <AdminPage
+            state={state}
+            onNextPage={admin.nextAdminUsersPage}
+            onPreviousPage={admin.previousAdminUsersPage}
+            onRefresh={admin.refreshAdminUsers}
+            onSetWhitelisted={admin.setAdminUserWhitelisted}
+          />
+        ) : state.activePage === "profile" ? (
           <ProfilePage state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
         ) : (
           <WorkspacePanel

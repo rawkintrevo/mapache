@@ -22,7 +22,9 @@ Read this before changing frontend startup, workspace/session state, modals, dra
 
 The frontend uses Vite and React. `src/main.js` initializes Firebase/Auth, owns the top-level app state, coordinates selected workspace/session subscriptions, and passes grouped handlers into React. `src/App.jsx` chooses between the public landing page, fatal error surface, and signed-in app shell.
 
-The signed-in shell is componentized under `src/components/`. `AppShell` owns the outer app wrapper, drawers, workspace panel, right inspector drawer, and modal stack. The selected-session experience is terminal-first; runner-dependent panels reset while a selected session is provisioning, stopped, failed, or missing `serviceUrl`.
+The signed-in shell is componentized under `src/components/`. `AppShell` owns the outer app wrapper, drawers, admin/profile/workspace page selection, right inspector drawer, and modal stack. The selected-session experience is terminal-first; runner-dependent panels reset while a selected session is provisioning, stopped, failed, or missing `serviceUrl`.
+
+The left drawer user menu shows an Admin item only when the current profile includes `isAdmin: true`. The Admin page lives in `src/components/admin/AdminPage.jsx` and reads paginated user summaries through `src/services/api.js`; `src/main.js` owns the admin page cursor stack, refresh, and whitelist toggle handlers.
 
 Workflow modules under `src/workflows/` own cohesive API/state sequences such as session lifecycle, GitHub connection, Git/PR operations, Pi auth, Pi packages, Pi skills, and workspace file/editor actions. Controller modules under `src/controllers/` own drawer toggles, modal visibility, file tree/editor handlers, and right-panel handlers so `src/main.js` does not keep growing flat callback lists.
 

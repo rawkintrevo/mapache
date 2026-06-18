@@ -46,6 +46,52 @@ function appAllowListStatus(config = {}) {
   };
 }
 
+function isUserWhitelisted(user = {}, config = {}) {
+  const uid = String(user.uid || user.id || "").trim();
+  const email = String(user.email || "").trim().toLowerCase();
+  return normalizeAppAllowListConfig(config).entries.some((entry) => (
+    (entry.type === "uid" && uid && entry.value === uid) ||
+    (entry.type === "email" && email && entry.value === email)
+  ));
+}
+
+function setUserWhitelistStatus(config = {}, user = {}, whitelisted = false) {
+  const uid = String(user.uid || user.id || "").trim();
+  const email = String(user.email || "").trim().toLowerCase();
+  const nextConfig = {
+    ...config,
+    enabled: whitelisted ? true : config.enabled === true,
+    entries: removeUserFromAllowListValue(config.entries, uid, email).map(formatAllowListEntry),
+    allowedEmails: removeUserFromAllowListValue(config.allowedEmails, uid, email)
+        .filter((entry) => entry.type === "email")
+        .map((entry) => entry.value),
+    allowedUids: removeUserFromAllowListValue(config.allowedUids, uid, email)
+        .filter((entry) => entry.type === "uid")
+        .map((entry) => entry.value),
+  };
+
+  if (!whitelisted) return nextConfig;
+
+  if (email) {
+    nextConfig.allowedEmails = [...nextConfig.allowedEmails, email];
+  } else if (uid) {
+    nextConfig.allowedUids = [...nextConfig.allowedUids, uid];
+  }
+  return nextConfig;
+}
+
+function removeUserFromAllowListValue(value, uid, email) {
+  return parseAppAllowList(value).filter((entry) => !(
+    (entry.type === "uid" && uid && entry.value === uid) ||
+    (entry.type === "email" && email && entry.value === email)
+  ));
+}
+
+function formatAllowListEntry(entry) {
+  if (entry.type === "email") return entry.value;
+  return `${entry.type}:${entry.value}`;
+}
+
 function normalizeAllowListEntry(entry) {
   const clean = String(entry || "").trim();
   if (!clean) return null;
@@ -71,6 +117,8 @@ module.exports = {
   appAllowListStatus,
   isAppAllowListConfigured,
   isFirebaseTokenAllowed,
+  isUserWhitelisted,
   normalizeAppAllowListConfig,
   parseAppAllowList,
+  setUserWhitelistStatus,
 };

@@ -32,6 +32,10 @@ const {
 const {resolveRunnerImage} = require("./runnerImages.helpers");
 const {routeRequest: apiRouteRequest} = require("./apiRoutes.helpers");
 const {dispatchApiRoute} = require("./apiDispatch.helpers");
+const {
+  listAdminUsers,
+  setAdminUserWhitelist,
+} = require("./admin.service");
 const {requireUser} = require("./auth.service");
 const {
   accrueSessionUsage,
@@ -86,6 +90,8 @@ const workspaceService = createWorkspaceService({
 
 const API_HANDLERS = {
   userWithUsage,
+  listAdminUsers,
+  setAdminUserWhitelist,
   getPiAuth: piService.getPiAuth,
   savePiAuthProvider: piService.savePiAuthProvider,
   deletePiAuthProvider: piService.deletePiAuthProvider,

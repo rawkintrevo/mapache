@@ -37,6 +37,13 @@ const session = {
 
 function createHandlers(overrides = {}) {
   const handlers = {
+    admin: {
+      nextAdminUsersPage: vi.fn(),
+      previousAdminUsersPage: vi.fn(),
+      refreshAdminUsers: vi.fn(),
+      setAdminUserWhitelisted: vi.fn(),
+      showAdmin: vi.fn(),
+    },
     app: {
       refreshAll: vi.fn(),
       signOut: vi.fn(),
@@ -127,6 +134,16 @@ function createHandlers(overrides = {}) {
 function createState(overrides = {}) {
   return {
     activePage: "workspace",
+    admin: {
+      allowList: {enabled: true},
+      cursor: "",
+      cursorStack: [],
+      error: "",
+      loading: false,
+      nextCursor: "",
+      pageSize: 25,
+      users: [],
+    },
     api: {},
     authModalOpen: false,
     busy: false,
@@ -272,6 +289,62 @@ describe("frontend smoke coverage", () => {
     await waitFor(() => {
       expect(handlers.sessions.getSessionAccessUrls).toHaveBeenCalledWith(workspace.id, session.id);
     });
+  });
+
+  test("shows admin menu and renders admin users for admin profiles", async () => {
+    const user = userEvent.setup();
+    const {handlers, rerender} = renderShell({
+      profile: {
+        displayName: "Ada Admin",
+        email: "ada@example.com",
+        isAdmin: true,
+      },
+    });
+
+    await user.click(screen.getByRole("button", {name: /Ada Admin/i}));
+    expect(screen.getByRole("menuitem", {name: "Admin"})).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", {name: "Admin"}));
+    expect(handlers.admin.showAdmin).toHaveBeenCalledTimes(1);
+
+    rerender(
+        <AppShell
+          handlers={handlers}
+          state={createState({
+            activePage: "admin",
+            admin: {
+              allowList: {enabled: true},
+              cursor: "",
+              cursorStack: [],
+              error: "",
+              loading: false,
+              nextCursor: "uid-2",
+              pageSize: 25,
+              users: [{
+                costs: {
+                  last30DaysUsd: 0.005,
+                  lifetimeUsd: 0.025,
+                },
+                displayName: "Grace",
+                email: "grace@example.com",
+                uid: "uid-1",
+                userType: "",
+                whitelisted: true,
+              }],
+            },
+            profile: {
+              displayName: "Ada Admin",
+              email: "ada@example.com",
+              isAdmin: true,
+            },
+          })}
+        />,
+    );
+
+    expect(screen.getByRole("heading", {name: "Admin"})).toBeInTheDocument();
+    expect(screen.getByText("Grace")).toBeInTheDocument();
+    expect(screen.getByText("$0.025")).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox"));
+    expect(handlers.admin.setAdminUserWhitelisted).toHaveBeenCalledWith("uid-1", false);
   });
 
   test("submits create session and create workspace modal flows", async () => {

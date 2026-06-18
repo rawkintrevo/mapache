@@ -21,6 +21,7 @@ export function LeftDrawer({
   onSelectSession,
   onSelectWorkspace,
   onSelectWorkspaceFile,
+  onShowAdmin,
   onShowProfile,
   onSignOut,
   onStopSession,
@@ -176,7 +177,13 @@ export function LeftDrawer({
           />
         </DrawerSection>
       </div>
-      <UserMenu state={state} onRefresh={onRefresh} onShowProfile={onShowProfile} onSignOut={onSignOut} />
+      <UserMenu
+        state={state}
+        onRefresh={onRefresh}
+        onShowAdmin={onShowAdmin}
+        onShowProfile={onShowProfile}
+        onSignOut={onSignOut}
+      />
     </aside>
   );
 }

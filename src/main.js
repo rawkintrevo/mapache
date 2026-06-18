@@ -61,6 +61,13 @@ const modalController = createModalController({
   loadPiAuth: piPanelsController.loadPiAuth,
 });
 const handlers = {
+  admin: {
+    nextAdminUsersPage,
+    previousAdminUsersPage,
+    refreshAdminUsers,
+    setAdminUserWhitelisted,
+    showAdmin,
+  },
   app: {
     refreshAll,
     signOut,
@@ -176,6 +183,9 @@ async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
     state.profile = me.user || null;
+    if (state.activePage === "admin" && state.profile?.isAdmin !== true) {
+      state.activePage = "workspace";
+    }
     const data = await state.api.getWorkspaces();
     const previousWorkspaceId = state.selectedWorkspaceId;
     state.workspaces = data.workspaces || [];
@@ -194,7 +204,79 @@ async function refreshAll() {
     await loadSessions();
     await piPanelsController.loadPiAuth();
     await workspaceFilesController.loadWorkspaceFiles();
+    if (state.activePage === "admin" && state.profile?.isAdmin === true) {
+      await loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
+    }
   });
+}
+
+async function showAdmin() {
+  if (state.profile?.isAdmin !== true) return;
+  state.activePage = "admin";
+  await loadAdminUsers({cursor: "", cursorStack: []});
+}
+
+async function refreshAdminUsers() {
+  await loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
+}
+
+async function nextAdminUsersPage() {
+  if (!state.admin.nextCursor) return;
+  await loadAdminUsers({
+    cursor: state.admin.nextCursor,
+    cursorStack: [...state.admin.cursorStack, state.admin.cursor],
+  });
+}
+
+async function previousAdminUsersPage() {
+  const cursorStack = [...state.admin.cursorStack];
+  const previousCursor = cursorStack.pop();
+  if (previousCursor === undefined) return;
+  await loadAdminUsers({cursor: previousCursor, cursorStack});
+}
+
+async function loadAdminUsers({cursor = "", cursorStack = []} = {}) {
+  state.admin.loading = true;
+  state.admin.error = "";
+  render();
+  try {
+    const data = await state.api.getAdminUsers({
+      cursor,
+      pageSize: state.admin.pageSize,
+    });
+    state.admin = {
+      ...state.admin,
+      users: data.users || [],
+      cursor,
+      cursorStack,
+      nextCursor: data.nextCursor || "",
+      allowList: data.allowList || null,
+      loading: false,
+      error: "",
+    };
+  } catch (error) {
+    state.admin.loading = false;
+    state.admin.error = friendlyGlobalError(error);
+  }
+  render();
+}
+
+async function setAdminUserWhitelisted(uid, whitelisted) {
+  state.admin.loading = true;
+  state.admin.error = "";
+  render();
+  try {
+    const data = await state.api.setAdminUserWhitelisted(uid, whitelisted);
+    const updatedUser = data.user;
+    state.admin.users = state.admin.users.map((user) => (
+      user.uid === uid && updatedUser ? updatedUser : user
+    ));
+  } catch (error) {
+    state.admin.error = friendlyGlobalError(error);
+  } finally {
+    state.admin.loading = false;
+    render();
+  }
 }
 
 async function loadSessions() {

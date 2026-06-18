@@ -14,6 +14,8 @@ Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud terminal
 
 The selected-session view prioritizes the terminal. Web-capable sessions expose a `Preview` canvas beside the terminal. GitHub-backed sessions expose Git status, pull, stage/unstage, commit, push, and pull-request actions under the terminal controls. The left drawer owns workspace, file, and session navigation. The right drawer owns contextual tools: Authentication Center, Skills, and Extensions.
 
+Admin users are identified by `isAdmin: true` on their `users/{uid}` Firestore document. They get an Admin page from the left drawer user menu for paginated user visibility, allowlist toggles, and per-user runner cost summaries.
+
 ## Workspace Modes
 
 Blank workspaces use Cloud Storage as durable workspace state. GitHub workspaces use GitHub as durable repository state and Cloud Storage as a resumability/cache layer. Workspace source metadata is explicit: blank workspaces use `source: {type: "blank"}`, and GitHub workspaces store normalized repository metadata and optional GitHub App connection metadata.

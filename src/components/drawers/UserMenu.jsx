@@ -1,4 +1,4 @@
-import {LogOut, RefreshCw, User} from "lucide-react";
+import {LogOut, RefreshCw, ShieldCheck, User} from "lucide-react";
 import {useState} from "react";
 import {Button} from "../common/Button.jsx";
 
@@ -27,7 +27,7 @@ function initials(label) {
       .toUpperCase() || "U";
 }
 
-export function UserMenu({state, onRefresh, onShowProfile, onSignOut}) {
+export function UserMenu({state, onRefresh, onShowAdmin, onShowProfile, onSignOut}) {
   const [open, setOpen] = useState(false);
   const label = userLabel(state);
   const email = userEmail(state);
@@ -59,6 +59,22 @@ export function UserMenu({state, onRefresh, onShowProfile, onSignOut}) {
                 Profile
               </button>
             </li>
+            {state.profile?.isAdmin === true ? (
+              <li>
+                <button
+                  className="drawer-user-list-item"
+                  role="menuitem"
+                  type="button"
+                  onClick={() => {
+                    onShowAdmin?.();
+                    setOpen(false);
+                  }}
+                >
+                  <ShieldCheck aria-hidden="true" />
+                  Admin
+                </button>
+              </li>
+            ) : null}
             <li>
               <button
                 className="drawer-user-list-item"

@@ -95,10 +95,25 @@ export function createRepoPickerState(overrides = {}) {
   };
 }
 
+export function createAdminState(overrides = {}) {
+  return {
+    users: [],
+    pageSize: 25,
+    cursor: "",
+    cursorStack: [],
+    nextCursor: "",
+    loading: false,
+    error: "",
+    allowList: null,
+    ...overrides,
+  };
+}
+
 export function createInitialState() {
   return {
     user: null,
     profile: null,
+    admin: createAdminState(),
     api: null,
     workspaces: [],
     sessions: [],

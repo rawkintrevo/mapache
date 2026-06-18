@@ -1,0 +1,18 @@
+{
+  "id": "script.openAdmin",
+  "title": "Open the admin page from the user menu",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Mapache QA Agent"},
+    {"type": "click", "role": "menuitem", "name": "Admin"},
+    {"type": "waitForSnapshotText", "text": "White Listed", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Admin menu item is visible for the QA user",
+    "Admin page renders the user table"
+  ],
+  "failureSignals": [
+    "Admin menu item is missing",
+    "admin_required",
+    "Admin page does not load the users table"
+  ]
+}
