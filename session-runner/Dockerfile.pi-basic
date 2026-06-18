@@ -12,6 +12,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY server.js ./
 COPY lib ./lib
+COPY seeded-skills ./seeded-skills
 
 RUN mkdir -p /workspace /root/.pi
 ENV PORT=8080

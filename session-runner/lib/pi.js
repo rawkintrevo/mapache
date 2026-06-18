@@ -106,8 +106,9 @@ function sendPiSkillError(res, error, fallbackCode) {
   res.status(500).json({error: fallbackCode});
 }
 
-function defaultRuntimeSkills(capabilities = {}) {
-  const commonSkills = defaultCommonPiSkills();
+function defaultRuntimeSkills(config = {}) {
+  const capabilities = config.runnerCapabilities || config || {};
+  const commonSkills = defaultCommonPiSkills(config);
   if (capabilities.n64) return [...commonSkills, ...defaultPiN64Skills()];
   if (capabilities.preview) return [...commonSkills, ...defaultPiWebSkills()];
   return commonSkills;
@@ -122,7 +123,8 @@ function seededSkill(name) {
   };
 }
 
-function defaultCommonPiSkills() {
+function defaultCommonPiSkills(config = {}) {
+  if (config.workspaceSourceMode !== "github") return [];
   return [seededSkill("mapache-github-issue")];
 }
 
