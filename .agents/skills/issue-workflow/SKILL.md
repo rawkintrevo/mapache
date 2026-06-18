@@ -46,8 +46,10 @@ When frontend behavior is changed during this issue workflow:
 4. Treat unexpected browser console errors, failed deterministic assertions, missing expected UI, failed network calls, or broken screenshots as issues to fix before opening the PR.
 5. Re-run the QA case after fixes until no issues are found.
 6. Store screenshots and other evidence under `artifacts/qa/<case-id>/`.
-7. Add the QA screenshots to the PR description or a PR comment. If the available GitHub tool cannot upload screenshots, do not silently omit them: include the local artifact paths in the PR and clearly note the upload limitation in the PR and final response.
-8. If QA cannot run because credentials, Chrome DevTools, or another required external setup is missing, treat the workflow as **User Action Needed** or **Blocked Handling** instead of opening a normal completion PR.
+7. Copy review-safe QA screenshots into a tracked PR asset path before the final implementation commit, such as `docs/pr-assets/issue-<issue-number>/<case-id>-<name>.png`. Do not copy screenshots that contain secrets, tokens, private customer data, or other sensitive content; redact or recapture them first.
+8. Embed the tracked screenshot asset in the PR body using a GitHub-renderable image URL or relative Markdown image. Keep non-image logs, snapshots, traces, and result JSON under `artifacts/qa/<case-id>/` and list those local paths in the PR only when useful.
+9. If the available GitHub tool cannot upload arbitrary local screenshots, do not fall back to listing only local screenshot paths. Prefer the tracked PR asset approach above so reviewers can see screenshots inline.
+10. If QA cannot run because credentials, Chrome DevTools, or another required external setup is missing, treat the workflow as **User Action Needed** or **Blocked Handling** instead of opening a normal completion PR.
 
 ## User Action Needed
 
@@ -92,9 +94,10 @@ When implementation is complete and checks pass:
 5. Link the issue in the PR description. Include:
    - Summary of changes.
    - Tests and QA commands run.
-   - Uploaded QA screenshots, or screenshot artifact paths plus an explicit upload limitation when screenshots could not be uploaded.
+   - Embedded QA screenshots from tracked PR assets when browser QA produced screenshots.
+   - Local paths for any supporting non-image QA artifacts that remain under `artifacts/qa/<case-id>/`.
    - Any known limitations or follow-up work.
-6. If a QA screenshot was produced and upload support is available, embed or attach it in the PR rather than merely mentioning it.
+6. If a QA screenshot was produced, verify the PR renders it inline before handoff when possible. If inline rendering cannot be verified, include both the Markdown image reference and the tracked asset path in the PR body and final response.
 
 ## Return To Main
 
