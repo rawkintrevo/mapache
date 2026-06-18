@@ -12,27 +12,9 @@ function archiveRemotePath(config, fileName) {
   return `${config.prefix}/${config.archiveStorageDir}/${fileName}`.replace(/\/+/g, "/");
 }
 
-function piHomeArchiveRemotePath(config, fileName) {
-  if (!config.piHomePrefix) return archiveRemotePath(config, fileName);
-  return `${config.piHomePrefix}/${fileName}`.replace(/\/+/g, "/");
-}
-
-function piSessionArchiveRemotePath(config, fileName) {
-  if (!config.piSessionStoragePrefix) return "";
-  return `${config.piSessionStoragePrefix}/${fileName}`.replace(/\/+/g, "/");
-}
-
-function piHomeArchiveExcludes() {
-  return [
-    "agent/sessions",
-    "agent/sessions/*",
-    "./agent/sessions",
-    "./agent/sessions/*",
-    "agent/mapache-sessions",
-    "agent/mapache-sessions/*",
-    "./agent/mapache-sessions",
-    "./agent/mapache-sessions/*",
-  ];
+function homeArchiveRemotePath(config) {
+  if (!config.homeStoragePrefix || config.homeSyncMode === "ephemeral") return "";
+  return `${config.homeStoragePrefix}/${config.homeArchiveName || "home.tar.gz"}`.replace(/\/+/g, "/");
 }
 
 function createArchiveSyncTargets({config, git}) {
@@ -62,27 +44,13 @@ function createArchiveSyncTargets({config, git}) {
       restoreOnStartup: true,
     },
     {
-      name: "root-pi",
+      name: "home",
       mode: "directory",
-      localPath: process.env.PI_HOME_DIR || "/root/.pi",
-      bucketName: config.piHomeBucketName,
-      remotePath: piHomeArchiveRemotePath(config, "root-pi.tar.gz"),
-      fallbackArchives: [{
-        bucketName: config.bucketName,
-        remotePath: archiveRemotePath(config, "root-pi.tar.gz"),
-      }],
-      exclude: piHomeArchiveExcludes(),
+      localPath: config.homeDir,
+      bucketName: config.homeStorageBucketName,
+      remotePath: homeArchiveRemotePath(config),
       ensureLocalPath: true,
-      restoreOnStartup: true,
-    },
-    {
-      name: "pi-session",
-      mode: "directory",
-      localPath: config.piSessionDir,
-      bucketName: config.piSessionStorageBucket,
-      remotePath: piSessionArchiveRemotePath(config, "pi-session.tar.gz"),
-      ensureLocalPath: true,
-      restoreOnStartup: true,
+      restoreOnStartup: config.homeSyncMode !== "ephemeral",
     },
   ];
 
@@ -281,7 +249,5 @@ module.exports = {
   archiveRemotePath,
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
-  piHomeArchiveExcludes,
-  piHomeArchiveRemotePath,
-  piSessionArchiveRemotePath,
+  homeArchiveRemotePath,
 };

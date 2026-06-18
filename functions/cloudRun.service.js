@@ -22,6 +22,7 @@ const {
   normalizeServiceAccountEmail,
   publicGoogleError,
 } = require("./backendUtils.helpers");
+const {envMapToCloudRunEnv} = require("./env.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
 
 function createCloudRunService(dependencies = {}) {
@@ -200,23 +201,33 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const capabilities = session.capabilities || runnerImageCapabilities(session.image);
   const terminal = terminalCommandEnv(session);
+  const homeDir = cleanHomeDir(session.homeDir || "/root");
+  const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
   const env = [
+    ...envMapToCloudRunEnv({
+      ...(session.workspaceEnv || {}),
+      ...(session.sessionEnv || {}),
+    }),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
+    {name: "HOME", value: homeDir},
+    {name: "MAPACHE_HOME_DIR", value: homeDir},
     {name: "OWNER_UID", value: session.ownerUid || ""},
     {name: "WORKSPACE_ID", value: session.workspaceId || ""},
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
-    {name: "PI_HOME_STORAGE_BUCKET", value: session.piHomeStorageBucket || DEFAULT_BUCKET || ""},
-    {name: "PI_HOME_STORAGE_PREFIX", value: session.piHomeStoragePrefix || piHomeStoragePrefix(session.ownerUid)},
-    {name: "PI_SESSION_DIR", value: session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "")},
+    {name: "HOME_STORAGE_BUCKET", value: session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "HOME_STORAGE_PREFIX", value: session.homeStoragePrefix || homeStoragePrefix(session.workspaceStoragePrefix)},
+    {name: "HOME_SYNC_MODE", value: cleanName(session.homeMode || "persistent") || "persistent"},
+    {name: "HOME_ARCHIVE_NAME", value: cleanName(session.homeArchiveName || "home.tar.gz") || "home.tar.gz"},
+    {name: "PI_SESSION_DIR", value: session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "", homeDir)},
     {name: "PI_SESSION_STORAGE_BUCKET", value: session.piSessionStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {
       name: "PI_SESSION_STORAGE_PREFIX",
       value: session.piSessionStoragePrefix || piSessionStoragePrefix(session.workspaceStoragePrefix, session.runnerSessionId || session.id || ""),
     },
     {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
-    {name: "PI_CODING_AGENT_DIR", value: "/root/.pi/agent"},
+    {name: "PI_CODING_AGENT_DIR", value: piAgentDir},
     {name: "SESSION_NAME", value: cleanName(session.name || "Terminal session")},
     {name: "TERMINAL_COMMAND", value: terminal.command},
     {name: "TERMINAL_ARGS", value: JSON.stringify(terminal.args)},
@@ -277,20 +288,29 @@ function terminalCommandEnv(session) {
   if (cleanName(session && session.terminalKind) === "shell") {
     return {command: "bash", args: ["-l"]};
   }
+  const homeDir = cleanHomeDir(session && session.homeDir || "/root");
   return {
     command: "pi",
-    args: ["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || ""), "-c"],
+    args: ["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "", homeDir), "-c"],
   };
 }
 
-function piHomeStoragePrefix(uid) {
-  const cleanUid = cleanName(uid);
-  return cleanUid ? `users/${cleanUid}/.mapahce-internal/pi-home` : "";
+function homeStoragePrefix(workspaceStoragePrefix) {
+  const cleanPrefix = String(workspaceStoragePrefix || "").replace(/^\/+|\/+$/g, "");
+  return cleanPrefix ? `${cleanPrefix}/${INTERNAL_STORAGE_DIR}/home` : "";
 }
 
-function piSessionDir(sessionId) {
+function piSessionDir(sessionId, homeDir = "/root") {
   const cleanSessionId = cleanName(sessionId);
-  return cleanSessionId ? `/root/.pi/agent/mapache-sessions/${cleanSessionId}` : "/root/.pi/agent/mapache-sessions/session";
+  const cleanDir = cleanHomeDir(homeDir);
+  return cleanSessionId ?
+    `${cleanDir}/.pi/agent/mapache-sessions/${cleanSessionId}` :
+    `${cleanDir}/.pi/agent/mapache-sessions/session`;
+}
+
+function cleanHomeDir(value) {
+  const path = cleanName(value || "/root").replace(/\/+$/, "");
+  return path && path.startsWith("/") ? path : "/root";
 }
 
 function piSessionStoragePrefix(workspaceStoragePrefix, sessionId) {
@@ -395,8 +415,8 @@ module.exports = {
   buildCloudRunPatch,
   buildCloudRunService,
   createCloudRunService,
+  homeStoragePrefix,
   normalizeResources,
-  piHomeStoragePrefix,
   piSessionDir,
   piSessionStoragePrefix,
   requestRunnerShutdown,

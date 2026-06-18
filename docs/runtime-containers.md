@@ -257,8 +257,12 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 
 - `STORAGE_BUCKET`
 - `STORAGE_PREFIX`
-- `PI_HOME_STORAGE_BUCKET`
-- `PI_HOME_STORAGE_PREFIX`
+- `HOME`
+- `MAPACHE_HOME_DIR`
+- `HOME_STORAGE_BUCKET`
+- `HOME_STORAGE_PREFIX`
+- `HOME_SYNC_MODE`
+- `HOME_ARCHIVE_NAME`
 - `PI_SESSION_DIR`
 - `PI_SESSION_STORAGE_BUCKET`
 - `PI_SESSION_STORAGE_PREFIX`
@@ -301,6 +305,10 @@ The backend passes that policy into the runner with:
 
 Normal upload/download sync now applies base exclusions for archive-backed/internal paths plus any `syncPolicy.exclude` entries. That keeps blank workspace behavior effectively unchanged while letting GitHub workspaces skip extra cached paths during ordinary file sync. Directory marker objects still apply for non-excluded directories.
 
+Workspace records also carry an app-owned `homePolicy` field. New workspaces default to a persistent `$HOME` rooted at `/root`, archived under `{workspace.storagePrefix}/.mapahce-internal/home/home.tar.gz`. The workspace owns this materialized home tree; sessions receive a resolved copy on creation and restore/archive that same tree through `HOME_STORAGE_BUCKET`, `HOME_STORAGE_PREFIX`, `HOME_SYNC_MODE`, and `HOME_ARCHIVE_NAME`. The archive is runtime state, not workspace content: Files API routes and sidebar listings hide `.mapahce-internal/` objects.
+
+Workspace and session records may also carry non-secret env maps. During Cloud Run provisioning, the backend merges them as image defaults, then workspace env, then session env, then Mapache-reserved runtime env. Session env can override workspace env, but neither can set reserved variables such as `HOME`, `WORKSPACE_DIR`, `SESSION_ID`, storage prefixes, runner tokens, terminal command vars, or preview/system vars.
+
 The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
 
 The sidebar upload action writes to that same Cloud Storage prefix. Small uploads use Cloud Functions with `POST /api/workspaces/{workspaceId}/file?path={filename}`. Files above the Function body limit use Firebase Storage resumable upload directly from the browser, guarded by Storage Rules under the workspace owner's `/workspaces/{uid}/...` tree. The sidebar download action asks Cloud Functions for a short-lived signed URL for the selected object, then lets the browser download from that URL so binary artifacts do not need to pass through Cloud Functions response bodies, Firebase Storage JavaScript body reads, or the text editor path. This makes browser-uploaded files immediately visible to future sessions and to the Files listing after refresh. During periodic sync-up, the runner compares local file mtimes with Cloud Storage `updated` timestamps; if the Storage object is newer, the runner downloads it into `/workspace` instead of overwriting it. That lets edits made through the sidebar, including `.mapache/preview.json`, converge into a running container while local files created inside a terminal still flow in the opposite direction.
@@ -316,7 +324,7 @@ High-cardinality runtime directories are not synced as individual Cloud Storage 
 
 - `/workspace/node_modules`
 - `/workspace/.git` for GitHub-backed workspaces
-- `/root/.pi`
+- `$HOME`
 
 The Pi extension manager extends this model to workspace-local Pi package cache directories:
 
@@ -329,11 +337,11 @@ The runner restores these directories from gzip-compressed tar archives during s
 
 `/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
-`/root/.pi` is user-scoped only for shared Pi home state such as auth and settings. The root Pi archive explicitly excludes `agent/sessions/` and `agent/mapache-sessions/` so Pi conversation JSONLs do not follow the authenticated user across workspaces or app sessions. The backend passes `PI_HOME_STORAGE_BUCKET` and `PI_HOME_STORAGE_PREFIX`; new sessions store the filtered archive under `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`. During restore, the runner first checks the user-scoped archive and then falls back to the old workspace-scoped archive path so existing auth can migrate on the next archive upload, but session JSONLs from that legacy archive are still excluded during extraction.
+The `$HOME` archive includes Pi auth, settings, package caches, shell state, and per-session Pi conversation directories. Treat the archive path as sensitive runtime state because it can contain credentials and command history. It lives under the hidden workspace internal prefix, and client file APIs must not expose it.
 
-Each Cloud session also receives a session-scoped Pi conversation archive. The backend stores `piSessionDir`, `piSessionStorageBucket`, and `piSessionStoragePrefix` on the session document and passes them as `PI_SESSION_DIR`, `PI_SESSION_STORAGE_BUCKET`, and `PI_SESSION_STORAGE_PREFIX`. The runner launches Pi with `--session-dir $PI_SESSION_DIR -c`, archives that directory separately as `pi-session.tar.gz`, and updates the session document with `piSessionJsonlPath`/`piSessionJsonlRelativePath` after Pi creates the JSONL. This makes a brand-new Cloud session start fresh while the same Cloud session resumes across tab/device changes and Cloud Run restarts.
+Each Cloud session uses a unique Pi conversation directory under `$HOME/.pi/agent/mapache-sessions/{sessionId}`. The runner launches Pi with `--session-dir $PI_SESSION_DIR -c` and updates the session document with `piSessionJsonlPath`/`piSessionJsonlRelativePath` after Pi creates the JSONL. The whole-home archive persists those directories, but the session id keeps each Cloud session's thread separate from other sessions in the same workspace.
 
-Pi provider auth is also mirrored in Firestore at `users/{uid}/private/piAuth`. The legacy `providers` map still matches Pi's `~/.pi/agent/auth.json` object shape exactly (`providerKey -> credential object`) for compatibility, while the `entries` map stores named credentials as `entryId -> {providerKey, label, credential}` so users can keep multiple credentials for one Pi provider and choose which one a session should use. The backend API writes web-added API keys as `{type: "api_key", key: "..."}` and records them as named entries. It also supports OpenAI ChatGPT Plus/Pro Codex subscription login through OpenAI's device-code flow and saves completed OAuth credentials for `openai-codex` as `{type: "oauth", access, refresh, expires, accountId}` entries. Pi sessions may store `piAuthSelection` (`providerKey -> entryId`) on the session document. The runner receives `OWNER_UID`, reads any restored/local `auth.json` entries into Firestore, and materializes either the selected entries or all legacy providers back into `~/.pi/agent/auth.json` with `0600` permissions on startup and during periodic sync. The backend also sets `PI_CODING_AGENT_DIR=/root/.pi/agent` so Pi resolves auth storage to the same file path. This makes CLI/TUI `/login` additions visible to the web UI after runner sync while letting web-added credentials appear in already-running sessions after the runner sync interval; an active Pi process may still need `/reload` to pick up rewritten credentials.
+Pi provider auth is also mirrored in Firestore at `users/{uid}/private/piAuth`. The legacy `providers` map still matches Pi's `$HOME/.pi/agent/auth.json` object shape exactly (`providerKey -> credential object`) for compatibility, while the `entries` map stores named credentials as `entryId -> {providerKey, label, credential}` so users can keep multiple credentials for one Pi provider and choose which one a session should use. The backend API writes web-added API keys as `{type: "api_key", key: "..."}` and records them as named entries. It also supports OpenAI ChatGPT Plus/Pro Codex subscription login through OpenAI's device-code flow and saves completed OAuth credentials for `openai-codex` as `{type: "oauth", access, refresh, expires, accountId}` entries. Pi sessions may store `piAuthSelection` (`providerKey -> entryId`) on the session document. The runner receives `OWNER_UID`, reads any restored/local `auth.json` entries from `$HOME/.pi/agent/auth.json` into Firestore, and materializes either the selected entries or all legacy providers back into that same file with `0600` permissions on startup and during periodic sync. The backend sets `PI_CODING_AGENT_DIR=$HOME/.pi/agent` so Pi resolves auth storage to the materialized home tree. This makes CLI/TUI `/login` additions visible to the web UI after runner sync while letting web-added credentials appear in already-running sessions after the runner sync interval; an active Pi process may still need `/reload` to pick up rewritten credentials.
 
 For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces, and archive upload stores `.git` under the hidden internal archive prefix while skipping obvious transient `*.lock` files where practical. Dedicated startup restore ordering for `.git` remains a later task.
 
@@ -458,7 +466,7 @@ New sessions use the image key selected in the modal and resolved by the backend
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
-The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, preview environment changes, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
+The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, home materialization env vars, workspace/session env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, preview environment changes, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `HOME_STORAGE_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
 
 When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
 
@@ -470,8 +478,7 @@ Expected package-manager write locations:
 
 - Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
 - Workspace package cache archives: `{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
-- User-scoped filtered Pi home archive: `users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz`
-- Session-scoped Pi conversation archive: `{workspace.storagePrefix}/.mapahce-internal/sessions/{sessionId}/pi-session/pi-session.tar.gz`
+- Workspace-owned home archive: `{workspace.storagePrefix}/.mapahce-internal/home/home.tar.gz`
 - User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
 
 ## Design Decisions

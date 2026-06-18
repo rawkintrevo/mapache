@@ -1,0 +1,44 @@
+{
+  "id": "script.loginQa",
+  "title": "Sign in through the QA custom-token flow",
+  "description": "Set QA login browser storage, navigate to /app, and wait for the signed-in shell.",
+  "requires": {
+    "chromeDevtools": true,
+    "secret": "QA_LOGIN_SECRET",
+    "devServer": "npm run dev",
+    "baseUrl": "http://127.0.0.1:5173"
+  },
+  "actions": [
+    {
+      "type": "setLocalStorage",
+      "origin": "{{baseUrl}}",
+      "values": {
+        "mapache.qaLogin": "1",
+        "mapache.qaSecret": "{{QA_LOGIN_SECRET}}"
+      }
+    },
+    {
+      "type": "navigate",
+      "url": "{{baseUrl}}/app?qaLogin=1"
+    },
+    {
+      "type": "waitForSnapshotText",
+      "text": "Create a workspace",
+      "timeoutMs": 15000
+    }
+  ],
+  "successSignals": [
+    "POST /api/qa/custom-token returns 200",
+    "Firebase signInWithCustomToken request returns 200",
+    "GET /api/me returns 200",
+    "App shell shows the QA user menu"
+  ],
+  "failureSignals": [
+    "Configuration error",
+    "qa_login_secret_missing",
+    "qa_login_not_configured",
+    "qa_login_denied",
+    "qa_login_user_update_failed",
+    "app_access_not_allowed"
+  ]
+}

@@ -30,12 +30,17 @@ function parseRunnerCapabilities() {
 
 function createConfig() {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
+  const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
+  const piHomeDir = path.join(homeDir, ".pi");
+  const piAgentDir = normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
   const bucketName = process.env.STORAGE_BUCKET || "";
   const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
-  const piHomeBucketName = process.env.PI_HOME_STORAGE_BUCKET || bucketName;
-  const piHomePrefix = normalizePrefix(process.env.PI_HOME_STORAGE_PREFIX || "");
+  const homeStorageBucketName = process.env.HOME_STORAGE_BUCKET || bucketName;
+  const homeStoragePrefix = normalizePrefix(process.env.HOME_STORAGE_PREFIX || "");
+  const homeSyncMode = normalizeEnvString(process.env.HOME_SYNC_MODE) || "persistent";
+  const homeArchiveName = normalizeEnvString(process.env.HOME_ARCHIVE_NAME) || "home.tar.gz";
   const piSessionDir = normalizeEnvString(process.env.PI_SESSION_DIR) ||
-    path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "mapache-sessions", process.env.SESSION_ID || "session");
+    path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
   const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
   const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
@@ -60,10 +65,15 @@ function createConfig() {
     githubRepoName: normalizeEnvString(process.env.GITHUB_REPO_NAME),
     githubRequestedBranch: normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH),
     githubRequestedCommit: normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT),
+    homeArchiveName,
+    homeDir,
+    homeStorageBucketName,
+    homeStoragePrefix,
+    homeSyncMode,
     internalStorageDir: ".mapahce-internal",
     ownerUid: process.env.OWNER_UID || "",
-    piHomeBucketName,
-    piHomePrefix,
+    piAgentDir,
+    piHomeDir,
     piSessionDir,
     piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
     piSessionStorageBucket,

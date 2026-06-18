@@ -41,6 +41,7 @@ End-to-end tests exercise the hosted app or local Firebase emulator plus browser
 Locations:
 
 - `e2e/` for Playwright or equivalent browser flows.
+- `e2e/qa/` for explicit Chrome DevTools-assisted QA manifests. These tests are opt-in only and should be run only when the user directly asks for QA, smoke, browser, or end-to-end testing.
 - `docs/guides/*-regression-checklist.md` for human-readable scenario checklists that are not automated yet.
 
 Candidate flows:
@@ -100,8 +101,14 @@ LLM-assisted regression checks are useful for broad UI and workflow review, but 
 
 Recommended location:
 
+- `e2e/qa/scripts/` for reusable single-action QA scripts.
+- `e2e/qa/cases/` for ordered QA cases that compose scripts and other cases.
 - `e2e/llm-regression/` for prompts, scenario manifests, fixtures, and result parsers.
 - `.github/workflows/` for a `workflow_dispatch` and optional nightly schedule after the suite is stable.
+
+Chrome DevTools browser QA can reach the signed-in shell through the QA custom-token flow. Before opening `/app`, set `mapache.qaLogin=1` and `mapache.qaSecret=<secret>` in browser storage, or use `/app?qaLogin=1&qaSecret=<secret>` for a one-time login trigger. The frontend removes `qaSecret` from the URL after reading it. The backend route is `POST /api/qa/custom-token`, backed by `functions/qaAuth.service.js`, and requires the configured QA account to pass the same app allowlist as normal users.
+
+QA manifests under `e2e/qa/` are executable instructions for agents, not default checks. A script is one reusable browser action, such as QA login. A case is a sequence of actions and assertions, and may reference scripts with `useScript` or other cases with `useCase`. The baseline case is `e2e/qa/cases/login.json`; follow-on cases should compose it instead of duplicating login steps.
 
 Guardrails:
 
@@ -114,7 +121,7 @@ Guardrails:
 - Always upload artifacts: prompt, model version, scenario manifest, browser trace, screenshots, console logs, network errors, terminal transcript, and structured result JSON.
 - Include cleanup scenarios or deterministic post-run cleanup scripts for all created workspaces, sessions, branches, and pull requests.
 
-Commit-time LLM checks should be opt-in and local. Nightly LLM checks may run automatically once artifacts and cleanup are proven reliable.
+Commit-time LLM checks should be opt-in and local. Chrome DevTools-assisted QA cases should not run during ordinary implementation or handoff unless the user asks for them. Nightly LLM checks may run automatically only after artifacts, credentials, and cleanup are proven reliable and a workflow has been explicitly added for that purpose.
 
 ## Related Docs
 

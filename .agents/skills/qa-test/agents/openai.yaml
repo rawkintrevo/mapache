@@ -1,0 +1,4 @@
+interface:
+  display_name: "QA Test"
+  short_description: "Run Mapache Chrome DevTools QA cases from checked-in manifests."
+  default_prompt: "Run the requested Mapache QA test case using Chrome DevTools and report evidence."

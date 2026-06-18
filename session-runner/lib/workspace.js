@@ -21,6 +21,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
 
   async function ensureWorkspace() {
     await fs.promises.mkdir(config.workspaceDir, {recursive: true});
+    await fs.promises.mkdir(config.piSessionDir, {recursive: true});
     await Promise.all(archives.archiveSyncTargets
         .filter((target) => target.ensureLocalPath)
         .map((target) => fs.promises.mkdir(target.localPath, {recursive: true})));

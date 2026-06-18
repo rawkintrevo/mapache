@@ -5,8 +5,9 @@ sidebar_position: 1
 # Create a Workspace
 
 A workspace is the project boundary for a repository, auth settings, file sync,
-and session history. Treat it like a disposable development environment with a
-stable connection to the code you care about.
+environment variables, and the materialized home folder. Treat it like a
+disposable development environment with a stable connection to the code you care
+about.
 
 ## Before You Start
 
@@ -24,6 +25,10 @@ stable connection to the code you care about.
 
 The workspace appears in the left drawer. From there you can launch sessions,
 refresh repository state, and inspect generated files.
+
+Each launched session starts its own Pi conversation thread. Starting another
+session in the same workspace reuses the workspace files and home folder, but it
+does not merge Pi chat history with the earlier session.
 
 ## Keep It Scoped
 

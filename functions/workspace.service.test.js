@@ -5,6 +5,7 @@ const {
   isHiddenWorkspaceFilePath,
   normalizePublicGitHubRepoUrl,
   normalizeWorkspaceFilePath,
+  normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
   storageFileToClientFile,
@@ -42,6 +43,31 @@ assert.deepStrictEqual(normalizeWorkspaceSyncPolicy({type: "github"}), {
     ".mapahce-internal/",
   ],
 });
+
+assert.deepStrictEqual(normalizeWorkspaceHomePolicy({
+  bucket: "bucket-1",
+  storagePrefix: "workspaces/u/demo",
+}), {
+  mode: "persistent",
+  path: "/root",
+  bucket: "bucket-1",
+  storagePrefix: "workspaces/u/demo/.mapahce-internal/home",
+  archiveName: "home.tar.gz",
+});
+assert.deepStrictEqual(normalizeWorkspaceHomePolicy({
+  bucket: "bucket-1",
+  storagePrefix: "workspaces/u/demo",
+}, {mode: "ephemeral"}), {
+  mode: "ephemeral",
+  path: "/root",
+  bucket: "bucket-1",
+  storagePrefix: "",
+  archiveName: "home.tar.gz",
+});
+assert.throws(() => normalizeWorkspaceHomePolicy({
+  bucket: "bucket-1",
+  storagePrefix: "workspaces/u/demo",
+}, {path: "../root"}), /invalid_workspace_home_path/);
 
 assert.strictEqual(normalizeWorkspaceFilePath("/src/App.jsx"), "src/App.jsx");
 assert.throws(() => normalizeWorkspaceFilePath("../secret"), /invalid_file_path/);

@@ -171,13 +171,13 @@ Workspace-local installed package code should be archived instead of synced obje
 
 An implementation may choose a single combined archive, such as `workspace-pi-packages.tar.gz`, if that proves simpler. Separate archives make npm and git cache behavior easier to reason about.
 
-The existing user Pi home archive remains:
+Workspace-owned `$HOME` materialization is the primary home-state archive:
 
 ```text
-users/{uid}/.mapahce-internal/pi-home/root-pi.tar.gz
+{workspace.storagePrefix}/.mapahce-internal/home/home.tar.gz
 ```
 
-The workspace package manager should not use this user archive as its primary write path. It changes when Pi itself writes user-scoped state or when the user runs non-local package commands.
+The workspace package manager should not put workspace-local package declarations in `$HOME`; those remain in `/workspace/.pi/settings.json`. User-scoped Pi settings, auth files, and non-local package state do live under `$HOME/.pi/agent` and are captured by the workspace-owned home archive.
 
 ### Firestore
 

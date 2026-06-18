@@ -15,6 +15,7 @@ COPY lib ./lib
 
 RUN mkdir -p /workspace /root/.pi
 ENV PORT=8080
+ENV HOME=/root
 ENV WORKSPACE_DIR=/workspace
 ENV PI_CODING_AGENT_DIR=/root/.pi/agent
 ENV TERMINAL_COMMAND=pi

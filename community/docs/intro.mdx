@@ -19,6 +19,10 @@ terminal session without polluting your local machine.
 Each session provisions a Cloud Run backed runner with a terminal-first workflow,
 workspace file sync, and browser-visible state.
 
+Each session also gets its own Pi conversation thread. Multiple sessions can share
+one workspace and home environment, but their Pi chat histories stay separated by
+session.
+
 ## Scope Credentials
 
 Store provider credentials in your profile, then enable only the providers a

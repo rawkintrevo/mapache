@@ -1,5 +1,6 @@
 import {Plus, X} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
+import {parseEnvText} from "../../utils/envText.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
@@ -61,6 +62,7 @@ export function WorkspaceModal({
               source,
               repoUrl,
               branch,
+              env: parseEnvText(formData.get("env")),
             });
             onClose();
           }}
@@ -154,6 +156,10 @@ export function WorkspaceModal({
               </label>
             </div>
           ) : null}
+          <label>
+            <span>Workspace env</span>
+            <textarea name="env" placeholder={"FOO=workspace-value\nNODE_ENV=development"} rows={4} />
+          </label>
           <Button type="submit">
             <Plus aria-hidden="true" />
             Create Workspace

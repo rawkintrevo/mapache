@@ -284,6 +284,7 @@ describe("frontend smoke coverage", () => {
 
     expect(sessionHandlers.sessions.createSession).toHaveBeenCalledWith({
       cpu: "1",
+      env: {},
       imageKey: "default",
       memory: "1Gi",
       name: "Agent Shell",
@@ -304,6 +305,7 @@ describe("frontend smoke coverage", () => {
 
     expect(workspaceHandlers.workspaces.createWorkspace).toHaveBeenCalledWith({
       branch: null,
+      env: {},
       name: "Smoke Workspace",
       repoUrl: "",
       source: {

@@ -47,6 +47,7 @@ build/Release
 # Dependency directories
 node_modules/
 dist/
+artifacts/
 
 # Optional npm cache directory
 .npm
@@ -71,4 +72,10 @@ functions/.env*
 .dataconnect
 .secrets/
 .agents/
+!.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/qa-test/
+!.agents/skills/qa-test/**
 .codex/

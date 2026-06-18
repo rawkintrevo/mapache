@@ -4,15 +4,18 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   createArchiveSyncTargets,
-  piHomeArchiveExcludes,
+  homeArchiveRemotePath,
 } = require("./workspaceArchives.service");
 
 function baseConfig(overrides = {}) {
   return {
     archiveStorageDir: ".mapahce-internal/archives",
     bucketName: "workspace-bucket",
-    piHomeBucketName: "pi-home-bucket",
-    piHomePrefix: "users/u/.mapahce-internal/pi-home",
+    homeArchiveName: "home.tar.gz",
+    homeDir: "/root",
+    homeStorageBucketName: "home-bucket",
+    homeStoragePrefix: "users/u/workspaces/w/.mapahce-internal/home",
+    homeSyncMode: "persistent",
     piSessionDir: "/tmp/pi-session",
     piSessionStorageBucket: "session-bucket",
     piSessionStoragePrefix: "users/u/workspaces/w/.mapahce-internal/sessions/s/pi-session",
@@ -36,18 +39,15 @@ test("selects default archive targets for blank workspaces", () => {
     "workspace-node-modules",
     "workspace-pi-npm",
     "workspace-pi-git",
-    "root-pi",
-    "pi-session",
+    "home",
   ]);
   assert.equal(targets.find((target) => target.name === "workspace-node-modules").remotePath,
       "users/u/workspaces/w/.mapahce-internal/archives/workspace-node_modules.tar.gz");
-  assert.equal(targets.find((target) => target.name === "root-pi").bucketName, "pi-home-bucket");
-  assert.equal(targets.find((target) => target.name === "root-pi").remotePath,
-      "users/u/.mapahce-internal/pi-home/root-pi.tar.gz");
-  assert.deepEqual(targets.find((target) => target.name === "root-pi").fallbackArchives, [{
-    bucketName: "workspace-bucket",
-    remotePath: "users/u/workspaces/w/.mapahce-internal/archives/root-pi.tar.gz",
-  }]);
+  assert.equal(targets.find((target) => target.name === "home").bucketName, "home-bucket");
+  assert.equal(targets.find((target) => target.name === "home").localPath, "/root");
+  assert.equal(targets.find((target) => target.name === "home").remotePath,
+      "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz");
+  assert.equal(targets.find((target) => target.name === "home").restoreOnStartup, true);
 });
 
 test("adds .git archive target only for GitHub workspaces", () => {
@@ -61,19 +61,17 @@ test("adds .git archive target only for GitHub workspaces", () => {
       "users/u/workspaces/w/.mapahce-internal/archives/workspace-git.tar.gz");
 });
 
-test("falls back root Pi archive path to workspace archive prefix", () => {
+test("disables home archive restore for ephemeral home mode", () => {
   const targets = createArchiveSyncTargets({
-    config: baseConfig({piHomePrefix: "", piHomeBucketName: ""}),
+    config: baseConfig({homeSyncMode: "ephemeral"}),
     git: git(false),
   });
-  const rootPiTarget = targets.find((target) => target.name === "root-pi");
+  const homeTarget = targets.find((target) => target.name === "home");
 
-  assert.equal(rootPiTarget.bucketName, "");
-  assert.equal(rootPiTarget.remotePath,
-      "users/u/workspaces/w/.mapahce-internal/archives/root-pi.tar.gz");
+  assert.equal(homeTarget.remotePath, "");
+  assert.equal(homeTarget.restoreOnStartup, false);
 });
 
-test("root Pi archive excludes session-specific conversation state", () => {
-  assert.ok(piHomeArchiveExcludes().includes("agent/sessions/*"));
-  assert.ok(piHomeArchiveExcludes().includes("./agent/mapache-sessions/*"));
+test("builds home archive path from workspace-owned home prefix", () => {
+  assert.equal(homeArchiveRemotePath(baseConfig()), "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz");
 });

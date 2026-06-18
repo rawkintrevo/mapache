@@ -14,6 +14,7 @@ function assertRoute(path, expected) {
 
 assertRoute("/api/me", {name: "me"});
 assertRoute("/me", {name: "me"});
+assertRoute("/api/qa/custom-token", {name: "qaCustomToken"});
 assertRoute("/api/pi-auth", {name: "piAuth"});
 assertRoute("/api/pi-auth/providers/anthropic", {
   name: "piAuthProvider",
@@ -96,6 +97,7 @@ assert.strictEqual(routeAllowsMethod({name: "unknown"}, "OPTIONS"), true);
 
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "GET"), false);
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "POST"), true);
+assert.strictEqual(routeRequiresAuth({name: "qaCustomToken"}, "POST"), false);
 assert.strictEqual(routeRequiresAuth({name: "me"}, "GET"), true);
 assert.strictEqual(routeRequiresAuth({name: "workspaces"}, "POST"), true);
 assert.strictEqual(routeRequiresAuth({name: "unknown"}, "GET"), true);

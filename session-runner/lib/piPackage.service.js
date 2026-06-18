@@ -13,7 +13,7 @@ const {
 function createPiPackageService({config, syncUp}) {
   async function listWorkspacePiPackages() {
     const settingsPath = path.join(config.workspaceDir, ".pi", "settings.json");
-    const userSettingsPath = path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "settings.json");
+    const userSettingsPath = path.join(config.piAgentDir, "settings.json");
     const settings = await readJsonFile(settingsPath, {});
     const userSettings = await readJsonFile(userSettingsPath, {});
     const packages = await listPiPackageSettingsEntries(settings, "workspace");
@@ -93,7 +93,7 @@ function createPiPackageService({config, syncUp}) {
   async function resolveInstalledPiPackagePath(source, scope = "workspace") {
     const parsed = classifyPiPackageSource(source);
     const root = scope === "user" ?
-      path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent") :
+      config.piAgentDir :
       path.join(config.workspaceDir, ".pi");
     if (parsed.type === "npm" && parsed.name) {
       return existingManagedPackagePath(path.join(root, "npm", "node_modules"), [parsed.name]);

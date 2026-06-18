@@ -5,6 +5,9 @@ const OPENAI_CODEX_PROVIDER = "openai-codex";
 function routeRequest(path) {
   const parts = String(path || "").replace(/^\/api\/?/, "/").split("/").filter(Boolean);
   if (parts.length === 1 && parts[0] === "me") return {name: "me"};
+  if (parts.length === 2 && parts[0] === "qa" && parts[1] === "custom-token") {
+    return {name: "qaCustomToken"};
+  }
   if (parts.length === 1 && parts[0] === "pi-auth") return {name: "piAuth"};
   if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
     return {name: "piAuthProvider", provider: parts[2]};
@@ -100,6 +103,7 @@ function routeRequest(path) {
 const ROUTE_METHODS = Object.freeze({
   githubCallback: ["GET"],
   me: ["GET"],
+  qaCustomToken: ["POST"],
   piAuth: ["GET"],
   piAuthProvider: ["PUT", "DELETE"],
   piAuthEntry: ["DELETE"],
@@ -142,6 +146,7 @@ function routeAllowsMethod(route, method) {
 function routeRequiresAuth(route, method) {
   const normalizedMethod = String(method || "").toUpperCase();
   if (normalizedMethod === "OPTIONS") return false;
+  if (normalizedMethod === "POST" && route && route.name === "qaCustomToken") return false;
   return !(normalizedMethod === "GET" && route && route.name === "githubCallback");
 }
 

@@ -17,6 +17,7 @@ const {
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
   GITHUB_APP_PRIVATE_KEY_SECRET,
+  QA_LOGIN_SECRET,
   SESSION_BROWSER_ACCESS_TTL_MS,
 } = require("./backendConfig");
 const {
@@ -45,18 +46,20 @@ const {
 } = require("./workspace.service");
 const {
   createCloudRunService,
+  homeStoragePrefix,
   normalizeResources,
-  piHomeStoragePrefix,
   piSessionDir,
   piSessionStoragePrefix,
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
+const {normalizeEnvMap} = require("./env.helpers");
 const {
   cleanGithubNumericId,
   createGithubService,
   sessionSourceMetadata,
 } = require("./github.service");
 const {createPiService} = require("./pi.service");
+const {createQaAuthService} = require("./qaAuth.service");
 
 const githubService = createGithubService();
 const piService = createPiService({
@@ -64,6 +67,7 @@ const piService = createPiService({
   requireWorkspace,
   requestRunnerJson,
 });
+const qaAuthService = createQaAuthService();
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
   markSessionStopped,
@@ -129,6 +133,7 @@ exports.api = onRequest({
     GITHUB_APP_CLIENT_ID_SECRET,
     GITHUB_APP_CLIENT_SECRET_SECRET,
     GITHUB_APP_PRIVATE_KEY_SECRET,
+    QA_LOGIN_SECRET,
   ],
 }, async (req, res) => {
   try {
@@ -141,6 +146,11 @@ exports.api = onRequest({
 
     if (req.method === "GET" && route.name === "githubCallback") {
       await githubService.handleGithubCallback(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && route.name === "qaCustomToken") {
+      res.status(200).json(await qaAuthService.mintQaCustomToken(req));
       return;
     }
 
@@ -216,8 +226,6 @@ async function createSession(uid, workspaceId, payload) {
     workspaceId,
     runnerSessionId: sessionRef.id,
     workspaceStoragePrefix: workspace.storagePrefix,
-    piHomeStorageBucket: DEFAULT_BUCKET || workspace.bucket,
-    piHomeStoragePrefix: piHomeStoragePrefix(uid),
     piSessionDir: piSessionDir(sessionRef.id),
     piSessionStorageBucket: workspace.bucket || DEFAULT_BUCKET,
     piSessionStoragePrefix: piSessionStoragePrefix(workspace.storagePrefix, sessionRef.id),
@@ -238,6 +246,8 @@ async function createSession(uid, workspaceId, payload) {
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
     ...sessionSourceMetadata(workspace),
     ...sessionSyncPolicyMetadata(workspace),
+    ...sessionHomePolicyMetadata(workspace),
+    ...sessionEnvMetadata(workspace, payload),
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
@@ -591,6 +601,36 @@ function sessionSyncPolicyMetadata(workspace) {
     syncPolicyExclude: Array.isArray(syncPolicy.exclude) ?
       syncPolicy.exclude.map((value) => cleanName(value)).filter(Boolean) :
       [],
+  };
+}
+
+function sessionHomePolicyMetadata(workspace) {
+  const policy = workspace && workspace.homePolicy ? workspace.homePolicy : {};
+  const mode = cleanName(policy.mode || "persistent").toLowerCase() === "ephemeral" ? "ephemeral" : "persistent";
+  const path = cleanName(policy.path || "/root") || "/root";
+  return {
+    homeMode: mode,
+    homeDir: path,
+    homeStorageBucket: cleanName(policy.bucket || workspace.bucket || DEFAULT_BUCKET),
+    homeStoragePrefix: mode === "persistent" ?
+      cleanName(policy.storagePrefix || homeStoragePrefix(workspace.storagePrefix)) :
+      "",
+    homeArchiveName: cleanName(policy.archiveName || "home.tar.gz") || "home.tar.gz",
+  };
+}
+
+function sessionEnvMetadata(workspace, payload) {
+  return {
+    workspaceEnv: normalizeEnvMap(workspace && workspace.env, {
+      errorCode: "invalid_workspace_env",
+      invalidNameErrorCode: "invalid_workspace_env_name",
+      reservedNameErrorCode: "reserved_workspace_env_name",
+    }),
+    sessionEnv: normalizeEnvMap(payload && payload.env, {
+      errorCode: "invalid_session_env",
+      invalidNameErrorCode: "invalid_session_env_name",
+      reservedNameErrorCode: "reserved_session_env_name",
+    }),
   };
 }
 

@@ -92,7 +92,7 @@ function createWorkspacePiAuthService({admin, config, db}) {
   }
 
   function piAuthFilePath() {
-    return path.join(process.env.PI_HOME_DIR || "/root/.pi", "agent", "auth.json");
+    return path.join(config.piAgentDir, "auth.json");
   }
 
   return {

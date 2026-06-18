@@ -2,7 +2,14 @@ import "./styles.css";
 import {createElement as h} from "react";
 import {createRoot} from "react-dom/client";
 import {App} from "./App.jsx";
-import {getFirestoreDb, initializeFirebase, signIn, signOut, watchAuth} from "./services/auth.js";
+import {
+  getFirestoreDb,
+  initializeFirebase,
+  maybeSignInWithQaToken,
+  signIn,
+  signOut,
+  watchAuth,
+} from "./services/auth.js";
 import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
@@ -113,6 +120,7 @@ async function start() {
       render();
       await refreshAll();
     });
+    await maybeSignInWithQaToken();
   } catch (error) {
     fatalError = error;
     render();
@@ -276,6 +284,7 @@ async function createWorkspace(payload) {
       data = await state.api.createWorkspace({
         name: payload.name,
         source: normalizeCreateWorkspaceSource(payload),
+        env: payload.env || {},
       });
     } catch (error) {
       throw new Error(friendlyWorkspaceError(error));

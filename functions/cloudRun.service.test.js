@@ -4,8 +4,8 @@ const assert = require("assert");
 const {
   buildCloudRunPatch,
   buildCloudRunService,
+  homeStoragePrefix,
   normalizeResources,
-  piHomeStoragePrefix,
   piSessionDir,
   piSessionStoragePrefix,
   requireRunnerServiceAccount,
@@ -57,8 +57,9 @@ assert.deepStrictEqual(resourceLimits({cpu: "2", memory: "512Mi"}), {
   memory: "512Mi",
 });
 
-assert.strictEqual(piHomeStoragePrefix("uid-1"), "users/uid-1/.mapahce-internal/pi-home");
+assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapahce-internal/home");
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
+assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapahce-internal/sessions/session-1/pi-session");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
@@ -89,9 +90,18 @@ assert.deepStrictEqual(terminalCommandEnv({
     name: "Shell",
     shutdownToken: "shutdown",
     browserAccessTokenSecret: "browser-secret",
+    homeDir: "/root",
+    homeStorageBucket: "bucket-1",
+    homeStoragePrefix: "workspaces/uid-1/demo/.mapahce-internal/home",
+    workspaceEnv: {FOO: "workspace", SHARED: "workspace"},
+    sessionEnv: {SHARED: "session"},
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   }));
   assert.strictEqual(shellEnv.FIREBASE_PROJECT_ID, "pi-agents-cloud");
+  assert.strictEqual(shellEnv.HOME, "/root");
+  assert.strictEqual(shellEnv.HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapahce-internal/home");
+  assert.strictEqual(shellEnv.FOO, "workspace");
+  assert.strictEqual(shellEnv.SHARED, "session");
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
   assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"-l\"]");
   assert.strictEqual(shellEnv.RUNNER_CAPABILITIES, "{\"terminal\":true,\"preview\":false,\"previewQa\":false,\"functions\":false,\"n64\":false}");
@@ -106,6 +116,7 @@ assert.deepStrictEqual(terminalCommandEnv({
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false},
   }));
   assert.strictEqual(previewEnv.TERMINAL_COMMAND, "pi");
+  assert.strictEqual(previewEnv.PI_CODING_AGENT_DIR, "/root/.pi/agent");
   assert.strictEqual(previewEnv.PREVIEW_ENABLED, "true");
   assert.strictEqual(previewEnv.PREVIEW_STATIC_ROOT, "/workspace/build");
   assert.strictEqual(previewEnv.MAPACHE_PREVIEW_URL, "http://127.0.0.1:8080/preview/");

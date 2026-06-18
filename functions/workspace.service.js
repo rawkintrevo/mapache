@@ -25,6 +25,7 @@ const {
   userPath,
   workspaceUploadBuffer,
 } = require("./backendUtils.helpers");
+const {normalizeEnvMap} = require("./env.helpers");
 
 function createWorkspaceService(dependencies = {}) {
   return {
@@ -86,6 +87,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
+  const storagePrefix = `workspaces/${uid}/${slugify(name)}`;
   const doc = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -105,7 +107,13 @@ async function createWorkspace(uid, payload, dependencies = {}) {
       resolvedCommit: null,
     },
     syncPolicy: normalizeWorkspaceSyncPolicy(source),
-    storagePrefix: `workspaces/${uid}/${slugify(name)}`,
+    homePolicy: normalizeWorkspaceHomePolicy({bucket, storagePrefix}, payload.homePolicy || payload.home),
+    env: normalizeEnvMap(payload.env, {
+      errorCode: "invalid_workspace_env",
+      invalidNameErrorCode: "invalid_workspace_env_name",
+      reservedNameErrorCode: "reserved_workspace_env_name",
+    }),
+    storagePrefix,
     createdAt: now,
     updatedAt: now,
   };
@@ -194,6 +202,38 @@ function normalizeWorkspaceSyncPolicy(source) {
       ".mapahce-internal/",
     ],
   };
+}
+
+function normalizeWorkspaceHomePolicy(workspace, value = {}) {
+  if (value == null || value === "") value = {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "invalid_workspace_home_policy");
+  }
+  const mode = cleanName(value.mode || "persistent").toLowerCase();
+  if (!["persistent", "ephemeral"].includes(mode)) {
+    throw httpError(400, "unsupported_workspace_home_mode");
+  }
+  const path = normalizeHomePath(value.path || "/root");
+  const bucket = cleanName(value.bucket || workspace.bucket || DEFAULT_BUCKET);
+  const storagePrefix = normalizeStoragePrefix(
+      value.storagePrefix ||
+      `${workspace.storagePrefix}/${INTERNAL_STORAGE_DIR}/home`,
+  );
+  return {
+    mode,
+    path,
+    bucket,
+    storagePrefix: mode === "persistent" ? storagePrefix : "",
+    archiveName: cleanName(value.archiveName || "home.tar.gz") || "home.tar.gz",
+  };
+}
+
+function normalizeHomePath(value) {
+  const path = cleanName(value || "/root");
+  if (!path.startsWith("/") || path.includes("\0") || path.includes("..")) {
+    throw httpError(400, "invalid_workspace_home_path");
+  }
+  return path.replace(/\/+$/, "") || "/root";
 }
 
 function normalizePublicGitHubRepoUrl(value) {
@@ -455,6 +495,7 @@ module.exports = {
   listWorkspaces,
   normalizePublicGitHubRepoUrl,
   normalizeWorkspaceFilePath,
+  normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSourcePayload,
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,

@@ -1,0 +1,49 @@
+{
+  "id": "auth.login",
+  "title": "QA login reaches the signed-in app shell",
+  "description": "Smoke test the QA custom-token auth path against the local Vite app proxying to the configured backend.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.login",
+  "steps": [
+    {
+      "useScript": "scripts/login-qa.json"
+    },
+    {
+      "assert": "page-title",
+      "expected": "Mapache Tools"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Create a workspace"
+    },
+    {
+      "assert": "network-status",
+      "requestUrlIncludes": "/api/qa/custom-token",
+      "expectedStatus": 200
+    },
+    {
+      "assert": "network-status",
+      "requestUrlIncludes": "/api/me",
+      "expectedStatus": 200
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "capture": "network"
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "app-shell.png"
+    }
+  ],
+  "cleanup": [
+    {
+      "type": "clearLocalStorageKeys",
+      "keys": [
+        "mapache.qaLogin",
+        "mapache.qaSecret"
+      ]
+    }
+  ]
+}

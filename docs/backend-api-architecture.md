@@ -15,6 +15,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Backend setup/config: `functions/backendContext.js`, `functions/backendConfig.js`
 - Shared validation/errors: `functions/backendUtils.helpers.js`
 - Auth/profile: `functions/auth.service.js`
+- QA custom token login: `functions/qaAuth.service.js`
 - Workspaces/files: `functions/workspace.service.js`
 - Cloud Run sessions: `functions/cloudRun.service.js`
 - GitHub App and PR flows: `functions/github.service.js`
@@ -25,6 +26,8 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 ## Current Behavior
 
 The frontend calls authenticated JSON routes under `/api/**`. Cloud Functions verifies Firebase ID tokens, applies the optional `appConfig/access` allow list, upserts `users/{uid}`, then serves user-owned workspace and session data.
+
+The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is unauthenticated but gated by the `QA_LOGIN_SECRET` Functions secret and the configured QA UID/email parameters. It mints a Firebase custom token for a controlled QA account so browser automation can reach the signed-in app shell; all subsequent API calls still use normal Firebase ID-token verification and app allowlist checks.
 
 Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `userPath`, source metadata, storage bucket, and storage prefix. Sessions live under `workspaces/{workspaceId}/sessions/{sessionId}` and repeat ownership metadata for explicit checks and operational queries.
 

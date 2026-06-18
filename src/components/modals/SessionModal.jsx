@@ -1,5 +1,6 @@
 import {Plus, X} from "lucide-react";
 import {sessionImages} from "../../config/sessionImages.js";
+import {parseEnvText} from "../../utils/envText.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
@@ -31,6 +32,7 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
               imageKey: formData.get("imageKey"),
               cpu: formData.get("cpu"),
               memory: formData.get("memory"),
+              env: parseEnvText(formData.get("env")),
             });
           }}
         >
@@ -43,6 +45,10 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
           </label>
           <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label><span>Memory</span><select name="memory" defaultValue="1Gi">{memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}</select></label>
+          <label>
+            <span>Session env</span>
+            <textarea name="env" placeholder={"FOO=session-value\nAPI_BASE=http://localhost:3000"} rows={4} />
+          </label>
           <Button disabled={busy} type="submit">
             <Plus aria-hidden="true" />
             Create session

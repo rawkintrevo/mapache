@@ -3,6 +3,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithCustomToken,
   signInWithPopup,
   signOut as firebaseSignOut,
 } from "firebase/auth";
@@ -50,6 +51,29 @@ export async function signOut() {
   await firebaseSignOut(auth);
 }
 
+export async function maybeSignInWithQaToken() {
+  const request = qaLoginRequest();
+  if (!request.enabled) return false;
+  if (!request.secret) {
+    throw new Error("qa_login_secret_missing");
+  }
+
+  const response = await fetch("/api/qa/custom-token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-mapache-qa-secret": request.secret,
+    },
+    body: JSON.stringify({}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || response.statusText || "qa_login_failed");
+  }
+  await signInWithCustomToken(auth, data.token);
+  return true;
+}
+
 async function getFirebaseConfig() {
   const envConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -77,4 +101,29 @@ async function getFirebaseConfig() {
   }
 
   return defaultFirebaseConfig;
+}
+
+function qaLoginRequest() {
+  if (typeof window === "undefined") return {enabled: false, secret: ""};
+  const params = new URLSearchParams(window.location.search);
+  const enabled = params.get("qaLogin") === "1" ||
+    readStorage("mapache.qaLogin") === "1";
+  const secret = params.get("qaSecret") ||
+    readStorage("mapache.qaSecret") ||
+    "";
+  if (params.has("qaSecret") || params.has("qaLogin")) {
+    params.delete("qaSecret");
+    params.delete("qaLogin");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }
+  return {enabled, secret};
+}
+
+function readStorage(key) {
+  try {
+    return window.sessionStorage.getItem(key) || window.localStorage.getItem(key) || "";
+  } catch (error) {
+    return "";
+  }
 }
