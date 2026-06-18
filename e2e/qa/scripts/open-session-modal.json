@@ -1,0 +1,11 @@
+{
+  "id": "script.openSessionModal",
+  "title": "Open the create session modal",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Create session"},
+    {"type": "waitForSnapshotText", "text": "New session", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "New session modal opens with image, CPU, memory, and env fields"
+  ]
+}

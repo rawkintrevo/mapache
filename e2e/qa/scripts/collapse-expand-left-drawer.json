@@ -1,0 +1,13 @@
+{
+  "id": "script.collapseExpandLeftDrawer",
+  "title": "Collapse and expand the left navigation drawer",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Collapse drawer"},
+    {"type": "waitForSnapshotText", "text": "Expand drawer", "timeoutMs": 5000},
+    {"type": "click", "role": "button", "name": "Expand drawer"},
+    {"type": "waitForSnapshotText", "text": "Navigation", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Navigation drawer collapses to icon-only and expands back to the full drawer"
+  ]
+}

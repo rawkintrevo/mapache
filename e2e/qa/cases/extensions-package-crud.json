@@ -1,0 +1,21 @@
+{
+  "id": "extensions.package-crud",
+  "title": "Workspace-local Pi package install/update/remove",
+  "description": "Create a session and exercise Extensions install, update, and remove controls against a selected safe package source.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/extensions.package-crud",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service",
+    "packageSource": "Curate the package source before running"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-ext-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-ext-session-{{timestamp}}", "imageKey": "pi-basic"}},
+    {"useScript": "scripts/install-pi-package.json", "parameters": {"source": "npm:@example/qa-package"}},
+    {"useScript": "scripts/update-pi-package.json"},
+    {"useScript": "scripts/remove-pi-package.json", "parameters": {"source": "npm:@example/qa-package"}},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

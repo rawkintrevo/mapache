@@ -110,6 +110,8 @@ Chrome DevTools browser QA can reach the signed-in shell through the QA custom-t
 
 QA manifests under `e2e/qa/` are executable instructions for agents, not default checks. A script is one reusable browser action, such as QA login. A case is a sequence of actions and assertions, and may reference scripts with `useScript` or other cases with `useCase`. The baseline case is `e2e/qa/cases/login.json`; follow-on cases should compose it instead of duplicating login steps.
 
+The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace files and editor behavior, session creation/lifecycle, Authentication Center, Pi auth selection, Skills, Extensions, Git status, Git commit/push/PR flows, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
+
 Guardrails:
 
 - Use fixed scenario manifests checked into the repo. Do not let the model invent target URLs, credentials, cleanup actions, or pass/fail criteria.

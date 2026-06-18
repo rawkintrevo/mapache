@@ -1,0 +1,28 @@
+{
+  "id": "git.change-pr-flow",
+  "title": "Git change, commit, push, and pull request flow",
+  "description": "Exercise Git status controls from changed file through PR creation. This is intentionally high-risk and should be curated before running.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/git.change-pr-flow",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service",
+    "githubAuth": "Connected GitHub repository with push and PR permissions",
+    "cleanup": "Close PR and delete branch after run"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-github-url-workspace.json", "parameters": {"workspaceName": "qa-git-pr-ws-{{timestamp}}", "repoUrl": "https://github.com/rawkintrevo/mapahce"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-git-pr-session-{{timestamp}}", "imageKey": "pi-basic"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"useScript": "scripts/refresh-git-status.json"},
+    {"useScript": "scripts/create-workspace-file-api.json", "parameters": {"path": "qa/git-flow-{{timestamp}}.txt", "fileName": "git-flow-{{timestamp}}.txt", "content": "qa git change"}},
+    {"useScript": "scripts/stage-first-git-file.json"},
+    {"useScript": "scripts/commit-git.json", "parameters": {"message": "qa: validate git flow"}},
+    {"useScript": "scripts/push-git.json"},
+    {"useScript": "scripts/submit-pr.json", "parameters": {"title": "QA validation", "body": "Opened by Mapache QA.", "draft": true}},
+    {"capture": "network"},
+    {"capture": "screenshot", "fileName": "pr-flow.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

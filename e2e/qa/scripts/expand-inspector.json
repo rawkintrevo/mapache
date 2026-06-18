@@ -1,0 +1,11 @@
+{
+  "id": "script.expandInspector",
+  "title": "Expand the right inspector drawer",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Expand inspector"},
+    {"type": "waitForSnapshotText", "text": "Authentication Center", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Inspector shows Authentication Center, Skills, and Extensions sections"
+  ]
+}

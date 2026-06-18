@@ -1,0 +1,21 @@
+{
+  "id": "auth.provider-api-key",
+  "title": "Save and delete API-key auth provider",
+  "description": "Use the Authentication Center to save a QA API-key entry and then remove it.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.provider-api-key",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {
+      "useScript": "scripts/save-api-key-provider.json",
+      "parameters": {
+        "provider": "anthropic",
+        "entryLabel": "qa-entry-{{timestamp}}",
+        "apiKey": "sk-ant-api03-qa-placeholder"
+      }
+    },
+    {"assert": "network-status", "requestUrlIncludes": "/api/pi-auth/providers/anthropic", "method": "PUT", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "auth-provider.png"},
+    {"useScript": "scripts/delete-auth-entry.json", "parameters": {"entryLabel": "qa-entry"}}
+  ]
+}

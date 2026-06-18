@@ -1,0 +1,11 @@
+{
+  "id": "script.refreshAppState",
+  "title": "Refresh app state",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Refresh"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/me", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Refresh app state button triggers /api/me and returns to an enabled state"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "script.installPiPackage",
+  "title": "Install a workspace-local Pi package",
+  "parameters": {
+    "source": "npm:@example/qa-package"
+  },
+  "actions": [
+    {"useScript": "scripts/expand-inspector.json"},
+    {"type": "fill", "placeholder": "npm:@scope/package or git:https://...", "value": "{{source}}"},
+    {"type": "click", "role": "button", "name": "Install"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/pi-packages/install", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "POST /pi-packages/install returns 200",
+    "Extensions panel lists the package"
+  ],
+  "requires": {
+    "session": "Selected active session",
+    "packageSource": "Use a known safe package source before running"
+  }
+}

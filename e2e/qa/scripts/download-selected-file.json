@@ -1,0 +1,11 @@
+{
+  "id": "script.downloadSelectedFile",
+  "title": "Request a download URL for the selected workspace file",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Download selected file"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/download-url", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "POST /api/workspaces/{workspaceId}/file/download-url returns 200"
+  ]
+}

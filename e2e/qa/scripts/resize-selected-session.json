@@ -1,0 +1,20 @@
+{
+  "id": "script.resizeSelectedSession",
+  "title": "Resize selected session resources",
+  "parameters": {
+    "cpu": "1",
+    "memory": "2Gi"
+  },
+  "actions": [
+    {"type": "select", "name": "resizeCpu", "value": "{{cpu}}"},
+    {"type": "select", "name": "resizeMemory", "value": "{{memory}}"},
+    {"type": "click", "role": "button", "name": "Resize"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/resize", "method": "POST", "expectedStatus": 200, "timeoutMs": 30000}
+  ],
+  "successSignals": [
+    "POST /resize returns 200 and session remains selectable"
+  ],
+  "requires": {
+    "cloudRun": "Selected session exists"
+  }
+}

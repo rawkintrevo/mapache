@@ -1,0 +1,27 @@
+{
+  "id": "full.blank-workspace-smoke",
+  "title": "Full blank workspace smoke",
+  "description": "Broad blank-workspace smoke covering login, workspace creation, file edit, session creation, inspector panels, and cleanup.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/full.blank-workspace-smoke",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-full-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-workspace-file-api.json", "parameters": {"path": "qa/full-smoke.txt", "fileName": "full-smoke.txt", "content": "full smoke content"}},
+    {"useScript": "scripts/open-file-editor.json", "parameters": {"fileName": "full-smoke.txt"}},
+    {"useScript": "scripts/save-file-editor.json", "parameters": {"content": "full smoke updated"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-full-session-{{timestamp}}", "imageKey": "pi-basic"}},
+    {"useScript": "scripts/expand-inspector.json"},
+    {"assert": "snapshot-text", "expected": "Authentication Center"},
+    {"assert": "snapshot-text", "expected": "Skills"},
+    {"assert": "snapshot-text", "expected": "Extensions"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"capture": "screenshot", "fileName": "full-smoke.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "script.deleteSelectedSession",
+  "title": "Delete selected session",
+  "actions": [
+    {"type": "confirmDialog", "action": "accept"},
+    {"type": "click", "role": "button", "nameIncludes": "Delete session"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions/", "method": "DELETE", "expectedStatus": 200, "timeoutMs": 60000}
+  ],
+  "successSignals": [
+    "DELETE /api/workspaces/{workspaceId}/sessions/{sessionId} returns 200",
+    "Session disappears from the session list"
+  ]
+}

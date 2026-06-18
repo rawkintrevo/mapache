@@ -1,0 +1,14 @@
+{
+  "id": "script.stopSelectedSession",
+  "title": "Stop selected session",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Stop"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/stop", "method": "POST", "expectedStatus": 200, "timeoutMs": 60000}
+  ],
+  "successSignals": [
+    "POST /stop returns 200 and session shows stopped/stopping state"
+  ],
+  "requires": {
+    "cloudRun": "Selected running session exists"
+  }
+}

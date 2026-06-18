@@ -1,0 +1,15 @@
+{
+  "id": "script.waitSessionRunning",
+  "title": "Wait for selected session runner access",
+  "actions": [
+    {"type": "waitForNetwork", "requestUrlIncludes": "/access-url", "method": "POST", "expectedStatus": 200, "timeoutMs": 180000},
+    {"type": "waitForSnapshotNotText", "text": "Terminal access is not ready.", "timeoutMs": 180000}
+  ],
+  "successSignals": [
+    "POST /api/workspaces/{workspaceId}/sessions/{sessionId}/access-url returns 200",
+    "Terminal iframe replaces the terminal placeholder"
+  ],
+  "requires": {
+    "cloudRun": "Selected session must be provisioned and expose serviceUrl"
+  }
+}

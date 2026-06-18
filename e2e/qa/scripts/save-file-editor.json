@@ -1,0 +1,15 @@
+{
+  "id": "script.saveFileEditor",
+  "title": "Edit and save an open workspace file",
+  "parameters": {
+    "content": "updated by qa"
+  },
+  "actions": [
+    {"type": "fill", "selector": ".file-editor-input", "value": "{{content}}"},
+    {"type": "click", "role": "button", "name": "Save"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/file?path=", "method": "PUT", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Save button writes updated content through PUT /api/workspaces/{id}/file"
+  ]
+}

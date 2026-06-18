@@ -1,0 +1,15 @@
+{
+  "id": "script.unstageFirstGitFile",
+  "title": "Unstage the first staged Git file",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Unstage", "match": "first"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-unstage", "method": "POST", "expectedStatus": 200, "timeoutMs": 30000}
+  ],
+  "successSignals": [
+    "POST /git-unstage returns 200",
+    "File returns to unstaged state"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace with staged changes"
+  }
+}

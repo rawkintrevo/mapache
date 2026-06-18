@@ -1,0 +1,14 @@
+{
+  "id": "script.pushGit",
+  "title": "Push Git branch",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Push"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-push", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "POST /git-push returns 200"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace with push credentials and commits to push"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "script.createSession",
+  "title": "Create a session for the selected workspace",
+  "parameters": {
+    "sessionName": "qa-session-{{timestamp}}",
+    "imageKey": "pi-basic",
+    "cpu": "1",
+    "memory": "1Gi",
+    "sessionEnv": "QA_SESSION=1"
+  },
+  "actions": [
+    {"useScript": "scripts/open-session-modal.json"},
+    {"type": "fill", "label": "Name", "value": "{{sessionName}}"},
+    {"type": "select", "name": "imageKey", "value": "{{imageKey}}"},
+    {"type": "select", "name": "cpu", "value": "{{cpu}}"},
+    {"type": "select", "name": "memory", "value": "{{memory}}"},
+    {"type": "fill", "label": "Session env", "value": "{{sessionEnv}}"},
+    {"type": "submit", "buttonName": "Create session"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201, "timeoutMs": 30000},
+    {"type": "waitForSnapshotText", "text": "{{sessionName}}", "timeoutMs": 15000}
+  ],
+  "successSignals": [
+    "POST /api/workspaces/{workspaceId}/sessions returns 201",
+    "Session appears selected or visible in the session list"
+  ],
+  "requires": {
+    "cloudRun": "May create billable Cloud Run resources"
+  }
+}

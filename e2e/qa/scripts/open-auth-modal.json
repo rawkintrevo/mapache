@@ -1,0 +1,12 @@
+{
+  "id": "script.openAuthModal",
+  "title": "Open the Authentication Provider modal",
+  "actions": [
+    {"useScript": "scripts/expand-inspector.json"},
+    {"type": "click", "role": "button", "name": "Add"},
+    {"type": "waitForSnapshotText", "text": "Add Authentication Provider", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Authentication provider modal opens"
+  ]
+}

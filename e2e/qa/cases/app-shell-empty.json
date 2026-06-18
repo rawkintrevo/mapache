@@ -1,0 +1,19 @@
+{
+  "id": "app.shell-empty",
+  "title": "Signed-in shell empty-state smoke",
+  "description": "Validate the signed-in app shell, empty workspaces/files/sessions states, and inspector collapsed state.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/app.shell-empty",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"assert": "snapshot-text", "expected": "Navigation"},
+    {"assert": "snapshot-text", "expected": "WORKSPACES"},
+    {"assert": "snapshot-text", "expected": "No workspaces yet."},
+    {"assert": "snapshot-text", "expected": "Select a workspace to view files."},
+    {"assert": "snapshot-text", "expected": "Select a workspace to view sessions."},
+    {"assert": "snapshot-text", "expected": "Expand inspector"},
+    {"capture": "screenshot", "fileName": "empty-shell.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

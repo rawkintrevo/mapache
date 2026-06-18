@@ -1,0 +1,19 @@
+{
+  "id": "script.commitGit",
+  "title": "Commit staged Git changes",
+  "parameters": {
+    "message": "qa: validate git commit flow"
+  },
+  "actions": [
+    {"type": "fill", "placeholder": "Commit message", "value": "{{message}}"},
+    {"type": "click", "role": "button", "name": "Commit"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-commit", "method": "POST", "expectedStatus": 200, "timeoutMs": 60000}
+  ],
+  "successSignals": [
+    "POST /git-commit returns 200",
+    "Git status refreshes with a new commit"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace with staged changes"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "script.createBlankWorkspace",
+  "title": "Create a blank workspace",
+  "parameters": {
+    "workspaceName": "qa-blank-{{timestamp}}",
+    "workspaceEnv": "QA_CASE=blank-workspace"
+  },
+  "actions": [
+    {"useScript": "scripts/open-workspace-modal.json"},
+    {"type": "fill", "label": "Workspace Name", "value": "{{workspaceName}}"},
+    {"type": "fill", "label": "Workspace env", "value": "{{workspaceEnv}}"},
+    {"type": "submit", "buttonName": "Create Workspace"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 201, "timeoutMs": 15000},
+    {"type": "waitForSnapshotText", "text": "{{workspaceName}}", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "POST /api/workspaces returns 201",
+    "New workspace appears selected in the left drawer"
+  ]
+}

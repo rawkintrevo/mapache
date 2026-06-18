@@ -1,0 +1,18 @@
+{
+  "id": "profile.view",
+  "title": "Profile and usage page",
+  "description": "Open the user profile page and verify identity and runner usage sections.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/profile.view",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-profile.json"},
+    {"assert": "snapshot-text", "expected": "User ID"},
+    {"assert": "snapshot-text", "expected": "Email"},
+    {"assert": "snapshot-text", "expected": "Sign-in providers"},
+    {"assert": "snapshot-text", "expected": "Runner Usage"},
+    {"assert": "snapshot-text", "expected": "Lifetime"},
+    {"assert": "snapshot-text", "expected": "Last 30 Days"},
+    {"capture": "screenshot", "fileName": "profile.png"}
+  ]
+}

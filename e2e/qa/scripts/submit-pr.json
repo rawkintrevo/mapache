@@ -1,0 +1,26 @@
+{
+  "id": "script.submitPr",
+  "title": "Submit a pull request",
+  "parameters": {
+    "branchDescription": "qa-validation",
+    "title": "QA validation",
+    "body": "Opened by Mapache QA.",
+    "draft": true
+  },
+  "actions": [
+    {"useScript": "scripts/open-pr-dialog.json"},
+    {"type": "fill", "label": "Working branch description", "value": "{{branchDescription}}"},
+    {"type": "fill", "label": "PR title", "value": "{{title}}"},
+    {"type": "fill", "label": "PR body", "value": "{{body}}"},
+    {"type": "setCheckbox", "label": "Open as draft", "checked": "{{draft}}"},
+    {"type": "click", "role": "button", "name": "Open PR"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-open-pr", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "POST /git-open-pr returns 200 and reports pull request URL"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace with push/PR credentials",
+    "cleanup": "Close or delete QA PR/branch after run"
+  }
+}

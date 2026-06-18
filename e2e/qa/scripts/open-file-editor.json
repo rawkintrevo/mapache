@@ -1,0 +1,14 @@
+{
+  "id": "script.openFileEditor",
+  "title": "Open a workspace file in the editor",
+  "parameters": {
+    "fileName": "readme"
+  },
+  "actions": [
+    {"type": "click", "snapshotTextIncludes": "{{fileName}}"},
+    {"type": "waitForSnapshotText", "text": "Save", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "File editor dialog opens with editable content and a Save button"
+  ]
+}

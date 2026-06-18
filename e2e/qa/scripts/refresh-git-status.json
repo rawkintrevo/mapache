@@ -1,0 +1,16 @@
+{
+  "id": "script.refreshGitStatus",
+  "title": "Observe Git status panel for a GitHub-backed session",
+  "actions": [
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-status", "method": "GET", "expectedStatus": 200, "timeoutMs": 30000},
+    {"type": "waitForSnapshotText", "text": "Git status", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "GET /git-status returns 200",
+    "Git status panel shows branch, commit, ahead/behind, working tree, and conflicts metrics"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace",
+    "session": "Selected running session with serviceUrl"
+  }
+}

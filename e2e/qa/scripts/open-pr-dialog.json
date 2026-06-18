@@ -1,0 +1,14 @@
+{
+  "id": "script.openPrDialog",
+  "title": "Open pull request dialog",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Open PR"},
+    {"type": "waitForSnapshotText", "text": "Open pull request", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Pull request modal opens"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace with canOpenPr true"
+  }
+}

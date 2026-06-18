@@ -1,0 +1,21 @@
+{
+  "id": "git.status",
+  "title": "Git status panel for GitHub workspace",
+  "description": "Create a GitHub workspace and session, then observe the Git status panel.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/git.status",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service",
+    "workspace": "GitHub public repo clone path must work"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-github-url-workspace.json", "parameters": {"workspaceName": "qa-git-ws-{{timestamp}}", "repoUrl": "https://github.com/rawkintrevo/mapahce"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-git-session-{{timestamp}}", "imageKey": "pi-basic"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"useScript": "scripts/refresh-git-status.json"},
+    {"capture": "screenshot", "fileName": "git-status.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

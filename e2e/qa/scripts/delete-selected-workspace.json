@@ -1,0 +1,13 @@
+{
+  "id": "script.deleteSelectedWorkspace",
+  "title": "Delete the selected workspace",
+  "actions": [
+    {"type": "confirmDialog", "action": "accept"},
+    {"type": "click", "role": "button", "nameIncludes": "Delete workspace"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces/", "method": "DELETE", "expectedStatus": 200, "timeoutMs": 20000}
+  ],
+  "successSignals": [
+    "DELETE /api/workspaces/{workspaceId} returns 200",
+    "Workspace disappears or app returns to the create-workspace empty state"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "script.openProfile",
+  "title": "Open the profile page from the user menu",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Mapache QA Agent"},
+    {"type": "click", "role": "menuitem", "name": "Profile"},
+    {"type": "waitForSnapshotText", "text": "Runner Usage", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Profile page shows User ID, Email, Sign-in providers, and Runner Usage"
+  ]
+}

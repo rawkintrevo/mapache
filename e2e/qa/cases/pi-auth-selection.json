@@ -1,0 +1,19 @@
+{
+  "id": "auth.pi-selection",
+  "title": "Manage Pi auth selection for a session",
+  "description": "Create a Pi session, save an auth provider entry, open Manage Pi Auth, save selection, and clean up.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.pi-selection",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-piauth-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-piauth-session-{{timestamp}}", "imageKey": "pi-basic"}},
+    {"useScript": "scripts/save-api-key-provider.json", "parameters": {"provider": "anthropic", "entryLabel": "qa-piauth-{{timestamp}}", "apiKey": "sk-ant-api03-qa-placeholder"}},
+    {"useScript": "scripts/manage-pi-auth-modal.json"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

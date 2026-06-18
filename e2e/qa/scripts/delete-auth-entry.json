@@ -1,0 +1,16 @@
+{
+  "id": "script.deleteAuthEntry",
+  "title": "Delete an authentication entry",
+  "parameters": {
+    "entryLabel": "qa-entry"
+  },
+  "actions": [
+    {"type": "confirmDialog", "action": "accept", "optional": true},
+    {"type": "click", "role": "button", "nameIncludes": "Delete {{entryLabel}}"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/pi-auth/entries/", "method": "DELETE", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "DELETE /api/pi-auth/entries/{entryId} returns 200",
+    "Authentication Center no longer shows the entry"
+  ]
+}

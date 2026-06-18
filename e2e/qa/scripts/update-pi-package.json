@@ -1,0 +1,17 @@
+{
+  "id": "script.updatePiPackage",
+  "title": "Update a workspace-local Pi package",
+  "parameters": {
+    "source": ""
+  },
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Update"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/pi-packages/update", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "POST /pi-packages/update returns 200"
+  ],
+  "requires": {
+    "session": "Selected active session with installed package"
+  }
+}

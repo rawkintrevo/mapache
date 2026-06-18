@@ -1,0 +1,18 @@
+{
+  "id": "navigation.drawers",
+  "title": "Navigation and drawer controls",
+  "description": "Exercise left drawer collapse/expand, section toggles, inspector expansion, and app refresh.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/navigation.drawers",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/collapse-expand-left-drawer.json"},
+    {"useScript": "scripts/toggle-drawer-sections.json"},
+    {"useScript": "scripts/expand-inspector.json"},
+    {"assert": "snapshot-text", "expected": "Authentication Center"},
+    {"assert": "snapshot-text", "expected": "Skills"},
+    {"assert": "snapshot-text", "expected": "Extensions"},
+    {"useScript": "scripts/refresh-app-state.json"},
+    {"capture": "screenshot", "fileName": "drawers.png"}
+  ]
+}

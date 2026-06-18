@@ -1,0 +1,28 @@
+{
+  "id": "session.create-basic",
+  "title": "Create basic Pi session",
+  "description": "Create a blank workspace and a pi-basic session, then verify the terminal placeholder or access URL path.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.create-basic",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-session-ws-{{timestamp}}"}},
+    {
+      "useScript": "scripts/create-session.json",
+      "parameters": {
+        "sessionName": "qa-pi-basic-{{timestamp}}",
+        "imageKey": "pi-basic",
+        "cpu": "1",
+        "memory": "1Gi"
+      }
+    },
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-pi-basic"]},
+    {"capture": "screenshot", "fileName": "session-detail.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "workspace.files-editor",
+  "title": "Workspace file create, edit, and download URL",
+  "description": "Create a blank workspace, write a file through the API, open it in the file editor, save changes, request a download URL, and clean up.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.files-editor",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-files-{{timestamp}}"}},
+    {
+      "useScript": "scripts/create-workspace-file-api.json",
+      "parameters": {
+        "path": "qa/readme-{{timestamp}}.txt",
+        "fileName": "readme-{{timestamp}}.txt",
+        "content": "initial qa file content"
+      }
+    },
+    {"useScript": "scripts/open-file-editor.json", "parameters": {"fileName": "readme"}},
+    {"useScript": "scripts/save-file-editor.json", "parameters": {"content": "updated qa file content"}},
+    {"useScript": "scripts/download-selected-file.json"},
+    {"capture": "screenshot", "fileName": "file-editor.png"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

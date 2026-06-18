@@ -1,0 +1,18 @@
+{
+  "id": "script.managePiAuthModal",
+  "title": "Open and save Manage Pi Auth selections",
+  "actions": [
+    {"useScript": "scripts/expand-inspector.json"},
+    {"type": "click", "role": "button", "name": "Manage Pi Auth"},
+    {"type": "waitForSnapshotText", "text": "Manage Pi Auth", "timeoutMs": 5000},
+    {"type": "click", "role": "button", "name": "Save"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/pi-auth-selection", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Manage Pi Auth modal opens for a selected Pi session",
+    "POST /pi-auth-selection returns 200"
+  ],
+  "requires": {
+    "session": "Selected Pi-based session"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "script.createWorkspaceFileApi",
+  "title": "Create or update a workspace file through the authenticated API",
+  "parameters": {
+    "path": "qa/readme-{{timestamp}}.txt",
+    "fileName": "readme-{{timestamp}}.txt",
+    "content": "hello from qa"
+  },
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "PUT",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/file?path={{urlencode:path}}",
+      "body": {"content": "{{content}}"}
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/file?path=", "method": "PUT", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "click", "role": "button", "name": "Refresh files"},
+    {"type": "waitForSnapshotText", "text": "{{fileName}}", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "PUT workspace file returns 200",
+    "File drawer shows the created file after refresh"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "session.lifecycle",
+  "title": "Session resize, restart, stop, and delete",
+  "description": "Create a session and exercise lifecycle controls before deleting it.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.lifecycle",
+  "requires": {
+    "cloudRun": "Creates and mutates a billable Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-lifecycle-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-lifecycle-{{timestamp}}"}},
+    {"useScript": "scripts/resize-selected-session.json", "parameters": {"cpu": "1", "memory": "2Gi"}},
+    {"useScript": "scripts/restart-selected-session.json"},
+    {"useScript": "scripts/stop-selected-session.json"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

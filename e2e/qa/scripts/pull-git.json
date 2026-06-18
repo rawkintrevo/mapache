@@ -1,0 +1,16 @@
+{
+  "id": "script.pullGit",
+  "title": "Pull latest Git changes",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Pull"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-pull", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "POST /git-pull returns 200",
+    "Git status refreshes afterward"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace",
+    "session": "Selected running session"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "script.restartSelectedSession",
+  "title": "Restart selected session",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Restart"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/restart", "method": "POST", "expectedStatus": 200, "timeoutMs": 60000}
+  ],
+  "successSignals": [
+    "POST /restart returns 200 and session transitions through restart/provisioning state"
+  ],
+  "requires": {
+    "cloudRun": "Selected session exists"
+  }
+}

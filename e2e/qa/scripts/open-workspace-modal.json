@@ -1,0 +1,11 @@
+{
+  "id": "script.openWorkspaceModal",
+  "title": "Open the create workspace modal",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Add Workspace"},
+    {"type": "waitForSnapshotText", "text": "Create Workspace", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Create Workspace modal opens with Blank and GitHub source choices"
+  ]
+}

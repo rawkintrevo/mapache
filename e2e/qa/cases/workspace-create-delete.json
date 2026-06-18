@@ -1,0 +1,22 @@
+{
+  "id": "workspace.create-delete",
+  "title": "Create and delete blank workspace",
+  "description": "Create a blank workspace with env vars, verify selection, then delete it.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.create-delete",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-blank-{{timestamp}}",
+        "workspaceEnv": "QA_WORKSPACE=blank\nQA_CREATED_BY=chrome-devtools"
+      }
+    },
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-text", "expected": "No sessions in this workspace."},
+    {"useScript": "scripts/delete-selected-workspace.json"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces/", "method": "DELETE", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "after-delete.png"}
+  ]
+}

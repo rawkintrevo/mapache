@@ -1,0 +1,25 @@
+{
+  "id": "workspace.github-url",
+  "title": "Create GitHub workspace from URL",
+  "description": "Exercise the GitHub workspace source fields with a public repository URL.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.github-url",
+  "requires": {
+    "backend": "GitHub workspace creation path configured",
+    "cleanup": "Deletes the created workspace at the end"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {
+      "useScript": "scripts/create-github-url-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-github-{{timestamp}}",
+        "repoUrl": "https://github.com/rawkintrevo/mapahce",
+        "branch": ""
+      }
+    },
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-text", "expected": "GitHub"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

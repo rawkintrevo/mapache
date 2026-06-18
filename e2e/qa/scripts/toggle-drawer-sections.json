@@ -1,0 +1,15 @@
+{
+  "id": "script.toggleDrawerSections",
+  "title": "Collapse and expand primary drawer sections",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Collapse Workspaces"},
+    {"type": "click", "role": "button", "name": "Expand Workspaces"},
+    {"type": "click", "role": "button", "name": "Collapse Files"},
+    {"type": "click", "role": "button", "name": "Expand Files"},
+    {"type": "click", "role": "button", "name": "Collapse Sessions"},
+    {"type": "click", "role": "button", "name": "Expand Sessions"}
+  ],
+  "successSignals": [
+    "Workspaces, Files, and Sessions sections can collapse and expand without losing app shell state"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "script.saveApiKeyProvider",
+  "title": "Save an API-key authentication provider",
+  "parameters": {
+    "provider": "anthropic",
+    "entryLabel": "qa-entry-{{timestamp}}",
+    "apiKey": "sk-ant-api03-qa-placeholder"
+  },
+  "actions": [
+    {"useScript": "scripts/open-auth-modal.json"},
+    {"type": "select", "name": "provider", "value": "{{provider}}"},
+    {"type": "fill", "name": "entryLabel", "value": "{{entryLabel}}"},
+    {"type": "fill", "name": "apiKey", "value": "{{apiKey}}"},
+    {"type": "submit", "buttonName": "Save"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/pi-auth/providers/", "method": "PUT", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "PUT /api/pi-auth/providers/{provider} returns 200",
+    "Authentication Center lists the saved entry label"
+  ],
+  "cleanupHint": "Delete the created auth entry after this case unless intentionally preserving QA credentials."
+}

@@ -1,0 +1,25 @@
+{
+  "id": "script.createGithubUrlWorkspace",
+  "title": "Create a GitHub workspace from a repository URL",
+  "parameters": {
+    "workspaceName": "qa-github-{{timestamp}}",
+    "repoUrl": "https://github.com/rawkintrevo/mapahce",
+    "branch": ""
+  },
+  "actions": [
+    {"useScript": "scripts/open-workspace-modal.json"},
+    {"type": "fill", "label": "Workspace Name", "value": "{{workspaceName}}"},
+    {"type": "click", "label": "GitHub"},
+    {"type": "fill", "label": "Repository URL", "value": "{{repoUrl}}"},
+    {"type": "fill", "label": "Branch", "value": "{{branch}}"},
+    {"type": "submit", "buttonName": "Create Workspace"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 201, "timeoutMs": 15000}
+  ],
+  "successSignals": [
+    "GitHub source fields are available",
+    "POST /api/workspaces returns 201 for a public GitHub URL"
+  ],
+  "requires": {
+    "network": "GitHub URL must be reachable by the backend/runner path"
+  }
+}

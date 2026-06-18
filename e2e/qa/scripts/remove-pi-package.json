@@ -1,0 +1,16 @@
+{
+  "id": "script.removePiPackage",
+  "title": "Remove a workspace-local Pi package",
+  "parameters": {
+    "source": "npm:@example/qa-package"
+  },
+  "actions": [
+    {"type": "confirmDialog", "action": "accept", "optional": true},
+    {"type": "click", "role": "button", "nameIncludes": "Remove {{source}}"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/pi-packages/remove", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "POST /pi-packages/remove returns 200",
+    "Package no longer appears as workspace-installed"
+  ]
+}

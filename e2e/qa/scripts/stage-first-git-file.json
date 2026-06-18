@@ -1,0 +1,15 @@
+{
+  "id": "script.stageFirstGitFile",
+  "title": "Stage the first changed Git file",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Stage", "match": "first"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/git-stage", "method": "POST", "expectedStatus": 200, "timeoutMs": 30000}
+  ],
+  "successSignals": [
+    "POST /git-stage returns 200",
+    "Staged count changes in Git status"
+  ],
+  "requires": {
+    "workspace": "GitHub-backed workspace with unstaged or untracked changes"
+  }
+}
