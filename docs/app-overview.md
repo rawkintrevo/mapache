@@ -41,6 +41,8 @@ Workspaces live at `workspaces/{workspaceId}`. Sessions live under `workspaces/{
 
 The frontend uses React on Vite. `src/main.js` initializes Firebase/Auth, owns app state and orchestration, and renders `src/App.jsx`. React UI lives under `src/components/`; controllers live under `src/controllers/`; API/state workflows live under `src/workflows/`; API client calls live in `src/services/api.js`.
 
+Global user actions run through the central `state.busy` guard in `src/main.js`, which keeps overlapping mutations disabled. The signed-in shell surfaces that state with `src/components/layout/GlobalActionIndicator.jsx`, using `state.busyMessage` when a specific action label is available and `Working...` otherwise.
+
 Read [frontend-architecture.md](./frontend-architecture.md), [ui-components.md](./ui-components.md), and [css-decomposition.md](./css-decomposition.md) before changing frontend ownership, components, or styling.
 
 ## Backend Summary

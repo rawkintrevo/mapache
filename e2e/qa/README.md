@@ -50,6 +50,7 @@ Keep manifests deterministic. Do not put secrets in case or script files.
 - `cases/login.json`: QA custom-token login and signed-in shell.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-drawers.json`: Left drawer, drawer sections, inspector, refresh.
+- `cases/global-action-indicator.json`: Busy indicator during global refresh.
 - `cases/profile.json`: Profile and runner usage view.
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.
 - `cases/workspace-create-delete.json`: Blank workspace creation and deletion.
