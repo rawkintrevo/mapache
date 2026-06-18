@@ -1,4 +1,4 @@
 interface:
   display_name: "Issue Workflow"
-  short_description: "Implement GitHub issues through branch, tests, QA, and PR."
-  default_prompt: "Use $issue-workflow to implement issue #123 from GitHub through branch, tests, QA, and PR."
+  short_description: "Implement GitHub issues through branch, tests, frontend QA, PR, and main cleanup."
+  default_prompt: "Use $issue-workflow to implement issue #123 from GitHub through branch, tests, frontend QA, PR, and return to main."
