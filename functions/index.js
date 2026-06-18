@@ -124,6 +124,8 @@ const API_HANDLERS = {
   deletePiSkill: piService.deletePiSkill,
   listConnectedRepos: githubService.listConnectedRepos,
   createGithubConnectUrl: githubService.createGithubConnectUrl,
+  getGithubConnection: githubService.getGithubConnection,
+  disconnectGithub: githubService.disconnectGithub,
 };
 
 exports.api = onRequest({

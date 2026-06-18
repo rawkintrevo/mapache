@@ -22,6 +22,8 @@ function createGithubService() {
     buildGithubAuthEnv,
     createGithubConnectUrl,
     createGithubInstallationToken,
+    disconnectGithub,
+    getGithubConnection,
     handleGithubCallback,
     isConnectedGithubSourcePayload,
     listConnectedRepos,
@@ -232,6 +234,39 @@ async function listConnectedRepos(uid) {
   });
 
   return {repos};
+}
+
+async function getGithubConnection(uid) {
+  const [userSnap, installationSnap] = await Promise.all([
+    githubUserDoc(uid).get(),
+    githubInstallationCollection(uid).get(),
+  ]);
+  return normalizeGithubConnectionStatus(
+      uid,
+      userSnap.exists ? userSnap.data() || {} : null,
+      installationSnap.docs.map((doc) => ({id: doc.id, data: doc.data() || {}})),
+  );
+}
+
+async function disconnectGithub(uid) {
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const installationSnap = await githubInstallationCollection(uid).get();
+  const batch = db.batch();
+  batch.set(githubUserDoc(uid), {
+    firebaseUid: uid,
+    connectionStatus: "disconnected",
+    installationIds: [],
+    updatedAt: now,
+  }, {merge: true});
+  installationSnap.docs.forEach((doc) => {
+    batch.set(doc.ref, {
+      installationStatus: "removed",
+      removedAt: now,
+      updatedAt: now,
+    }, {merge: true});
+  });
+  await batch.commit();
+  return getGithubConnection(uid);
 }
 
 async function createGithubConnectUrl(uid, req) {
@@ -900,6 +935,69 @@ function normalizeGithubInstallationRecord(uid, installationId, value, allowedIn
   };
 }
 
+function normalizeGithubConnectionStatus(uid, userData, installationRecords) {
+  const data = userData && typeof userData === "object" ? userData : {};
+  const allowedInstallationIds = new Set(normalizeGithubInstallationIds(data.installationIds));
+  const installations = (Array.isArray(installationRecords) ? installationRecords : [])
+      .map((record) => normalizeGithubConnectionInstallation(
+          uid,
+          record && record.id,
+          record && record.data,
+          allowedInstallationIds,
+      ))
+      .filter(Boolean);
+  const statusFromData = cleanName(data.connectionStatus).toLowerCase();
+  let connectionStatus = statusFromData || (
+    cleanGithubValue(data.githubLogin) || cleanGithubNumericId(data.githubUserId) ? "connected" : "not_connected"
+  );
+  if (connectionStatus === "disconnected") {
+    connectionStatus = "not_connected";
+  }
+  if (connectionStatus === "connected" && installations.some((installation) => installation.status === "needs_reauth")) {
+    connectionStatus = "needs_reauth";
+  }
+
+  return {
+    connected: connectionStatus === "connected" || connectionStatus === "needs_reauth",
+    connectionStatus,
+    githubUserId: cleanGithubNumericId(data.githubUserId),
+    githubLogin: cleanGithubValue(data.githubLogin),
+    displayName: cleanGithubValue(data.displayName),
+    avatarUrl: cleanGithubValue(data.avatarUrl),
+    installationCount: installations.length,
+    installationAccounts: installations,
+  };
+}
+
+function normalizeGithubConnectionInstallation(uid, installationId, value, allowedInstallationIds) {
+  const data = value && typeof value === "object" ? value : {};
+  const normalizedInstallationId = cleanGithubNumericId(installationId || data.installationId);
+  if (!normalizedInstallationId) {
+    return null;
+  }
+  if (allowedInstallationIds.size && !allowedInstallationIds.has(normalizedInstallationId)) {
+    return null;
+  }
+
+  const ownerUid = cleanGithubValue(data.ownerUid);
+  if (ownerUid && ownerUid !== uid) {
+    return null;
+  }
+
+  const status = cleanName(data.installationStatus).toLowerCase() || "active";
+  if (status === "removed" || status === "disconnected") {
+    return null;
+  }
+
+  return {
+    installationId: normalizedInstallationId,
+    accountLogin: cleanGithubValue(data.githubAccountLogin),
+    accountType: cleanGithubValue(data.githubAccountType),
+    repositorySelection: cleanGithubValue(data.repositorySelection),
+    status,
+  };
+}
+
 async function listStoredGithubInstallationRepositories(uid, installationId) {
   const snap = await githubInstallationRepoCollection(uid, installationId).get();
   return snap.docs
@@ -1100,6 +1198,7 @@ module.exports = {
   githubRepoMapKey,
   isConnectedGithubSourcePayload,
   normalizeBranchDescription,
+  normalizeGithubConnectionStatus,
   normalizeGithubConnectedRepo,
   normalizeGithubInstallationId,
   normalizeGithubInstallationIds,

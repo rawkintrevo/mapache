@@ -1,5 +1,5 @@
 import "./ProfilePage.css";
-import {LogOut, RefreshCw} from "lucide-react";
+import {ExternalLink, GitBranch, LogOut, RefreshCw, Unplug} from "lucide-react";
 import {useState} from "react";
 import {Button} from "../common/Button.jsx";
 
@@ -52,6 +52,16 @@ function estimatedRewardsPoints(usage) {
   return estimatedUsageCost(usage) / 0.003;
 }
 
+function githubStatusLabel(status) {
+  if (status === "connected") return "Connected";
+  if (status === "needs_reauth") return "Needs reauthorization";
+  return "Not connected";
+}
+
+function githubAccountLabel(connection) {
+  return connection?.githubLogin || connection?.displayName || "";
+}
+
 function usageMetric(label, value, unit) {
   return (
     <div className="profile-usage-metric">
@@ -76,7 +86,14 @@ function usageCostMetric(label, value, unit) {
   );
 }
 
-export function ProfilePage({state, onRefresh, onSignOut}) {
+export function ProfilePage({
+  state,
+  onConnectGithub,
+  onDisconnectGithub,
+  onRefresh,
+  onRefreshGithubRepositories,
+  onSignOut,
+}) {
   const name = userDisplayName(state);
   const email = userEmail(state);
   const photo = userPhoto(state);
@@ -87,6 +104,13 @@ export function ProfilePage({state, onRefresh, onSignOut}) {
   const activeUsage = usageTab === "last30Days" ? last30Days : lifetime;
   const activeUsageLabel = usageTab === "last30Days" ? "Last 30 Days" : "Lifetime";
   const activeUsagePoints = estimatedRewardsPoints(activeUsage);
+  const githubConnection = state.githubConnection || {};
+  const githubData = githubConnection.data || {};
+  const githubConnected = Boolean(githubData.connected);
+  const githubAccount = githubAccountLabel(githubData);
+  const githubRepoCount = Array.isArray(state.repoPicker?.repos) ? state.repoPicker.repos.length : 0;
+  const githubBusy = state.busy || githubConnection.loading || githubConnection.refreshing || githubConnection.disconnecting;
+  const githubPrimaryLabel = githubConnected ? "Restart OAuth" : "Connect GitHub";
 
   return (
     <section className="workspace profile-page">
@@ -112,6 +136,50 @@ export function ProfilePage({state, onRefresh, onSignOut}) {
             <dd>{providerList(state)}</dd>
           </div>
         </dl>
+        <section className="profile-github" aria-labelledby="profile-github-title">
+          <div className="profile-section-heading">
+            <h3 id="profile-github-title">GitHub</h3>
+            {githubAccount ? <p className="subtle">@{githubAccount}</p> : null}
+          </div>
+          <div className="profile-github-status-row">
+            <span className={`profile-github-status profile-github-status-${githubData.connectionStatus || "not_connected"}`}>
+              {githubConnection.loading ? "Loading" : githubStatusLabel(githubData.connectionStatus)}
+            </span>
+            {githubConnected ? (
+              <span className="subtle">
+                {formatUsageNumber(githubData.installationCount)} installation{githubData.installationCount === 1 ? "" : "s"}
+                {githubRepoCount ? `, ${formatUsageNumber(githubRepoCount)} repositories loaded` : ""}
+              </span>
+            ) : (
+              <span className="subtle">No GitHub account connected.</span>
+            )}
+          </div>
+          {githubConnection.error ? <p className="error">{githubConnection.error}</p> : null}
+          {githubConnection.message ? <p className="profile-github-message">{githubConnection.message}</p> : null}
+          <div className="profile-github-actions">
+            <Button disabled={githubBusy} variant="secondary" onClick={onConnectGithub}>
+              <GitBranch aria-hidden="true" />
+              {githubPrimaryLabel}
+            </Button>
+            <Button disabled={githubBusy || !githubConnected} variant="secondary" onClick={onRefreshGithubRepositories}>
+              <RefreshCw aria-hidden="true" />
+              {githubConnection.refreshing || state.repoPicker?.loading ? "Refreshing..." : "Refresh repositories"}
+            </Button>
+            <a
+              className="button button--secondary profile-github-settings-link"
+              href="https://github.com/settings/installations"
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ExternalLink aria-hidden="true" />
+              Manage installation
+            </a>
+            <Button disabled={githubBusy || !githubConnected} variant="secondary" onClick={onDisconnectGithub}>
+              <Unplug aria-hidden="true" />
+              {githubConnection.disconnecting ? "Disconnecting..." : "Disconnect GitHub"}
+            </Button>
+          </div>
+        </section>
         <section className="profile-usage" aria-labelledby="profile-usage-title">
           <div className="profile-section-heading">
             <h3 id="profile-usage-title">Runner Usage</h3>

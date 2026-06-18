@@ -80,6 +80,8 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-skills/delete", {
   sessionId: "session-1",
 });
 assertRoute("/api/github/connect", {name: "githubConnect"});
+assertRoute("/api/github/connection", {name: "githubConnection"});
+assertRoute("/api/github/disconnect", {name: "githubDisconnect"});
 assertRoute("/api/github/callback", {name: "githubCallback"});
 assertRoute("/api/github/repos", {name: "githubRepos"});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/nope", {name: "unknown"});

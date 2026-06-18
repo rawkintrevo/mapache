@@ -35,6 +35,8 @@ Session creation writes a Firestore session record, resolves the curated runner 
 
 Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, Pi skills, Pi package operations, preview/access URLs, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
 
+GitHub connector account routes live under `/api/github/**` and are implemented in `functions/github.service.js`. `GET /api/github/connection` returns safe connection metadata from `githubUsers/{uid}` and installation docs without token material. `GET /api/github/repos` refreshes the connected repository view through short-lived installation tokens. `POST /api/github/disconnect` performs a soft disconnect by marking the user connection disconnected and installation docs removed; it does not delete workspace source metadata or revoke/delete any secret material.
+
 ## Invariants
 
 - Firebase Auth UID is the ownership boundary for workspace/session/user metadata.
