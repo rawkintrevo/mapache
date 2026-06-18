@@ -8,7 +8,7 @@ import {Topbar} from "./Topbar.jsx";
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, drawer, files, git, modals, pi, sessions, workspaces} = handlers;
+  const {admin, app, drawer, files, git, github, modals, pi, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -53,8 +53,15 @@ export function AppShell(props) {
             onRefresh={admin.refreshAdminUsers}
             onSetWhitelisted={admin.setAdminUserWhitelisted}
           />
-        ) : state.activePage === "profile" ? (
-          <ProfilePage state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
+        ) : {state.activePage === "profile" ? (
+          <ProfilePage
+            state={state}
+            onConnectGithub={github.connectGithub}
+            onDisconnectGithub={github.disconnectGithub}
+            onRefresh={app.refreshAll}
+            onRefreshGithubRepositories={github.refreshGithubRepositories}
+            onSignOut={app.signOut}
+          />
         ) : (
           <WorkspacePanel
             selectedSession={selectedSession}

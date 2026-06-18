@@ -6,6 +6,7 @@ import {AppShell} from "../components/layout/AppShell.jsx";
 import {
   createFileEditorState,
   createGitStatusState,
+  createGithubConnectionState,
   createPiAuthState,
   createPiPackagesState,
   createPiSkillsState,
@@ -77,7 +78,10 @@ function createHandlers(overrides = {}) {
     },
     github: {
       connectGithub: vi.fn(),
+      disconnectGithub: vi.fn(),
+      loadGithubConnection: vi.fn(),
       loadConnectedRepos: vi.fn(),
+      refreshGithubRepositories: vi.fn(),
     },
     modals: {
       closeAuthModal: vi.fn(),
@@ -153,6 +157,7 @@ function createState(overrides = {}) {
     expandedFilePaths: new Set(),
     fileEditor: createFileEditorState(),
     gitStatus: createGitStatusState(),
+    githubConnection: createGithubConnectionState(),
     piAuth: createPiAuthState({
       entries: {
         "entry-1": {
@@ -291,6 +296,47 @@ describe("frontend smoke coverage", () => {
     });
   });
 
+  test("renders profile GitHub connector controls", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell({
+      activePage: "profile",
+      githubConnection: createGithubConnectionState({
+        data: {
+          connected: true,
+          connectionStatus: "connected",
+          githubLogin: "octocat",
+          installationCount: 1,
+        },
+      }),
+      repoPicker: createRepoPickerState({
+        attempted: true,
+        repos: [
+          {
+            fullName: "octocat/mapache",
+            installationId: "42",
+            repoId: "99",
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByRole("heading", {name: "GitHub"})).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText("@octocat")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: "Restart OAuth"}));
+    expect(handlers.github.connectGithub).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", {name: "Refresh repositories"}));
+    expect(handlers.github.refreshGithubRepositories).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", {name: "Disconnect GitHub"}));
+    expect(handlers.github.disconnectGithub).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByRole("link", {name: "Manage installation"})).toHaveAttribute(
+        "href",
+        "https://github.com/settings/installations",
+    );
   test("shows admin menu and renders admin users for admin profiles", async () => {
     const user = userEvent.setup();
     const {handlers, rerender} = renderShell({

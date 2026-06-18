@@ -34,7 +34,13 @@ import {
   updateGitCommitMessageState,
   updatePullRequestFormState,
 } from "./workflows/git.js";
-import {connectGithubState, loadConnectedReposState} from "./workflows/githubConnection.js";
+import {
+  connectGithubState,
+  disconnectGithubState,
+  loadConnectedReposState,
+  loadGithubConnectionState,
+  refreshGithubRepositoriesState,
+} from "./workflows/githubConnection.js";
 import {
   deleteSessionState,
   resizeSessionState,
@@ -88,7 +94,10 @@ const handlers = {
   },
   github: {
     connectGithub,
+    disconnectGithub,
+    loadGithubConnection,
     loadConnectedRepos,
+    refreshGithubRepositories,
   },
   modals: modalController,
   pi: piPanelsController,
@@ -183,6 +192,7 @@ async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
     state.profile = me.user || null;
+    await loadGithubConnectionState({state, render, silent: true});
     if (state.activePage === "admin" && state.profile?.isAdmin !== true) {
       state.activePage = "workspace";
     }
@@ -355,8 +365,22 @@ async function loadConnectedRepos() {
   await loadConnectedReposState({state, render});
 }
 
+async function loadGithubConnection(options = {}) {
+  await loadGithubConnectionState({state, render, ...options});
+}
+
+async function refreshGithubRepositories() {
+  await refreshGithubRepositoriesState({state, render, loadGithubConnection});
+}
+
 async function connectGithub() {
   await connectGithubState({state, render});
+}
+
+async function disconnectGithub() {
+  const ok = window.confirm("Disconnect GitHub from this Mapache account?");
+  if (!ok) return;
+  await disconnectGithubState({state, render, loadGithubConnection});
 }
 
 async function createWorkspace(payload) {

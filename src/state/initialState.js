@@ -95,6 +95,15 @@ export function createRepoPickerState(overrides = {}) {
   };
 }
 
+export function createGithubConnectionState(overrides = {}) {
+  return {
+    loading: false,
+    refreshing: false,
+    disconnecting: false,
+    error: "",
+    message: "",
+    data: null,
+    attempted: false,
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -135,6 +144,7 @@ export function createInitialState() {
     piAuth: createPiAuthState(),
     pullRequestForm: createPullRequestFormState(),
     repoPicker: createRepoPickerState(),
+    githubConnection: createGithubConnectionState(),
     drawerCollapsed: false,
     rightDrawerCollapsed: true,
     collapsedDrawerSections: new Set(),

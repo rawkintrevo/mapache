@@ -80,6 +80,8 @@ const ROUTE_DISPATCHERS = Object.freeze({
   github: Object.freeze([
     ["GET", "githubRepos", jsonResult(({handlers, user}) => handlers.listConnectedRepos(user.uid))],
     ["GET", "githubConnect", jsonResult(({handlers, req, user}) => handlers.createGithubConnectUrl(user.uid, req))],
+    ["GET", "githubConnection", jsonResult(({handlers, user}) => handlers.getGithubConnection(user.uid))],
+    ["POST", "githubDisconnect", jsonResult(({handlers, user}) => handlers.disconnectGithub(user.uid))],
   ]),
 });
 

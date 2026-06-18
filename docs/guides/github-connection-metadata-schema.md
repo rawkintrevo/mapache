@@ -164,6 +164,10 @@ If an installation is removed or revoked:
 - stop presenting repositories from that installation in the picker
 - avoid deleting workspace source metadata unless the workspace is explicitly migrated
 
+The Profile page disconnect action is a soft disconnect. It marks `githubUsers/{firebaseUid}.connectionStatus` as `disconnected`, clears the user-level `installationIds` list, and marks known installation docs as `removed`. It does not delete GitHub-backed workspace source metadata and does not revoke a GitHub App installation on github.com; users manage the external installation from GitHub's installation settings.
+
+The Profile page connection status uses only safe account metadata from `githubUsers/{firebaseUid}` and installation docs: GitHub login/display name/avatar, connection status, installation account names, repository-selection mode, and counts. It must not render OAuth tokens, installation tokens, client secrets, or private key material.
+
 ## Security Notes
 
 - Never store installation tokens in Firestore

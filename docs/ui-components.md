@@ -26,7 +26,7 @@ This document serves as an index for significant UI components in the applicatio
 | `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable workspace file tree used by the left drawer. |
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
-| `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details and account actions. |
+| `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
 | `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing user-scoped Pi auth providers. |
 | `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | React Skills panel for workspace-local Pi Markdown skills under `.pi/skills`. |

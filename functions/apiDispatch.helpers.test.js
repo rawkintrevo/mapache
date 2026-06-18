@@ -120,6 +120,27 @@ async function collectDispatch({route, method = "GET", body, query = {}}) {
   });
 
   assert.deepStrictEqual(await collectDispatch({
+    route: {name: "githubConnection"},
+  }), {
+    status: 200,
+    payload: {
+      handler: "getGithubConnection",
+      args: ["user-1"],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "githubDisconnect"},
+  }), {
+    status: 200,
+    payload: {
+      handler: "disconnectGithub",
+      args: ["user-1"],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
     method: "GET",
     route: {name: "unknown"},
   }), {

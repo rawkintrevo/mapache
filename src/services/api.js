@@ -177,6 +177,12 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-skills/delete`,
         {method: "POST", body: {name}},
     ),
+    getGithubConnection: () => request(getToken, "/api/github/connection"),
+    disconnectGithub: () => request(
+        getToken,
+        "/api/github/disconnect",
+        {method: "POST", body: {}},
+    ),
     getConnectedRepos: () => request(getToken, "/api/github/repos"),
     getGithubConnectUrl: () => request(
         getToken,

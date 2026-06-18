@@ -102,6 +102,12 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
   }
+  if (parts.length === 2 && parts[0] === "github" && parts[1] === "connection") {
+    return {name: "githubConnection"};
+  }
+  if (parts.length === 2 && parts[0] === "github" && parts[1] === "disconnect") {
+    return {name: "githubDisconnect"};
+  }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "callback") {
     return {name: "githubCallback"};
   }
@@ -148,6 +154,8 @@ const ROUTE_METHODS = Object.freeze({
   piSkillDelete: ["POST"],
   githubRepos: ["GET"],
   githubConnect: ["GET"],
+  githubConnection: ["GET"],
+  githubDisconnect: ["POST"],
 });
 
 function routeAllowsMethod(route, method) {
