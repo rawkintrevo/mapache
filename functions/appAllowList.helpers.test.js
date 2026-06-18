@@ -5,8 +5,10 @@ const {
   appAllowListStatus,
   isAppAllowListConfigured,
   isFirebaseTokenAllowed,
+  isUserWhitelisted,
   normalizeAppAllowListConfig,
   parseAppAllowList,
+  setUserWhitelistStatus,
 } = require("./appAllowList.helpers");
 
 assert.deepStrictEqual(parseAppAllowList(""), []);
@@ -71,5 +73,56 @@ assert.strictEqual(
     isFirebaseTokenAllowed({uid: "anyone", email: "anyone@example.com"}, {enabled: true}),
     false,
 );
+
+assert.strictEqual(
+    isUserWhitelisted({uid: "uid-1", email: "alice@example.com"}, {
+      enabled: false,
+      allowedEmails: ["alice@example.com"],
+    }),
+    true,
+);
+assert.strictEqual(
+    isUserWhitelisted({uid: "uid-1", email: "alice@example.com"}, {
+      enabled: true,
+      allowedUids: ["uid-2"],
+    }),
+    false,
+);
+
+assert.deepStrictEqual(setUserWhitelistStatus({
+  enabled: false,
+  entries: ["email:alice@example.com", "uid:uid-3"],
+  allowedEmails: ["bob@example.com"],
+  allowedUids: ["uid-1"],
+}, {uid: "uid-1", email: "alice@example.com"}, false), {
+  enabled: false,
+  entries: ["uid:uid-3"],
+  allowedEmails: ["bob@example.com"],
+  allowedUids: [],
+});
+
+assert.deepStrictEqual(setUserWhitelistStatus({
+  enabled: false,
+  entries: [],
+  allowedEmails: [],
+  allowedUids: [],
+}, {uid: "uid-1", email: "Alice@Example.com"}, true), {
+  enabled: true,
+  entries: [],
+  allowedEmails: ["alice@example.com"],
+  allowedUids: [],
+});
+
+assert.deepStrictEqual(setUserWhitelistStatus({
+  enabled: true,
+  entries: [],
+  allowedEmails: [],
+  allowedUids: [],
+}, {uid: "uid-1", email: ""}, true), {
+  enabled: true,
+  entries: [],
+  allowedEmails: [],
+  allowedUids: ["uid-1"],
+});
 
 console.log("app allow list helper tests passed");

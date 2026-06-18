@@ -70,6 +70,32 @@ async function collectDispatch({route, method = "GET", body, query = {}}) {
   });
 
   assert.deepStrictEqual(await collectDispatch({
+    method: "GET",
+    route: {name: "adminUsers"},
+    query: {pageSize: "10", cursor: "uid-1"},
+  }), {
+    status: 200,
+    payload: {
+      handler: "listAdminUsers",
+      args: [{uid: "user-1"}, {pageSize: "10", cursor: "uid-1"}],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "adminUserWhitelist", uid: "uid-2"},
+    body: {whitelisted: true},
+  }), {
+    status: 200,
+    payload: {
+      user: {
+        handler: "setAdminUserWhitelist",
+        args: [{uid: "user-1"}, "uid-2", true],
+      },
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "gitCommit", workspaceId: "workspace-1", sessionId: "session-1"},
     body: {message: "hello"},

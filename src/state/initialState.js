@@ -104,6 +104,16 @@ export function createGithubConnectionState(overrides = {}) {
     message: "",
     data: null,
     attempted: false,
+export function createAdminState(overrides = {}) {
+  return {
+    users: [],
+    pageSize: 25,
+    cursor: "",
+    cursorStack: [],
+    nextCursor: "",
+    loading: false,
+    error: "",
+    allowList: null,
     ...overrides,
   };
 }
@@ -112,6 +122,7 @@ export function createInitialState() {
   return {
     user: null,
     profile: null,
+    admin: createAdminState(),
     api: null,
     workspaces: [],
     sessions: [],

@@ -5,6 +5,17 @@ const OPENAI_CODEX_PROVIDER = "openai-codex";
 function routeRequest(path) {
   const parts = String(path || "").replace(/^\/api\/?/, "/").split("/").filter(Boolean);
   if (parts.length === 1 && parts[0] === "me") return {name: "me"};
+  if (parts.length === 2 && parts[0] === "admin" && parts[1] === "users") {
+    return {name: "adminUsers"};
+  }
+  if (
+    parts.length === 4 &&
+    parts[0] === "admin" &&
+    parts[1] === "users" &&
+    parts[3] === "whitelist"
+  ) {
+    return {name: "adminUserWhitelist", uid: parts[2]};
+  }
   if (parts.length === 2 && parts[0] === "qa" && parts[1] === "custom-token") {
     return {name: "qaCustomToken"};
   }
@@ -109,6 +120,8 @@ function routeRequest(path) {
 const ROUTE_METHODS = Object.freeze({
   githubCallback: ["GET"],
   me: ["GET"],
+  adminUsers: ["GET"],
+  adminUserWhitelist: ["POST"],
   qaCustomToken: ["POST"],
   piAuth: ["GET"],
   piAuthProvider: ["PUT", "DELETE"],

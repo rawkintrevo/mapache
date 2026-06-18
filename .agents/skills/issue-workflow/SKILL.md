@@ -1,6 +1,6 @@
 ---
 name: issue-workflow
-description: "Use when the user provides a GitHub issue number and wants Codex to complete the whole implementation workflow: update local main from remote, read the issue and comments, create an issue-named branch, implement and test the change, run QA for significant frontend changes, commit, push, open a pull request, and comment or label the issue when blocked or waiting on user action."
+description: "Use when the user provides a GitHub issue number and wants Codex to complete the whole implementation workflow: update local main from remote, read the issue and comments, create an issue-named branch, implement and test the change, compose and run QA for frontend changes, commit, push, open a pull request, return to main, and comment or label the issue when blocked or waiting on user action."
 ---
 
 # Issue Workflow
@@ -33,8 +33,21 @@ Use this skill to turn a GitHub issue number into a branch, tested implementatio
 1. Implement the issue according to existing project structure and conventions.
 2. Keep changes scoped to the issue. Avoid unrelated refactors.
 3. Add or update automated tests for the changed behavior.
-4. For major frontend changes, add or update a QA test and run it. Verify the browser console has no unexpected errors. Keep the QA screenshots for the PR.
+4. If the issue changes frontend code, styling, user-visible UI state, navigation, or browser workflow behavior, follow the **Frontend QA Requirement** below.
 5. Run the relevant build, lint, unit, integration, and QA commands for the touched areas.
+
+## Frontend QA Requirement
+
+When frontend behavior is changed during this issue workflow:
+
+1. Use the `qa-test` skill before completion.
+2. Add or update checked-in QA case manifests under `e2e/qa/cases/` when existing cases do not cover the changed user path. Compose existing `useCase` and `useScript` steps instead of duplicating login/setup.
+3. Run the relevant QA case with Chrome DevTools against a local dev server.
+4. Treat unexpected browser console errors, failed deterministic assertions, missing expected UI, failed network calls, or broken screenshots as issues to fix before opening the PR.
+5. Re-run the QA case after fixes until no issues are found.
+6. Store screenshots and other evidence under `artifacts/qa/<case-id>/`.
+7. Add the QA screenshots to the PR description or a PR comment. If the available GitHub tool cannot upload screenshots, do not silently omit them: include the local artifact paths in the PR and clearly note the upload limitation in the PR and final response.
+8. If QA cannot run because credentials, Chrome DevTools, or another required external setup is missing, treat the workflow as **User Action Needed** or **Blocked Handling** instead of opening a normal completion PR.
 
 ## User Action Needed
 
@@ -48,6 +61,7 @@ If completing the issue requires something only the user can do, such as changin
    - The exact action the user must take.
    - How to resume after the action is done.
 4. Stop after reporting the branch, commit, and issue comment.
+5. Follow **Return To Main** before the final response.
 
 ## Blocked Handling
 
@@ -65,6 +79,7 @@ When blocked:
    - The next decision or access needed.
 4. Add the `blocked` label to the issue.
 5. Stop and report the block clearly to the user.
+6. Follow **Return To Main** before the final response.
 
 ## Completion
 
@@ -77,9 +92,19 @@ When implementation is complete and checks pass:
 5. Link the issue in the PR description. Include:
    - Summary of changes.
    - Tests and QA commands run.
-   - QA screenshot paths or uploaded screenshots when frontend QA was run.
+   - Uploaded QA screenshots, or screenshot artifact paths plus an explicit upload limitation when screenshots could not be uploaded.
    - Any known limitations or follow-up work.
-6. If a QA screenshot was produced, use it in the PR rather than merely mentioning it.
+6. If a QA screenshot was produced and upload support is available, embed or attach it in the PR rather than merely mentioning it.
+
+## Return To Main
+
+Before the final response after completion, user-action pause, or blocked bailout:
+
+1. Ensure useful issue-related changes have been committed and pushed, or intentionally left uncommitted only when the workflow is blocked before a meaningful commit can be made.
+2. Inspect `git status --short`.
+3. Switch back to `main`.
+4. If local changes or untracked files would block switching to `main`, do not stash, reset, delete, or overwrite them automatically. Stop, report the current branch and blocking paths, and tell the user what must be resolved before the branch can be switched.
+5. After switching, leave the working tree on `main`; do not pull or otherwise change `main` during cleanup unless the user requested it.
 
 ## Final Response
 
@@ -89,4 +114,5 @@ End with:
 2. PR link, or issue comment link if blocked or waiting on user action.
 3. Commit hash.
 4. Tests and QA run, including screenshot paths when applicable.
-5. Any remaining user action or residual risk.
+5. Final local branch state, including whether cleanup returned to `main`.
+6. Any remaining user action or residual risk.

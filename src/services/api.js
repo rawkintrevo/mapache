@@ -1,6 +1,17 @@
 export function createApiClient(getToken) {
   return {
     getMe: () => request(getToken, "/api/me"),
+    getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
+      const params = new URLSearchParams();
+      params.set("pageSize", String(pageSize));
+      if (cursor) params.set("cursor", cursor);
+      return request(getToken, `/api/admin/users?${params.toString()}`);
+    },
+    setAdminUserWhitelisted: (uid, whitelisted) => request(
+        getToken,
+        `/api/admin/users/${encodeURIComponent(uid)}/whitelist`,
+        {method: "POST", body: {whitelisted}},
+    ),
     getPiAuth: () => request(getToken, "/api/pi-auth"),
     savePiAuthProvider: (provider, key, label = "") => request(
         getToken,
