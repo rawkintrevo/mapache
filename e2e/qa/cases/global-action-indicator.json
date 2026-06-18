@@ -1,0 +1,14 @@
+{
+  "id": "global.actionIndicator",
+  "title": "Global action indicator appears during app refresh",
+  "description": "Verify the shell shows an accessible busy indicator while a global refresh action is in progress.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/global.actionIndicator",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/refresh-app-state-with-busy-indicator.json"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"capture": "screenshot", "fileName": "busy-indicator.png"}
+  ]
+}

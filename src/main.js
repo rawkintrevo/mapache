@@ -576,8 +576,9 @@ async function getSessionAccessUrls(workspaceId, sessionId) {
   return state.api.getSessionAccessUrls(workspaceId, sessionId);
 }
 
-async function runBusy(task) {
+async function runBusy(task, message = "Working...") {
   state.busy = true;
+  state.busyMessage = message;
   state.error = "";
   render();
   try {
@@ -586,6 +587,7 @@ async function runBusy(task) {
     state.error = friendlyGlobalError(error);
   } finally {
     state.busy = false;
+    state.busyMessage = "";
     render();
   }
 }

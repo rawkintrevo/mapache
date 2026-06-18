@@ -151,6 +151,7 @@ function createState(overrides = {}) {
     api: {},
     authModalOpen: false,
     busy: false,
+    busyMessage: "",
     collapsedDrawerSections: new Set(),
     drawerCollapsed: false,
     error: "",
@@ -296,6 +297,13 @@ describe("frontend smoke coverage", () => {
     });
   });
 
+  test("shows an accessible global action indicator while busy", () => {
+    renderShell({busy: true, busyMessage: "Refreshing workspace..."});
+
+    expect(screen.getByRole("status")).toHaveTextContent("Refreshing workspace...");
+    expect(screen.getByRole("button", {name: "Refresh app state"})).toBeDisabled();
+  });
+
   test("renders profile GitHub connector controls", async () => {
     const user = userEvent.setup();
     const {handlers} = renderShell({
@@ -337,6 +345,8 @@ describe("frontend smoke coverage", () => {
         "href",
         "https://github.com/settings/installations",
     );
+  });
+
   test("shows admin menu and renders admin users for admin profiles", async () => {
     const user = userEvent.setup();
     const {handlers, rerender} = renderShell({

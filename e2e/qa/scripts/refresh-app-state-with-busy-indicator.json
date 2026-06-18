@@ -1,0 +1,13 @@
+{
+  "id": "script.refreshAppStateWithBusyIndicator",
+  "title": "Refresh app state and observe busy indicator",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Refresh"},
+    {"type": "waitForSnapshotText", "text": "Working...", "timeoutMs": 3000},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/me", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Refresh app state button shows Working... while /api/me is in flight",
+    "Refresh app state button returns to an enabled state after /api/me succeeds"
+  ]
+}

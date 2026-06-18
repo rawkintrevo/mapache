@@ -1,0 +1,48 @@
+.global-action-indicator {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(23, 33, 43, 0.14);
+  color: var(--color-text-main);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.global-action-indicator__icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--color-accent);
+  animation: global-action-indicator-spin 0.9s linear infinite;
+}
+
+@keyframes global-action-indicator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-action-indicator__icon {
+    animation: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .global-action-indicator {
+    top: 106px;
+  }
+}

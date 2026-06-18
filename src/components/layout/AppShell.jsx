@@ -4,6 +4,7 @@ import {RightDrawer} from "../inspector/RightDrawer.jsx";
 import {ModalStack} from "../modals/ModalStack.jsx";
 import {ProfilePage} from "../profile/ProfilePage.jsx";
 import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
+import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
 import {Topbar} from "./Topbar.jsx";
 
 export function AppShell(props) {
@@ -23,6 +24,7 @@ export function AppShell(props) {
   return (
     <div className="app">
       <Topbar state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
+      <GlobalActionIndicator busy={state.busy} message={state.busyMessage} />
       <main className={shellClassName}>
         <LeftDrawer
           state={state}
@@ -53,7 +55,7 @@ export function AppShell(props) {
             onRefresh={admin.refreshAdminUsers}
             onSetWhitelisted={admin.setAdminUserWhitelisted}
           />
-        ) : {state.activePage === "profile" ? (
+        ) : state.activePage === "profile" ? (
           <ProfilePage
             state={state}
             onConnectGithub={github.connectGithub}

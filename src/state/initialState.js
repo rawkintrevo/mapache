@@ -104,6 +104,10 @@ export function createGithubConnectionState(overrides = {}) {
     message: "",
     data: null,
     attempted: false,
+    ...overrides,
+  };
+}
+
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -152,6 +156,7 @@ export function createInitialState() {
     authModalOpen: false,
     piAuthManageModalOpen: false,
     busy: false,
+    busyMessage: "",
     error: "",
   };
 }
