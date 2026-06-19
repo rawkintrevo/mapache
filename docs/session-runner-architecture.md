@@ -21,12 +21,15 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 - Git endpoints: `session-runner/lib/git.js` and `git*.service.js`
 - Pi endpoints: `session-runner/lib/pi.js`, `piPackage.service.js`, `piSkill.service.js`
 - Seeded skills: `session-runner/seeded-skills/`
+- Codex workspace seeds and Pi skill compatibility import: `session-runner/lib/codex.js`, `session-runner/lib/codexSeededWorkspace.service.js`, and `session-runner/seeded-codex/`
 
 ## Current Behavior
 
 `server.js` bootstraps Express, configures route gates, restores workspace state, starts the terminal process, and wires terminal/preview/Git/Pi routes. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve.
 
 The terminal uses `node-pty` and WebSocket replay. Preview routes support static, proxy, and N64 ROM modes depending on runner capabilities and workspace preview config. GitHub workspaces restore `.git` through archives or clone fallback, then restore worktree/cache state. Pi package and skill endpoints operate on the same `/workspace/.pi` files that Pi uses in the terminal.
+
+Codex runners seed `.agents/` workspace files before the Codex terminal starts. They also copy missing workspace-local Pi skills from `.pi/skills/**` into `.agents/skills/**` with Codex-compatible frontmatter, preserving existing Codex skill files.
 
 ## Invariants
 

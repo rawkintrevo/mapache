@@ -143,6 +143,7 @@ const API_HANDLERS = {
 
 exports.api = onRequest({
   cors: true,
+  timeoutSeconds: 300,
   secrets: [
     GITHUB_APP_ID_SECRET,
     GITHUB_APP_CLIENT_ID_SECRET,

@@ -32,7 +32,7 @@ The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is
 
 Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `userPath`, source metadata, storage bucket, and storage prefix. Sessions live under `workspaces/{workspaceId}/sessions/{sessionId}` and repeat ownership metadata for explicit checks and operational queries.
 
-Session creation writes a Firestore session record, resolves the curated runner image key server-side, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
+Session creation writes a Firestore session record, resolves the curated runner image key server-side, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. The API function uses a longer request timeout than the default so slower runner image rollouts, especially Chromium-backed web images, can finish Cloud Run provisioning instead of timing out while the service is still becoming healthy. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
 
 Admin user summaries reuse the same usage rollups as `/api/me`, but return cost estimates in dollars for lifetime and trailing-30-day windows. Whitelist toggles update `appConfig/access`, preferring `allowedEmails` when the target user has an email and `allowedUids` otherwise.
 
