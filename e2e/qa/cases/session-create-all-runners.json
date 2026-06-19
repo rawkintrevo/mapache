@@ -1,0 +1,42 @@
+{
+  "id": "session.create-all-runners",
+  "title": "Create sessions for all standard runners",
+  "description": "Log in, create a blank workspace, then create and clean up pi-basic, codex-basic, pi-web, and codex-web sessions.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.create-all-runners",
+  "requires": {
+    "cloudRun": "Creates billable Cloud Run services for multiple runners"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-all-runners-ws-{{timestamp}}"}},
+
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-basic-{{timestamp}}", "imageKey": "pi-basic", "cpu": "1", "memory": "1Gi"}},
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-pi-basic"]},
+    {"capture": "screenshot", "fileName": "pi-basic-session.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-codex-basic-{{timestamp}}", "imageKey": "codex-basic", "cpu": "1", "memory": "1Gi"}},
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-codex-basic"]},
+    {"capture": "screenshot", "fileName": "codex-basic-session.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-{{timestamp}}", "imageKey": "pi-web", "cpu": "1", "memory": "2Gi"}},
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-pi-web"]},
+    {"capture": "screenshot", "fileName": "pi-web-session.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-codex-web-{{timestamp}}", "imageKey": "codex-web", "cpu": "1", "memory": "2Gi"}},
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-codex-web"]},
+    {"capture": "screenshot", "fileName": "codex-web-session.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}
