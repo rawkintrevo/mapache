@@ -27,11 +27,35 @@ const RUNNER_IMAGES = {
       functions: false,
     },
   },
+  "codex-basic": {
+    key: "codex-basic",
+    label: "codex-basic",
+    terminalKind: "codex",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-basic",
+    capabilities: {
+      terminal: true,
+      preview: false,
+      previewQa: false,
+      functions: false,
+    },
+  },
   "pi-web": {
     key: "pi-web",
     label: "pi-web",
     terminalKind: "pi",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web",
+    capabilities: {
+      terminal: true,
+      preview: true,
+      previewQa: true,
+      functions: true,
+    },
+  },
+  "codex-web": {
+    key: "codex-web",
+    label: "codex-web",
+    terminalKind: "codex",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web",
     capabilities: {
       terminal: true,
       preview: true,

@@ -42,6 +42,8 @@ Browser QA login uses a Functions secret plus configured QA account params. Conf
 - Functions changes require a Functions deploy before handoff unless the user explicitly asks not to deploy.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
+- Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `codex-basic`, and `codex-web`.
+- The Codex runner Dockerfiles pin Codex CLI `0.140.0` and install the published Linux package tarball directly because that release's `codex-package_SHA256SUMS` file is missing the Linux standalone package entry and breaks the hosted `install.sh` flow.
 - Do not put developer maintenance notes under `community/`.
 
 ## Verification

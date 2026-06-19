@@ -1,0 +1,31 @@
+FROM node:24-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl fd-find git gzip openssh-client python3 make g++ ripgrep tar \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY install-codex-standalone.sh /usr/local/bin/install-codex-standalone.sh
+# Pin a working standalone release and install it directly because 0.140.0's
+# codex-package_SHA256SUMS asset is missing the Linux package entry.
+RUN chmod +x /usr/local/bin/install-codex-standalone.sh \
+  && CODEX_INSTALL_DIR=/usr/local/bin /usr/local/bin/install-codex-standalone.sh
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY server.js ./
+COPY lib ./lib
+COPY seeded-skills ./seeded-skills
+COPY seeded-codex ./seeded-codex
+
+RUN mkdir -p /workspace /tmp/mapache-codex
+ENV PORT=8080
+ENV HOME=/root
+ENV WORKSPACE_DIR=/workspace
+ENV CODEX_HOME=/tmp/mapache-codex/session
+ENV TERMINAL_COMMAND=codex
+ENV TERMINAL_ARGS='[]'
+
+EXPOSE 8080
+CMD ["npm", "start"]

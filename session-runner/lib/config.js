@@ -43,6 +43,9 @@ function createConfig() {
     path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
   const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
   const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
+  const codexHomeDir = path.resolve(process.env.CODEX_HOME || path.join("/tmp", "mapache-codex", process.env.SESSION_ID || "session"));
+  const codexHomeStorageBucketName = process.env.CODEX_HOME_STORAGE_BUCKET || bucketName;
+  const codexHomeStoragePrefix = normalizePrefix(process.env.CODEX_HOME_STORAGE_PREFIX || "");
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
@@ -55,6 +58,9 @@ function createConfig() {
     archiveStorageDir: ".mapahce-internal/archives",
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
     bucketName,
+    codexHomeDir,
+    codexHomeStorageBucketName,
+    codexHomeStoragePrefix,
     directoryMarkerFile: ".mapahce-directory",
     githubCloneToken: normalizeEnvString(process.env.GITHUB_CLONE_TOKEN),
     githubCloneUsername: normalizeEnvString(process.env.GITHUB_CLONE_USERNAME) || "x-access-token",

@@ -42,6 +42,8 @@ Keep changes scoped to the existing structure:
 
 For frontend changes, run `npm run build` before handing off when feasible. For runtime container changes, validate the container path and document whether existing Cloud Run services need a new revision.
 
+Routine QA and implementation validation should ignore the `pi-n64` runner unless the task explicitly changes N64 behavior, the `pi-n64` image, or an N64-only workflow. When a change affects general session creation, terminal flows, or standard runner images, prioritize `default`, `pi-basic`, `codex-basic`, `pi-web`, and `codex-web`.
+
 This repo deploys to the `pi-agents-cloud` Firebase/GCP project. Use explicit project flags for remote build and deploy commands so a local default gcloud project cannot send work to the wrong place. For example, push the default runner image with:
 
 ```bash

@@ -54,6 +54,18 @@ function createArchiveSyncTargets({config, git}) {
     },
   ];
 
+  if (config.codexHomeStoragePrefix) {
+    targets.push({
+      name: "codex-home",
+      mode: "directory",
+      localPath: config.codexHomeDir,
+      bucketName: config.codexHomeStorageBucketName,
+      remotePath: `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/"),
+      ensureLocalPath: true,
+      restoreOnStartup: true,
+    });
+  }
+
   if (git.isGithubWorkspace()) {
     targets.push({
       name: "workspace-git",

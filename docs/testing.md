@@ -53,6 +53,8 @@ Candidate flows:
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
 - Skills and Extensions drawer smoke paths against a controlled runner fixture.
 
+Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, and `codex-web`.
+
 E2E tests should not run in normal PR workflows until they are reliable, bounded, and credential-light. Run them manually before risky deploys and in scheduled workflows once automation exists.
 
 ### Nightly and release regression tests

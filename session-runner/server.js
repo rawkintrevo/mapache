@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const express = require("express");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
+const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
 const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
@@ -24,6 +25,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const activity = createActivityService({admin, db, config});
+const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config);
 const workspace = createWorkspaceService({admin, config, db, git, storage});
@@ -33,9 +35,15 @@ const terminalSession = createTerminalSession({
   config,
   activity,
   onTerminalExit: async ({command, exitCode}) => {
-    if (path.basename(String(command && command.file || "")) !== "pi") return;
-    await git.finalizeGithubAutomationBranch(exitCode);
-    await workspace.syncUp({includeArchives: true});
+    const executable = path.basename(String(command && command.file || ""));
+    if (executable === "pi") {
+      await git.finalizeGithubAutomationBranch(exitCode);
+      await workspace.syncUp({includeArchives: true});
+      return;
+    }
+    if (executable === "codex") {
+      await workspace.syncUp({includeArchives: true});
+    }
   },
 });
 
@@ -301,9 +309,16 @@ workspace.ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
-      await workspace.synchronizePiAuth({materialize: true});
+      if (config.terminalKind === "pi") {
+        await workspace.synchronizePiAuth({materialize: true});
+      }
       await git.prepareGithubAutomationBranch();
-      await pi.seedDefaultRuntimeSkills();
+      if (config.terminalKind === "pi") {
+        await pi.seedDefaultRuntimeSkills();
+      }
+      if (config.terminalKind === "codex") {
+        await codex.seedDefaultWorkspaceFiles();
+      }
     })
     .then(() => {
       startSyncLoop();

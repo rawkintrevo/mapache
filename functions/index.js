@@ -49,6 +49,8 @@ const {
   requireWorkspace,
 } = require("./workspace.service");
 const {
+  codexHomeDir,
+  codexHomeStoragePrefix,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,
@@ -239,6 +241,9 @@ async function createSession(uid, workspaceId, payload) {
     piSessionStoragePrefix: piSessionStoragePrefix(workspace.storagePrefix, sessionRef.id),
     piSessionJsonlPath: null,
     piSessionJsonlRelativePath: null,
+    codexHomeDir: runnerImage.terminalKind === "codex" ? codexHomeDir(sessionRef.id) : "",
+    codexHomeStorageBucket: runnerImage.terminalKind === "codex" ? (workspace.bucket || DEFAULT_BUCKET) : "",
+    codexHomeStoragePrefix: runnerImage.terminalKind === "codex" ? codexHomeStoragePrefix(workspace.storagePrefix, sessionRef.id) : "",
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
     status: runnerImage.canProvision ? "provisioning" : "needs_image",
