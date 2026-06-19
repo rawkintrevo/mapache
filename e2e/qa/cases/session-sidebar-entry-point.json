@@ -1,0 +1,15 @@
+{
+  "id": "session.sidebar-entry-point",
+  "title": "Single sidebar session creation entry point",
+  "description": "Verify an active workspace row has no create-session action and the Sessions section retains the only create-session button.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.sidebar-entry-point",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-session-entry-{{timestamp}}"}},
+    {"assert": "accessible-button-count", "name": "Create session", "expectedCount": 1},
+    {"assert": "accessible-button-absent", "nameIncludes": "Create session in"},
+    {"capture": "screenshot", "fileName": "single-session-entry-point.png"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

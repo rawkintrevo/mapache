@@ -80,7 +80,6 @@ export function LeftDrawer({
             selectedWorkspaceId={state.selectedWorkspaceId}
             workspaces={state.workspaces}
             onDeleteWorkspace={onDeleteWorkspace}
-            onOpenSessionModal={onOpenSessionModal}
             onSelectWorkspace={onSelectWorkspace}
           />
         </DrawerSection>
