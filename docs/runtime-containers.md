@@ -209,8 +209,13 @@ When preview is enabled, the runner exposes:
 - `GET /preview/logs/stream` for server-sent browser console log events.
 - `POST /preview/logs` for the injected browser logger.
 - `GET /preview/*` for static files under `/workspace/build` with SPA fallback to `index.html`.
+- `POST /preview/share` for backend-only static preview export to Cloud Storage. This route requires the runner shutdown token and is not available through browser preview access.
 
 The `pi-web` static preview serves generated output from `/workspace/build`. The seeded `mapache-preview-build` skill instructs agents to emit browser-loadable output there and to configure relative asset bases, such as Vite's `base: "./"`, so bundled assets resolve correctly under `/preview/`.
+
+Share Preview uses the same static preview root. The runner reads the active preview config, accepts only static mode, requires `/workspace/build/index.html` or the configured static root's `index.html`, skips symlinks, and uploads regular files under that root to the storage prefix supplied by the authenticated API. The V1 export is bounded to 1000 files and 100 MiB. It does not export proxy-mode upstream responses, the full workspace, hidden session state, auth material, environment variables, or archive-backed internal directories outside the static root.
+
+Public shared previews are served by the Cloud Functions API from `publicPreviews/{token}` metadata and Cloud Storage objects. Preview tokens are unguessable and expire after 30 days; expired previews return HTTP 410. There is not yet a dedicated garbage-collection job for expired preview objects, so storage cleanup is a maintenance follow-up if preview volume grows.
 
 HTML responses from the static preview receive a small development logger script when `PREVIEW_INJECT_LOGGER=true`. It forwards `console.log`, `console.info`, `console.warn`, `console.error`, `window.onerror`, and unhandled promise rejections to the runner log buffer. QA agents can combine these logs with Playwright screenshots and interaction checks without needing to scrape the terminal.
 

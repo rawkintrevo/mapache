@@ -14,6 +14,7 @@ export function WorkspacePanel({
   onPushGit,
   onResizeSession,
   onRestartSession,
+  onShareSessionPreview,
   onSelectSession,
   onStageGitPath,
   onUnstageGitPath,
@@ -38,6 +39,7 @@ export function WorkspacePanel({
           onPushGit={onPushGit}
           onResizeSession={onResizeSession}
           onRestartSession={onRestartSession}
+          onShareSessionPreview={onShareSessionPreview}
           onStageGitPath={onStageGitPath}
           onUnstageGitPath={onUnstageGitPath}
           onUpdateGitCommitMessage={onUpdateGitCommitMessage}

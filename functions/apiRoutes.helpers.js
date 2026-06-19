@@ -19,6 +19,13 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "qa" && parts[1] === "custom-token") {
     return {name: "qaCustomToken"};
   }
+  if (parts.length >= 2 && parts[0] === "public-previews") {
+    return {
+      name: "publicPreview",
+      token: parts[1],
+      path: parts.slice(2).join("/"),
+    };
+  }
   if (parts.length === 1 && parts[0] === "pi-auth") return {name: "piAuth"};
   if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
     return {name: "piAuthProvider", provider: parts[2]};
@@ -60,6 +67,7 @@ function routeRequest(path) {
     ["restart", "restartSession"],
     ["stop", "stopSession"],
     ["access-url", "sessionAccess"],
+    ["share-preview", "sessionSharePreview"],
     ["pi-auth-selection", "sessionPiAuthSelection"],
     ["git-status", "gitStatus"],
     ["git-pull", "gitPull"],
@@ -138,6 +146,7 @@ const ROUTE_METHODS = Object.freeze({
   restartSession: ["POST"],
   stopSession: ["POST"],
   sessionAccess: ["POST"],
+  sessionSharePreview: ["POST"],
   sessionPiAuthSelection: ["POST"],
   gitStatus: ["GET"],
   gitPull: ["POST"],
@@ -168,6 +177,7 @@ function routeRequiresAuth(route, method) {
   const normalizedMethod = String(method || "").toUpperCase();
   if (normalizedMethod === "OPTIONS") return false;
   if (normalizedMethod === "POST" && route && route.name === "qaCustomToken") return false;
+  if (normalizedMethod === "GET" && route && route.name === "publicPreview") return false;
   return !(normalizedMethod === "GET" && route && route.name === "githubCallback");
 }
 

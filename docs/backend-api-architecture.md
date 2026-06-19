@@ -36,7 +36,9 @@ Session creation writes a Firestore session record, resolves the curated runner 
 
 Admin user summaries reuse the same usage rollups as `/api/me`, but return cost estimates in dollars for lifetime and trailing-30-day windows. Whitelist toggles update `appConfig/access`, preferring `allowedEmails` when the target user has an email and `allowedUids` otherwise.
 
-Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, Pi skills, Pi package operations, preview/access URLs, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
+Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, Pi skills, Pi package operations, preview/access URLs, share-preview export, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
+
+Website sessions with preview capability can create a public share preview through `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/share-preview`. The API verifies workspace/session ownership, requires a running preview-capable session, generates an unguessable token, asks the runner to upload only the configured static preview root, and stores metadata in `publicPreviews/{token}`. Public reads use unauthenticated `GET /api/public-previews/{token}/...`, which serves objects from the recorded Cloud Storage prefix with SPA fallback to `index.html`. These public routes do not expose source files, session runner URLs, browser-access tokens, shutdown tokens, environment variables, or workspace storage prefixes.
 
 GitHub connector account routes live under `/api/github/**` and are implemented in `functions/github.service.js`. `GET /api/github/connection` returns safe connection metadata from `githubUsers/{uid}` and installation docs without token material. `GET /api/github/repos` refreshes the connected repository view through short-lived installation tokens. `POST /api/github/disconnect` performs a soft disconnect by marking the user connection disconnected and installation docs removed; it does not delete workspace source metadata or revoke/delete any secret material.
 
@@ -47,6 +49,7 @@ GitHub connector account routes live under `/api/github/**` and are implemented 
 - The backend, not the frontend, is authoritative for runner image selection and GitHub workspace concurrency guards.
 - Cloud Functions and session runners use separate service accounts.
 - Do not write secret values to Firestore, Cloud Storage, logs, workspace files, or browser state.
+- Public preview documents may identify owner/workspace/session ids for maintenance, but public preview responses must only serve files copied from the static preview output prefix.
 - Route handlers should remain small; move cohesive domain behavior into service/helper modules as areas are touched.
 
 ## Verification

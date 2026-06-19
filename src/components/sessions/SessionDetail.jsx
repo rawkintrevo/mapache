@@ -1,5 +1,5 @@
 import "./SessionDetail.css";
-import {RotateCcw} from "lucide-react";
+import {Copy, ExternalLink, Mail, RotateCcw, Share2, UploadCloud} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
@@ -24,6 +24,7 @@ export function SessionDetail({
   onPushGit,
   onResizeSession,
   onRestartSession,
+  onShareSessionPreview,
   onStageGitPath,
   onUnstageGitPath,
   onUpdateGitCommitMessage,
@@ -32,6 +33,8 @@ export function SessionDetail({
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [accessUrls, setAccessUrls] = useState(null);
   const [accessError, setAccessError] = useState("");
+  const [shareState, setShareState] = useState({loading: false, error: "", preview: null, copied: false});
+  const [publishOpen, setPublishOpen] = useState(false);
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
@@ -59,6 +62,11 @@ export function SessionDetail({
     };
   }, [workspaceId, session.id, session.serviceUrl, onGetSessionAccessUrls]);
 
+  useEffect(() => {
+    setShareState({loading: false, error: "", preview: null, copied: false});
+    setPublishOpen(false);
+  }, [workspaceId, session.id]);
+
   const handleResize = () => {
     const form = formRef.current;
     if (!form) return;
@@ -67,6 +75,24 @@ export function SessionDetail({
       cpu: formData.get("resizeCpu"),
       memory: formData.get("resizeMemory"),
     });
+  };
+
+  const handleSharePreview = async () => {
+    if (!workspaceId || !session.id || !onShareSessionPreview) return;
+    setShareState((current) => ({...current, loading: true, error: "", copied: false}));
+    try {
+      const preview = await onShareSessionPreview(workspaceId, session.id);
+      setShareState({loading: false, error: "", preview, copied: false});
+    } catch (error) {
+      setShareState({loading: false, error: error.message || "preview_share_failed", preview: null, copied: false});
+    }
+  };
+
+  const handleCopyPreviewUrl = async () => {
+    const url = shareState.preview?.publicUrl;
+    if (!url) return;
+    await navigator.clipboard.writeText(url);
+    setShareState((current) => ({...current, copied: true}));
   };
 
   return (
@@ -141,6 +167,22 @@ export function SessionDetail({
         </label>
         <div className="session-actions">
           <Button disabled={busy} onClick={handleResize}>Resize</Button>
+          {capabilities.preview ? (
+            <>
+              <Button
+                disabled={busy || !hasRunnerUrl || shareState.loading}
+                variant="secondary"
+                onClick={handleSharePreview}
+              >
+                <Share2 aria-hidden="true" />
+                {shareState.loading ? "Sharing..." : "Share Preview"}
+              </Button>
+              <Button variant="secondary" onClick={() => setPublishOpen((open) => !open)}>
+                <UploadCloud aria-hidden="true" />
+                Publish
+              </Button>
+            </>
+          ) : null}
           <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
             <RotateCcw aria-hidden="true" />
             Restart
@@ -148,6 +190,44 @@ export function SessionDetail({
 
         </div>
       </form>
+      {capabilities.preview ? (
+        <div className="preview-share-panel" aria-live="polite">
+          {shareState.error ? (
+            <p className="preview-share-error">{friendlyPreviewShareError(shareState.error)}</p>
+          ) : null}
+          {shareState.preview?.publicUrl ? (
+            <div className="preview-url-row">
+              <div>
+                <span>Public preview</span>
+                <a href={shareState.preview.publicUrl} rel="noreferrer" target="_blank">
+                  {shareState.preview.publicUrl}
+                </a>
+              </div>
+              <Button aria-label="Copy public preview URL" variant="secondary" onClick={handleCopyPreviewUrl}>
+                <Copy aria-hidden="true" />
+                {shareState.copied ? "Copied" : "Copy"}
+              </Button>
+              <Button
+                aria-label="Open public preview"
+                variant="secondary"
+                onClick={() => window.open(shareState.preview.publicUrl, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink aria-hidden="true" />
+                Open
+              </Button>
+            </div>
+          ) : null}
+          {publishOpen ? (
+            <div className="publish-panel">
+              <p>Automated publishing is not available yet.</p>
+              <a href="mailto:trevor@ata.systems">
+                <Mail aria-hidden="true" />
+                Contact trevor@ata.systems for help publishing your website.
+              </a>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {showGitStatus ? (
         <GitStatusPanel
           busy={busy}
@@ -164,4 +244,15 @@ export function SessionDetail({
       ) : null}
     </div>
   );
+}
+
+function friendlyPreviewShareError(message) {
+  if (message === "preview_static_build_not_ready") return "Build the static website into /workspace/build before sharing.";
+  if (message === "preview_share_requires_static_build") return "Share Preview only supports static build output.";
+  if (message === "session_not_running") return "Start the session before sharing a preview.";
+  if (message === "runner_preview_share_unavailable") return "Preview sharing is temporarily unavailable.";
+  if (message === "session_preview_not_supported") return "This session does not support website previews.";
+  if (message === "preview_static_build_too_large") return "The static build is too large to share as a preview.";
+  if (message === "preview_static_build_too_many_files") return "The static build has too many files to share as a preview.";
+  return message || "Preview sharing failed.";
 }

@@ -77,6 +77,7 @@ export function AppShell(props) {
             onPushGit={git.pushGit}
             onResizeSession={sessions.resizeSession}
             onRestartSession={sessions.restartSession}
+            onShareSessionPreview={sessions.shareSessionPreview}
             onSelectSession={sessions.selectSession}
             onStageGitPath={git.stageGitPath}
             onUnstageGitPath={git.unstageGitPath}

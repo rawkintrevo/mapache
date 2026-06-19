@@ -105,6 +105,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/access-url`,
         {method: "POST", body: {}},
     ),
+    shareSessionPreview: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/share-preview`,
+        {method: "POST", body: {}},
+    ),
     saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-auth-selection`,

@@ -8,10 +8,12 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const storage = admin.storage();
 const auth = new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
 
 module.exports = {
   admin,
   auth,
   db,
+  storage,
 };

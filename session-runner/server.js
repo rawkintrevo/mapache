@@ -80,6 +80,20 @@ app.get("/capabilities", requireBrowserAccess, (req, res) => {
 });
 
 if (config.previewEnabled) {
+  app.post(`${config.previewBasePath}/share`, async (req, res) => {
+    if (!hasRunnerAccess(req)) {
+      res.status(404).json({error: "not_found"});
+      return;
+    }
+
+    try {
+      res.json(await preview.shareStaticBuild(storage, req.body || {}));
+    } catch (error) {
+      console.error("preview share failed", error);
+      res.status(error.status || 500).json({error: error.publicMessage || "preview_share_failed"});
+    }
+  });
+
   app.use(config.previewBasePath, requireBrowserAccess);
 
   app.get(`${config.previewBasePath}/status`, async (req, res) => {
