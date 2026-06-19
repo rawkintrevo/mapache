@@ -6,6 +6,7 @@ const {spawn} = require("child_process");
 const {pipeline} = require("stream/promises");
 const {collectStderr, waitForChild} = require("./processes");
 const {pathExists} = require("./utils");
+const {legacyInternalStoragePathVariants} = require("./runtimePaths");
 
 function archiveRemotePath(config, fileName) {
   if (!config.prefix) return "";
@@ -17,6 +18,34 @@ function homeArchiveRemotePath(config) {
   return `${config.homeStoragePrefix}/${config.homeArchiveName || "home.tar.gz"}`.replace(/\/+/g, "/");
 }
 
+function legacyArchiveRemotePaths(config, remotePath) {
+  if (!remotePath) return [];
+  const archives = [
+    ...legacyInternalStoragePathVariants(remotePath).map((path) => ({
+      bucketName: config.bucketName,
+      remotePath: path,
+    })),
+  ];
+  if (remotePath.startsWith(`${config.prefix}/${config.archiveStorageDir}/`)) {
+    for (const legacyArchiveStorageDir of config.legacyArchiveStorageDirs || []) {
+      archives.push({
+        bucketName: config.bucketName,
+        remotePath: `${config.prefix}/${legacyArchiveStorageDir}/${remotePath.split("/").pop()}`
+            .replace(/\/+/g, "/"),
+      });
+    }
+  }
+  return archives.filter((archive, index, list) => {
+    if (!archive.remotePath || archive.remotePath === remotePath) {
+      return false;
+    }
+    return list.findIndex((candidate) =>
+      candidate.bucketName === archive.bucketName &&
+        candidate.remotePath === archive.remotePath,
+    ) === index;
+  });
+}
+
 function createArchiveSyncTargets({config, git}) {
   const targets = [
     {
@@ -24,6 +53,7 @@ function createArchiveSyncTargets({config, git}) {
       mode: "workspaceNodeModules",
       localPath: config.workspaceDir,
       remotePath: archiveRemotePath(config, "workspace-node_modules.tar.gz"),
+      fallbackArchives: legacyArchiveRemotePaths(config, archiveRemotePath(config, "workspace-node_modules.tar.gz")),
       ensureLocalPath: true,
       restoreOnStartup: true,
     },
@@ -32,6 +62,7 @@ function createArchiveSyncTargets({config, git}) {
       mode: "directory",
       localPath: path.join(config.workspaceDir, ".pi", "npm"),
       remotePath: archiveRemotePath(config, "workspace-pi-npm.tar.gz"),
+      fallbackArchives: legacyArchiveRemotePaths(config, archiveRemotePath(config, "workspace-pi-npm.tar.gz")),
       ensureLocalPath: false,
       restoreOnStartup: true,
     },
@@ -40,6 +71,7 @@ function createArchiveSyncTargets({config, git}) {
       mode: "directory",
       localPath: path.join(config.workspaceDir, ".pi", "git"),
       remotePath: archiveRemotePath(config, "workspace-pi-git.tar.gz"),
+      fallbackArchives: legacyArchiveRemotePaths(config, archiveRemotePath(config, "workspace-pi-git.tar.gz")),
       ensureLocalPath: false,
       restoreOnStartup: true,
     },
@@ -49,6 +81,10 @@ function createArchiveSyncTargets({config, git}) {
       localPath: config.homeDir,
       bucketName: config.homeStorageBucketName,
       remotePath: homeArchiveRemotePath(config),
+      fallbackArchives: legacyArchiveRemotePaths({
+        ...config,
+        bucketName: config.homeStorageBucketName,
+      }, homeArchiveRemotePath(config)),
       ensureLocalPath: true,
       restoreOnStartup: config.homeSyncMode !== "ephemeral",
     },
@@ -61,6 +97,13 @@ function createArchiveSyncTargets({config, git}) {
       localPath: config.codexHomeDir,
       bucketName: config.codexHomeStorageBucketName,
       remotePath: `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/"),
+      fallbackArchives: legacyArchiveRemotePaths(
+          {
+            ...config,
+            bucketName: config.codexHomeStorageBucketName,
+          },
+          `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/"),
+      ),
       ensureLocalPath: true,
       restoreOnStartup: true,
     });
@@ -72,6 +115,7 @@ function createArchiveSyncTargets({config, git}) {
       mode: "workspaceGit",
       localPath: path.join(config.workspaceDir, ".git"),
       remotePath: archiveRemotePath(config, "workspace-git.tar.gz"),
+      fallbackArchives: legacyArchiveRemotePaths(config, archiveRemotePath(config, "workspace-git.tar.gz")),
       ensureLocalPath: false,
       restoreOnStartup: true,
     });

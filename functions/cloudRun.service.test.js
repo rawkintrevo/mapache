@@ -60,11 +60,11 @@ assert.deepStrictEqual(resourceLimits({cpu: "2", memory: "512Mi"}), {
 });
 
 assert.strictEqual(codexHomeDir("session-1"), "/tmp/mapache-codex/session-1");
-assert.strictEqual(codexHomeStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapahce-internal/sessions/session-1/codex-home");
-assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapahce-internal/home");
+assert.strictEqual(codexHomeStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/codex-home");
+assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapache-internal/home");
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
-assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapahce-internal/sessions/session-1/pi-session");
+assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/pi-session");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
 
@@ -100,14 +100,14 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
     browserAccessTokenSecret: "browser-secret",
     homeDir: "/root",
     homeStorageBucket: "bucket-1",
-    homeStoragePrefix: "workspaces/uid-1/demo/.mapahce-internal/home",
+    homeStoragePrefix: "workspaces/uid-1/demo/.mapache-internal/home",
     workspaceEnv: {FOO: "workspace", SHARED: "workspace"},
     sessionEnv: {SHARED: "session"},
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   }));
   assert.strictEqual(shellEnv.FIREBASE_PROJECT_ID, "pi-agents-cloud");
   assert.strictEqual(shellEnv.HOME, "/root");
-  assert.strictEqual(shellEnv.HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapahce-internal/home");
+  assert.strictEqual(shellEnv.HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/home");
   assert.strictEqual(shellEnv.FOO, "workspace");
   assert.strictEqual(shellEnv.SHARED, "session");
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
@@ -140,7 +140,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
   }));
   assert.strictEqual(codexEnv.TERMINAL_COMMAND, "codex");
   assert.strictEqual(codexEnv.CODEX_HOME, "/tmp/mapache-codex/session-1");
-  assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapahce-internal/sessions/session-1/codex-home");
+  assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/sessions/session-1/codex-home");
 
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",

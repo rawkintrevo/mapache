@@ -124,7 +124,7 @@ Illustrative shape:
       "dist/",
       "build/",
       ".next/",
-      ".mapahce-internal/"
+      ".mapache-internal/"
     ]
   },
   createdAt: Timestamp,
@@ -278,7 +278,7 @@ That sync should:
 - include ordinary project files that affect the working tree
 - exclude `.git/`
 - exclude existing runtime cache paths such as `node_modules/` and `/root/.pi`
-- exclude internal storage objects under `.mapahce-internal/`
+- exclude internal storage objects under `.mapache-internal/`
 - remove or invalidate stale cached files after local deletion
 
 This gives the app a reasonable recovery path for uncommitted file edits while still letting Git own repository semantics.

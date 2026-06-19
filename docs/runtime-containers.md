@@ -362,7 +362,7 @@ The backend mints those values only while provisioning or restarting the runner.
 
 Blank workspaces continue using the existing storage-oriented env setup, with `WORKSPACE_SOURCE_TYPE=blank` so the runner can detect mode without guessing.
 
-Workspace records also carry an app-owned `syncPolicy` field. Blank workspaces default to `mode: "blank"` with no exclusions. GitHub workspaces default to `mode: "github-cache"` and exclude `.git/`, `node_modules/`, build outputs, `.next/`, and `.mapahce-internal/` paths from normal file sync.
+Workspace records also carry an app-owned `syncPolicy` field. Blank workspaces default to `mode: "blank"` with no exclusions. GitHub workspaces default to `mode: "github-cache"` and exclude `.git/`, `node_modules/`, build outputs, `.next/`, and `.mapache-internal/` paths from normal file sync.
 
 The backend passes that policy into the runner with:
 
@@ -371,7 +371,9 @@ The backend passes that policy into the runner with:
 
 Normal upload/download sync now applies base exclusions for archive-backed/internal paths plus any `syncPolicy.exclude` entries. That keeps blank workspace behavior effectively unchanged while letting GitHub workspaces skip extra cached paths during ordinary file sync. Directory marker objects still apply for non-excluded directories.
 
-Workspace records also carry an app-owned `homePolicy` field. New workspaces default to a persistent `$HOME` rooted at `/root`, archived under `{workspace.storagePrefix}/.mapahce-internal/home/home.tar.gz`. The workspace owns this materialized home tree; sessions receive a resolved copy on creation and restore/archive that same tree through `HOME_STORAGE_BUCKET`, `HOME_STORAGE_PREFIX`, `HOME_SYNC_MODE`, and `HOME_ARCHIVE_NAME`. The archive is runtime state, not workspace content: Files API routes and sidebar listings hide `.mapahce-internal/` objects.
+Workspace records also carry an app-owned `homePolicy` field. New workspaces default to a persistent `$HOME` rooted at `/root`, archived under `{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz`. The workspace owns this materialized home tree; sessions receive a resolved copy on creation and restore/archive that same tree through `HOME_STORAGE_BUCKET`, `HOME_STORAGE_PREFIX`, `HOME_SYNC_MODE`, and `HOME_ARCHIVE_NAME`. The archive is runtime state, not workspace content: Files API routes and sidebar listings hide `.mapache-internal/` objects.
+
+As of 2026-06-19, new writes use canonical `.mapache-internal` and `.mapache-directory` names. The backend and runner still read the historical `.mapahce-internal` and `.mapahce-directory` paths so existing workspaces, archive objects, and empty-directory markers continue restoring correctly. Client file APIs, sync filters, and Git-path validation must treat both spellings as hidden internal/runtime state.
 
 Workspace and session records may also carry non-secret env maps. During Cloud Run provisioning, the backend merges them as image defaults, then workspace env, then session env, then Mapache-reserved runtime env. Session env can override workspace env, but neither can set reserved variables such as `HOME`, `WORKSPACE_DIR`, `SESSION_ID`, storage prefixes, runner tokens, terminal command vars, or preview/system vars.
 
@@ -384,7 +386,7 @@ This behavior now needs to be read together with workspace source mode:
 - For `blank` workspaces, Cloud Storage remains the durable source of truth.
 - For `github` workspaces, Cloud Storage is a cache and resumability layer for the last active local state. GitHub is the durable repository source of truth.
 
-Cloud Storage does not store real directories, so the runner uploads a `.mapahce-directory` marker object inside each synced directory. The Files API maps those marker objects to `type: "directory"` entries and filters them out of the displayed file list. Existing Cloud Run sessions need a new runner revision before empty directories can appear in the sidebar.
+Cloud Storage does not store real directories, so the runner uploads a `.mapache-directory` marker object inside each synced directory. The Files API maps those marker objects to `type: "directory"` entries and filters them out of the displayed file list. The runtime still recognizes the legacy `.mapahce-directory` marker while old objects remain in storage. Existing Cloud Run sessions need a new runner revision before empty directories can appear in the sidebar.
 
 High-cardinality runtime directories are not synced as individual Cloud Storage objects:
 
@@ -394,14 +396,14 @@ High-cardinality runtime directories are not synced as individual Cloud Storage 
 
 The Pi extension manager extends this model to workspace-local Pi package cache directories:
 
-- `/workspace/.pi/npm` archived as `.mapahce-internal/archives/workspace-pi-npm.tar.gz`
-- `/workspace/.pi/git` archived as `.mapahce-internal/archives/workspace-pi-git.tar.gz`
+- `/workspace/.pi/npm` archived as `.mapache-internal/archives/workspace-pi-npm.tar.gz`
+- `/workspace/.pi/git` archived as `.mapache-internal/archives/workspace-pi-git.tar.gz`
 
-The portable package declaration file, `/workspace/.pi/settings.json`, remains normal workspace file state. Package install directories are runtime cache state and are archived under `.mapahce-internal/archives/` instead of uploaded object-by-object. Normal workspace sync skips `.pi/npm/` and `.pi/git/`, while the Files API and editor routes hide those cache paths and the internal archive objects.
+The portable package declaration file, `/workspace/.pi/settings.json`, remains normal workspace file state. Package install directories are runtime cache state and are archived under `.mapache-internal/archives/` instead of uploaded object-by-object. Normal workspace sync skips `.pi/npm/` and `.pi/git/`, while the Files API and editor routes hide those cache paths and the internal archive objects.
 
 The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted.
 
-`/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapahce-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
+`/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapache-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
 The `$HOME` archive includes Pi auth, settings, package caches, shell state, and per-session Pi conversation directories. Treat the archive path as sensitive runtime state because it can contain credentials and command history. It lives under the hidden workspace internal prefix, and client file APIs must not expose it.
 
@@ -543,8 +545,8 @@ firebase deploy --only functions --project pi-agents-cloud
 Expected package-manager write locations:
 
 - Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
-- Workspace package cache archives: `{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
-- Workspace-owned home archive: `{workspace.storagePrefix}/.mapahce-internal/home/home.tar.gz`
+- Workspace package cache archives: `{workspace.storagePrefix}/.mapache-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
+- Workspace-owned home archive: `{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz`
 - User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
 
 ## Design Decisions

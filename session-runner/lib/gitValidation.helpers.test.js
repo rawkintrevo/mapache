@@ -23,7 +23,9 @@ test("normalizes git action paths and rejects internal or empty targets", () => 
 
   assertMessage(() => normalizeGitActionPaths([]), "missing_paths");
   assertMessage(() => normalizeGitActionPaths(["/"]), "invalid_git_path");
+  assertMessage(() => normalizeGitActionPaths([".mapache-internal/log.json"]), "invalid_git_path");
   assertMessage(() => normalizeGitActionPaths([".mapahce-internal/log.json"]), "invalid_git_path");
+  assertMessage(() => normalizeGitActionPaths(["src/.mapache-directory/file"]), "invalid_git_path");
   assertMessage(() => normalizeGitActionPaths(["src/.mapahce-directory/file"]), "invalid_git_path");
 });
 

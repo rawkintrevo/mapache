@@ -40,7 +40,7 @@ assert.deepStrictEqual(normalizeWorkspaceSyncPolicy({type: "github"}), {
     "dist/",
     "build/",
     ".next/",
-    ".mapahce-internal/",
+    ".mapache-internal/",
   ],
 });
 
@@ -51,7 +51,7 @@ assert.deepStrictEqual(normalizeWorkspaceHomePolicy({
   mode: "persistent",
   path: "/root",
   bucket: "bucket-1",
-  storagePrefix: "workspaces/u/demo/.mapahce-internal/home",
+  storagePrefix: "workspaces/u/demo/.mapache-internal/home",
   archiveName: "home.tar.gz",
 });
 assert.deepStrictEqual(normalizeWorkspaceHomePolicy({
@@ -71,9 +71,11 @@ assert.throws(() => normalizeWorkspaceHomePolicy({
 
 assert.strictEqual(normalizeWorkspaceFilePath("/src/App.jsx"), "src/App.jsx");
 assert.throws(() => normalizeWorkspaceFilePath("../secret"), /invalid_file_path/);
+assert.throws(() => normalizeWorkspaceFilePath(".mapache-directory"), /invalid_file_path/);
 assert.throws(() => normalizeWorkspaceFilePath(".mapahce-directory"), /invalid_file_path/);
 assert.throws(() => normalizeWorkspaceFilePath(".pi/npm/package.json"), /invalid_file_path/);
 
+assert.strictEqual(isHiddenWorkspaceFilePath(".mapache-internal/archives/x"), true);
 assert.strictEqual(isHiddenWorkspaceFilePath(".mapahce-internal/archives/x"), true);
 assert.strictEqual(isHiddenWorkspaceFilePath(".pi/git/repo"), true);
 assert.strictEqual(isHiddenWorkspaceFilePath(".pi/skills/demo/SKILL.md"), false);
@@ -98,8 +100,22 @@ assert.deepStrictEqual(storageFileToClientFile({
   size: 0,
   updatedAt: "",
 });
+assert.deepStrictEqual(storageFileToClientFile({
+  name: "workspaces/u/w/src/.mapache-directory",
+  metadata: {},
+}, "workspaces/u/w/"), {
+  path: "src",
+  name: "src",
+  type: "directory",
+  size: 0,
+  updatedAt: "",
+});
 assert.strictEqual(storageFileToClientFile({
   name: "workspaces/u/w/.mapahce-internal/archives/x",
+  metadata: {},
+}, "workspaces/u/w/"), null);
+assert.strictEqual(storageFileToClientFile({
+  name: "workspaces/u/w/.mapache-internal/archives/x",
   metadata: {},
 }, "workspaces/u/w/"), null);
 
