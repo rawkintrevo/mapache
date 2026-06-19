@@ -68,6 +68,9 @@ jobs:
           printf '%s\n' \
             'FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com' \
             'SESSION_RUNNER_SERVICE_ACCOUNT=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com' \
+            'QA_LOGIN_UID=${{ vars.QA_LOGIN_UID }}' \
+            'QA_LOGIN_EMAIL=${{ vars.QA_LOGIN_EMAIL }}' \
+            'QA_LOGIN_DISPLAY_NAME=${{ vars.QA_LOGIN_DISPLAY_NAME }}' \
             > functions/.env.pi-agents-cloud
 
       - name: Deploy Firebase production

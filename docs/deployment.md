@@ -31,7 +31,7 @@ gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-
 
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account.
 
-GitHub Actions preview and production workflows install root, `community/`, `functions/`, and `session-runner/` dependencies, run the fast checks, build the app/community output, and deploy to Firebase. Production writes `functions/.env.pi-agents-cloud` with the expected service account params before deploy.
+GitHub Actions preview and production workflows install root, `community/`, `functions/`, and `session-runner/` dependencies, run the fast checks, build the app/community output, and deploy to Firebase. Production writes `functions/.env.pi-agents-cloud` before deploy with the expected service account params plus `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and `QA_LOGIN_DISPLAY_NAME` from GitHub production environment variables.
 
 Browser QA login uses a Functions secret plus configured QA account params. Configure `QA_LOGIN_SECRET` as a Firebase Functions secret, and set `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and optionally `QA_LOGIN_DISPLAY_NAME` for the deployed function. The QA account must also be present in `appConfig/access` when the app allowlist is enabled. The API service account needs `roles/firebaseauth.admin` so it can create or update the controlled QA Firebase Auth user before minting the custom token.
 
