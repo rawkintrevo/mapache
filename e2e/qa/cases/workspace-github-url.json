@@ -14,7 +14,7 @@
       "useScript": "scripts/create-github-url-workspace.json",
       "parameters": {
         "workspaceName": "qa-github-{{timestamp}}",
-        "repoUrl": "https://github.com/rawkintrevo/mapahce",
+        "repoUrl": "https://github.com/rawkintrevo/mapache",
         "branch": ""
       }
     },

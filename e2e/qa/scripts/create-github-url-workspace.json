@@ -3,7 +3,7 @@
   "title": "Create a GitHub workspace from a repository URL",
   "parameters": {
     "workspaceName": "qa-github-{{timestamp}}",
-    "repoUrl": "https://github.com/rawkintrevo/mapahce",
+    "repoUrl": "https://github.com/rawkintrevo/mapache",
     "branch": ""
   },
   "actions": [
