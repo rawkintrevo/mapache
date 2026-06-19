@@ -23,7 +23,7 @@
     },
     {
       "type": "waitForSnapshotText",
-      "text": "Create a workspace",
+      "text": "Navigation",
       "timeoutMs": 15000
     }
   ],
@@ -31,7 +31,7 @@
     "POST /api/qa/custom-token returns 200",
     "Firebase signInWithCustomToken request returns 200",
     "GET /api/me returns 200",
-    "App shell shows the QA user menu"
+    "App shell shows the QA user menu and Navigation drawer"
   ],
   "failureSignals": [
     "Configuration error",
