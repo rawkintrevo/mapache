@@ -14,6 +14,17 @@ contains the language runtime and tools the project needs. Heavier images are
 useful for agent stacks with preinstalled CLIs, but they take longer to build
 and maintain.
 
+| Image | Terminal or agent mode | Preview support | Function or tool support | Recommended use case |
+| --- | --- | --- | --- | --- |
+| `pi-basic` | Pi agent terminal | No browser preview | Standard terminal tools, no function runner | Agent-led terminal work that does not need a web preview. |
+| `pi-web` | Pi agent terminal | Browser preview and preview QA | Web preview plus function-capable tooling | Agent-led web app work where you need to inspect and test the running UI. |
+| `codex-basic` | Codex terminal | No browser preview | Standard terminal tools, no function runner | Code changes and command-line verification without a browser-served app. |
+| `codex-web` | Codex terminal | Browser preview and preview QA | Web preview plus function-capable tooling | Codex-driven frontend or full-stack work that needs a live browser preview. |
+
+Choose a `*-basic` image when terminal access is enough. Choose a `*-web` image
+when the project needs an in-browser preview, preview QA, or function-capable
+tooling.
+
 ## Start the Runner
 
 1. Select a workspace.
