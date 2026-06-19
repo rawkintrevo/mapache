@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     port: 5173,
     watch: {
-      ignored: ["**/community/build/**", "**/dist/**"],
+      ignored: ["**/community/build/**", "**/dist/**", "**/artifacts/**"],
     },
     proxy: {
       "/api": {

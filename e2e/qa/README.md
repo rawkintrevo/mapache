@@ -7,6 +7,8 @@ This directory stores opt-in browser QA definitions for Chrome DevTools-assisted
 - `scripts/`: Single reusable actions. Scripts should do one thing, such as sign in, open a drawer, create a workspace, or capture console/network evidence.
 - `cases/`: Ordered test cases. Cases compose scripts and may include other cases through `useCase`.
 
+Store run output under `artifacts/qa/`. The local Vite dev server ignores `artifacts/**`, so screenshots, network dumps, console logs, and result JSON files can be written there during a QA run without crashing the app under test.
+
 ## Case Format
 
 Cases are JSON manifests with stable IDs:
@@ -44,6 +46,8 @@ Common action types inside scripts:
 - `waitForSnapshotText` / `waitForNetwork`: Wait for a visible text or network status.
 
 Keep manifests deterministic. Do not put secrets in case or script files.
+
+Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted execution. Do not assume a standalone local headless Chrome or Playwright launch is available in every sandboxed environment.
 
 ## Initial Case Catalog
 
