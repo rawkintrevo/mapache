@@ -63,16 +63,16 @@ export function RightDrawer({
         onToggleDrawerSection={onToggleDrawerSection}
       />
       <SkillsPanel
-        piSkills={state.piSkills}
+        workspaceSkills={state.workspaceSkills}
         selectedSession={selectedSession}
         state={state}
-        onCancelPiSkillEdit={onCancelPiSkillEdit}
-        onDeletePiSkill={onDeletePiSkill}
-        onEditPiSkill={onEditPiSkill}
-        onRefreshPiSkills={onRefreshPiSkills}
-        onSavePiSkill={onSavePiSkill}
+        onCancelWorkspaceSkillEdit={onCancelPiSkillEdit}
+        onDeleteWorkspaceSkill={onDeletePiSkill}
+        onEditWorkspaceSkill={onEditPiSkill}
+        onRefreshWorkspaceSkills={onRefreshPiSkills}
+        onSaveWorkspaceSkill={onSavePiSkill}
         onToggleDrawerSection={onToggleDrawerSection}
-        onUpdatePiSkillForm={onUpdatePiSkillForm}
+        onUpdateWorkspaceSkillForm={onUpdatePiSkillForm}
       />
       <ExtensionsPanel
         piPackages={state.piPackages}

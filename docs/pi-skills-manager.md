@@ -1,22 +1,23 @@
-# Pi Skills Manager
+# Workspace Skills Manager
 
 ## Purpose
 
-This page owns the web surface for workspace-local Pi skills.
+This page owns the web surface for workspace-local skills across supported agent harnesses.
 
 ## Read When
 
-Read this before changing the Skills drawer, runner skill endpoints, Cloud Functions skill proxy routes, seeded runner skills, or `.pi/skills` sync behavior.
+Read this before changing the Skills drawer, runner skill endpoints, Cloud Functions skill proxy routes, seeded runner skills, or workspace skill sync behavior.
 
-Mapache exposes a web surface for workspace-local Pi skills.
+Mapache exposes a web surface for workspace-local skills.
 
-Pi discovers skills from Markdown files under `.pi/skills/`. The web manager writes each skill as:
+The web manager writes skills into the active harness's native workspace directory:
 
 ```text
 /workspace/.pi/skills/{skill-name}/SKILL.md
+/workspace/.agents/skills/{skill-name}/SKILL.md
 ```
 
-This matches Pi's skill discovery rules for directories containing `SKILL.md`, keeps skills as normal workspace files, and avoids any separate registry or code-level plugin registration.
+Pi uses `.pi/skills/{skill-name}/SKILL.md`. Codex uses `.agents/skills/{skill-name}/SKILL.md`. Both stay as normal workspace files instead of a separate registry or database.
 
 ## Behavior
 
@@ -24,23 +25,26 @@ This matches Pi's skill discovery rules for directories containing `SKILL.md`, k
 - Creating or editing a skill writes Markdown with required frontmatter:
   - `name`
   - `description`
-- Deleting a skill removes `.pi/skills/{skill-name}/SKILL.md` and its containing skill directory.
+- Deleting a skill removes the active harness's `{skills-root}/{skill-name}/SKILL.md` file and its containing skill directory.
 - Skill names follow Pi's documented rules: lowercase letters, numbers, and single hyphens.
 - Skill descriptions are required and capped at 1024 characters.
+- The drawer is available for Pi and Codex sessions. Shell-only sessions do not expose skill management.
 
-Pi scans skills at agent startup. If a Pi TUI is already running, users may need to restart Pi inside the terminal for newly saved skills to appear in the available-skills prompt and `/skill:name` command list.
+Pi scans skills at agent startup. Codex reads workspace skills from `.agents/skills`. If either harness is already running, users may need to restart that agent in the terminal before newly saved skills appear in its skill list.
 
 ## Runtime API
 
 The runner exposes protected skill endpoints with the same shutdown-token gate used by Git and package endpoints:
 
 ```text
-GET  /pi/skills
-POST /pi/skills
-POST /pi/skills/delete
+GET  /skills
+POST /skills
+POST /skills/delete
 ```
 
-The endpoints operate inside `/workspace`, then run normal workspace sync so `.pi/skills/**` is persisted to Cloud Storage as ordinary workspace files.
+The neutral routes pick the correct native workspace directory from `terminalKind`. Compatibility aliases remain available at `/pi/skills*` so older clients and mixed deploys keep working during rollout.
+
+The endpoints operate inside `/workspace`, then run normal workspace sync so skill files are persisted to Cloud Storage as ordinary workspace files.
 
 Skills do not use archive-backed sync. Unlike Pi packages, skills are small Markdown files and should remain visible in normal workspace file state.
 
@@ -82,12 +86,12 @@ The runner creates native files only when missing. User-edited files with the sa
 Cloud Functions proxies authenticated requests to the active runner:
 
 ```text
-GET  /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-skills
-POST /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-skills
-POST /api/workspaces/{workspaceId}/sessions/{sessionId}/pi-skills/delete
+GET  /api/workspaces/{workspaceId}/sessions/{sessionId}/skills
+POST /api/workspaces/{workspaceId}/sessions/{sessionId}/skills
+POST /api/workspaces/{workspaceId}/sessions/{sessionId}/skills/delete
 ```
 
-The backend verifies Firebase Auth, workspace ownership, session ownership, runner availability, and skill payload shape before proxying.
+The backend verifies Firebase Auth, workspace ownership, session ownership, runner availability, supported harness type, and skill payload shape before proxying. Compatibility aliases remain available at `/api/.../pi-skills*`.
 
 ## Security
 

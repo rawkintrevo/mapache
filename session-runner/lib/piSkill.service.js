@@ -12,17 +12,19 @@ const {
 } = require("./piValidation.helpers");
 
 function createPiSkillService({config, syncUp}) {
-  async function listWorkspacePiSkills() {
-    const skillsPath = path.join(config.workspaceDir, ".pi", "skills");
+  const harness = workspaceSkillHarness(config);
+
+  async function listWorkspaceSkills() {
+    const skillsPath = harness.skillsPath;
     const skills = [];
     const entries = await safeReadDir(skillsPath);
 
     for (const entry of entries) {
       const entryPath = path.join(skillsPath, entry.name);
-      if (entry.isFile() && entry.name.endsWith(".md")) {
+      if (harness.legacyFileSupport && entry.isFile() && entry.name.endsWith(".md")) {
         const content = await readSkillMarkdown(entryPath);
         skills.push(skillSummaryFromMarkdown(content, {
-          path: `.pi/skills/${entry.name}`,
+          path: `${harness.relativeSkillsPath}/${entry.name}`,
           kind: "file",
           editable: true,
           fallbackName: entry.name.replace(/\.md$/i, ""),
@@ -34,7 +36,7 @@ function createPiSkillService({config, syncUp}) {
         if (await pathExists(skillPath)) {
           const content = await readSkillMarkdown(skillPath);
           skills.push(skillSummaryFromMarkdown(content, {
-            path: `.pi/skills/${entry.name}/SKILL.md`,
+            path: `${harness.relativeSkillsPath}/${entry.name}/SKILL.md`,
             kind: "directory",
             editable: true,
             fallbackName: entry.name,
@@ -46,16 +48,21 @@ function createPiSkillService({config, syncUp}) {
     return {
       ok: true,
       scope: "workspace",
+      harness: harness.id,
+      harnessLabel: harness.label,
+      requiresRestart: true,
+      restartHint: harness.restartHint,
+      skillsRelativePath: harness.relativeSkillsPath,
       skillsPath,
       skills: skills.sort((left, right) => left.name.localeCompare(right.name)),
     };
   }
 
-  async function saveWorkspacePiSkill(body) {
+  async function saveWorkspaceSkill(body) {
     const name = normalizePiSkillName(body.name);
     const description = normalizePiSkillDescription(body.description);
     const instructions = normalizePiSkillContent(body.content || body.instructions || "");
-    const skillsPath = path.join(config.workspaceDir, ".pi", "skills");
+    const skillsPath = harness.skillsPath;
     const skillDir = path.join(skillsPath, name);
     const skillPath = path.join(skillDir, "SKILL.md");
     await fs.promises.mkdir(skillDir, {recursive: true});
@@ -65,24 +72,29 @@ function createPiSkillService({config, syncUp}) {
     return {
       ok: true,
       action: "save",
+      harness: harness.id,
+      harnessLabel: harness.label,
+      requiresRestart: true,
+      restartHint: harness.restartHint,
+      skillsRelativePath: harness.relativeSkillsPath,
       skill: skillSummaryFromMarkdown(markdown, {
-        path: `.pi/skills/${name}/SKILL.md`,
+        path: `${harness.relativeSkillsPath}/${name}/SKILL.md`,
         kind: "directory",
         editable: true,
         fallbackName: name,
       }),
-      skills: (await listWorkspacePiSkills()).skills,
+      skills: (await listWorkspaceSkills()).skills,
     };
   }
 
-  async function deleteWorkspacePiSkill(body) {
+  async function deleteWorkspaceSkill(body) {
     const name = normalizePiSkillName(body.name);
-    const skillsPath = path.join(config.workspaceDir, ".pi", "skills");
+    const skillsPath = harness.skillsPath;
     const skillDir = path.join(skillsPath, name);
     const skillPath = path.join(skillDir, "SKILL.md");
     if (!await pathExists(skillPath)) {
       const rootMdPath = path.join(skillsPath, `${name}.md`);
-      if (!await pathExists(rootMdPath)) {
+      if (!harness.legacyFileSupport || !await pathExists(rootMdPath)) {
         const error = new Error("skill_not_found");
         error.code = "skill_not_found";
         throw error;
@@ -95,15 +107,45 @@ function createPiSkillService({config, syncUp}) {
     return {
       ok: true,
       action: "delete",
+      harness: harness.id,
+      harnessLabel: harness.label,
+      requiresRestart: true,
+      restartHint: harness.restartHint,
+      skillsRelativePath: harness.relativeSkillsPath,
       name,
-      skills: (await listWorkspacePiSkills()).skills,
+      skills: (await listWorkspaceSkills()).skills,
     };
   }
 
   return {
-    deleteWorkspacePiSkill,
-    listWorkspacePiSkills,
-    saveWorkspacePiSkill,
+    deleteWorkspacePiSkill: deleteWorkspaceSkill,
+    deleteWorkspaceSkill,
+    listWorkspacePiSkills: listWorkspaceSkills,
+    listWorkspaceSkills,
+    saveWorkspacePiSkill: saveWorkspaceSkill,
+    saveWorkspaceSkill,
+  };
+}
+
+function workspaceSkillHarness(config = {}) {
+  const terminalKind = String(config.terminalKind || "").trim().toLowerCase();
+  if (terminalKind === "codex") {
+    return {
+      id: "codex",
+      label: "Codex",
+      relativeSkillsPath: ".agents/skills",
+      skillsPath: path.join(config.workspaceDir, ".agents", "skills"),
+      legacyFileSupport: false,
+      restartHint: "Restart Codex in the terminal if a running agent needs to rescan skills.",
+    };
+  }
+  return {
+    id: "pi",
+    label: "Pi",
+    relativeSkillsPath: ".pi/skills",
+    skillsPath: path.join(config.workspaceDir, ".pi", "skills"),
+    legacyFileSupport: true,
+    restartHint: "Restart Pi in the terminal if a running agent needs to rescan skills.",
   };
 }
 
@@ -120,4 +162,5 @@ async function readSkillMarkdown(skillPath) {
 module.exports = {
   createPiSkillService,
   readSkillMarkdown,
+  workspaceSkillHarness,
 };

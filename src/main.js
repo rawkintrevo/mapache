@@ -16,6 +16,7 @@ import {createInitialState} from "./state/initialState.js";
 import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
+  resetWorkspaceSkills as resetWorkspaceSkillsState,
   resetSignedOutState,
 } from "./state/resetters.js";
 import {createDrawerController} from "./controllers/drawerController.js";
@@ -185,8 +186,8 @@ function resetPiPackages() {
   piPanelsController.resetPiPackages();
 }
 
-function resetPiSkills() {
-  piPanelsController.resetPiSkills();
+function resetWorkspaceSkills() {
+  resetWorkspaceSkillsState(state);
 }
 
 async function refreshAll() {
@@ -210,7 +211,7 @@ async function refreshAll() {
       workspaceFilesController.resetWorkspaceFiles();
       resetGitStatus();
       resetPiPackages();
-      resetPiSkills();
+      resetWorkspaceSkills();
     }
     await loadSessions();
     await piPanelsController.loadPiAuth();
@@ -432,7 +433,7 @@ async function deleteWorkspace(workspaceId) {
       workspaceFilesController.resetWorkspaceFiles();
       resetGitStatus();
       resetPiPackages();
-      resetPiSkills();
+      resetWorkspaceSkills();
     }
     await refreshAll();
   });
@@ -445,12 +446,12 @@ async function selectWorkspace(workspaceId) {
   workspaceFilesController.resetWorkspaceFiles();
   resetGitStatus();
   resetPiPackages();
-  resetPiSkills();
+  resetWorkspaceSkills();
   await runBusy(async () => {
     await loadSessions();
     await loadGitStatus();
     await piPanelsController.loadPiPackages();
-    await piPanelsController.loadPiSkills();
+    await piPanelsController.loadWorkspaceSkills();
     await workspaceFilesController.loadWorkspaceFiles();
   });
 }
@@ -476,13 +477,13 @@ async function loadSelectedSessionPanels() {
   if (!getSelectedSession()?.serviceUrl) {
     resetGitStatus();
     resetPiPackages();
-    resetPiSkills();
+    resetWorkspaceSkills();
     render();
     return;
   }
   await loadGitStatus();
   await piPanelsController.loadPiPackages();
-  await piPanelsController.loadPiSkills();
+  await piPanelsController.loadWorkspaceSkills();
 }
 
 async function loadGitStatus() {

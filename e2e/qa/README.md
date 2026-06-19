@@ -67,6 +67,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
 - `cases/skills-crud.json`: Workspace-local Pi skill create/edit/delete.
+- `cases/skills-crud-codex.json`: Workspace-local Codex skill create/edit/delete.
 - `cases/extensions-package-crud.json`: Pi package install/update/remove.
 - `cases/git-status.json`: Git status panel for GitHub-backed sessions.
 - `cases/git-change-pr-flow.json`: Git stage/commit/push/open PR.

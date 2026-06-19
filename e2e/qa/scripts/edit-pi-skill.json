@@ -1,6 +1,6 @@
 {
   "id": "script.editPiSkill",
-  "title": "Edit a workspace-local Pi skill",
+  "title": "Edit a workspace-local skill",
   "parameters": {
     "skillName": "qa-skill",
     "content": "# QA Skill\n\nUpdated by QA."
@@ -10,7 +10,7 @@
     {"type": "waitForSnapshotText", "text": "Save changes", "timeoutMs": 5000},
     {"type": "fill", "label": "Markdown instructions", "value": "{{content}}"},
     {"type": "click", "role": "button", "name": "Save changes"},
-    {"type": "waitForNetwork", "requestUrlIncludes": "/pi-skills", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+    {"type": "waitForNetwork", "requestUrlIncludes": "/skills", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
   ],
   "successSignals": [
     "Existing skill can be loaded into the form and saved"

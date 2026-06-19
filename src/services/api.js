@@ -168,6 +168,20 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages/update`,
         {method: "POST", body: source ? {source} : {}},
     ),
+    getWorkspaceSkills: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/skills`,
+    ),
+    saveWorkspaceSkill: (workspaceId, sessionId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/skills`,
+        {method: "POST", body},
+    ),
+    deleteWorkspaceSkill: (workspaceId, sessionId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/skills/delete`,
+        {method: "POST", body: {name}},
+    ),
     getPiSkills: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-skills`,

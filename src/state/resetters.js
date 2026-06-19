@@ -4,7 +4,7 @@ import {
   createGitStatusState,
   createPiAuthState,
   createPiPackagesState,
-  createPiSkillsState,
+  createWorkspaceSkillsState,
   createPullRequestFormState,
 } from "./initialState.js";
 
@@ -25,9 +25,11 @@ export function resetPiAuth(state) {
   state.piAuth = createPiAuthState();
 }
 
-export function resetPiSkills(state) {
-  state.piSkills = createPiSkillsState();
+export function resetWorkspaceSkills(state) {
+  state.workspaceSkills = createWorkspaceSkillsState();
 }
+
+export const resetPiSkills = resetWorkspaceSkills;
 
 export function resetFileEditor(state) {
   state.fileEditor = createFileEditorState();
@@ -68,6 +70,6 @@ export function resetSignedOutState(state) {
   state.collapsedDrawerSections = new Set();
   resetGitStatus(state);
   resetPiPackages(state);
-  resetPiSkills(state);
+  resetWorkspaceSkills(state);
   resetPiAuth(state);
 }

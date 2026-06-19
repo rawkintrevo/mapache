@@ -67,37 +67,44 @@ export function friendlyPiUpdateError(error) {
   return message;
 }
 
-export function friendlyPiSkillError(error) {
+export function friendlyWorkspaceSkillError(error) {
   const message = error.message || "Could not load skills.";
-  if (message === "no_active_session" || message === "session_not_running") return "Start an active pi-basic session to inspect workspace skills.";
+  if (message === "not_found") return "This workspace skills API is not deployed yet. Refresh after the latest functions deploy.";
+  if (message === "no_active_session" || message === "session_not_running") return "Start an active Pi or Codex session to inspect workspace skills.";
   if (message === "runner_skill_listing_unsupported") return "This session runner does not support skill listing yet. Restart or recreate the session after deployment.";
   if (message === "runner_skill_list_unavailable") return "The session runner is unavailable. Try refreshing after the terminal is ready.";
-  if (message === "pi_skill_list_failed") return "The runner could not read workspace Pi skills.";
+  if (message === "pi_skill_list_failed") return "The runner could not read workspace skills.";
   return message;
 }
 
-export function friendlyPiSkillSaveError(error) {
+export function friendlyWorkspaceSkillSaveError(error) {
   const message = error.message || "Could not save skill.";
+  if (message === "not_found") return "This workspace skills API is not deployed yet. Refresh after the latest functions deploy.";
   if (message === "invalid_skill_name") return "Use a lowercase skill name with letters, numbers, and single hyphens only.";
   if (message === "invalid_skill_description") return "Enter a skill description under 1024 characters.";
   if (message === "invalid_skill_content") return "Enter Markdown skill instructions under 128 KiB.";
   if (message === "skill_operation_busy") return "Another skill operation is already running. Try again in a moment.";
   if (message === "runner_skill_save_unsupported") return "This session runner does not support skill saves yet. Restart or recreate the session after deployment.";
   if (message === "runner_skill_save_unavailable") return "The session runner is unavailable. Try again after the terminal is ready.";
-  if (message === "pi_skill_save_failed") return "Pi skill save failed in the runner.";
+  if (message === "pi_skill_save_failed") return "Skill save failed in the runner.";
   return message;
 }
 
-export function friendlyPiSkillDeleteError(error) {
+export function friendlyWorkspaceSkillDeleteError(error) {
   const message = error.message || "Could not delete skill.";
+  if (message === "not_found") return "This workspace skills API is not deployed yet. Refresh after the latest functions deploy.";
   if (message === "invalid_skill_name") return "That skill name is not valid for deletion.";
   if (message === "skill_not_found") return "That skill was not found in this workspace.";
   if (message === "skill_operation_busy") return "Another skill operation is already running. Try again in a moment.";
   if (message === "runner_skill_delete_unsupported") return "This session runner does not support skill deletion yet. Restart or recreate the session after deployment.";
   if (message === "runner_skill_delete_unavailable") return "The session runner is unavailable. Try again after the terminal is ready.";
-  if (message === "pi_skill_delete_failed") return "Pi skill deletion failed in the runner.";
+  if (message === "pi_skill_delete_failed") return "Skill deletion failed in the runner.";
   return message;
 }
+
+export const friendlyPiSkillError = friendlyWorkspaceSkillError;
+export const friendlyPiSkillSaveError = friendlyWorkspaceSkillSaveError;
+export const friendlyPiSkillDeleteError = friendlyWorkspaceSkillDeleteError;
 
 export function friendlyPiAuthError(error) {
   const message = error.message || "Could not update Pi authentication.";

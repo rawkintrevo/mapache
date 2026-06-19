@@ -20,7 +20,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Workspaces/files: `functions/workspace.service.js`
 - Cloud Run sessions: `functions/cloudRun.service.js`
 - GitHub App and PR flows: `functions/github.service.js`
-- Pi auth, packages, and skills: `functions/pi.service.js`
+- Pi auth, packages, and workspace skills: `functions/pi.service.js`
 - Usage rollups: `functions/userUsage.service.js`
 - Runner image catalog: `functions/runnerImages.helpers.js`
 
@@ -36,7 +36,9 @@ Session creation writes a Firestore session record, resolves the curated runner 
 
 Admin user summaries reuse the same usage rollups as `/api/me`, but return cost estimates in dollars for lifetime and trailing-30-day windows. Whitelist toggles update `appConfig/access`, preferring `allowedEmails` when the target user has an email and `allowedUids` otherwise.
 
-Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, Pi skills, Pi package operations, preview/access URLs, share-preview export, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
+Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, workspace skills, Pi package operations, preview/access URLs, share-preview export, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
+
+Workspace skills now use neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/skills` and `/skills/delete`. `functions/pi.service.js` still owns validation and compatibility because Pi and Codex share the same name/description/content rules and the same rollout path. The service gates skill management to Pi and Codex sessions, prefers the neutral runner `/skills*` endpoints, and falls back to legacy `/pi/skills*` routes when an older runner revision is still serving an existing session.
 
 Website sessions with preview capability can create a public share preview through `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/share-preview`. The API verifies workspace/session ownership, requires a running preview-capable session, generates an unguessable token, asks the runner to upload only the configured static preview root, and stores metadata in `publicPreviews/{token}`. Public reads use unauthenticated `GET /api/public-previews/{token}/...`, which serves objects from the recorded Cloud Storage prefix with SPA fallback to `index.html`. These public routes do not expose source files, session runner URLs, browser-access tokens, shutdown tokens, environment variables, or workspace storage prefixes.
 

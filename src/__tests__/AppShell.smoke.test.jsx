@@ -9,9 +9,9 @@ import {
   createGithubConnectionState,
   createPiAuthState,
   createPiPackagesState,
-  createPiSkillsState,
   createPullRequestFormState,
   createRepoPickerState,
+  createWorkspaceSkillsState,
 } from "../state/initialState.js";
 
 const workspace = {
@@ -176,7 +176,7 @@ function createState(overrides = {}) {
         userPackages: [],
       },
     }),
-    piSkills: createPiSkillsState({
+    workspaceSkills: createWorkspaceSkillsState({
       data: {
         skills: [{
           content: "---\ndescription: Preview QA\n---\n# Preview QA",

@@ -2,15 +2,16 @@ import {Edit3, RefreshCw, Save, Trash2, X} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {sessionSkillHarness, sessionSupportsWorkspaceSkills} from "../../utils/sessionSkills.js";
 
 function stripFrontmatter(content) {
   return String(content || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 }
 
-function SkillRow({busy, skill, onDeletePiSkill, onEditPiSkill}) {
+function SkillRow({busy, skill, onDeleteWorkspaceSkill, onEditWorkspaceSkill}) {
   const detail = (
     <>
-      <span className="drawer-list-row__code">{skill.path || `.pi/skills/${skill.name}/SKILL.md`}</span>
+      <span className="drawer-list-row__code">{skill.path || skill.filePath || `<skill-path>`}</span>
       {skill.description ? <span className="subtle">{skill.description}</span> : null}
     </>
   );
@@ -19,19 +20,19 @@ function SkillRow({busy, skill, onDeletePiSkill, onEditPiSkill}) {
     <DrawerListItem
       actions={[
         <DrawerListActionButton
-          disabled={busy || !onEditPiSkill}
+          disabled={busy || !onEditWorkspaceSkill}
           icon={<Edit3 aria-hidden="true" />}
           key="edit"
           label={`Edit ${skill.name}`}
-          onClick={() => onEditPiSkill?.(skill)}
+          onClick={() => onEditWorkspaceSkill?.(skill)}
         />,
         <DrawerListActionButton
-          disabled={busy || !onDeletePiSkill}
+          disabled={busy || !onDeleteWorkspaceSkill}
           icon={<Trash2 aria-hidden="true" />}
           key="delete"
           label={`Delete ${skill.name}`}
           tone="danger"
-          onClick={() => onDeletePiSkill?.(skill.name)}
+          onClick={() => onDeleteWorkspaceSkill?.(skill.name)}
         />,
       ]}
       detail={detail}
@@ -41,14 +42,14 @@ function SkillRow({busy, skill, onDeletePiSkill, onEditPiSkill}) {
   );
 }
 
-function SkillForm({status, onCancelPiSkillEdit, onSavePiSkill, onUpdatePiSkillForm}) {
+function SkillForm({status, onCancelWorkspaceSkillEdit, onSaveWorkspaceSkill, onUpdateWorkspaceSkillForm}) {
   const form = status.form || {};
   return (
     <form
       className="skill-form"
       onSubmit={(event) => {
         event.preventDefault();
-        onSavePiSkill?.();
+        onSaveWorkspaceSkill?.();
       }}
     >
       <label>
@@ -59,7 +60,7 @@ function SkillForm({status, onCancelPiSkillEdit, onSavePiSkill, onUpdatePiSkillF
           placeholder="code-review"
           type="text"
           value={form.name || ""}
-          onChange={(event) => onUpdatePiSkillForm?.({name: event.target.value})}
+          onChange={(event) => onUpdateWorkspaceSkillForm?.({name: event.target.value})}
         />
       </label>
       <label>
@@ -70,29 +71,29 @@ function SkillForm({status, onCancelPiSkillEdit, onSavePiSkill, onUpdatePiSkillF
           placeholder="Use when reviewing code changes for correctness and maintainability."
           type="text"
           value={form.description || ""}
-          onChange={(event) => onUpdatePiSkillForm?.({description: event.target.value})}
+          onChange={(event) => onUpdateWorkspaceSkillForm?.({description: event.target.value})}
         />
       </label>
       <label>
         Markdown instructions
         <textarea
           disabled={status.saving}
-          placeholder="# My Skill\n\nInstructions for pi..."
+          placeholder="# My Skill\n\nInstructions for the active agent..."
           rows={8}
           value={form.content || ""}
-          onChange={(event) => onUpdatePiSkillForm?.({content: event.target.value})}
+          onChange={(event) => onUpdateWorkspaceSkillForm?.({content: event.target.value})}
         />
       </label>
       <div className="skill-form-actions">
         <Button
-          disabled={status.saving || !onSavePiSkill || !String(form.name || "").trim() || !String(form.description || "").trim() || !String(form.content || "").trim()}
+          disabled={status.saving || !onSaveWorkspaceSkill || !String(form.name || "").trim() || !String(form.description || "").trim() || !String(form.content || "").trim()}
           type="submit"
         >
           <Save aria-hidden="true" />
           {status.saving ? "Saving..." : form.editing ? "Save changes" : "Create skill"}
         </Button>
         {form.editing ? (
-          <Button disabled={status.saving} type="button" variant="secondary" onClick={onCancelPiSkillEdit}>
+          <Button disabled={status.saving} type="button" variant="secondary" onClick={onCancelWorkspaceSkillEdit}>
             <X aria-hidden="true" />
             Cancel
           </Button>
@@ -102,9 +103,13 @@ function SkillForm({status, onCancelPiSkillEdit, onSavePiSkill, onUpdatePiSkillF
   );
 }
 
-function SkillsBody({selectedSession, skills, status, onDeletePiSkill, onEditPiSkill}) {
+function SkillsBody({selectedSession, skills, status, onDeleteWorkspaceSkill, onEditWorkspaceSkill}) {
+  const harness = sessionSkillHarness(selectedSession);
   if (!selectedSession) {
-    return <p className="empty">Start or select an active pi-basic session to manage workspace-local Pi skills.</p>;
+    return <p className="empty">Start or select an active Pi or Codex session to manage workspace-local skills.</p>;
+  }
+  if (!sessionSupportsWorkspaceSkills(selectedSession)) {
+    return <p className="empty">Workspace skill management is available for Pi and Codex sessions only.</p>;
   }
   if (status.loading) {
     return <p className="empty">Loading workspace skills...</p>;
@@ -113,7 +118,7 @@ function SkillsBody({selectedSession, skills, status, onDeletePiSkill, onEditPiS
     return <p className="empty">{status.error}</p>;
   }
   if (!skills.length) {
-    return <p className="empty">No workspace skills yet. Skills created here are written to /workspace/.pi/skills/&lt;name&gt;/SKILL.md.</p>;
+    return <p className="empty">No workspace skills yet. Skills created here are written to {harness?.examplePath || "/workspace/<skill-path>"}.</p>;
   }
   return (
     <DrawerList className="skill-list">
@@ -122,8 +127,8 @@ function SkillsBody({selectedSession, skills, status, onDeletePiSkill, onEditPiS
           busy={status.saving}
           key={skill.path || skill.name}
           skill={skill}
-          onDeletePiSkill={onDeletePiSkill}
-          onEditPiSkill={onEditPiSkill}
+          onDeleteWorkspaceSkill={onDeleteWorkspaceSkill}
+          onEditWorkspaceSkill={onEditWorkspaceSkill}
         />
       ))}
     </DrawerList>
@@ -131,18 +136,19 @@ function SkillsBody({selectedSession, skills, status, onDeletePiSkill, onEditPiS
 }
 
 export function SkillsPanel({
-  piSkills,
+  workspaceSkills,
   selectedSession,
   state,
-  onCancelPiSkillEdit,
-  onDeletePiSkill,
-  onEditPiSkill,
-  onRefreshPiSkills,
-  onSavePiSkill,
+  onCancelWorkspaceSkillEdit,
+  onDeleteWorkspaceSkill,
+  onEditWorkspaceSkill,
+  onRefreshWorkspaceSkills,
+  onSaveWorkspaceSkill,
   onToggleDrawerSection,
-  onUpdatePiSkillForm,
+  onUpdateWorkspaceSkillForm,
 }) {
-  const status = piSkills || {loading: false, saving: false, error: "", message: "", data: null, form: {}};
+  const harness = sessionSkillHarness(selectedSession);
+  const status = workspaceSkills || {loading: false, saving: false, error: "", message: "", data: null, form: {}};
   const skills = status.data && Array.isArray(status.data.skills) ? status.data.skills : [];
 
   return (
@@ -150,13 +156,13 @@ export function SkillsPanel({
       actions={[
         <Button
           aria-label="Refresh"
-          disabled={status.loading || status.saving || !onRefreshPiSkills}
+          disabled={status.loading || status.saving || !onRefreshWorkspaceSkills}
           icon={true}
           key="refresh-skills"
           size="compact"
           tooltip="Refresh"
           variant="secondary"
-          onClick={onRefreshPiSkills}
+          onClick={onRefreshWorkspaceSkills}
         >
           <RefreshCw aria-hidden="true" />
         </Button>,
@@ -168,14 +174,16 @@ export function SkillsPanel({
       onToggleDrawerSection={onToggleDrawerSection}
     >
       <p className="subtle">
-        Workspace-local Pi skills. Pi discovers Markdown skill files under .pi/skills; restart Pi in the terminal if a running agent needs to rescan them.
+        {harness ?
+          `${harness.label} discovers Markdown skill files under ${harness.relativeSkillsPath}; ${harness.restartHint.charAt(0).toLowerCase()}${harness.restartHint.slice(1)}` :
+          "Workspace-local skills for the active Pi or Codex harness."}
       </p>
-      {selectedSession ? (
+      {selectedSession && sessionSupportsWorkspaceSkills(selectedSession) ? (
         <SkillForm
           status={status}
-          onCancelPiSkillEdit={onCancelPiSkillEdit}
-          onSavePiSkill={onSavePiSkill}
-          onUpdatePiSkillForm={onUpdatePiSkillForm}
+          onCancelWorkspaceSkillEdit={onCancelWorkspaceSkillEdit}
+          onSaveWorkspaceSkill={onSaveWorkspaceSkill}
+          onUpdateWorkspaceSkillForm={onUpdateWorkspaceSkillForm}
         />
       ) : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
@@ -183,8 +191,8 @@ export function SkillsPanel({
         selectedSession={selectedSession}
         skills={skills.map((skill) => ({...skill, contentBody: stripFrontmatter(skill.content)}))}
         status={status}
-        onDeletePiSkill={onDeletePiSkill}
-        onEditPiSkill={onEditPiSkill}
+        onDeleteWorkspaceSkill={onDeleteWorkspaceSkill}
+        onEditWorkspaceSkill={onEditWorkspaceSkill}
       />
     </DrawerSection>
   );

@@ -77,7 +77,8 @@ function routeRequest(path) {
     ["git-push", "gitPush"],
     ["git-open-pr", "gitOpenPr"],
     ["pi-packages", "piPackages"],
-    ["pi-skills", "piSkills"],
+    ["skills", "sessionSkills"],
+    ["pi-skills", "sessionSkills"],
   ]);
   if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "sessions") {
     const name = sessionActionRoutes.get(parts[4]);
@@ -102,10 +103,10 @@ function routeRequest(path) {
     parts.length === 6 &&
     parts[0] === "workspaces" &&
     parts[2] === "sessions" &&
-    parts[4] === "pi-skills" &&
+    (parts[4] === "skills" || parts[4] === "pi-skills") &&
     parts[5] === "delete"
   ) {
-    return {name: "piSkillDelete", workspaceId: parts[1], sessionId: parts[3]};
+    return {name: "sessionSkillDelete", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
@@ -159,8 +160,8 @@ const ROUTE_METHODS = Object.freeze({
   piPackageInstall: ["POST"],
   piPackageRemove: ["POST"],
   piPackageUpdate: ["POST"],
-  piSkills: ["GET", "POST"],
-  piSkillDelete: ["POST"],
+  sessionSkills: ["GET", "POST"],
+  sessionSkillDelete: ["POST"],
   githubRepos: ["GET"],
   githubConnect: ["GET"],
   githubConnection: ["GET"],

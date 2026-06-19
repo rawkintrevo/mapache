@@ -116,7 +116,7 @@ When running the local Vite app for browser QA, keep screenshots, console logs, 
 
 Some sandboxed hosts still cannot launch a standalone local Chrome or Chromium CLI reliably for headless QA because the browser process itself fails before page load. In this repo, checked-in `e2e/qa/` manifests should be executed through Chrome DevTools-assisted QA rather than assuming raw headless-browser or Playwright launches are available everywhere.
 
-The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace files and editor behavior, session creation/lifecycle, Authentication Center, Pi auth selection, Skills, Extensions, Git status, Git commit/push/PR flows, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
+The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace files and editor behavior, session creation/lifecycle, Authentication Center, Pi auth selection, workspace skills for Pi and Codex sessions, Extensions, Git status, Git commit/push/PR flows, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
 
 Guardrails:
 

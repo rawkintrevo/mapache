@@ -1,28 +1,38 @@
 import {
-  friendlyPiSkillDeleteError,
-  friendlyPiSkillError,
-  friendlyPiSkillSaveError,
+  friendlyWorkspaceSkillDeleteError,
+  friendlyWorkspaceSkillError,
+  friendlyWorkspaceSkillSaveError,
 } from "../utils/friendlyErrors.js";
+import {sessionSkillHarness, sessionSupportsWorkspaceSkills} from "../utils/sessionSkills.js";
 
 function stripFrontmatter(content) {
   return String(content || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 }
 
-export function updatePiSkillFormState(state, patch) {
-  state.piSkills = {
-    ...state.piSkills,
+function createDefaultSkillContent(harness) {
+  const label = harness?.label || "the active agent";
+  return `# New Skill\n\nAdd instructions for ${label} here.`;
+}
+
+function selectedSession(state) {
+  return state.sessions.find((session) => session.id === state.selectedSessionId) || null;
+}
+
+export function updateWorkspaceSkillFormState(state, patch) {
+  state.workspaceSkills = {
+    ...state.workspaceSkills,
     error: "",
     message: "",
     form: {
-      ...state.piSkills.form,
+      ...state.workspaceSkills.form,
       ...patch,
     },
   };
 }
 
-export function editPiSkillState(state, skill) {
-  state.piSkills = {
-    ...state.piSkills,
+export function editWorkspaceSkillState(state, skill) {
+  state.workspaceSkills = {
+    ...state.workspaceSkills,
     error: "",
     message: "",
     form: {
@@ -34,26 +44,29 @@ export function editPiSkillState(state, skill) {
   };
 }
 
-export function cancelPiSkillEditState(state) {
-  state.piSkills = {
-    ...state.piSkills,
+export function cancelWorkspaceSkillEditState(state) {
+  const harness = sessionSkillHarness(selectedSession(state));
+  state.workspaceSkills = {
+    ...state.workspaceSkills,
     error: "",
     message: "",
     form: {
       name: "",
       description: "",
-      content: "# New Skill\n\nAdd instructions for pi here.",
+      content: createDefaultSkillContent(harness),
       editing: false,
     },
   };
 }
 
-export async function loadPiSkillsState({state, render}) {
+export async function loadWorkspaceSkillsState({state, render}) {
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
+  const session = selectedSession(state);
+  const harness = sessionSkillHarness(session);
   if (!workspaceId || !sessionId) {
-    state.piSkills = {
-      ...state.piSkills,
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       loading: false,
       error: "Select or start an active session to inspect skills.",
       unavailable: true,
@@ -62,30 +75,41 @@ export async function loadPiSkillsState({state, render}) {
     render();
     return;
   }
+  if (!sessionSupportsWorkspaceSkills(session)) {
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
+      loading: false,
+      error: "Workspace skill management is available for Pi and Codex sessions only.",
+      unavailable: true,
+      data: null,
+    };
+    render();
+    return;
+  }
 
-  state.piSkills = {
-    ...state.piSkills,
+  state.workspaceSkills = {
+    ...state.workspaceSkills,
     loading: true,
     error: "",
     unavailable: false,
-    data: state.piSkills.data || null,
+    data: state.workspaceSkills.data || null,
   };
   render();
 
   try {
-    const data = await state.api.getPiSkills(workspaceId, sessionId);
-    state.piSkills = {
-      ...state.piSkills,
+    const data = await state.api.getWorkspaceSkills(workspaceId, sessionId);
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       loading: false,
       error: "",
       unavailable: false,
-      data: data || {skills: []},
+      data: data || {skills: [], harness: harness?.id || ""},
     };
   } catch (error) {
-    state.piSkills = {
-      ...state.piSkills,
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       loading: false,
-      error: friendlyPiSkillError(error),
+      error: friendlyWorkspaceSkillError(error),
       unavailable: true,
       data: null,
     };
@@ -93,28 +117,35 @@ export async function loadPiSkillsState({state, render}) {
   render();
 }
 
-export async function savePiSkillState({state, loadPiSkills, render}) {
+export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, render}) {
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
-  const form = state.piSkills.form || {};
+  const session = selectedSession(state);
+  const harness = sessionSkillHarness(session);
+  const form = state.workspaceSkills.form || {};
   const payload = {
     name: String(form.name || "").trim(),
     description: String(form.description || "").trim(),
     content: String(form.content || "").trim(),
   };
   if (!workspaceId || !sessionId) {
-    state.piSkills = {...state.piSkills, error: "Start an active session before saving a skill."};
+    state.workspaceSkills = {...state.workspaceSkills, error: "Start an active session before saving a skill."};
+    render();
+    return;
+  }
+  if (!sessionSupportsWorkspaceSkills(session)) {
+    state.workspaceSkills = {...state.workspaceSkills, error: "Workspace skill management is available for Pi and Codex sessions only."};
     render();
     return;
   }
   if (!payload.name || !payload.description || !payload.content) {
-    state.piSkills = {...state.piSkills, error: "Enter a skill name, description, and Markdown instructions."};
+    state.workspaceSkills = {...state.workspaceSkills, error: "Enter a skill name, description, and Markdown instructions."};
     render();
     return;
   }
 
-  state.piSkills = {
-    ...state.piSkills,
+  state.workspaceSkills = {
+    ...state.workspaceSkills,
     saving: true,
     error: "",
     message: form.editing ? "Saving skill..." : "Creating skill...",
@@ -122,38 +153,40 @@ export async function savePiSkillState({state, loadPiSkills, render}) {
   render();
 
   try {
-    await state.api.savePiSkill(workspaceId, sessionId, payload);
-    state.piSkills = {
-      ...state.piSkills,
+    await state.api.saveWorkspaceSkill(workspaceId, sessionId, payload);
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       saving: false,
-      message: "Skill saved to .pi/skills. Restart Pi in the terminal to force a skill rescan.",
+      message: `Skill saved to ${harness?.relativeSkillsPath || "the workspace skill directory"}. ${harness?.restartHint || ""}`.trim(),
       form: {
         name: "",
         description: "",
-        content: "# New Skill\n\nAdd instructions for pi here.",
+        content: createDefaultSkillContent(harness),
         editing: false,
       },
     };
-    await loadPiSkills();
+    await loadWorkspaceSkills();
   } catch (error) {
-    state.piSkills = {
-      ...state.piSkills,
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       saving: false,
-      error: friendlyPiSkillSaveError(error),
+      error: friendlyWorkspaceSkillSaveError(error),
       message: "",
     };
     render();
   }
 }
 
-export async function deletePiSkillState({state, name, loadPiSkills, render}) {
+export async function deleteWorkspaceSkillState({state, name, loadWorkspaceSkills, render}) {
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
+  const session = selectedSession(state);
   const skillName = String(name || "").trim();
   if (!workspaceId || !sessionId || !skillName) return;
+  if (!sessionSupportsWorkspaceSkills(session)) return;
 
-  state.piSkills = {
-    ...state.piSkills,
+  state.workspaceSkills = {
+    ...state.workspaceSkills,
     saving: true,
     error: "",
     message: "Deleting skill...",
@@ -161,20 +194,27 @@ export async function deletePiSkillState({state, name, loadPiSkills, render}) {
   render();
 
   try {
-    await state.api.deletePiSkill(workspaceId, sessionId, skillName);
-    state.piSkills = {
-      ...state.piSkills,
+    await state.api.deleteWorkspaceSkill(workspaceId, sessionId, skillName);
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       saving: false,
       message: "Skill deleted.",
     };
-    await loadPiSkills();
+    await loadWorkspaceSkills();
   } catch (error) {
-    state.piSkills = {
-      ...state.piSkills,
+    state.workspaceSkills = {
+      ...state.workspaceSkills,
       saving: false,
-      error: friendlyPiSkillDeleteError(error),
+      error: friendlyWorkspaceSkillDeleteError(error),
       message: "",
     };
     render();
   }
 }
+
+export const updatePiSkillFormState = updateWorkspaceSkillFormState;
+export const editPiSkillState = editWorkspaceSkillState;
+export const cancelPiSkillEditState = cancelWorkspaceSkillEditState;
+export const loadPiSkillsState = loadWorkspaceSkillsState;
+export const savePiSkillState = saveWorkspaceSkillState;
+export const deletePiSkillState = deleteWorkspaceSkillState;
