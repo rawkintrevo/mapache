@@ -59,6 +59,7 @@ const {
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
 const {normalizeEnvMap} = require("./env.helpers");
+const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
 const {
   cleanGithubNumericId,
   createGithubService,
@@ -616,7 +617,9 @@ function sessionSyncPolicyMetadata(workspace) {
   return {
     syncPolicyMode: cleanName(syncPolicy.mode || "blank") || "blank",
     syncPolicyExclude: Array.isArray(syncPolicy.exclude) ?
-      syncPolicy.exclude.map((value) => cleanName(value)).filter(Boolean) :
+      syncPolicy.exclude
+          .map((value) => canonicalizeInternalStoragePath(cleanName(value)))
+          .filter(Boolean) :
       [],
   };
 }
@@ -630,7 +633,7 @@ function sessionHomePolicyMetadata(workspace) {
     homeDir: path,
     homeStorageBucket: cleanName(policy.bucket || workspace.bucket || DEFAULT_BUCKET),
     homeStoragePrefix: mode === "persistent" ?
-      cleanName(policy.storagePrefix || homeStoragePrefix(workspace.storagePrefix)) :
+      canonicalizeInternalStoragePath(cleanName(policy.storagePrefix || homeStoragePrefix(workspace.storagePrefix))) :
       "",
     homeArchiveName: cleanName(policy.archiveName || "home.tar.gz") || "home.tar.gz",
   };

@@ -5,6 +5,10 @@ const {
   matchesSyncPolicyPattern,
   normalizeRelativeWorkspacePath,
 } = require("./utils");
+const {
+  isDirectoryMarkerFileName,
+  isInternalStorageDirName,
+} = require("./runtimePaths");
 
 function isWorkspacePiPackageCachePath(parts) {
   return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
@@ -14,7 +18,7 @@ function createWorkspacePathHelpers({config}) {
   function shouldIgnoreWorkspacePath(relativePath) {
     const normalizedPath = normalizeRelativeWorkspacePath(relativePath);
     const parts = normalizedPath.split("/").filter(Boolean);
-    if (parts.includes("node_modules") || parts[0] === config.internalStorageDir || isWorkspacePiPackageCachePath(parts)) {
+    if (parts.includes("node_modules") || isInternalStorageDirName(parts[0]) || isWorkspacePiPackageCachePath(parts)) {
       return true;
     }
     return config.workspaceSyncPolicyExclude.some((pattern) => matchesSyncPolicyPattern(normalizedPath, pattern));
@@ -22,7 +26,7 @@ function createWorkspacePathHelpers({config}) {
 
   function shouldIgnoreInternalWorkspacePath(relativePath) {
     const firstPart = String(relativePath || "").split(path.sep).filter(Boolean)[0] || "";
-    return firstPart === config.internalStorageDir;
+    return isInternalStorageDirName(firstPart);
   }
 
   function normalizeRemoteWorkspacePath(remotePath) {
@@ -33,8 +37,8 @@ function createWorkspacePathHelpers({config}) {
     if (!remotePath || remotePath.endsWith("/")) return false;
     const relative = normalizeRemoteWorkspacePath(remotePath);
     if (!relative) return false;
-    if (relative === config.directoryMarkerFile) return false;
-    if (relative === config.internalStorageDir || relative.startsWith(`${config.internalStorageDir}/`)) {
+    if (isDirectoryMarkerFileName(relative)) return false;
+    if (isInternalStorageDirName(relative) || isInternalStorageDirName(relative.split("/")[0])) {
       return false;
     }
     return true;

@@ -9,19 +9,20 @@ const {
 
 function baseConfig(overrides = {}) {
   return {
-    archiveStorageDir: ".mapahce-internal/archives",
+    archiveStorageDir: ".mapache-internal/archives",
     bucketName: "workspace-bucket",
     homeArchiveName: "home.tar.gz",
     codexHomeDir: "/tmp/codex-home/session-1",
     codexHomeStorageBucketName: "codex-bucket",
-    codexHomeStoragePrefix: "users/u/workspaces/w/.mapahce-internal/sessions/s/codex-home",
+    codexHomeStoragePrefix: "users/u/workspaces/w/.mapache-internal/sessions/s/codex-home",
     homeDir: "/root",
     homeStorageBucketName: "home-bucket",
-    homeStoragePrefix: "users/u/workspaces/w/.mapahce-internal/home",
+    homeStoragePrefix: "users/u/workspaces/w/.mapache-internal/home",
     homeSyncMode: "persistent",
+    legacyArchiveStorageDirs: [".mapahce-internal/archives"],
     piSessionDir: "/tmp/pi-session",
     piSessionStorageBucket: "session-bucket",
-    piSessionStoragePrefix: "users/u/workspaces/w/.mapahce-internal/sessions/s/pi-session",
+    piSessionStoragePrefix: "users/u/workspaces/w/.mapache-internal/sessions/s/pi-session",
     prefix: "users/u/workspaces/w",
     workspaceDir: "/workspace",
     ...overrides,
@@ -46,16 +47,28 @@ test("selects default archive targets for blank workspaces", () => {
     "codex-home",
   ]);
   assert.equal(targets.find((target) => target.name === "workspace-node-modules").remotePath,
-      "users/u/workspaces/w/.mapahce-internal/archives/workspace-node_modules.tar.gz");
+      "users/u/workspaces/w/.mapache-internal/archives/workspace-node_modules.tar.gz");
+  assert.deepEqual(targets.find((target) => target.name === "workspace-node-modules").fallbackArchives, [{
+    bucketName: "workspace-bucket",
+    remotePath: "users/u/workspaces/w/.mapahce-internal/archives/workspace-node_modules.tar.gz",
+  }]);
   assert.equal(targets.find((target) => target.name === "home").bucketName, "home-bucket");
   assert.equal(targets.find((target) => target.name === "home").localPath, "/root");
   assert.equal(targets.find((target) => target.name === "home").remotePath,
-      "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz");
+      "users/u/workspaces/w/.mapache-internal/home/home.tar.gz");
+  assert.deepEqual(targets.find((target) => target.name === "home").fallbackArchives, [{
+    bucketName: "home-bucket",
+    remotePath: "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz",
+  }]);
   assert.equal(targets.find((target) => target.name === "home").restoreOnStartup, true);
   assert.equal(targets.find((target) => target.name === "codex-home").localPath, "/tmp/codex-home/session-1");
   assert.equal(targets.find((target) => target.name === "codex-home").bucketName, "codex-bucket");
   assert.equal(targets.find((target) => target.name === "codex-home").remotePath,
-      "users/u/workspaces/w/.mapahce-internal/sessions/s/codex-home/codex-home.tar.gz");
+      "users/u/workspaces/w/.mapache-internal/sessions/s/codex-home/codex-home.tar.gz");
+  assert.deepEqual(targets.find((target) => target.name === "codex-home").fallbackArchives, [{
+    bucketName: "codex-bucket",
+    remotePath: "users/u/workspaces/w/.mapahce-internal/sessions/s/codex-home/codex-home.tar.gz",
+  }]);
   assert.equal(targets.find((target) => target.name === "codex-home").restoreOnStartup, true);
 });
 
@@ -67,7 +80,7 @@ test("adds .git archive target only for GitHub workspaces", () => {
   assert.equal(gitTarget.mode, "workspaceGit");
   assert.equal(gitTarget.localPath, "/workspace/.git");
   assert.equal(gitTarget.remotePath,
-      "users/u/workspaces/w/.mapahce-internal/archives/workspace-git.tar.gz");
+      "users/u/workspaces/w/.mapache-internal/archives/workspace-git.tar.gz");
 });
 
 test("disables home archive restore for ephemeral home mode", () => {
@@ -82,5 +95,5 @@ test("disables home archive restore for ephemeral home mode", () => {
 });
 
 test("builds home archive path from workspace-owned home prefix", () => {
-  assert.equal(homeArchiveRemotePath(baseConfig()), "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz");
+  assert.equal(homeArchiveRemotePath(baseConfig()), "users/u/workspaces/w/.mapache-internal/home/home.tar.gz");
 });

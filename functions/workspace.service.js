@@ -7,7 +7,7 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
-  DIRECTORY_MARKER_FILE,
+  DIRECTORY_MARKER_FILES,
   INTERNAL_STORAGE_DIR,
   MAX_WORKSPACE_TEXT_FILE_BYTES,
   MAX_WORKSPACE_UPLOAD_BYTES,
@@ -26,6 +26,10 @@ const {
   workspaceUploadBuffer,
 } = require("./backendUtils.helpers");
 const {normalizeEnvMap} = require("./env.helpers");
+const {
+  isDirectoryMarkerFileName,
+  isInternalStorageDirName,
+} = require("./runtimePaths.helpers");
 
 function createWorkspaceService(dependencies = {}) {
   return {
@@ -199,7 +203,7 @@ function normalizeWorkspaceSyncPolicy(source) {
       "dist/",
       "build/",
       ".next/",
-      ".mapahce-internal/",
+      ".mapache-internal/",
     ],
   };
 }
@@ -434,9 +438,8 @@ function storageFileToClientFile(file, queryPrefix) {
   if (isHiddenWorkspaceFilePath(relativePath)) {
     return null;
   }
-  if (relativePath.endsWith(`/${DIRECTORY_MARKER_FILE}`)) {
-    const directoryPath = relativePath.slice(0, -(`/${DIRECTORY_MARKER_FILE}`).length);
-    if (!directoryPath) return null;
+  const directoryPath = workspaceDirectoryPathFromMarker(relativePath);
+  if (directoryPath) {
     return {
       path: directoryPath,
       name: directoryPath.split("/").pop(),
@@ -473,7 +476,7 @@ function normalizeWorkspaceFilePath(value) {
   if (!parts.length || parts.some((part) => part === "." || part === "..")) {
     throw httpError(400, "invalid_file_path");
   }
-  if (parts.includes(DIRECTORY_MARKER_FILE)) {
+  if (parts.some((part) => isDirectoryMarkerFileName(part))) {
     throw httpError(400, "invalid_file_path");
   }
   if (isHiddenWorkspaceFilePath(parts.join("/"))) {
@@ -484,8 +487,17 @@ function normalizeWorkspaceFilePath(value) {
 
 function isHiddenWorkspaceFilePath(relativePath) {
   const parts = String(relativePath || "").split("/").filter(Boolean);
-  if (parts[0] === INTERNAL_STORAGE_DIR) return true;
+  if (isInternalStorageDirName(parts[0])) return true;
   return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
+}
+
+function workspaceDirectoryPathFromMarker(relativePath) {
+  for (const marker of DIRECTORY_MARKER_FILES) {
+    if (relativePath.endsWith(`/${marker}`)) {
+      return relativePath.slice(0, -(`/${marker}`).length) || "";
+    }
+  }
+  return "";
 }
 
 module.exports = {

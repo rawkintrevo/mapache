@@ -165,8 +165,8 @@ Workspace-local package declarations are synced as normal workspace files:
 Workspace-local installed package code should be archived instead of synced object-by-object:
 
 ```text
-{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-npm.tar.gz
-{workspace.storagePrefix}/.mapahce-internal/archives/workspace-pi-git.tar.gz
+{workspace.storagePrefix}/.mapache-internal/archives/workspace-pi-npm.tar.gz
+{workspace.storagePrefix}/.mapache-internal/archives/workspace-pi-git.tar.gz
 ```
 
 An implementation may choose a single combined archive, such as `workspace-pi-packages.tar.gz`, if that proves simpler. Separate archives make npm and git cache behavior easier to reason about.
@@ -174,7 +174,7 @@ An implementation may choose a single combined archive, such as `workspace-pi-pa
 Workspace-owned `$HOME` materialization is the primary home-state archive:
 
 ```text
-{workspace.storagePrefix}/.mapahce-internal/home/home.tar.gz
+{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz
 ```
 
 The workspace package manager should not put workspace-local package declarations in `$HOME`; those remain in `/workspace/.pi/settings.json`. User-scoped Pi settings, auth files, and non-local package state do live under `$HOME/.pi/agent` and are captured by the workspace-owned home archive.

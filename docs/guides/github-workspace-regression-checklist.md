@@ -13,7 +13,7 @@ Use this checklist before deploying changes that touch GitHub-backed workspaces.
 - [ ] Exact commit checkout still lands on the requested SHA when one is provided.
 - [ ] Cached `.git` archives restore correctly on restart.
 - [ ] Deleted worktree files do not reappear from stale cache objects.
-- [ ] Ignored paths such as `.git/`, `node_modules/`, build outputs, and `.mapahce-internal/` stay out of normal sync.
+- [ ] Ignored paths such as `.git/`, `node_modules/`, build outputs, and `.mapache-internal/` stay out of normal sync.
 - [ ] The Git panel still shows status, pull, stage/unstage, commit, push, and open-PR actions for GitHub workspaces.
 
 ## Validation commands

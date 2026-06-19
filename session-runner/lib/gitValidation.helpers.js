@@ -1,6 +1,10 @@
 "use strict";
 
 const {normalizeEnvString, normalizeRelativeWorkspacePath} = require("./utils");
+const {
+  isDirectoryMarkerFileName,
+  isInternalStorageDirName,
+} = require("./runtimePaths");
 
 function normalizeBranchDescription(value) {
   return normalizeEnvString(value)
@@ -25,7 +29,7 @@ function normalizeGitActionPaths(paths) {
     if (!parts.length || parts.some((part) => part === "." || part === "..")) {
       throw new Error("invalid_git_path");
     }
-    if (parts[0] === ".mapahce-internal" || parts.includes(".mapahce-directory")) {
+    if (isInternalStorageDirName(parts[0]) || parts.some((part) => isDirectoryMarkerFileName(part))) {
       throw new Error("invalid_git_path");
     }
     return normalized;

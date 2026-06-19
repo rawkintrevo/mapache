@@ -8,6 +8,12 @@ const {
   parseSyncPolicyExclude,
   positiveNumber,
 } = require("./utils");
+const {
+  DIRECTORY_MARKER_FILE,
+  LEGACY_DIRECTORY_MARKER_FILE,
+  INTERNAL_STORAGE_DIR,
+  LEGACY_INTERNAL_STORAGE_DIR,
+} = require("./runtimePaths");
 
 function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
@@ -55,13 +61,13 @@ function createConfig() {
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
-    archiveStorageDir: ".mapahce-internal/archives",
+    archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
     bucketName,
     codexHomeDir,
     codexHomeStorageBucketName,
     codexHomeStoragePrefix,
-    directoryMarkerFile: ".mapahce-directory",
+    directoryMarkerFile: DIRECTORY_MARKER_FILE,
     githubCloneToken: normalizeEnvString(process.env.GITHUB_CLONE_TOKEN),
     githubCloneUsername: normalizeEnvString(process.env.GITHUB_CLONE_USERNAME) || "x-access-token",
     githubAutomationToken: normalizeEnvString(process.env.GITHUB_AUTOMATION_TOKEN),
@@ -76,7 +82,10 @@ function createConfig() {
     homeStorageBucketName,
     homeStoragePrefix,
     homeSyncMode,
-    internalStorageDir: ".mapahce-internal",
+    internalStorageDir: INTERNAL_STORAGE_DIR,
+    legacyArchiveStorageDirs: [`${LEGACY_INTERNAL_STORAGE_DIR}/archives`],
+    legacyDirectoryMarkerFiles: [LEGACY_DIRECTORY_MARKER_FILE],
+    legacyInternalStorageDirs: [LEGACY_INTERNAL_STORAGE_DIR],
     ownerUid: process.env.OWNER_UID || "",
     piAgentDir,
     piHomeDir,
