@@ -46,6 +46,18 @@ function legacyArchiveRemotePaths(config, remotePath) {
   });
 }
 
+function codexHomeArchiveRemotePath(config) {
+  if (!config.codexHomeStoragePrefix) return "";
+  return `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/");
+}
+
+function legacyCodexHomeArchivePrefixes(config) {
+  if (!config.prefix) return [];
+  return [config.internalStorageDir, ...(config.legacyInternalStorageDirs || [])]
+      .filter(Boolean)
+      .map((internalDir) => `${config.prefix}/${internalDir}/sessions/`.replace(/\/+/g, "/"));
+}
+
 function createArchiveSyncTargets({config, git}) {
   const targets = [
     {
@@ -91,19 +103,21 @@ function createArchiveSyncTargets({config, git}) {
   ];
 
   if (config.codexHomeStoragePrefix) {
+    const remotePath = codexHomeArchiveRemotePath(config);
     targets.push({
       name: "codex-home",
       mode: "directory",
       localPath: config.codexHomeDir,
       bucketName: config.codexHomeStorageBucketName,
-      remotePath: `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/"),
+      remotePath,
       fallbackArchives: legacyArchiveRemotePaths(
           {
             ...config,
             bucketName: config.codexHomeStorageBucketName,
           },
-          `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/"),
+          remotePath,
       ),
+      fallbackArchivePrefixes: legacyCodexHomeArchivePrefixes(config),
       ensureLocalPath: true,
       restoreOnStartup: true,
     });
@@ -179,7 +193,34 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
       const [exists] = await file.exists();
       if (exists) return file;
     }
-    return null;
+    return findLatestFallbackArchiveFile(target);
+  }
+
+  async function findLatestFallbackArchiveFile(target) {
+    const prefixes = target.fallbackArchivePrefixes || [];
+    if (!prefixes.length) return null;
+    const matches = [];
+    for (const prefix of prefixes) {
+      const [files] = await storage.bucket(target.bucketName || config.bucketName).getFiles({prefix});
+      for (const file of files) {
+        if (!file.name.endsWith("/codex-home/codex-home.tar.gz")) continue;
+        const updatedMs = await archiveUpdatedMs(file);
+        matches.push({file, updatedMs});
+      }
+    }
+    matches.sort((a, b) => b.updatedMs - a.updatedMs);
+    return matches[0] ? matches[0].file : null;
+  }
+
+  async function archiveUpdatedMs(file) {
+    try {
+      const [metadata] = await file.getMetadata();
+      const updatedMs = Date.parse(metadata.updated || metadata.timeCreated || "");
+      return Number.isFinite(updatedMs) ? updatedMs : 0;
+    } catch (error) {
+      if (error && (error.code === 404 || error.code === "ENOENT")) return 0;
+      throw error;
+    }
   }
 
   function archiveFile(target, remotePath = target.remotePath) {
@@ -303,6 +344,7 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
 
 module.exports = {
   archiveRemotePath,
+  codexHomeArchiveRemotePath,
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
   homeArchiveRemotePath,

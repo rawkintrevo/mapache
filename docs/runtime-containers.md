@@ -138,7 +138,7 @@ TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
-Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session path such as `/tmp/mapache-codex/<session-id>`, plus a session-specific archive prefix. That keeps Codex auth, logs, sessions, skills, and standalone package metadata separate from repository `.codex/config.toml` files under `/workspace/.codex` and prevents one Mapache session's Codex state from leaking into another.
+Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session local path such as `/tmp/mapache-codex/<session-id>`, plus a workspace-scoped archive prefix at `{workspace.storagePrefix}/.mapache-internal/codex-home`. Local process state stays isolated per Cloud session, while Codex auth, logs, sessions, skills, and standalone package metadata persist for later Codex sessions in the same workspace. This state remains separate from repository `.codex/config.toml` files under `/workspace/.codex`. On first restore after this change, the runner falls back to the latest historical per-session Codex home archive under `.mapache-internal/sessions/*/codex-home/` when the workspace-scoped archive is not present yet.
 
 For connected GitHub workspaces, non-shell Pi sessions also prepare a clean automation branch before the terminal process starts. The runner fetches the selected base branch, resets the restored worktree to that remote branch, removes untracked non-ignored files, checks out a unique branch named `mapache/<session-name-kebab>-<session-id>`, and records that branch on the session document. When the Pi terminal process exits, the runner stages any remaining workspace changes and commits them with a Mapache-authored commit. If the automation branch already has commits and the worktree is clean, the runner pushes those commits without creating an extra commit. It then opens a pull request back to the base branch with the short-lived GitHub App installation token. If there are no changes and no commits ahead of the base branch, the runner records `githubAutomationStatus: "no_changes"` and does not create a commit or PR. Shell sessions and non-connected GitHub workspaces keep the manual Git controls behavior only.
 
@@ -341,6 +341,9 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 - `HOME_STORAGE_PREFIX`
 - `HOME_SYNC_MODE`
 - `HOME_ARCHIVE_NAME`
+- `CODEX_HOME`
+- `CODEX_HOME_STORAGE_BUCKET`
+- `CODEX_HOME_STORAGE_PREFIX`
 - `PI_SESSION_DIR`
 - `PI_SESSION_STORAGE_BUCKET`
 - `PI_SESSION_STORAGE_PREFIX`
@@ -405,6 +408,7 @@ High-cardinality runtime directories are not synced as individual Cloud Storage 
 - `/workspace/node_modules`
 - `/workspace/.git` for GitHub-backed workspaces
 - `$HOME`
+- `$CODEX_HOME`
 
 The Pi extension manager extends this model to workspace-local Pi package cache directories:
 
@@ -418,6 +422,8 @@ The runner restores these directories from gzip-compressed tar archives during s
 `/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapache-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
 The `$HOME` archive includes Pi auth, settings, package caches, shell state, and per-session Pi conversation directories. Treat the archive path as sensitive runtime state because it can contain credentials and command history. It lives under the hidden workspace internal prefix, and client file APIs must not expose it.
+
+The `$CODEX_HOME` archive includes Codex CLI auth, sessions, logs, skills, and standalone package metadata for Codex runners. Treat it as sensitive runtime state for the same reason. It is workspace-scoped rather than session-scoped so creating a new `codex-basic` or `codex-web` session in the same workspace can reuse prior Codex authentication. The runner restores a historical per-session Codex archive only as a migration fallback when the workspace-scoped archive is missing, then uploads future changes to the workspace-scoped archive.
 
 Each Cloud session uses a unique Pi conversation directory under `$HOME/.pi/agent/mapache-sessions/{sessionId}`. The runner launches Pi with `--session-dir $PI_SESSION_DIR -c` and updates the session document with `piSessionJsonlPath`/`piSessionJsonlRelativePath` after Pi creates the JSONL. The whole-home archive persists those directories, but the session id keeps each Cloud session's thread separate from other sessions in the same workspace.
 

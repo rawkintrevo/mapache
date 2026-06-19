@@ -60,7 +60,7 @@ assert.deepStrictEqual(resourceLimits({cpu: "2", memory: "512Mi"}), {
 });
 
 assert.strictEqual(codexHomeDir("session-1"), "/tmp/mapache-codex/session-1");
-assert.strictEqual(codexHomeStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/codex-home");
+assert.strictEqual(codexHomeStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/codex-home");
 assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapache-internal/home");
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
@@ -140,7 +140,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
   }));
   assert.strictEqual(codexEnv.TERMINAL_COMMAND, "codex");
   assert.strictEqual(codexEnv.CODEX_HOME, "/tmp/mapache-codex/session-1");
-  assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/sessions/session-1/codex-home");
+  assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/codex-home");
 
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",

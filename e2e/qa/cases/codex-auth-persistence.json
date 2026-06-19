@@ -1,0 +1,29 @@
+{
+  "id": "codex.auth-persistence",
+  "title": "Codex auth persists across sessions in the same workspace",
+  "description": "Log in, create a blank workspace, authenticate Codex in one codex-basic session, create a second codex-basic session in the same workspace, and verify Codex remains authenticated.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/codex.auth-persistence",
+  "requires": {
+    "cloudRun": "Creates billable codex-basic Cloud Run services",
+    "secret": "A local ignored OpenAI QA key at .secrets/openai_qa_key"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-codex-auth-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-codex-auth-first-{{timestamp}}", "imageKey": "codex-basic", "cpu": "1", "memory": "1Gi", "sessionEnv": "QA_SESSION=1"}},
+    {"assert": "runner-terminal-reaches-running"},
+    {"assert": "codex-authenticate-with-local-openai-key"},
+    {"capture": "screenshot", "fileName": "first-session-authenticated.png"},
+    {"useScript": "scripts/stop-selected-session.json"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-codex-auth-second-{{timestamp}}", "imageKey": "codex-basic", "cpu": "1", "memory": "1Gi", "sessionEnv": "QA_SESSION=1"}},
+    {"assert": "runner-terminal-reaches-running"},
+    {"assert": "codex-auth-persists-without-reentering-key"},
+    {"capture": "screenshot", "fileName": "second-session-authenticated.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}
