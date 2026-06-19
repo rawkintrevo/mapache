@@ -6,7 +6,11 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const {defaultWorkspaceSeeds} = require("./codex");
-const {createCodexSeededWorkspaceService, resolveSeedContent} = require("./codexSeededWorkspace.service");
+const {
+  createCodexSeededWorkspaceService,
+  normalizeCodexSkillMarkdown,
+  resolveSeedContent,
+} = require("./codexSeededWorkspace.service");
 
 test("seeds default codex workspace files without overwriting existing files", async (t) => {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-codex-seeds-"));
@@ -66,4 +70,52 @@ test("default codex workspace seed catalog selects blank, github, and preview se
 
   const contents = await Promise.all(previewSeeds.map(resolveSeedContent));
   assert.ok(contents.every((content) => content.length > 0));
+});
+
+test("imports Pi skills for Codex with generated frontmatter", async (t) => {
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-codex-pi-skills-"));
+  t.after(() => fs.rm(workspaceDir, {recursive: true, force: true}));
+
+  const piSkillPath = path.join(workspaceDir, ".pi", "skills", "legacy-pi-skill", "SKILL.md");
+  const existingCodexSkillPath = path.join(workspaceDir, ".agents", "skills", "existing-skill", "SKILL.md");
+  await fs.mkdir(path.dirname(piSkillPath), {recursive: true});
+  await fs.mkdir(path.dirname(existingCodexSkillPath), {recursive: true});
+  await fs.writeFile(piSkillPath, "# Legacy Pi Skill\n\nDo the useful thing.", "utf8");
+  await fs.writeFile(existingCodexSkillPath, "user codex content", "utf8");
+  await fs.mkdir(path.join(workspaceDir, ".pi", "skills", "existing-skill"), {recursive: true});
+  await fs.writeFile(
+      path.join(workspaceDir, ".pi", "skills", "existing-skill", "SKILL.md"),
+      "---\nname: existing-skill\ndescription: Pi copy\n---\n\nDo not overwrite.",
+      "utf8",
+  );
+
+  const service = createCodexSeededWorkspaceService({
+    config: {workspaceDir},
+    defaultWorkspaceSeeds() {
+      return [];
+    },
+  });
+
+  await service.seedDefaultWorkspaceFiles();
+
+  const imported = await fs.readFile(
+      path.join(workspaceDir, ".agents", "skills", "legacy-pi-skill", "SKILL.md"),
+      "utf8",
+  );
+  assert.match(imported, /^---\nname: legacy-pi-skill\ndescription: Imported Pi skill: legacy-pi-skill\n---/);
+  assert.match(imported, /# Legacy Pi Skill/);
+  assert.equal(await fs.readFile(existingCodexSkillPath, "utf8"), "user codex content");
+});
+
+test("normalizes Pi skill Markdown into Codex-compatible skill Markdown", () => {
+  assert.equal(
+      normalizeCodexSkillMarkdown(
+          "---\nname: useful-skill\ndescription: Useful skill\n---\n\nUse the tool.",
+          "fallback",
+      ),
+      "---\nname: useful-skill\ndescription: Useful skill\n---\n\nUse the tool.\n",
+  );
+
+  assert.equal(normalizeCodexSkillMarkdown("", "empty"), "");
+  assert.equal(normalizeCodexSkillMarkdown("Body", "Invalid Name"), "");
 });

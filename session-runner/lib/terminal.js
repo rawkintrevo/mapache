@@ -326,6 +326,7 @@ function renderTerminalPage(options = {}) {
   <body>
     <div id="terminal"></div>
     <script src="/xterm/lib/xterm.js"></script>
+    <script src="/xterm-fit/lib/addon-fit.js"></script>
     <script>
       const terminalElement = document.getElementById("terminal");
       const term = new Terminal({
@@ -343,11 +344,13 @@ function renderTerminalPage(options = {}) {
           selectionBackground: "#334155",
         },
       });
+      const fitAddon = new FitAddon.FitAddon();
       let socket = null;
       let reconnectTimer = null;
       let replayOnConnect = true;
       let terminalExited = false;
 
+      term.loadAddon(fitAddon);
       term.open(terminalElement);
       term.focus();
 
@@ -365,10 +368,7 @@ function renderTerminalPage(options = {}) {
       window.addEventListener("resize", resizeTerminal);
 
       function resizeTerminal() {
-        const rect = terminalElement.getBoundingClientRect();
-        const cols = Math.max(40, Math.floor((rect.width - 20) / 8.5));
-        const rows = Math.max(12, Math.floor((rect.height - 20) / 20.3));
-        term.resize(cols, rows);
+        fitAddon.fit();
       }
 
       function sendData(data) {

@@ -52,6 +52,10 @@ app.use(
     "/xterm",
     express.static(path.join(__dirname, "node_modules", "@xterm", "xterm")),
 );
+app.use(
+    "/xterm-fit",
+    express.static(path.join(__dirname, "node_modules", "@xterm", "addon-fit")),
+);
 
 app.get("/", requireBrowserAccess, (req, res) => {
   res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken}));

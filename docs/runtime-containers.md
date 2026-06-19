@@ -55,6 +55,7 @@ FROM node:24-bookworm-slim
 Installed OS packages currently include:
 
 - `bash`
+- `bubblewrap` in Codex images, so the Codex CLI can use its expected local sandbox path inside the already isolated runner
 - `ca-certificates`
 - `curl`
 - `fd-find`, exposed as `fd` with a symlink to Debian's `fdfind` binary
@@ -143,6 +144,8 @@ For connected GitHub workspaces, non-shell Pi sessions also prepare a clean auto
 
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
 
+The terminal page also loads `@xterm/addon-fit` from the runner and fits the xterm viewport to the actual iframe dimensions before sending resize events to the PTY. Avoid returning to hand-estimated character cell sizes; Codex's TUI depends on the browser terminal and PTY agreeing on rows and columns so typed input and long model output stay visible.
+
 ## Pi Basic Runtime
 
 `session-runner/Dockerfile.pi-basic` starts from the same Pi-oriented base image and package set as the default runner.
@@ -168,6 +171,8 @@ gcloud builds submit session-runner \
 `session-runner/Dockerfile.codex-basic` is the terminal-first Codex runner. It installs the standalone Codex CLI and starts the browser terminal in interactive `codex` mode.
 
 For blank workspaces, `codex-basic` seeds a root `AGENTS.md` when it is missing. For connected GitHub workspaces, it seeds `.agents/skills/mapache-github-issue/SKILL.md` when that file is missing. These Codex-specific workspace seeds are separate from Pi `.pi` files and never overwrite user-edited workspace files.
+
+Codex startup also imports existing workspace-local Pi skills from `.pi/skills/**` into `.agents/skills/{skill-name}/SKILL.md` when the Codex copy is missing. The import normalizes every copied skill to Codex-compatible YAML frontmatter with `name` and `description`, including legacy Pi skill files that lack frontmatter, and does not overwrite user-edited Codex skills.
 
 Build and push the image with:
 
@@ -252,6 +257,8 @@ It seeds Codex-native workspace files instead of Pi `.pi` skills. When the targe
 - `.agents/skills/mapache-api-hosting/SKILL.md`
 - `.agents/skills/mapache-preview-qa/SKILL.md`
 - `.agents/skills/mapache-github-issue/SKILL.md` for connected GitHub workspaces
+
+As with `codex-basic`, startup imports missing Codex copies of workspace-local Pi skills from `.pi/skills/**` and normalizes frontmatter so Codex accepts the skills on load.
 
 Build and push the image with:
 
