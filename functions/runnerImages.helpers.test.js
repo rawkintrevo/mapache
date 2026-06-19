@@ -28,6 +28,19 @@ assert.deepStrictEqual(webImage.capabilities, {
 });
 assert.strictEqual(webImage.canProvision, true);
 
+const codexWebImage = resolveRunnerImage({imageKey: "codex-web"});
+assert.strictEqual(codexWebImage.key, "codex-web");
+assert.strictEqual(codexWebImage.image, "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web");
+assert.strictEqual(codexWebImage.terminalKind, "codex");
+assert.deepStrictEqual(codexWebImage.capabilities, {
+  terminal: true,
+  preview: true,
+  previewQa: true,
+  functions: true,
+  n64: false,
+});
+assert.strictEqual(codexWebImage.canProvision, true);
+
 const shellImage = resolveRunnerImage({imageKey: "default"});
 assert.strictEqual(shellImage.key, "default");
 assert.strictEqual(shellImage.terminalKind, "shell");

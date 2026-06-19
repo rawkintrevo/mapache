@@ -12,6 +12,9 @@ function baseConfig(overrides = {}) {
     archiveStorageDir: ".mapahce-internal/archives",
     bucketName: "workspace-bucket",
     homeArchiveName: "home.tar.gz",
+    codexHomeDir: "/tmp/codex-home/session-1",
+    codexHomeStorageBucketName: "codex-bucket",
+    codexHomeStoragePrefix: "users/u/workspaces/w/.mapahce-internal/sessions/s/codex-home",
     homeDir: "/root",
     homeStorageBucketName: "home-bucket",
     homeStoragePrefix: "users/u/workspaces/w/.mapahce-internal/home",
@@ -40,6 +43,7 @@ test("selects default archive targets for blank workspaces", () => {
     "workspace-pi-npm",
     "workspace-pi-git",
     "home",
+    "codex-home",
   ]);
   assert.equal(targets.find((target) => target.name === "workspace-node-modules").remotePath,
       "users/u/workspaces/w/.mapahce-internal/archives/workspace-node_modules.tar.gz");
@@ -48,6 +52,11 @@ test("selects default archive targets for blank workspaces", () => {
   assert.equal(targets.find((target) => target.name === "home").remotePath,
       "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz");
   assert.equal(targets.find((target) => target.name === "home").restoreOnStartup, true);
+  assert.equal(targets.find((target) => target.name === "codex-home").localPath, "/tmp/codex-home/session-1");
+  assert.equal(targets.find((target) => target.name === "codex-home").bucketName, "codex-bucket");
+  assert.equal(targets.find((target) => target.name === "codex-home").remotePath,
+      "users/u/workspaces/w/.mapahce-internal/sessions/s/codex-home/codex-home.tar.gz");
+  assert.equal(targets.find((target) => target.name === "codex-home").restoreOnStartup, true);
 });
 
 test("adds .git archive target only for GitHub workspaces", () => {

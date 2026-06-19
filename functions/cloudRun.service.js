@@ -201,8 +201,10 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const capabilities = session.capabilities || runnerImageCapabilities(session.image);
   const terminal = terminalCommandEnv(session);
+  const terminalKind = cleanName(session.terminalKind || "pi") || "pi";
   const homeDir = cleanHomeDir(session.homeDir || "/root");
   const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
+  const codexHome = session.codexHomeDir || codexHomeDir(session.runnerSessionId || session.id || "");
   const env = [
     ...envMapToCloudRunEnv({
       ...(session.workspaceEnv || {}),
@@ -231,7 +233,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "SESSION_NAME", value: cleanName(session.name || "Terminal session")},
     {name: "TERMINAL_COMMAND", value: terminal.command},
     {name: "TERMINAL_ARGS", value: JSON.stringify(terminal.args)},
-    {name: "TERMINAL_KIND", value: cleanName(session.terminalKind || "pi") || "pi"},
+    {name: "TERMINAL_KIND", value: terminalKind},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
@@ -240,6 +242,17 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "RUNNER_CAPABILITIES", value: JSON.stringify(capabilities)},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];
+
+  if (terminalKind === "codex") {
+    env.push(
+        {name: "CODEX_HOME", value: codexHome},
+        {name: "CODEX_HOME_STORAGE_BUCKET", value: session.codexHomeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+        {
+          name: "CODEX_HOME_STORAGE_PREFIX",
+          value: session.codexHomeStoragePrefix || codexHomeStoragePrefix(session.workspaceStoragePrefix, session.runnerSessionId || session.id || ""),
+        },
+    );
+  }
 
   if (capabilities.preview) {
     env.push(
@@ -285,8 +298,12 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
 }
 
 function terminalCommandEnv(session) {
-  if (cleanName(session && session.terminalKind) === "shell") {
+  const terminalKind = cleanName(session && session.terminalKind);
+  if (terminalKind === "shell") {
     return {command: "bash", args: ["-l"]};
+  }
+  if (terminalKind === "codex") {
+    return {command: "codex", args: []};
   }
   const homeDir = cleanHomeDir(session && session.homeDir || "/root");
   return {
@@ -308,6 +325,11 @@ function piSessionDir(sessionId, homeDir = "/root") {
     `${cleanDir}/.pi/agent/mapache-sessions/session`;
 }
 
+function codexHomeDir(sessionId) {
+  const cleanSessionId = cleanName(sessionId) || "session";
+  return `/tmp/mapache-codex/${cleanSessionId}`;
+}
+
 function cleanHomeDir(value) {
   const path = cleanName(value || "/root").replace(/\/+$/, "");
   return path && path.startsWith("/") ? path : "/root";
@@ -318,6 +340,13 @@ function piSessionStoragePrefix(workspaceStoragePrefix, sessionId) {
   const cleanSessionId = cleanName(sessionId);
   if (!cleanPrefix || !cleanSessionId) return "";
   return `${cleanPrefix}/${INTERNAL_STORAGE_DIR}/sessions/${cleanSessionId}/pi-session`;
+}
+
+function codexHomeStoragePrefix(workspaceStoragePrefix, sessionId) {
+  const cleanPrefix = String(workspaceStoragePrefix || "").replace(/^\/+|\/+$/g, "");
+  const cleanSessionId = cleanName(sessionId);
+  if (!cleanPrefix || !cleanSessionId) return "";
+  return `${cleanPrefix}/${INTERNAL_STORAGE_DIR}/sessions/${cleanSessionId}/codex-home`;
 }
 
 function stringifySyncPolicyExclude(value) {
@@ -414,6 +443,8 @@ function resourceLimits(resources) {
 module.exports = {
   buildCloudRunPatch,
   buildCloudRunService,
+  codexHomeDir,
+  codexHomeStoragePrefix,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,

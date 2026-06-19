@@ -24,10 +24,34 @@ export const sessionImages = [
     },
   },
   {
+    key: "codex-basic",
+    label: "codex-basic",
+    value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-basic",
+    terminalKind: "codex",
+    capabilities: {
+      terminal: true,
+      preview: false,
+      previewQa: false,
+      functions: false,
+    },
+  },
+  {
     key: "pi-web",
     label: "pi-web",
     value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web",
     terminalKind: "pi",
+    capabilities: {
+      terminal: true,
+      preview: true,
+      previewQa: true,
+      functions: true,
+    },
+  },
+  {
+    key: "codex-web",
+    label: "codex-web",
+    value: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web",
+    terminalKind: "codex",
     capabilities: {
       terminal: true,
       preview: true,

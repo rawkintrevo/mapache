@@ -28,7 +28,19 @@ The `pi-n64` runner image is built from `session-runner/Dockerfile.pi-n64` and p
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64
 ```
 
-The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `pi-web`, and `pi-n64`, each with explicit capability metadata and a stable `imageKey`.
+The `codex-basic` runner image is built from `session-runner/Dockerfile.codex-basic` and published as:
+
+```text
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-basic
+```
+
+The `codex-web` runner image is built from `session-runner/Dockerfile.codex-web` and published as:
+
+```text
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web
+```
+
+The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata and a stable `imageKey`.
 
 The backend is authoritative for image selection. `functions/runnerImages.helpers.js` contains the curated server-side image catalog. Session creation accepts `imageKey` and maps it to the catalog entry before provisioning Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
 
@@ -66,6 +78,14 @@ curl -fsSL https://pi.dev/install.sh | sh
 ```
 
 Pi package installs can also require npm, git, search tools, and native build tooling depending on the package. The web extension manager runs package operations inside the active runner rather than on the client device, so it uses the same runtime toolchain that Pi uses in the terminal.
+
+Codex images install the Codex CLI with the documented standalone installer in non-interactive mode:
+
+```bash
+CODEX_INSTALL_DIR=/usr/local/bin ./install-codex-standalone.sh
+```
+
+As of 2026-06-18, the Dockerfiles pin Codex CLI `0.140.0` and install the published Linux package tarball directly because that release's `codex-package_SHA256SUMS` file is missing the Linux standalone package entry and breaks the hosted `install.sh` flow.
 
 ## Runner Server Layout
 
@@ -117,6 +137,8 @@ TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
+Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session path such as `/tmp/mapache-codex/<session-id>`, plus a session-specific archive prefix. That keeps Codex auth, logs, sessions, skills, and standalone package metadata separate from repository `.codex/config.toml` files under `/workspace/.codex` and prevents one Mapache session's Codex state from leaking into another.
+
 For connected GitHub workspaces, non-shell Pi sessions also prepare a clean automation branch before the terminal process starts. The runner fetches the selected base branch, resets the restored worktree to that remote branch, removes untracked non-ignored files, checks out a unique branch named `mapache/<session-name-kebab>-<session-id>`, and records that branch on the session document. When the Pi terminal process exits, the runner stages any remaining workspace changes and commits them with a Mapache-authored commit. If the automation branch already has commits and the worktree is clean, the runner pushes those commits without creating an extra commit. It then opens a pull request back to the base branch with the short-lived GitHub App installation token. If there are no changes and no commits ahead of the base branch, the runner records `githubAutomationStatus: "no_changes"` and does not create a commit or PR. Shell sessions and non-connected GitHub workspaces keep the manual Git controls behavior only.
 
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
@@ -137,7 +159,22 @@ Build and push the image with:
 
 ```bash
 gcloud builds submit session-runner \
+  --project pi-agents-cloud \
   --config session-runner/cloudbuild.pi-basic.yaml
+```
+
+## Codex Basic Runtime
+
+`session-runner/Dockerfile.codex-basic` is the terminal-first Codex runner. It installs the standalone Codex CLI and starts the browser terminal in interactive `codex` mode.
+
+For blank workspaces, `codex-basic` seeds a root `AGENTS.md` when it is missing. For connected GitHub workspaces, it seeds `.agents/skills/mapache-github-issue/SKILL.md` when that file is missing. These Codex-specific workspace seeds are separate from Pi `.pi` files and never overwrite user-edited workspace files.
+
+Build and push the image with:
+
+```bash
+gcloud builds submit session-runner \
+  --project pi-agents-cloud \
+  --config session-runner/cloudbuild.codex-basic.yaml
 ```
 
 ## Pi Web Runtime
@@ -197,7 +234,31 @@ Build and push the image with:
 
 ```bash
 gcloud builds submit session-runner \
+  --project pi-agents-cloud \
   --config session-runner/cloudbuild.pi-web.yaml
+```
+
+## Codex Web Runtime
+
+`session-runner/Dockerfile.codex-web` is the web-development Codex runner. It has the same Chromium, Playwright, preview gateway, browser log capture, and capabilities contract as `pi-web`:
+
+```json
+{"terminal":true,"preview":true,"previewQa":true,"functions":true}
+```
+
+It seeds Codex-native workspace files instead of Pi `.pi` skills. When the target file is missing, startup writes:
+
+- `.agents/skills/mapache-preview-build/SKILL.md`
+- `.agents/skills/mapache-api-hosting/SKILL.md`
+- `.agents/skills/mapache-preview-qa/SKILL.md`
+- `.agents/skills/mapache-github-issue/SKILL.md` for connected GitHub workspaces
+
+Build and push the image with:
+
+```bash
+gcloud builds submit session-runner \
+  --project pi-agents-cloud \
+  --config session-runner/cloudbuild.codex-web.yaml
 ```
 
 ## Pi N64 Runtime
@@ -250,6 +311,7 @@ Build and push the image with:
 
 ```bash
 gcloud builds submit session-runner \
+  --project pi-agents-cloud \
   --config session-runner/cloudbuild.pi-n64.yaml
 ```
 

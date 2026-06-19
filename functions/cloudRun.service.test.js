@@ -4,6 +4,8 @@ const assert = require("assert");
 const {
   buildCloudRunPatch,
   buildCloudRunService,
+  codexHomeDir,
+  codexHomeStoragePrefix,
   homeStoragePrefix,
   normalizeResources,
   piSessionDir,
@@ -57,6 +59,8 @@ assert.deepStrictEqual(resourceLimits({cpu: "2", memory: "512Mi"}), {
   memory: "512Mi",
 });
 
+assert.strictEqual(codexHomeDir("session-1"), "/tmp/mapache-codex/session-1");
+assert.strictEqual(codexHomeStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapahce-internal/sessions/session-1/codex-home");
 assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapahce-internal/home");
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
@@ -74,6 +78,10 @@ assert.deepStrictEqual(terminalCommandEnv({
 }), {
   command: "pi",
   args: ["--session-dir", "/root/.pi/agent/mapache-sessions/session-1", "-c"],
+});
+assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
+  command: "codex",
+  args: [],
 });
 
 (async () => {
@@ -120,6 +128,19 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(previewEnv.PREVIEW_ENABLED, "true");
   assert.strictEqual(previewEnv.PREVIEW_STATIC_ROOT, "/workspace/build");
   assert.strictEqual(previewEnv.MAPACHE_PREVIEW_URL, "http://127.0.0.1:8080/preview/");
+
+  const codexEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
+    terminalKind: "codex",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
+  }));
+  assert.strictEqual(codexEnv.TERMINAL_COMMAND, "codex");
+  assert.strictEqual(codexEnv.CODEX_HOME, "/tmp/mapache-codex/session-1");
+  assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapahce-internal/sessions/session-1/codex-home");
 
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",

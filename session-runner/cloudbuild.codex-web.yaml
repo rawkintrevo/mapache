@@ -1,0 +1,15 @@
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.codex-web
+      - -t
+      - ${_IMAGE}
+      - .
+
+images:
+  - ${_IMAGE}
