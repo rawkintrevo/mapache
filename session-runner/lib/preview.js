@@ -4,18 +4,23 @@ const fs = require("fs");
 const path = require("path");
 const {normalizeEnvString, pathExists, safePathInRoot} = require("./utils");
 
-function createPreviewService(config) {
+function createPreviewService(config, deps = {}) {
+  const browserQa = deps.browserQa || null;
   const previewLogs = [];
   const previewLogStreams = new Set();
 
   function capabilityStatus() {
-    return {
+    const status = {
       enabled: config.previewEnabled,
       basePath: config.previewBasePath,
       staticRoot: config.previewStaticRoot,
       injectLogger: config.previewInjectLogger,
       n64RomPath: config.runnerCapabilities.n64 ? config.previewN64RomPath : null,
     };
+    if (browserQa) {
+      status.qa = browserQa.capabilityStatus();
+    }
+    return status;
   }
 
   async function status() {
@@ -26,7 +31,7 @@ function createPreviewService(config) {
     const rootExists = await pathExists(staticRoot);
     const upstreamReady = previewConfig.mode === "proxy" ? await previewUpstreamReady(previewConfig.upstream) : false;
     const romStat = previewConfig.mode === "n64" ? await statN64Rom(previewConfig.romPath) : null;
-    return {
+    const response = {
       ok: true,
       mode: previewConfig.mode,
       ready: previewConfig.mode === "proxy" ? upstreamReady : previewConfig.mode === "n64" ? Boolean(romStat) : indexExists,
@@ -49,6 +54,10 @@ function createPreviewService(config) {
         limit: config.previewLogLimit,
       },
     };
+    if (browserQa) {
+      response.qa = browserQa.status(response);
+    }
+    return response;
   }
 
   async function shareStaticBuild(storage, body) {

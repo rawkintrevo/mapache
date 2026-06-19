@@ -12,8 +12,12 @@ COPY package*.json ./
 RUN npm install --omit=dev \
   && npm install -g @playwright/test
 COPY server.js ./
+COPY bin ./bin
 COPY lib ./lib
 COPY seeded-skills ./seeded-skills
+
+RUN chmod +x /app/bin/mapache-preview-qa.js \
+  && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa
 
 RUN mkdir -p /workspace /root/.pi /workspace/.mapache/qa
 ENV PORT=8080
@@ -30,6 +34,7 @@ ENV PREVIEW_LOG_LIMIT=500
 ENV MAPACHE_RUNNER_URL=http://127.0.0.1:8080
 ENV MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/
 ENV MAPACHE_QA_DIR=/workspace/.mapache/qa
+ENV MAPACHE_BROWSER_QA_COMMAND=/usr/local/bin/mapache-preview-qa
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV NODE_PATH=/usr/local/lib/node_modules

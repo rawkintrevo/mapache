@@ -214,16 +214,22 @@ The shared runner server still owns the terminal, sync, protected shutdown, Git,
 - `MAPACHE_RUNNER_URL=http://127.0.0.1:8080`
 - `MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/`
 - `MAPACHE_QA_DIR=/workspace/.mapache/qa`
+- `MAPACHE_BROWSER_QA_COMMAND=/usr/local/bin/mapache-preview-qa`
 
 When preview is enabled, the runner exposes:
 
 - `GET /capabilities` for live runtime capability discovery.
 - `GET /preview/status` for static preview readiness.
+- `GET /preview/qa/status` for browser automation readiness and the last QA run state.
 - `GET /preview/logs` for the in-memory browser console log ring buffer.
 - `GET /preview/logs/stream` for server-sent browser console log events.
 - `POST /preview/logs` for the injected browser logger.
 - `GET /preview/*` for static files under `/workspace/build` with SPA fallback to `index.html`.
 - `POST /preview/share` for backend-only static preview export to Cloud Storage. This route requires the runner shutdown token and is not available through browser preview access.
+
+The web images now provide a supported browser QA command at `/usr/local/bin/mapache-preview-qa`. The command launches Chromium through Playwright with fixed desktop/mobile viewport defaults, supports basic `goto`, `click`, `fill`, `press`, `waitFor`, and `screenshot` actions from a JSON spec, writes screenshots plus `report.md` and `report.json` under `$MAPACHE_QA_DIR/latest`, and updates `$MAPACHE_QA_DIR/last-run.json` so the runner can report whether the last QA execution passed or failed.
+
+`GET /capabilities` includes preview QA capability metadata such as the command path, Chromium executable path, supported viewports, and supported actions. `GET /preview/status` now embeds a `qa` block whose `state` distinguishes `preview_not_running`, `browser_automation_unavailable`, `browser_ready`, and `qa_execution_failed`.
 
 The `pi-web` static preview serves generated output from `/workspace/build`. The seeded `mapache-preview-build` skill instructs agents to emit browser-loadable output there and to configure relative asset bases, such as Vite's `base: "./"`, so bundled assets resolve correctly under `/preview/`.
 
@@ -231,7 +237,7 @@ Share Preview uses the same static preview root. The runner reads the active pre
 
 Public shared previews are served by the Cloud Functions API from `publicPreviews/{token}` metadata and Cloud Storage objects. Preview tokens are unguessable and expire after 30 days; expired previews return HTTP 410. There is not yet a dedicated garbage-collection job for expired preview objects, so storage cleanup is a maintenance follow-up if preview volume grows.
 
-HTML responses from the static preview receive a small development logger script when `PREVIEW_INJECT_LOGGER=true`. It forwards `console.log`, `console.info`, `console.warn`, `console.error`, `window.onerror`, and unhandled promise rejections to the runner log buffer. QA agents can combine these logs with Playwright screenshots and interaction checks without needing to scrape the terminal.
+HTML responses from the static preview receive a small development logger script when `PREVIEW_INJECT_LOGGER=true`. It forwards `console.log`, `console.info`, `console.warn`, `console.error`, `window.onerror`, and unhandled promise rejections to the runner log buffer. QA agents can combine these logs with the supported browser QA command's screenshots, failed-request capture, and interaction checks without needing to scrape the terminal.
 
 Agents can switch the preview gateway from static-file serving to a local app/API server by writing `/workspace/.mapache/preview.json`:
 
@@ -252,7 +258,7 @@ On startup, `pi-web` also seeds three workspace-local Pi skills when they are mi
 - `mapache-api-hosting`
 - `mapache-preview-qa`
 
-These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-web` sessions. Existing user-edited skills with the same names are not overwritten.
+These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-web` sessions. `mapache-preview-qa` now points agents at the supported `mapache-preview-qa` command instead of embedding an inline Playwright launch script. Existing user-edited skills with the same names are not overwritten.
 
 Build and push the image with:
 
@@ -264,7 +270,7 @@ gcloud builds submit session-runner \
 
 ## Codex Web Runtime
 
-`session-runner/Dockerfile.codex-web` is the web-development Codex runner. It has the same Chromium, Playwright, preview gateway, browser log capture, and capabilities contract as `pi-web`:
+`session-runner/Dockerfile.codex-web` is the web-development Codex runner. It has the same Chromium, Playwright, preview gateway, browser log capture, runner-owned browser QA command, and capabilities contract as `pi-web`:
 
 ```json
 {"terminal":true,"preview":true,"previewQa":true,"functions":true}

@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const express = require("express");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
+const {createBrowserQaService} = require("./lib/browserQa");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
@@ -25,9 +26,10 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const activity = createActivityService({admin, db, config});
+const browserQa = createBrowserQaService(config);
 const codex = createCodexService({config});
 const git = createGitService({config, activity});
-const preview = createPreviewService(config);
+const preview = createPreviewService(config, {browserQa});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
 const pi = createPiService({config, syncUp: workspace.syncUp});
 const terminalSession = createTerminalSession({
@@ -71,7 +73,7 @@ app.get("/healthz", requireBrowserAccess, (req, res) => {
   });
 });
 
-app.get("/capabilities", requireBrowserAccess, (req, res) => {
+app.get("/capabilities", requireBrowserAccess, async (req, res) => {
   res.json({
     ok: true,
     capabilities: config.runnerCapabilities,
@@ -98,6 +100,14 @@ if (config.previewEnabled) {
 
   app.get(`${config.previewBasePath}/status`, async (req, res) => {
     res.json(await preview.status());
+  });
+
+  app.get(`${config.previewBasePath}/qa/status`, async (req, res) => {
+    const previewStatus = await preview.status();
+    res.json({
+      ok: true,
+      qa: previewStatus.qa || browserQa.status(previewStatus),
+    });
   });
 
   app.get(`${config.previewBasePath}/logs`, (req, res) => {
