@@ -12,7 +12,7 @@ Use this skill when the user gives a GitHub issue number, such as "work on issue
 - A short-lived GitHub App token may be available as $GITHUB_AUTOMATION_TOKEN.
 - If the token is absent, public repositories can still use unauthenticated GitHub API requests.
 - The runner may already be on a clean mapache/* branch for this session.
-- Connected GitHub workspaces usually start on a fresh mapache/* branch whose base branch was fetched immediately before Pi started.
+- Connected GitHub workspaces may start on a fresh mapache/* automation branch whose base branch was fetched immediately before the agent started.
 
 ## Read The Issue
 

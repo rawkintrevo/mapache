@@ -3,7 +3,7 @@
 const {createPiPackageService} = require("./piPackage.service");
 const {createPiSeededSkillService} = require("./piSeededSkills.service");
 const {createPiSkillService} = require("./piSkill.service");
-const path = require("path");
+const {defaultWorkspaceSkills} = require("./workspaceSkillCatalog");
 
 function createPiService({config, syncUp}) {
   let packageOperationLock = null;
@@ -107,40 +107,7 @@ function sendPiSkillError(res, error, fallbackCode) {
 }
 
 function defaultRuntimeSkills(config = {}) {
-  const capabilities = config.runnerCapabilities || config || {};
-  const commonSkills = defaultCommonPiSkills(config);
-  if (capabilities.n64) return [...commonSkills, ...defaultPiN64Skills()];
-  if (capabilities.preview) return [...commonSkills, ...defaultPiWebSkills()];
-  return commonSkills;
-}
-
-const SEEDED_SKILLS_DIR = path.join(__dirname, "..", "seeded-skills");
-
-function seededSkill(name) {
-  return {
-    name,
-    filePath: path.join(SEEDED_SKILLS_DIR, name, "SKILL.md"),
-  };
-}
-
-function defaultCommonPiSkills(config = {}) {
-  if (config.workspaceSourceMode !== "github") return [];
-  return [seededSkill("mapache-github-issue")];
-}
-
-function defaultPiWebSkills() {
-  return [
-    seededSkill("mapache-preview-build"),
-    seededSkill("mapache-api-hosting"),
-    seededSkill("mapache-preview-qa"),
-  ];
-}
-
-function defaultPiN64Skills() {
-  return [
-    seededSkill("mapache-n64-build"),
-    seededSkill("mapache-n64-preview"),
-  ];
+  return defaultWorkspaceSkills(config);
 }
 
 module.exports = {

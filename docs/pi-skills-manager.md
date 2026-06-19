@@ -46,28 +46,36 @@ Skills do not use archive-backed sync. Unlike Pi packages, skills are small Mark
 
 ## Runner-Seeded Skills
 
-Some curated runners seed workflow skills during startup after workspace restore and before the Pi terminal process starts. Seeded skills are ordinary workspace-local skill files under:
+Mapache-owned seeded skills have one harness-neutral source catalog under `session-runner/seeded-skills/`. The runner selects named profiles from workspace context and capabilities:
+
+- `github` for connected GitHub workspaces.
+- `web` for preview-capable non-N64 runners.
+- `n64` for N64-capable runners.
+
+Pi and Codex use the same selected catalog entries. During startup, Pi materializes them as ordinary workspace-local skill files under:
 
 ```text
 /workspace/.pi/skills/{skill-name}/SKILL.md
 ```
 
-All Pi runners seed:
+Codex materializes the same files under `.agents/skills/{skill-name}/SKILL.md`. Profile resolution is independent of the agent harness, and the skill text must not name Pi- or Codex-specific runner variants.
+
+The `github` profile includes:
 
 - `mapache-github-issue`: explains how to work from or create GitHub issues by reading repository context, applying type and difficulty labels for new issues, confirming the base branch is up to date before editing, asking clarifying questions or decision questions when needed, implementing the scoped change, and ending with a local commit.
 
-Current `pi-web` seeded skills are:
+The `web` profile includes:
 
 - `mapache-preview-build`: explains how to build static output to `/workspace/build`.
 - `mapache-api-hosting`: explains how to run a localhost app/API server and proxy `/preview/*` to it with `/workspace/.mapache/preview.json`.
 - `mapache-preview-qa`: explains how to use preview status, browser logs, screenshots, and Playwright QA artifacts under `$MAPACHE_QA_DIR`.
 
-Current `pi-n64` seeded skills are:
+The `n64` profile includes:
 
 - `mapache-n64-build`: explains how to build/package Nintendo 64 homebrew ROM artifacts to `/workspace/build/game.z64`.
 - `mapache-n64-preview`: explains the N64 EmulatorJS preview shell, status endpoint, ROM endpoint, and optional emulator core override.
 
-The runner creates these files only when missing. User-edited files with the same names are not overwritten.
+The runner creates native files only when missing. User-edited files with the same names are not overwritten. Codex additionally imports missing user-authored Pi skills for compatibility; bundled Mapache skills no longer have a separate Codex template tree.
 
 ## Backend API
 

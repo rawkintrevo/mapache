@@ -1,9 +1,9 @@
 ---
 name: mapache-preview-qa
-description: QA a Mapache pi-web preview with status checks, console logs, screenshots, and Playwright.
+description: QA a Mapache preview with status checks, console logs, screenshots, and Playwright.
 ---
 
-Use this skill after building a site or starting a preview server in a Mapache pi-web session.
+Use this skill after building a site or starting a preview server in a Mapache preview-capable session.
 
 ## Contract
 

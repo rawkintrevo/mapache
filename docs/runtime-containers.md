@@ -96,12 +96,13 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
 - `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, and Pi auth/home materialization lives in `workspacePiAuth.service.js`.
 - `git.js` composes runner Git behavior. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it.
-- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, default seeded skill Markdown lives under `session-runner/seeded-skills/`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
+- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
+- `workspaceSkillCatalog.js` selects harness-neutral `github`, `web`, and `n64` skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/`; Pi and Codex materialize those same files into their native workspace paths.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`.
 
-All runner images copy `session-runner/seeded-skills/` into `/app/seeded-skills/` so file-backed Pi skill seeds are available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session.
+All runner images copy `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require new revisions of the affected Pi and Codex runner images; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
 ## Terminal Runtime
 
@@ -154,7 +155,7 @@ The image sets `TERMINAL_COMMAND=pi` and `TERMINAL_ARGS=["-c"]`, so new browser 
 
 The skills manager targets `pi-basic` first. Skill listing and mutations require a running session so the manager can write the same `/workspace/.pi/skills/{skill-name}/SKILL.md` files that Pi discovers at startup.
 
-For blank workspaces, `pi-basic` does not seed GitHub workflow skills. For GitHub-backed workspaces, it seeds `mapache-github-issue` when the workspace-local copy is missing.
+For blank workspaces, `pi-basic` does not select the `github` profile. For GitHub-backed workspaces, it materializes the shared `mapache-github-issue` skill when the workspace-local Pi copy is missing.
 
 The extension manager targets Pi-capable runners. For v1, package listing and package mutations can require a running session so the manager can operate on the same `/workspace/.pi/settings.json` and package cache directories that Pi uses.
 
@@ -170,7 +171,7 @@ gcloud builds submit session-runner \
 
 `session-runner/Dockerfile.codex-basic` is the terminal-first Codex runner. It installs the standalone Codex CLI and starts the browser terminal in interactive `codex` mode.
 
-For blank workspaces, `codex-basic` seeds a root `AGENTS.md` when it is missing. For connected GitHub workspaces, it seeds `.agents/skills/mapache-github-issue/SKILL.md` when that file is missing. These Codex-specific workspace seeds are separate from Pi `.pi` files and never overwrite user-edited workspace files.
+For blank workspaces, `codex-basic` seeds a root `AGENTS.md` when it is missing. For connected GitHub workspaces, it materializes the shared `mapache-github-issue` catalog entry at `.agents/skills/mapache-github-issue/SKILL.md` when that file is missing. Native Pi and Codex files remain separate and never overwrite user-edited workspace files, but Mapache-owned seed content has one canonical source.
 
 Codex startup also imports existing workspace-local Pi skills from `.pi/skills/**` into `.agents/skills/{skill-name}/SKILL.md` when the Codex copy is missing. The import normalizes every copied skill to Codex-compatible YAML frontmatter with `name` and `description`, including legacy Pi skill files that lack frontmatter, and does not overwrite user-edited Codex skills.
 
@@ -230,7 +231,7 @@ Agents can switch the preview gateway from static-file serving to a local app/AP
 
 Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or a valid `staticRoot` in `/workspace/.mapache/preview.json`.
 
-On startup, GitHub-backed Pi workspaces seed `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit. Blank workspaces do not seed this GitHub-specific skill. The default seeded skill payloads are versioned as normal `SKILL.md` files under `session-runner/seeded-skills/{skill-name}/SKILL.md`; the runner copies them into `/workspace/.pi/skills/{skill-name}/SKILL.md` only when a workspace-local file is missing.
+On startup, GitHub-backed workspaces select the shared `github` profile containing `mapache-github-issue`, a workflow skill for taking a GitHub issue number, reading issue context and comments through the GitHub API, confirming the base branch is up to date before editing, asking clarifying or decision questions when needed, implementing the scoped change, and ending with a local commit. Blank workspaces do not select this profile. The runner copies selected catalog files into the active harness's native workspace path only when a workspace-local file is missing.
 
 On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 
@@ -256,7 +257,7 @@ gcloud builds submit session-runner \
 {"terminal":true,"preview":true,"previewQa":true,"functions":true}
 ```
 
-It seeds Codex-native workspace files instead of Pi `.pi` skills. When the target file is missing, startup writes:
+It materializes the shared `web` profile as Codex-native workspace files instead of Pi `.pi` skills. When the target file is missing, startup writes:
 
 - `.agents/skills/mapache-preview-build/SKILL.md`
 - `.agents/skills/mapache-api-hosting/SKILL.md`
