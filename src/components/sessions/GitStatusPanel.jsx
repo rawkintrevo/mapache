@@ -119,6 +119,21 @@ function GitStatusBody({status, handlers}) {
   );
 }
 
+function GitStatusHelp({session}) {
+  const isConnectedPiGithubSession = session?.sourceType === "github" &&
+    session?.sourceMode === "connected" &&
+    session?.terminalKind === "pi";
+
+  return (
+    <>
+      <p className="subtle">Push sends the current branch only. Stage files and create a commit before pushing.</p>
+      {isConnectedPiGithubSession ? (
+        <p className="subtle">Connected Pi sessions still handle the automation branch push and PR flow when the Pi process exits.</p>
+      ) : null}
+    </>
+  );
+}
+
 export function GitStatusPanel({
   busy,
   gitStatus,
@@ -184,6 +199,7 @@ export function GitStatusPanel({
         handlers={{onStageGitPath, onUnstageGitPath}}
         status={status}
       />
+      <GitStatusHelp session={session} />
       {data && data.git ? (
         <form
           className="git-commit-form"
