@@ -10,7 +10,7 @@
   },
   "steps": [
     {"useCase": "cases/login.json"},
-    {"useScript": "scripts/create-github-url-workspace.json", "parameters": {"workspaceName": "qa-git-ws-{{timestamp}}", "repoUrl": "https://github.com/rawkintrevo/mapahce"}},
+    {"useScript": "scripts/create-github-url-workspace.json", "parameters": {"workspaceName": "qa-git-ws-{{timestamp}}", "repoUrl": "https://github.com/rawkintrevo/mapache"}},
     {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-git-session-{{timestamp}}", "imageKey": "pi-basic"}},
     {"useScript": "scripts/wait-session-running.json"},
     {"useScript": "scripts/refresh-git-status.json"},
