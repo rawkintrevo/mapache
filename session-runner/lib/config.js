@@ -58,11 +58,20 @@ function createConfig() {
   const runnerCapabilities = parseRunnerCapabilities();
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
+  const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
+    browserQaActionTimeoutMs: positiveNumber(process.env.BROWSER_QA_ACTION_TIMEOUT_MS, 5000),
+    browserQaBaseUrl: normalizeEnvString(process.env.MAPACHE_PREVIEW_URL) || `http://127.0.0.1:${process.env.PORT || 8080}${previewBasePath}/`,
+    browserQaCommand: normalizeEnvString(process.env.MAPACHE_BROWSER_QA_COMMAND) || "mapache-preview-qa",
+    browserQaDir,
+    browserQaExecutablePath: normalizeEnvString(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) || "/usr/bin/chromium",
+    browserQaHeadless: envFlag(process.env.BROWSER_QA_HEADLESS, true),
+    browserQaNavigationTimeoutMs: positiveNumber(process.env.BROWSER_QA_NAVIGATION_TIMEOUT_MS, 15000),
+    browserQaStatePath: path.join(browserQaDir, "last-run.json"),
     bucketName,
     codexHomeDir,
     codexHomeStorageBucketName,

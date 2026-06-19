@@ -77,3 +77,25 @@ test("shareStaticBuild rejects missing and non-static preview output", async () 
       (error) => error.publicMessage === "preview_share_requires_static_build",
   );
 });
+
+test("status includes browser QA readiness when the service is provided", async () => {
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-preview-"));
+  await fs.mkdir(path.join(workspaceDir, "build"), {recursive: true});
+  await fs.writeFile(path.join(workspaceDir, "build", "index.html"), "<h1>Hi</h1>");
+
+  const preview = createPreviewService(previewConfig(workspaceDir), {
+    browserQa: {
+      capabilityStatus() {
+        return {available: true, command: "mapache-preview-qa"};
+      },
+      status(previewStatus) {
+        return {available: true, state: previewStatus.ready ? "browser_ready" : "preview_not_running"};
+      },
+    },
+  });
+
+  const status = await preview.status();
+  assert.equal(status.qa.state, "browser_ready");
+  assert.equal(status.qa.available, true);
+  assert.equal(preview.capabilityStatus().qa.command, "mapache-preview-qa");
+});

@@ -11,6 +11,7 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 ## Canonical Owner
 
 - Entrypoint/router: `session-runner/server.js`
+- Browser QA orchestration: `session-runner/lib/browserQa.js` and `session-runner/bin/mapache-preview-qa.js`
 - Shared config: `session-runner/lib/config.js`
 - Terminal and PTY: `session-runner/lib/terminal.js`
 - Preview gateway: `session-runner/lib/preview.js`
@@ -27,7 +28,7 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 
 `server.js` bootstraps Express, configures route gates, restores workspace state, starts the terminal process, and wires terminal/preview/Git/Pi routes. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve.
 
-The terminal uses `node-pty` and WebSocket replay. Preview routes support static, proxy, and N64 ROM modes depending on runner capabilities and workspace preview config. GitHub workspaces restore `.git` through archives or clone fallback, then restore worktree/cache state. Pi package and skill endpoints operate on the same `/workspace/.pi` files that Pi uses in the terminal.
+The terminal uses `node-pty` and WebSocket replay. Preview routes support static, proxy, and N64 ROM modes depending on runner capabilities and workspace preview config. Web-capable images also expose a runner-owned browser QA contract: `browserQa.js` reports dependency health into `/capabilities`, `/preview/status`, and `/preview/qa/status`, while the image-local `mapache-preview-qa` command launches Chromium through Playwright, writes structured reports under `$MAPACHE_QA_DIR`, and updates a shared `last-run.json` state file that status routes can surface. GitHub workspaces restore `.git` through archives or clone fallback, then restore worktree/cache state. Pi package and skill endpoints operate on the same `/workspace/.pi` files that Pi uses in the terminal.
 
 Pi and Codex runners select the same harness-neutral `github`, `web`, and `n64` skill profiles from workspace source mode and runner capabilities. Pi materializes selected catalog entries under `.pi/skills/**`; Codex materializes the same source files under `.agents/skills/**`. Both paths preserve existing user-edited files. Codex also copies missing user-created Pi skills from `.pi/skills/**` into `.agents/skills/**` with Codex-compatible frontmatter.
 
@@ -36,6 +37,7 @@ Workspace skill CRUD now uses neutral runner routes at `/skills` and `/skills/de
 ## Invariants
 
 - Browser terminal/preview/capability routes require browser-access tokens.
+- Browser QA artifacts and state must stay under `$MAPACHE_QA_DIR`; status routes read that state instead of scraping terminal output.
 - Backend-only runner routes require the separate shutdown token.
 - Tokens must not be persisted into workspace files, archives, or logs.
 - High-cardinality caches such as `.git`, `node_modules`, `/root/.pi`, and Pi package code use archive-backed sync rather than normal file listing.
