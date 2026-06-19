@@ -344,9 +344,8 @@ function piSessionStoragePrefix(workspaceStoragePrefix, sessionId) {
 
 function codexHomeStoragePrefix(workspaceStoragePrefix, sessionId) {
   const cleanPrefix = String(workspaceStoragePrefix || "").replace(/^\/+|\/+$/g, "");
-  const cleanSessionId = cleanName(sessionId);
-  if (!cleanPrefix || !cleanSessionId) return "";
-  return `${cleanPrefix}/${INTERNAL_STORAGE_DIR}/sessions/${cleanSessionId}/codex-home`;
+  if (!cleanPrefix) return "";
+  return `${cleanPrefix}/${INTERNAL_STORAGE_DIR}/codex-home`;
 }
 
 function stringifySyncPolicyExclude(value) {
