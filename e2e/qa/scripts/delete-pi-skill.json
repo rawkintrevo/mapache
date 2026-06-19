@@ -1,16 +1,16 @@
 {
   "id": "script.deletePiSkill",
-  "title": "Delete a workspace-local Pi skill",
+  "title": "Delete a workspace-local skill",
   "parameters": {
     "skillName": "qa-skill"
   },
   "actions": [
     {"type": "confirmDialog", "action": "accept", "optional": true},
     {"type": "click", "role": "button", "nameIncludes": "Delete {{skillName}}"},
-    {"type": "waitForNetwork", "requestUrlIncludes": "/pi-skills/delete", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+    {"type": "waitForNetwork", "requestUrlIncludes": "/skills/delete", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
   ],
   "successSignals": [
-    "POST /pi-skills/delete returns 200",
+    "POST /skills/delete returns 200",
     "Skill no longer appears in the Skills panel"
   ]
 }

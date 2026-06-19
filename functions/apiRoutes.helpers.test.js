@@ -94,8 +94,18 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-packages/install"
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills", {
+  name: "sessionSkills",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills/delete", {
+  name: "sessionSkillDelete",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-skills/delete", {
-  name: "piSkillDelete",
+  name: "sessionSkillDelete",
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });

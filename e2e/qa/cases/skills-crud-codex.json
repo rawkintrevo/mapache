@@ -1,16 +1,16 @@
 {
-  "id": "skills.crud",
-  "title": "Workspace-local skills CRUD (Pi)",
-  "description": "Create a Pi session, create a skill, edit it, delete it, and clean up.",
+  "id": "skills.crud.codex",
+  "title": "Workspace-local skills CRUD (Codex)",
+  "description": "Create a Codex session, create a skill, edit it, delete it, and clean up.",
   "baseUrl": "http://127.0.0.1:5173",
-  "artifactsDir": "artifacts/qa/skills.crud",
+  "artifactsDir": "artifacts/qa/skills.crud.codex",
   "requires": {
     "cloudRun": "Creates a billable Cloud Run service"
   },
   "steps": [
     {"useCase": "cases/login.json"},
-    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-skills-ws-{{timestamp}}"}},
-    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-skills-session-{{timestamp}}", "imageKey": "pi-basic"}},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-codex-skills-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-codex-skills-session-{{timestamp}}", "imageKey": "codex-basic"}},
     {"useScript": "scripts/create-pi-skill.json", "parameters": {"skillName": "qa-skill-{{timestamp}}"}},
     {"useScript": "scripts/edit-pi-skill.json", "parameters": {"skillName": "qa-skill"}},
     {"useScript": "scripts/delete-pi-skill.json", "parameters": {"skillName": "qa-skill"}},

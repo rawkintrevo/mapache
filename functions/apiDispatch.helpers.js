@@ -73,10 +73,10 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "piPackageRemove", jsonResult(({handlers, req, route, user}) => handlers.removePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "piPackageUpdate", jsonResult(({handlers, req, route, user}) => handlers.updatePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
-  piSkills: Object.freeze([
-    ["GET", "piSkills", jsonResult(({handlers, route, user}) => handlers.listPiSkills(user.uid, route.workspaceId, route.sessionId))],
-    ["POST", "piSkills", jsonResult(({handlers, req, route, user}) => handlers.savePiSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
-    ["POST", "piSkillDelete", jsonResult(({handlers, req, route, user}) => handlers.deletePiSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+  workspaceSkills: Object.freeze([
+    ["GET", "sessionSkills", jsonResult(({handlers, route, user}) => handlers.listWorkspaceSkills(user.uid, route.workspaceId, route.sessionId))],
+    ["POST", "sessionSkills", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+    ["POST", "sessionSkillDelete", jsonResult(({handlers, req, route, user}) => handlers.deleteWorkspaceSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
   github: Object.freeze([
     ["GET", "githubRepos", jsonResult(({handlers, user}) => handlers.listConnectedRepos(user.uid))],

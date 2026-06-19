@@ -230,44 +230,51 @@ app.post("/pi/packages/update", async (req, res) => {
   }
 });
 
-app.get("/pi/skills", async (req, res) => {
+async function handleWorkspaceSkillList(req, res) {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
     return;
   }
 
   try {
-    res.json(await pi.withSkillOperationLock({read: true}, pi.listWorkspacePiSkills));
+    res.json(await pi.withSkillOperationLock({read: true}, pi.listWorkspaceSkills));
   } catch (error) {
     sendPiSkillError(res, error, "pi_skill_list_failed");
   }
-});
+}
 
-app.post("/pi/skills", async (req, res) => {
+async function handleWorkspaceSkillSave(req, res) {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
     return;
   }
 
   try {
-    res.json(await pi.withSkillOperationLock({read: false}, () => pi.saveWorkspacePiSkill(req.body || {})));
+    res.json(await pi.withSkillOperationLock({read: false}, () => pi.saveWorkspaceSkill(req.body || {})));
   } catch (error) {
     sendPiSkillError(res, error, "pi_skill_save_failed");
   }
-});
+}
 
-app.post("/pi/skills/delete", async (req, res) => {
+async function handleWorkspaceSkillDelete(req, res) {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
     return;
   }
 
   try {
-    res.json(await pi.withSkillOperationLock({read: false}, () => pi.deleteWorkspacePiSkill(req.body || {})));
+    res.json(await pi.withSkillOperationLock({read: false}, () => pi.deleteWorkspaceSkill(req.body || {})));
   } catch (error) {
     sendPiSkillError(res, error, "pi_skill_delete_failed");
   }
-});
+}
+
+app.get("/skills", handleWorkspaceSkillList);
+app.post("/skills", handleWorkspaceSkillSave);
+app.post("/skills/delete", handleWorkspaceSkillDelete);
+app.get("/pi/skills", handleWorkspaceSkillList);
+app.post("/pi/skills", handleWorkspaceSkillSave);
+app.post("/pi/skills/delete", handleWorkspaceSkillDelete);
 
 app.post("/git/pull", async (req, res) => {
   await handleGitAction(req, res, "git pull failed", "git_pull_failed", () => git.pullGitAction(), {

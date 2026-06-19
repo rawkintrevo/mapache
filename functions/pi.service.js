@@ -59,21 +59,27 @@ function createPiService(dependencies = {}) {
     completeOpenAiCodexDeviceCode,
     deletePiAuthEntry,
     deletePiAuthProvider,
+    deleteWorkspaceSkill: (uid, workspaceId, sessionId, payload) =>
+      deleteWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     deletePiSkill: (uid, workspaceId, sessionId, payload) =>
-      deletePiSkill(uid, workspaceId, sessionId, payload, dependencies),
+      deleteWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     getPiAuth,
     handleOpenAiCodexOAuthCallback,
     installPiPackage: (uid, workspaceId, sessionId, payload) =>
       installPiPackage(uid, workspaceId, sessionId, payload, dependencies),
     listPiPackages: (uid, workspaceId, sessionId) =>
       listPiPackages(uid, workspaceId, sessionId, dependencies),
+    listWorkspaceSkills: (uid, workspaceId, sessionId) =>
+      listWorkspaceSkills(uid, workspaceId, sessionId, dependencies),
     listPiSkills: (uid, workspaceId, sessionId) =>
-      listPiSkills(uid, workspaceId, sessionId, dependencies),
+      listWorkspaceSkills(uid, workspaceId, sessionId, dependencies),
     removePiPackage: (uid, workspaceId, sessionId, payload) =>
       removePiPackage(uid, workspaceId, sessionId, payload, dependencies),
     savePiAuthProvider,
+    saveWorkspaceSkill: (uid, workspaceId, sessionId, payload) =>
+      saveWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     savePiSkill: (uid, workspaceId, sessionId, payload) =>
-      savePiSkill(uid, workspaceId, sessionId, payload, dependencies),
+      saveWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     saveSessionPiAuthSelection: (uid, workspaceId, sessionId, payload) =>
       saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, dependencies),
     startOpenAiCodexDeviceCode,
@@ -420,33 +426,36 @@ async function listPiPackages(uid, workspaceId, sessionId, dependencies = {}) {
   return {...data, knownPackages};
 }
 
-async function listPiSkills(uid, workspaceId, sessionId, dependencies = {}) {
+async function listWorkspaceSkills(uid, workspaceId, sessionId, dependencies = {}) {
   await requireWorkspaceDependency(dependencies, uid, workspaceId);
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!sessionSupportsWorkspaceSkills(session)) throw httpError(501, "runner_skill_listing_unsupported");
   if (!session.shutdownToken) throw httpError(501, "runner_skill_listing_unsupported");
-  return requestRunnerPiSkills(session, dependencies);
+  return requestRunnerWorkspaceSkills(session, dependencies);
 }
 
-async function savePiSkill(uid, workspaceId, sessionId, payload, dependencies = {}) {
+async function saveWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies = {}) {
   await requireWorkspaceDependency(dependencies, uid, workspaceId);
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   const skill = normalizePiSkillPayload(payload);
   if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!sessionSupportsWorkspaceSkills(session)) throw httpError(501, "runner_skill_save_unsupported");
   if (!session.shutdownToken) throw httpError(501, "runner_skill_save_unsupported");
-  return requestRunnerPiSkillSave(session, skill, dependencies);
+  return requestRunnerWorkspaceSkillSave(session, skill, dependencies);
 }
 
-async function deletePiSkill(uid, workspaceId, sessionId, payload, dependencies = {}) {
+async function deleteWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies = {}) {
   await requireWorkspaceDependency(dependencies, uid, workspaceId);
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   const skillName = normalizePiSkillName(payload.name);
   if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!sessionSupportsWorkspaceSkills(session)) throw httpError(501, "runner_skill_delete_unsupported");
   if (!session.shutdownToken) throw httpError(501, "runner_skill_delete_unsupported");
-  return requestRunnerPiSkillDelete(session, {name: skillName}, dependencies);
+  return requestRunnerWorkspaceSkillDelete(session, {name: skillName}, dependencies);
 }
 
 async function listKnownPiPackages(uid, data) {
@@ -621,37 +630,75 @@ async function requestRunnerPiPackageUpdate(session, body, dependencies = {}) {
   });
 }
 
-async function requestRunnerPiSkills(session, dependencies = {}) {
-  return requestRunnerJsonDependency(dependencies, session, "/pi/skills", {
-    notFoundError: "runner_skill_listing_unsupported",
-    notFoundStatus: 501,
-    failureError: "pi_skill_list_failed",
-    unavailableError: "runner_skill_list_unavailable",
+async function requestRunnerWorkspaceSkills(session, dependencies = {}) {
+  return requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
+    legacyRoutePath: "/pi/skills",
+    routePath: "/skills",
+    requestOptions: {
+      notFoundError: "runner_skill_listing_unsupported",
+      notFoundStatus: 501,
+      failureError: "pi_skill_list_failed",
+      unavailableError: "runner_skill_list_unavailable",
+    },
   });
 }
 
-async function requestRunnerPiSkillSave(session, body, dependencies = {}) {
-  return requestRunnerJsonDependency(dependencies, session, "/pi/skills", {
-    method: "POST",
-    body,
-    notFoundError: "runner_skill_save_unsupported",
-    notFoundStatus: 501,
-    failureError: "pi_skill_save_failed",
-    unavailableError: "runner_skill_save_unavailable",
-    timeoutMs: 30000,
+async function requestRunnerWorkspaceSkillSave(session, body, dependencies = {}) {
+  return requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
+    legacyRoutePath: "/pi/skills",
+    routePath: "/skills",
+    requestOptions: {
+      method: "POST",
+      body,
+      notFoundError: "runner_skill_save_unsupported",
+      notFoundStatus: 501,
+      failureError: "pi_skill_save_failed",
+      unavailableError: "runner_skill_save_unavailable",
+      timeoutMs: 30000,
+    },
   });
 }
 
-async function requestRunnerPiSkillDelete(session, body, dependencies = {}) {
-  return requestRunnerJsonDependency(dependencies, session, "/pi/skills/delete", {
-    method: "POST",
-    body,
-    notFoundError: "runner_skill_delete_unsupported",
-    notFoundStatus: 501,
-    failureError: "pi_skill_delete_failed",
-    unavailableError: "runner_skill_delete_unavailable",
-    timeoutMs: 30000,
+async function requestRunnerWorkspaceSkillDelete(session, body, dependencies = {}) {
+  return requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
+    legacyRoutePath: "/pi/skills/delete",
+    routePath: "/skills/delete",
+    requestOptions: {
+      method: "POST",
+      body,
+      notFoundError: "runner_skill_delete_unsupported",
+      notFoundStatus: 501,
+      failureError: "pi_skill_delete_failed",
+      unavailableError: "runner_skill_delete_unavailable",
+      timeoutMs: 30000,
+    },
   });
+}
+
+function sessionSupportsWorkspaceSkills(session = {}) {
+  const terminalKind = String(session.terminalKind || "").trim().toLowerCase();
+  if (terminalKind === "pi" || terminalKind === "codex") return true;
+
+  const imageKey = String(session.imageKey || "").trim().toLowerCase();
+  if (imageKey.startsWith("pi-") || imageKey.startsWith("codex-")) return true;
+
+  const image = String(session.image || "").trim().toLowerCase();
+  return /session-runner:(pi|codex)-/.test(image);
+}
+
+async function requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
+  routePath,
+  legacyRoutePath,
+  requestOptions,
+}) {
+  try {
+    return await requestRunnerJsonDependency(dependencies, session, routePath, requestOptions);
+  } catch (error) {
+    if (error?.status !== (requestOptions.notFoundStatus || 501) || error?.publicMessage !== requestOptions.notFoundError) {
+      throw error;
+    }
+    return requestRunnerJsonDependency(dependencies, session, legacyRoutePath, requestOptions);
+  }
 }
 
 function normalizePiSkillPayload(payload) {
@@ -959,4 +1006,5 @@ module.exports = {
   parseOpenAiCodexErrorCode,
   piPackageCatalogDocId,
   piPackageCatalogRecord,
+  sessionSupportsWorkspaceSkills,
 };

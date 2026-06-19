@@ -14,18 +14,19 @@ import {
   updatePiPackageState,
 } from "../workflows/piPackages.js";
 import {
-  cancelPiSkillEditState,
-  deletePiSkillState,
-  editPiSkillState,
-  loadPiSkillsState,
-  savePiSkillState,
-  updatePiSkillFormState,
+  cancelWorkspaceSkillEditState,
+  deleteWorkspaceSkillState,
+  editWorkspaceSkillState,
+  loadWorkspaceSkillsState,
+  saveWorkspaceSkillState,
+  updateWorkspaceSkillFormState,
 } from "../workflows/piSkills.js";
 import {
   resetPiAuth as resetPiAuthState,
   resetPiPackages as resetPiPackagesState,
-  resetPiSkills as resetPiSkillsState,
+  resetWorkspaceSkills as resetWorkspaceSkillsState,
 } from "../state/resetters.js";
+import {sessionSkillHarness} from "../utils/sessionSkills.js";
 
 export function createPiPanelsController({state, render}) {
   function resetPiPackages() {
@@ -36,16 +37,16 @@ export function createPiPanelsController({state, render}) {
     resetPiAuthState(state);
   }
 
-  function resetPiSkills() {
-    resetPiSkillsState(state);
+  function resetWorkspaceSkills() {
+    resetWorkspaceSkillsState(state);
   }
 
   async function loadPiPackages() {
     await loadPiPackagesState({state, resetPiPackages, render});
   }
 
-  async function loadPiSkills() {
-    await loadPiSkillsState({state, render});
+  async function loadWorkspaceSkills() {
+    await loadWorkspaceSkillsState({state, render});
   }
 
   async function loadPiAuth(options = {}) {
@@ -56,39 +57,42 @@ export function createPiPanelsController({state, render}) {
     await loadPiPackages();
   }
 
-  async function refreshPiSkills() {
-    await loadPiSkills();
+  async function refreshWorkspaceSkills() {
+    await loadWorkspaceSkills();
   }
 
   async function refreshPiAuth() {
     await loadPiAuth({showMessage: true});
   }
 
-  function updatePiSkillForm(patch) {
-    updatePiSkillFormState(state, patch);
+  function updateWorkspaceSkillForm(patch) {
+    updateWorkspaceSkillFormState(state, patch);
     render();
   }
 
-  function editPiSkill(skill) {
-    editPiSkillState(state, skill);
+  function editWorkspaceSkill(skill) {
+    editWorkspaceSkillState(state, skill);
     render();
   }
 
-  function cancelPiSkillEdit() {
-    cancelPiSkillEditState(state);
+  function cancelWorkspaceSkillEdit() {
+    cancelWorkspaceSkillEditState(state);
     render();
   }
 
-  async function savePiSkill() {
-    await savePiSkillState({state, loadPiSkills, render});
+  async function saveWorkspaceSkill() {
+    await saveWorkspaceSkillState({state, loadWorkspaceSkills, render});
   }
 
-  async function deletePiSkill(name) {
+  async function deleteWorkspaceSkill(name) {
     const skillName = String(name || "").trim();
     if (!skillName) return;
-    const ok = window.confirm(`Delete Pi skill ${skillName}? This removes .pi/skills/${skillName}/SKILL.md from the workspace.`);
+    const session = state.sessions.find((item) => item.id === state.selectedSessionId) || null;
+    const harness = sessionSkillHarness(session);
+    const path = harness ? `${harness.relativeSkillsPath}/${skillName}/SKILL.md` : `<skill-path>`;
+    const ok = window.confirm(`Delete skill ${skillName}? This removes ${path} from the workspace.`);
     if (!ok) return;
-    await deletePiSkillState({state, name: skillName, loadPiSkills, render});
+    await deleteWorkspaceSkillState({state, name: skillName, loadWorkspaceSkills, render});
   }
 
   function updatePiAuthForm(patch) {
@@ -135,28 +139,36 @@ export function createPiPanelsController({state, render}) {
   }
 
   return {
-    cancelPiSkillEdit,
+    cancelPiSkillEdit: cancelWorkspaceSkillEdit,
+    cancelWorkspaceSkillEdit,
     deletePiAuthProvider,
-    deletePiSkill,
-    editPiSkill,
+    deletePiSkill: deleteWorkspaceSkill,
+    deleteWorkspaceSkill,
+    editPiSkill: editWorkspaceSkill,
+    editWorkspaceSkill,
     installPiPackage,
     loadPiAuth,
     loadPiPackages,
-    loadPiSkills,
+    loadPiSkills: loadWorkspaceSkills,
+    loadWorkspaceSkills,
     refreshPiAuth,
     refreshPiPackages,
-    refreshPiSkills,
+    refreshPiSkills: refreshWorkspaceSkills,
+    refreshWorkspaceSkills,
     removePiPackage,
     resetPiAuth,
     resetPiPackages,
-    resetPiSkills,
+    resetPiSkills: resetWorkspaceSkills,
+    resetWorkspaceSkills,
     savePiAuthProvider,
-    savePiSkill,
+    savePiSkill: saveWorkspaceSkill,
+    saveWorkspaceSkill,
     saveSessionPiAuthSelection,
     startOpenAiCodexDeviceLogin,
     updatePiAuthForm,
     updatePiInstallSource,
     updatePiPackage,
-    updatePiSkillForm,
+    updatePiSkillForm: updateWorkspaceSkillForm,
+    updateWorkspaceSkillForm,
   };
 }

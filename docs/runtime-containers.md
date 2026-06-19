@@ -96,7 +96,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
 - `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, and Pi auth/home materialization lives in `workspacePiAuth.service.js`.
 - `git.js` composes runner Git behavior. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it.
-- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
+- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, workspace skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `workspaceSkillCatalog.js` selects harness-neutral `github`, `web`, and `n64` skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/`; Pi and Codex materialize those same files into their native workspace paths.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
@@ -153,7 +153,20 @@ The terminal page also loads `@xterm/addon-fit` from the runner and fits the xte
 
 The image sets `TERMINAL_COMMAND=pi` and `TERMINAL_ARGS=["-c"]`, so new browser terminal connections open Pi in resume mode instead of a login shell or fresh conversation.
 
-The skills manager targets `pi-basic` first. Skill listing and mutations require a running session so the manager can write the same `/workspace/.pi/skills/{skill-name}/SKILL.md` files that Pi discovers at startup.
+The skills manager targets Pi and Codex sessions. Skill listing and mutations require a running session so the manager can write the same native workspace skill files the active harness discovers at startup:
+
+- Pi: `/workspace/.pi/skills/{skill-name}/SKILL.md`
+- Codex: `/workspace/.agents/skills/{skill-name}/SKILL.md`
+
+The neutral runner endpoints are:
+
+```text
+GET  /skills
+POST /skills
+POST /skills/delete
+```
+
+Legacy `/pi/skills*` aliases remain available so older clients and mixed deploys keep working while frontend, Functions, and runner revisions roll forward.
 
 For blank workspaces, `pi-basic` does not select the `github` profile. For GitHub-backed workspaces, it materializes the shared `mapache-github-issue` skill when the workspace-local Pi copy is missing.
 
