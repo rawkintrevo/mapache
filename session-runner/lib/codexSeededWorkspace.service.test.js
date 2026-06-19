@@ -70,6 +70,16 @@ test("default codex workspace seed catalog selects blank, github, and preview se
 
   const contents = await Promise.all(previewSeeds.map(resolveSeedContent));
   assert.ok(contents.every((content) => content.length > 0));
+  assert.ok(contents.slice(1).every((content) => !/\b(?:pi|codex)-web\b/i.test(content)));
+
+  assert.deepEqual(defaultWorkspaceSeeds({
+    workspaceSourceMode: "blank",
+    runnerCapabilities: {n64: true},
+  }).map((seed) => seed.targetPath), [
+    "AGENTS.md",
+    path.join(".agents", "skills", "mapache-n64-build", "SKILL.md"),
+    path.join(".agents", "skills", "mapache-n64-preview", "SKILL.md"),
+  ]);
 });
 
 test("imports Pi skills for Codex with generated frontmatter", async (t) => {

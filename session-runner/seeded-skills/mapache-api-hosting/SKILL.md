@@ -1,6 +1,6 @@
 ---
 name: mapache-api-hosting
-description: Host an app or API behind the Mapache pi-web preview gateway.
+description: Host an app or API behind the Mapache preview gateway.
 ---
 
 Use this skill when a preview needs a running server, API routes, server-rendered app, or function emulator instead of only static files.

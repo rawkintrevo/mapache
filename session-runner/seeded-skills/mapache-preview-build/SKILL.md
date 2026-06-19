@@ -1,9 +1,9 @@
 ---
 name: mapache-preview-build
-description: Build static web output where the Mapache pi-web preview canvas can serve it.
+description: Build static web output where the Mapache preview canvas can serve it.
 ---
 
-Use this skill when building a static website or static frontend bundle in a Mapache pi-web session.
+Use this skill when building a static website or static frontend bundle in a Mapache preview-capable session.
 
 ## Contract
 
