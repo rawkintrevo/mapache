@@ -61,6 +61,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
 - `cases/workspace-files-editor.json`: Workspace file create/edit/download URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
+- `cases/session-sidebar-entry-point.json`: Single create-session action in the left sidebar.
 - `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, and `codex-web` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.

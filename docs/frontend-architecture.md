@@ -26,7 +26,7 @@ The signed-in shell is componentized under `src/components/`. `AppShell` owns th
 
 Preview-capable sessions show Preview, Share Preview, and Publish actions in `SessionDetail`. Share Preview calls the authenticated API to export the static build and then displays a copyable public preview URL. Publish is intentionally informational in V1 and directs users to contact `trevor@ata.systems`; it must not imply a production deploy happened.
 
-The left drawer user menu shows an Admin item only when the current profile includes `isAdmin: true`. The Admin page lives in `src/components/admin/AdminPage.jsx` and reads paginated user summaries through `src/services/api.js`; `src/main.js` owns the admin page cursor stack, refresh, and whitelist toggle handlers.
+The left drawer exposes session creation only from the Sessions section header for the selected workspace; workspace rows do not duplicate that action. The left drawer user menu shows an Admin item only when the current profile includes `isAdmin: true`. The Admin page lives in `src/components/admin/AdminPage.jsx` and reads paginated user summaries through `src/services/api.js`; `src/main.js` owns the admin page cursor stack, refresh, and whitelist toggle handlers.
 
 Workflow modules under `src/workflows/` own cohesive API/state sequences such as session lifecycle, GitHub connection and repository refresh, Git/PR operations, Pi auth, Pi packages, Pi skills, and workspace file/editor actions. Controller modules under `src/controllers/` own drawer toggles, modal visibility, file tree/editor handlers, and right-panel handlers so `src/main.js` does not keep growing flat callback lists.
 

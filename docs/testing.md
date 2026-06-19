@@ -110,7 +110,7 @@ Recommended location:
 
 Chrome DevTools browser QA can reach the signed-in shell through the QA custom-token flow. Before opening `/app`, set `mapache.qaLogin=1` and `mapache.qaSecret=<secret>` in browser storage, or use `/app?qaLogin=1&qaSecret=<secret>` for a one-time login trigger. The frontend removes `qaSecret` from the URL after reading it. The backend route is `POST /api/qa/custom-token`, backed by `functions/qaAuth.service.js`, and requires the configured QA account to pass the same app allowlist as normal users.
 
-QA manifests under `e2e/qa/` are executable instructions for agents, not default checks. A script is one reusable browser action, such as QA login. A case is a sequence of actions and assertions, and may reference scripts with `useScript` or other cases with `useCase`. The baseline case is `e2e/qa/cases/login.json`; follow-on cases should compose it instead of duplicating login steps.
+QA manifests under `e2e/qa/` are executable instructions for agents, not default checks. A script is one reusable browser action, such as QA login. A case is a sequence of actions and assertions, and may reference scripts with `useScript` or other cases with `useCase`. The baseline case is `e2e/qa/cases/login.json`; it verifies the stable signed-in Navigation shell so it works for both empty and previously used QA accounts. Follow-on cases should compose it instead of duplicating login steps.
 
 When running the local Vite app for browser QA, keep screenshots, console logs, network dumps, traces, and result JSON under `artifacts/qa/`. The dev server ignores `artifacts/**`, so writing QA evidence there does not consume extra file watchers or crash the app under test.
 

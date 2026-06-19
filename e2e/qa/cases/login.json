@@ -14,7 +14,7 @@
     },
     {
       "assert": "snapshot-text",
-      "expected": "Create a workspace"
+      "expected": "Navigation"
     },
     {
       "assert": "network-status",
