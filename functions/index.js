@@ -66,6 +66,10 @@ const {
 } = require("./github.service");
 const {createPiService} = require("./pi.service");
 const {createQaAuthService} = require("./qaAuth.service");
+const {
+  classifyRunnerResponseError,
+  parseRunnerResponseBody,
+} = require("./runnerProxy.helpers");
 
 const githubService = createGithubService();
 const piService = createPiService({
@@ -713,16 +717,20 @@ async function requestRunnerJson(session, routePath, options = {}) {
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
     });
-    const data = await response.json().catch(() => ({}));
+    const rawBody = await response.text().catch(() => "");
+    const data = parseRunnerResponseBody(rawBody);
     if (!response.ok) {
       if (response.status === 404 && options.notFoundError) {
         throw httpError(options.notFoundStatus || 503, options.notFoundError);
       }
       throw httpError(
           response.status === 404 ? 503 : response.status,
-          cleanName(data.error || options.failureError || "runner_request_failed") ||
-            options.failureError ||
-            "runner_request_failed",
+          classifyRunnerResponseError({
+            status: response.status,
+            data,
+            rawBody,
+            fallbackError: options.failureError || "runner_request_failed",
+          }),
       );
     }
     return data;

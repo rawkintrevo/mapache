@@ -120,6 +120,7 @@ export function friendlyFilesError(error) {
 
 export function friendlyGitStatusError(error) {
   const message = error.message || "Could not load Git status.";
+  if (message === "runner_busy_or_unavailable") return "The session runner is busy or unavailable right now. Try again in a few seconds.";
   if (message === "runner_git_status_unavailable") return "Git status is temporarily unavailable.";
   if (message === "runner_git_push_unavailable") return "Git push is temporarily unavailable.";
   if (message === "runner_git_open_pr_unavailable") return "Pull request creation is temporarily unavailable.";
