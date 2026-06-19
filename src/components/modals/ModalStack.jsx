@@ -4,6 +4,7 @@ import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {SessionModal} from "./SessionModal.jsx";
+import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 
 export function ModalStack(props) {
@@ -50,6 +51,21 @@ export function ModalStack(props) {
           session={props.selectedSession}
           onClose={modals.closePiAuthManageModal}
           onSave={pi.saveSessionPiAuthSelection}
+        />
+      ) : null}
+      {state.workspaceSkillModalOpen ? (
+        <WorkspaceSkillModal
+          selectedSession={props.selectedSession}
+          workspaceSkills={state.workspaceSkills}
+          onCancelWorkspaceSkillEdit={pi.cancelPiSkillEdit}
+          onClose={modals.closeWorkspaceSkillModal}
+          onSaveWorkspaceSkill={async () => {
+            await pi.savePiSkill();
+            if (!state.workspaceSkills?.error) {
+              modals.closeWorkspaceSkillModal();
+            }
+          }}
+          onUpdateWorkspaceSkillForm={pi.updatePiSkillForm}
         />
       ) : null}
       {state.fileEditor.open ? (

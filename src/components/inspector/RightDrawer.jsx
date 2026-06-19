@@ -16,16 +16,15 @@ export function RightDrawer({
   onEditPiSkill,
   onOpenAuthModal,
   onOpenPiAuthManage,
+  onOpenWorkspaceSkillModal,
   onRefreshPiAuth,
   onRefreshPiPackages,
   onRefreshPiSkills,
   onRemovePiPackage,
-  onSavePiSkill,
   onToggleDrawerSection,
   onToggleRightDrawer,
   onUpdatePiInstallSource,
   onUpdatePiPackage,
-  onUpdatePiSkillForm,
 }) {
   const toggleButton = (
     <Button
@@ -69,10 +68,9 @@ export function RightDrawer({
         onCancelWorkspaceSkillEdit={onCancelPiSkillEdit}
         onDeleteWorkspaceSkill={onDeletePiSkill}
         onEditWorkspaceSkill={onEditPiSkill}
+        onOpenWorkspaceSkillModal={onOpenWorkspaceSkillModal}
         onRefreshWorkspaceSkills={onRefreshPiSkills}
-        onSaveWorkspaceSkill={onSavePiSkill}
         onToggleDrawerSection={onToggleDrawerSection}
-        onUpdateWorkspaceSkillForm={onUpdatePiSkillForm}
       />
       <ExtensionsPanel
         piPackages={state.piPackages}

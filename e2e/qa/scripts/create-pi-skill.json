@@ -8,6 +8,8 @@
   },
   "actions": [
     {"useScript": "scripts/expand-inspector.json"},
+    {"type": "click", "role": "button", "name": "New skill"},
+    {"type": "waitForSnapshotText", "text": "New skill", "timeoutMs": 5000},
     {"type": "fill", "label": "Skill name", "value": "{{skillName}}"},
     {"type": "fill", "label": "Description", "value": "{{description}}"},
     {"type": "fill", "label": "Markdown instructions", "value": "{{content}}"},
