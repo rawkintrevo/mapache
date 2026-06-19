@@ -21,6 +21,8 @@ Read this before changing Firebase config, deployment workflows, Cloud Functions
 
 Firebase Hosting serves the Vite app from `dist/`, rewrites `/api/**` to the `api` Cloud Function, rewrites `/app` and `/app/**` to the app shell, and serves the Docusaurus community build under `/community/**`.
 
+The `/api/**` rewrite also serves public shared website previews at `/api/public-previews/{token}/...`. Those requests are intentionally unauthenticated and are authorized by unguessable preview tokens plus `publicPreviews/{token}` metadata. Deploying Share Preview requires both the Cloud Functions API revision and the web-capable session runner image revision that includes `POST /preview/share`; existing running Cloud Run sessions need restart/recreation before they can export shared previews.
+
 The repo targets the `pi-agents-cloud` Firebase/GCP project. Use explicit project flags for remote build and deploy commands:
 
 ```bash
@@ -40,6 +42,7 @@ Browser QA login uses a Functions secret plus configured QA account params. Conf
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.
 - Keep Functions and runner service accounts separate.
 - Functions changes require a Functions deploy before handoff unless the user explicitly asks not to deploy.
+- Share Preview changes that touch `session-runner/` require rebuilding and pushing `pi-web` and `codex-web`; existing web sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
 - Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `codex-basic`, and `codex-web`.

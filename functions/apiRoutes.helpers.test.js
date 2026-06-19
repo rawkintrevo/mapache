@@ -20,6 +20,16 @@ assertRoute("/api/admin/users/uid-1/whitelist", {
   uid: "uid-1",
 });
 assertRoute("/api/qa/custom-token", {name: "qaCustomToken"});
+assertRoute("/api/public-previews/token_123/index.html", {
+  name: "publicPreview",
+  token: "token_123",
+  path: "index.html",
+});
+assertRoute("/api/public-previews/token_123/assets/app.js", {
+  name: "publicPreview",
+  token: "token_123",
+  path: "assets/app.js",
+});
 assertRoute("/api/pi-auth", {name: "piAuth"});
 assertRoute("/api/pi-auth/providers/anthropic", {
   name: "piAuthProvider",
@@ -64,6 +74,11 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/access-url", {
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/share-preview", {
+  name: "sessionSharePreview",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/git-status", {
   name: "gitStatus",
   workspaceId: "workspace-1",
@@ -105,6 +120,8 @@ assert.strictEqual(routeAllowsMethod({name: "unknown"}, "OPTIONS"), true);
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "GET"), false);
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "POST"), true);
 assert.strictEqual(routeRequiresAuth({name: "qaCustomToken"}, "POST"), false);
+assert.strictEqual(routeRequiresAuth({name: "publicPreview"}, "GET"), false);
+assert.strictEqual(routeRequiresAuth({name: "publicPreview"}, "POST"), true);
 assert.strictEqual(routeRequiresAuth({name: "me"}, "GET"), true);
 assert.strictEqual(routeRequiresAuth({name: "workspaces"}, "POST"), true);
 assert.strictEqual(routeRequiresAuth({name: "unknown"}, "GET"), true);

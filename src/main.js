@@ -107,6 +107,7 @@ const handlers = {
     getSessionAccessUrls,
     resizeSession,
     restartSession,
+    shareSessionPreview,
     selectSession,
     stopSession,
   },
@@ -574,6 +575,10 @@ async function deleteSession(sessionId) {
 
 async function getSessionAccessUrls(workspaceId, sessionId) {
   return state.api.getSessionAccessUrls(workspaceId, sessionId);
+}
+
+async function shareSessionPreview(workspaceId, sessionId) {
+  return state.api.shareSessionPreview(workspaceId, sessionId);
 }
 
 async function runBusy(task, message = "Working...") {

@@ -107,6 +107,15 @@ async function collectDispatch({route, method = "GET", body, query = {}}) {
     },
   });
 
+  const sharePreview = await collectDispatch({
+    method: "POST",
+    route: {name: "sessionSharePreview", workspaceId: "workspace-1", sessionId: "session-1"},
+  });
+  assert.strictEqual(sharePreview.status, 200);
+  assert.strictEqual(sharePreview.payload.handler, "shareSessionPreview");
+  assert.deepStrictEqual(sharePreview.payload.args.slice(0, 3), ["user-1", "workspace-1", "session-1"]);
+  assert.strictEqual(sharePreview.payload.args[3].method, "POST");
+
   assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "openAiCodexDeviceCode", action: "complete"},

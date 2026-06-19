@@ -1,0 +1,11 @@
+{
+  "id": "script.openPublishPanel",
+  "title": "Open the selected session Publish panel",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Publish"},
+    {"type": "waitForSnapshotText", "text": "Automated publishing is not available yet.", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Publish panel opens with V1 publishing instructions"
+  ]
+}

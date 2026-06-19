@@ -1,0 +1,27 @@
+{
+  "id": "session.share-preview-publish",
+  "title": "Preview-capable session exposes Share Preview and Publish actions",
+  "description": "Create a pi-web session and verify the website sharing controls are visible without implying a production deploy.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.share-preview-publish",
+  "requires": {
+    "cloudRun": "Creates a billable pi-web Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-share-preview-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-share-preview-{{timestamp}}", "imageKey": "pi-web", "cpu": "1", "memory": "2Gi"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "snapshot-text", "expected": "Share Preview"},
+    {"assert": "snapshot-text", "expected": "Publish"},
+    {"capture": "screenshot", "fileName": "share-preview-actions.png"},
+    {"useScript": "scripts/open-publish-panel.json"},
+    {"assert": "snapshot-text", "expected": "Automated publishing is not available yet."},
+    {"assert": "snapshot-text", "expected": "Contact trevor@ata.systems for help publishing your website."},
+    {"capture": "screenshot", "fileName": "publish-panel.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

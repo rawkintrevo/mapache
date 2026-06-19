@@ -55,6 +55,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "stopSession", namedJsonResult("session", ({handlers, route, user}) => handlers.stopSession(user.uid, route.workspaceId, route.sessionId))],
     ["DELETE", "session", jsonResult(({handlers, route, user}) => handlers.deleteSession(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "sessionAccess", jsonResult(({handlers, route, user}) => handlers.createSessionAccessUrls(user.uid, route.workspaceId, route.sessionId))],
+    ["POST", "sessionSharePreview", jsonResult(({handlers, req, route, user}) => handlers.shareSessionPreview(user.uid, route.workspaceId, route.sessionId, req))],
     ["POST", "sessionPiAuthSelection", jsonResult(({handlers, req, route, user}) => handlers.saveSessionPiAuthSelection(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
   git: Object.freeze([
