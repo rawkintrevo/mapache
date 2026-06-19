@@ -38,6 +38,12 @@ Use the QA login secret only from an existing local ignored source or an explici
 
 Never write QA secrets to tracked files, screenshots, console output, result JSON, or final answers.
 
+For Codex/OpenAI QA cases that require an OpenAI API key, use the ignored local file:
+
+- `.secrets/openai_qa_key`
+
+Read the raw key from that file at runtime only. Do not copy it into checked-in QA manifests, scripts, PR comments, screenshots, terminal transcripts, or result JSON. When testing Codex API-key auth through the terminal, first verify whether the prompt echoes typed input with a fake value. If it echoes input, do not paste the real key into the terminal; use a safer setup path such as creating a temporary Codex `auth.json` with `codex login --with-api-key` from stdin in an ignored temp directory, then archive/upload that auth state for the QA workspace.
+
 ## Manifest Semantics
 
 Scripts are single reusable actions, such as `scripts/login-qa.json`. Cases are ordered sequences under `cases/` and may compose scripts or other cases.
