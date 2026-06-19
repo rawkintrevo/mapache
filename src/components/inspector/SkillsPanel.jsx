@@ -1,4 +1,4 @@
-import {Edit3, RefreshCw, Save, Trash2, X} from "lucide-react";
+import {Edit3, Plus, RefreshCw, Save, Trash2, X} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
@@ -42,7 +42,7 @@ function SkillRow({busy, skill, onDeleteWorkspaceSkill, onEditWorkspaceSkill}) {
   );
 }
 
-function SkillForm({status, onCancelWorkspaceSkillEdit, onSaveWorkspaceSkill, onUpdateWorkspaceSkillForm}) {
+export function SkillForm({status, onCancelWorkspaceSkillEdit, onSaveWorkspaceSkill, onUpdateWorkspaceSkillForm}) {
   const form = status.form || {};
   return (
     <form
@@ -57,6 +57,8 @@ function SkillForm({status, onCancelWorkspaceSkillEdit, onSaveWorkspaceSkill, on
         <input
           autoComplete="off"
           disabled={status.saving || Boolean(form.editing)}
+          id="workspace-skill-name"
+          name="name"
           placeholder="code-review"
           type="text"
           value={form.name || ""}
@@ -68,6 +70,8 @@ function SkillForm({status, onCancelWorkspaceSkillEdit, onSaveWorkspaceSkill, on
         <input
           autoComplete="off"
           disabled={status.saving}
+          id="workspace-skill-description"
+          name="description"
           placeholder="Use when reviewing code changes for correctness and maintainability."
           type="text"
           value={form.description || ""}
@@ -78,6 +82,8 @@ function SkillForm({status, onCancelWorkspaceSkillEdit, onSaveWorkspaceSkill, on
         Markdown instructions
         <textarea
           disabled={status.saving}
+          id="workspace-skill-content"
+          name="content"
           placeholder="# My Skill\n\nInstructions for the active agent..."
           rows={8}
           value={form.content || ""}
@@ -142,18 +148,34 @@ export function SkillsPanel({
   onCancelWorkspaceSkillEdit,
   onDeleteWorkspaceSkill,
   onEditWorkspaceSkill,
+  onOpenWorkspaceSkillModal,
   onRefreshWorkspaceSkills,
-  onSaveWorkspaceSkill,
   onToggleDrawerSection,
-  onUpdateWorkspaceSkillForm,
 }) {
   const harness = sessionSkillHarness(selectedSession);
   const status = workspaceSkills || {loading: false, saving: false, error: "", message: "", data: null, form: {}};
   const skills = status.data && Array.isArray(status.data.skills) ? status.data.skills : [];
+  const canManageSkills = selectedSession && sessionSupportsWorkspaceSkills(selectedSession);
 
   return (
     <DrawerSection
       actions={[
+        <Button
+          aria-label="New skill"
+          disabled={status.loading || status.saving || !canManageSkills || !onOpenWorkspaceSkillModal}
+          icon={true}
+          key="new-skill"
+          size="compact"
+          title="New skill"
+          tooltip="New skill"
+          variant="secondary"
+          onClick={() => {
+            onCancelWorkspaceSkillEdit?.();
+            onOpenWorkspaceSkillModal?.();
+          }}
+        >
+          <Plus aria-hidden="true" />
+        </Button>,
         <Button
           aria-label="Refresh"
           disabled={status.loading || status.saving || !onRefreshWorkspaceSkills}
@@ -178,21 +200,16 @@ export function SkillsPanel({
           `${harness.label} discovers Markdown skill files under ${harness.relativeSkillsPath}; ${harness.restartHint.charAt(0).toLowerCase()}${harness.restartHint.slice(1)}` :
           "Workspace-local skills for the active Pi or Codex harness."}
       </p>
-      {selectedSession && sessionSupportsWorkspaceSkills(selectedSession) ? (
-        <SkillForm
-          status={status}
-          onCancelWorkspaceSkillEdit={onCancelWorkspaceSkillEdit}
-          onSaveWorkspaceSkill={onSaveWorkspaceSkill}
-          onUpdateWorkspaceSkillForm={onUpdateWorkspaceSkillForm}
-        />
-      ) : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
       <SkillsBody
         selectedSession={selectedSession}
         skills={skills.map((skill) => ({...skill, contentBody: stripFrontmatter(skill.content)}))}
         status={status}
         onDeleteWorkspaceSkill={onDeleteWorkspaceSkill}
-        onEditWorkspaceSkill={onEditWorkspaceSkill}
+        onEditWorkspaceSkill={(skill) => {
+          onEditWorkspaceSkill?.(skill);
+          onOpenWorkspaceSkillModal?.();
+        }}
       />
     </DrawerSection>
   );

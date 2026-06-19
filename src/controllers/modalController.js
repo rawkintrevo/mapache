@@ -26,6 +26,16 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
+  function openWorkspaceSkillModal() {
+    state.workspaceSkillModalOpen = true;
+    render();
+  }
+
+  function closeWorkspaceSkillModal() {
+    state.workspaceSkillModalOpen = false;
+    render();
+  }
+
   function openAuthModal() {
     state.authModalOpen = true;
     render();
@@ -51,10 +61,12 @@ export function createModalController({state, render, loadPiAuth}) {
     closeAuthModal,
     closePiAuthManageModal,
     closeSessionModal,
+    closeWorkspaceSkillModal,
     closeWorkspaceModal,
     openAuthModal,
     openPiAuthManageModal,
     openSessionModal,
+    openWorkspaceSkillModal,
     openWorkspaceModal,
     showProfile,
   };

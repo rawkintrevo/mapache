@@ -47,6 +47,7 @@ This document serves as an index for significant UI components in the applicatio
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a new session. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
+| `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for creating and editing workspace-local Markdown skills from the right inspector Skills panel. |
 
 When adding new UI components, please update this index.
 

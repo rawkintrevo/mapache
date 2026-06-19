@@ -87,10 +87,12 @@ function createHandlers(overrides = {}) {
       closeAuthModal: vi.fn(),
       closePiAuthManageModal: vi.fn(),
       closeSessionModal: vi.fn(),
+      closeWorkspaceSkillModal: vi.fn(),
       closeWorkspaceModal: vi.fn(),
       openAuthModal: vi.fn(),
       openPiAuthManageModal: vi.fn(),
       openSessionModal: vi.fn(),
+      openWorkspaceSkillModal: vi.fn(),
       openWorkspaceModal: vi.fn(),
       showProfile: vi.fn(),
     },
@@ -209,6 +211,7 @@ function createState(overrides = {}) {
     workspaceFilesUploadMessage: "",
     workspaceFilesUploading: false,
     workspaceFilesWorkspaceId: workspace.id,
+    workspaceSkillModalOpen: false,
     workspaceModalOpen: false,
     workspaces: [workspace],
     ...overrides,
@@ -286,7 +289,16 @@ describe("frontend smoke coverage", () => {
     expect(container).not.toHaveTextContent("tkey");
     expect(screen.queryByText(/User-scoped Pi auth/)).not.toBeInTheDocument();
     expect(screen.getByText("preview-qa")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Skill name")).not.toBeInTheDocument();
     expect(screen.getByText("npm:@team/workspace-package")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: "New skill"}));
+    expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(1);
+    expect(handlers.modals.openWorkspaceSkillModal).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", {name: "Edit preview-qa"}));
+    expect(handlers.pi.editPiSkill).toHaveBeenCalledWith(expect.objectContaining({name: "preview-qa"}));
+    expect(handlers.modals.openWorkspaceSkillModal).toHaveBeenCalledTimes(2);
 
     const sessionRows = screen.getAllByRole("button", {name: /Pi smoke/i});
     await user.click(sessionRows[0]);
@@ -467,5 +479,38 @@ describe("frontend smoke coverage", () => {
     });
     expect(workspaceHandlers.modals.closeWorkspaceModal).toHaveBeenCalled();
     workspaceView.unmount();
+  });
+
+  test("submits and closes the workspace skill modal", async () => {
+    const user = userEvent.setup();
+    const handlers = createHandlers();
+    handlers.pi.savePiSkill.mockResolvedValue();
+    render(
+        <AppShell
+          handlers={handlers}
+          state={createState({
+            selectedSessionId: session.id,
+            workspaceSkillModalOpen: true,
+            workspaceSkills: createWorkspaceSkillsState({
+              form: {
+                content: "# Modal Skill\n\nUse this from a modal.",
+                description: "Created from a modal",
+                editing: false,
+                name: "modal-skill",
+              },
+            }),
+          })}
+        />,
+    );
+
+    const dialog = screen.getByRole("dialog", {name: "New skill"});
+    expect(within(dialog).getByLabelText("Skill name")).toHaveValue("modal-skill");
+    await user.click(within(dialog).getByRole("button", {name: "Create skill"}));
+    expect(handlers.pi.savePiSkill).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(1));
+
+    await user.click(within(dialog).getByRole("button", {name: "Close"}));
+    expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(1);
+    expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(2);
   });
 });

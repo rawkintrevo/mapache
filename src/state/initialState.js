@@ -155,6 +155,7 @@ export function createInitialState() {
     rightDrawerCollapsed: true,
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
+    workspaceSkillModalOpen: false,
     authModalOpen: false,
     piAuthManageModalOpen: false,
     busy: false,

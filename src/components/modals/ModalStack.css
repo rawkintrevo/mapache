@@ -103,6 +103,10 @@
   width: min(760px, 100%);
 }
 
+.workspace-skill-panel {
+  width: min(680px, 100%);
+}
+
 .modal-form {
   display: grid;
   gap: 12px;
