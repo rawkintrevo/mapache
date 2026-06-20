@@ -62,6 +62,7 @@ Installed OS packages currently include:
 - `curl`
 - `fd-find`, exposed as `fd` with a symlink to Debian's `fdfind` binary
 - `git`
+- `gh` in Codex images, so Codex sessions can use the GitHub CLI for issue, PR, and repository workflow commands without manual installation
 - `gzip`
 - `openssh-client`
 - `python3`
@@ -142,6 +143,8 @@ TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
 Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session local path such as `/tmp/mapache-codex/<session-id>`, plus a workspace-scoped archive prefix at `{workspace.storagePrefix}/.mapache-internal/codex-home`. Local process state stays isolated per Cloud session, while Codex auth, logs, sessions, skills, and standalone package metadata persist for later Codex sessions in the same workspace. This state remains separate from repository `.codex/config.toml` files under `/workspace/.codex`. On first restore after this change, the runner falls back to the latest historical per-session Codex home archive under `.mapache-internal/sessions/*/codex-home/` when the workspace-scoped archive is not present yet.
+
+Codex images also include the GitHub CLI (`gh`) so terminal sessions can use the same issue, PR, and metadata commands the issue workflow expects.
 
 For connected GitHub workspaces, non-shell Pi sessions also prepare a clean automation branch before the terminal process starts. The runner fetches the selected base branch, resets the restored worktree to that remote branch, removes untracked non-ignored files, checks out a unique branch named `mapache/<session-name-kebab>-<session-id>`, and records that branch on the session document. When the Pi terminal process exits, the runner stages any remaining workspace changes and commits them with a Mapache-authored commit. If the automation branch already has commits and the worktree is clean, the runner pushes those commits without creating an extra commit. It then opens a pull request back to the base branch with the short-lived GitHub App installation token. If there are no changes and no commits ahead of the base branch, the runner records `githubAutomationStatus: "no_changes"` and does not create a commit or PR. Shell sessions and non-connected GitHub workspaces keep the manual Git controls behavior only.
 

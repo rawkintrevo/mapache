@@ -45,6 +45,7 @@ MCP management changes require both the Functions API revision and affected runn
 - Keep Functions and runner service accounts separate.
 - Functions changes require a Functions deploy before handoff unless the user explicitly asks not to deploy.
 - Share Preview and browser QA runtime changes that touch `session-runner/` require rebuilding and pushing `pi-web` and `codex-web`; existing web sessions keep their current runner revision until restarted or recreated.
+- Codex runner image changes, including the packaged GitHub CLI, require rebuilding and pushing `codex-basic` and `codex-web`; existing Codex sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
 - Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `codex-basic`, and `codex-web`.
