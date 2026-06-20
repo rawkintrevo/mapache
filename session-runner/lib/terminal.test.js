@@ -9,7 +9,11 @@ test("renderTerminalPage includes critical xterm layout and helper-textarea styl
 
   assert.match(html, /#terminal \.xterm-helper-textarea/);
   assert.match(html, /left: -9999em/);
+  assert.match(html, /color: transparent/);
+  assert.match(html, /caret-color: transparent/);
   assert.match(html, /#terminal \.xterm-viewport/);
   assert.match(html, /#terminal \.xterm-screen,\s*#terminal \.xterm-screen canvas/);
+  assert.match(html, /helperTextarea\.addEventListener\("input", scheduleHelperTextareaClear, true\)/);
+  assert.match(html, /term\.onRender\(\(\) => \{\s*applyHelperTextareaStyles\(\);/);
   assert.match(html, /mapache_access/);
 });
