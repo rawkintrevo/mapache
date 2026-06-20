@@ -44,6 +44,8 @@ The frontend image dropdown is configured in `src/config/sessionImages.js`. It c
 
 The backend is authoritative for image selection. `functions/runnerImages.helpers.js` contains the curated server-side image catalog. Session creation accepts `imageKey` and maps it to the catalog entry before provisioning Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
 
+Workspace MCP server config is managed from the right drawer and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. The runner writes a standard `/workspace/.mcp.json` for shared MCP discovery. Pi images bake in `pi-mcp-adapter` with `pi install npm:pi-mcp-adapter`, so Pi loads the shared config through the adapter path. Codex images do not use the Pi adapter; Codex runners write MCP entries into `$CODEX_HOME/config.toml`, which is part of the workspace-scoped Codex home archive.
+
 ## Base Environment
 
 The image uses:
@@ -361,6 +363,7 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 - `HOME_STORAGE_PREFIX`
 - `HOME_SYNC_MODE`
 - `HOME_ARCHIVE_NAME`
+- `MCP_CONFIG`
 - `CODEX_HOME`
 - `CODEX_HOME_STORAGE_BUCKET`
 - `CODEX_HOME_STORAGE_PREFIX`

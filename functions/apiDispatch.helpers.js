@@ -46,6 +46,8 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["PUT", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceFile(user.uid, route.workspaceId, req.query.path, req.body || {}))],
     ["POST", "workspaceFile", createdJsonResult(({handlers, req, route, user}) => handlers.uploadWorkspaceFile(user.uid, route.workspaceId, req.query.path, req))],
     ["POST", "workspaceFileDownloadUrl", jsonResult(({handlers, req, route, user}) => handlers.createWorkspaceFileDownloadUrl(user.uid, route.workspaceId, req.query.path))],
+    ["GET", "workspaceMcp", jsonResult(({handlers, route, user}) => handlers.getWorkspaceMcpConfig(user.uid, route.workspaceId))],
+    ["PUT", "workspaceMcp", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceMcpConfig(user.uid, route.workspaceId, req.body || {}))],
   ]),
   sessions: Object.freeze([
     ["GET", "sessions", namedJsonResult("sessions", ({handlers, route, user}) => handlers.listSessions(user.uid, route.workspaceId))],

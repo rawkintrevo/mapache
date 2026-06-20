@@ -103,6 +103,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
     homeStoragePrefix: "workspaces/uid-1/demo/.mapache-internal/home",
     workspaceEnv: {FOO: "workspace", SHARED: "workspace"},
     sessionEnv: {SHARED: "session"},
+    mcpConfig: {mcpServers: {demo: {command: "node", args: ["server.js"]}}},
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   }));
   assert.strictEqual(shellEnv.FIREBASE_PROJECT_ID, "pi-agents-cloud");
@@ -112,6 +113,10 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
   assert.strictEqual(shellEnv.SHARED, "session");
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
   assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"-l\"]");
+  assert.deepStrictEqual(JSON.parse(shellEnv.MCP_CONFIG), {
+    version: 1,
+    mcpServers: {demo: {command: "node", args: ["server.js"]}},
+  });
   assert.strictEqual(shellEnv.RUNNER_CAPABILITIES, "{\"terminal\":true,\"preview\":false,\"previewQa\":false,\"functions\":false,\"n64\":false}");
 
   const previewEnv = envMap(await sessionRunnerEnv({

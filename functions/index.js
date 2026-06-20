@@ -60,6 +60,7 @@ const {
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
 const {normalizeEnvMap} = require("./env.helpers");
+const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
 const {
   cleanGithubNumericId,
@@ -114,6 +115,8 @@ const API_HANDLERS = {
   saveWorkspaceFile: workspaceService.saveWorkspaceFile,
   uploadWorkspaceFile: workspaceService.uploadWorkspaceFile,
   createWorkspaceFileDownloadUrl: workspaceService.createWorkspaceFileDownloadUrl,
+  getWorkspaceMcpConfig: workspaceService.getWorkspaceMcpConfig,
+  saveWorkspaceMcpConfig: workspaceService.saveWorkspaceMcpConfig,
   listSessions,
   createSession,
   resizeSession,
@@ -273,6 +276,7 @@ async function createSession(uid, workspaceId, payload) {
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
+    mcpConfig: mcpConfigForRunner(workspace),
     ...sessionSourceMetadata(workspace),
     ...sessionSyncPolicyMetadata(workspace),
     ...sessionHomePolicyMetadata(workspace),
@@ -579,9 +583,11 @@ async function restartSession(uid, workspaceId, sessionId) {
   const restartedAt = admin.firestore.Timestamp.now();
   const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
   const restartNonce = Date.now().toString();
+  const mcpConfig = mcpConfigForRunner(workspace);
   const restartUpdate = {
     status: recreatingSessionService ? "provisioning" : "restarting",
     browserAccessTokenSecret,
+    mcpConfig,
     restartNonce,
     restartedAt,
     stoppedAt: null,

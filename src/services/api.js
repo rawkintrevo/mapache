@@ -66,6 +66,15 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/file/download-url?path=${encodeURIComponent(path)}`,
         {method: "POST", body: {}},
     ),
+    getWorkspaceMcpConfig: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/mcp`,
+    ),
+    saveWorkspaceMcpConfig: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/mcp`,
+        {method: "PUT", body},
+    ),
     uploadWorkspaceFile: (workspaceId, file) => uploadFile(
         getToken,
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(file.name)}`,

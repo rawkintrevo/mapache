@@ -11,6 +11,7 @@ const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
 const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
+const {createMcpConfigService} = require("./lib/mcpConfig.service");
 const {createPreviewService} = require("./lib/preview");
 const {admin, db, storage} = require("./lib/services");
 const {
@@ -32,6 +33,7 @@ const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
 const pi = createPiService({config, syncUp: workspace.syncUp});
+const mcpConfig = createMcpConfigService({config});
 const terminalSession = createTerminalSession({
   admin,
   config,
@@ -344,6 +346,7 @@ workspace.ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      await mcpConfig.materializeMcpConfig();
       if (config.terminalKind === "pi") {
         await workspace.synchronizePiAuth({materialize: true});
       }

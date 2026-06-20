@@ -95,6 +95,7 @@ function createConfig() {
     legacyArchiveStorageDirs: [`${LEGACY_INTERNAL_STORAGE_DIR}/archives`],
     legacyDirectoryMarkerFiles: [LEGACY_DIRECTORY_MARKER_FILE],
     legacyInternalStorageDirs: [LEGACY_INTERNAL_STORAGE_DIR],
+    mcpConfigRaw: process.env.MCP_CONFIG || "",
     ownerUid: process.env.OWNER_UID || "",
     piAgentDir,
     piHomeDir,

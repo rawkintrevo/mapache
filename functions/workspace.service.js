@@ -27,6 +27,10 @@ const {
 } = require("./backendUtils.helpers");
 const {normalizeEnvMap} = require("./env.helpers");
 const {
+  normalizeMcpConfigPayload,
+  normalizeStoredMcpConfig,
+} = require("./mcpConfig.helpers");
+const {
   isDirectoryMarkerFileName,
   isInternalStorageDirName,
 } = require("./runtimePaths.helpers");
@@ -36,9 +40,11 @@ function createWorkspaceService(dependencies = {}) {
     createWorkspace: (uid, payload) => createWorkspace(uid, payload, dependencies),
     createWorkspaceFileDownloadUrl,
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
+    getWorkspaceMcpConfig,
     listWorkspaceFiles,
     listWorkspaces,
     readWorkspaceFile,
+    saveWorkspaceMcpConfig,
     saveWorkspaceFile,
     uploadWorkspaceFile,
   };
@@ -49,6 +55,26 @@ async function listWorkspaces(uid) {
       .where("ownerUid", "==", uid)
       .get();
   return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
+}
+
+async function getWorkspaceMcpConfig(uid, workspaceId) {
+  const workspace = await requireWorkspace(uid, workspaceId);
+  return normalizeStoredMcpConfig(workspace.mcpConfig || {});
+}
+
+async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
+  const workspaceSnap = await workspaceRef.get();
+  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+  const workspace = workspaceSnap.data() || {};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+
+  const mcpConfig = normalizeMcpConfigPayload(payload);
+  await workspaceRef.update({
+    mcpConfig,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return mcpConfig;
 }
 
 async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
@@ -117,6 +143,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
       invalidNameErrorCode: "invalid_workspace_env_name",
       reservedNameErrorCode: "reserved_workspace_env_name",
     }),
+    mcpConfig: normalizeMcpConfigPayload(payload.mcpConfig || {}),
     storagePrefix,
     createdAt: now,
     updatedAt: now,
@@ -505,6 +532,7 @@ module.exports = {
   deleteWorkspaceStorageIfUnshared,
   isHiddenWorkspaceFilePath,
   listWorkspaces,
+  getWorkspaceMcpConfig,
   normalizePublicGitHubRepoUrl,
   normalizeWorkspaceFilePath,
   normalizeWorkspaceHomePolicy,
@@ -512,6 +540,7 @@ module.exports = {
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
   requireWorkspace,
+  saveWorkspaceMcpConfig,
   storageFileToClientFile,
   workspaceStorageFile,
 };

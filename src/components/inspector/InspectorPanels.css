@@ -16,6 +16,7 @@
 
 .package-install-form,
 .package-subsection,
+.mcp-form,
 .skill-form {
   display: grid;
   gap: 8px;
@@ -25,10 +26,19 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.mcp-form textarea,
 .skill-form textarea {
   min-height: 150px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
+}
+
+.mcp-form textarea {
+  min-height: 82px;
+}
+
+.mcp-list {
+  margin-top: 10px;
 }
 
 .skill-form-actions {

@@ -60,6 +60,10 @@ assertRoute("/api/workspaces/workspace-1/file/download-url", {
   name: "workspaceFileDownloadUrl",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/mcp", {
+  name: "workspaceMcp",
+  workspaceId: "workspace-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions", {
   name: "sessions",
   workspaceId: "workspace-1",

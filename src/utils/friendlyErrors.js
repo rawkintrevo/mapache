@@ -106,6 +106,18 @@ export const friendlyPiSkillError = friendlyWorkspaceSkillError;
 export const friendlyPiSkillSaveError = friendlyWorkspaceSkillSaveError;
 export const friendlyPiSkillDeleteError = friendlyWorkspaceSkillDeleteError;
 
+export function friendlyMcpConfigError(error) {
+  const message = error.message || "Could not update MCP servers.";
+  if (message === "invalid_mcp_server_name") return "Use a lowercase MCP server name with letters, numbers, underscores, or hyphens.";
+  if (message === "missing_mcp_server_transport") return "Enter either a command or a URL for the MCP server.";
+  if (message === "multiple_mcp_server_transports") return "Choose command or URL, not both.";
+  if (message === "invalid_mcp_args") return "MCP server args must be a list of strings.";
+  if (message === "invalid_mcp_env") return "MCP environment variables must use valid names.";
+  if (message === "invalid_mcp_headers") return "MCP headers must use valid names.";
+  if (message === "too_many_mcp_servers") return "Remove an MCP server before adding another one.";
+  return message;
+}
+
 export function friendlyPiAuthError(error) {
   const message = error.message || "Could not update Pi authentication.";
   if (message === "invalid_pi_auth_provider") return "Choose a supported API key provider.";

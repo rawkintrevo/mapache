@@ -46,6 +46,9 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "workspaces") {
     return {name: "workspace", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
+    return {name: "workspaceMcp", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
     return {name: "workspaceFiles", workspaceId: parts[1]};
   }
@@ -138,6 +141,7 @@ const ROUTE_METHODS = Object.freeze({
   openAiCodexDeviceCode: ["POST"],
   workspaces: ["GET", "POST"],
   workspace: ["DELETE"],
+  workspaceMcp: ["GET", "PUT"],
   workspaceFiles: ["GET"],
   workspaceFile: ["GET", "PUT", "POST"],
   workspaceFileDownloadUrl: ["POST"],

@@ -59,6 +59,25 @@ export function createWorkspaceSkillsState(overrides = {}) {
 
 export const createPiSkillsState = createWorkspaceSkillsState;
 
+export function createMcpServersState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    data: null,
+    form: {
+      name: "",
+      transport: "stdio",
+      command: "",
+      args: "",
+      url: "",
+      env: "",
+    },
+    ...overrides,
+  };
+}
+
 export function createPiAuthState(overrides = {}) {
   return {
     loading: false,
@@ -147,6 +166,7 @@ export function createInitialState() {
     gitStatus: createGitStatusState(),
     piPackages: createPiPackagesState(),
     workspaceSkills: createWorkspaceSkillsState(),
+    mcpServers: createMcpServersState(),
     piAuth: createPiAuthState(),
     pullRequestForm: createPullRequestFormState(),
     repoPicker: createRepoPickerState(),
