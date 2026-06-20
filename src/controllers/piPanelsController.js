@@ -22,6 +22,13 @@ import {
   updateWorkspaceSkillFormState,
 } from "../workflows/piSkills.js";
 import {
+  deleteMcpServerState,
+  loadMcpServersState,
+  saveMcpServerState,
+  updateMcpServerFormState,
+} from "../workflows/mcpServers.js";
+import {
+  resetMcpServers as resetMcpServersState,
   resetPiAuth as resetPiAuthState,
   resetPiPackages as resetPiPackagesState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
@@ -41,6 +48,10 @@ export function createPiPanelsController({state, render}) {
     resetWorkspaceSkillsState(state);
   }
 
+  function resetMcpServers() {
+    resetMcpServersState(state);
+  }
+
   async function loadPiPackages() {
     await loadPiPackagesState({state, resetPiPackages, render});
   }
@@ -53,6 +64,10 @@ export function createPiPanelsController({state, render}) {
     await loadPiAuthState({state, render, options});
   }
 
+  async function loadMcpServers() {
+    await loadMcpServersState({state, render});
+  }
+
   async function refreshPiPackages() {
     await loadPiPackages();
   }
@@ -63,6 +78,27 @@ export function createPiPanelsController({state, render}) {
 
   async function refreshPiAuth() {
     await loadPiAuth({showMessage: true});
+  }
+
+  async function refreshMcpServers() {
+    await loadMcpServers();
+  }
+
+  function updateMcpServerForm(patch) {
+    updateMcpServerFormState(state, patch);
+    render();
+  }
+
+  async function saveMcpServer() {
+    await saveMcpServerState({state, loadMcpServers, render});
+  }
+
+  async function deleteMcpServer(name) {
+    const serverName = String(name || "").trim();
+    if (!serverName) return;
+    const ok = window.confirm(`Delete MCP server ${serverName}? Restart active sessions after deleting to apply the change.`);
+    if (!ok) return;
+    await deleteMcpServerState({state, name: serverName, loadMcpServers, render});
   }
 
   function updateWorkspaceSkillForm(patch) {
@@ -147,25 +183,31 @@ export function createPiPanelsController({state, render}) {
     editPiSkill: editWorkspaceSkill,
     editWorkspaceSkill,
     installPiPackage,
+    deleteMcpServer,
+    loadMcpServers,
     loadPiAuth,
     loadPiPackages,
     loadPiSkills: loadWorkspaceSkills,
     loadWorkspaceSkills,
     refreshPiAuth,
+    refreshMcpServers,
     refreshPiPackages,
     refreshPiSkills: refreshWorkspaceSkills,
     refreshWorkspaceSkills,
     removePiPackage,
     resetPiAuth,
+    resetMcpServers,
     resetPiPackages,
     resetPiSkills: resetWorkspaceSkills,
     resetWorkspaceSkills,
     savePiAuthProvider,
+    saveMcpServer,
     savePiSkill: saveWorkspaceSkill,
     saveWorkspaceSkill,
     saveSessionPiAuthSelection,
     startOpenAiCodexDeviceLogin,
     updatePiAuthForm,
+    updateMcpServerForm,
     updatePiInstallSource,
     updatePiPackage,
     updatePiSkillForm: updateWorkspaceSkillForm,

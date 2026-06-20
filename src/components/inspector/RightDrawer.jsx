@@ -4,6 +4,7 @@ import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
+import {McpServersPanel} from "./McpServersPanel.jsx";
 import {SkillsPanel} from "./SkillsPanel.jsx";
 
 export function RightDrawer({
@@ -13,18 +14,22 @@ export function RightDrawer({
   onCancelPiSkillEdit,
   onDeletePiAuthProvider,
   onDeletePiSkill,
+  onDeleteMcpServer,
   onEditPiSkill,
   onOpenAuthModal,
   onOpenPiAuthManage,
   onOpenWorkspaceSkillModal,
   onRefreshPiAuth,
+  onRefreshMcpServers,
   onRefreshPiPackages,
   onRefreshPiSkills,
   onRemovePiPackage,
   onToggleDrawerSection,
   onToggleRightDrawer,
   onUpdatePiInstallSource,
+  onUpdateMcpServerForm,
   onUpdatePiPackage,
+  onSaveMcpServer,
 }) {
   const toggleButton = (
     <Button
@@ -71,6 +76,15 @@ export function RightDrawer({
         onOpenWorkspaceSkillModal={onOpenWorkspaceSkillModal}
         onRefreshWorkspaceSkills={onRefreshPiSkills}
         onToggleDrawerSection={onToggleDrawerSection}
+      />
+      <McpServersPanel
+        mcpServers={state.mcpServers}
+        state={state}
+        onDeleteMcpServer={onDeleteMcpServer}
+        onRefreshMcpServers={onRefreshMcpServers}
+        onSaveMcpServer={onSaveMcpServer}
+        onToggleDrawerSection={onToggleDrawerSection}
+        onUpdateMcpServerForm={onUpdateMcpServerForm}
       />
       <ExtensionsPanel
         piPackages={state.piPackages}

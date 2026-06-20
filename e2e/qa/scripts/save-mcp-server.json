@@ -1,0 +1,24 @@
+{
+  "id": "script.saveMcpServer",
+  "title": "Save a workspace MCP server",
+  "parameters": {
+    "serverName": "qa-mcp-{{timestamp}}",
+    "command": "npx",
+    "args": "-y chrome-devtools-mcp@latest",
+    "env": "QA_MCP=enabled"
+  },
+  "actions": [
+    {"type": "fill", "label": "Server name", "value": "{{serverName}}"},
+    {"type": "select", "name": "transport", "value": "stdio"},
+    {"type": "fill", "label": "Command", "value": "{{command}}"},
+    {"type": "fill", "label": "Args", "value": "{{args}}"},
+    {"type": "fill", "label": "Env", "value": "{{env}}"},
+    {"type": "submit", "buttonName": "Add MCP server"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/mcp", "method": "PUT", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "waitForSnapshotText", "text": "{{serverName}}", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "PUT /api/workspaces/{workspaceId}/mcp returns 200",
+    "MCP Servers panel lists the saved server name"
+  ]
+}

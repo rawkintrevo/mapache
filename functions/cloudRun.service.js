@@ -239,6 +239,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},
+    {name: "MCP_CONFIG", value: stringifyMcpConfig(session.mcpConfig)},
     {name: "RUNNER_CAPABILITIES", value: JSON.stringify(capabilities)},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];
@@ -356,6 +357,18 @@ function stringifySyncPolicyExclude(value) {
   }
 }
 
+function stringifyMcpConfig(value) {
+  try {
+    const config = value && typeof value === "object" ? value : {};
+    const servers = config.mcpServers && typeof config.mcpServers === "object" && !Array.isArray(config.mcpServers) ?
+      config.mcpServers :
+      {};
+    return JSON.stringify({version: 1, mcpServers: servers});
+  } catch (error) {
+    return JSON.stringify({version: 1, mcpServers: {}});
+  }
+}
+
 async function requestRunnerShutdown(session) {
   if (!session.serviceUrl || !session.shutdownToken) return;
 
@@ -454,6 +467,7 @@ module.exports = {
   resourceLimits,
   runnerServiceAccountValue,
   sessionRunnerEnv,
+  stringifyMcpConfig,
   stringifySyncPolicyExclude,
   terminalCommandEnv,
 };

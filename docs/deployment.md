@@ -37,6 +37,8 @@ GitHub Actions preview and production workflows install root, `community/`, `fun
 
 Browser QA login uses a Functions secret plus configured QA account params. Configure `QA_LOGIN_SECRET` as a Firebase Functions secret, and set `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and optionally `QA_LOGIN_DISPLAY_NAME` for the deployed function. The QA account must also be present in `appConfig/access` when the app allowlist is enabled. The API service account needs `roles/firebaseauth.admin` so it can create or update the controlled QA Firebase Auth user before minting the custom token.
 
+MCP management changes require both the Functions API revision and affected runner image revisions. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. Pi runner images must be rebuilt when the baked `pi-mcp-adapter` install changes; existing Pi and Codex Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.

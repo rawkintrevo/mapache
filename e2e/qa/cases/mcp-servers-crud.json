@@ -1,0 +1,31 @@
+{
+  "id": "mcp.servers-crud",
+  "title": "Manage workspace MCP servers from the right drawer",
+  "description": "Create a blank workspace, add an MCP server from the right drawer, verify the workspace MCP API persisted it, and clean up the workspace.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/mcp.servers-crud",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-mcp-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=mcp-servers-crud"
+      }
+    },
+    {"useScript": "scripts/expand-inspector.json"},
+    {"assert": "snapshot-text", "expected": "MCP Servers"},
+    {
+      "useScript": "scripts/save-mcp-server.json",
+      "parameters": {
+        "serverName": "qa-mcp-{{timestamp}}",
+        "command": "npx",
+        "args": "-y chrome-devtools-mcp@latest",
+        "env": "QA_MCP=enabled"
+      }
+    },
+    {"assert": "network-status", "requestUrlIncludes": "/mcp", "method": "PUT", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "mcp-servers.png"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

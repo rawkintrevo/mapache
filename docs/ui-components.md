@@ -30,6 +30,7 @@ This document serves as an index for significant UI components in the applicatio
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
 | `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing user-scoped Pi auth providers. |
+| `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
 | `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | React Skills panel for workspace-local Markdown skills, switching between Pi `.pi/skills` and Codex `.agents/skills` based on the selected session harness. |
 | `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for workspace-local Pi packages. |
 | `PackageInstallForm` | `src/components/inspector/PackageInstallForm.jsx` | React form for installing Pi packages into the active workspace. |

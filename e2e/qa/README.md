@@ -65,6 +65,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, and `codex-web` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
+- `cases/mcp-servers-crud.json`: Right-drawer MCP server save path for selected workspaces.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
 - `cases/skills-crud.json`: Workspace-local Pi skill create/edit/delete.
 - `cases/skills-crud-codex.json`: Workspace-local Codex skill create/edit/delete.

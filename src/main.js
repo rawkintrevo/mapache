@@ -16,6 +16,7 @@ import {createInitialState} from "./state/initialState.js";
 import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
+  resetMcpServers as resetMcpServersState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
   resetSignedOutState,
 } from "./state/resetters.js";
@@ -190,6 +191,10 @@ function resetWorkspaceSkills() {
   resetWorkspaceSkillsState(state);
 }
 
+function resetMcpServers() {
+  resetMcpServersState(state);
+}
+
 async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
@@ -212,8 +217,10 @@ async function refreshAll() {
       resetGitStatus();
       resetPiPackages();
       resetWorkspaceSkills();
+      resetMcpServers();
     }
     await loadSessions();
+    await piPanelsController.loadMcpServers();
     await piPanelsController.loadPiAuth();
     await workspaceFilesController.loadWorkspaceFiles();
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {
@@ -447,8 +454,10 @@ async function selectWorkspace(workspaceId) {
   resetGitStatus();
   resetPiPackages();
   resetWorkspaceSkills();
+  resetMcpServers();
   await runBusy(async () => {
     await loadSessions();
+    await piPanelsController.loadMcpServers();
     await loadGitStatus();
     await piPanelsController.loadPiPackages();
     await piPanelsController.loadWorkspaceSkills();

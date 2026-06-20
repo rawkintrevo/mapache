@@ -30,7 +30,7 @@ The left drawer exposes session creation only from the Sessions section header f
 
 Workflow modules under `src/workflows/` own cohesive API/state sequences such as session lifecycle, GitHub connection and repository refresh, Git/PR operations, Pi auth, Pi packages, workspace skills, and workspace file/editor actions. Controller modules under `src/controllers/` own drawer toggles, modal visibility, file tree/editor handlers, and right-panel handlers so `src/main.js` does not keep growing flat callback lists.
 
-The Skills inspector now uses harness-neutral state under `state.workspaceSkills` and chooses the active workspace skill root from the selected session's harness metadata. Pi sessions write `.pi/skills/**`; Codex sessions write `.agents/skills/**`; shell sessions show an unsupported-state message instead of the edit form.
+The right inspector also owns workspace-scoped MCP server management through `state.mcpServers`. The MCP panel edits the selected workspace's shared MCP config, not a single session; newly created sessions receive the config snapshot automatically and active sessions pick up edits after restart. The Skills inspector uses harness-neutral state under `state.workspaceSkills` and chooses the active workspace skill root from the selected session's harness metadata. Pi sessions write `.pi/skills/**`; Codex sessions write `.agents/skills/**`; shell sessions show an unsupported-state message instead of the edit form.
 
 ## Styling
 
