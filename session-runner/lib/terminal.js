@@ -314,12 +314,56 @@ function renderTerminalPage(options = {}) {
         height: 100%;
         margin: 0;
         background: #0d1117;
+        overflow: hidden;
       }
       #terminal {
         height: 100%;
         width: 100%;
         box-sizing: border-box;
         padding: 10px;
+      }
+      #terminal .xterm {
+        height: 100%;
+        position: relative;
+      }
+      #terminal .xterm-helpers {
+        position: absolute;
+        top: 0;
+        z-index: 5;
+      }
+      #terminal .xterm-helper-textarea {
+        position: absolute;
+        opacity: 0;
+        left: -9999em;
+        top: 0;
+        width: 0;
+        height: 0;
+        z-index: -5;
+        padding: 0;
+        border: 0;
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        resize: none;
+      }
+      #terminal .composition-view {
+        display: none;
+        position: absolute;
+        white-space: nowrap;
+        z-index: 1;
+      }
+      #terminal .composition-view.active {
+        display: block;
+      }
+      #terminal .xterm-viewport {
+        position: absolute;
+        inset: 0;
+        overflow-y: scroll;
+      }
+      #terminal .xterm-screen,
+      #terminal .xterm-screen canvas {
+        position: absolute;
+        inset: 0;
       }
     </style>
   </head>

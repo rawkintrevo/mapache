@@ -1,0 +1,31 @@
+{
+  "id": "session.terminal-input-persistence",
+  "title": "Terminal helper input stays hidden after typing",
+  "description": "Log in, create a codex-basic session, wait for runner access, type a full sentence into the terminal input, wait a few seconds, and verify the helper textarea does not visibly echo and disappear.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.terminal-input-persistence",
+  "requires": {
+    "cloudRun": "Creates a billable codex-basic Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-terminal-input-{{timestamp}}"}},
+    {
+      "useScript": "scripts/create-session.json",
+      "parameters": {
+        "sessionName": "qa-terminal-input-{{timestamp}}",
+        "imageKey": "codex-basic",
+        "cpu": "1",
+        "memory": "1Gi",
+        "sessionEnv": "QA_SESSION=1"
+      }
+    },
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "runner-terminal-helper-input-remains-hidden-after-typing"},
+    {"capture": "screenshot", "fileName": "terminal-input-hidden-after-typing.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}
