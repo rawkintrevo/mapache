@@ -1,6 +1,6 @@
 # SSH-Backed Sessions
 
-This guide explains how to prepare an SSH target for Mapache sessions when the target only allows login with OpenSSH signed user keys.
+This guide explains how to prepare an SSH target for Mapache sessions. Mapache acts as the SSH client from inside a small Cloud Run runner, so it needs client-side credential material that can authenticate to the target.
 
 ## Behavior
 
@@ -8,7 +8,25 @@ An SSH-backed session still provisions a small Mapache Cloud Run runner. The run
 
 The SSH target shell starts in the configured initial directory and then behaves like a normal shell for the configured user. The file browser is intentionally scoped to that initial directory for the first implementation. Port forwards connect from the SSH target's `127.0.0.1:<port>` and are exposed through the existing authenticated runner URL.
 
-## Target Setup
+## Key Material
+
+Do not paste your everyday personal private key into Mapache unless you intentionally want Mapache to use that identity. Prefer a dedicated keypair for Mapache access.
+
+For normal SSH public-key auth:
+
+- Put the dedicated public key on the target host, usually in the target user's `~/.ssh/authorized_keys`.
+- Paste the dedicated private key into Mapache.
+- Do not paste the ordinary `.pub` file into Mapache; a public key alone cannot authenticate an SSH client.
+
+For OpenSSH signed user certificate auth:
+
+- The target host trusts a user CA public key through `TrustedUserCAKeys`.
+- Mapache needs the dedicated private key and the signed user certificate, usually named `*-cert.pub`.
+- The `*-cert.pub` file is a signed user certificate, not the same thing as the ordinary `.pub` public key.
+
+## Signed-Key Target Setup
+
+Use this section when the target only allows login through OpenSSH signed user keys.
 
 On a trusted admin machine, create or choose an SSH user CA:
 
@@ -39,7 +57,7 @@ sudo sshd -t
 sudo systemctl reload sshd
 ```
 
-Create a user key for the Mapache session and sign it with the CA. The principal must match a principal accepted for the target account. If the target uses default principal mapping, use the Unix username.
+Create a dedicated user key for Mapache and sign it with the CA. The principal must match a principal accepted for the target account. If the target uses default principal mapping, use the Unix username.
 
 ```bash
 ssh-keygen -t ed25519 -f ./mapache_session_key -C mapache-session
@@ -72,7 +90,7 @@ In the Mapache web UI, create a workspace:
 2. Set the source to Dev machine.
 3. Enter host, port, username, and initial directory.
 4. Paste the private key from `mapache_session_key`.
-5. Paste the signed user certificate from `mapache_session_key-cert.pub`.
+5. Paste the signed user certificate from `mapache_session_key-cert.pub`, not the ordinary `mapache_session_key.pub` public key.
 6. Paste `known_hosts` when strict host key checking should pin the target host key.
 7. Create the workspace.
 8. Create a session in that workspace. The session modal defaults to SSH target and uses the workspace target configuration.
