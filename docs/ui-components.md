@@ -40,6 +40,7 @@ This document serves as an index for significant UI components in the applicatio
 | `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, resize controls, restart controls, and Git status placement for the selected session. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace. |
+| `SessionStatusSummary` | `src/components/sessions/SessionStatusSummary.jsx` | Shared session-row accessory that renders the accessible status light tooltip and hyphen-split runner tags for both session list variants. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
