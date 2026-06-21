@@ -80,6 +80,14 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "sessionSkills", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "sessionSkillDelete", jsonResult(({handlers, req, route, user}) => handlers.deleteWorkspaceSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
+  sshSessions: Object.freeze([
+    ["GET", "sshSessionFiles", jsonResult(({handlers, route, user}) => handlers.listSshSessionFiles(user.uid, route.workspaceId, route.sessionId))],
+    ["GET", "sshSessionFile", jsonResult(({handlers, req, route, user}) => handlers.readSshSessionFile(user.uid, route.workspaceId, route.sessionId, req.query.path))],
+    ["PUT", "sshSessionFile", jsonResult(({handlers, req, route, user}) => handlers.saveSshSessionFile(user.uid, route.workspaceId, route.sessionId, req.query.path, req.body || {}))],
+    ["GET", "sshSessionForwards", jsonResult(({handlers, route, user}) => handlers.listSshSessionForwards(user.uid, route.workspaceId, route.sessionId))],
+    ["POST", "sshSessionForwards", createdJsonResult(({handlers, req, route, user}) => handlers.createSshSessionForward(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+    ["DELETE", "sshSessionForward", jsonResult(({handlers, route, user}) => handlers.closeSshSessionForward(user.uid, route.workspaceId, route.sessionId, route.port))],
+  ]),
   github: Object.freeze([
     ["GET", "githubRepos", jsonResult(({handlers, user}) => handlers.listConnectedRepos(user.uid))],
     ["GET", "githubConnect", jsonResult(({handlers, req, user}) => handlers.createGithubConnectUrl(user.uid, req))],

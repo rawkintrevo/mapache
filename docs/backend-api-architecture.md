@@ -34,6 +34,8 @@ Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `us
 
 Session creation writes a Firestore session record, resolves the curated runner image key server-side, snapshots the selected workspace's MCP config into the session, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. Restart refreshes the MCP snapshot from the workspace before patching or recreating Cloud Run so active sessions can pick up right-drawer MCP edits. The API function uses a longer request timeout than the default so slower runner image rollouts, especially Chromium-backed web images, can finish Cloud Run provisioning instead of timing out while the service is still becoming healthy. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
 
+SSH-backed sessions use the same session collection and Cloud Run provisioning path, but set `sessionType: "ssh"` and `terminalKind: "ssh"` so the runner opens an SSH client PTY instead of a local harness. The create request accepts target metadata plus OpenSSH private key, user certificate, and optional known-hosts material. The stored Firestore session document keeps only target metadata and certificate presence flags; the private key and certificate body are passed only as provisioning environment for the runner revision. Session-scoped SSH file routes and port-forward routes verify normal workspace/session ownership before proxying to backend-only runner routes.
+
 Admin user summaries reuse the same usage rollups as `/api/me`, but return cost estimates in dollars for lifetime and trailing-30-day windows. Whitelist toggles update `appConfig/access`, preferring `allowedEmails` when the target user has an email and `allowedUids` otherwise.
 
 Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, workspace skills, Pi package operations, preview/access URLs, share-preview export, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
@@ -73,3 +75,4 @@ GitHub connector account routes live under `/api/github/**` and are implemented 
 - [Pi skills manager](./pi-skills-manager.md)
 - [Pi extension manager](./pi-extension-manager.md)
 - [Deployment](./deployment.md)
+- [SSH-backed sessions guide](./guides/ssh-backed-sessions.md)

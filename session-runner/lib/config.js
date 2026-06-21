@@ -59,6 +59,7 @@ function createConfig() {
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
+  const sshConfigDir = path.join(homeDir, ".mapache", "ssh");
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
@@ -117,6 +118,20 @@ function createConfig() {
     sessionId: process.env.SESSION_ID || "",
     sessionName: normalizeEnvString(process.env.SESSION_NAME) || "Terminal session",
     shutdownToken: process.env.SESSION_SHUTDOWN_TOKEN || "",
+    sshCertificate: normalizeEnvString(process.env.SSH_CERTIFICATE),
+    sshCertificatePath: path.join(sshConfigDir, "id_user-cert.pub"),
+    sshConfigDir,
+    sshHost: normalizeEnvString(process.env.SSH_TARGET_HOST),
+    sshInitialDirectory: normalizeEnvString(process.env.SSH_INITIAL_DIRECTORY) || "~",
+    sshKnownHosts: normalizeEnvString(process.env.SSH_KNOWN_HOSTS),
+    sshKnownHostsPath: path.join(sshConfigDir, "known_hosts"),
+    sshMaxFileBytes: positiveNumber(process.env.SSH_MAX_FILE_BYTES, 1024 * 1024),
+    sshPort: positiveNumber(process.env.SSH_TARGET_PORT, 22),
+    sshPrivateKey: normalizeEnvString(process.env.SSH_PRIVATE_KEY),
+    sshPrivateKeyPath: path.join(sshConfigDir, "id_user"),
+    sshShell: normalizeEnvString(process.env.SSH_SHELL) || "bash",
+    sshStrictHostKeyChecking: envFlag(process.env.SSH_STRICT_HOST_KEY_CHECKING, true),
+    sshUsername: normalizeEnvString(process.env.SSH_TARGET_USERNAME),
     syncIntervalMs: Number(process.env.SYNC_INTERVAL_MS || 30000),
     terminalReplayLimit: positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000),
     terminalKind: normalizeEnvString(process.env.TERMINAL_KIND) || "pi",

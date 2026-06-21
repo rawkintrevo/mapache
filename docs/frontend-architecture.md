@@ -24,6 +24,8 @@ The frontend uses Vite and React. `src/main.js` initializes Firebase/Auth, owns 
 
 The signed-in shell is componentized under `src/components/`. `AppShell` owns the outer app wrapper, drawers, workspace panel, profile page, right inspector drawer, and modal stack. The Profile page includes account details, runner usage, and account-level GitHub connector controls for status, OAuth restart/connect, repository refresh, installation settings, and soft disconnect. The selected-session experience is terminal-first; runner-dependent panels reset while a selected session is provisioning, stopped, failed, or missing `serviceUrl`.
 
+The session modal supports both Cloud runner sessions and SSH target sessions. SSH target creation collects host, port, username, initial directory, private key, signed user certificate, and optional known-hosts content. When the selected session is SSH-backed, the left file drawer loads session-scoped SSH file data instead of workspace Cloud Storage files, and the session detail panel shows authenticated localhost port-forward controls.
+
 Preview-capable sessions show Preview, Share Preview, and Publish actions in `SessionDetail`. Share Preview calls the authenticated API to export the static build and then displays a copyable public preview URL. Publish is intentionally informational in V1 and directs users to contact `trevor@ata.systems`; it must not imply a production deploy happened.
 
 The left drawer exposes session creation only from the Sessions section header for the selected workspace; workspace rows do not duplicate that action. The left drawer user menu shows an Admin item only when the current profile includes `isAdmin: true`. The Admin page lives in `src/components/admin/AdminPage.jsx` and reads paginated user summaries through `src/services/api.js`; `src/main.js` owns the admin page cursor stack, refresh, and whitelist toggle handlers.
@@ -60,3 +62,4 @@ Global CSS enters through `src/styles.css`, which imports `src/styles/tokens.css
 - [UI components](./ui-components.md)
 - [Style guide](./STYLE_GUIDE.md)
 - [CSS decomposition](./css-decomposition.md)
+- [SSH-backed sessions guide](./guides/ssh-backed-sessions.md)

@@ -83,6 +83,27 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/share-preview", {
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/ssh-files", {
+  name: "sshSessionFiles",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/ssh-file", {
+  name: "sshSessionFile",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/ssh-ports", {
+  name: "sshSessionForwards",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/ssh-ports/5173", {
+  name: "sshSessionForward",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+  port: "5173",
+});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/git-status", {
   name: "gitStatus",
   workspaceId: "workspace-1",

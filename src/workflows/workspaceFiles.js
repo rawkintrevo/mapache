@@ -8,11 +8,14 @@ import {friendlyFilesError} from "../utils/friendlyErrors.js";
 
 export async function loadWorkspaceFilesState(state) {
   state.workspaceFilesError = "";
-  state.workspaceFilesWorkspaceId = state.selectedWorkspaceId;
+  state.workspaceFilesWorkspaceId = workspaceFileScopeId(state);
   if (!state.selectedWorkspaceId) return;
 
   try {
-    const data = await state.api.getWorkspaceFiles(state.selectedWorkspaceId);
+    const sshSession = selectedSshSession(state);
+    const data = sshSession ?
+      await state.api.getSshSessionFiles(state.selectedWorkspaceId, sshSession.id) :
+      await state.api.getWorkspaceFiles(state.selectedWorkspaceId);
     state.workspaceFiles = data.files || [];
     state.workspaceFilesTruncated = Boolean(data.truncated);
   } catch (error) {
@@ -23,6 +26,12 @@ export async function loadWorkspaceFilesState(state) {
 export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render}) {
   const selectedFiles = Array.from(files || []).filter(Boolean);
   if (!state.selectedWorkspaceId || !selectedFiles.length) return;
+  if (selectedSshSession(state)) {
+    state.workspaceFilesError = "SSH file upload is not available yet. Open or edit files from the SSH file tree.";
+    state.workspaceFilesUploadMessage = "";
+    render();
+    return;
+  }
 
   state.workspaceFilesUploading = true;
   state.workspaceFilesUploadMessage = `Uploading ${selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files`}...`;
@@ -59,6 +68,12 @@ export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFile
 export async function downloadWorkspaceFileState({state, render}) {
   const path = state.selectedWorkspaceFilePath;
   if (!state.selectedWorkspaceId || !path) return;
+  if (selectedSshSession(state)) {
+    state.workspaceFilesError = "SSH file download is not available yet. Open the file and copy its contents from the editor.";
+    state.workspaceFilesUploadMessage = "";
+    render();
+    return;
+  }
 
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
@@ -107,7 +122,10 @@ export async function selectWorkspaceFileState({state, path, render}) {
   render();
 
   try {
-    const data = await state.api.getWorkspaceFile(workspaceId, path);
+    const sshSession = selectedSshSession(state);
+    const data = sshSession ?
+      await state.api.getSshSessionFile(workspaceId, sshSession.id, path) :
+      await state.api.getWorkspaceFile(workspaceId, path);
     if (!isCurrentFileSelection(state, workspaceId, path)) return;
     state.fileEditor = {
       ...state.fileEditor,
@@ -147,11 +165,14 @@ export async function saveFileEditorState({state, content, loadWorkspaceFiles, r
   render();
 
   try {
-    const data = await state.api.saveWorkspaceFile(
-        state.selectedWorkspaceId,
-        state.fileEditor.path,
-        content,
-    );
+    const sshSession = selectedSshSession(state);
+    const data = sshSession ?
+      await state.api.saveSshSessionFile(state.selectedWorkspaceId, sshSession.id, state.fileEditor.path, content) :
+      await state.api.saveWorkspaceFile(
+          state.selectedWorkspaceId,
+          state.fileEditor.path,
+          content,
+      );
     state.fileEditor = {
       ...state.fileEditor,
       content,
@@ -174,4 +195,14 @@ function isCurrentFileSelection(state, workspaceId, path) {
   return state.selectedWorkspaceId === workspaceId &&
     state.fileEditor.path === path &&
     state.fileEditor.open;
+}
+
+function selectedSshSession(state) {
+  const session = (state.sessions || []).find((item) => item.id === state.selectedSessionId);
+  return session && (session.sessionType === "ssh" || session.terminalKind === "ssh") && session.serviceUrl ? session : null;
+}
+
+function workspaceFileScopeId(state) {
+  const sshSession = selectedSshSession(state);
+  return sshSession ? `${state.selectedWorkspaceId}:${sshSession.id}:ssh` : state.selectedWorkspaceId;
 }

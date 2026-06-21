@@ -55,6 +55,16 @@
   gap: 8px;
 }
 
+.ssh-forward-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.ssh-forward-list {
+  display: grid;
+  gap: 8px;
+}
+
 .preview-share-error {
   margin: 0;
   color: var(--danger);

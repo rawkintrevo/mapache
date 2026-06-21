@@ -451,6 +451,7 @@ describe("frontend smoke coverage", () => {
       imageKey: "default",
       memory: "1Gi",
       name: "Agent Shell",
+      sessionType: "cloud",
     });
 
     unmount();

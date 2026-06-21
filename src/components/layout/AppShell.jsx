@@ -78,10 +78,13 @@ export function AppShell(props) {
             onResizeSession={sessions.resizeSession}
             onRestartSession={sessions.restartSession}
             onShareSessionPreview={sessions.shareSessionPreview}
+            onCloseSshSessionForward={sessions.closeSshSessionForward}
+            onCreateSshSessionForward={sessions.createSshSessionForward}
             onSelectSession={sessions.selectSession}
             onStageGitPath={git.stageGitPath}
             onUnstageGitPath={git.unstageGitPath}
             onUpdateGitCommitMessage={git.updateGitCommitMessage}
+            onUpdateSshForwardPort={sessions.updateSshForwardPort}
           />
         )}
         <RightDrawer

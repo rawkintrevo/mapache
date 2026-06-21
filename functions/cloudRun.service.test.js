@@ -84,6 +84,10 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
   command: "codex",
   args: [],
 });
+assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
+  command: "",
+  args: [],
+});
 
 (async () => {
   const originalProject = process.env.GCLOUD_PROJECT;

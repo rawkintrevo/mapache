@@ -24,7 +24,7 @@ This document serves as an index for significant UI components in the applicatio
 | `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
 | `WorkspaceDrawerList` | `src/components/drawers/WorkspaceDrawerList.jsx` | React workspace list used by the left drawer. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including stop/delete actions. |
-| `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable workspace file tree used by the left drawer. |
+| `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable file tree used by the left drawer for workspace storage files or selected SSH session files. |
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
@@ -37,7 +37,7 @@ This document serves as an index for significant UI components in the applicatio
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, resize controls, restart controls, and Git status placement for the selected session. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, resize controls, restart controls, SSH port-forward controls, and Git status placement for the selected session. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace. |
 | `SessionStatusSummary` | `src/components/sessions/SessionStatusSummary.jsx` | Shared session-row accessory that renders the accessible status light tooltip and hyphen-split runner tags for both session list variants. |
@@ -46,7 +46,7 @@ This document serves as an index for significant UI components in the applicatio
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved Pi auth entry per provider is materialized into the active Pi session's `auth.json`. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank or GitHub-backed workspace, including the GitHub App connected repository picker, repository URL fallback, and optional branch field. |
-| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a new session. |
+| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session or SSH target session. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
 | `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for creating and editing workspace-local Markdown skills from the right inspector Skills panel. |

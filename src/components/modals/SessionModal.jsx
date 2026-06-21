@@ -1,4 +1,5 @@
 import {Plus, X} from "lucide-react";
+import {useState} from "react";
 import {sessionImages} from "../../config/sessionImages.js";
 import {parseEnvText} from "../../utils/envText.js";
 import {Button} from "../common/Button.jsx";
@@ -12,6 +13,7 @@ function formatMemory(value) {
 }
 
 export function SessionModal({busy, error = "", onClose, onCreateSession}) {
+  const [sessionType, setSessionType] = useState("cloud");
   return (
     <ModalBackdrop onClose={onClose}>
       <section aria-labelledby="session-modal-title" aria-modal="true" className="modal-panel" role="dialog">
@@ -27,22 +29,70 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
           onSubmit={(event) => {
             event.preventDefault();
             const formData = new FormData(event.currentTarget);
-            onCreateSession({
+            const base = {
               name: String(formData.get("name") || "").trim() || "Terminal session",
-              imageKey: formData.get("imageKey"),
+              sessionType,
               cpu: formData.get("cpu"),
               memory: formData.get("memory"),
               env: parseEnvText(formData.get("env")),
+            };
+            onCreateSession(sessionType === "ssh" ? {
+              ...base,
+              sshTarget: {
+                host: String(formData.get("sshHost") || "").trim(),
+                port: formData.get("sshPort") || "22",
+                username: String(formData.get("sshUsername") || "").trim(),
+                initialDirectory: String(formData.get("sshInitialDirectory") || "").trim() || "~",
+                privateKey: String(formData.get("sshPrivateKey") || ""),
+                certificate: String(formData.get("sshCertificate") || ""),
+                knownHosts: String(formData.get("sshKnownHosts") || ""),
+                strictHostKeyChecking: formData.get("sshStrictHostKeyChecking") === "on",
+              },
+            } : {
+              ...base,
+              imageKey: formData.get("imageKey"),
             });
           }}
         >
           <label><span>Name</span><input autoComplete="off" name="name" placeholder="shell" required /></label>
           <label>
-            <span>Container image</span>
-            <select name="imageKey" defaultValue={sessionImages[0]?.key}>
-              {sessionImages.map((image) => <option key={image.key} value={image.key}>{image.label}</option>)}
+            <span>Session type</span>
+            <select name="sessionType" value={sessionType} onChange={(event) => setSessionType(event.target.value)}>
+              <option value="cloud">Cloud runner</option>
+              <option value="ssh">SSH target</option>
             </select>
           </label>
+          {sessionType === "cloud" ? (
+            <label>
+              <span>Container image</span>
+              <select name="imageKey" defaultValue={sessionImages[0]?.key}>
+                {sessionImages.map((image) => <option key={image.key} value={image.key}>{image.label}</option>)}
+              </select>
+            </label>
+          ) : (
+            <>
+              <label><span>Host</span><input autoComplete="off" name="sshHost" placeholder="dev.example.com" required /></label>
+              <label><span>Port</span><input autoComplete="off" defaultValue="22" inputMode="numeric" name="sshPort" required /></label>
+              <label><span>Username</span><input autoComplete="off" name="sshUsername" placeholder="developer" required /></label>
+              <label><span>Initial directory</span><input autoComplete="off" defaultValue="~" name="sshInitialDirectory" /></label>
+              <label>
+                <span>Private key</span>
+                <textarea autoComplete="off" name="sshPrivateKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required rows={5} />
+              </label>
+              <label>
+                <span>Signed certificate</span>
+                <textarea autoComplete="off" name="sshCertificate" placeholder="ssh-ed25519-cert-v01@openssh.com ..." required rows={3} />
+              </label>
+              <label>
+                <span>Known hosts</span>
+                <textarea autoComplete="off" name="sshKnownHosts" placeholder="dev.example.com ssh-ed25519 AAAA..." rows={3} />
+              </label>
+              <label className="checkbox-label">
+                <input defaultChecked={true} name="sshStrictHostKeyChecking" type="checkbox" />
+                <span>Strict host key checking</span>
+              </label>
+            </>
+          )}
           <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label><span>Memory</span><select name="memory" defaultValue="1Gi">{memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}</select></label>
           <label>

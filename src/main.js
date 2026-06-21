@@ -17,6 +17,7 @@ import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyError
 import {
   resetGitStatus as resetGitStatusState,
   resetMcpServers as resetMcpServersState,
+  resetSshForwards as resetSshForwardsState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
   resetSignedOutState,
 } from "./state/resetters.js";
@@ -104,7 +105,9 @@ const handlers = {
   modals: modalController,
   pi: piPanelsController,
   sessions: {
+    closeSshSessionForward,
     createSession,
+    createSshSessionForward,
     deleteSession,
     getSessionAccessUrls,
     resizeSession,
@@ -112,6 +115,7 @@ const handlers = {
     shareSessionPreview,
     selectSession,
     stopSession,
+    updateSshForwardPort,
   },
   workspaces: {
     createWorkspace,
@@ -195,6 +199,10 @@ function resetMcpServers() {
   resetMcpServersState(state);
 }
 
+function resetSshForwards() {
+  resetSshForwardsState(state);
+}
+
 async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
@@ -218,6 +226,7 @@ async function refreshAll() {
       resetPiPackages();
       resetWorkspaceSkills();
       resetMcpServers();
+      resetSshForwards();
     }
     await loadSessions();
     await piPanelsController.loadMcpServers();
@@ -441,6 +450,7 @@ async function deleteWorkspace(workspaceId) {
       resetGitStatus();
       resetPiPackages();
       resetWorkspaceSkills();
+      resetSshForwards();
     }
     await refreshAll();
   });
@@ -455,6 +465,7 @@ async function selectWorkspace(workspaceId) {
   resetPiPackages();
   resetWorkspaceSkills();
   resetMcpServers();
+  resetSshForwards();
   await runBusy(async () => {
     await loadSessions();
     await piPanelsController.loadMcpServers();
@@ -483,16 +494,21 @@ async function selectSession(sessionId) {
 }
 
 async function loadSelectedSessionPanels() {
+  workspaceFilesController.resetWorkspaceFiles();
   if (!getSelectedSession()?.serviceUrl) {
     resetGitStatus();
     resetPiPackages();
     resetWorkspaceSkills();
+    resetSshForwards();
+    await workspaceFilesController.loadWorkspaceFiles();
     render();
     return;
   }
   await loadGitStatus();
   await piPanelsController.loadPiPackages();
   await piPanelsController.loadWorkspaceSkills();
+  await workspaceFilesController.loadWorkspaceFiles();
+  await loadSshForwards();
 }
 
 async function loadGitStatus() {
@@ -589,6 +605,49 @@ async function getSessionAccessUrls(workspaceId, sessionId) {
 
 async function shareSessionPreview(workspaceId, sessionId) {
   return state.api.shareSessionPreview(workspaceId, sessionId);
+}
+
+function updateSshForwardPort(port) {
+  state.sshForwards.port = port;
+  render();
+}
+
+async function loadSshForwards() {
+  const session = getSelectedSession();
+  if (!session || (session.sessionType !== "ssh" && session.terminalKind !== "ssh") || !session.serviceUrl) {
+    resetSshForwards();
+    return;
+  }
+  state.sshForwards.loading = true;
+  state.sshForwards.error = "";
+  render();
+  try {
+    const data = await state.api.getSshSessionForwards(state.selectedWorkspaceId, session.id);
+    state.sshForwards.forwards = data.forwards || [];
+  } catch (error) {
+    state.sshForwards.error = error.message || "ssh_forwards_unavailable";
+  } finally {
+    state.sshForwards.loading = false;
+  }
+}
+
+async function createSshSessionForward() {
+  const session = getSelectedSession();
+  if (!session || !state.sshForwards.port) return;
+  await runBusy(async () => {
+    await state.api.createSshSessionForward(state.selectedWorkspaceId, session.id, state.sshForwards.port);
+    state.sshForwards.port = "";
+    await loadSshForwards();
+  });
+}
+
+async function closeSshSessionForward(port) {
+  const session = getSelectedSession();
+  if (!session) return;
+  await runBusy(async () => {
+    await state.api.closeSshSessionForward(state.selectedWorkspaceId, session.id, port);
+    await loadSshForwards();
+  });
 }
 
 async function runBusy(task, message = "Working...") {
