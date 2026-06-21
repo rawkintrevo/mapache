@@ -130,7 +130,7 @@ function cloudRunServiceName(region, serviceId) {
 function publicGoogleError(error) {
   const message = error && error.response && error.response.data ?
     JSON.stringify(error.response.data) :
-    error.message;
+    error && error.message;
   return cleanName(message || "Cloud Run request failed.");
 }
 

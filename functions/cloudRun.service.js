@@ -7,6 +7,7 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
+  DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
   DEFAULT_CPU,
   DEFAULT_MEMORY,
   DEFAULT_REGION,
@@ -37,18 +38,17 @@ function createCloudRunService(dependencies = {}) {
 }
 
 async function provisionSessionService(workspace, sessionRef, session, dependencies = {}) {
+  let client;
+  const parent = `projects/${await getProjectId()}/locations/${session.region}`;
+  const serviceName = `${parent}/services/${session.serviceId}`;
   try {
-    const client = await auth.getClient();
-    const parent = `projects/${await getProjectId()}/locations/${session.region}`;
+    client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${session.serviceId}`;
     const body = await buildCloudRunService(workspace, session, dependencies);
     const response = await client.request({url, method: "POST", data: body});
-    await waitForOperation(client, response.data);
-    await setPublicInvoker(client, `${parent}/services/${session.serviceId}`);
-    const service = await getCloudRunService(
-        client,
-        `${parent}/services/${session.serviceId}`,
-    );
+    await waitForOperation(client, response.data, dependencies);
+    await setPublicInvoker(client, serviceName);
+    const service = await getCloudRunService(client, serviceName);
     await sessionRef.update({
       status: "running",
       serviceUrl: service.uri || null,
@@ -56,12 +56,62 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   } catch (error) {
+    let provisioningError = error;
+    if (client && isCloudRunOperationTimeout(error)) {
+      const service = await reconcileProvisioningTimeout(client, serviceName);
+      if (service) {
+        try {
+          await setPublicInvoker(client, serviceName);
+          await sessionRef.update({
+            status: "running",
+            serviceUrl: service.uri,
+            lastError: null,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return;
+        } catch (reconciliationError) {
+          provisioningError = reconciliationError;
+        }
+      }
+    }
     await sessionRef.update({
       status: "provision_failed",
-      lastError: publicGoogleError(error),
+      lastError: publicGoogleError(provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
+}
+
+async function reconcileProvisioningTimeout(client, serviceName) {
+  try {
+    const service = await getCloudRunService(client, serviceName);
+    if (isCloudRunServiceReady(service)) return service;
+  } catch (error) {
+    if (!isGoogleNotFound(error)) {
+      logger.warn("Cloud Run provisioning reconciliation failed", publicGoogleError(error));
+    }
+  }
+
+  try {
+    await client.request({
+      url: `https://run.googleapis.com/v2/${serviceName}`,
+      method: "DELETE",
+    });
+  } catch (error) {
+    if (!isGoogleNotFound(error)) {
+      logger.error("Cloud Run timed-out service cleanup failed", publicGoogleError(error));
+    }
+  }
+  return null;
+}
+
+function isCloudRunServiceReady(service) {
+  return Boolean(
+      service &&
+      service.uri &&
+      service.terminalCondition &&
+      service.terminalCondition.state === "CONDITION_SUCCEEDED",
+  );
 }
 
 async function patchSessionService(sessionRef, session, options = {}, dependencies = {}) {
@@ -412,10 +462,17 @@ async function setPublicInvoker(client, serviceName) {
   });
 }
 
-async function waitForOperation(client, operation) {
+async function waitForOperation(client, operation, options = {}) {
   if (!operation || !operation.name) return;
+  const timeoutMs = positiveOperationNumber(
+      options.operationTimeoutMs,
+      DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
+  );
+  const pollIntervalMs = positiveOperationNumber(options.operationPollIntervalMs, 2000);
+  const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+  const sleep = options.sleep || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
   const url = `https://run.googleapis.com/v2/${operation.name}`;
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const response = await client.request({url, method: "GET"});
     if (response.data && response.data.done) {
       if (response.data.error) {
@@ -423,9 +480,20 @@ async function waitForOperation(client, operation) {
       }
       return response.data;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (attempt + 1 < maxAttempts) await sleep(pollIntervalMs);
   }
-  throw new Error("Cloud Run operation timed out.");
+  const error = new Error(`Cloud Run operation timed out after ${timeoutMs}ms.`);
+  error.code = "cloud_run_operation_timeout";
+  throw error;
+}
+
+function positiveOperationNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function isCloudRunOperationTimeout(error) {
+  return Boolean(error && error.code === "cloud_run_operation_timeout");
 }
 
 async function getCloudRunService(client, serviceName) {
@@ -470,4 +538,5 @@ module.exports = {
   stringifyMcpConfig,
   stringifySyncPolicyExclude,
   terminalCommandEnv,
+  waitForOperation,
 };

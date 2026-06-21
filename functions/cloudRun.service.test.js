@@ -6,6 +6,7 @@ const {
   buildCloudRunService,
   codexHomeDir,
   codexHomeStoragePrefix,
+  createCloudRunService,
   homeStoragePrefix,
   normalizeResources,
   piSessionDir,
@@ -200,6 +201,150 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
   }, {restart: true});
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
+
+  let operationPolls = 0;
+  const delayedUpdates = [];
+  const delayedClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        return {data: {name: "operations/delayed-create"}};
+      }
+      if (method === "GET" && url.endsWith("operations/delayed-create")) {
+        operationPolls += 1;
+        return {data: {done: operationPolls === 31}};
+      }
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      if (method === "GET" && url.includes("/services/session-delayed")) {
+        return {data: {uri: "https://session-delayed.example.run.app"}};
+      }
+      throw new Error(`Unexpected delayed provisioning request: ${method} ${url}`);
+    },
+  };
+  const delayedService = createCloudRunService({
+    auth: {getClient: async () => delayedClient},
+    operationTimeoutMs: 62000,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await delayedService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, {
+    update: async (update) => delayedUpdates.push(update),
+  }, {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "delayed",
+    serviceId: "session-delayed",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+  });
+  assert.strictEqual(operationPolls, 31);
+  assert.strictEqual(delayedUpdates.length, 1);
+  assert.strictEqual(delayedUpdates[0].status, "running");
+  assert.strictEqual(delayedUpdates[0].serviceUrl, "https://session-delayed.example.run.app");
+
+  const reconciledUpdates = [];
+  const reconciledClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        return {data: {name: "operations/reconciled-create"}};
+      }
+      if (method === "GET" && url.endsWith("operations/reconciled-create")) {
+        return {data: {done: false}};
+      }
+      if (method === "GET" && url.includes("/services/session-reconciled")) {
+        return {data: {
+          uri: "https://session-reconciled.example.run.app",
+          terminalCondition: {state: "CONDITION_SUCCEEDED"},
+        }};
+      }
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      throw new Error(`Unexpected reconciled provisioning request: ${method} ${url}`);
+    },
+  };
+  const reconciledService = createCloudRunService({
+    auth: {getClient: async () => reconciledClient},
+    operationTimeoutMs: 2000,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await reconciledService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, {
+    update: async (update) => reconciledUpdates.push(update),
+  }, {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "reconciled",
+    serviceId: "session-reconciled",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+  });
+  assert.strictEqual(reconciledUpdates.length, 1);
+  assert.strictEqual(reconciledUpdates[0].status, "running");
+  assert.strictEqual(reconciledUpdates[0].serviceUrl, "https://session-reconciled.example.run.app");
+
+  const timeoutRequests = [];
+  const timeoutUpdates = [];
+  const timeoutClient = {
+    request: async ({url, method}) => {
+      timeoutRequests.push({url, method});
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        return {data: {name: "operations/stuck-create"}};
+      }
+      if (method === "GET" && url.endsWith("operations/stuck-create")) {
+        return {data: {done: false}};
+      }
+      if (method === "GET" && url.includes("/services/session-stuck")) {
+        return {data: {terminalCondition: {state: "CONDITION_PENDING"}}};
+      }
+      if (method === "DELETE" && url.includes("/services/session-stuck")) {
+        return {data: {name: "operations/delete-stuck"}};
+      }
+      throw new Error(`Unexpected timed-out provisioning request: ${method} ${url}`);
+    },
+  };
+  const timeoutService = createCloudRunService({
+    auth: {getClient: async () => timeoutClient},
+    operationTimeoutMs: 4000,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await timeoutService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, {
+    update: async (update) => timeoutUpdates.push(update),
+  }, {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "stuck",
+    serviceId: "session-stuck",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+  });
+  assert.ok(timeoutRequests.some(({method, url}) =>
+    method === "DELETE" && url.includes("/services/session-stuck")));
+  assert.strictEqual(timeoutUpdates.length, 1);
+  assert.strictEqual(timeoutUpdates[0].status, "provision_failed");
+  assert.match(timeoutUpdates[0].lastError, /timed out after 4000ms/);
 
   if (originalProject === undefined) delete process.env.GCLOUD_PROJECT;
   else process.env.GCLOUD_PROJECT = originalProject;
