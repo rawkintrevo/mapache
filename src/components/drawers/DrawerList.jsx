@@ -13,6 +13,7 @@ export function DrawerListItem({
   detail = null,
   meta = "",
   title,
+  titleAccessory = null,
   onSelect,
 }) {
   const mainClassName = "drawer-list-row__main";
@@ -20,7 +21,7 @@ export function DrawerListItem({
     <>
       <span className="drawer-list-row__title">
         <span>{title}</span>
-        {badge ? <span className="pill">{badge}</span> : null}
+        {titleAccessory || (badge ? <span className="pill">{badge}</span> : null)}
       </span>
       {meta ? <span className="subtle">{meta}</span> : null}
       {detail}
