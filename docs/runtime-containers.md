@@ -129,7 +129,7 @@ For the default shell runner, that process is a login shell:
 bash -l
 ```
 
-For SSH-backed sessions, Cloud Functions still provisions the default runner image, but sets `TERMINAL_KIND=ssh` and injects SSH target/auth environment. The runner writes the private key, signed user certificate, and optional `known_hosts` content under the runtime home directory with restrictive permissions, then starts an OpenSSH client PTY against the configured target and initial directory. The SSH shell is reconnectable through the existing browser terminal replay path while the Cloud Run runner instance remains active.
+For SSH-backed sessions, Cloud Functions still provisions the default runner image, but sets `TERMINAL_KIND=ssh` and injects SSH target/auth environment. The runner writes the private key, optional signed user certificate, and optional `known_hosts` content under the runtime home directory with restrictive permissions, then starts an OpenSSH client PTY against the configured target and initial directory. The SSH shell is reconnectable through the existing browser terminal replay path while the Cloud Run runner instance remains active.
 
 SSH file browsing is runner-backed rather than Cloud Storage-backed. The first implementation intentionally scopes list/read/save operations to the configured initial directory on the target machine and relies on the SSH account's OS permissions. SSH port forwarding is also runner-backed: each requested target port starts an `ssh -N -L 127.0.0.1:<local>:127.0.0.1:<remote>` process inside the runner and exposes it only through authenticated `/ssh/forward/<port>/` browser URLs.
 

@@ -507,6 +507,7 @@ describe("frontend smoke coverage", () => {
       source: expect.objectContaining({
         type: "ssh",
         sshTarget: expect.objectContaining({
+          authMode: "private-key",
           host: "dev.example.com",
           username: "developer",
         }),

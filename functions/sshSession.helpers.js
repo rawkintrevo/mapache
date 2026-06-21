@@ -8,6 +8,7 @@ function normalizeSshSessionPayload(payload = {}) {
   const username = cleanUser(source.username || source.user);
   const port = cleanPort(source.port || 22);
   const initialDirectory = cleanInitialDirectory(source.initialDirectory || source.cwd || "~");
+  const authMode = cleanAuthMode(source.authMode || source.authType || source.authentication);
   const privateKey = cleanSecretMultiline(source.privateKey);
   const certificate = cleanSecretMultiline(source.certificate || source.publicCertificate || source.sshCertificate);
   const knownHosts = cleanSecretMultiline(source.knownHosts);
@@ -16,7 +17,7 @@ function normalizeSshSessionPayload(payload = {}) {
   if (!host) throw httpError(400, "ssh_host_required");
   if (!username) throw httpError(400, "ssh_username_required");
   if (!privateKey) throw httpError(400, "ssh_private_key_required");
-  if (!certificate) throw httpError(400, "ssh_certificate_required");
+  if (authMode === "certificate" && !certificate) throw httpError(400, "ssh_certificate_required");
 
   return {
     public: {
@@ -25,8 +26,8 @@ function normalizeSshSessionPayload(payload = {}) {
       username,
       initialDirectory,
       auth: {
-        type: "openssh-user-certificate",
-        hasCertificate: true,
+        type: authMode === "certificate" ? "openssh-user-certificate" : "private-key",
+        hasCertificate: Boolean(certificate),
         strictHostKeyChecking,
         hasKnownHosts: Boolean(knownHosts),
       },
@@ -36,11 +37,23 @@ function normalizeSshSessionPayload(payload = {}) {
       },
     },
     secrets: {
+      authMode,
       privateKey,
       certificate,
       knownHosts,
     },
   };
+}
+
+function cleanAuthMode(value) {
+  const mode = cleanName(value || "private-key").toLowerCase();
+  if (["certificate", "cert", "openssh-user-certificate", "signed-key"].includes(mode)) {
+    return "certificate";
+  }
+  if (["private-key", "key", "public-key"].includes(mode)) {
+    return "private-key";
+  }
+  throw httpError(400, "unsupported_ssh_auth_mode");
 }
 
 function cleanHost(value) {

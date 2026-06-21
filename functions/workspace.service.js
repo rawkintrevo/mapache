@@ -166,7 +166,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${ref.id}`).set({
       ownerUid: uid,
       workspaceId: ref.id,
-      type: "openssh-user-certificate",
+      type: sourceSecrets.authMode === "certificate" ? "openssh-user-certificate" : "private-key",
       ...sourceSecrets,
       createdAt: now,
       updatedAt: now,

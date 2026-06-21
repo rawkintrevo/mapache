@@ -302,6 +302,7 @@ async function createSession(uid, workspaceId, payload) {
         SSH_TARGET_PORT: String(sshPayload.public.port),
         SSH_TARGET_USERNAME: sshPayload.public.username,
         SSH_INITIAL_DIRECTORY: sshPayload.public.initialDirectory,
+        SSH_AUTH_MODE: sshPayload.public.auth.type === "openssh-user-certificate" ? "certificate" : "private-key",
         SSH_STRICT_HOST_KEY_CHECKING: sshPayload.public.auth.strictHostKeyChecking ? "true" : "false",
       },
     } : {}),
@@ -336,6 +337,7 @@ async function createSession(uid, workspaceId, payload) {
       ...session,
       sessionEnv: {
         ...(session.sessionEnv || {}),
+        SSH_AUTH_MODE: sshPayload.secrets.authMode || "private-key",
         SSH_PRIVATE_KEY: sshPayload.secrets.privateKey,
         SSH_CERTIFICATE: sshPayload.secrets.certificate,
         SSH_KNOWN_HOSTS: sshPayload.secrets.knownHosts,
@@ -358,6 +360,7 @@ async function normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSo
       privateKey: secrets.privateKey,
       certificate: secrets.certificate,
       knownHosts: secrets.knownHosts,
+      authMode: secrets.authMode || workspaceSshSource.target?.auth?.type,
       strictHostKeyChecking: workspaceSshSource.target?.auth?.strictHostKeyChecking,
     },
   });

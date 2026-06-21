@@ -51,6 +51,7 @@ export function WorkspaceModal({
                 port: formData.get("sshPort") || "22",
                 username: String(formData.get("sshUsername") || "").trim(),
                 initialDirectory: String(formData.get("sshInitialDirectory") || "").trim() || "~",
+                authMode: formData.get("sshAuthMode") || "private-key",
                 privateKey: String(formData.get("sshPrivateKey") || ""),
                 certificate: String(formData.get("sshCertificate") || ""),
                 knownHosts: String(formData.get("sshKnownHosts") || ""),
@@ -189,12 +190,19 @@ export function WorkspaceModal({
               <label><span>Username</span><input autoComplete="off" name="sshUsername" placeholder="developer" required /></label>
               <label><span>Initial directory</span><input autoComplete="off" defaultValue="~" name="sshInitialDirectory" /></label>
               <label>
+                <span>Authentication</span>
+                <select defaultValue="private-key" name="sshAuthMode">
+                  <option value="private-key">Private key</option>
+                  <option value="certificate">Signed certificate</option>
+                </select>
+              </label>
+              <label>
                 <span>Private key</span>
                 <textarea autoComplete="off" name="sshPrivateKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required rows={5} />
               </label>
               <label>
                 <span>Signed certificate</span>
-                <textarea autoComplete="off" name="sshCertificate" placeholder="ssh-ed25519-cert-v01@openssh.com ..." required rows={3} />
+                <textarea autoComplete="off" name="sshCertificate" placeholder="Only required for signed-certificate auth" rows={3} />
               </label>
               <label>
                 <span>Known hosts</span>

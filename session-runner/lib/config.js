@@ -118,6 +118,7 @@ function createConfig() {
     sessionId: process.env.SESSION_ID || "",
     sessionName: normalizeEnvString(process.env.SESSION_NAME) || "Terminal session",
     shutdownToken: process.env.SESSION_SHUTDOWN_TOKEN || "",
+    sshAuthMode: normalizeEnvString(process.env.SSH_AUTH_MODE) === "certificate" ? "certificate" : "private-key",
     sshCertificate: normalizeEnvString(process.env.SSH_CERTIFICATE),
     sshCertificatePath: path.join(sshConfigDir, "id_user-cert.pub"),
     sshConfigDir,

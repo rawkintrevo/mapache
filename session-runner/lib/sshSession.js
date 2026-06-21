@@ -30,12 +30,17 @@ function withPreparedSsh(config, action) {
 
 function prepareSshMaterial(config) {
   if (config.terminalKind !== "ssh") return;
-  if (!config.sshHost || !config.sshUsername || !config.sshPrivateKey || !config.sshCertificate) {
-    throw new Error("SSH sessions require SSH_TARGET_HOST, SSH_TARGET_USERNAME, SSH_PRIVATE_KEY, and SSH_CERTIFICATE.");
+  if (!config.sshHost || !config.sshUsername || !config.sshPrivateKey) {
+    throw new Error("SSH sessions require SSH_TARGET_HOST, SSH_TARGET_USERNAME, and SSH_PRIVATE_KEY.");
+  }
+  if (config.sshAuthMode === "certificate" && !config.sshCertificate) {
+    throw new Error("Certificate SSH sessions require SSH_CERTIFICATE.");
   }
   fs.mkdirSync(config.sshConfigDir, {recursive: true, mode: 0o700});
   writeSecretFile(config.sshPrivateKeyPath, config.sshPrivateKey, 0o600);
-  writeSecretFile(config.sshCertificatePath, config.sshCertificate, 0o644);
+  if (config.sshAuthMode === "certificate") {
+    writeSecretFile(config.sshCertificatePath, config.sshCertificate, 0o644);
+  }
   if (config.sshKnownHosts) writeSecretFile(config.sshKnownHostsPath, config.sshKnownHosts, 0o644);
 }
 
@@ -58,12 +63,14 @@ function baseSshArgs(config) {
   const args = [
     "-p", String(config.sshPort),
     "-i", config.sshPrivateKeyPath,
-    "-o", `CertificateFile=${config.sshCertificatePath}`,
     "-o", "IdentitiesOnly=yes",
     "-o", "ServerAliveInterval=30",
     "-o", "ServerAliveCountMax=3",
     "-o", "ExitOnForwardFailure=yes",
   ];
+  if (config.sshAuthMode === "certificate") {
+    args.push("-o", `CertificateFile=${config.sshCertificatePath}`);
+  }
   if (config.sshKnownHosts) {
     args.push("-o", `UserKnownHostsFile=${config.sshKnownHostsPath}`, "-o", "StrictHostKeyChecking=yes");
   } else if (config.sshStrictHostKeyChecking) {
