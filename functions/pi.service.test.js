@@ -25,7 +25,10 @@ const {
   parseGitPackageSource,
   parseOpenAiCodexErrorCode,
   piPackageCatalogDocId,
+  removePiAuthEntry,
+  removePiAuthProvider,
   sessionSupportsWorkspaceSkills,
+  writePiAuthMaps,
 } = require("./pi.service");
 
 function publicMessage(error) {
@@ -127,6 +130,35 @@ assert.throws(() => normalizePiAuthProviderKey("unknown-provider"), (error) => p
 assert.strictEqual(normalizePiAuthStoredProviderKey("custom-provider"), "custom-provider");
 assert.throws(() => normalizePiAuthApiKey(""), (error) => publicMessage(error) === "invalid_pi_auth_key");
 assert.strictEqual(normalizePiAuthApiKey(" key "), "key");
+
+const openAiCredential1 = {type: "oauth", access: "first"};
+const openAiCredential2 = {type: "oauth", access: "second"};
+assert.deepStrictEqual(removePiAuthEntry({"openai-codex": openAiCredential2}, {
+  "entry-1": {providerKey: "openai-codex", credential: openAiCredential1, createdAt: "2026-01-01"},
+  "entry-2": {providerKey: "openai-codex", credential: openAiCredential2, createdAt: "2026-01-02"},
+}, "entry-2"), {
+  providers: {"openai-codex": openAiCredential1},
+  entries: {
+    "entry-1": {providerKey: "openai-codex", credential: openAiCredential1, createdAt: "2026-01-01"},
+  },
+});
+assert.deepStrictEqual(removePiAuthEntry({"openai-codex": openAiCredential1}, {
+  "entry-1": {providerKey: "openai-codex", credential: openAiCredential1, createdAt: "2026-01-01"},
+}, "entry-1"), {providers: {}, entries: {}});
+assert.deepStrictEqual(removePiAuthProvider({anthropic: {type: "api_key", key: "secret"}}, {
+  "entry-1": {providerKey: "anthropic", credential: {type: "api_key", key: "secret"}},
+}, "anthropic"), {providers: {}, entries: {}});
+
+const transactionCalls = [];
+writePiAuthMaps({
+  update: (ref, payload) => transactionCalls.push({method: "update", ref, payload}),
+  set: (ref, payload) => transactionCalls.push({method: "set", ref, payload}),
+}, "pi-auth-ref", {exists: true}, {providers: {}, entries: {}, updatedAt: "now", createdAt: "created"});
+assert.deepStrictEqual(transactionCalls, [{
+  method: "update",
+  ref: "pi-auth-ref",
+  payload: {providers: {}, entries: {}, updatedAt: "now"},
+}]);
 
 assert.strictEqual(cleanOpenAiCodexDeviceField(" code "), "code");
 assert.strictEqual(cleanOpenAiCodexDeviceField("bad\ncode"), "");

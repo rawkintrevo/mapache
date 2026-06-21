@@ -148,7 +148,12 @@ export function createPiPanelsController({state, render}) {
     await startOpenAiCodexDeviceLoginState({state, render});
   }
 
-  async function savePiAuthProvider() {
+  async function savePiAuthProvider(provider, apiKey, entryLabel) {
+    updatePiAuthFormState(state, {
+      selectedProvider: provider,
+      apiKey,
+      entryLabel,
+    });
     await savePiAuthProviderState({state, render});
   }
 

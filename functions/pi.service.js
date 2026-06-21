@@ -112,17 +112,13 @@ async function deletePiAuthProvider(uid, provider) {
     const data = snap.exists ? snap.data() : {};
     const current = normalizePiAuthProviders(data.providers);
     const entries = normalizePiAuthEntries(data.entries, current);
-    delete current[providerKey];
-    const filteredEntries = Object.entries(entries).reduce((acc, [id, entry]) => {
-      if (entry.providerKey !== providerKey) acc[id] = entry;
-      return acc;
-    }, {});
-    transaction.set(ref, {
-      providers: current,
-      entries: filteredEntries,
+    const nextAuth = removePiAuthProvider(current, entries, providerKey);
+    writePiAuthMaps(transaction, ref, snap, {
+      providers: nextAuth.providers,
+      entries: nextAuth.entries,
       updatedAt: now,
-      ...(snap.exists ? {} : {createdAt: now}),
-    }, {merge: true});
+      createdAt: now,
+    });
   });
   return getPiAuth(uid);
 }
@@ -136,23 +132,53 @@ async function deletePiAuthEntry(uid, entryId) {
     const data = snap.exists ? snap.data() : {};
     const providers = normalizePiAuthProviders(data.providers);
     const entries = normalizePiAuthEntries(data.entries, providers);
-    const entry = entries[normalizedEntryId];
-    if (!entry) return;
-    delete entries[normalizedEntryId];
-    const latestForProvider = Object.values(entries)
-        .filter((item) => item.providerKey === entry.providerKey)
-        .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0];
-    const nextProviders = {...providers};
-    if (latestForProvider) nextProviders[entry.providerKey] = latestForProvider.credential;
-    else delete nextProviders[entry.providerKey];
-    transaction.set(ref, {
-      providers: nextProviders,
-      entries,
+    const nextAuth = removePiAuthEntry(providers, entries, normalizedEntryId);
+    if (!nextAuth) return;
+    writePiAuthMaps(transaction, ref, snap, {
+      providers: nextAuth.providers,
+      entries: nextAuth.entries,
       updatedAt: now,
-      ...(snap.exists ? {} : {createdAt: now}),
-    }, {merge: true});
+      createdAt: now,
+    });
   });
   return getPiAuth(uid);
+}
+
+function removePiAuthProvider(providers, entries, providerKey) {
+  const nextProviders = {...providers};
+  delete nextProviders[providerKey];
+  const nextEntries = Object.entries(entries).reduce((acc, [id, entry]) => {
+    if (entry.providerKey !== providerKey) acc[id] = entry;
+    return acc;
+  }, {});
+  return {providers: nextProviders, entries: nextEntries};
+}
+
+function removePiAuthEntry(providers, entries, entryId) {
+  const entry = entries[entryId];
+  if (!entry) return null;
+  const nextEntries = {...entries};
+  delete nextEntries[entryId];
+  const latestForProvider = Object.values(nextEntries)
+      .filter((item) => item.providerKey === entry.providerKey)
+      .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0];
+  const nextProviders = {...providers};
+  if (latestForProvider) nextProviders[entry.providerKey] = latestForProvider.credential;
+  else delete nextProviders[entry.providerKey];
+  return {providers: nextProviders, entries: nextEntries};
+}
+
+function writePiAuthMaps(transaction, ref, snap, fields) {
+  const payload = {
+    providers: fields.providers,
+    entries: fields.entries,
+    updatedAt: fields.updatedAt,
+  };
+  if (snap.exists) {
+    transaction.update(ref, payload);
+    return;
+  }
+  transaction.set(ref, {...payload, createdAt: fields.createdAt});
 }
 
 async function savePiAuthCredential(uid, providerKey, credential, label = "") {
@@ -1006,5 +1032,8 @@ module.exports = {
   parseOpenAiCodexErrorCode,
   piPackageCatalogDocId,
   piPackageCatalogRecord,
+  removePiAuthEntry,
+  removePiAuthProvider,
   sessionSupportsWorkspaceSkills,
+  writePiAuthMaps,
 };

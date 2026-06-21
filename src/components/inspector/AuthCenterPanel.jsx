@@ -1,4 +1,4 @@
-import {KeyRound, Plus, RefreshCw, Trash2} from "lucide-react";
+import {KeyRound, Plus, RefreshCw, RotateCw, Trash2} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
 import {Button} from "../common/Button.jsx";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
@@ -17,7 +17,7 @@ function normalizeEntries(status) {
   return normalized.sort((left, right) => `${left.providerKey}:${left.label}`.localeCompare(`${right.providerKey}:${right.label}`));
 }
 
-function AuthProviderRow({entry, disabled, onDelete}) {
+function AuthProviderRow({entry, disabled, onDelete, onRelogin}) {
   const credential = entry.credential && typeof entry.credential === "object" ? entry.credential : {};
   const type = credential.type === "oauth" ? "OAuth credential" : credential.type === "api_key" ? "API key" : "Saved credential";
   const detail = (
@@ -29,6 +29,15 @@ function AuthProviderRow({entry, disabled, onDelete}) {
   return (
     <DrawerListItem
       actions={[
+        ...(credential.type === "oauth" ? [
+          <DrawerListActionButton
+            disabled={disabled || !onRelogin}
+            icon={<RotateCw aria-hidden="true" />}
+            key="relogin"
+            label={`Log in again for ${entry.label || piAuthProviderLabel(entry.providerKey)}`}
+            onClick={() => onRelogin?.(entry.providerKey)}
+          />,
+        ] : []),
         <DrawerListActionButton
           disabled={disabled || !onDelete}
           icon={<Trash2 aria-hidden="true" />}
@@ -129,6 +138,7 @@ export function AuthCenterPanel({
               entry={entry}
               key={entry.id}
               onDelete={onDeletePiAuthProvider}
+              onRelogin={onOpenAuthModal}
             />
           ))}
         </DrawerList>

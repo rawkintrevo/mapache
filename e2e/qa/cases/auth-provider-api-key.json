@@ -16,6 +16,9 @@
     },
     {"assert": "network-status", "requestUrlIncludes": "/api/pi-auth/providers/anthropic", "method": "PUT", "expectedStatus": 200},
     {"capture": "screenshot", "fileName": "auth-provider.png"},
-    {"useScript": "scripts/delete-auth-entry.json", "parameters": {"entryLabel": "qa-entry"}}
+    {"useScript": "scripts/delete-auth-entry.json", "parameters": {"entryLabel": "qa-entry"}},
+    {"useScript": "scripts/refresh-auth-providers.json"},
+    {"assert": "auth-entry-absent", "entryLabel": "qa-entry"},
+    {"capture": "screenshot", "fileName": "auth-provider-deleted.png"}
   ]
 }
