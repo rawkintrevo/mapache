@@ -238,8 +238,11 @@ async function listSessions(uid, workspaceId) {
 
 async function createSession(uid, workspaceId, payload) {
   const workspace = await requireWorkspace(uid, workspaceId);
-  const sessionType = cleanName(payload.sessionType || payload.type || "cloud").toLowerCase();
-  const sshPayload = sessionType === "ssh" ? normalizeSshSessionPayload(payload) : null;
+  const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
+  const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
+  const sshPayload = sessionType === "ssh" ?
+    await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) :
+    null;
   const now = admin.firestore.FieldValue.serverTimestamp();
   const sessionRef = sessionCollection(workspaceId).doc();
   const region = cleanName(payload.region || DEFAULT_REGION);
@@ -341,6 +344,23 @@ async function createSession(uid, workspaceId, payload) {
   }
 
   return toClientDoc(await sessionRef.get());
+}
+
+async function normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) {
+  if (payload && payload.sshTarget) return normalizeSshSessionPayload(payload);
+  if (!workspaceSshSource) return normalizeSshSessionPayload(payload);
+  const privateSnap = await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).get();
+  if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
+  const secrets = privateSnap.data() || {};
+  return normalizeSshSessionPayload({
+    sshTarget: {
+      ...(workspaceSshSource.target || {}),
+      privateKey: secrets.privateKey,
+      certificate: secrets.certificate,
+      knownHosts: secrets.knownHosts,
+      strictHostKeyChecking: workspaceSshSource.target?.auth?.strictHostKeyChecking,
+    },
+  });
 }
 
 async function createSessionAccessUrls(uid, workspaceId, sessionId) {

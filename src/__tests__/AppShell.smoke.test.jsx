@@ -482,6 +482,38 @@ describe("frontend smoke coverage", () => {
     workspaceView.unmount();
   });
 
+  test("submits dev machine workspace source", async () => {
+    const user = userEvent.setup();
+    const handlers = createHandlers();
+    render(
+        <AppShell
+          handlers={handlers}
+          state={createState({workspaceModalOpen: true})}
+        />,
+    );
+
+    const dialog = screen.getByRole("dialog", {name: "Create Workspace"});
+    await user.type(within(dialog).getByLabelText("Workspace Name"), "Dev Box");
+    await user.click(within(dialog).getByLabelText("Dev machine"));
+    await user.type(within(dialog).getByLabelText("Host"), "dev.example.com");
+    await user.clear(within(dialog).getByLabelText("Username"));
+    await user.type(within(dialog).getByLabelText("Username"), "developer");
+    await user.type(within(dialog).getByLabelText("Private key"), "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----");
+    await user.type(within(dialog).getByLabelText("Signed certificate"), "ssh-ed25519-cert-v01@openssh.com AAAA cert");
+    await user.click(within(dialog).getByRole("button", {name: "Create Workspace"}));
+
+    expect(handlers.workspaces.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Dev Box",
+      source: expect.objectContaining({
+        type: "ssh",
+        sshTarget: expect.objectContaining({
+          host: "dev.example.com",
+          username: "developer",
+        }),
+      }),
+    }));
+  });
+
   test("submits and closes the workspace skill modal", async () => {
     const user = userEvent.setup();
     const handlers = createHandlers();

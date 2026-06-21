@@ -424,6 +424,12 @@ function normalizeCreateWorkspaceSource(payload = {}) {
   const source = payload.source && typeof payload.source === "object" ? payload.source : {};
   const sourceType = String(source.type || payload.source || "blank").trim().toLowerCase();
   if (sourceType !== "github") {
+    if (sourceType === "ssh") {
+      return {
+        ...source,
+        type: "ssh",
+      };
+    }
     return {type: "blank"};
   }
 

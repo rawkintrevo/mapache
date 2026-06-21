@@ -34,7 +34,7 @@ Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `us
 
 Session creation writes a Firestore session record, resolves the curated runner image key server-side, snapshots the selected workspace's MCP config into the session, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. Restart refreshes the MCP snapshot from the workspace before patching or recreating Cloud Run so active sessions can pick up right-drawer MCP edits. The API function uses a longer request timeout than the default so slower runner image rollouts, especially Chromium-backed web images, can finish Cloud Run provisioning instead of timing out while the service is still becoming healthy. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
 
-SSH-backed sessions use the same session collection and Cloud Run provisioning path, but set `sessionType: "ssh"` and `terminalKind: "ssh"` so the runner opens an SSH client PTY instead of a local harness. The create request accepts target metadata plus OpenSSH private key, user certificate, and optional known-hosts material. The stored Firestore session document keeps only target metadata and certificate presence flags; the private key and certificate body are passed only as provisioning environment for the runner revision. Session-scoped SSH file routes and port-forward routes verify normal workspace/session ownership before proxying to backend-only runner routes.
+SSH-backed sessions use the same session collection and Cloud Run provisioning path, but set `sessionType: "ssh"` and `terminalKind: "ssh"` so the runner opens an SSH client PTY instead of a local harness. Dev machine workspaces store public SSH target metadata on the workspace source and store private key/certificate material under the owner's private user subcollection. Session creation for those workspaces loads the private material server-side and passes it only as provisioning environment for the runner revision. Session-scoped SSH file routes and port-forward routes verify normal workspace/session ownership before proxying to backend-only runner routes.
 
 Admin user summaries reuse the same usage rollups as `/api/me`, but return cost estimates in dollars for lifetime and trailing-30-day windows. Whitelist toggles update `appConfig/access`, preferring `allowedEmails` when the target user has an email and `allowedUids` otherwise.
 
@@ -54,7 +54,7 @@ GitHub connector account routes live under `/api/github/**` and are implemented 
 - Admin-only API routes must require `users/{uid}.isAdmin === true`; being on the app allowlist is not enough to enumerate users or edit allowlist state.
 - The backend, not the frontend, is authoritative for runner image selection and GitHub workspace concurrency guards.
 - Cloud Functions and session runners use separate service accounts.
-- Do not write secret values to Firestore, Cloud Storage, logs, workspace files, or browser state.
+- Do not write secret values to public workspace/session documents, Cloud Storage, logs, workspace files, or browser state. Credential material that must persist should stay in owner-scoped private user documents and only be materialized into runner environment when needed.
 - Public preview documents may identify owner/workspace/session ids for maintenance, but public preview responses must only serve files copied from the static preview output prefix.
 - Route handlers should remain small; move cohesive domain behavior into service/helper modules as areas are touched.
 

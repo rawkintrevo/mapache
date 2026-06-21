@@ -1,5 +1,5 @@
 import {Plus, X} from "lucide-react";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {sessionImages} from "../../config/sessionImages.js";
 import {parseEnvText} from "../../utils/envText.js";
 import {Button} from "../common/Button.jsx";
@@ -12,8 +12,12 @@ function formatMemory(value) {
   return value.replace("Gi", " GiB");
 }
 
-export function SessionModal({busy, error = "", onClose, onCreateSession}) {
-  const [sessionType, setSessionType] = useState("cloud");
+export function SessionModal({busy, error = "", selectedWorkspace = null, onClose, onCreateSession}) {
+  const workspaceSsh = selectedWorkspace?.source?.type === "ssh";
+  const [sessionType, setSessionType] = useState(workspaceSsh ? "ssh" : "cloud");
+  useEffect(() => {
+    setSessionType(workspaceSsh ? "ssh" : "cloud");
+  }, [workspaceSsh]);
   return (
     <ModalBackdrop onClose={onClose}>
       <section aria-labelledby="session-modal-title" aria-modal="true" className="modal-panel" role="dialog">
@@ -38,7 +42,7 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
             };
             onCreateSession(sessionType === "ssh" ? {
               ...base,
-              sshTarget: {
+              ...(workspaceSsh ? {} : {sshTarget: {
                 host: String(formData.get("sshHost") || "").trim(),
                 port: formData.get("sshPort") || "22",
                 username: String(formData.get("sshUsername") || "").trim(),
@@ -47,7 +51,7 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
                 certificate: String(formData.get("sshCertificate") || ""),
                 knownHosts: String(formData.get("sshKnownHosts") || ""),
                 strictHostKeyChecking: formData.get("sshStrictHostKeyChecking") === "on",
-              },
+              }}),
             } : {
               ...base,
               imageKey: formData.get("imageKey"),
@@ -58,7 +62,7 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
           <label>
             <span>Session type</span>
             <select name="sessionType" value={sessionType} onChange={(event) => setSessionType(event.target.value)}>
-              <option value="cloud">Cloud runner</option>
+              <option disabled={workspaceSsh} value="cloud">Cloud runner</option>
               <option value="ssh">SSH target</option>
             </select>
           </label>
@@ -69,6 +73,12 @@ export function SessionModal({busy, error = "", onClose, onCreateSession}) {
                 {sessionImages.map((image) => <option key={image.key} value={image.key}>{image.label}</option>)}
               </select>
             </label>
+          ) : workspaceSsh ? (
+            <div className="workspace-source-fields">
+              <p className="subtle">
+                This session will connect to {selectedWorkspace.source?.target?.username}@{selectedWorkspace.source?.target?.host}.
+              </p>
+            </div>
           ) : (
             <>
               <label><span>Host</span><input autoComplete="off" name="sshHost" placeholder="dev.example.com" required /></label>

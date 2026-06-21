@@ -66,17 +66,18 @@ ssh-keyscan -p 22 dev.example.com > ./known_hosts
 
 ## Creating A Mapache Session
 
-In the Mapache web UI:
+In the Mapache web UI, create a workspace:
 
-1. Open New session.
-2. Set Session type to SSH target.
+1. Open Create Workspace.
+2. Set the source to Dev machine.
 3. Enter host, port, username, and initial directory.
 4. Paste the private key from `mapache_session_key`.
 5. Paste the signed user certificate from `mapache_session_key-cert.pub`.
 6. Paste `known_hosts` when strict host key checking should pin the target host key.
-7. Create the session.
+7. Create the workspace.
+8. Create a session in that workspace. The session modal defaults to SSH target and uses the workspace target configuration.
 
-The private key and certificate are used to configure the Cloud Run runner environment for that session. The stored Firestore session document keeps target metadata and certificate presence, but not the private key or certificate body. Restarting an SSH session may require creating a fresh session with currently valid signed key material.
+The private key and certificate are stored under the signed-in user's private Firestore subcollection for that workspace and are used to configure the Cloud Run runner environment for SSH sessions. The public workspace document keeps target metadata and certificate presence, but not the private key or certificate body. Rotating an expired certificate currently means creating a new dev-machine workspace with fresh signed key material.
 
 ## Port Forwarding
 

@@ -34,6 +34,7 @@ const {
   isDirectoryMarkerFileName,
   isInternalStorageDirName,
 } = require("./runtimePaths.helpers");
+const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 
 function createWorkspaceService(dependencies = {}) {
   return {
@@ -101,6 +102,9 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
   }
 
   await deleteWorkspaceStorageIfUnshared(uid, workspace);
+  await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).delete().catch((error) => {
+    logger.warn("ssh workspace auth cleanup failed", {workspaceId, error: error.message});
+  });
   if (typeof db.recursiveDelete === "function") {
     await db.recursiveDelete(workspaceRef);
   } else {
@@ -118,19 +122,28 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
   const storagePrefix = `workspaces/${uid}/${slugify(name)}`;
+  const sourceSecrets = source.secrets || null;
+  const publicSource = {...source};
+  delete publicSource.secrets;
   const doc = {
     ownerUid: uid,
     userPath: userPath(uid),
     name,
     bucket,
-    source: source.type === "blank" ? {
+    source: publicSource.type === "blank" ? {
       type: "blank",
       status: "ready",
       statusMessage: null,
       resolvedBranch: null,
       resolvedCommit: null,
+    } : publicSource.type === "ssh" ? {
+      ...publicSource,
+      status: "ready",
+      statusMessage: null,
+      resolvedBranch: null,
+      resolvedCommit: null,
     } : {
-      ...source,
+      ...publicSource,
       status: "pending",
       statusMessage: null,
       resolvedBranch: null,
@@ -149,6 +162,16 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     updatedAt: now,
   };
   const ref = await db.collection("workspaces").add(doc);
+  if (sourceSecrets) {
+    await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${ref.id}`).set({
+      ownerUid: uid,
+      workspaceId: ref.id,
+      type: "openssh-user-certificate",
+      ...sourceSecrets,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
   const snap = await ref.get();
   return toClientDoc(snap);
 }
@@ -181,6 +204,15 @@ async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) 
   }
   if (type === "blank") {
     return {type: "blank"};
+  }
+  if (type === "ssh" || type === "dev-machine" || type === "dev-machine-backed") {
+    const normalized = normalizeSshSessionPayload({sshTarget: source.sshTarget || source.target || source});
+    return {
+      type: "ssh",
+      mode: "dev-machine",
+      target: normalized.public,
+      secrets: normalized.secrets,
+    };
   }
   if (type !== "github") {
     throw httpError(400, "unsupported_workspace_source_type");

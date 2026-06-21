@@ -112,7 +112,7 @@ export function AppShell(props) {
           onSaveMcpServer={pi.saveMcpServer}
         />
       </main>
-      <ModalStack handlers={handlers} selectedSession={selectedSession} state={state} />
+      <ModalStack handlers={handlers} selectedSession={selectedSession} selectedWorkspace={selectedWorkspace} state={state} />
     </div>
   );
 }
