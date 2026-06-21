@@ -36,7 +36,17 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
-  function openAuthModal() {
+  function openAuthModal(provider = "") {
+    const selectedProvider = typeof provider === "string" ? provider.trim() : "";
+    if (selectedProvider) {
+      state.piAuth = {
+        ...state.piAuth,
+        selectedProvider,
+        openAiCodexDevice: null,
+        error: "",
+        message: "",
+      };
+    }
     state.authModalOpen = true;
     render();
   }

@@ -37,10 +37,7 @@ export function ModalStack(props) {
         <AuthModal
           piAuth={state.piAuth}
           onClose={modals.closeAuthModal}
-          onSave={(provider, apiKey, entryLabel) => {
-            pi.updatePiAuthForm({selectedProvider: provider, apiKey, entryLabel});
-            pi.savePiAuthProvider();
-          }}
+          onSave={pi.savePiAuthProvider}
           onStartOpenAiCodexDeviceLogin={pi.startOpenAiCodexDeviceLogin}
           onUpdate={pi.updatePiAuthForm}
         />

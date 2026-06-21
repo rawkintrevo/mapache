@@ -1,0 +1,13 @@
+{
+  "id": "script.refreshAuthProviders",
+  "title": "Refresh Authentication Center providers",
+  "actions": [
+    {"type": "click", "selector": ".auth-center-refresh"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/pi-auth", "method": "GET", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "waitForSnapshotText", "text": "Authentication providers refreshed.", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "GET /api/pi-auth returns 200",
+    "Authentication Center reports that providers were refreshed"
+  ]
+}
