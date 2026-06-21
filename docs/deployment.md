@@ -39,11 +39,14 @@ Browser QA login uses a Functions secret plus configured QA account params. Conf
 
 MCP management changes require both the Functions API revision and affected runner image revisions. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. Pi runner images must be rebuilt when the baked `pi-mcp-adapter` install changes; existing Pi and Codex Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents.
 
+Cloud Run create, update, and delete operations use a 240-second polling deadline by default, configurable with `CLOUD_RUN_OPERATION_TIMEOUT_MS`. This leaves headroom under the API Function's 300-second request timeout while allowing slower runner revisions to become healthy. When create polling genuinely times out, Functions reconciles an already-ready service before reporting failure; otherwise it requests service deletion so a healthy but inaccessible runner is not left orphaned. Provisioning failures always record a user-safe `lastError`.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.
 - Keep Functions and runner service accounts separate.
 - Functions changes require a Functions deploy before handoff unless the user explicitly asks not to deploy.
+- Keep `CLOUD_RUN_OPERATION_TIMEOUT_MS` below the API Function timeout so timeout reconciliation and Firestore updates have time to complete.
 - Share Preview and browser QA runtime changes that touch `session-runner/` require rebuilding and pushing `pi-web` and `codex-web`; existing web sessions keep their current runner revision until restarted or recreated.
 - Codex runner image changes, including the packaged GitHub CLI, require rebuilding and pushing `codex-basic` and `codex-web`; existing Codex sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
