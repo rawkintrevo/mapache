@@ -87,14 +87,18 @@
   justify-items: center;
   padding: 20px;
   background: rgba(16, 24, 32, 0.48);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-panel {
   display: grid;
   gap: 18px;
   width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px;
@@ -187,6 +191,7 @@
   }
 
   .modal-panel {
+    max-height: calc(100vh - 20px);
     max-height: calc(100dvh - 20px);
   }
 
