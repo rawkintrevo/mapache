@@ -22,6 +22,7 @@ Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud terminal
 | Frontend state, React shell, app workflows | [Frontend architecture](./frontend-architecture.md) | [UI components](./ui-components.md), [Style guide](./STYLE_GUIDE.md) |
 | Backend API, Cloud Functions, Firestore ownership | [Backend API architecture](./backend-api-architecture.md) | [GitHub workspaces](./github-workspaces.md), [GitHub connection metadata schema](./guides/github-connection-metadata-schema.md) |
 | Runtime container images, PTY, terminal, preview, workspace sync | [Runtime containers](./runtime-containers.md) | [Session runner architecture](./session-runner-architecture.md) |
+| SSH-backed dev-machine sessions and signed-key setup | [Runtime containers](./runtime-containers.md) | [SSH-backed sessions guide](./guides/ssh-backed-sessions.md), [Backend API architecture](./backend-api-architecture.md) |
 | GitHub-backed workspaces, repo picker, PR behavior | [GitHub workspaces](./github-workspaces.md) | [ADR index](./decisions.md), [GitHub App setup guide](./guides/github-app-setup.md) |
 | Pi auth, packages, skills | [Pi skills manager](./pi-skills-manager.md), [Pi extension manager](./pi-extension-manager.md) | [Runtime containers](./runtime-containers.md) |
 | Testing and local verification | [Testing](./testing.md) | [Wiki update protocol](./wiki-update-protocol.md) |

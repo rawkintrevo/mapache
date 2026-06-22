@@ -15,10 +15,13 @@ export function WorkspacePanel({
   onResizeSession,
   onRestartSession,
   onShareSessionPreview,
+  onCloseSshSessionForward,
+  onCreateSshSessionForward,
   onSelectSession,
   onStageGitPath,
   onUnstageGitPath,
   onUpdateGitCommitMessage,
+  onUpdateSshForwardPort,
 }) {
   const isGithubWorkspace = selectedWorkspace?.source?.type === "github" || selectedSession?.sourceType === "github";
 
@@ -30,6 +33,7 @@ export function WorkspacePanel({
           gitStatus={state.gitStatus}
           isGithubWorkspace={isGithubWorkspace}
           session={selectedSession}
+          sshForwards={state.sshForwards}
           workspaceId={state.selectedWorkspaceId}
           onCommitGit={onCommitGit}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
@@ -40,9 +44,12 @@ export function WorkspacePanel({
           onResizeSession={onResizeSession}
           onRestartSession={onRestartSession}
           onShareSessionPreview={onShareSessionPreview}
+          onCloseSshSessionForward={onCloseSshSessionForward}
+          onCreateSshSessionForward={onCreateSshSessionForward}
           onStageGitPath={onStageGitPath}
           onUnstageGitPath={onUnstageGitPath}
           onUpdateGitCommitMessage={onUpdateGitCommitMessage}
+          onUpdateSshForwardPort={onUpdateSshForwardPort}
         />
       </section>
     );

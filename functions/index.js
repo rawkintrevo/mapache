@@ -73,6 +73,7 @@ const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
 } = require("./runnerProxy.helpers");
+const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 
 const githubService = createGithubService();
 const piService = createPiService({
@@ -125,6 +126,12 @@ const API_HANDLERS = {
   deleteSession,
   createSessionAccessUrls,
   shareSessionPreview,
+  listSshSessionFiles,
+  readSshSessionFile,
+  saveSshSessionFile,
+  listSshSessionForwards,
+  createSshSessionForward,
+  closeSshSessionForward,
   saveSessionPiAuthSelection: piService.saveSessionPiAuthSelection,
   getGitStatusSummary,
   pullGit,
@@ -231,6 +238,11 @@ async function listSessions(uid, workspaceId) {
 
 async function createSession(uid, workspaceId, payload) {
   const workspace = await requireWorkspace(uid, workspaceId);
+  const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
+  const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
+  const sshPayload = sessionType === "ssh" ?
+    await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) :
+    null;
   const now = admin.firestore.FieldValue.serverTimestamp();
   const sessionRef = sessionCollection(workspaceId).doc();
   const region = cleanName(payload.region || DEFAULT_REGION);
@@ -242,7 +254,7 @@ async function createSession(uid, workspaceId, payload) {
   const serviceId = `session-${sessionRef.id.toLowerCase()}`;
   let runnerImage;
   try {
-    runnerImage = resolveRunnerImage(payload, DEFAULT_IMAGE);
+    runnerImage = resolveRunnerImage(sshPayload ? {...payload, imageKey: "default"} : payload, DEFAULT_IMAGE);
   } catch (error) {
     if (error && error.code === "invalid_runner_image") {
       throw httpError(400, "invalid_runner_image", error);
@@ -269,8 +281,9 @@ async function createSession(uid, workspaceId, payload) {
     region,
     image: runnerImage.image,
     imageKey: runnerImage.key,
-    terminalKind: runnerImage.terminalKind || "pi",
-    capabilities: runnerImage.capabilities,
+    sessionType: sshPayload ? "ssh" : "cloud",
+    terminalKind: sshPayload ? "ssh" : (runnerImage.terminalKind || "pi"),
+    capabilities: sshPayload ? {...runnerImage.capabilities, preview: false, ssh: true, sshFiles: true, sshForwarding: true} : runnerImage.capabilities,
     serviceAccount: runnerServiceAccountValue() || null,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
@@ -281,6 +294,18 @@ async function createSession(uid, workspaceId, payload) {
     ...sessionSyncPolicyMetadata(workspace),
     ...sessionHomePolicyMetadata(workspace),
     ...sessionEnvMetadata(workspace, payload),
+    ...(sshPayload ? {
+      sshTarget: sshPayload.public,
+      sessionEnv: {
+        ...(sessionEnvMetadata(workspace, payload).sessionEnv || {}),
+        SSH_TARGET_HOST: sshPayload.public.host,
+        SSH_TARGET_PORT: String(sshPayload.public.port),
+        SSH_TARGET_USERNAME: sshPayload.public.username,
+        SSH_INITIAL_DIRECTORY: sshPayload.public.initialDirectory,
+        SSH_AUTH_MODE: sshPayload.public.auth.type === "openssh-user-certificate" ? "certificate" : "private-key",
+        SSH_STRICT_HOST_KEY_CHECKING: sshPayload.public.auth.strictHostKeyChecking ? "true" : "false",
+      },
+    } : {}),
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
@@ -308,10 +333,37 @@ async function createSession(uid, workspaceId, payload) {
   }
 
   if (runnerImage.canProvision) {
-    await provisionSessionService(workspace, sessionRef, session);
+    await provisionSessionService(workspace, sessionRef, sshPayload ? {
+      ...session,
+      sessionEnv: {
+        ...(session.sessionEnv || {}),
+        SSH_AUTH_MODE: sshPayload.secrets.authMode || "private-key",
+        SSH_PRIVATE_KEY: sshPayload.secrets.privateKey,
+        SSH_CERTIFICATE: sshPayload.secrets.certificate,
+        SSH_KNOWN_HOSTS: sshPayload.secrets.knownHosts,
+      },
+    } : session);
   }
 
   return toClientDoc(await sessionRef.get());
+}
+
+async function normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) {
+  if (payload && payload.sshTarget) return normalizeSshSessionPayload(payload);
+  if (!workspaceSshSource) return normalizeSshSessionPayload(payload);
+  const privateSnap = await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).get();
+  if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
+  const secrets = privateSnap.data() || {};
+  return normalizeSshSessionPayload({
+    sshTarget: {
+      ...(workspaceSshSource.target || {}),
+      privateKey: secrets.privateKey,
+      certificate: secrets.certificate,
+      knownHosts: secrets.knownHosts,
+      authMode: secrets.authMode || workspaceSshSource.target?.auth?.type,
+      strictHostKeyChecking: workspaceSshSource.target?.auth?.strictHostKeyChecking,
+    },
+  });
 }
 
 async function createSessionAccessUrls(uid, workspaceId, sessionId) {
@@ -327,12 +379,71 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId) {
   const baseUrl = session.serviceUrl.replace(/\/+$/, "");
   const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
   const previewUrl = appendQuery(`${baseUrl}/preview/`, "mapache_access", token);
+  const sshForwardBaseUrl = appendQuery(`${baseUrl}/ssh/forward`, "mapache_access", token);
   return {
     ok: true,
     expiresAt: new Date(expiresAtMs).toISOString(),
     terminalUrl,
     previewUrl,
+    sshForwardBaseUrl,
   };
+}
+
+async function listSshSessionFiles(uid, workspaceId, sessionId) {
+  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
+  return requestRunnerJson(session, "/ssh/files", {
+    unavailableError: "runner_ssh_files_unavailable",
+  });
+}
+
+async function readSshSessionFile(uid, workspaceId, sessionId, filePath) {
+  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
+  return requestRunnerJson(session, `/ssh/file?path=${encodeURIComponent(String(filePath || ""))}`, {
+    unavailableError: "runner_ssh_file_unavailable",
+  });
+}
+
+async function saveSshSessionFile(uid, workspaceId, sessionId, filePath, payload) {
+  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
+  return requestRunnerJson(session, `/ssh/file?path=${encodeURIComponent(String(filePath || ""))}`, {
+    method: "PUT",
+    body: {content: String(payload && payload.content || "")},
+    unavailableError: "runner_ssh_file_save_unavailable",
+  });
+}
+
+async function listSshSessionForwards(uid, workspaceId, sessionId) {
+  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
+  return requestRunnerJson(session, "/ssh/ports", {
+    unavailableError: "runner_ssh_ports_unavailable",
+  });
+}
+
+async function createSshSessionForward(uid, workspaceId, sessionId, payload) {
+  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
+  return requestRunnerJson(session, "/ssh/ports", {
+    method: "POST",
+    body: {port: payload && payload.port},
+    unavailableError: "runner_ssh_port_unavailable",
+  });
+}
+
+async function closeSshSessionForward(uid, workspaceId, sessionId, port) {
+  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
+  return requestRunnerJson(session, `/ssh/ports/${encodeURIComponent(String(port || ""))}`, {
+    method: "DELETE",
+    unavailableError: "runner_ssh_port_close_unavailable",
+  });
+}
+
+async function requireRunningSshSession(uid, workspaceId, sessionId) {
+  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") {
+    throw httpError(400, "ssh_session_required");
+  }
+  if (!session.serviceUrl || !session.shutdownToken) throw httpError(409, "session_not_running");
+  return session;
 }
 
 async function shareSessionPreview(uid, workspaceId, sessionId, req) {

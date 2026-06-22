@@ -16,6 +16,7 @@ export function SessionDetail({
   gitStatus,
   isGithubWorkspace,
   session,
+  sshForwards,
   workspaceId,
   onCommitGit,
   onGetSessionAccessUrls,
@@ -25,9 +26,12 @@ export function SessionDetail({
   onResizeSession,
   onRestartSession,
   onShareSessionPreview,
+  onCloseSshSessionForward,
+  onCreateSshSessionForward,
   onStageGitPath,
   onUnstageGitPath,
   onUpdateGitCommitMessage,
+  onUpdateSshForwardPort,
 }) {
   const formRef = useRef(null);
   const [activeCanvas, setActiveCanvas] = useState("terminal");
@@ -40,6 +44,7 @@ export function SessionDetail({
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
+  const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
 
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +233,54 @@ export function SessionDetail({
           ) : null}
         </div>
       ) : null}
+      {isSshSession ? (
+        <div className="ssh-forward-panel">
+          <form
+            className="toolbar"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onCreateSshSessionForward?.();
+            }}
+          >
+            <label>
+              <span>Forward port</span>
+              <input
+                inputMode="numeric"
+                placeholder="5173"
+                value={sshForwards?.port || ""}
+                onChange={(event) => onUpdateSshForwardPort?.(event.target.value)}
+              />
+            </label>
+            <Button disabled={busy || !hasRunnerUrl || sshForwards?.loading || !sshForwards?.port} type="submit">
+              <ExternalLink aria-hidden="true" />
+              Open
+            </Button>
+          </form>
+          {sshForwards?.error ? <p className="preview-share-error">{sshForwards.error}</p> : null}
+          {sshForwards?.forwards?.length ? (
+            <div className="ssh-forward-list">
+              {sshForwards.forwards.map((forward) => {
+                const url = sshForwardUrl(accessUrls?.sshForwardBaseUrl, forward.port);
+                return (
+                  <div className="preview-url-row" key={forward.port}>
+                    <div>
+                      <span>localhost:{forward.port}</span>
+                      {url ? <a href={url} rel="noreferrer" target="_blank">{url}</a> : null}
+                    </div>
+                    <Button disabled={!url} variant="secondary" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+                      <ExternalLink aria-hidden="true" />
+                      Open
+                    </Button>
+                    <Button variant="secondary" onClick={() => onCloseSshSessionForward?.(forward.port)}>
+                      Close
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {showGitStatus ? (
         <GitStatusPanel
           busy={busy}
@@ -244,6 +297,13 @@ export function SessionDetail({
       ) : null}
     </div>
   );
+}
+
+function sshForwardUrl(baseUrl, port) {
+  if (!baseUrl || !port) return "";
+  const url = new URL(baseUrl);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${encodeURIComponent(port)}/`;
+  return url.toString();
 }
 
 function friendlyPreviewShareError(message) {

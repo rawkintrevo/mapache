@@ -83,15 +83,24 @@
   inset: 0;
   z-index: 10;
   display: grid;
-  place-items: center;
+  align-items: center;
+  justify-items: center;
   padding: 20px;
   background: rgba(16, 24, 32, 0.48);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-panel {
   display: grid;
   gap: 18px;
   width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -112,17 +121,40 @@
   gap: 12px;
 }
 
-.checkbox-row {
+.checkbox-row,
+.checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.checkbox-row input[type="checkbox"],
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
 }
 
 .modal-heading {
+  position: sticky;
+  top: -20px;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  margin: -20px -20px 0;
+  padding: 20px 20px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
 }
 
 .modal-panel .toolbar {
@@ -153,6 +185,16 @@
 }
 
 @media (max-width: 620px) {
+  .modal-backdrop {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .modal-panel {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
   .workspace-source-choice {
     grid-template-columns: 1fr;
   }

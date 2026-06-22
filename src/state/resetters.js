@@ -7,6 +7,7 @@ import {
   createPiPackagesState,
   createWorkspaceSkillsState,
   createPullRequestFormState,
+  createSshForwardsState,
 } from "./initialState.js";
 
 export function resetPullRequestForm(state) {
@@ -44,6 +45,10 @@ export function resetAdmin(state) {
   state.admin = createAdminState();
 }
 
+export function resetSshForwards(state) {
+  state.sshForwards = createSshForwardsState();
+}
+
 export function resetWorkspaceFiles(state) {
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
@@ -78,4 +83,5 @@ export function resetSignedOutState(state) {
   resetWorkspaceSkills(state);
   resetMcpServers(state);
   resetPiAuth(state);
+  resetSshForwards(state);
 }

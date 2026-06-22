@@ -356,6 +356,9 @@ function terminalCommandEnv(session) {
   if (terminalKind === "codex") {
     return {command: "codex", args: []};
   }
+  if (terminalKind === "ssh") {
+    return {command: "", args: []};
+  }
   const homeDir = cleanHomeDir(session && session.homeDir || "/root");
   return {
     command: "pi",

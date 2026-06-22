@@ -63,7 +63,7 @@ export function WorkspaceFileTree({state, onSelectWorkspaceFile, onToggleWorkspa
     return <p className="empty">Select a workspace to view files.</p>;
   }
 
-  if (state.workspaceFilesWorkspaceId !== state.selectedWorkspaceId) {
+  if (state.workspaceFilesWorkspaceId !== currentFileScopeId(state)) {
     return (
       <>
         {uploadStatus}
@@ -106,4 +106,10 @@ export function WorkspaceFileTree({state, onSelectWorkspaceFile, onToggleWorkspa
       {state.workspaceFilesTruncated ? <p className="empty">Showing first 500 files.</p> : null}
     </div>
   );
+}
+
+function currentFileScopeId(state) {
+  const session = (state.sessions || []).find((item) => item.id === state.selectedSessionId);
+  const isSsh = session && (session.sessionType === "ssh" || session.terminalKind === "ssh") && session.serviceUrl;
+  return isSsh ? `${state.selectedWorkspaceId}:${session.id}:ssh` : state.selectedWorkspaceId;
 }

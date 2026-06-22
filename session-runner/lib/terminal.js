@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
+const {prepareSshMaterial, sshCommand} = require("./sshSession");
 
 function createTerminalSession({admin, config, activity, onTerminalExit}) {
   const sockets = new Set();
@@ -199,6 +200,11 @@ function sendTerminalMessage(socket, message) {
 }
 
 function terminalCommand(config = {}) {
+  if (config.terminalKind === "ssh") {
+    prepareSshMaterial(config);
+    return sshCommand(config, {tty: true, loginShell: true});
+  }
+
   const command = String(process.env.TERMINAL_COMMAND || "").trim();
   if (command) {
     const args = normalizePiTerminalArgs(command, terminalArgs(), config);

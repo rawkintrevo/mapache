@@ -82,6 +82,9 @@ function routeRequest(path) {
     ["pi-packages", "piPackages"],
     ["skills", "sessionSkills"],
     ["pi-skills", "sessionSkills"],
+    ["ssh-files", "sshSessionFiles"],
+    ["ssh-file", "sshSessionFile"],
+    ["ssh-ports", "sshSessionForwards"],
   ]);
   if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "sessions") {
     const name = sessionActionRoutes.get(parts[4]);
@@ -93,6 +96,14 @@ function routeRequest(path) {
     ["remove", "piPackageRemove"],
     ["update", "piPackageUpdate"],
   ]);
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    parts[4] === "ssh-ports"
+  ) {
+    return {name: "sshSessionForward", workspaceId: parts[1], sessionId: parts[3], port: parts[5]};
+  }
   if (
     parts.length === 6 &&
     parts[0] === "workspaces" &&
@@ -166,6 +177,10 @@ const ROUTE_METHODS = Object.freeze({
   piPackageUpdate: ["POST"],
   sessionSkills: ["GET", "POST"],
   sessionSkillDelete: ["POST"],
+  sshSessionFiles: ["GET"],
+  sshSessionFile: ["GET", "PUT"],
+  sshSessionForwards: ["GET", "POST"],
+  sshSessionForward: ["DELETE"],
   githubRepos: ["GET"],
   githubConnect: ["GET"],
   githubConnection: ["GET"],
