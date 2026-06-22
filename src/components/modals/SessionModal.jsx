@@ -16,6 +16,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
   const workspaceSsh = selectedWorkspace?.source?.type === "ssh";
   const [sessionType, setSessionType] = useState(workspaceSsh ? "ssh" : "cloud");
   const [sshAuthMode, setSshAuthMode] = useState("private-key");
+  const [sshStrictHostKeyChecking, setSshStrictHostKeyChecking] = useState(false);
   useEffect(() => {
     setSessionType(workspaceSsh ? "ssh" : "cloud");
   }, [workspaceSsh]);
@@ -51,8 +52,8 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
                 authMode: sshAuthMode,
                 privateKey: String(formData.get("sshPrivateKey") || ""),
                 certificate: sshAuthMode === "certificate" ? String(formData.get("sshCertificate") || "") : "",
-                knownHosts: String(formData.get("sshKnownHosts") || ""),
-                strictHostKeyChecking: formData.get("sshStrictHostKeyChecking") === "on",
+                knownHosts: sshStrictHostKeyChecking ? String(formData.get("sshKnownHosts") || "") : "",
+                strictHostKeyChecking: sshStrictHostKeyChecking,
               }}),
             } : {
               ...base,
@@ -105,13 +106,20 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
                 </label>
               ) : null}
               <label className="checkbox-label">
-                <input name="sshStrictHostKeyChecking" type="checkbox" />
+                <input
+                  checked={sshStrictHostKeyChecking}
+                  name="sshStrictHostKeyChecking"
+                  type="checkbox"
+                  onChange={(event) => setSshStrictHostKeyChecking(event.target.checked)}
+                />
                 <span>Strict host key checking</span>
               </label>
-              <label>
-                <span>Known hosts</span>
-                <textarea autoComplete="off" name="sshKnownHosts" placeholder="Optional unless strict host key checking is enabled" rows={3} />
-              </label>
+              {sshStrictHostKeyChecking ? (
+                <label>
+                  <span>Known hosts</span>
+                  <textarea autoComplete="off" name="sshKnownHosts" placeholder="dev.example.com ssh-ed25519 AAAA..." rows={3} />
+                </label>
+              ) : null}
             </>
           )}
           <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>

@@ -15,6 +15,7 @@ export function WorkspaceModal({
   const [manualRepoUrl, setManualRepoUrl] = useState("");
   const [selectedRepoKey, setSelectedRepoKey] = useState("");
   const [sshAuthMode, setSshAuthMode] = useState("private-key");
+  const [sshStrictHostKeyChecking, setSshStrictHostKeyChecking] = useState(false);
   const isGithub = sourceType === "github";
   const isSsh = sourceType === "ssh";
   const repos = repoPicker && Array.isArray(repoPicker.repos) ? repoPicker.repos : [];
@@ -55,8 +56,8 @@ export function WorkspaceModal({
                 authMode: sshAuthMode,
                 privateKey: String(formData.get("sshPrivateKey") || ""),
                 certificate: sshAuthMode === "certificate" ? String(formData.get("sshCertificate") || "") : "",
-                knownHosts: String(formData.get("sshKnownHosts") || ""),
-                strictHostKeyChecking: formData.get("sshStrictHostKeyChecking") === "on",
+                knownHosts: sshStrictHostKeyChecking ? String(formData.get("sshKnownHosts") || "") : "",
+                strictHostKeyChecking: sshStrictHostKeyChecking,
               },
             } : selectedRepo ? {
               type: "github",
@@ -208,13 +209,20 @@ export function WorkspaceModal({
                 </label>
               ) : null}
               <label className="checkbox-label">
-                <input name="sshStrictHostKeyChecking" type="checkbox" />
+                <input
+                  checked={sshStrictHostKeyChecking}
+                  name="sshStrictHostKeyChecking"
+                  type="checkbox"
+                  onChange={(event) => setSshStrictHostKeyChecking(event.target.checked)}
+                />
                 <span>Strict host key checking</span>
               </label>
-              <label>
-                <span>Known hosts</span>
-                <textarea autoComplete="off" name="sshKnownHosts" placeholder="Optional unless strict host key checking is enabled" rows={3} />
-              </label>
+              {sshStrictHostKeyChecking ? (
+                <label>
+                  <span>Known hosts</span>
+                  <textarea autoComplete="off" name="sshKnownHosts" placeholder="dev.example.com ssh-ed25519 AAAA..." rows={3} />
+                </label>
+              ) : null}
             </div>
           ) : null}
           <label>
