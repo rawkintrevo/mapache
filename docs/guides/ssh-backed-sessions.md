@@ -76,7 +76,7 @@ ssh -i ./mapache_session_key \
   developer@dev.example.com
 ```
 
-For strict host key checking, collect the target host key:
+Strict host key checking is off by default for Dev machine setup. To enable it, collect the target host key and paste it into the Known hosts field:
 
 ```bash
 ssh-keyscan -p 22 dev.example.com > ./known_hosts
@@ -92,7 +92,7 @@ In the Mapache web UI, create a workspace:
 4. Choose **Private key** for normal `authorized_keys` auth, or **Signed certificate** for OpenSSH user-certificate auth.
 5. Paste the private key from `mapache_session_key`.
 6. For signed-certificate auth only, paste the signed user certificate from `mapache_session_key-cert.pub`, not the ordinary `mapache_session_key.pub` public key.
-7. Paste `known_hosts` when strict host key checking should pin the target host key.
+7. Leave strict host key checking off for the simplest first connection, or enable it and paste `known_hosts` to pin the target host key.
 8. Create the workspace.
 9. Create a session in that workspace. The session modal defaults to SSH target and uses the workspace target configuration.
 

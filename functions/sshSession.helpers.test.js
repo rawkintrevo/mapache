@@ -13,6 +13,7 @@ const normalized = normalizeSshSessionPayload({
     privateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----",
     certificate: "ssh-ed25519-cert-v01@openssh.com AAAA user-cert",
     knownHosts: "dev.example.com ssh-ed25519 AAAAhost",
+    strictHostKeyChecking: true,
   },
 });
 

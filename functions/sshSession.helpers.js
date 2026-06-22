@@ -12,7 +12,7 @@ function normalizeSshSessionPayload(payload = {}) {
   const privateKey = cleanSecretMultiline(source.privateKey);
   const certificate = cleanSecretMultiline(source.certificate || source.publicCertificate || source.sshCertificate);
   const knownHosts = cleanSecretMultiline(source.knownHosts);
-  const strictHostKeyChecking = source.strictHostKeyChecking !== false;
+  const strictHostKeyChecking = source.strictHostKeyChecking === true || source.strictHostKeyChecking === "true";
 
   if (!host) throw httpError(400, "ssh_host_required");
   if (!username) throw httpError(400, "ssh_username_required");

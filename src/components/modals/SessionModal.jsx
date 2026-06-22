@@ -15,6 +15,7 @@ function formatMemory(value) {
 export function SessionModal({busy, error = "", selectedWorkspace = null, onClose, onCreateSession}) {
   const workspaceSsh = selectedWorkspace?.source?.type === "ssh";
   const [sessionType, setSessionType] = useState(workspaceSsh ? "ssh" : "cloud");
+  const [sshAuthMode, setSshAuthMode] = useState("private-key");
   useEffect(() => {
     setSessionType(workspaceSsh ? "ssh" : "cloud");
   }, [workspaceSsh]);
@@ -47,9 +48,9 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
                 port: formData.get("sshPort") || "22",
                 username: String(formData.get("sshUsername") || "").trim(),
                 initialDirectory: String(formData.get("sshInitialDirectory") || "").trim() || "~",
-                authMode: formData.get("sshAuthMode") || "private-key",
+                authMode: sshAuthMode,
                 privateKey: String(formData.get("sshPrivateKey") || ""),
-                certificate: String(formData.get("sshCertificate") || ""),
+                certificate: sshAuthMode === "certificate" ? String(formData.get("sshCertificate") || "") : "",
                 knownHosts: String(formData.get("sshKnownHosts") || ""),
                 strictHostKeyChecking: formData.get("sshStrictHostKeyChecking") === "on",
               }}),
@@ -88,7 +89,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
               <label><span>Initial directory</span><input autoComplete="off" defaultValue="~" name="sshInitialDirectory" /></label>
               <label>
                 <span>Authentication</span>
-                <select defaultValue="private-key" name="sshAuthMode">
+                <select name="sshAuthMode" value={sshAuthMode} onChange={(event) => setSshAuthMode(event.target.value)}>
                   <option value="private-key">Private key</option>
                   <option value="certificate">Signed certificate</option>
                 </select>
@@ -97,17 +98,19 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
                 <span>Private key</span>
                 <textarea autoComplete="off" name="sshPrivateKey" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" required rows={5} />
               </label>
-              <label>
-                <span>Signed certificate</span>
-                <textarea autoComplete="off" name="sshCertificate" placeholder="Only required for signed-certificate auth" rows={3} />
+              {sshAuthMode === "certificate" ? (
+                <label>
+                  <span>Signed certificate</span>
+                  <textarea autoComplete="off" name="sshCertificate" placeholder="ssh-ed25519-cert-v01@openssh.com ..." required rows={3} />
+                </label>
+              ) : null}
+              <label className="checkbox-label">
+                <input name="sshStrictHostKeyChecking" type="checkbox" />
+                <span>Strict host key checking</span>
               </label>
               <label>
                 <span>Known hosts</span>
-                <textarea autoComplete="off" name="sshKnownHosts" placeholder="dev.example.com ssh-ed25519 AAAA..." rows={3} />
-              </label>
-              <label className="checkbox-label">
-                <input defaultChecked={true} name="sshStrictHostKeyChecking" type="checkbox" />
-                <span>Strict host key checking</span>
+                <textarea autoComplete="off" name="sshKnownHosts" placeholder="Optional unless strict host key checking is enabled" rows={3} />
               </label>
             </>
           )}

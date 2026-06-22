@@ -499,7 +499,7 @@ describe("frontend smoke coverage", () => {
     await user.clear(within(dialog).getByLabelText("Username"));
     await user.type(within(dialog).getByLabelText("Username"), "developer");
     await user.type(within(dialog).getByLabelText("Private key"), "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----");
-    await user.type(within(dialog).getByLabelText("Signed certificate"), "ssh-ed25519-cert-v01@openssh.com AAAA cert");
+    expect(within(dialog).queryByLabelText("Signed certificate")).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", {name: "Create Workspace"}));
 
     expect(handlers.workspaces.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
