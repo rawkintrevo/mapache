@@ -475,7 +475,10 @@ async function selectWorkspace(workspaceId) {
   await runBusy(async () => {
     await loadSessions();
     await piPanelsController.loadMcpServers();
-    await loadSelectedSessionPanels();
+    await loadGitStatus();
+    await piPanelsController.loadPiPackages();
+    await piPanelsController.loadWorkspaceSkills();
+    await workspaceFilesController.loadWorkspaceFiles();
   });
 }
 
@@ -497,9 +500,8 @@ async function selectSession(sessionId) {
 }
 
 async function loadSelectedSessionPanels() {
-  const session = getSelectedSession();
   workspaceFilesController.resetWorkspaceFiles();
-  if (!session?.serviceUrl) {
+  if (!getSelectedSession()?.serviceUrl) {
     resetGitStatus();
     resetPiPackages();
     resetWorkspaceSkills();
@@ -508,25 +510,11 @@ async function loadSelectedSessionPanels() {
     render();
     return;
   }
-  if (isSshSession(session)) {
-    resetGitStatus();
-    resetPiPackages();
-    resetWorkspaceSkills();
-    await workspaceFilesController.loadWorkspaceFiles();
-    await loadSshForwards();
-    return;
-  }
   await loadGitStatus();
   await piPanelsController.loadPiPackages();
   await piPanelsController.loadWorkspaceSkills();
   await workspaceFilesController.loadWorkspaceFiles();
   await loadSshForwards();
-}
-
-function isSshSession(session) {
-  return session?.sessionType === "ssh" ||
-    session?.terminalKind === "ssh" ||
-    Boolean(session?.capabilities?.ssh);
 }
 
 async function loadGitStatus() {
@@ -613,7 +601,7 @@ async function deleteSession(sessionId) {
 
   await runBusy(async () => {
     await deleteSessionState(state, sessionId);
-    await loadSelectedSessionPanels();
+    await loadGitStatus();
   });
 }
 
