@@ -239,7 +239,6 @@ async function listSessions(uid, workspaceId) {
 async function createSession(uid, workspaceId, payload) {
   const workspace = await requireWorkspace(uid, workspaceId);
   const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
-  console.log(`Workspace ${workspaceId} source: ${JSON.stringify(workspace.source)}`);
   const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
   console.log(`Creating session, sessionType: ${sessionType}, payload: ${JSON.stringify(payload)}`);
   const sshPayload = sessionType === "ssh" ?
