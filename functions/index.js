@@ -288,6 +288,7 @@ async function createSession(uid, workspaceId, payload) {
     capabilities: sshPayload ? {...runnerImage.capabilities, preview: false, ssh: true, sshFiles: true, sshForwarding: true} : runnerImage.capabilities,
     serviceAccount: runnerServiceAccountValue() || null,
     serviceId,
+    id: sessionRef.id,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
