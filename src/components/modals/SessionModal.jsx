@@ -62,13 +62,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
           }}
         >
           <label><span>Name</span><input autoComplete="off" name="name" placeholder="shell" required /></label>
-          <label>
-            <span>Session type</span>
-            <select name="sessionType" value={sessionType} onChange={(event) => setSessionType(event.target.value)}>
-              <option disabled={workspaceSsh} value="cloud">Cloud runner</option>
-              <option value="ssh">SSH target</option>
-            </select>
-          </label>
+          <input type="hidden" name="sessionType" value={sessionType} />
           {sessionType === "cloud" ? (
             <label>
               <span>Container image</span>
