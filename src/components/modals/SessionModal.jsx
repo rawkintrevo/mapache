@@ -5,7 +5,7 @@ import {parseEnvText} from "../../utils/envText.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
-const cpuOptions = ["2", "2", "4"];
+const cpuOptions = ["2", "4"];
 const memoryOptions = ["2Gi", "4Gi", "8Gi"];
 
 function formatMemory(value) {

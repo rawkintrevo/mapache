@@ -446,10 +446,10 @@ describe("frontend smoke coverage", () => {
     await user.click(within(sessionDialog).getByRole("button", {name: "Create session"}));
 
     expect(sessionHandlers.sessions.createSession).toHaveBeenCalledWith({
-      cpu: "1",
+      cpu: "2",
       env: {},
       imageKey: "default",
-      memory: "1Gi",
+      memory: "2Gi",
       name: "Agent Shell",
       sessionType: "cloud",
     });
