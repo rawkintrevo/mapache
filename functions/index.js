@@ -335,6 +335,7 @@ async function createSession(uid, workspaceId, payload) {
   }
 
   if (runnerImage.canProvision) {
+    console.log(`Provisioning session: ${sessionRef.id}, sessionType: ${sessionType}`);
     await provisionSessionService(workspace, sessionRef, sshPayload ? {
       ...session,
       sessionEnv: {
