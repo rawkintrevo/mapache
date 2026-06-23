@@ -1,5 +1,5 @@
 import {Trash2} from "lucide-react";
-import {workspaceSourceSummary} from "../workspaces/workspaceSourceSummary.js";
+import {getWorkspaceTag, workspaceSourceSummary} from "../workspaces/workspaceSourceSummary.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
 export function WorkspaceDrawerList({busy, selectedWorkspaceId, workspaces, onDeleteWorkspace, onSelectWorkspace}) {
@@ -28,7 +28,7 @@ export function WorkspaceDrawerList({busy, selectedWorkspaceId, workspaces, onDe
               />,
             ]}
             active={isActive}
-            badge={workspace.id.slice(0, 5)}
+            badge={getWorkspaceTag(workspace)}
             key={workspace.id}
             meta={workspaceSourceSummary(workspace)}
             title={workspace.name}

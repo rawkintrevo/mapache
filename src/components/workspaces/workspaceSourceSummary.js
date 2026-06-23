@@ -1,8 +1,15 @@
+export function getWorkspaceTag(workspace) {
+  const type = workspace.source?.type || "blank";
+  if (type === "github") return "GitHub";
+  if (type === "ssh") return "Dev machine";
+  return "Blank";
+}
+
 export function workspaceSourceSummary(workspace) {
   if (!workspace) return "";
   const source = workspace.source || {type: "blank"};
   if (source.type !== "github") {
-    return workspace.storagePrefix || "";
+    return "";
   }
 
   const repo = [source.owner, source.repo].filter(Boolean).join("/") || "GitHub repo";
