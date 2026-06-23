@@ -345,20 +345,6 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     }
   }
 
-  if (session.SSH_TARGET_HOST) {
-    env.push(
-        {name: "SSH_TARGET_HOST", value: session.SSH_TARGET_HOST},
-        {name: "SSH_TARGET_PORT", value: session.SSH_TARGET_PORT || "22"},
-        {name: "SSH_TARGET_USERNAME", value: session.SSH_TARGET_USERNAME || ""},
-        {name: "SSH_INITIAL_DIRECTORY", value: session.SSH_INITIAL_DIRECTORY || "~"},
-        {name: "SSH_AUTH_MODE", value: session.SSH_AUTH_MODE || "private-key"},
-        {name: "SSH_STRICT_HOST_KEY_CHECKING", value: session.SSH_STRICT_HOST_KEY_CHECKING || "false"},
-        session.SSH_PRIVATE_KEY ? {name: "SSH_PRIVATE_KEY", value: session.SSH_PRIVATE_KEY} : null,
-        session.SSH_CERTIFICATE ? {name: "SSH_CERTIFICATE", value: session.SSH_CERTIFICATE} : null,
-        session.SSH_KNOWN_HOSTS ? {name: "SSH_KNOWN_HOSTS", value: session.SSH_KNOWN_HOSTS} : null,
-    );
-  }
-
   return env.filter(Boolean);
 }
 
