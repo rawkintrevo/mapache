@@ -14,6 +14,8 @@ test("renderTerminalPage includes critical xterm layout and helper-textarea styl
   assert.match(html, /#terminal \.xterm-viewport/);
   assert.match(html, /#terminal \.xterm-screen,\s*#terminal \.xterm-screen canvas/);
   assert.match(html, /helperTextarea\.addEventListener\("input", scheduleHelperTextareaClear, true\)/);
+  assert.match(html, /const isMobile = \/Android\|webOS\|iPhone/);
+  assert.match(html, /if \(!isMobile\) \{\s*helperTextarea\.addEventListener/);
   assert.match(html, /term\.onRender\(\(\) => \{\s*applyHelperTextareaStyles\(\);/);
   assert.match(html, /mapache_access/);
 });

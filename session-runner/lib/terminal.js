@@ -402,7 +402,23 @@ function renderTerminalPage(options = {}) {
         },
       });
       const fitAddon = new FitAddon.FitAddon();
-      const helperTextareaStyles = {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const helperTextareaStyles = isMobile ? {
+        opacity: "0",
+        position: "absolute",
+        left: "0",
+        top: "0",
+        width: "1px",
+        height: "1px",
+        zIndex: "5",
+        padding: "0",
+        border: "0",
+        margin: "0",
+        fontSize: "16px",
+        background: "transparent",
+        color: "transparent",
+        caretColor: "transparent",
+      } : {
         opacity: "0",
         left: "-9999em",
         top: "0",
@@ -450,14 +466,18 @@ function renderTerminalPage(options = {}) {
 
       applyHelperTextareaStyles();
       if (helperTextarea) {
-        helperTextarea.addEventListener("keydown", scheduleHelperTextareaClear, true);
-        helperTextarea.addEventListener("input", scheduleHelperTextareaClear, true);
-        helperTextarea.addEventListener("keyup", clearHelperTextarea, true);
+        if (!isMobile) {
+          helperTextarea.addEventListener("keydown", scheduleHelperTextareaClear, true);
+          helperTextarea.addEventListener("input", scheduleHelperTextareaClear, true);
+          helperTextarea.addEventListener("keyup", clearHelperTextarea, true);
+        }
         helperTextarea.addEventListener("focus", applyHelperTextareaStyles, true);
       }
 
       term.onData((data) => {
-        scheduleHelperTextareaClear();
+        if (!isMobile) {
+          scheduleHelperTextareaClear();
+        }
         sendData(data);
       });
 
