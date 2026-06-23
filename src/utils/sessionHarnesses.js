@@ -1,4 +1,4 @@
-import catalog from "../../shared/runnerCatalog.json";
+import catalog from "../../functions/runnerCatalog.json";
 
 const harnesses = catalog.harnesses || {};
 

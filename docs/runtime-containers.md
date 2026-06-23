@@ -40,7 +40,7 @@ The `codex-web` runner image is built from `session-runner/Dockerfile.codex-web`
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web
 ```
 
-The frontend image dropdown is configured from `shared/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`.
+The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`.
 
 Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, and `n64`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
 

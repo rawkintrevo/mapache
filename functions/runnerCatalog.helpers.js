@@ -1,6 +1,6 @@
 "use strict";
 
-const catalog = require("../shared/runnerCatalog.json");
+const catalog = require("./runnerCatalog.json");
 
 const DEFAULT_RUNNER_IMAGE_KEY = "default";
 

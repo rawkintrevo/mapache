@@ -10,7 +10,7 @@ Read this before changing session image selection, persisted session metadata, a
 
 ## Canonical Owner
 
-- Shared frontend and Functions catalog: `shared/runnerCatalog.json`
+- Shared frontend and Functions catalog: `functions/runnerCatalog.json`
 - Frontend harness utilities: `src/utils/sessionHarnesses.js`
 - Functions catalog helpers: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Functions session creation and env wiring: `functions/index.js`, `functions/cloudRun.service.js`
@@ -28,7 +28,7 @@ The supported harness ids are:
 - `pi`
 - `codex`
 
-The shared catalog in `shared/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64 capability flags. Each harness entry declares whether it supports:
+The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64 capability flags. Each harness entry declares whether it supports:
 
 - auth materialization
 - workspace-local skills
@@ -36,7 +36,7 @@ The shared catalog in `shared/runnerCatalog.json` is the source of truth for fro
 - workspace subagents
 - workspace-local packages
 
-The runner cannot import `shared/runnerCatalog.json` directly because the Docker build context is only `session-runner/`. Runner-local harness metadata therefore lives in `session-runner/lib/harnesses/metadata.js` and must stay behaviorally aligned with the shared catalog.
+The runner cannot import `functions/runnerCatalog.json` directly because the Docker build context is only `session-runner/`. Runner-local harness metadata therefore lives in `session-runner/lib/harnesses/metadata.js` and must stay behaviorally aligned with the shared catalog.
 
 ## Auth
 

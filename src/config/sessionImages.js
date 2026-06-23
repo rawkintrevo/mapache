@@ -1,4 +1,4 @@
-import catalog from "../../shared/runnerCatalog.json";
+import catalog from "../../functions/runnerCatalog.json";
 
 export const sessionImages = catalog.images.map((image) => ({
   key: image.imageKey,
