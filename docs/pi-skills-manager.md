@@ -42,7 +42,7 @@ POST /skills
 POST /skills/delete
 ```
 
-The neutral routes pick the correct native workspace directory from `terminalKind`. Compatibility aliases remain available at `/pi/skills*` so older clients and mixed deploys keep working during rollout.
+The neutral routes pick the correct native workspace directory from the session harness. Compatibility aliases remain available at `/pi/skills*` so older clients and mixed deploys keep working during rollout.
 
 The endpoints operate inside `/workspace`, then run normal workspace sync so skill files are persisted to Cloud Storage as ordinary workspace files.
 
@@ -109,3 +109,4 @@ Skills can instruct the agent to perform actions. Treat skill editing as a privi
 - [Backend API architecture](./backend-api-architecture.md)
 - [Runtime containers](./runtime-containers.md)
 - [Session runner architecture](./session-runner-architecture.md)
+- [Runner harnesses](./runner-harnesses.md)

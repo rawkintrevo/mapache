@@ -52,6 +52,8 @@ function createConfig() {
   const codexHomeDir = path.resolve(process.env.CODEX_HOME || path.join("/tmp", "mapache-codex", process.env.SESSION_ID || "session"));
   const codexHomeStorageBucketName = process.env.CODEX_HOME_STORAGE_BUCKET || bucketName;
   const codexHomeStoragePrefix = normalizePrefix(process.env.CODEX_HOME_STORAGE_PREFIX || "");
+  const codexConfigPath = path.resolve(process.env.CODEX_CONFIG_PATH || path.join(workspaceDir, ".codex", "config.toml"));
+  const harnessId = normalizeEnvString(process.env.HARNESS_ID) || normalizeEnvString(process.env.TERMINAL_KIND) || "shell";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
@@ -74,6 +76,7 @@ function createConfig() {
     browserQaNavigationTimeoutMs: positiveNumber(process.env.BROWSER_QA_NAVIGATION_TIMEOUT_MS, 15000),
     browserQaStatePath: path.join(browserQaDir, "last-run.json"),
     bucketName,
+    codexConfigPath,
     codexHomeDir,
     codexHomeStorageBucketName,
     codexHomeStoragePrefix,
@@ -87,6 +90,7 @@ function createConfig() {
     githubRepoName: normalizeEnvString(process.env.GITHUB_REPO_NAME),
     githubRequestedBranch: normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH),
     githubRequestedCommit: normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT),
+    harnessId,
     homeArchiveName,
     homeDir,
     homeStorageBucketName,

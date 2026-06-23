@@ -12,30 +12,30 @@ export function createApiClient(getToken) {
         `/api/admin/users/${encodeURIComponent(uid)}/whitelist`,
         {method: "POST", body: {whitelisted}},
     ),
-    getPiAuth: () => request(getToken, "/api/pi-auth"),
+    getPiAuth: () => request(getToken, "/api/auth"),
     savePiAuthProvider: (provider, key, label = "") => request(
         getToken,
-        `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
+        `/api/auth/providers/${encodeURIComponent(provider)}`,
         {method: "PUT", body: {key, label}},
     ),
     deletePiAuthProvider: (provider) => request(
         getToken,
-        `/api/pi-auth/providers/${encodeURIComponent(provider)}`,
+        `/api/auth/providers/${encodeURIComponent(provider)}`,
         {method: "DELETE"},
     ),
     deletePiAuthEntry: (entryId) => request(
         getToken,
-        `/api/pi-auth/entries/${encodeURIComponent(entryId)}`,
+        `/api/auth/entries/${encodeURIComponent(entryId)}`,
         {method: "DELETE"},
     ),
     startOpenAiCodexDeviceLogin: () => request(
         getToken,
-        "/api/pi-auth/providers/openai-codex/device-code/start",
+        "/api/auth/providers/openai-codex/device-code/start",
         {method: "POST", body: {}},
     ),
     completeOpenAiCodexDeviceLogin: (deviceAuthId, userCode) => request(
         getToken,
-        "/api/pi-auth/providers/openai-codex/device-code/complete",
+        "/api/auth/providers/openai-codex/device-code/complete",
         {method: "POST", body: {deviceAuthId, userCode}},
     ),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
@@ -148,7 +148,7 @@ export function createApiClient(getToken) {
     ),
     saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => request(
         getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-auth-selection`,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/auth-selection`,
         {method: "POST", body: {selection}},
     ),
     getGitStatus: (workspaceId, sessionId) => request(
@@ -216,6 +216,20 @@ export function createApiClient(getToken) {
     deleteWorkspaceSkill: (workspaceId, sessionId, name) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/skills/delete`,
+        {method: "POST", body: {name}},
+    ),
+    getWorkspaceSubagents: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/subagents`,
+    ),
+    saveWorkspaceSubagent: (workspaceId, sessionId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/subagents`,
+        {method: "POST", body},
+    ),
+    deleteWorkspaceSubagent: (workspaceId, sessionId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/subagents/delete`,
         {method: "POST", body: {name}},
     ),
     getPiSkills: (workspaceId, sessionId) => request(

@@ -36,6 +36,16 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
+  function openWorkspaceSubagentModal() {
+    state.workspaceSubagentModalOpen = true;
+    render();
+  }
+
+  function closeWorkspaceSubagentModal() {
+    state.workspaceSubagentModalOpen = false;
+    render();
+  }
+
   function openAuthModal(provider = "") {
     const selectedProvider = typeof provider === "string" ? provider.trim() : "";
     if (selectedProvider) {
@@ -71,11 +81,13 @@ export function createModalController({state, render, loadPiAuth}) {
     closeAuthModal,
     closePiAuthManageModal,
     closeSessionModal,
+    closeWorkspaceSubagentModal,
     closeWorkspaceSkillModal,
     closeWorkspaceModal,
     openAuthModal,
     openPiAuthManageModal,
     openSessionModal,
+    openWorkspaceSubagentModal,
     openWorkspaceSkillModal,
     openWorkspaceModal,
     showProfile,

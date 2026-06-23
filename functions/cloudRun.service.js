@@ -24,6 +24,7 @@ const {
   publicGoogleError,
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
+const {resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
 
 function createCloudRunService(dependencies = {}) {
@@ -250,8 +251,9 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const capabilities = session.capabilities || runnerImageCapabilities(session.image);
+  const harness = resolveSessionHarness(session);
   const terminal = terminalCommandEnv(session);
-  const terminalKind = cleanName(session.terminalKind || "pi") || "pi";
+  const terminalKind = cleanName(harness?.terminalKind || session.terminalKind || "shell") || "shell";
   const homeDir = cleanHomeDir(session.homeDir || "/root");
   const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
   const codexHome = session.codexHomeDir || codexHomeDir(session.runnerSessionId || session.id || "");
@@ -281,6 +283,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
     {name: "PI_CODING_AGENT_DIR", value: piAgentDir},
     {name: "SESSION_NAME", value: cleanName(session.name || "Terminal session")},
+    {name: "HARNESS_ID", value: harness?.id || cleanName(session.harnessId || "") || "shell"},
     {name: "TERMINAL_COMMAND", value: terminal.command},
     {name: "TERMINAL_ARGS", value: JSON.stringify(terminal.args)},
     {name: "TERMINAL_KIND", value: terminalKind},
@@ -294,7 +297,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];
 
-  if (terminalKind === "codex") {
+  if (harness?.id === "codex") {
     env.push(
         {name: "CODEX_HOME", value: codexHome},
         {name: "CODEX_HOME_STORAGE_BUCKET", value: session.codexHomeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
@@ -302,6 +305,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
           name: "CODEX_HOME_STORAGE_PREFIX",
           value: session.codexHomeStoragePrefix || codexHomeStoragePrefix(session.workspaceStoragePrefix, session.runnerSessionId || session.id || ""),
         },
+        {name: "CODEX_CONFIG_PATH", value: "/workspace/.codex/config.toml"},
     );
   }
 
@@ -349,14 +353,14 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
 }
 
 function terminalCommandEnv(session) {
-  const terminalKind = cleanName(session && session.terminalKind);
-  if (terminalKind === "shell") {
+  const harness = resolveSessionHarness(session || {});
+  if (harness?.id === "shell") {
     return {command: "bash", args: ["-l"]};
   }
-  if (terminalKind === "codex") {
+  if (harness?.id === "codex") {
     return {command: "codex", args: []};
   }
-  if (terminalKind === "ssh") {
+  if (harness?.id === "ssh") {
     return {command: "", args: []};
   }
   const homeDir = cleanHomeDir(session && session.homeDir || "/root");

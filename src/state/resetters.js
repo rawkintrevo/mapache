@@ -5,6 +5,7 @@ import {
   createMcpServersState,
   createPiAuthState,
   createPiPackagesState,
+  createWorkspaceSubagentsState,
   createWorkspaceSkillsState,
   createPullRequestFormState,
   createSshForwardsState,
@@ -32,6 +33,10 @@ export function resetWorkspaceSkills(state) {
 }
 
 export const resetPiSkills = resetWorkspaceSkills;
+
+export function resetWorkspaceSubagents(state) {
+  state.workspaceSubagents = createWorkspaceSubagentsState();
+}
 
 export function resetMcpServers(state) {
   state.mcpServers = createMcpServersState();
@@ -81,6 +86,7 @@ export function resetSignedOutState(state) {
   resetGitStatus(state);
   resetPiPackages(state);
   resetWorkspaceSkills(state);
+  resetWorkspaceSubagents(state);
   resetMcpServers(state);
   resetPiAuth(state);
   resetSshForwards(state);

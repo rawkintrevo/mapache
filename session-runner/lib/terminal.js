@@ -200,7 +200,7 @@ function sendTerminalMessage(socket, message) {
 }
 
 function terminalCommand(config = {}) {
-  if (config.terminalKind === "ssh") {
+  if (String(config.harnessId || config.terminalKind || "").trim().toLowerCase() === "ssh") {
     prepareSshMaterial(config);
     return sshCommand(config, {tty: true, loginShell: true});
   }

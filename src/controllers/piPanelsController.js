@@ -22,6 +22,14 @@ import {
   updateWorkspaceSkillFormState,
 } from "../workflows/piSkills.js";
 import {
+  cancelWorkspaceSubagentEditState,
+  deleteWorkspaceSubagentState,
+  editWorkspaceSubagentState,
+  loadWorkspaceSubagentsState,
+  saveWorkspaceSubagentState,
+  updateWorkspaceSubagentFormState,
+} from "../workflows/subagents.js";
+import {
   deleteMcpServerState,
   loadMcpServersState,
   saveMcpServerState,
@@ -31,9 +39,11 @@ import {
   resetMcpServers as resetMcpServersState,
   resetPiAuth as resetPiAuthState,
   resetPiPackages as resetPiPackagesState,
+  resetWorkspaceSubagents as resetWorkspaceSubagentsState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
 } from "../state/resetters.js";
 import {sessionSkillHarness} from "../utils/sessionSkills.js";
+import {sessionSubagentHarness} from "../utils/sessionHarnesses.js";
 
 export function createPiPanelsController({state, render}) {
   function resetPiPackages() {
@@ -46,6 +56,10 @@ export function createPiPanelsController({state, render}) {
 
   function resetWorkspaceSkills() {
     resetWorkspaceSkillsState(state);
+  }
+
+  function resetWorkspaceSubagents() {
+    resetWorkspaceSubagentsState(state);
   }
 
   function resetMcpServers() {
@@ -64,6 +78,10 @@ export function createPiPanelsController({state, render}) {
     await loadPiAuthState({state, render, options});
   }
 
+  async function loadWorkspaceSubagents() {
+    await loadWorkspaceSubagentsState({state, render});
+  }
+
   async function loadMcpServers() {
     await loadMcpServersState({state, render});
   }
@@ -78,6 +96,10 @@ export function createPiPanelsController({state, render}) {
 
   async function refreshPiAuth() {
     await loadPiAuth({showMessage: true});
+  }
+
+  async function refreshWorkspaceSubagents() {
+    await loadWorkspaceSubagents();
   }
 
   async function refreshMcpServers() {
@@ -129,6 +151,36 @@ export function createPiPanelsController({state, render}) {
     const ok = window.confirm(`Delete skill ${skillName}? This removes ${path} from the workspace.`);
     if (!ok) return;
     await deleteWorkspaceSkillState({state, name: skillName, loadWorkspaceSkills, render});
+  }
+
+  function updateWorkspaceSubagentForm(patch) {
+    updateWorkspaceSubagentFormState(state, patch);
+    render();
+  }
+
+  function editWorkspaceSubagent(subagent) {
+    editWorkspaceSubagentState(state, subagent);
+    render();
+  }
+
+  function cancelWorkspaceSubagentEdit() {
+    cancelWorkspaceSubagentEditState(state);
+    render();
+  }
+
+  async function saveWorkspaceSubagent() {
+    await saveWorkspaceSubagentState({state, loadWorkspaceSubagents, render});
+  }
+
+  async function deleteWorkspaceSubagent(name) {
+    const subagentName = String(name || "").trim();
+    if (!subagentName) return;
+    const session = state.sessions.find((item) => item.id === state.selectedSessionId) || null;
+    const harness = sessionSubagentHarness(session);
+    const path = harness ? `${harness.relativePath}/${subagentName}${harness.id === "codex" ? ".toml" : ".md"}` : "<subagent-path>";
+    const ok = window.confirm(`Delete subagent ${subagentName}? This removes ${path} from the workspace.`);
+    if (!ok) return;
+    await deleteWorkspaceSubagentState({state, name: subagentName, loadWorkspaceSubagents, render});
   }
 
   function updatePiAuthForm(patch) {
@@ -184,8 +236,10 @@ export function createPiPanelsController({state, render}) {
     cancelWorkspaceSkillEdit,
     deletePiAuthProvider,
     deletePiSkill: deleteWorkspaceSkill,
+    deleteWorkspaceSubagent,
     deleteWorkspaceSkill,
     editPiSkill: editWorkspaceSkill,
+    editWorkspaceSubagent,
     editWorkspaceSkill,
     installPiPackage,
     deleteMcpServer,
@@ -193,21 +247,25 @@ export function createPiPanelsController({state, render}) {
     loadPiAuth,
     loadPiPackages,
     loadPiSkills: loadWorkspaceSkills,
+    loadWorkspaceSubagents,
     loadWorkspaceSkills,
     refreshPiAuth,
     refreshMcpServers,
     refreshPiPackages,
     refreshPiSkills: refreshWorkspaceSkills,
+    refreshWorkspaceSubagents,
     refreshWorkspaceSkills,
     removePiPackage,
     resetPiAuth,
     resetMcpServers,
     resetPiPackages,
     resetPiSkills: resetWorkspaceSkills,
+    resetWorkspaceSubagents,
     resetWorkspaceSkills,
     savePiAuthProvider,
     saveMcpServer,
     savePiSkill: saveWorkspaceSkill,
+    saveWorkspaceSubagent,
     saveWorkspaceSkill,
     saveSessionPiAuthSelection,
     startOpenAiCodexDeviceLogin,
@@ -216,6 +274,8 @@ export function createPiPanelsController({state, render}) {
     updatePiInstallSource,
     updatePiPackage,
     updatePiSkillForm: updateWorkspaceSkillForm,
+    updateWorkspaceSubagentForm,
     updateWorkspaceSkillForm,
+    cancelWorkspaceSubagentEdit,
   };
 }

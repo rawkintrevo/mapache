@@ -26,6 +26,22 @@ function routeRequest(path) {
       path: parts.slice(2).join("/"),
     };
   }
+  if (parts.length === 1 && parts[0] === "auth") return {name: "piAuth"};
+  if (parts.length === 3 && parts[0] === "auth" && parts[1] === "providers") {
+    return {name: "piAuthProvider", provider: parts[2]};
+  }
+  if (parts.length === 3 && parts[0] === "auth" && parts[1] === "entries") {
+    return {name: "piAuthEntry", entryId: parts[2]};
+  }
+  if (
+    parts.length === 5 &&
+    parts[0] === "auth" &&
+    parts[1] === "providers" &&
+    parts[2] === OPENAI_CODEX_PROVIDER &&
+    parts[3] === "device-code"
+  ) {
+    return {name: "openAiCodexDeviceCode", action: parts[4]};
+  }
   if (parts.length === 1 && parts[0] === "pi-auth") return {name: "piAuth"};
   if (parts.length === 3 && parts[0] === "pi-auth" && parts[1] === "providers") {
     return {name: "piAuthProvider", provider: parts[2]};
@@ -71,6 +87,7 @@ function routeRequest(path) {
     ["stop", "stopSession"],
     ["access-url", "sessionAccess"],
     ["share-preview", "sessionSharePreview"],
+    ["auth-selection", "sessionPiAuthSelection"],
     ["pi-auth-selection", "sessionPiAuthSelection"],
     ["git-status", "gitStatus"],
     ["git-pull", "gitPull"],
@@ -82,6 +99,8 @@ function routeRequest(path) {
     ["pi-packages", "piPackages"],
     ["skills", "sessionSkills"],
     ["pi-skills", "sessionSkills"],
+    ["subagents", "sessionSubagents"],
+    ["subagent-chains", "sessionSubagentChains"],
     ["ssh-files", "sshSessionFiles"],
     ["ssh-file", "sshSessionFile"],
     ["ssh-ports", "sshSessionForwards"],
@@ -121,6 +140,19 @@ function routeRequest(path) {
     parts[5] === "delete"
   ) {
     return {name: "sessionSkillDelete", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
+    (parts[4] === "subagents" || parts[4] === "subagent-chains") &&
+    parts[5] === "delete"
+  ) {
+    return {
+      name: parts[4] === "subagents" ? "sessionSubagentDelete" : "sessionSubagentChainDelete",
+      workspaceId: parts[1],
+      sessionId: parts[3],
+    };
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};
@@ -177,6 +209,10 @@ const ROUTE_METHODS = Object.freeze({
   piPackageUpdate: ["POST"],
   sessionSkills: ["GET", "POST"],
   sessionSkillDelete: ["POST"],
+  sessionSubagents: ["GET", "POST"],
+  sessionSubagentDelete: ["POST"],
+  sessionSubagentChains: ["GET", "POST"],
+  sessionSubagentChainDelete: ["POST"],
   sshSessionFiles: ["GET"],
   sshSessionFile: ["GET", "PUT"],
   sshSessionForwards: ["GET", "POST"],

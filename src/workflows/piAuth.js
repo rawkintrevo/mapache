@@ -59,7 +59,7 @@ export async function deletePiAuthProviderState({state, provider, render}) {
       ...state.piAuth,
       saving: false,
       error: "",
-      message: `${providerKey} deleted. New sessions will no longer materialize it into Pi auth.json.`,
+      message: `${providerKey} deleted. New sessions will no longer materialize this credential automatically.`,
       providers: data.providers || {},
       entries: data.entries || {},
     };
@@ -134,7 +134,7 @@ async function pollOpenAiCodexLoginState({state, render}) {
         ...state.piAuth,
         saving: false,
         error: "",
-        message: "OpenAI Codex subscription login saved. New sessions will materialize it into Pi auth.json.",
+        message: "OpenAI Codex subscription login saved. New sessions can materialize it into the selected harness auth file.",
         providers: data.providers || state.piAuth.providers || {},
         entries: data.entries || state.piAuth.entries || {},
         openAiCodexDevice: {...device, status: "complete"},
@@ -195,7 +195,7 @@ export async function savePiAuthProviderState({state, render}) {
       ...state.piAuth,
       saving: false,
       error: "",
-      message: "API key saved. New sessions will materialize it into Pi auth.json.",
+      message: "API key saved. New sessions can materialize it into the selected harness auth file.",
       providers: data.providers || state.piAuth.providers || {},
       entries: data.entries || state.piAuth.entries || {},
       apiKey: "",
@@ -215,16 +215,16 @@ export async function savePiAuthProviderState({state, render}) {
 
 export async function saveSessionPiAuthSelectionState({state, session, selection, render}) {
   if (!state.api || !session?.workspaceId || !session?.id) return;
-  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving Pi auth selection..."};
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving session auth selection..."};
   render();
   try {
     const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, selection);
-    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, piAuthSelection: data.selection || selection} : item);
+    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, authSelection: data.selection || selection} : item);
     state.piAuth = {
       ...state.piAuth,
       saving: false,
       error: "",
-      message: "Pi auth selection saved. Run /reload in Pi if the active agent should reload credentials.",
+      message: "Session auth selection saved. Restart the active harness if it should reload credentials.",
     };
     state.piAuthManageModalOpen = false;
   } catch (error) {

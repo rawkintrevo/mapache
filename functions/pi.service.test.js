@@ -6,6 +6,7 @@ const {
   buildGitPackageSource,
   cleanOpenAiCodexDeviceField,
   createPiService,
+  mergeCompatiblePiAuthState,
   normalizeGitPackageSource,
   normalizeOpenAiCodexReturnTo,
   normalizePiAuthApiKey,
@@ -112,6 +113,60 @@ assert.deepStrictEqual(normalizePiAuthEntries({}, {openai: {type: "api_key", key
     label: "openai",
     credential: {type: "api_key", key: "sk"},
     createdAt: "",
+  },
+});
+assert.deepStrictEqual(mergeCompatiblePiAuthState({
+  providers: {openai: {type: "api_key", key: "new"}},
+  entries: {
+    "entry-new": {
+      id: "entry-new",
+      providerKey: "openai",
+      label: "new",
+      credential: {type: "api_key", key: "new"},
+      createdAt: "2026-06-23T00:00:00.000Z",
+    },
+  },
+}, {
+  providers: {
+    openai: {type: "api_key", key: "old"},
+    anthropic: {type: "api_key", key: "legacy"},
+  },
+  entries: {
+    "entry-old": {
+      id: "entry-old",
+      providerKey: "openai",
+      label: "old",
+      credential: {type: "api_key", key: "old"},
+      createdAt: "2026-06-22T00:00:00.000Z",
+    },
+  },
+}), {
+  providers: {
+    openai: {type: "api_key", key: "new"},
+    anthropic: {type: "api_key", key: "legacy"},
+  },
+  entries: {
+    "entry-old": {
+      id: "entry-old",
+      providerKey: "openai",
+      label: "old",
+      credential: {type: "api_key", key: "old"},
+      createdAt: "2026-06-22T00:00:00.000Z",
+    },
+    "entry-new": {
+      id: "entry-new",
+      providerKey: "openai",
+      label: "new",
+      credential: {type: "api_key", key: "new"},
+      createdAt: "2026-06-23T00:00:00.000Z",
+    },
+    "legacy-anthropic": {
+      id: "legacy-anthropic",
+      providerKey: "anthropic",
+      label: "anthropic",
+      credential: {type: "api_key", key: "legacy"},
+      createdAt: "",
+    },
   },
 });
 assert.deepStrictEqual(normalizePiAuthSelection({
@@ -225,7 +280,7 @@ function serviceForSession(sessionSnap, calls = []) {
   await assertServiceError(
       () => serviceForSession(shellSessionSnap).saveSessionPiAuthSelection("uid", "workspace", "session", {selection: {}}),
       400,
-      "not_pi_session",
+      "auth_selection_unsupported",
   );
   await assertServiceError(
       () => serviceForSession(shellSessionSnap).saveWorkspaceSkill("uid", "workspace", "session", {
