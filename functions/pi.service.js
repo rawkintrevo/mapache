@@ -96,10 +96,8 @@ function createPiService(dependencies = {}) {
 }
 
 async function getPiAuth(uid) {
-  const snap = await agentAuthDoc(uid).get();
-  const data = snap.exists ? snap.data() : {};
-  const providers = normalizePiAuthProviders(data.providers);
-  return {providers, entries: normalizePiAuthEntries(data.entries, providers)};
+  const {providers, entries} = await readCompatiblePiAuthState(uid);
+  return {providers, entries};
 }
 
 async function savePiAuthProvider(uid, provider, payload) {
@@ -111,15 +109,13 @@ async function savePiAuthProvider(uid, provider, payload) {
 
 async function deletePiAuthProvider(uid, provider) {
   const providerKey = normalizePiAuthStoredProviderKey(provider);
-  const ref = agentAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(ref);
-    const data = snap.exists ? snap.data() : {};
-    const current = normalizePiAuthProviders(data.providers);
-    const entries = normalizePiAuthEntries(data.entries, current);
+    const state = await readCompatiblePiAuthTransactionState(transaction, uid);
+    const current = state.providers;
+    const entries = state.entries;
     const nextAuth = removePiAuthProvider(current, entries, providerKey);
-    writePiAuthMaps(transaction, ref, snap, {
+    writeCompatiblePiAuthMaps(transaction, state, {
       providers: nextAuth.providers,
       entries: nextAuth.entries,
       updatedAt: now,
@@ -131,16 +127,14 @@ async function deletePiAuthProvider(uid, provider) {
 
 async function deletePiAuthEntry(uid, entryId) {
   const normalizedEntryId = normalizePiAuthEntryId(entryId);
-  const ref = agentAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(ref);
-    const data = snap.exists ? snap.data() : {};
-    const providers = normalizePiAuthProviders(data.providers);
-    const entries = normalizePiAuthEntries(data.entries, providers);
+    const state = await readCompatiblePiAuthTransactionState(transaction, uid);
+    const providers = state.providers;
+    const entries = state.entries;
     const nextAuth = removePiAuthEntry(providers, entries, normalizedEntryId);
     if (!nextAuth) return;
-    writePiAuthMaps(transaction, ref, snap, {
+    writeCompatiblePiAuthMaps(transaction, state, {
       providers: nextAuth.providers,
       entries: nextAuth.entries,
       updatedAt: now,
@@ -188,17 +182,15 @@ function writePiAuthMaps(transaction, ref, snap, fields) {
 }
 
 async function savePiAuthCredential(uid, providerKey, credential, label = "") {
-  const ref = agentAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(ref);
-    const data = snap.exists ? snap.data() : {};
-    const current = normalizePiAuthProviders(data.providers);
-    const entries = normalizePiAuthEntries(data.entries, current);
+    const state = await readCompatiblePiAuthTransactionState(transaction, uid);
+    const current = state.providers;
+    const entries = state.entries;
     const cleanCredential = normalizePlainObject(credential);
     const entryId = buildPiAuthEntryId(providerKey);
     const createdAt = new Date().toISOString();
-    transaction.set(ref, {
+    writeCompatiblePiAuthMaps(transaction, state, {
       providers: {
         ...current,
         [providerKey]: cleanCredential,
@@ -214,8 +206,8 @@ async function savePiAuthCredential(uid, providerKey, credential, label = "") {
         },
       },
       updatedAt: now,
-      ...(snap.exists ? {} : {createdAt: now}),
-    }, {merge: true});
+      createdAt: now,
+    });
   });
 }
 
@@ -392,6 +384,7 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   };
   await sessionSnap.ref.set({
     authSelection: selection,
+    piAuthSelection: selection.providers,
     authSelectionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, {merge: true});
 
@@ -957,6 +950,62 @@ function agentAuthDoc(uid) {
   return db.collection("users").doc(uid).collection("private").doc("agentAuth");
 }
 
+function legacyPiAuthDoc(uid) {
+  return db.collection("users").doc(uid).collection("private").doc("piAuth");
+}
+
+async function readCompatiblePiAuthState(uid) {
+  const refs = compatiblePiAuthDocRefs(uid);
+  const [agentSnap, legacySnap] = await Promise.all([refs.agent.get(), refs.legacy.get()]);
+  return mergeCompatiblePiAuthState(
+      agentSnap.exists ? agentSnap.data() : {},
+      legacySnap.exists ? legacySnap.data() : {},
+  );
+}
+
+async function readCompatiblePiAuthTransactionState(transaction, uid) {
+  const refs = compatiblePiAuthDocRefs(uid);
+  const [agentSnap, legacySnap] = await Promise.all([
+    transaction.get(refs.agent),
+    transaction.get(refs.legacy),
+  ]);
+  return {
+    refs,
+    snaps: {
+      agent: agentSnap,
+      legacy: legacySnap,
+    },
+    ...mergeCompatiblePiAuthState(
+        agentSnap.exists ? agentSnap.data() : {},
+        legacySnap.exists ? legacySnap.data() : {},
+    ),
+  };
+}
+
+function compatiblePiAuthDocRefs(uid) {
+  return {
+    agent: agentAuthDoc(uid),
+    legacy: legacyPiAuthDoc(uid),
+  };
+}
+
+function mergeCompatiblePiAuthState(agentData = {}, legacyData = {}) {
+  const legacyProviders = normalizePiAuthProviders(legacyData.providers);
+  const agentProviders = normalizePiAuthProviders(agentData.providers);
+  const providers = {...legacyProviders, ...agentProviders};
+  const legacyEntries = normalizePiAuthEntries(legacyData.entries, legacyProviders);
+  const agentEntries = normalizePiAuthEntries(agentData.entries, agentProviders);
+  return {
+    providers,
+    entries: normalizePiAuthEntries({...legacyEntries, ...agentEntries}, providers),
+  };
+}
+
+function writeCompatiblePiAuthMaps(transaction, state, fields) {
+  writePiAuthMaps(transaction, state.refs.agent, state.snaps.agent, fields);
+  writePiAuthMaps(transaction, state.refs.legacy, state.snaps.legacy, fields);
+}
+
 function normalizePiAuthProviders(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.entries(value).reduce((acc, [provider, credential]) => {
@@ -1132,6 +1181,7 @@ module.exports = {
   createPiService,
   mergePiPackageCatalogEntry,
   normalizeGitPackageSource,
+  mergeCompatiblePiAuthState,
   normalizeOpenAiCodexReturnTo,
   normalizePiAuthApiKey,
   normalizePiAuthEntries,

@@ -40,14 +40,16 @@ The runner cannot import `functions/runnerCatalog.json` directly because the Doc
 
 ## Auth
 
-Saved user credentials now live in `users/{uid}/private/agentAuth`. Session-specific selection now lives on the session document as:
+Saved user credentials now live in `users/{uid}/private/agentAuth`. During rollout, Functions and runners also read the legacy `users/{uid}/private/piAuth` document and mirror writes there so existing saved Pi credentials remain available until the compatibility path is intentionally removed.
+
+Session-specific selection now lives on the session document as:
 
 ```text
 authSelection
 authSelectionUpdatedAt
 ```
 
-`authSelection` stores both the target harness and the chosen entry ids per provider. The web app and Functions expose neutral auth routes:
+`authSelection` stores both the target harness and the chosen entry ids per provider. During rollout, backend writes also mirror the provider map into legacy `piAuthSelection`, and runners still read that legacy field for older Pi sessions that have not been resaved yet. The web app and Functions expose neutral auth routes:
 
 ```text
 GET  /api/auth
@@ -105,7 +107,7 @@ Runner startup now resolves the active harness once, then executes harness hooks
 4. `materializeSkills`
 5. `materializeSubagents`
 
-This keeps feature gating out of route handlers and UI inference code where possible.
+This keeps feature gating out of route handlers and UI inference code where possible. Runner-side Pi skill and subagent helpers are also instantiated lazily so shell and SSH harnesses do not fail startup just because those unsupported helper constructors exist in the same image.
 
 ## Frontend
 

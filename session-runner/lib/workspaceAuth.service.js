@@ -10,20 +10,15 @@ function createWorkspaceAuthService({admin, config, db}) {
 
   async function synchronizeAuth(options = {}) {
     if (!config.ownerUid || !harness.auth?.supported) return;
-    const ref = agentAuthDoc(config.ownerUid, db);
     const localAuth = await readLocalAuthFile();
 
     if (Object.keys(localAuth).length) {
-      await ref.set({
-        providers: localAuth,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, {merge: true});
+      await writeRemoteAuthProviders(localAuth);
     }
 
     if (!options.materialize) return;
 
-    const snap = await ref.get();
-    const data = snap.exists ? snap.data() : {};
+    const data = await readRemoteAuthData();
     const selection = await readSessionAuthSelection();
     const remoteAuth = buildMaterializedAuth(data, selection);
     if (!Object.keys(remoteAuth).length && !Object.keys(localAuth).length) return;
@@ -41,8 +36,16 @@ function createWorkspaceAuthService({admin, config, db}) {
     try {
       const snap = await db.collection("workspaces").doc(config.workspaceId).collection("sessions").doc(config.sessionId).get();
       const data = snap.exists ? snap.data() : {};
-      if (!Object.prototype.hasOwnProperty.call(data, "authSelection")) return null;
-      return normalizeAuthSelection(data.authSelection);
+      if (Object.prototype.hasOwnProperty.call(data, "authSelection")) {
+        return normalizeAuthSelection(data.authSelection);
+      }
+      if (data.piAuthSelection && typeof data.piAuthSelection === "object" && !Array.isArray(data.piAuthSelection)) {
+        return {
+          harness: "pi",
+          providers: normalizeAuthSelection(data.piAuthSelection).providers,
+        };
+      }
+      return null;
     } catch (error) {
       console.warn("auth selection read failed", compactErrorMessage(error.message || error));
       return null;
@@ -53,13 +56,32 @@ function createWorkspaceAuthService({admin, config, db}) {
     if (!config.ownerUid || !harness.auth?.supported) {
       return {ok: true, appliedToRunner: false, providerCount: 0};
     }
-    const ref = agentAuthDoc(config.ownerUid, db);
-    const snap = await ref.get();
-    const data = snap.exists ? snap.data() : {};
+    const data = await readRemoteAuthData();
     const auth = buildMaterializedAuth(data, selection === null ? await readSessionAuthSelection() : selection);
     await writeLocalAuthFile(auth);
     console.log(`${harness.id} auth materialized ${Object.keys(auth).length} selected provider(s) to ${authFilePath()}`);
     return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length};
+  }
+
+  async function readRemoteAuthData() {
+    const refs = compatibleAuthDocRefs(config.ownerUid, db);
+    const [agentSnap, legacySnap] = await Promise.all([refs.agent.get(), refs.legacy.get()]);
+    return mergeRemoteAuthData(
+        agentSnap.exists ? agentSnap.data() : {},
+        legacySnap.exists ? legacySnap.data() : {},
+    );
+  }
+
+  async function writeRemoteAuthProviders(providers) {
+    const refs = compatibleAuthDocRefs(config.ownerUid, db);
+    const payload = {
+      providers: normalizeAuthProviders(providers),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await Promise.all([
+      refs.agent.set(payload, {merge: true}),
+      refs.legacy.set(payload, {merge: true}),
+    ]);
   }
 
   function buildMaterializedAuth(data, selection) {
@@ -117,6 +139,29 @@ function createWorkspaceAuthService({admin, config, db}) {
 
 function agentAuthDoc(uid, db) {
   return db.collection("users").doc(uid).collection("private").doc("agentAuth");
+}
+
+function legacyPiAuthDoc(uid, db) {
+  return db.collection("users").doc(uid).collection("private").doc("piAuth");
+}
+
+function compatibleAuthDocRefs(uid, db) {
+  return {
+    agent: agentAuthDoc(uid, db),
+    legacy: legacyPiAuthDoc(uid, db),
+  };
+}
+
+function mergeRemoteAuthData(agentData = {}, legacyData = {}) {
+  const legacyProviders = normalizeAuthProviders(legacyData.providers);
+  const agentProviders = normalizeAuthProviders(agentData.providers);
+  const providers = {...legacyProviders, ...agentProviders};
+  const legacyEntries = normalizeAuthEntries(legacyData.entries, legacyProviders);
+  const agentEntries = normalizeAuthEntries(agentData.entries, agentProviders);
+  return {
+    providers,
+    entries: normalizeAuthEntries({...legacyEntries, ...agentEntries}, providers),
+  };
 }
 
 function providersForHarness(providers, harness) {
@@ -267,6 +312,7 @@ function normalizeAuthKey(value) {
 module.exports = {
   buildCodexAuthFile,
   createWorkspaceAuthService,
+  mergeRemoteAuthData,
   normalizeAuthEntries,
   normalizeAuthProviders,
   normalizeAuthSelection,
