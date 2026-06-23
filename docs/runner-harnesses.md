@@ -61,7 +61,7 @@ POST /api/workspaces/{workspaceId}/sessions/{sessionId}/auth-selection
 
 Legacy `/api/pi-auth/*` aliases still exist for rollout compatibility.
 
-Pi sessions materialize the selected providers into `$HOME/.pi/agent/auth.json`. Codex sessions materialize the selected providers into `$CODEX_HOME/auth.json`. Codex auth supports the OpenAI API key provider plus the OpenAI Codex OAuth token shape used by the local CLI.
+Pi sessions materialize the selected providers into `$HOME/.pi/agent/auth.json`. Codex sessions materialize the selected providers into `$CODEX_HOME/auth.json`. Codex auth supports the OpenAI API key provider plus the OpenAI Codex OAuth token shape used by the local CLI. The runner now writes current Codex auth-mode values (`chatgpt` and `apikey`) and skips materializing saved Codex OAuth credentials that do not include a valid JWT-shaped `id_token`, so a stale or partial saved credential cannot prevent the Codex CLI from starting.
 
 ## Skills, MCP, and Subagents
 

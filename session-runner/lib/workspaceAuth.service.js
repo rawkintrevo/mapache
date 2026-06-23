@@ -114,8 +114,20 @@ function createWorkspaceAuthService({admin, config, db}) {
   async function writeLocalAuthFile(auth) {
     const authPath = authFilePath();
     await fs.promises.mkdir(path.dirname(authPath), {recursive: true});
-    const content = harness.id === "codex" ? JSON.stringify(buildCodexAuthFile(auth), null, 2) :
-      JSON.stringify(normalizeAuthProviders(auth), null, 2);
+    if (harness.id === "codex") {
+      const codexAuth = buildCodexAuthFile(auth);
+      if (!codexAuth) {
+        await fs.promises.unlink(authPath).catch((error) => {
+          if (error && error.code !== "ENOENT") throw error;
+        });
+        return;
+      }
+      const content = JSON.stringify(codexAuth, null, 2);
+      await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
+      await fs.promises.chmod(authPath, 0o600).catch(() => {});
+      return;
+    }
+    const content = JSON.stringify(normalizeAuthProviders(auth), null, 2);
     await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
     await fs.promises.chmod(authPath, 0o600).catch(() => {});
   }
@@ -197,19 +209,66 @@ function parseCodexAuthFile(content) {
 
 function buildCodexAuthFile(auth) {
   const providers = normalizeAuthProviders(auth);
-  const oauth = providers["openai-codex"] && providers["openai-codex"].type === "oauth" ? providers["openai-codex"] : null;
-  const apiKey = providers.openai && providers.openai.type === "api_key" ? providers.openai.key : "";
+  const oauth = normalizeCodexOauthCredential(providers["openai-codex"]);
+  const apiKey = normalizeCodexApiKey(providers.openai);
+  if (!oauth && !apiKey) return null;
+  if (!oauth) {
+    return {
+      auth_mode: "apikey",
+      OPENAI_API_KEY: apiKey,
+    };
+  }
   return {
-    auth_mode: oauth ? "chatgpt" : "api_key",
+    auth_mode: "chatgpt",
     OPENAI_API_KEY: apiKey || "",
-    tokens: oauth ? {
-      id_token: String(oauth.id || ""),
-      access_token: String(oauth.access || ""),
-      refresh_token: String(oauth.refresh || ""),
-      account_id: String(oauth.accountId || ""),
-    } : {},
-    last_refresh: Number(oauth && oauth.lastRefresh || Date.now()),
+    tokens: {
+      id_token: oauth.id,
+      access_token: oauth.access,
+      refresh_token: oauth.refresh,
+      account_id: oauth.accountId,
+    },
+    last_refresh: normalizeCodexLastRefresh(oauth.lastRefresh),
   };
+}
+
+function normalizeCodexApiKey(credential) {
+  if (!credential || credential.type !== "api_key") return "";
+  return String(credential.key || "").trim();
+}
+
+function normalizeCodexLastRefresh(value) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+  return null;
+}
+
+function normalizeCodexOauthCredential(credential) {
+  if (!credential || credential.type !== "oauth") return null;
+  const id = String(credential.id || "").trim();
+  const access = String(credential.access || "").trim();
+  const refresh = String(credential.refresh || "").trim();
+  if (!looksLikeJwt(id) || !access || !refresh) return null;
+  return {
+    id,
+    access,
+    refresh,
+    accountId: String(credential.accountId || "").trim(),
+    lastRefresh: credential.lastRefresh ?? credential.expires ?? null,
+  };
+}
+
+function looksLikeJwt(value) {
+  const parts = String(value || "").trim().split(".");
+  if (parts.length !== 3 || parts.some((part) => !part)) return false;
+  return parts.slice(0, 2).every((part) => {
+    try {
+      const decoded = Buffer.from(part, "base64url").toString("utf8");
+      const parsed = JSON.parse(decoded);
+      return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed);
+    } catch (error) {
+      return false;
+    }
+  });
 }
 
 function normalizeAuthProviders(value) {
