@@ -5,8 +5,8 @@ import {parseEnvText} from "../../utils/envText.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
-const cpuOptions = ["1", "2", "4"];
-const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
+const cpuOptions = ["2", "4"];
+const memoryOptions = ["2Gi", "4Gi", "8Gi"];
 
 function formatMemory(value) {
   return value.replace("Gi", " GiB");
@@ -62,13 +62,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
           }}
         >
           <label><span>Name</span><input autoComplete="off" name="name" placeholder="shell" required /></label>
-          <label>
-            <span>Session type</span>
-            <select name="sessionType" value={sessionType} onChange={(event) => setSessionType(event.target.value)}>
-              <option disabled={workspaceSsh} value="cloud">Cloud runner</option>
-              <option value="ssh">SSH target</option>
-            </select>
-          </label>
+          <input type="hidden" name="sessionType" value={sessionType} />
           {sessionType === "cloud" ? (
             <label>
               <span>Container image</span>
@@ -122,8 +116,8 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
               ) : null}
             </>
           )}
-          <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label><span>Memory</span><select name="memory" defaultValue="1Gi">{memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}</select></label>
+          <label><span>CPU</span><select name="cpu" defaultValue="2">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label><span>Memory</span><select name="memory" defaultValue="2Gi">{memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}</select></label>
           <label>
             <span>Session env</span>
             <textarea name="env" placeholder={"FOO=session-value\nAPI_BASE=http://localhost:3000"} rows={4} />

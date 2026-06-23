@@ -252,6 +252,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const capabilities = session.capabilities || runnerImageCapabilities(session.image);
   const terminal = terminalCommandEnv(session);
   const terminalKind = cleanName(session.terminalKind || "pi") || "pi";
+  logger.info(`Provisioning session ${session.id}, terminalKind: ${terminalKind}`);
   const homeDir = cleanHomeDir(session.homeDir || "/root");
   const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
   const codexHome = session.codexHomeDir || codexHomeDir(session.runnerSessionId || session.id || "");

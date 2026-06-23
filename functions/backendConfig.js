@@ -36,8 +36,8 @@ const QA_LOGIN_EMAIL = defineString("QA_LOGIN_EMAIL");
 const QA_LOGIN_DISPLAY_NAME = defineString("QA_LOGIN_DISPLAY_NAME");
 
 const DEFAULT_REGION = process.env.SESSION_REGION || "us-central1";
-const DEFAULT_CPU = process.env.SESSION_CPU || "1";
-const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "1Gi";
+const DEFAULT_CPU = process.env.SESSION_CPU || "2";
+const DEFAULT_MEMORY = process.env.SESSION_MEMORY || "2Gi";
 const DEFAULT_IMAGE = process.env.SESSION_RUNNER_IMAGE || "";
 const DEFAULT_BUCKET = process.env.SESSION_BUCKET || firebaseStorageBucket();
 const DEFAULT_IDLE_TIMEOUT_MINUTES = positiveNumber(process.env.SESSION_IDLE_TIMEOUT_MINUTES, 60);

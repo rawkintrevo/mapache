@@ -240,6 +240,7 @@ async function createSession(uid, workspaceId, payload) {
   const workspace = await requireWorkspace(uid, workspaceId);
   const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
   const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
+  console.log(`Creating session, sessionType: ${sessionType}, payload: ${JSON.stringify(payload)}`);
   const sshPayload = sessionType === "ssh" ?
     await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) :
     null;
@@ -262,6 +263,7 @@ async function createSession(uid, workspaceId, payload) {
     throw error;
   }
   const session = {
+    id: sessionRef.id,
     ownerUid: uid,
     userPath: userPath(uid),
     workspaceId,
@@ -286,6 +288,7 @@ async function createSession(uid, workspaceId, payload) {
     capabilities: sshPayload ? {...runnerImage.capabilities, preview: false, ssh: true, sshFiles: true, sshForwarding: true} : runnerImage.capabilities,
     serviceAccount: runnerServiceAccountValue() || null,
     serviceId,
+    id: sessionRef.id,
     serviceName: cloudRunServiceName(region, serviceId),
     serviceUrl: null,
     workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
@@ -333,6 +336,7 @@ async function createSession(uid, workspaceId, payload) {
   }
 
   if (runnerImage.canProvision) {
+    console.log(`Provisioning session Ref: ${sessionRef}, id: ${sessionRef.id}, sessionType: ${sessionType}`);
     await provisionSessionService(workspace, sessionRef, sshPayload ? {
       ...session,
       sessionEnv: {
@@ -684,6 +688,7 @@ async function restartSession(uid, workspaceId, sessionId) {
   const sessionSnap = await sessionRef.get();
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   const session = sessionSnap.data();
+  console.log(`Restarting session: ${sessionId}, workspace: ${workspaceId}, session data: ${JSON.stringify(session)}`);
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
 
   const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
@@ -1053,3 +1058,4 @@ function normalizeGitCommitMessage(payload) {
   }
   return message;
 }
+// Dummy
