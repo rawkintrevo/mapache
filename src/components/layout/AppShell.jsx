@@ -90,19 +90,24 @@ export function AppShell(props) {
         <RightDrawer
           selectedSession={selectedSession}
           state={state}
+          onCancelWorkspaceSubagentEdit={pi.cancelWorkspaceSubagentEdit}
           onInstallPiPackage={pi.installPiPackage}
           onCancelPiSkillEdit={pi.cancelPiSkillEdit}
           onDeleteMcpServer={pi.deleteMcpServer}
           onDeletePiAuthProvider={pi.deletePiAuthProvider}
           onDeletePiSkill={pi.deletePiSkill}
+          onDeleteWorkspaceSubagent={pi.deleteWorkspaceSubagent}
           onEditPiSkill={pi.editPiSkill}
+          onEditWorkspaceSubagent={pi.editWorkspaceSubagent}
           onOpenAuthModal={modals.openAuthModal}
           onOpenPiAuthManage={modals.openPiAuthManageModal}
           onOpenWorkspaceSkillModal={modals.openWorkspaceSkillModal}
+          onOpenWorkspaceSubagentModal={modals.openWorkspaceSubagentModal}
           onRefreshMcpServers={pi.refreshMcpServers}
           onRefreshPiAuth={pi.refreshPiAuth}
           onRefreshPiPackages={pi.refreshPiPackages}
           onRefreshPiSkills={pi.refreshPiSkills}
+          onRefreshWorkspaceSubagents={pi.refreshWorkspaceSubagents}
           onRemovePiPackage={pi.removePiPackage}
           onToggleDrawerSection={drawer.toggleDrawerSection}
           onToggleRightDrawer={drawer.toggleRightDrawer}

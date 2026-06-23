@@ -2,6 +2,7 @@ import {Download, RefreshCw} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {DrawerList} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {sessionHarness, sessionSupportsPackages} from "../../utils/sessionHarnesses.js";
 import {PackageInstallForm} from "./PackageInstallForm.jsx";
 import {PackageRow} from "./PackageRow.jsx";
 
@@ -55,9 +56,13 @@ function PackageList({knownPackages, packages, status, userPackages, onInstallPi
 
 function ExtensionsBody(props) {
   const {knownPackages, packages, selectedSession, status, userPackages} = props;
+  const harness = sessionHarness(selectedSession);
 
   if (!selectedSession) {
-    return <p className="empty">Start or select an active session to inspect workspace-local Pi extensions.</p>;
+    return <p className="empty">Start or select an active session to inspect workspace-local extensions.</p>;
+  }
+  if (!sessionSupportsPackages(selectedSession)) {
+    return <p className="empty">{harness?.label || "This"} sessions do not support workspace-local extensions.</p>;
   }
   if (status.loading) {
     return <p className="empty">Loading workspace extensions...</p>;
@@ -66,7 +71,7 @@ function ExtensionsBody(props) {
     return <p className="empty">{status.error}</p>;
   }
   if (!packages.length && !knownPackages.length && !userPackages.length) {
-    return <p className="empty">No workspace-local Pi packages are configured. Packages installed with `pi install -l ...` will appear here after refresh.</p>;
+    return <p className="empty">No workspace-local extensions are configured for this harness.</p>;
   }
   return <PackageList {...props} />;
 }
@@ -83,6 +88,7 @@ export function ExtensionsPanel({
   onUpdatePiPackage,
 }) {
   const status = piPackages || {loading: false, error: "", unavailable: false, data: null};
+  const harness = sessionHarness(selectedSession);
   const packages = status.data && Array.isArray(status.data.packages) ? status.data.packages : [];
   const knownPackages = status.data && Array.isArray(status.data.knownPackages) ? status.data.knownPackages : [];
   const userPackages = status.data && Array.isArray(status.data.userPackages) ? status.data.userPackages : [];
@@ -121,8 +127,12 @@ export function ExtensionsPanel({
       title="Extensions"
       onToggleDrawerSection={onToggleDrawerSection}
     >
-      <p className="subtle">Workspace-local Pi packages only. This web view reflects Pi TUI/CLI changes after refresh.</p>
-      {selectedSession ? (
+      <p className="subtle">
+        {sessionSupportsPackages(selectedSession) ?
+          `Workspace-local ${harness?.label || "harness"} packages. This view reflects terminal-side changes after refresh.` :
+          "Workspace-local package management is unavailable for this harness."}
+      </p>
+      {selectedSession && sessionSupportsPackages(selectedSession) ? (
         <PackageInstallForm
           status={status}
           onInstallPiPackage={onInstallPiPackage}

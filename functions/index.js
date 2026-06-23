@@ -30,6 +30,7 @@ const {
   toClientDoc,
   userPath,
 } = require("./backendUtils.helpers");
+const {resolveHarness} = require("./runnerCatalog.helpers");
 const {resolveRunnerImage} = require("./runnerImages.helpers");
 const {routeRequest: apiRouteRequest} = require("./apiRoutes.helpers");
 const {dispatchApiRoute} = require("./apiDispatch.helpers");
@@ -261,6 +262,8 @@ async function createSession(uid, workspaceId, payload) {
     }
     throw error;
   }
+  const harnessId = sshPayload ? "ssh" : (runnerImage.harnessId || "shell");
+  const harness = resolveHarness(harnessId);
   const session = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -272,17 +275,18 @@ async function createSession(uid, workspaceId, payload) {
     piSessionStoragePrefix: piSessionStoragePrefix(workspace.storagePrefix, sessionRef.id),
     piSessionJsonlPath: null,
     piSessionJsonlRelativePath: null,
-    codexHomeDir: runnerImage.terminalKind === "codex" ? codexHomeDir(sessionRef.id) : "",
-    codexHomeStorageBucket: runnerImage.terminalKind === "codex" ? (workspace.bucket || DEFAULT_BUCKET) : "",
-    codexHomeStoragePrefix: runnerImage.terminalKind === "codex" ? codexHomeStoragePrefix(workspace.storagePrefix, sessionRef.id) : "",
+    codexHomeDir: harnessId === "codex" ? codexHomeDir(sessionRef.id) : "",
+    codexHomeStorageBucket: harnessId === "codex" ? (workspace.bucket || DEFAULT_BUCKET) : "",
+    codexHomeStoragePrefix: harnessId === "codex" ? codexHomeStoragePrefix(workspace.storagePrefix, sessionRef.id) : "",
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
     status: runnerImage.canProvision ? "provisioning" : "needs_image",
     region,
     image: runnerImage.image,
     imageKey: runnerImage.key,
+    harnessId,
     sessionType: sshPayload ? "ssh" : "cloud",
-    terminalKind: sshPayload ? "ssh" : (runnerImage.terminalKind || "pi"),
+    terminalKind: harness?.terminalKind || runnerImage.terminalKind || "shell",
     capabilities: sshPayload ? {...runnerImage.capabilities, preview: false, ssh: true, sshFiles: true, sshForwarding: true} : runnerImage.capabilities,
     serviceAccount: runnerServiceAccountValue() || null,
     serviceId,

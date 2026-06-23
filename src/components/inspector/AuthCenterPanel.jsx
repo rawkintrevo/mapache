@@ -1,5 +1,6 @@
 import {KeyRound, Plus, RefreshCw, RotateCw, Trash2} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
+import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 import {Button} from "../common/Button.jsx";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
 import {DrawerSection} from "../drawers/DrawerSection.jsx";
@@ -54,13 +55,6 @@ function AuthProviderRow({entry, disabled, onDelete, onRelogin}) {
   );
 }
 
-function isPiBasedSession(session) {
-  const terminalKind = String(session?.terminalKind || "").toLowerCase();
-  const imageKey = String(session?.imageKey || "").toLowerCase();
-  const image = String(session?.image || "").toLowerCase();
-  return terminalKind === "pi" || imageKey.startsWith("pi-") || /session-runner:pi-/.test(image);
-}
-
 export function AuthCenterPanel({
   piAuth,
   selectedSession,
@@ -80,7 +74,11 @@ export function AuthCenterPanel({
     entries: {},
   };
   const providerEntries = normalizeEntries(status);
-  const showManagePiAuth = isPiBasedSession(selectedSession);
+  const authHarness = sessionAuthHarness(selectedSession);
+  const providerEntriesForHarness = authHarness?.providerKeys?.length ?
+    providerEntries.filter((entry) => authHarness.providerKeys.includes(entry.providerKey)) :
+    providerEntries;
+  const showManagePiAuth = sessionSupportsAuth(selectedSession);
 
   return (
     <DrawerSection
@@ -125,14 +123,14 @@ export function AuthCenterPanel({
           onClick={onOpenPiAuthManage}
         >
           <KeyRound aria-hidden="true" />
-          Manage Pi Auth
+          {authHarness?.manageTitle || "Manage Auth"}
         </Button>
       ) : null}
       {status.error ? <p className="empty">{status.error}</p> : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
-      {providerEntries.length ? (
+      {providerEntriesForHarness.length ? (
         <DrawerList>
-          {providerEntries.map((entry) => (
+          {providerEntriesForHarness.map((entry) => (
             <AuthProviderRow
               disabled={status.loading || status.saving}
               entry={entry}
@@ -143,7 +141,7 @@ export function AuthCenterPanel({
           ))}
         </DrawerList>
       ) : (
-        <p className="empty">No Pi auth providers saved yet.</p>
+        <p className="empty">No saved auth providers are available for this harness yet.</p>
       )}
     </DrawerSection>
   );

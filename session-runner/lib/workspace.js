@@ -5,13 +5,13 @@ const path = require("path");
 const {createWorkspaceArchiveService} = require("./workspaceArchives.service");
 const {createGithubWorkspaceRestoreService} = require("./workspaceGithub.service");
 const {createWorkspacePathHelpers} = require("./workspacePath.helpers");
-const {createWorkspacePiAuthService} = require("./workspacePiAuth.service");
+const {createWorkspaceAuthService} = require("./workspaceAuth.service");
 const {normalizeRelativeWorkspacePath} = require("./utils");
 
 function createWorkspaceService({admin, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
   const archives = createWorkspaceArchiveService({config, git, pathHelpers, storage});
-  const piAuth = createWorkspacePiAuthService({admin, config, db});
+  const auth = createWorkspaceAuthService({admin, config, db});
   const githubRestore = createGithubWorkspaceRestoreService({
     archives,
     config,
@@ -61,7 +61,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
   }
 
   async function syncUp(options = {}) {
-    await piAuth.synchronizePiAuth({materialize: true});
+    await auth.synchronizeAuth({materialize: true});
     if (!config.bucketName || !config.prefix) return;
     const {directories, files} = await walkWorkspace(config.workspaceDir);
     const desiredRemotePaths = new Set();
@@ -148,13 +148,13 @@ function createWorkspaceService({admin, config, db, git, storage}) {
   return {
     archiveSyncTargets: archives.archiveSyncTargets,
     ensureWorkspace,
-    materializePiAuthNow: piAuth.materializePiAuthNow,
+    materializeAuthNow: auth.materializeAuthNow,
     prepareWorkspaceSource,
     syncArchivesDown: archives.syncArchivesDown,
     syncArchivesUp: archives.syncArchivesUp,
     syncDown,
     syncUp,
-    synchronizePiAuth: piAuth.synchronizePiAuth,
+    synchronizeAuth: auth.synchronizeAuth,
   };
 }
 

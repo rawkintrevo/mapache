@@ -2,14 +2,17 @@
 
 const {createPiPackageService} = require("./piPackage.service");
 const {createPiSeededSkillService} = require("./piSeededSkills.service");
-const {createPiSkillService} = require("./piSkill.service");
+const {createWorkspaceSkillService} = require("./workspaceSkill.service");
+const {createWorkspaceSubagentService} = require("./workspaceSubagent.service");
 const {defaultWorkspaceSkills} = require("./workspaceSkillCatalog");
 
 function createPiService({config, syncUp}) {
   let packageOperationLock = null;
   let skillOperationLock = null;
+  let subagentOperationLock = null;
   const packageService = createPiPackageService({config, syncUp});
-  const skillService = createPiSkillService({config, syncUp});
+  const skillService = createWorkspaceSkillService({config, syncUp});
+  const subagentService = createWorkspaceSubagentService({config, syncUp});
   const seededSkillService = createPiSeededSkillService({config, defaultRuntimeSkills});
 
   async function withPackageOperationLock(options, operation) {
@@ -62,12 +65,39 @@ function createPiService({config, syncUp}) {
     }
   }
 
+  async function withSubagentOperationLock(options, operation) {
+    while (subagentOperationLock) {
+      if (!options || !options.read) {
+        const busyError = new Error("subagent_operation_busy");
+        busyError.code = "subagent_operation_busy";
+        throw busyError;
+      }
+      await subagentOperationLock.catch(() => {});
+    }
+
+    let releaseLock;
+    const currentLock = new Promise((resolve) => {
+      releaseLock = resolve;
+    });
+    subagentOperationLock = currentLock;
+    try {
+      return await operation();
+    } finally {
+      releaseLock();
+      if (subagentOperationLock === currentLock) {
+        subagentOperationLock = null;
+      }
+    }
+  }
+
   return {
     ...packageService,
     ...skillService,
+    ...subagentService,
     ...seededSkillService,
     withPackageOperationLock,
     withSkillOperationLock,
+    withSubagentOperationLock,
   };
 }
 
@@ -89,8 +119,8 @@ function sendPiPackageError(res, error, fallbackCode) {
 }
 
 function sendPiSkillError(res, error, fallbackCode) {
-  if (error && error.code === "skill_operation_busy") {
-    res.status(409).json({error: "skill_operation_busy", busy: true});
+  if (error && (error.code === "skill_operation_busy" || error.code === "subagent_operation_busy")) {
+    res.status(409).json({error: error.code, busy: true});
     return;
   }
   if (error && [
@@ -98,8 +128,12 @@ function sendPiSkillError(res, error, fallbackCode) {
     "invalid_skill_description",
     "invalid_skill_content",
     "skill_not_found",
+    "invalid_subagent_description",
+    "invalid_subagent_content",
+    "subagent_not_found",
+    "subagent_chains_write_unsupported",
   ].includes(error.code)) {
-    res.status(error.code === "skill_not_found" ? 404 : 400).json({error: error.code});
+    res.status(["skill_not_found", "subagent_not_found"].includes(error.code) ? 404 : 400).json({error: error.code});
     return;
   }
   console.error(`${fallbackCode.replace(/_/g, " ")}`, error);

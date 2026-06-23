@@ -59,6 +59,24 @@ export function createWorkspaceSkillsState(overrides = {}) {
 
 export const createPiSkillsState = createWorkspaceSkillsState;
 
+export function createWorkspaceSubagentsState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    unavailable: false,
+    data: null,
+    form: {
+      name: "",
+      description: "",
+      instructions: "Describe the specialized work this subagent should handle.",
+      editing: false,
+    },
+    ...overrides,
+  };
+}
+
 export function createMcpServersState(overrides = {}) {
   return {
     loading: false,
@@ -177,6 +195,7 @@ export function createInitialState() {
     gitStatus: createGitStatusState(),
     piPackages: createPiPackagesState(),
     workspaceSkills: createWorkspaceSkillsState(),
+    workspaceSubagents: createWorkspaceSubagentsState(),
     mcpServers: createMcpServersState(),
     piAuth: createPiAuthState(),
     pullRequestForm: createPullRequestFormState(),
@@ -187,6 +206,7 @@ export function createInitialState() {
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     workspaceSkillModalOpen: false,
+    workspaceSubagentModalOpen: false,
     authModalOpen: false,
     piAuthManageModalOpen: false,
     busy: false,

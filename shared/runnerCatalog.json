@@ -1,0 +1,241 @@
+{
+  "harnesses": {
+    "shell": {
+      "id": "shell",
+      "label": "Shell",
+      "terminalKind": "shell",
+      "auth": {
+        "supported": false
+      },
+      "skills": {
+        "supported": false
+      },
+      "mcp": {
+        "supported": false,
+        "sharedPath": ".mcp.json"
+      },
+      "subagents": {
+        "supported": false
+      },
+      "packages": {
+        "supported": false
+      }
+    },
+    "ssh": {
+      "id": "ssh",
+      "label": "SSH",
+      "terminalKind": "ssh",
+      "auth": {
+        "supported": false
+      },
+      "skills": {
+        "supported": false
+      },
+      "mcp": {
+        "supported": false,
+        "sharedPath": ".mcp.json"
+      },
+      "subagents": {
+        "supported": false
+      },
+      "packages": {
+        "supported": false
+      }
+    },
+    "pi": {
+      "id": "pi",
+      "label": "Pi",
+      "terminalKind": "pi",
+      "auth": {
+        "supported": true,
+        "providerKeys": [
+          "anthropic",
+          "ant-ling",
+          "azure-openai-responses",
+          "openai",
+          "deepseek",
+          "nvidia",
+          "google",
+          "mistral",
+          "groq",
+          "cerebras",
+          "cloudflare-ai-gateway",
+          "cloudflare-workers-ai",
+          "xai",
+          "openrouter",
+          "vercel-ai-gateway",
+          "zai",
+          "zai-coding-cn",
+          "opencode",
+          "opencode-go",
+          "huggingface",
+          "fireworks",
+          "together",
+          "kimi-coding",
+          "minimax",
+          "minimax-cn",
+          "xiaomi",
+          "xiaomi-token-plan-cn",
+          "xiaomi-token-plan-ams",
+          "xiaomi-token-plan-sgp",
+          "openai-codex"
+        ],
+        "selectionField": "authSelection",
+        "storagePath": "$HOME/.pi/agent/auth.json",
+        "manageTitle": "Manage Pi Auth",
+        "manageDescription": "Choose which saved credentials should be written into this session's Pi auth.json.",
+        "reloadHint": "Run /reload in Pi after saving if the active agent should reload credentials."
+      },
+      "skills": {
+        "supported": true,
+        "relativePath": ".pi/skills",
+        "examplePath": "/workspace/.pi/skills/<name>/SKILL.md",
+        "restartHint": "Restart Pi in the terminal if a running agent needs to rescan skills."
+      },
+      "mcp": {
+        "supported": true,
+        "sharedPath": ".mcp.json",
+        "harnessSpecificPath": ".pi/mcp.json"
+      },
+      "subagents": {
+        "supported": true,
+        "relativePath": ".pi/agents",
+        "chainsRelativePath": ".pi/chains",
+        "settingsRelativePath": ".pi/settings.json",
+        "schema": "pi-agent-markdown",
+        "examplePath": "/workspace/.pi/agents/<name>.md",
+        "restartHint": "Restart Pi in the terminal if a running agent should reload subagents."
+      },
+      "packages": {
+        "supported": true,
+        "relativePath": ".pi/settings.json",
+        "restartHint": "Refresh after Pi CLI changes to reload workspace-local packages."
+      }
+    },
+    "codex": {
+      "id": "codex",
+      "label": "Codex",
+      "terminalKind": "codex",
+      "auth": {
+        "supported": true,
+        "providerKeys": [
+          "openai",
+          "openai-codex"
+        ],
+        "selectionField": "authSelection",
+        "storagePath": "$CODEX_HOME/auth.json",
+        "manageTitle": "Manage Codex Auth",
+        "manageDescription": "Choose which saved credentials should be written into this session's Codex auth.json.",
+        "reloadHint": "Restart Codex in the terminal after saving if the active agent should reload credentials."
+      },
+      "skills": {
+        "supported": true,
+        "relativePath": ".agents/skills",
+        "examplePath": "/workspace/.agents/skills/<name>/SKILL.md",
+        "restartHint": "Restart Codex in the terminal if a running agent needs to rescan skills."
+      },
+      "mcp": {
+        "supported": true,
+        "sharedPath": ".mcp.json",
+        "harnessSpecificPath": ".codex/config.toml"
+      },
+      "subagents": {
+        "supported": true,
+        "relativePath": ".codex/agents",
+        "configPath": ".codex/config.toml",
+        "schema": "codex-agent-toml",
+        "examplePath": "/workspace/.codex/agents/<name>.toml",
+        "restartHint": "Restart Codex in the terminal if a running agent should reload subagents."
+      },
+      "packages": {
+        "supported": false
+      }
+    }
+  },
+  "images": [
+    {
+      "imageKey": "default",
+      "harnessId": "shell",
+      "variant": "default",
+      "label": "Shell",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+      "capabilities": {
+        "terminal": true,
+        "preview": false,
+        "previewQa": false,
+        "functions": false,
+        "n64": false
+      }
+    },
+    {
+      "imageKey": "pi-basic",
+      "harnessId": "pi",
+      "variant": "basic",
+      "label": "pi-basic",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
+      "capabilities": {
+        "terminal": true,
+        "preview": false,
+        "previewQa": false,
+        "functions": false,
+        "n64": false
+      }
+    },
+    {
+      "imageKey": "codex-basic",
+      "harnessId": "codex",
+      "variant": "basic",
+      "label": "codex-basic",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-basic",
+      "capabilities": {
+        "terminal": true,
+        "preview": false,
+        "previewQa": false,
+        "functions": false,
+        "n64": false
+      }
+    },
+    {
+      "imageKey": "pi-web",
+      "harnessId": "pi",
+      "variant": "web",
+      "label": "pi-web",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web",
+      "capabilities": {
+        "terminal": true,
+        "preview": true,
+        "previewQa": true,
+        "functions": true,
+        "n64": false
+      }
+    },
+    {
+      "imageKey": "codex-web",
+      "harnessId": "codex",
+      "variant": "web",
+      "label": "codex-web",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web",
+      "capabilities": {
+        "terminal": true,
+        "preview": true,
+        "previewQa": true,
+        "functions": true,
+        "n64": false
+      }
+    },
+    {
+      "imageKey": "pi-n64",
+      "harnessId": "pi",
+      "variant": "n64",
+      "label": "pi-n64",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
+      "capabilities": {
+        "terminal": true,
+        "preview": true,
+        "previewQa": false,
+        "functions": false,
+        "n64": true
+      }
+    }
+  ]
+}

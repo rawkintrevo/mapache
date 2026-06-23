@@ -40,13 +40,13 @@ The `codex-web` runner image is built from `session-runner/Dockerfile.codex-web`
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web
 ```
 
-The frontend image dropdown is configured in `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata and a stable `imageKey`.
+The frontend image dropdown is configured from `shared/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`.
 
 Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, and `n64`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
 
-The backend is authoritative for image selection. `functions/runnerImages.helpers.js` contains the curated server-side image catalog. Session creation accepts `imageKey` and maps it to the catalog entry before provisioning Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
+The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` contain the curated server-side image catalog. Session creation accepts `imageKey`, resolves the catalog entry plus its `harnessId`, persists both on the session document, and then provisions Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
 
-Workspace MCP server config is managed from the right drawer and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. The runner writes a standard `/workspace/.mcp.json` for shared MCP discovery. Pi images bake in `pi-mcp-adapter` with `pi install npm:pi-mcp-adapter`, so Pi loads the shared config through the adapter path. Codex images do not use the Pi adapter; Codex runners write MCP entries into `$CODEX_HOME/config.toml`, which is part of the workspace-scoped Codex home archive.
+Workspace MCP server config is managed from the right drawer and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. The runner writes a standard `/workspace/.mcp.json` for shared MCP discovery. Pi images bake in `pi-mcp-adapter` with `pi install npm:pi-mcp-adapter`, so Pi loads the shared config through the adapter path. Codex images do not use the Pi adapter; Codex runners write MCP entries into `/workspace/.codex/config.toml`, while the archived `$CODEX_HOME` continues to hold auth, logs, and session-local CLI state.
 
 ## Base Environment
 
@@ -99,13 +99,14 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
-- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, and Pi auth/home materialization lives in `workspacePiAuth.service.js`.
+- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, and harness-backed auth/home materialization lives in `workspaceAuth.service.js` with compatibility exports in `workspacePiAuth.service.js`.
 - `git.js` composes runner Git behavior. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it.
-- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, workspace skill CRUD lives in `piSkill.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
+- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`, workspace skill CRUD lives in `workspaceSkill.service.js` with compatibility exports in `piSkill.service.js`, workspace subagent CRUD lives in `workspaceSubagent.service.js`, seeded skill file creation lives in `piSeededSkills.service.js`, and shared package/skill validation helpers live in `piValidation.helpers.js`.
+- `harnesses/index.js` and `harnesses/metadata.js` resolve the active runner harness and define which auth, MCP, skill, package, and subagent hooks are supported at startup.
 - `workspaceSkillCatalog.js` selects harness-neutral `github`, `web`, and `n64` skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/`; Pi and Codex materialize those same files into their native workspace paths.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
-Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`.
+Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`. The runner now receives `HARNESS_ID` alongside `TERMINAL_KIND` so SSH, shell, Pi, and Codex behavior does not depend on image-name inference alone.
 
 All runner images copy `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require new revisions of the affected Pi and Codex runner images; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
@@ -148,7 +149,7 @@ TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
-Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session local path such as `/tmp/mapache-codex/<session-id>`, plus a workspace-scoped archive prefix at `{workspace.storagePrefix}/.mapache-internal/codex-home`. Local process state stays isolated per Cloud session, while Codex auth, logs, sessions, skills, and standalone package metadata persist for later Codex sessions in the same workspace. This state remains separate from repository `.codex/config.toml` files under `/workspace/.codex`. On first restore after this change, the runner falls back to the latest historical per-session Codex home archive under `.mapache-internal/sessions/*/codex-home/` when the workspace-scoped archive is not present yet.
+Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session local path such as `/tmp/mapache-codex/<session-id>`, plus a workspace-scoped archive prefix at `{workspace.storagePrefix}/.mapache-internal/codex-home`. Local process state stays isolated per Cloud session, while Codex auth, logs, sessions, and standalone package metadata persist for later Codex sessions in the same workspace. This state remains separate from repository `.codex/config.toml` files under `/workspace/.codex`, and Codex MCP config now materializes into that workspace file. On first restore after this change, the runner falls back to the latest historical per-session Codex home archive under `.mapache-internal/sessions/*/codex-home/` when the workspace-scoped archive is not present yet.
 
 Codex images also include the GitHub CLI (`gh`) so terminal sessions can use the same issue, PR, and metadata commands the issue workflow expects.
 
@@ -617,6 +618,7 @@ Expected package-manager write locations:
 
 ## Related Docs
 
+- [Runner harnesses](./runner-harnesses.md)
 - [Session runner architecture](./session-runner-architecture.md)
 - [Backend API architecture](./backend-api-architecture.md)
 - [GitHub workspaces](./github-workspaces.md)

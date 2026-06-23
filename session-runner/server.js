@@ -10,6 +10,7 @@ const {createBrowserQaService} = require("./lib/browserQa");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
+const {createRunnerHarnessRegistry} = require("./lib/harnesses");
 const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
 const {createMcpConfigService} = require("./lib/mcpConfig.service");
 const {createPreviewService} = require("./lib/preview");
@@ -36,6 +37,8 @@ const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
 const pi = createPiService({config, syncUp: workspace.syncUp});
 const mcpConfig = createMcpConfigService({config});
+const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
+const activeHarness = harnesses.resolveHarness();
 const terminalSession = createTerminalSession({
   admin,
   config,
@@ -243,19 +246,22 @@ app.get("/git/status", async (req, res) => {
   }
 });
 
-app.post("/pi/auth/materialize", async (req, res) => {
+async function handleAuthMaterialize(req, res) {
   if (!hasRunnerAccess(req)) {
     res.status(404).json({error: "not_found"});
     return;
   }
 
   try {
-    res.json(await workspace.materializePiAuthNow(req.body && req.body.selection));
+    res.json(await workspace.materializeAuthNow(req.body && req.body.selection));
   } catch (error) {
-    console.error("pi auth materialize failed", error);
-    res.status(500).json({error: "pi_auth_materialize_failed"});
+    console.error("auth materialize failed", error);
+    res.status(500).json({error: "auth_materialize_failed"});
   }
-});
+}
+
+app.post("/auth/materialize", handleAuthMaterialize);
+app.post("/pi/auth/materialize", handleAuthMaterialize);
 
 app.get("/pi/packages", async (req, res) => {
   if (!hasRunnerAccess(req)) {
@@ -355,6 +361,79 @@ app.get("/pi/skills", handleWorkspaceSkillList);
 app.post("/pi/skills", handleWorkspaceSkillSave);
 app.post("/pi/skills/delete", handleWorkspaceSkillDelete);
 
+async function handleWorkspaceSubagentList(req, res) {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await pi.withSubagentOperationLock({read: true}, pi.listWorkspaceSubagents));
+  } catch (error) {
+    sendPiSkillError(res, error, "subagent_list_failed");
+  }
+}
+
+async function handleWorkspaceSubagentSave(req, res) {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await pi.withSubagentOperationLock({read: false}, () => pi.saveWorkspaceSubagent(req.body || {})));
+  } catch (error) {
+    sendPiSkillError(res, error, "subagent_save_failed");
+  }
+}
+
+async function handleWorkspaceSubagentDelete(req, res) {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await pi.withSubagentOperationLock({read: false}, () => pi.deleteWorkspaceSubagent(req.body || {})));
+  } catch (error) {
+    sendPiSkillError(res, error, "subagent_delete_failed");
+  }
+}
+
+async function handleWorkspaceSubagentChains(req, res) {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    res.json(await pi.withSubagentOperationLock({read: true}, pi.listWorkspaceSubagentChains));
+  } catch (error) {
+    sendPiSkillError(res, error, "subagent_chains_list_failed");
+  }
+}
+
+app.get("/subagents", handleWorkspaceSubagentList);
+app.post("/subagents", handleWorkspaceSubagentSave);
+app.post("/subagents/delete", handleWorkspaceSubagentDelete);
+app.get("/subagent-chains", handleWorkspaceSubagentChains);
+app.post("/subagent-chains", async (req, res) => {
+  if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
+  try {
+    res.json(await pi.withSubagentOperationLock({read: false}, () => pi.saveWorkspaceSubagentChain(req.body || {})));
+  } catch (error) {
+    sendPiSkillError(res, error, "subagent_chains_save_failed");
+  }
+});
+app.post("/subagent-chains/delete", async (req, res) => {
+  if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
+  try {
+    res.json(await pi.withSubagentOperationLock({read: false}, () => pi.deleteWorkspaceSubagentChain(req.body || {})));
+  } catch (error) {
+    sendPiSkillError(res, error, "subagent_chains_delete_failed");
+  }
+});
+
 app.post("/git/pull", async (req, res) => {
   await handleGitAction(req, res, "git pull failed", "git_pull_failed", () => git.pullGitAction(), {
     statusCode: 500,
@@ -413,17 +492,12 @@ workspace.ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
-      await mcpConfig.materializeMcpConfig();
-      if (config.terminalKind === "pi") {
-        await workspace.synchronizePiAuth({materialize: true});
-      }
+      await activeHarness.materializeConfig();
+      await activeHarness.materializeAuth();
+      await activeHarness.materializeMcp();
       await git.prepareGithubAutomationBranch();
-      if (config.terminalKind === "pi") {
-        await pi.seedDefaultRuntimeSkills();
-      }
-      if (config.terminalKind === "codex") {
-        await codex.seedDefaultWorkspaceFiles();
-      }
+      await activeHarness.materializeSkills();
+      await activeHarness.materializeSubagents();
     })
     .then(() => {
       startSyncLoop();

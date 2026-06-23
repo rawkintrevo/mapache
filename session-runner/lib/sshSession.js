@@ -7,9 +7,10 @@ const {spawn, execFile} = require("child_process");
 
 function createSshSessionService({config}) {
   const forwards = new Map();
+  const isSshHarness = () => String(config.harnessId || config.terminalKind || "").trim().toLowerCase() === "ssh";
 
   return {
-    enabled: () => config.terminalKind === "ssh",
+    enabled: isSshHarness,
     prepare: () => prepareSshMaterial(config),
     terminalCommand: () => sshCommand(config, {tty: true, loginShell: true}),
     listFiles: () => withPreparedSsh(config, () => listFiles(config)),
@@ -29,7 +30,7 @@ function withPreparedSsh(config, action) {
 }
 
 function prepareSshMaterial(config) {
-  if (config.terminalKind !== "ssh") return;
+  if (String(config.harnessId || config.terminalKind || "").trim().toLowerCase() !== "ssh") return;
   if (!config.sshHost || !config.sshUsername || !config.sshPrivateKey) {
     throw new Error("SSH sessions require SSH_TARGET_HOST, SSH_TARGET_USERNAME, and SSH_PRIVATE_KEY.");
   }

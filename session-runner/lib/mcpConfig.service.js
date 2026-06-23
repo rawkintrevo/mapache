@@ -22,13 +22,16 @@ function parseMcpConfig(value) {
 function createMcpConfigService({config}) {
   const mcpConfig = parseMcpConfig(config.mcpConfigRaw);
 
-  async function materializeMcpConfig() {
+  async function materializeMcpConfig(harness = null) {
     await writeJsonFile(path.join(config.workspaceDir, ".mcp.json"), mcpConfig);
-    if (config.terminalKind === "codex") {
-      await writeCodexConfig(path.join(config.codexHomeDir, "config.toml"), mcpConfig);
+    const harnessId = harness && harness.id ? harness.id : String(config.harnessId || config.terminalKind || "").trim().toLowerCase();
+    if (harnessId === "codex") {
+      const targetPath = config.codexConfigPath || path.join(config.workspaceDir, ".codex", "config.toml");
+      await writeCodexConfig(targetPath, mcpConfig);
     }
     return {
       ok: true,
+      harness: harnessId || "shell",
       serverCount: Object.keys(mcpConfig.mcpServers).length,
     };
   }

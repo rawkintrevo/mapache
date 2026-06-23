@@ -59,6 +59,9 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "sessionAccess", jsonResult(({handlers, route, user}) => handlers.createSessionAccessUrls(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "sessionSharePreview", jsonResult(({handlers, req, route, user}) => handlers.shareSessionPreview(user.uid, route.workspaceId, route.sessionId, req))],
     ["POST", "sessionPiAuthSelection", jsonResult(({handlers, req, route, user}) => handlers.saveSessionPiAuthSelection(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+    ["GET", "sessionSubagents", jsonResult(({handlers, route, user}) => handlers.listWorkspaceSubagents(user.uid, route.workspaceId, route.sessionId))],
+    ["POST", "sessionSubagents", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceSubagent(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+    ["POST", "sessionSubagentDelete", jsonResult(({handlers, req, route, user}) => handlers.deleteWorkspaceSubagent(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
   git: Object.freeze([
     ["GET", "gitStatus", jsonResult(({handlers, route, user}) => handlers.getGitStatusSummary(user.uid, route.workspaceId, route.sessionId))],

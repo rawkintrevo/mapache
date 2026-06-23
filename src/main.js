@@ -18,6 +18,7 @@ import {
   resetGitStatus as resetGitStatusState,
   resetMcpServers as resetMcpServersState,
   resetSshForwards as resetSshForwardsState,
+  resetWorkspaceSubagents as resetWorkspaceSubagentsState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
   resetSignedOutState,
 } from "./state/resetters.js";
@@ -195,6 +196,10 @@ function resetWorkspaceSkills() {
   resetWorkspaceSkillsState(state);
 }
 
+function resetWorkspaceSubagents() {
+  resetWorkspaceSubagentsState(state);
+}
+
 function resetMcpServers() {
   resetMcpServersState(state);
 }
@@ -225,6 +230,7 @@ async function refreshAll() {
       resetGitStatus();
       resetPiPackages();
       resetWorkspaceSkills();
+      resetWorkspaceSubagents();
       resetMcpServers();
       resetSshForwards();
     }
@@ -456,6 +462,7 @@ async function deleteWorkspace(workspaceId) {
       resetGitStatus();
       resetPiPackages();
       resetWorkspaceSkills();
+      resetWorkspaceSubagents();
       resetSshForwards();
     }
     await refreshAll();
@@ -470,6 +477,7 @@ async function selectWorkspace(workspaceId) {
   resetGitStatus();
   resetPiPackages();
   resetWorkspaceSkills();
+  resetWorkspaceSubagents();
   resetMcpServers();
   resetSshForwards();
   await runBusy(async () => {
@@ -503,6 +511,7 @@ async function loadSelectedSessionPanels() {
     resetGitStatus();
     resetPiPackages();
     resetWorkspaceSkills();
+    resetWorkspaceSubagents();
     resetSshForwards();
     await workspaceFilesController.loadWorkspaceFiles();
     render();
@@ -512,6 +521,7 @@ async function loadSelectedSessionPanels() {
     resetGitStatus();
     resetPiPackages();
     resetWorkspaceSkills();
+    resetWorkspaceSubagents();
     await workspaceFilesController.loadWorkspaceFiles();
     await loadSshForwards();
     return;
@@ -519,6 +529,7 @@ async function loadSelectedSessionPanels() {
   await loadGitStatus();
   await piPanelsController.loadPiPackages();
   await piPanelsController.loadWorkspaceSkills();
+  await piPanelsController.loadWorkspaceSubagents();
   await workspaceFilesController.loadWorkspaceFiles();
   await loadSshForwards();
 }

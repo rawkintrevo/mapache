@@ -8,6 +8,7 @@ import {
   Plus,
 } from "lucide-react";
 import {Button} from "../common/Button.jsx";
+import {sessionHarness} from "../../utils/sessionHarnesses.js";
 
 function formatGitCount(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
@@ -120,9 +121,10 @@ function GitStatusBody({status, handlers}) {
 }
 
 function GitStatusHelp({session}) {
+  const harness = sessionHarness(session);
   const isConnectedPiGithubSession = session?.sourceType === "github" &&
     session?.sourceMode === "connected" &&
-    session?.terminalKind === "pi";
+    harness?.id === "pi";
 
   return (
     <>

@@ -6,6 +6,7 @@ import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
 import {McpServersPanel} from "./McpServersPanel.jsx";
 import {SkillsPanel} from "./SkillsPanel.jsx";
+import {SubagentsPanel} from "./SubagentsPanel.jsx";
 
 export function RightDrawer({
   selectedSession,
@@ -14,15 +15,19 @@ export function RightDrawer({
   onCancelPiSkillEdit,
   onDeletePiAuthProvider,
   onDeletePiSkill,
+  onDeleteWorkspaceSubagent,
   onDeleteMcpServer,
   onEditPiSkill,
+  onEditWorkspaceSubagent,
   onOpenAuthModal,
   onOpenPiAuthManage,
   onOpenWorkspaceSkillModal,
+  onOpenWorkspaceSubagentModal,
   onRefreshPiAuth,
   onRefreshMcpServers,
   onRefreshPiPackages,
   onRefreshPiSkills,
+  onRefreshWorkspaceSubagents,
   onRemovePiPackage,
   onToggleDrawerSection,
   onToggleRightDrawer,
@@ -30,6 +35,7 @@ export function RightDrawer({
   onUpdateMcpServerForm,
   onUpdatePiPackage,
   onSaveMcpServer,
+  onCancelWorkspaceSubagentEdit,
 }) {
   const toggleButton = (
     <Button
@@ -75,6 +81,17 @@ export function RightDrawer({
         onEditWorkspaceSkill={onEditPiSkill}
         onOpenWorkspaceSkillModal={onOpenWorkspaceSkillModal}
         onRefreshWorkspaceSkills={onRefreshPiSkills}
+        onToggleDrawerSection={onToggleDrawerSection}
+      />
+      <SubagentsPanel
+        selectedSession={selectedSession}
+        state={state}
+        workspaceSubagents={state.workspaceSubagents}
+        onCancelWorkspaceSubagentEdit={onCancelWorkspaceSubagentEdit}
+        onDeleteWorkspaceSubagent={onDeleteWorkspaceSubagent}
+        onEditWorkspaceSubagent={onEditWorkspaceSubagent}
+        onOpenWorkspaceSubagentModal={onOpenWorkspaceSubagentModal}
+        onRefreshWorkspaceSubagents={onRefreshWorkspaceSubagents}
         onToggleDrawerSection={onToggleDrawerSection}
       />
       <McpServersPanel

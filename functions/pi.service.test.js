@@ -225,7 +225,7 @@ function serviceForSession(sessionSnap, calls = []) {
   await assertServiceError(
       () => serviceForSession(shellSessionSnap).saveSessionPiAuthSelection("uid", "workspace", "session", {selection: {}}),
       400,
-      "not_pi_session",
+      "auth_selection_unsupported",
   );
   await assertServiceError(
       () => serviceForSession(shellSessionSnap).saveWorkspaceSkill("uid", "workspace", "session", {

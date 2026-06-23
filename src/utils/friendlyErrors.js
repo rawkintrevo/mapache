@@ -106,6 +106,41 @@ export const friendlyPiSkillError = friendlyWorkspaceSkillError;
 export const friendlyPiSkillSaveError = friendlyWorkspaceSkillSaveError;
 export const friendlyPiSkillDeleteError = friendlyWorkspaceSkillDeleteError;
 
+export function friendlyWorkspaceSubagentError(error) {
+  const message = error.message || "Could not load subagents.";
+  if (message === "not_found") return "This workspace subagents API is not deployed yet. Refresh after the latest functions and runner deploy.";
+  if (message === "no_active_session" || message === "session_not_running") return "Start an active Pi or Codex session to inspect workspace subagents.";
+  if (message === "runner_subagent_listing_unsupported") return "This session runner does not support subagent listing yet. Restart or recreate the session after deployment.";
+  if (message === "runner_subagent_list_unavailable") return "The session runner is unavailable. Try refreshing after the terminal is ready.";
+  if (message === "subagent_list_failed") return "The runner could not read workspace subagents.";
+  return message;
+}
+
+export function friendlyWorkspaceSubagentSaveError(error) {
+  const message = error.message || "Could not save subagent.";
+  if (message === "not_found") return "This workspace subagents API is not deployed yet. Refresh after the latest functions and runner deploy.";
+  if (message === "invalid_subagent_name") return "Use a lowercase subagent name with letters, numbers, and single hyphens only.";
+  if (message === "invalid_subagent_description") return "Enter a subagent description under 1024 characters.";
+  if (message === "invalid_subagent_content") return "Enter subagent instructions under 128 KiB.";
+  if (message === "subagent_operation_busy") return "Another subagent operation is already running. Try again in a moment.";
+  if (message === "runner_subagent_save_unsupported") return "This session runner does not support subagent saves yet. Restart or recreate the session after deployment.";
+  if (message === "runner_subagent_save_unavailable") return "The session runner is unavailable. Try again after the terminal is ready.";
+  if (message === "subagent_save_failed") return "Subagent save failed in the runner.";
+  return message;
+}
+
+export function friendlyWorkspaceSubagentDeleteError(error) {
+  const message = error.message || "Could not delete subagent.";
+  if (message === "not_found") return "This workspace subagents API is not deployed yet. Refresh after the latest functions and runner deploy.";
+  if (message === "invalid_subagent_name") return "That subagent name is not valid for deletion.";
+  if (message === "subagent_not_found") return "That subagent was not found in this workspace.";
+  if (message === "subagent_operation_busy") return "Another subagent operation is already running. Try again in a moment.";
+  if (message === "runner_subagent_delete_unsupported") return "This session runner does not support subagent deletion yet. Restart or recreate the session after deployment.";
+  if (message === "runner_subagent_delete_unavailable") return "The session runner is unavailable. Try again after the terminal is ready.";
+  if (message === "subagent_delete_failed") return "Subagent deletion failed in the runner.";
+  return message;
+}
+
 export function friendlyMcpConfigError(error) {
   const message = error.message || "Could not update MCP servers.";
   if (message === "invalid_mcp_server_name") return "Use a lowercase MCP server name with letters, numbers, underscores, or hyphens.";
@@ -119,11 +154,11 @@ export function friendlyMcpConfigError(error) {
 }
 
 export function friendlyPiAuthError(error) {
-  const message = error.message || "Could not update Pi authentication.";
+  const message = error.message || "Could not update authentication.";
   if (message === "invalid_pi_auth_provider") return "Choose a supported API key provider.";
   if (message === "invalid_pi_auth_key") return "Enter a valid API key value.";
   if (message === "invalid_pi_auth_entry") return "Choose a saved authentication entry.";
-  if (message === "not_pi_session") return "Choose a Pi-based session before managing Pi auth.";
+  if (message === "auth_selection_unsupported") return "Choose a Pi or Codex session before managing session auth.";
   return message;
 }
 

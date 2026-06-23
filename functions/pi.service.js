@@ -59,6 +59,8 @@ function createPiService(dependencies = {}) {
     completeOpenAiCodexDeviceCode,
     deletePiAuthEntry,
     deletePiAuthProvider,
+    deleteWorkspaceSubagent: (uid, workspaceId, sessionId, payload) =>
+      deleteWorkspaceSubagent(uid, workspaceId, sessionId, payload, dependencies),
     deleteWorkspaceSkill: (uid, workspaceId, sessionId, payload) =>
       deleteWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     deletePiSkill: (uid, workspaceId, sessionId, payload) =>
@@ -69,6 +71,8 @@ function createPiService(dependencies = {}) {
       installPiPackage(uid, workspaceId, sessionId, payload, dependencies),
     listPiPackages: (uid, workspaceId, sessionId) =>
       listPiPackages(uid, workspaceId, sessionId, dependencies),
+    listWorkspaceSubagents: (uid, workspaceId, sessionId) =>
+      listWorkspaceSubagents(uid, workspaceId, sessionId, dependencies),
     listWorkspaceSkills: (uid, workspaceId, sessionId) =>
       listWorkspaceSkills(uid, workspaceId, sessionId, dependencies),
     listPiSkills: (uid, workspaceId, sessionId) =>
@@ -76,6 +80,8 @@ function createPiService(dependencies = {}) {
     removePiPackage: (uid, workspaceId, sessionId, payload) =>
       removePiPackage(uid, workspaceId, sessionId, payload, dependencies),
     savePiAuthProvider,
+    saveWorkspaceSubagent: (uid, workspaceId, sessionId, payload) =>
+      saveWorkspaceSubagent(uid, workspaceId, sessionId, payload, dependencies),
     saveWorkspaceSkill: (uid, workspaceId, sessionId, payload) =>
       saveWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     savePiSkill: (uid, workspaceId, sessionId, payload) =>
@@ -90,7 +96,7 @@ function createPiService(dependencies = {}) {
 }
 
 async function getPiAuth(uid) {
-  const snap = await piAuthDoc(uid).get();
+  const snap = await agentAuthDoc(uid).get();
   const data = snap.exists ? snap.data() : {};
   const providers = normalizePiAuthProviders(data.providers);
   return {providers, entries: normalizePiAuthEntries(data.entries, providers)};
@@ -105,7 +111,7 @@ async function savePiAuthProvider(uid, provider, payload) {
 
 async function deletePiAuthProvider(uid, provider) {
   const providerKey = normalizePiAuthStoredProviderKey(provider);
-  const ref = piAuthDoc(uid);
+  const ref = agentAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
@@ -125,7 +131,7 @@ async function deletePiAuthProvider(uid, provider) {
 
 async function deletePiAuthEntry(uid, entryId) {
   const normalizedEntryId = normalizePiAuthEntryId(entryId);
-  const ref = piAuthDoc(uid);
+  const ref = agentAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
@@ -182,7 +188,7 @@ function writePiAuthMaps(transaction, ref, snap, fields) {
 }
 
 async function savePiAuthCredential(uid, providerKey, credential, label = "") {
-  const ref = piAuthDoc(uid);
+  const ref = agentAuthDoc(uid);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
@@ -363,6 +369,7 @@ async function exchangeOpenAiCodexAuthorizationCode(code, verifier, redirectUri 
   const accountId = openAiCodexAccountId(data.access_token);
   if (!accountId) throw httpError(502, "openai_codex_missing_account_id");
   return {
+    id: data.id_token || "",
     access: data.access_token,
     refresh: data.refresh_token,
     expires: Date.now() + data.expires_in * 1000,
@@ -374,19 +381,23 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   await requireWorkspaceDependency(dependencies, uid, workspaceId);
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
-  if (cleanName(session.terminalKind || "pi") !== "pi") {
-    throw httpError(400, "not_pi_session");
+  const harnessId = sessionHarnessId(session);
+  if (!["pi", "codex"].includes(harnessId)) {
+    throw httpError(400, "auth_selection_unsupported");
   }
   const piAuth = await getPiAuth(uid);
-  const selection = normalizePiAuthSelection(payload && payload.selection, piAuth.entries);
+  const selection = {
+    harness: harnessId,
+    providers: normalizePiAuthSelection(payload && payload.selection && payload.selection.providers ? payload.selection.providers : payload && payload.selection, piAuth.entries),
+  };
   await sessionSnap.ref.set({
-    piAuthSelection: selection,
-    piAuthSelectionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    authSelection: selection,
+    authSelectionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, {merge: true});
 
-  let materialized = {ok: true, appliedToRunner: false, providerCount: Object.keys(selection).length};
+  let materialized = {ok: true, appliedToRunner: false, providerCount: Object.keys(selection.providers).length};
   if (session.serviceUrl && session.shutdownToken) {
-    materialized = await requestRunnerPiAuthMaterialize(session, {selection}, dependencies);
+    materialized = await requestRunnerAuthMaterialize(session, {selection}, dependencies);
   }
   return {ok: true, selection, materialized};
 }
@@ -482,6 +493,38 @@ async function deleteWorkspaceSkill(uid, workspaceId, sessionId, payload, depend
   if (!sessionSupportsWorkspaceSkills(session)) throw httpError(501, "runner_skill_delete_unsupported");
   if (!session.shutdownToken) throw httpError(501, "runner_skill_delete_unsupported");
   return requestRunnerWorkspaceSkillDelete(session, {name: skillName}, dependencies);
+}
+
+async function listWorkspaceSubagents(uid, workspaceId, sessionId, dependencies = {}) {
+  await requireWorkspaceDependency(dependencies, uid, workspaceId);
+  const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!sessionSupportsWorkspaceSubagents(session)) throw httpError(501, "runner_subagent_listing_unsupported");
+  if (!session.shutdownToken) throw httpError(501, "runner_subagent_listing_unsupported");
+  return requestRunnerWorkspaceSubagents(session, dependencies);
+}
+
+async function saveWorkspaceSubagent(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  await requireWorkspaceDependency(dependencies, uid, workspaceId);
+  const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const subagent = normalizeWorkspaceSubagentPayload(payload);
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!sessionSupportsWorkspaceSubagents(session)) throw httpError(501, "runner_subagent_save_unsupported");
+  if (!session.shutdownToken) throw httpError(501, "runner_subagent_save_unsupported");
+  return requestRunnerWorkspaceSubagentSave(session, subagent, dependencies);
+}
+
+async function deleteWorkspaceSubagent(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  await requireWorkspaceDependency(dependencies, uid, workspaceId);
+  const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
+  const session = {id: sessionId, ...sessionSnap.data()};
+  const subagentName = normalizeWorkspaceSubagentName(payload.name);
+  if (!session.serviceUrl) throw httpError(409, "no_active_session");
+  if (!sessionSupportsWorkspaceSubagents(session)) throw httpError(501, "runner_subagent_delete_unsupported");
+  if (!session.shutdownToken) throw httpError(501, "runner_subagent_delete_unsupported");
+  return requestRunnerWorkspaceSubagentDelete(session, {name: subagentName}, dependencies);
 }
 
 async function listKnownPiPackages(uid, data) {
@@ -599,14 +642,14 @@ function openAiCodexAccountId(accessToken) {
   }
 }
 
-async function requestRunnerPiAuthMaterialize(session, body, dependencies = {}) {
-  return requestRunnerJsonDependency(dependencies, session, "/pi/auth/materialize", {
+async function requestRunnerAuthMaterialize(session, body, dependencies = {}) {
+  return requestRunnerJsonDependency(dependencies, session, "/auth/materialize", {
     method: "POST",
     body,
-    notFoundError: "runner_pi_auth_unsupported",
+    notFoundError: "runner_auth_unsupported",
     notFoundStatus: 501,
-    failureError: "pi_auth_materialize_failed",
-    unavailableError: "runner_pi_auth_unavailable",
+    failureError: "auth_materialize_failed",
+    unavailableError: "runner_auth_unavailable",
     timeoutMs: 30000,
   });
 }
@@ -701,15 +744,59 @@ async function requestRunnerWorkspaceSkillDelete(session, body, dependencies = {
   });
 }
 
+async function requestRunnerWorkspaceSubagents(session, dependencies = {}) {
+  return requestRunnerJsonDependency(dependencies, session, "/subagents", {
+    notFoundError: "runner_subagent_listing_unsupported",
+    notFoundStatus: 501,
+    failureError: "subagent_list_failed",
+    unavailableError: "runner_subagent_list_unavailable",
+  });
+}
+
+async function requestRunnerWorkspaceSubagentSave(session, body, dependencies = {}) {
+  return requestRunnerJsonDependency(dependencies, session, "/subagents", {
+    method: "POST",
+    body,
+    notFoundError: "runner_subagent_save_unsupported",
+    notFoundStatus: 501,
+    failureError: "subagent_save_failed",
+    unavailableError: "runner_subagent_save_unavailable",
+    timeoutMs: 30000,
+  });
+}
+
+async function requestRunnerWorkspaceSubagentDelete(session, body, dependencies = {}) {
+  return requestRunnerJsonDependency(dependencies, session, "/subagents/delete", {
+    method: "POST",
+    body,
+    notFoundError: "runner_subagent_delete_unsupported",
+    notFoundStatus: 501,
+    failureError: "subagent_delete_failed",
+    unavailableError: "runner_subagent_delete_unavailable",
+    timeoutMs: 30000,
+  });
+}
+
 function sessionSupportsWorkspaceSkills(session = {}) {
+  return ["pi", "codex"].includes(sessionHarnessId(session));
+}
+
+function sessionSupportsWorkspaceSubagents(session = {}) {
+  return ["pi", "codex"].includes(sessionHarnessId(session));
+}
+
+function sessionHarnessId(session = {}) {
+  const harnessId = String(session.harnessId || "").trim().toLowerCase();
+  if (harnessId) return harnessId;
   const terminalKind = String(session.terminalKind || "").trim().toLowerCase();
-  if (terminalKind === "pi" || terminalKind === "codex") return true;
-
+  if (terminalKind) return terminalKind;
   const imageKey = String(session.imageKey || "").trim().toLowerCase();
-  if (imageKey.startsWith("pi-") || imageKey.startsWith("codex-")) return true;
-
+  if (imageKey.startsWith("pi-")) return "pi";
+  if (imageKey.startsWith("codex-")) return "codex";
   const image = String(session.image || "").trim().toLowerCase();
-  return /session-runner:(pi|codex)-/.test(image);
+  if (/session-runner:pi-/.test(image)) return "pi";
+  if (/session-runner:codex-/.test(image)) return "codex";
+  return "shell";
 }
 
 async function requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
@@ -757,6 +844,38 @@ function normalizePiSkillContent(value) {
     throw httpError(400, "invalid_skill_content");
   }
   return content;
+}
+
+function normalizeWorkspaceSubagentPayload(payload) {
+  return {
+    name: normalizeWorkspaceSubagentName(payload && payload.name),
+    description: normalizeWorkspaceSubagentDescription(payload && payload.description),
+    instructions: normalizeWorkspaceSubagentInstructions(payload && (payload.instructions || payload.content || payload.developerInstructions)),
+  };
+}
+
+function normalizeWorkspaceSubagentName(value) {
+  const name = String(value || "").trim().toLowerCase();
+  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+    throw httpError(400, "invalid_subagent_name");
+  }
+  return name;
+}
+
+function normalizeWorkspaceSubagentDescription(value) {
+  const description = String(value || "").trim();
+  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) {
+    throw httpError(400, "invalid_subagent_description");
+  }
+  return description;
+}
+
+function normalizeWorkspaceSubagentInstructions(value) {
+  const instructions = String(value || "").trim();
+  if (!instructions || instructions.length > 128 * 1024 || /\u0000/.test(instructions)) {
+    throw httpError(400, "invalid_subagent_content");
+  }
+  return instructions;
 }
 
 function normalizePiPackageSource(value) {
@@ -834,8 +953,8 @@ function buildGitPackageSource(host, gitPath, ref = "") {
   return {host: normalizedHost, path: parts.join("/"), ref: String(ref || "").trim()};
 }
 
-function piAuthDoc(uid) {
-  return db.collection("users").doc(uid).collection("private").doc("piAuth");
+function agentAuthDoc(uid) {
+  return db.collection("users").doc(uid).collection("private").doc("agentAuth");
 }
 
 function normalizePiAuthProviders(value) {
@@ -1035,5 +1154,6 @@ module.exports = {
   removePiAuthEntry,
   removePiAuthProvider,
   sessionSupportsWorkspaceSkills,
+  sessionSupportsWorkspaceSubagents,
   writePiAuthMaps,
 };

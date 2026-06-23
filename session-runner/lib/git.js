@@ -86,7 +86,7 @@ function createGitService({config, activity}) {
 
   function shouldAutomateGithubPullRequest() {
     return isGithubWorkspace() &&
-      config.terminalKind === "pi" &&
+      config.harnessId === "pi" &&
       Boolean(config.githubAutomationToken && config.githubRepoOwner && config.githubRepoName);
   }
 

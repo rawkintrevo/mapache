@@ -4,6 +4,7 @@ import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {SessionModal} from "./SessionModal.jsx";
+import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
 import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 
@@ -64,6 +65,21 @@ export function ModalStack(props) {
             }
           }}
           onUpdateWorkspaceSkillForm={pi.updatePiSkillForm}
+        />
+      ) : null}
+      {state.workspaceSubagentModalOpen ? (
+        <WorkspaceSubagentModal
+          selectedSession={props.selectedSession}
+          workspaceSubagents={state.workspaceSubagents}
+          onCancelWorkspaceSubagentEdit={pi.cancelWorkspaceSubagentEdit}
+          onClose={modals.closeWorkspaceSubagentModal}
+          onSaveWorkspaceSubagent={async () => {
+            await pi.saveWorkspaceSubagent();
+            if (!state.workspaceSubagents?.error) {
+              modals.closeWorkspaceSubagentModal();
+            }
+          }}
+          onUpdateWorkspaceSubagentForm={pi.updateWorkspaceSubagentForm}
         />
       ) : null}
       {state.fileEditor.open ? (

@@ -20,9 +20,9 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Workspaces/files: `functions/workspace.service.js`
 - Cloud Run sessions: `functions/cloudRun.service.js`
 - GitHub App and PR flows: `functions/github.service.js`
-- Pi auth, packages, and workspace skills: `functions/pi.service.js`
+- Pi auth, packages, workspace skills, and workspace subagents: `functions/pi.service.js`
+- Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Usage rollups: `functions/userUsage.service.js`
-- Runner image catalog: `functions/runnerImages.helpers.js`
 
 ## Current Behavior
 
@@ -32,17 +32,21 @@ The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is
 
 Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `userPath`, source metadata, storage bucket, storage prefix, and workspace-scoped MCP server config. Sessions live under `workspaces/{workspaceId}/sessions/{sessionId}` and repeat ownership metadata for explicit checks and operational queries.
 
-Session creation writes a Firestore session record, resolves the curated runner image key server-side, snapshots the selected workspace's MCP config into the session, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. Restart refreshes the MCP snapshot from the workspace before patching or recreating Cloud Run so active sessions can pick up right-drawer MCP edits. The API function uses a longer request timeout than the default so slower runner image rollouts, especially Chromium-backed web images, can finish Cloud Run provisioning instead of timing out while the service is still becoming healthy. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
+Session creation writes a Firestore session record, resolves the curated runner image key and `harnessId` server-side, snapshots the selected workspace's MCP config into the session, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. Restart refreshes the MCP snapshot from the workspace before patching or recreating Cloud Run so active sessions can pick up right-drawer MCP edits. The API function uses a longer request timeout than the default so slower runner image rollouts, especially Chromium-backed web images, can finish Cloud Run provisioning instead of timing out while the service is still becoming healthy. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
 
 SSH-backed sessions use the same session collection and Cloud Run provisioning path, but set `sessionType: "ssh"` and `terminalKind: "ssh"` so the runner opens an SSH client PTY instead of a local harness. Dev machine workspaces store public SSH target metadata on the workspace source and store private key plus optional certificate material under the owner's private user subcollection. Session creation for those workspaces loads the private material server-side and passes it only as provisioning environment for the runner revision. Session-scoped SSH file routes and port-forward routes verify normal workspace/session ownership before proxying to backend-only runner routes.
 
 Admin user summaries reuse the same usage rollups as `/api/me`, but return cost estimates in dollars for lifetime and trailing-30-day windows. Whitelist toggles update `appConfig/access`, preferring `allowedEmails` when the target user has an email and `allowedUids` otherwise.
 
-Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, workspace skills, Pi package operations, preview/access URLs, share-preview export, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
+Backend proxy routes verify workspace/session ownership before calling protected runner routes for Git status/actions, workspace skills, workspace subagents, Pi package operations, preview/access URLs, share-preview export, and auth materialization. Browser terminal/preview access uses finite-lifetime runner URLs signed with the per-session browser secret; backend-only runner management keeps using the shutdown token gate.
 
 Workspace MCP management routes live at `GET/PUT /api/workspaces/{workspaceId}/mcp`. The backend validates server names, stdio command/args, URL transports, env maps, and headers, then stores a normalized `{version, mcpServers}` config on the workspace document. Secrets should be referenced through environment variables rather than written directly into MCP config.
 
+Workspace auth now uses neutral account routes at `/api/auth/*` plus the per-session route `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/auth-selection`. Saved credentials persist in `users/{uid}/private/agentAuth`, and session selection persists in `authSelection` on the session document. Legacy `/api/pi-auth/*` and `/api/.../pi-auth-selection` aliases remain available for rollout compatibility.
+
 Workspace skills now use neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/skills` and `/skills/delete`. `functions/pi.service.js` still owns validation and compatibility because Pi and Codex share the same name/description/content rules and the same rollout path. The service gates skill management to Pi and Codex sessions, prefers the neutral runner `/skills*` endpoints, and falls back to legacy `/pi/skills*` routes when an older runner revision is still serving an existing session.
+
+Workspace subagents use parallel neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/subagents` and `/subagents/delete`. The backend gates subagent CRUD to Pi and Codex sessions, validates the shared name/description/instructions rules, and proxies to runner-managed native files. `GET /subagent-chains` is also wired through for future chain UI, but V1 chain writes still return unsupported errors from the runner.
 
 Website sessions with preview capability can create a public share preview through `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/share-preview`. The API verifies workspace/session ownership, requires a running preview-capable session, generates an unguessable token, asks the runner to upload only the configured static preview root, and stores metadata in `publicPreviews/{token}`. Public reads use unauthenticated `GET /api/public-previews/{token}/...`, which serves objects from the recorded Cloud Storage prefix with SPA fallback to `index.html`. These public routes do not expose source files, session runner URLs, browser-access tokens, shutdown tokens, environment variables, or workspace storage prefixes.
 
@@ -72,6 +76,7 @@ GitHub connector account routes live under `/api/github/**` and are implemented 
 
 - [App overview](./app-overview.md)
 - [GitHub workspaces](./github-workspaces.md)
+- [Runner harnesses](./runner-harnesses.md)
 - [Pi skills manager](./pi-skills-manager.md)
 - [Pi extension manager](./pi-extension-manager.md)
 - [Deployment](./deployment.md)

@@ -29,10 +29,11 @@ This document serves as an index for significant UI components in the applicatio
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
 | `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
-| `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing user-scoped Pi auth providers. |
+| `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing saved user-scoped auth entries filtered to the selected session harness. |
 | `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
 | `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | React Skills panel for workspace-local Markdown skills, switching between Pi `.pi/skills` and Codex `.agents/skills` based on the selected session harness. |
-| `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for workspace-local Pi packages. |
+| `SubagentsPanel` | `src/components/inspector/SubagentsPanel.jsx` | React Subagents panel for workspace-local Pi `.pi/agents/*.md` and Codex `.codex/agents/*.toml` files based on the selected session harness. |
+| `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for harness-gated workspace-local packages, currently Pi-only. |
 | `PackageInstallForm` | `src/components/inspector/PackageInstallForm.jsx` | React form for installing Pi packages into the active workspace. |
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
@@ -44,12 +45,13 @@ This document serves as an index for significant UI components in the applicatio
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
-| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved Pi auth entry per provider is materialized into the active Pi session's `auth.json`. |
+| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session or SSH target session, defaulting to SSH for Dev machine workspaces. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
 | `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for creating and editing workspace-local Markdown skills from the right inspector Skills panel. |
+| `WorkspaceSubagentModal` | `src/components/modals/WorkspaceSubagentModal.jsx` | React modal for creating and editing workspace-local subagents from the right inspector Subagents panel. |
 
 When adding new UI components, please update this index.
 
