@@ -264,6 +264,7 @@ async function createSession(uid, workspaceId, payload) {
     throw error;
   }
   const session = {
+    id: sessionRef.id,
     ownerUid: uid,
     userPath: userPath(uid),
     workspaceId,
