@@ -1,4 +1,4 @@
-import {workspaceSourceSummary} from "./workspaceSourceSummary.js";
+import {getWorkspaceTag, workspaceSourceSummary} from "./workspaceSourceSummary.js";
 
 export function WorkspaceHeader({workspace}) {
   if (!workspace) {
@@ -12,7 +12,10 @@ export function WorkspaceHeader({workspace}) {
 
   return (
     <div>
-      <h1>{workspace.name}</h1>
+      <h1>
+        {workspace.name}
+        <span className="pill" style={{marginLeft: "10px"}}>{getWorkspaceTag(workspace)}</span>
+      </h1>
       <p className="subtle">{workspaceSourceSummary(workspace)}</p>
     </div>
   );
