@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This page maps the runner server modules. Detailed runtime behavior remains in [runtime-containers.md](./runtime-containers.md).
+This page maps the runner server modules. Detailed runtime behavior remains in [runtime-containers.md](./runtime-containers.md). Runner kind resolution is documented in [runner-kind-resolution.md](./runner-kind-resolution.md).
 
 ## Read When
 
