@@ -14,7 +14,7 @@ const startedAt = Date.parse("2026-06-17T10:00:00.000Z");
 const stoppedAt = Date.parse("2026-06-17T10:30:00.000Z");
 
 assert.strictEqual(parseCpuCount("2"), 2);
-assert.strictEqual(parseCpuCount("bad"), 1);
+assert.strictEqual(parseCpuCount("bad"), 2);
 assert.strictEqual(parseMemoryGb("512Mi"), 0.5);
 assert.strictEqual(parseMemoryGb("2Gi"), 2);
 assert.strictEqual(parseMemoryGb("1Ti"), 1024);

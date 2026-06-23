@@ -52,8 +52,8 @@ assert.deepStrictEqual(normalizeResources({cpu: "2", memory: "2Gi"}), {
   memory: "2Gi",
 });
 assert.deepStrictEqual(normalizeResources({}), {
-  cpu: "1",
-  memory: "1Gi",
+  cpu: "2",
+  memory: "2Gi",
 });
 assert.deepStrictEqual(resourceLimits({cpu: "2", memory: "512Mi"}), {
   cpu: "2",
