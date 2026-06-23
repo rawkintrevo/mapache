@@ -684,6 +684,7 @@ async function restartSession(uid, workspaceId, sessionId) {
   const sessionSnap = await sessionRef.get();
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   const session = sessionSnap.data();
+  console.log(`Restarting session: ${sessionId}, workspace: ${workspaceId}, session data: ${JSON.stringify(session)}`);
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
 
   const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
