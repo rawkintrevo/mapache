@@ -24,6 +24,7 @@ function baseConfig(overrides = {}) {
     internalStorageDir: ".mapache-internal",
     legacyArchiveStorageDirs: [".mapahce-internal/archives"],
     legacyInternalStorageDirs: [".mapahce-internal"],
+    piAgentDir: "/root/.pi/agent",
     piSessionDir: "/tmp/pi-session",
     piSessionStorageBucket: "session-bucket",
     piSessionStoragePrefix: "users/u/workspaces/w/.mapache-internal/sessions/s/pi-session",
@@ -64,6 +65,12 @@ test("selects default archive targets for blank workspaces", () => {
     bucketName: "home-bucket",
     remotePath: "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz",
   }]);
+  assert.deepEqual(targets.find((target) => target.name === "home").exclude, [
+    ".pi/agent/npm/node_modules",
+    ".pi/agent/npm/node_modules/*",
+    "./.pi/agent/npm/node_modules",
+    "./.pi/agent/npm/node_modules/*",
+  ]);
   assert.equal(targets.find((target) => target.name === "home").restoreOnStartup, true);
   assert.equal(targets.find((target) => target.name === "codex-home").localPath, "/tmp/codex-home/session-1");
   assert.equal(targets.find((target) => target.name === "codex-home").bucketName, "codex-bucket");
@@ -100,6 +107,16 @@ test("disables home archive restore for ephemeral home mode", () => {
 
   assert.equal(homeTarget.remotePath, "");
   assert.equal(homeTarget.restoreOnStartup, false);
+});
+
+test("does not add Pi npm excludes when Pi agent dir is outside home", () => {
+  const targets = createArchiveSyncTargets({
+    config: baseConfig({piAgentDir: "/tmp/pi-agent"}),
+    git: git(false),
+  });
+  const homeTarget = targets.find((target) => target.name === "home");
+
+  assert.deepEqual(homeTarget.exclude, []);
 });
 
 test("builds home archive path from workspace-owned home prefix", () => {

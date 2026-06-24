@@ -454,7 +454,7 @@ The runner restores these directories from gzip-compressed tar archives during s
 
 `/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapache-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
 
-The `$HOME` archive includes Pi auth, settings, package caches, shell state, and per-session Pi conversation directories. Treat the archive path as sensitive runtime state because it can contain credentials and command history. It lives under the hidden workspace internal prefix, and client file APIs must not expose it.
+The `$HOME` archive includes Pi auth, settings, package caches, shell state, and per-session Pi conversation directories. It excludes Pi's runtime-managed `$PI_CODING_AGENT_DIR/npm/node_modules` tree so baked image packages such as `pi-mcp-adapter` cannot collide with restored package contents before the runner starts listening. Treat the archive path as sensitive runtime state because it can contain credentials and command history. It lives under the hidden workspace internal prefix, and client file APIs must not expose it.
 
 The `$CODEX_HOME` archive includes Codex CLI auth, sessions, logs, skills, and standalone package metadata for Codex runners. Treat it as sensitive runtime state for the same reason. It is workspace-scoped rather than session-scoped so creating a new `codex-basic` or `codex-web` session in the same workspace can reuse prior Codex authentication. The runner restores a historical per-session Codex archive only as a migration fallback when the workspace-scoped archive is missing, then uploads future changes to the workspace-scoped archive.
 

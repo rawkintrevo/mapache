@@ -97,6 +97,7 @@ function createArchiveSyncTargets({config, git}) {
         ...config,
         bucketName: config.homeStorageBucketName,
       }, homeArchiveRemotePath(config)),
+      exclude: homeArchiveExcludePatterns(config),
       ensureLocalPath: true,
       restoreOnStartup: config.homeSyncMode !== "ephemeral",
     },
@@ -136,6 +137,23 @@ function createArchiveSyncTargets({config, git}) {
   }
 
   return targets;
+}
+
+function homeArchiveExcludePatterns(config) {
+  const homeDir = config.homeDir ? path.resolve(config.homeDir) : "";
+  if (!homeDir) return [];
+  const piAgentDir = path.resolve(config.piAgentDir || path.join(homeDir, ".pi", "agent"));
+  const piNodeModulesDir = path.join(piAgentDir, "npm", "node_modules");
+  const relative = path.relative(homeDir, piNodeModulesDir).split(path.sep).join("/");
+  if (!relative || relative.startsWith("../") || relative === ".." || path.isAbsolute(relative)) {
+    return [];
+  }
+  return [
+    relative,
+    `${relative}/*`,
+    `./${relative}`,
+    `./${relative}/*`,
+  ];
 }
 
 function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
