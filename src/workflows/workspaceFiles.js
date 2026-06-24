@@ -52,6 +52,11 @@ export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFile
         await state.api.uploadWorkspaceFile(state.selectedWorkspaceId, file);
       }
     }
+    if (state.api.syncWorkspaceFiles) {
+      state.workspaceFilesUploadMessage = "Syncing uploaded files to active sessions...";
+      render();
+      await state.api.syncWorkspaceFiles(state.selectedWorkspaceId);
+    }
     state.workspaceFilesUploadMessage = selectedFiles.length === 1 ?
       `Uploaded ${selectedFiles[0].name}.` :
       `Uploaded ${selectedFiles.length} files.`;
@@ -180,6 +185,9 @@ export async function saveFileEditorState({state, content, loadWorkspaceFiles, r
       saving: false,
       updatedAt: data.updatedAt || state.fileEditor.updatedAt,
     };
+    if (!sshSession && state.api.syncWorkspaceFiles) {
+      await state.api.syncWorkspaceFiles(state.selectedWorkspaceId);
+    }
     await loadWorkspaceFiles();
   } catch (error) {
     state.fileEditor = {

@@ -68,6 +68,9 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
     return {name: "workspaceFiles", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sync-files") {
+    return {name: "workspaceSyncFiles", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "file") {
     return {name: "workspaceFile", workspaceId: parts[1]};
   }
@@ -186,6 +189,7 @@ const ROUTE_METHODS = Object.freeze({
   workspace: ["DELETE"],
   workspaceMcp: ["GET", "PUT"],
   workspaceFiles: ["GET"],
+  workspaceSyncFiles: ["POST"],
   workspaceFile: ["GET", "PUT", "POST"],
   workspaceFileDownloadUrl: ["POST"],
   sessions: ["GET", "POST"],
