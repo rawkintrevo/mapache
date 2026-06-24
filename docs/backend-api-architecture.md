@@ -17,7 +17,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Auth/profile: `functions/auth.service.js`
 - Admin user listing and allowlist controls: `functions/admin.service.js`
 - QA custom token login: `functions/qaAuth.service.js`
-- Workspaces/files: `functions/workspace.service.js`
+- Workspaces/files: `functions/workspace.service.js`, with live runner materialization coordinated by `functions/index.js`
 - Cloud Run sessions: `functions/cloudRun.service.js`
 - GitHub App and PR flows: `functions/github.service.js`
 - Pi auth, packages, workspace skills, and workspace subagents: `functions/pi.service.js`
@@ -31,6 +31,8 @@ The frontend calls authenticated JSON routes under `/api/**`. Cloud Functions ve
 The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is unauthenticated but gated by the `QA_LOGIN_SECRET` Functions secret and the configured QA UID/email parameters. It mints a Firebase custom token for a controlled QA account so browser automation can reach the signed-in app shell; all subsequent API calls still use normal Firebase ID-token verification and app allowlist checks.
 
 Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `userPath`, source metadata, storage bucket, storage prefix, and workspace-scoped MCP server config. Sessions live under `workspaces/{workspaceId}/sessions/{sessionId}` and repeat ownership metadata for explicit checks and operational queries.
+
+File browser writes use Cloud Storage as the workspace source of truth. After a web upload or editor save, the frontend calls `POST /api/workspaces/{workspaceId}/sync-files`; Functions verifies workspace ownership, finds running cloud sessions for that workspace, and asks each runner to pull current storage into its live `/workspace` directory. The sync request is best-effort per session so a storage write does not fail solely because one active runner is temporarily unavailable.
 
 Session creation writes a Firestore session record, resolves the curated runner image key and `harnessId` server-side, snapshots the selected workspace's MCP config into the session, provisions a per-session Cloud Run service, and records service URL/status/image/capability metadata. Restart refreshes the MCP snapshot from the workspace before patching or recreating Cloud Run so active sessions can pick up right-drawer MCP edits. The API function uses a longer request timeout than the default so slower runner image rollouts, especially Chromium-backed web images, can finish Cloud Run provisioning instead of timing out while the service is still becoming healthy. Session stop/delete paths clean up Cloud Run services and record allocated runner usage.
 

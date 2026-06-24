@@ -108,6 +108,8 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`. The runner now receives `HARNESS_ID` alongside `TERMINAL_KIND` so SSH, shell, Pi, and Codex behavior does not depend on image-name inference alone.
 
+The runner exposes a backend-only `POST /workspace/sync-down` route protected by `SESSION_SHUTDOWN_TOKEN`. Functions calls this route after file-browser uploads or editor saves so newly written Cloud Storage objects materialize into the active `/workspace` filesystem that the terminal process sees. The existing periodic sync loop still uploads local terminal changes back to storage and preserves newer remote objects when it encounters them.
+
 All runner images copy `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require new revisions of the affected Pi and Codex runner images; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
 ## Terminal Runtime

@@ -116,6 +116,7 @@ const API_HANDLERS = {
   readWorkspaceFile: workspaceService.readWorkspaceFile,
   saveWorkspaceFile: workspaceService.saveWorkspaceFile,
   uploadWorkspaceFile: workspaceService.uploadWorkspaceFile,
+  syncWorkspaceFiles,
   createWorkspaceFileDownloadUrl: workspaceService.createWorkspaceFileDownloadUrl,
   getWorkspaceMcpConfig: workspaceService.getWorkspaceMcpConfig,
   saveWorkspaceMcpConfig: workspaceService.saveWorkspaceMcpConfig,
@@ -235,6 +236,38 @@ async function listSessions(uid, workspaceId) {
       .orderBy("updatedAt", "desc")
       .get();
   return snap.docs.map(toClientDoc);
+}
+
+async function syncWorkspaceFiles(uid, workspaceId) {
+  await requireWorkspace(uid, workspaceId);
+  const snap = await sessionCollection(workspaceId)
+      .where("status", "==", "running")
+      .get();
+  const cloudSessions = snap.docs
+      .map((doc) => ({id: doc.id, ...doc.data()}))
+      .filter((session) => session.ownerUid === uid && session.serviceUrl && session.sessionType !== "ssh");
+
+  const results = await Promise.all(cloudSessions.map(async (session) => {
+    try {
+      await requestRunnerWorkspaceSyncDown(session);
+      return {sessionId: session.id, ok: true};
+    } catch (error) {
+      logger.warn("runner workspace sync down failed", {
+        workspaceId,
+        sessionId: session.id,
+        error: error.publicMessage || error.message,
+      });
+      return {sessionId: session.id, ok: false, error: error.publicMessage || "runner_workspace_sync_down_failed"};
+    }
+  }));
+
+  return {
+    ok: true,
+    sessionCount: cloudSessions.length,
+    syncedCount: results.filter((result) => result.ok).length,
+    failedCount: results.filter((result) => !result.ok).length,
+    results,
+  };
 }
 
 async function createSession(uid, workspaceId, payload) {
@@ -985,6 +1018,14 @@ async function requestRunnerGitOpenPr(session, body) {
     method: "POST",
     body,
     unavailableError: "runner_git_open_pr_unavailable",
+  });
+}
+
+async function requestRunnerWorkspaceSyncDown(session) {
+  return requestRunnerJson(session, "/workspace/sync-down", {
+    method: "POST",
+    unavailableError: "runner_workspace_sync_down_unavailable",
+    failureError: "runner_workspace_sync_down_failed",
   });
 }
 

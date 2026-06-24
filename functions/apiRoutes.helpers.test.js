@@ -52,6 +52,10 @@ assertRoute("/api/workspaces/workspace-1/files", {
   name: "workspaceFiles",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/sync-files", {
+  name: "workspaceSyncFiles",
+  workspaceId: "workspace-1",
+});
 assertRoute("/api/workspaces/workspace-1/file", {
   name: "workspaceFile",
   workspaceId: "workspace-1",

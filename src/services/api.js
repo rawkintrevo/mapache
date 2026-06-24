@@ -52,6 +52,11 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/files`,
     ),
+    syncWorkspaceFiles: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sync-files`,
+        {method: "POST", body: {}},
+    ),
     getWorkspaceFile: (workspaceId, path) => request(
         getToken,
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
