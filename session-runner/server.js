@@ -88,6 +88,21 @@ app.get("/capabilities", requireBrowserAccess, async (req, res) => {
   });
 });
 
+app.post("/workspace/sync-down", async (req, res) => {
+  if (!hasRunnerAccess(req)) {
+    res.status(404).json({error: "not_found"});
+    return;
+  }
+
+  try {
+    await workspace.syncDown();
+    res.json({ok: true});
+  } catch (error) {
+    console.error("workspace sync down failed", error);
+    res.status(500).json({error: "workspace_sync_down_failed"});
+  }
+});
+
 app.get("/ssh/files", async (req, res) => {
   if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
   if (!sshSession.enabled()) return res.status(400).json({error: "ssh_session_required"});
