@@ -8,6 +8,7 @@ const {
   codexHomeStoragePrefix,
   createCloudRunService,
   homeStoragePrefix,
+  imageFreshnessUpdate,
   normalizeResources,
   piSessionDir,
   piSessionStoragePrefix,
@@ -68,6 +69,40 @@ assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.p
 assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/pi-session");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
+
+assert.deepStrictEqual(imageFreshnessUpdate({
+  imageKey: "pi-basic",
+}, {
+  template: {
+    containers: [{
+      image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
+    }],
+  },
+  latestReadyRevision: "session-1-00001",
+}), {
+  deployedImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
+  deployedRevision: "session-1-00001",
+  imageFreshness: {
+    status: "latest",
+    reason: "deployed_image_matches_catalog",
+    imageKey: "pi-basic",
+    currentImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
+    deployedImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
+    deployedRevision: "session-1-00001",
+  },
+});
+assert.strictEqual(imageFreshnessUpdate({
+  imageKey: "pi-basic",
+}, {
+  template: {
+    containers: [{
+      image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:old-pi-basic",
+    }],
+  },
+}).imageFreshness.status, "stale");
+assert.strictEqual(imageFreshnessUpdate({
+  imageKey: "pi-basic",
+}, {}).imageFreshness.status, "unknown");
 
 assert.deepStrictEqual(terminalCommandEnv({terminalKind: "shell"}), {
   command: "bash",

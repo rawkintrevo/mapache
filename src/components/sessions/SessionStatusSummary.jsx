@@ -1,25 +1,44 @@
 import {useId} from "react";
-import {getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone} from "./sessionPresentation.js";
+import {
+  getSessionImageFreshness,
+  getSessionRunnerTags,
+  getSessionStatusLabel,
+  getSessionStatusTone,
+} from "./sessionPresentation.js";
 import "./SessionStatusSummary.css";
 
 export function SessionStatusSummary({session}) {
-  const tooltipId = useId();
+  const statusTooltipId = useId();
+  const imageTooltipId = useId();
   const statusLabel = getSessionStatusLabel(session?.status);
   const statusTone = getSessionStatusTone(statusLabel);
+  const imageFreshness = getSessionImageFreshness(session);
   const runnerTags = getSessionRunnerTags(session);
 
   return (
     <span className="session-title-accessory">
       <span className="session-status-shell">
         <span
-          aria-describedby={tooltipId}
+          aria-describedby={statusTooltipId}
           aria-label={`Session status: ${statusLabel}`}
           className={`session-status-light session-status-light--${statusTone}`}
           role="img"
           tabIndex={0}
         />
-        <span className="session-status-tooltip" id={tooltipId} role="tooltip">
+        <span className="session-status-tooltip" id={statusTooltipId} role="tooltip">
           {statusLabel}
+        </span>
+      </span>
+      <span className="session-status-shell">
+        <span
+          aria-describedby={imageTooltipId}
+          aria-label={`Image freshness: ${imageFreshness.label}`}
+          className={`session-status-light session-image-light session-status-light--${imageFreshness.tone}`}
+          role="img"
+          tabIndex={0}
+        />
+        <span className="session-status-tooltip" id={imageTooltipId} role="tooltip">
+          {imageFreshness.tooltip}
         </span>
       </span>
       {runnerTags.length ? (

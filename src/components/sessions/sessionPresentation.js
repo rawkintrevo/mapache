@@ -29,3 +29,34 @@ export function getSessionRunnerTags(session) {
       .map((segment) => segment.trim())
       .filter(Boolean);
 }
+
+export function getSessionImageFreshness(session) {
+  const status = String(session?.imageFreshness?.status || "").trim().toLowerCase();
+  if (status === "latest") {
+    return {
+      status: "latest",
+      label: "Latest image",
+      tone: "success",
+      tooltip: "This session is running the latest runner image.",
+    };
+  }
+  if (status === "stale") {
+    return {
+      status: "stale",
+      label: "Stale image",
+      tone: "warning",
+      tooltip: "This session is running an older runner image. Restart the session to pick up the latest container.",
+    };
+  }
+  return {
+    status: "unknown",
+    label: "Image freshness unknown",
+    tone: "neutral",
+    tooltip: "Image freshness is not available for this session.",
+  };
+}
+
+export function isSessionRunningStaleImage(session) {
+  return String(session?.status || "").trim().toLowerCase() === "running" &&
+    getSessionImageFreshness(session).status === "stale";
+}

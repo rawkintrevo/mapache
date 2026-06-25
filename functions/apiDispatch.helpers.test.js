@@ -118,6 +118,16 @@ async function collectDispatch({route, method = "GET", body, query = {}}) {
     },
   });
 
+  assert.deepStrictEqual(await collectDispatch({
+    route: {name: "sessionSubagents", workspaceId: "workspace-1", sessionId: "session-1"},
+  }), {
+    status: 200,
+    payload: {
+      handler: "listWorkspaceSubagents",
+      args: ["user-1", "workspace-1", "session-1"],
+    },
+  });
+
   const sharePreview = await collectDispatch({
     method: "POST",
     route: {name: "sessionSharePreview", workspaceId: "workspace-1", sessionId: "session-1"},

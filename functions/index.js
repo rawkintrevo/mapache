@@ -149,6 +149,9 @@ const API_HANDLERS = {
   listWorkspaceSkills: piService.listWorkspaceSkills,
   saveWorkspaceSkill: piService.saveWorkspaceSkill,
   deleteWorkspaceSkill: piService.deleteWorkspaceSkill,
+  listWorkspaceSubagents: piService.listWorkspaceSubagents,
+  saveWorkspaceSubagent: piService.saveWorkspaceSubagent,
+  deleteWorkspaceSubagent: piService.deleteWorkspaceSubagent,
   listPiSkills: piService.listPiSkills,
   savePiSkill: piService.savePiSkill,
   deletePiSkill: piService.deletePiSkill,
@@ -317,6 +320,12 @@ async function createSession(uid, workspaceId, payload) {
     region,
     image: runnerImage.image,
     imageKey: runnerImage.key,
+    deployedImage: null,
+    deployedRevision: null,
+    imageFreshness: imageFreshnessUnknown({
+      image: runnerImage.image,
+      imageKey: runnerImage.key,
+    }, "session_not_running"),
     harnessId,
     sessionType: sshPayload ? "ssh" : "cloud",
     terminalKind: harness?.terminalKind || runnerImage.terminalKind || "shell",
@@ -732,8 +741,13 @@ async function restartSession(uid, workspaceId, sessionId) {
   const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
   const restartNonce = Date.now().toString();
   const mcpConfig = mcpConfigForRunner(workspace);
+  const restartRunnerImage = resolveRestartRunnerImage(session);
+  const restartImageUpdate = restartRunnerImage ?
+    restartRunnerImageMetadata(session, restartRunnerImage) :
+    {};
   const restartUpdate = {
     status: recreatingSessionService ? "provisioning" : "restarting",
+    ...restartImageUpdate,
     browserAccessTokenSecret,
     mcpConfig,
     restartNonce,
@@ -742,6 +756,12 @@ async function restartSession(uid, workspaceId, sessionId) {
     autoStoppedAt: null,
     stopReason: null,
     serviceUrl: null,
+    deployedImage: null,
+    deployedRevision: null,
+    imageFreshness: imageFreshnessUnknown({
+      ...session,
+      ...restartImageUpdate,
+    }, "session_restarting"),
     lastError: null,
     updatedAt: restartedAt,
   };
@@ -775,6 +795,62 @@ async function restartSession(uid, workspaceId, sessionId) {
   }
 
   return toClientDoc(await sessionRef.get());
+}
+
+function resolveRestartRunnerImage(session = {}) {
+  const imageKey = cleanName(session.imageKey || "");
+  if (imageKey) {
+    try {
+      return resolveRunnerImage({imageKey}, DEFAULT_IMAGE);
+    } catch (error) {
+      if (!error || error.code !== "invalid_runner_image") throw error;
+    }
+  }
+
+  const image = cleanName(session.image || "");
+  if (!image) return null;
+  try {
+    return resolveRunnerImage({image}, DEFAULT_IMAGE);
+  } catch (error) {
+    if (error && error.code === "invalid_runner_image") return null;
+    throw error;
+  }
+}
+
+function restartRunnerImageMetadata(session = {}, runnerImage = {}) {
+  const base = {
+    image: runnerImage.image,
+    imageKey: runnerImage.key,
+  };
+  if (session.sessionType === "ssh" || session.terminalKind === "ssh") {
+    return {
+      ...base,
+      capabilities: {
+        ...runnerImage.capabilities,
+        preview: false,
+        ssh: true,
+        sshFiles: true,
+        sshForwarding: true,
+      },
+    };
+  }
+  return {
+    ...base,
+    harnessId: runnerImage.harnessId || session.harnessId || "shell",
+    terminalKind: runnerImage.terminalKind || session.terminalKind || "shell",
+    capabilities: runnerImage.capabilities || session.capabilities || {terminal: true},
+  };
+}
+
+function imageFreshnessUnknown(session = {}, reason = "freshness_unavailable") {
+  return {
+    status: "unknown",
+    reason,
+    imageKey: session.imageKey || null,
+    currentImage: session.image || null,
+    deployedImage: null,
+    deployedRevision: null,
+  };
 }
 
 async function stopSession(uid, workspaceId, sessionId) {
@@ -907,6 +983,9 @@ async function markSessionStopped(sessionRef, session, reason) {
     status: "stopped",
     activeSocketCount: 0,
     serviceUrl: null,
+    deployedImage: null,
+    deployedRevision: null,
+    imageFreshness: imageFreshnessUnknown(session, "session_not_running"),
     stoppedAt,
     lastError: null,
     updatedAt: stoppedAt,

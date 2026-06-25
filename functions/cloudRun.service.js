@@ -24,7 +24,7 @@ const {
   publicGoogleError,
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
-const {resolveSessionHarness} = require("./runnerCatalog.helpers");
+const {currentRunnerImageForKey, resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
 
 function createCloudRunService(dependencies = {}) {
@@ -53,6 +53,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     await sessionRef.update({
       status: "running",
       serviceUrl: service.uri || null,
+      ...imageFreshnessUpdate(session, service),
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -66,6 +67,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
           await sessionRef.update({
             status: "running",
             serviceUrl: service.uri,
+            ...imageFreshnessUpdate(session, service),
             lastError: null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
@@ -115,6 +117,41 @@ function isCloudRunServiceReady(service) {
   );
 }
 
+function imageFreshnessUpdate(session = {}, service = {}) {
+  const currentImage = currentRunnerImageForKey(session.imageKey);
+  const deployedImage = service.template?.containers?.[0]?.image || "";
+  const deployedRevision = service.latestReadyRevision || service.latestCreatedRevision || "";
+  let status = "unknown";
+  let reason = "freshness_unavailable";
+
+  if (!session.imageKey) {
+    reason = "missing_image_key";
+  } else if (!currentImage?.image) {
+    reason = "unknown_image_key";
+  } else if (!deployedImage) {
+    reason = "missing_deployed_image";
+  } else if (deployedImage === currentImage.image) {
+    status = "latest";
+    reason = "deployed_image_matches_catalog";
+  } else {
+    status = "stale";
+    reason = "deployed_image_differs_from_catalog";
+  }
+
+  return {
+    deployedImage: deployedImage || null,
+    deployedRevision: deployedRevision || null,
+    imageFreshness: {
+      status,
+      reason,
+      imageKey: session.imageKey || null,
+      currentImage: currentImage?.image || null,
+      deployedImage: deployedImage || null,
+      deployedRevision: deployedRevision || null,
+    },
+  };
+}
+
 async function patchSessionService(sessionRef, session, options = {}, dependencies = {}) {
   if (!session.serviceName) {
     await sessionRef.update({
@@ -142,6 +179,7 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     await sessionRef.update({
       status: "running",
       serviceUrl: service.uri || session.serviceUrl || null,
+      ...imageFreshnessUpdate(session, service),
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -534,6 +572,7 @@ module.exports = {
   codexHomeStoragePrefix,
   createCloudRunService,
   homeStoragePrefix,
+  imageFreshnessUpdate,
   normalizeResources,
   piSessionDir,
   piSessionStoragePrefix,
