@@ -61,7 +61,9 @@ POST /api/workspaces/{workspaceId}/sessions/{sessionId}/auth-selection
 
 Legacy `/api/pi-auth/*` aliases still exist for rollout compatibility.
 
-Pi sessions materialize the selected providers into `$HOME/.pi/agent/auth.json`. Codex sessions materialize the selected providers into `$CODEX_HOME/auth.json`. Codex auth supports the OpenAI API key provider plus the OpenAI Codex OAuth token shape used by the local CLI. The runner now writes current Codex auth-mode values (`chatgpt` and `apikey`) and skips materializing saved Codex OAuth credentials that do not include a valid JWT-shaped `id_token`, so a stale or partial saved credential cannot prevent the Codex CLI from starting.
+Pi sessions materialize the selected agent providers into `$HOME/.pi/agent/auth.json`. Codex sessions materialize the selected Codex providers into `$CODEX_HOME/auth.json`. Codex auth supports the OpenAI API key provider plus the OpenAI Codex OAuth token shape used by the local CLI. The runner writes current Codex auth-mode values (`chatgpt` and `apikey`) and skips materializing saved Codex OAuth credentials that do not include a valid JWT-shaped `id_token`, so a stale or partial saved credential cannot prevent the Codex CLI from starting.
+
+GitHub CLI auth is a shared auth provider for Pi and Codex harnesses. The saved provider key is `github-cli`, stored as an API-key credential containing a GitHub token. It is not written into Pi or Codex native auth files. Instead, the runner materializes the selected token to `$HOME/.config/gh/hosts.yml` and excludes that file from the persistent `$HOME` archive. This makes the Authentication Center the durable source of truth for `gh` credentials while keeping manual `gh auth login` state session-local unless the user saves the token in the app.
 
 ## Skills, MCP, and Subagents
 

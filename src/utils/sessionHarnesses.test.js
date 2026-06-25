@@ -19,6 +19,8 @@ describe("sessionHarnesses", () => {
 
   it("returns auth metadata for auth-capable harnesses", () => {
     expect(sessionAuthHarness({harnessId: "pi"})?.storagePath).toContain(".pi/agent/auth.json");
+    expect(sessionAuthHarness({harnessId: "pi"})?.providerKeys).toContain("github-cli");
+    expect(sessionAuthHarness({harnessId: "codex"})?.providerKeys).toContain("github-cli");
     expect(sessionAuthHarness({harnessId: "shell"})).toBeNull();
   });
 

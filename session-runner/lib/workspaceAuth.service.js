@@ -21,6 +21,7 @@ function createWorkspaceAuthService({admin, config, db}) {
     const data = await readRemoteAuthData();
     const selection = await readSessionAuthSelection();
     const remoteAuth = buildMaterializedAuth(data, selection);
+    await writeGitHubCliAuth(remoteAuth);
     if (!Object.keys(remoteAuth).length && !Object.keys(localAuth).length) return;
 
     const mergedAuth = selection && selection.harness === harness.id ? remoteAuth : {
@@ -58,6 +59,7 @@ function createWorkspaceAuthService({admin, config, db}) {
     }
     const data = await readRemoteAuthData();
     const auth = buildMaterializedAuth(data, selection === null ? await readSessionAuthSelection() : selection);
+    await writeGitHubCliAuth(auth);
     await writeLocalAuthFile(auth);
     console.log(`${harness.id} auth materialized ${Object.keys(auth).length} selected provider(s) to ${authFilePath()}`);
     return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length};
@@ -113,9 +115,10 @@ function createWorkspaceAuthService({admin, config, db}) {
 
   async function writeLocalAuthFile(auth) {
     const authPath = authFilePath();
+    const nativeAuth = authFileProviders(auth);
     await fs.promises.mkdir(path.dirname(authPath), {recursive: true});
     if (harness.id === "codex") {
-      const codexAuth = buildCodexAuthFile(auth);
+      const codexAuth = buildCodexAuthFile(nativeAuth);
       if (!codexAuth) {
         await fs.promises.unlink(authPath).catch((error) => {
           if (error && error.code !== "ENOENT") throw error;
@@ -127,9 +130,24 @@ function createWorkspaceAuthService({admin, config, db}) {
       await fs.promises.chmod(authPath, 0o600).catch(() => {});
       return;
     }
-    const content = JSON.stringify(normalizeAuthProviders(auth), null, 2);
+    const content = JSON.stringify(normalizeAuthProviders(nativeAuth), null, 2);
     await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
     await fs.promises.chmod(authPath, 0o600).catch(() => {});
+  }
+
+  async function writeGitHubCliAuth(auth) {
+    const credential = normalizeGitHubCliCredential(auth && auth["github-cli"]);
+    const hostsPath = githubCliHostsPath(config);
+    if (!hostsPath) return;
+    await fs.promises.mkdir(path.dirname(hostsPath), {recursive: true});
+    if (!credential) {
+      await fs.promises.unlink(hostsPath).catch((error) => {
+        if (error && error.code !== "ENOENT") throw error;
+      });
+      return;
+    }
+    await fs.promises.writeFile(hostsPath, `${buildGitHubCliHostsYaml(credential)}\n`, {mode: 0o600});
+    await fs.promises.chmod(hostsPath, 0o600).catch(() => {});
   }
 
   function authFilePath() {
@@ -147,6 +165,46 @@ function createWorkspaceAuthService({admin, config, db}) {
     synchronizeAuth,
     writeLocalAuthFile,
   };
+}
+
+function authFileProviders(auth) {
+  const providers = normalizeAuthProviders(auth);
+  delete providers["github-cli"];
+  return providers;
+}
+
+function githubCliHostsPath(config = {}) {
+  const homeDir = config.homeDir ? path.resolve(config.homeDir) : "";
+  if (!homeDir) return "";
+  return path.join(homeDir, ".config", "gh", "hosts.yml");
+}
+
+function normalizeGitHubCliCredential(credential) {
+  if (!credential || credential.type !== "api_key") return null;
+  const token = String(credential.key || "").trim();
+  if (!token) return null;
+  return {
+    host: String(credential.host || "github.com").trim() || "github.com",
+    oauthToken: token,
+    user: String(credential.user || "").trim(),
+    gitProtocol: String(credential.gitProtocol || "https").trim() || "https",
+  };
+}
+
+function yamlScalar(value) {
+  const text = String(value || "");
+  return JSON.stringify(text);
+}
+
+function buildGitHubCliHostsYaml(credential) {
+  const host = credential.host || "github.com";
+  const lines = [
+    `${host}:`,
+    `    oauth_token: ${yamlScalar(credential.oauthToken)}`,
+    `    git_protocol: ${yamlScalar(credential.gitProtocol || "https")}`,
+  ];
+  if (credential.user) lines.push(`    user: ${yamlScalar(credential.user)}`);
+  return lines.join("\n");
 }
 
 function agentAuthDoc(uid, db) {
@@ -369,9 +427,13 @@ function normalizeAuthKey(value) {
 }
 
 module.exports = {
+  authFileProviders,
+  buildGitHubCliHostsYaml,
   buildCodexAuthFile,
   createWorkspaceAuthService,
+  githubCliHostsPath,
   mergeRemoteAuthData,
+  normalizeGitHubCliCredential,
   normalizeAuthEntries,
   normalizeAuthProviders,
   normalizeAuthSelection,

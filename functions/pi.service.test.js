@@ -181,6 +181,7 @@ assert.strictEqual(normalizePiAuthEntryId("entry:1_ok"), "entry:1_ok");
 assert.strictEqual(normalizePiAuthEntryId("", {required: false}), "");
 assert.throws(() => normalizePiAuthEntryId("bad id"), (error) => publicMessage(error) === "invalid_pi_auth_entry");
 assert.strictEqual(normalizePiAuthProviderKey("openai"), "openai");
+assert.strictEqual(normalizePiAuthProviderKey("github-cli"), "github-cli");
 assert.throws(() => normalizePiAuthProviderKey("unknown-provider"), (error) => publicMessage(error) === "invalid_pi_auth_provider");
 assert.strictEqual(normalizePiAuthStoredProviderKey("custom-provider"), "custom-provider");
 assert.throws(() => normalizePiAuthApiKey(""), (error) => publicMessage(error) === "invalid_pi_auth_key");

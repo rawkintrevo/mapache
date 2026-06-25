@@ -4,6 +4,7 @@ export const piAuthProviders = [
   {key: "azure-openai-responses", label: "Azure OpenAI Responses"},
   {key: "openai", label: "OpenAI"},
   {key: "openai-codex", label: "OpenAI ChatGPT Plus/Pro (Codex)"},
+  {key: "github-cli", label: "GitHub CLI"},
   {key: "deepseek", label: "DeepSeek"},
   {key: "nvidia", label: "NVIDIA NIM"},
   {key: "google", label: "Google Gemini"},

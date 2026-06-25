@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fd-find fonts-liberation git gzip openssh-client python3 make g++ ripgrep tar \
+  && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fd-find fonts-liberation gh git gzip openssh-client python3 make g++ ripgrep tar \
   && ln -s /usr/bin/fdfind /usr/local/bin/fd \
   && rm -rf /var/lib/apt/lists/*
 

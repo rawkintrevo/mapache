@@ -27,6 +27,7 @@ const PI_AUTH_API_KEY_PROVIDERS = new Set([
   "ant-ling",
   "azure-openai-responses",
   "openai",
+  "github-cli",
   "deepseek",
   "nvidia",
   "google",

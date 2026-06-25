@@ -53,6 +53,7 @@
           "ant-ling",
           "azure-openai-responses",
           "openai",
+          "github-cli",
           "deepseek",
           "nvidia",
           "google",
@@ -120,7 +121,8 @@
         "supported": true,
         "providerKeys": [
           "openai",
-          "openai-codex"
+          "openai-codex",
+          "github-cli"
         ],
         "selectionField": "authSelection",
         "storagePath": "$CODEX_HOME/auth.json",
