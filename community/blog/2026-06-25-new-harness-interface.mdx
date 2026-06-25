@@ -1,0 +1,50 @@
+---
+slug: new-harness-interface
+title: New Harness Interface
+authors: [mapache]
+tags: [daily]
+date: 2026-06-25
+---
+
+Elegent designs make me happy. 
+
+{/* truncate */}
+
+Maybe it's just because I'm a Millenial, but elegant designs and implementations make me happy.
+
+The runner interface had become to bloated an in general just a mess of one-off patches and work
+arounds (as is bound to happen when vibe coding anything). So I took a look and came up with a way 
+to solve several problems at once. 
+
+Top level it was to just create a standard interface for new runners (before each one was being 
+treated like the special princess it was.) 
+
+Now, there is a contract and expectations- oh you're a new runner? Where do your skills go? Where 
+does your auth go? How do you hanlde MCPs and sub-agents. etc. Basically, these harnesses aren't 
+_that_ special. They all more or less do the same things, with a bit changed under the hood, or 
+another special whiz-bang feature. 
+
+This worked out great- I was getting lost in the hell that is a million special cases, and by doing 
+so I solved some other issues I didn't even realize were related. 
+
+## tl;dr
+
+At the end, lol. Another way you can see that I actually write the blogs myself. 
+
+The workspace owns a what will be materialized into the `$HOME` directory. The sessions
+own what will be materialized into the `/workspace directory`. This lets you have some config
+shared across session, some isolated per session. You can share across workspaces using the webui. 
+
+But, for instance, the codex runner doesn't need to know about `pi-web-access`. And the `pi` runner
+doesn't need to know what's in the codex config about guardrails. And while they both might use
+the same skill, each harness expects it in a slightly different place on disk. 
+
+So all of that is handled. Elegantly. And if you're wondering where Claude Code is, I have railed and
+soap boxed many many times about how Anthropic releases second (borderline third) rate models with 
+good heuristics, and have damaged not only the AI industry, but the entire computer science industry
+with their hamful rhetoric about model safety that is clearly just them trying to hand cuff other 
+providers that are pulling further and further away from them.  I've also been in code bases where
+Claude has been given a free hand, and they're gross, I can smell its stink almost right away. Lots 
+of subroutines with no point- excessive documentation that says almost nothing. Etc.  I started this 
+post saying elegant designs make me happy. Claude does the opposite so hard, that I now think it may 
+be fucking with me specifically. 
