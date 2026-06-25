@@ -4,6 +4,7 @@ import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 const OPENAI_CODEX_PROVIDER = "openai-codex";
+const GITHUB_CLI_PROVIDER = "github-cli";
 
 export function AuthModal({
   piAuth = {},
@@ -16,6 +17,7 @@ export function AuthModal({
   const apiKey = piAuth.apiKey || "";
   const entryLabel = piAuth.entryLabel || "";
   const isOpenAiCodex = selectedProvider === OPENAI_CODEX_PROVIDER;
+  const isGitHubCli = selectedProvider === GITHUB_CLI_PROVIDER;
   const device = piAuth.openAiCodexDevice;
 
   return (
@@ -70,7 +72,7 @@ export function AuthModal({
             <input
               className="auth-key-input"
               name="apiKey"
-              placeholder="API Key"
+              placeholder={isGitHubCli ? "GitHub token" : "API Key"}
               type="password"
               value={apiKey}
               onChange={(event) => onUpdate?.({apiKey: event.target.value})}

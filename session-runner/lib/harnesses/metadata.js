@@ -2,6 +2,40 @@
 
 const path = require("path");
 
+const PI_AUTH_PROVIDER_KEYS = Object.freeze([
+  "anthropic",
+  "ant-ling",
+  "azure-openai-responses",
+  "openai",
+  "deepseek",
+  "nvidia",
+  "google",
+  "mistral",
+  "groq",
+  "cerebras",
+  "cloudflare-ai-gateway",
+  "cloudflare-workers-ai",
+  "xai",
+  "openrouter",
+  "vercel-ai-gateway",
+  "zai",
+  "zai-coding-cn",
+  "opencode",
+  "opencode-go",
+  "huggingface",
+  "fireworks",
+  "together",
+  "kimi-coding",
+  "minimax",
+  "minimax-cn",
+  "xiaomi",
+  "xiaomi-token-plan-cn",
+  "xiaomi-token-plan-ams",
+  "xiaomi-token-plan-sgp",
+  "openai-codex",
+  "github-cli",
+]);
+
 const HARNESSES = Object.freeze({
   shell: Object.freeze({
     id: "shell",
@@ -31,7 +65,7 @@ const HARNESSES = Object.freeze({
       supported: true,
       storagePath: (config) => path.join(config.piAgentDir, "auth.json"),
       selectionField: "authSelection",
-      providerKeys: null,
+      providerKeys: PI_AUTH_PROVIDER_KEYS,
     },
     skills: {
       supported: true,
@@ -65,7 +99,7 @@ const HARNESSES = Object.freeze({
       supported: true,
       storagePath: (config) => path.join(config.codexHomeDir, "auth.json"),
       selectionField: "authSelection",
-      providerKeys: ["openai", "openai-codex"],
+      providerKeys: ["openai", "openai-codex", "github-cli"],
     },
     skills: {
       supported: true,

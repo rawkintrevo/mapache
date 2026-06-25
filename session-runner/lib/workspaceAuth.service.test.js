@@ -2,7 +2,15 @@
 
 const assert = require("assert");
 const test = require("node:test");
-const {buildCodexAuthFile, createWorkspaceAuthService, mergeRemoteAuthData} = require("./workspaceAuth.service");
+const {
+  authFileProviders,
+  buildCodexAuthFile,
+  buildGitHubCliHostsYaml,
+  createWorkspaceAuthService,
+  githubCliHostsPath,
+  mergeRemoteAuthData,
+  normalizeGitHubCliCredential,
+} = require("./workspaceAuth.service");
 
 test("mergeRemoteAuthData preserves legacy auth while preferring agentAuth providers", () => {
   assert.deepStrictEqual(mergeRemoteAuthData({
@@ -151,4 +159,35 @@ test("buildCodexAuthFile preserves valid Codex oauth credentials", () => {
   assert.equal(auth.tokens.id_token, "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature");
   assert.equal(auth.tokens.account_id, "acct_123");
   assert.equal(auth.last_refresh, "2025-10-09T08:53:20.000Z");
+});
+
+test("github cli api key credentials materialize as gh hosts.yml", () => {
+  assert.deepStrictEqual(normalizeGitHubCliCredential({
+    type: "api_key",
+    key: " ghp_test ",
+  }), {
+    host: "github.com",
+    oauthToken: "ghp_test",
+    user: "",
+    gitProtocol: "https",
+  });
+  assert.equal(buildGitHubCliHostsYaml({
+    host: "github.com",
+    oauthToken: "ghp_test",
+    gitProtocol: "https",
+  }), [
+    "github.com:",
+    "    oauth_token: \"ghp_test\"",
+    "    git_protocol: \"https\"",
+  ].join("\n"));
+  assert.equal(githubCliHostsPath({homeDir: "/root"}), "/root/.config/gh/hosts.yml");
+});
+
+test("github cli credentials are not written into native agent auth files", () => {
+  assert.deepStrictEqual(authFileProviders({
+    openai: {type: "api_key", key: "sk-test"},
+    "github-cli": {type: "api_key", key: "ghp_test"},
+  }), {
+    openai: {type: "api_key", key: "sk-test"},
+  });
 });

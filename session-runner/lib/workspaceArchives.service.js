@@ -145,10 +145,15 @@ function homeArchiveExcludePatterns(config) {
   const piAgentDir = path.resolve(config.piAgentDir || path.join(homeDir, ".pi", "agent"));
   const piNodeModulesDir = path.join(piAgentDir, "npm", "node_modules");
   const relative = path.relative(homeDir, piNodeModulesDir).split(path.sep).join("/");
+  const excludes = [
+    ".config/gh/hosts.yml",
+    "./.config/gh/hosts.yml",
+  ];
   if (!relative || relative.startsWith("../") || relative === ".." || path.isAbsolute(relative)) {
-    return [];
+    return excludes;
   }
   return [
+    ...excludes,
     relative,
     `${relative}/*`,
     `./${relative}`,

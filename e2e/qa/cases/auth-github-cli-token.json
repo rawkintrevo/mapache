@@ -1,0 +1,24 @@
+{
+  "id": "auth.github-cli-token",
+  "title": "Save and delete GitHub CLI token auth",
+  "description": "Use the Authentication Center to save a GitHub CLI token entry and then remove it.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.github-cli-token",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {
+      "useScript": "scripts/save-api-key-provider.json",
+      "parameters": {
+        "provider": "github-cli",
+        "entryLabel": "qa-gh-cli-{{timestamp}}",
+        "apiKey": "ghp_qa_placeholder"
+      }
+    },
+    {"assert": "network-status", "requestUrlIncludes": "/api/pi-auth/providers/github-cli", "method": "PUT", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "github-cli-token.png"},
+    {"useScript": "scripts/delete-auth-entry.json", "parameters": {"entryLabel": "qa-gh-cli"}},
+    {"useScript": "scripts/refresh-auth-providers.json"},
+    {"assert": "auth-entry-absent", "entryLabel": "qa-gh-cli"},
+    {"capture": "screenshot", "fileName": "github-cli-token-deleted.png"}
+  ]
+}

@@ -66,6 +66,8 @@ test("selects default archive targets for blank workspaces", () => {
     remotePath: "users/u/workspaces/w/.mapahce-internal/home/home.tar.gz",
   }]);
   assert.deepEqual(targets.find((target) => target.name === "home").exclude, [
+    ".config/gh/hosts.yml",
+    "./.config/gh/hosts.yml",
     ".pi/agent/npm/node_modules",
     ".pi/agent/npm/node_modules/*",
     "./.pi/agent/npm/node_modules",
@@ -116,7 +118,10 @@ test("does not add Pi npm excludes when Pi agent dir is outside home", () => {
   });
   const homeTarget = targets.find((target) => target.name === "home");
 
-  assert.deepEqual(homeTarget.exclude, []);
+  assert.deepEqual(homeTarget.exclude, [
+    ".config/gh/hosts.yml",
+    "./.config/gh/hosts.yml",
+  ]);
 });
 
 test("builds home archive path from workspace-owned home prefix", () => {

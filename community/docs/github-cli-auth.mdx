@@ -1,0 +1,49 @@
+---
+sidebar_position: 2
+---
+
+# GitHub CLI Auth
+
+Mapache includes the GitHub CLI (`gh`) in Pi and Codex runner sessions.
+
+Use the GitHub workspace connection when you want Mapache to clone a connected
+repository, push agent branches, or open automatic pull requests. That flow uses
+the Mapache GitHub App and short-lived installation credentials.
+
+Use GitHub CLI auth when you want manual `gh` commands in the terminal, such as:
+
+```bash
+gh issue view 130
+gh pr checks
+gh repo view
+```
+
+## Save a GitHub CLI Token
+
+1. Create a GitHub token with the scopes needed for your manual commands.
+2. Open the Authentication Center in Mapache.
+3. Add `GitHub CLI`.
+4. Paste the token and save it.
+5. Open `Manage Auth` for the Pi or Codex session.
+6. Select the saved GitHub CLI token for that session.
+
+Mapache writes the selected token to the runner's `~/.config/gh/hosts.yml`.
+After saving, run:
+
+```bash
+gh auth status
+```
+
+If a running terminal does not see the token immediately, restart the session.
+
+## Log Out or Revoke Access
+
+To stop materializing the token in a session, open `Manage Auth` and choose
+`Do not include` for GitHub CLI.
+
+To remove the saved token from Mapache, delete the GitHub CLI entry in the
+Authentication Center. To invalidate the token completely, revoke it in GitHub.
+
+Manual `gh auth login` inside the terminal is not the durable Mapache auth path.
+Save the token in the Authentication Center when you want GitHub CLI auth to
+survive a session restart or recreation.
