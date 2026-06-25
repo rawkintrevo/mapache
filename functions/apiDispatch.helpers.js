@@ -41,7 +41,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["GET", "workspaces", namedJsonResult("workspaces", ({handlers, user}) => handlers.listWorkspaces(user.uid))],
     ["POST", "workspaces", createdNamedJsonResult("workspace", ({handlers, req, user}) => handlers.createWorkspace(user.uid, req.body || {}))],
     ["DELETE", "workspace", jsonResult(({handlers, route, user}) => handlers.deleteWorkspace(user.uid, route.workspaceId))],
-    ["GET", "workspaceFiles", jsonResult(({handlers, route, user}) => handlers.listWorkspaceFiles(user.uid, route.workspaceId))],
+    ["GET", "workspaceFiles", jsonResult(({handlers, req, route, user}) => handlers.listWorkspaceFiles(user.uid, route.workspaceId, req.query.path))],
     ["POST", "workspaceSyncFiles", jsonResult(({handlers, route, user}) => handlers.syncWorkspaceFiles(user.uid, route.workspaceId))],
     ["GET", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.readWorkspaceFile(user.uid, route.workspaceId, req.query.path))],
     ["PUT", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceFile(user.uid, route.workspaceId, req.query.path, req.body || {}))],
@@ -85,7 +85,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "sessionSkillDelete", jsonResult(({handlers, req, route, user}) => handlers.deleteWorkspaceSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
   sshSessions: Object.freeze([
-    ["GET", "sshSessionFiles", jsonResult(({handlers, route, user}) => handlers.listSshSessionFiles(user.uid, route.workspaceId, route.sessionId))],
+    ["GET", "sshSessionFiles", jsonResult(({handlers, req, route, user}) => handlers.listSshSessionFiles(user.uid, route.workspaceId, route.sessionId, req.query.path))],
     ["GET", "sshSessionFile", jsonResult(({handlers, req, route, user}) => handlers.readSshSessionFile(user.uid, route.workspaceId, route.sessionId, req.query.path))],
     ["PUT", "sshSessionFile", jsonResult(({handlers, req, route, user}) => handlers.saveSshSessionFile(user.uid, route.workspaceId, route.sessionId, req.query.path, req.body || {}))],
     ["GET", "sshSessionForwards", jsonResult(({handlers, route, user}) => handlers.listSshSessionForwards(user.uid, route.workspaceId, route.sessionId))],

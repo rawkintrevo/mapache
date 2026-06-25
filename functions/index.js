@@ -426,9 +426,9 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId) {
   };
 }
 
-async function listSshSessionFiles(uid, workspaceId, sessionId) {
+async function listSshSessionFiles(uid, workspaceId, sessionId, directoryPath = "") {
   const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, "/ssh/files", {
+  return requestRunnerJson(session, `/ssh/files?path=${encodeURIComponent(String(directoryPath || ""))}`, {
     unavailableError: "runner_ssh_files_unavailable",
   });
 }

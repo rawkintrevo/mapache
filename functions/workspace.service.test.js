@@ -5,9 +5,11 @@ const {
   isHiddenWorkspaceFilePath,
   normalizePublicGitHubRepoUrl,
   normalizeWorkspaceFilePath,
+  normalizeWorkspaceDirectoryPath,
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
+  storagePrefixToClientDirectory,
   storageFileToClientFile,
 } = require("./workspace.service");
 
@@ -74,6 +76,9 @@ assert.throws(() => normalizeWorkspaceFilePath("../secret"), /invalid_file_path/
 assert.throws(() => normalizeWorkspaceFilePath(".mapache-directory"), /invalid_file_path/);
 assert.throws(() => normalizeWorkspaceFilePath(".mapahce-directory"), /invalid_file_path/);
 assert.throws(() => normalizeWorkspaceFilePath(".pi/npm/package.json"), /invalid_file_path/);
+assert.strictEqual(normalizeWorkspaceDirectoryPath(""), "");
+assert.strictEqual(normalizeWorkspaceDirectoryPath("/src/components/"), "src/components");
+assert.throws(() => normalizeWorkspaceDirectoryPath(".mapache-internal"), /invalid_file_path/);
 
 assert.strictEqual(isHiddenWorkspaceFilePath(".mapache-internal/archives/x"), true);
 assert.strictEqual(isHiddenWorkspaceFilePath(".mapahce-internal/archives/x"), true);
@@ -118,5 +123,21 @@ assert.strictEqual(storageFileToClientFile({
   name: "workspaces/u/w/.mapache-internal/archives/x",
   metadata: {},
 }, "workspaces/u/w/"), null);
+
+assert.deepStrictEqual(storagePrefixToClientDirectory("workspaces/u/w/src/", "workspaces/u/w/"), {
+  path: "src",
+  name: "src",
+  type: "directory",
+  size: 0,
+  updatedAt: "",
+});
+assert.deepStrictEqual(storagePrefixToClientDirectory("workspaces/u/w/src/components/", "workspaces/u/w/"), {
+  path: "src/components",
+  name: "components",
+  type: "directory",
+  size: 0,
+  updatedAt: "",
+});
+assert.strictEqual(storagePrefixToClientDirectory("workspaces/u/w/.mapache-internal/", "workspaces/u/w/"), null);
 
 console.log("workspace service tests passed");

@@ -182,6 +182,7 @@ export function createInitialState() {
     sessions: [],
     workspaceFiles: [],
     workspaceFilesError: "",
+    workspaceFileLoadedDirs: new Set(),
     workspaceFilesUploading: false,
     workspaceFilesUploadMessage: "",
     workspaceFilesTruncated: false,

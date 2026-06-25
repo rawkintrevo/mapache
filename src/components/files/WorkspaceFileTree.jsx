@@ -19,7 +19,7 @@ function FileNodes({childrenMap, depth = 0, options}) {
         <span aria-hidden="true" className="icon">{expanded ? "▾" : "▸"}</span>
         <span aria-hidden="true" className="icon">{expanded ? "▣" : "▢"}</span>
         <span className="file-name">{folder.name}</span>
-        <span className="file-count">{countFolderFiles(folder)}</span>
+        <span className="file-count">{options.loadedDirs.has(folder.path) ? countFolderFiles(folder) : ""}</span>
       </button>,
     ];
 
@@ -93,6 +93,7 @@ export function WorkspaceFileTree({state, onSelectWorkspaceFile, onToggleWorkspa
   const tree = buildFileTree(state.workspaceFiles);
   const options = {
     expandedPaths: state.expandedFilePaths,
+    loadedDirs: state.workspaceFileLoadedDirs || new Set(),
     onSelectWorkspaceFile,
     onToggleWorkspaceFileDir,
     selectedPath: state.selectedWorkspaceFilePath,

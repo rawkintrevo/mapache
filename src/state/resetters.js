@@ -57,6 +57,7 @@ export function resetSshForwards(state) {
 export function resetWorkspaceFiles(state) {
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
+  state.workspaceFileLoadedDirs = new Set();
   state.workspaceFilesUploading = false;
   state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
@@ -71,6 +72,7 @@ export function resetSignedOutState(state) {
   state.sessions = [];
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
+  state.workspaceFileLoadedDirs = new Set();
   state.workspaceFilesUploading = false;
   state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;

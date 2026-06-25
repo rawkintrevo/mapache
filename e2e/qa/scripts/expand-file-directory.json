@@ -1,0 +1,14 @@
+{
+  "id": "script.expandFileDirectory",
+  "title": "Expand a workspace file directory",
+  "parameters": {
+    "directoryName": "qa"
+  },
+  "actions": [
+    {"type": "click", "snapshotTextIncludes": "{{directoryName}}"},
+    {"type": "waitForSnapshotText", "text": "{{directoryName}}", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Directory row expands without a full recursive file reload"
+  ]
+}

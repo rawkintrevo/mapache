@@ -13,7 +13,7 @@ function createSshSessionService({config}) {
     enabled: isSshHarness,
     prepare: () => prepareSshMaterial(config),
     terminalCommand: () => sshCommand(config, {tty: true, loginShell: true}),
-    listFiles: () => withPreparedSsh(config, () => listFiles(config)),
+    listFiles: (directoryPath = "") => withPreparedSsh(config, () => listFiles(config, directoryPath)),
     readFile: (relativePath) => withPreparedSsh(config, () => readFile(config, relativePath)),
     saveFile: (relativePath, content) => withPreparedSsh(config, () => saveFile(config, relativePath, content)),
     createForward: (port) => withPreparedSsh(config, () => createForward(config, forwards, port)),
@@ -86,19 +86,31 @@ function remoteTarget(config) {
   return `${config.sshUsername}@${config.sshHost}`;
 }
 
-async function listFiles(config) {
+async function listFiles(config, directoryPath = "") {
+  const cleanDirectoryPath = normalizeScopedDirectoryPath(directoryPath);
+  const findRoot = cleanDirectoryPath ? shellQuote(cleanDirectoryPath) : ".";
   const command = [
     "cd", shellRemotePath(config.sshInitialDirectory), "&&",
-    "find . -maxdepth 8 -type f -size -1048576c | sed 's#^./##' | sort | head -500",
+    "(",
+    "find", findRoot, "-mindepth 1 -maxdepth 1 -type d | sed 's#^./##; s#^#d:#'",
+    ";",
+    "find", findRoot, "-mindepth 1 -maxdepth 1 -type f -size -1048576c | sed 's#^./##; s#^#f:#'",
+    ") | sort | head -500",
   ].join(" ");
   const stdout = await sshExec(config, command);
-  const files = stdout.split("\n").map((line) => line.trim()).filter(Boolean).map((relativePath) => ({
-    name: path.posix.basename(relativePath),
-    path: relativePath,
-    size: null,
-    updatedAt: "",
-  }));
-  return {ok: true, files, truncated: files.length >= 500, root: config.sshInitialDirectory, scope: "initial-directory"};
+  const files = stdout.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+    const separator = line.indexOf(":");
+    const typeCode = separator >= 0 ? line.slice(0, separator) : "f";
+    const relativePath = separator >= 0 ? line.slice(separator + 1) : line;
+    return {
+      name: path.posix.basename(relativePath),
+      path: relativePath,
+      type: typeCode === "d" ? "directory" : "file",
+      size: null,
+      updatedAt: "",
+    };
+  });
+  return {ok: true, files, path: cleanDirectoryPath, truncated: files.length >= 500, root: config.sshInitialDirectory, scope: "initial-directory"};
 }
 
 async function readFile(config, relativePath) {
@@ -138,6 +150,12 @@ function normalizeScopedPath(value) {
     throw error;
   }
   return clean;
+}
+
+function normalizeScopedDirectoryPath(value) {
+  const clean = String(value || "").replace(/^\/+|\/+$/g, "");
+  if (!clean) return "";
+  return normalizeScopedPath(clean);
 }
 
 function sshExec(config, remoteCommand, options = {}) {

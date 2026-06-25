@@ -378,24 +378,36 @@ async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
   await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
 }
 
-async function listWorkspaceFiles(uid, workspaceId) {
+async function listWorkspaceFiles(uid, workspaceId, directoryPath = "") {
   const workspace = await requireWorkspace(uid, workspaceId);
   const bucketName = workspace.bucket || DEFAULT_BUCKET;
   const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
   if (!bucketName || !prefix) return {files: [], truncated: false};
 
-  const queryPrefix = `${prefix}/`;
-  const [files, nextQuery] = await admin.storage().bucket(bucketName).getFiles({
+  const cleanDirectoryPath = normalizeWorkspaceDirectoryPath(directoryPath);
+  const basePrefix = `${prefix}/`;
+  const queryPrefix = cleanDirectoryPath ? `${basePrefix}${cleanDirectoryPath}/` : basePrefix;
+  const [files, nextQuery, response] = await admin.storage().bucket(bucketName).getFiles({
     autoPaginate: false,
+    delimiter: "/",
     maxResults: 500,
     prefix: queryPrefix,
   });
+  const directoryRows = (response && response.prefixes || [])
+      .map((storagePrefix) => storagePrefixToClientDirectory(storagePrefix, basePrefix))
+      .filter(Boolean);
+  const fileRows = files
+      .map((file) => storageFileToClientFile(file, basePrefix))
+      .filter(Boolean);
+  const byPath = new Map();
+  for (const entry of [...directoryRows, ...fileRows]) {
+    byPath.set(`${entry.type}:${entry.path}`, entry);
+  }
 
   return {
-    files: files
-        .map((file) => storageFileToClientFile(file, queryPrefix))
-        .filter(Boolean)
+    files: Array.from(byPath.values())
         .sort((left, right) => left.path.localeCompare(right.path)),
+    path: cleanDirectoryPath,
     truncated: Boolean(nextQuery),
   };
 }
@@ -544,10 +556,30 @@ function normalizeWorkspaceFilePath(value) {
   return parts.join("/");
 }
 
+function normalizeWorkspaceDirectoryPath(value) {
+  const path = String(value || "").replace(/^\/+|\/+$/g, "");
+  if (!path) return "";
+  return normalizeWorkspaceFilePath(path);
+}
+
 function isHiddenWorkspaceFilePath(relativePath) {
   const parts = String(relativePath || "").split("/").filter(Boolean);
   if (isInternalStorageDirName(parts[0])) return true;
   return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
+}
+
+function storagePrefixToClientDirectory(storagePrefix, basePrefix) {
+  const relativePath = String(storagePrefix || "")
+      .slice(basePrefix.length)
+      .replace(/\/+$/g, "");
+  if (!relativePath || isHiddenWorkspaceFilePath(relativePath)) return null;
+  return {
+    path: relativePath,
+    name: relativePath.split("/").pop(),
+    type: "directory",
+    size: 0,
+    updatedAt: "",
+  };
 }
 
 function workspaceDirectoryPathFromMarker(relativePath) {
@@ -563,9 +595,11 @@ module.exports = {
   createWorkspaceService,
   deleteWorkspaceStorageIfUnshared,
   isHiddenWorkspaceFilePath,
+  listWorkspaceFiles,
   listWorkspaces,
   getWorkspaceMcpConfig,
   normalizePublicGitHubRepoUrl,
+  normalizeWorkspaceDirectoryPath,
   normalizeWorkspaceFilePath,
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSourcePayload,
@@ -573,6 +607,7 @@ module.exports = {
   parsePublicGitHubRepoUrl,
   requireWorkspace,
   saveWorkspaceMcpConfig,
+  storagePrefixToClientDirectory,
   storageFileToClientFile,
   workspaceStorageFile,
 };

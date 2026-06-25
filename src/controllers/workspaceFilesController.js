@@ -14,8 +14,8 @@ import {
 } from "../state/resetters.js";
 
 export function createWorkspaceFilesController({state, render, runBusy}) {
-  async function loadWorkspaceFiles() {
-    await loadWorkspaceFilesState(state);
+  async function loadWorkspaceFiles(path = "") {
+    await loadWorkspaceFilesState(state, path);
   }
 
   async function refreshWorkspaceFiles() {
@@ -30,8 +30,8 @@ export function createWorkspaceFilesController({state, render, runBusy}) {
     await downloadWorkspaceFileState({state, render});
   }
 
-  function toggleWorkspaceFileDir(path) {
-    toggleWorkspaceFileDirState(state, path);
+  async function toggleWorkspaceFileDir(path) {
+    await toggleWorkspaceFileDirState({state, path, loadWorkspaceFiles, render});
     render();
   }
 

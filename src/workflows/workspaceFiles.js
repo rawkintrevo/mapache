@@ -6,7 +6,8 @@ import {
 import {resetFileEditor as resetFileEditorState} from "../state/resetters.js";
 import {friendlyFilesError} from "../utils/friendlyErrors.js";
 
-export async function loadWorkspaceFilesState(state) {
+export async function loadWorkspaceFilesState(state, path = "") {
+  const cleanPath = cleanDirectoryPath(path);
   state.workspaceFilesError = "";
   state.workspaceFilesWorkspaceId = workspaceFileScopeId(state);
   if (!state.selectedWorkspaceId) return;
@@ -14,9 +15,14 @@ export async function loadWorkspaceFilesState(state) {
   try {
     const sshSession = selectedSshSession(state);
     const data = sshSession ?
-      await state.api.getSshSessionFiles(state.selectedWorkspaceId, sshSession.id) :
-      await state.api.getWorkspaceFiles(state.selectedWorkspaceId);
-    state.workspaceFiles = data.files || [];
+      await state.api.getSshSessionFiles(state.selectedWorkspaceId, sshSession.id, cleanPath) :
+      await state.api.getWorkspaceFiles(state.selectedWorkspaceId, cleanPath);
+    if (!cleanPath) {
+      state.workspaceFileLoadedDirs = new Set();
+      state.expandedFilePaths = new Set();
+    }
+    mergeWorkspaceFileListing(state, cleanPath, data.files || []);
+    state.workspaceFileLoadedDirs.add(cleanPath);
     state.workspaceFilesTruncated = Boolean(data.truncated);
   } catch (error) {
     state.workspaceFilesError = friendlyFilesError(error);
@@ -105,12 +111,19 @@ export async function downloadWorkspaceFileState({state, render}) {
   render();
 }
 
-export function toggleWorkspaceFileDirState(state, path) {
+export async function toggleWorkspaceFileDirState({state, path, loadWorkspaceFiles, render}) {
+  const cleanPath = cleanDirectoryPath(path);
   const next = new Set(state.expandedFilePaths);
-  if (next.has(path)) {
-    next.delete(path);
+  if (next.has(cleanPath)) {
+    next.delete(cleanPath);
   } else {
-    next.add(path);
+    next.add(cleanPath);
+    if (!state.workspaceFileLoadedDirs.has(cleanPath)) {
+      state.expandedFilePaths = next;
+      state.workspaceFilesError = "";
+      render();
+      await loadWorkspaceFiles(cleanPath);
+    }
   }
   state.expandedFilePaths = next;
 }
@@ -213,4 +226,26 @@ function selectedSshSession(state) {
 function workspaceFileScopeId(state) {
   const sshSession = selectedSshSession(state);
   return sshSession ? `${state.selectedWorkspaceId}:${sshSession.id}:ssh` : state.selectedWorkspaceId;
+}
+
+function cleanDirectoryPath(path) {
+  return String(path || "").replace(/^\/+|\/+$/g, "");
+}
+
+function mergeWorkspaceFileListing(state, directoryPath, files) {
+  const immediatePrefix = directoryPath ? `${directoryPath}/` : "";
+  const isImmediateChild = (entry) => {
+    const entryPath = String(entry.path || "");
+    if (directoryPath && !entryPath.startsWith(immediatePrefix)) return false;
+    if (!directoryPath && entryPath.includes("/")) return false;
+    const childPath = directoryPath ? entryPath.slice(immediatePrefix.length) : entryPath;
+    return childPath && !childPath.includes("/");
+  };
+  const retained = directoryPath ?
+    state.workspaceFiles.filter((entry) => !isImmediateChild(entry)) :
+    [];
+  const byPath = new Map();
+  for (const entry of retained) byPath.set(`${entry.type || "file"}:${entry.path}`, entry);
+  for (const entry of files) byPath.set(`${entry.type || "file"}:${entry.path}`, entry);
+  state.workspaceFiles = Array.from(byPath.values());
 }
