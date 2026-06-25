@@ -52,6 +52,12 @@
   background: #cbd5e1;
 }
 
+.session-image-light::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 0 2px rgba(15, 23, 42, 0.08);
+}
+
 .session-status-light:focus-visible {
   border-radius: 999px;
   box-shadow: 0 0 0 2px rgba(20, 125, 100, 0.18);
@@ -68,7 +74,10 @@
   color: #f8fafc;
   font-size: 12px;
   font-weight: 700;
-  white-space: nowrap;
+  width: max-content;
+  max-width: min(280px, 80vw);
+  white-space: normal;
+  text-align: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;

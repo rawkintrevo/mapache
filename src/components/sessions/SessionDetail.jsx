@@ -3,6 +3,7 @@ import {Copy, ExternalLink, Mail, RotateCcw, Share2, UploadCloud} from "lucide-r
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
+import {isSessionRunningStaleImage} from "./sessionPresentation.js";
 
 const cpuOptions = ["1", "2", "4"];
 const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
@@ -45,6 +46,11 @@ export function SessionDetail({
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
+  const restartPicksUpLatestImage = isSessionRunningStaleImage(session);
+  const restartLabel = restartPicksUpLatestImage ? "Restart for latest image" : "Restart";
+  const restartTitle = restartPicksUpLatestImage ?
+    "Restart this session to pick up the latest container image." :
+    "Restart this session.";
 
   useEffect(() => {
     let cancelled = false;
@@ -188,9 +194,16 @@ export function SessionDetail({
               </Button>
             </>
           ) : null}
-          <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
+          <Button
+            aria-label={restartTitle}
+            className={restartPicksUpLatestImage ? "session-restart-stale" : ""}
+            disabled={busy}
+            title={restartTitle}
+            variant="secondary"
+            onClick={() => onRestartSession(session.id)}
+          >
             <RotateCcw aria-hidden="true" />
-            Restart
+            {restartLabel}
           </Button>
 
         </div>

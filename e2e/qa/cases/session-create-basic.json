@@ -20,6 +20,8 @@
       }
     },
     {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "snapshot-text", "expected": "This session is running the latest runner image."},
     {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-pi-basic"]},
     {"capture": "screenshot", "fileName": "session-detail.png"},
     {"useScript": "scripts/delete-selected-session.json"},

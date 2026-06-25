@@ -92,6 +92,11 @@ function runnerImageCapabilities(image) {
   return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({terminal: true});
 }
 
+function currentRunnerImageForKey(imageKey) {
+  const runnerImage = RUNNER_IMAGES[cleanRunnerImageValue(imageKey)];
+  return runnerImage ? resolvedRunnerImage(runnerImage) : null;
+}
+
 function resolveRunnerImage(payload = {}, defaultImage = "") {
   const requestedKey = cleanRunnerImageValue(payload.imageKey);
   if (requestedKey) {
@@ -161,6 +166,7 @@ module.exports = {
   HARNESSES,
   RUNNER_IMAGES,
   cloneCapabilities,
+  currentRunnerImageForKey,
   listRunnerImages,
   resolveHarness,
   resolveRunnerImage,

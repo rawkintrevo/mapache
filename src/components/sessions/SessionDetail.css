@@ -121,6 +121,17 @@
   text-decoration: none;
 }
 
+.session-restart-stale {
+  border: 1px solid #d97706;
+  background: #fef3c7;
+  color: #78350f;
+  font-weight: 800;
+}
+
+.session-restart-stale:hover {
+  background: #fde68a;
+}
+
 @media (max-width: 720px) {
   .preview-url-row {
     align-items: stretch;
