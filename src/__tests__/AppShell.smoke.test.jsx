@@ -442,6 +442,8 @@ describe("frontend smoke coverage", () => {
     const {handlers: sessionHandlers, unmount} = renderShell({sessionModalOpen: true});
 
     const sessionDialog = screen.getByRole("dialog", {name: "New session"});
+    expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
+    expect(within(sessionDialog).getByLabelText("Container image")).toBeInTheDocument();
     await user.type(within(sessionDialog).getByLabelText("Name"), "Agent Shell");
     await user.click(within(sessionDialog).getByRole("button", {name: "Create session"}));
 
@@ -480,6 +482,40 @@ describe("frontend smoke coverage", () => {
     });
     expect(workspaceHandlers.modals.closeWorkspaceModal).toHaveBeenCalled();
     workspaceView.unmount();
+  });
+
+  test("create session modal derives ssh sessions from dev machine workspaces", async () => {
+    const user = userEvent.setup();
+    const sshWorkspace = {
+      ...workspace,
+      source: {
+        target: {
+          host: "dev.example.com",
+          username: "developer",
+        },
+        type: "ssh",
+      },
+    };
+    const {handlers} = renderShell({
+      sessionModalOpen: true,
+      workspaces: [sshWorkspace],
+    });
+
+    const sessionDialog = screen.getByRole("dialog", {name: "New session"});
+    expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
+    expect(within(sessionDialog).queryByLabelText("Container image")).not.toBeInTheDocument();
+    expect(within(sessionDialog).getByText("This session will connect to developer@dev.example.com.")).toBeInTheDocument();
+
+    await user.type(within(sessionDialog).getByLabelText("Name"), "Dev shell");
+    await user.click(within(sessionDialog).getByRole("button", {name: "Create session"}));
+
+    expect(handlers.sessions.createSession).toHaveBeenCalledWith({
+      cpu: "1",
+      env: {},
+      memory: "1Gi",
+      name: "Dev shell",
+      sessionType: "ssh",
+    });
   });
 
   test("submits dev machine workspace source", async () => {
