@@ -48,9 +48,9 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}`,
         {method: "DELETE"},
     ),
-    getWorkspaceFiles: (workspaceId) => request(
+    getWorkspaceFiles: (workspaceId, path = "") => request(
         getToken,
-        `/api/workspaces/${workspaceId}/files`,
+        `/api/workspaces/${workspaceId}/files${path ? `?path=${encodeURIComponent(path)}` : ""}`,
     ),
     syncWorkspaceFiles: (workspaceId) => request(
         getToken,
@@ -66,9 +66,9 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
         {method: "PUT", body: {content}},
     ),
-    getSshSessionFiles: (workspaceId, sessionId) => request(
+    getSshSessionFiles: (workspaceId, sessionId, path = "") => request(
         getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-files`,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-files${path ? `?path=${encodeURIComponent(path)}` : ""}`,
     ),
     getSshSessionFile: (workspaceId, sessionId, path) => request(
         getToken,

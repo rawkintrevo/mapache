@@ -107,7 +107,7 @@ app.get("/ssh/files", async (req, res) => {
   if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
   if (!sshSession.enabled()) return res.status(400).json({error: "ssh_session_required"});
   try {
-    res.json(await sshSession.listFiles());
+    res.json(await sshSession.listFiles(req.query.path || ""));
   } catch (error) {
     console.error("ssh file list failed", error);
     res.status(error.status || 502).json({error: error.publicMessage || error.message || "ssh_file_list_failed"});

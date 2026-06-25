@@ -110,6 +110,8 @@ Route paths, environment variables, storage paths, and startup order remain cont
 
 The runner exposes a backend-only `POST /workspace/sync-down` route protected by `SESSION_SHUTDOWN_TOKEN`. Functions calls this route after file-browser uploads or editor saves so newly written Cloud Storage objects materialize into the active `/workspace` filesystem that the terminal process sees. The existing periodic sync loop still uploads local terminal changes back to storage and preserves newer remote objects when it encounters them.
 
+Workspace file browsing uses lazy directory traversal. The Functions `GET /workspaces/{workspaceId}/files` API accepts an optional `path` query parameter and lists only that directory's immediate files and child directories from Cloud Storage using a delimiter. The first load requests the workspace root only; the frontend requests child directories when the user expands them. SSH-backed Dev machine file browsing follows the same contract through the runner `/ssh/files?path=...` route and uses a non-recursive remote `find` limited to the requested directory.
+
 All runner images copy `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require new revisions of the affected Pi and Codex runner images; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
 ## Terminal Runtime

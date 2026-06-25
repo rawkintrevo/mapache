@@ -15,10 +15,10 @@
     },
     {"type": "waitForNetwork", "requestUrlIncludes": "/file?path=", "method": "PUT", "expectedStatus": 200, "timeoutMs": 10000},
     {"type": "click", "role": "button", "name": "Refresh files"},
-    {"type": "waitForSnapshotText", "text": "{{fileName}}", "timeoutMs": 10000}
+    {"type": "waitForSnapshotText", "text": "qa", "timeoutMs": 10000}
   ],
   "successSignals": [
     "PUT workspace file returns 200",
-    "File drawer shows the created file after refresh"
+    "File drawer shows the created file's parent directory after refresh"
   ]
 }

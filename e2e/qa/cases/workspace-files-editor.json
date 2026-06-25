@@ -15,6 +15,7 @@
         "content": "initial qa file content"
       }
     },
+    {"useScript": "scripts/expand-file-directory.json", "parameters": {"directoryName": "qa"}},
     {"useScript": "scripts/open-file-editor.json", "parameters": {"fileName": "readme"}},
     {"useScript": "scripts/save-file-editor.json", "parameters": {"content": "updated qa file content"}},
     {"useScript": "scripts/download-selected-file.json"},
