@@ -7,6 +7,7 @@ const express = require("express");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
 const {createBrowserQaService} = require("./lib/browserQa");
+const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
@@ -30,6 +31,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
+const chromeRuntime = createChromeRuntime(config);
 const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
@@ -85,7 +87,12 @@ app.get("/capabilities", requireBrowserAccess, async (req, res) => {
     ok: true,
     capabilities: config.runnerCapabilities,
     preview: preview.capabilityStatus(),
+    browser: chromeRuntime.status(),
   });
+});
+
+app.get("/browser/status", requireBrowserAccess, (req, res) => {
+  res.json({ok: true, browser: chromeRuntime.status()});
 });
 
 app.post("/workspace/sync-down", async (req, res) => {
@@ -230,6 +237,7 @@ app.post("/shutdown", async (req, res) => {
 
   try {
     sshSession.closeAll();
+    await chromeRuntime.stop();
     await workspace.syncUp({includeArchives: true});
     await activity.updateSessionActivity({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -507,6 +515,7 @@ workspace.ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      await chromeRuntime.start();
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
       await activeHarness.materializeMcp();
