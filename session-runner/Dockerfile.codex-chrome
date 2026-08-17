@@ -11,6 +11,8 @@ COPY install-codex-standalone.sh /usr/local/bin/install-codex-standalone.sh
 RUN chmod +x /usr/local/bin/install-codex-standalone.sh \
   && CODEX_INSTALL_DIR=/usr/local/bin /usr/local/bin/install-codex-standalone.sh
 
+RUN npm install -g chrome-devtools-mcp@1.6.0
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev \
@@ -21,8 +23,9 @@ COPY lib ./lib
 COPY seeded-skills ./seeded-skills
 COPY seeded-codex ./seeded-codex
 
-RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js \
+RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
+  && ln -sf /app/bin/mapache-chrome-status.js /usr/local/bin/mapache-chrome-status \
   && node /app/bin/check-chrome-runtime.js
 
 RUN mkdir -p /workspace /workspace/.mapache/qa /tmp/mapache-codex /var/lib/mapache/chrome/profile

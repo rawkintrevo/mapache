@@ -5,6 +5,9 @@ const path = require("path");
 const SEEDED_SKILLS_DIR = path.join(__dirname, "..", "seeded-skills");
 
 const WORKSPACE_SKILL_PROFILES = Object.freeze({
+  chrome: Object.freeze([
+    "mapache-chrome",
+  ]),
   github: Object.freeze([
     "mapache-github-issue",
   ]),
@@ -24,6 +27,7 @@ function defaultWorkspaceSkillProfileIds(config = {}) {
   const profileIds = [];
 
   if (config.workspaceSourceMode === "github") profileIds.push("github");
+  if (capabilities.chrome) profileIds.push("chrome");
   if (capabilities.n64) profileIds.push("n64");
   else if (capabilities.preview) profileIds.push("web");
 

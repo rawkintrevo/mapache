@@ -80,6 +80,13 @@ function createConfig() {
     browserQaHeadless: envFlag(process.env.BROWSER_QA_HEADLESS, true),
     browserQaNavigationTimeoutMs: positiveNumber(process.env.BROWSER_QA_NAVIGATION_TIMEOUT_MS, 15000),
     browserQaStatePath: path.join(browserQaDir, "last-run.json"),
+    browserActivityUrl: chromeEnabled ?
+      normalizeEnvString(process.env.MAPACHE_BROWSER_ACTIVITY_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/activity` : "",
+    browserCdpUrl: chromeEnabled ?
+      normalizeEnvString(process.env.MAPACHE_BROWSER_CDP_URL) || `http://127.0.0.1:${positiveNumber(process.env.CHROME_CDP_PORT, 9222)}` : "",
+    browserStatusUrl: chromeEnabled ?
+      normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/status` : "",
+    browserStatusCommand: chromeEnabled ? normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_COMMAND) || "mapache-chrome-status" : "",
     chromeCdpHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_CDP_HOST) || "127.0.0.1" : "",
     chromeCdpPort: chromeEnabled ? positiveNumber(process.env.CHROME_CDP_PORT, 9222) : 0,
     chromeDisplay: chromeEnabled ? normalizeEnvString(process.env.CHROME_DISPLAY) || ":99" : "",
