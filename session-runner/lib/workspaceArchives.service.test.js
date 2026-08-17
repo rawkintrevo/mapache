@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  chromeProfileArchiveExcludePatterns,
+  chromeProfileArchiveRemotePath,
   codexHomeArchiveRemotePath,
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
@@ -87,6 +89,23 @@ test("selects default archive targets for blank workspaces", () => {
     "users/u/workspaces/w/.mapahce-internal/sessions/",
   ]);
   assert.equal(targets.find((target) => target.name === "codex-home").restoreOnStartup, true);
+});
+
+test("adds a Chrome-only profile archive outside normal workspace files", () => {
+  const targets = createArchiveSyncTargets({
+    config: baseConfig({chromeEnabled: true, chromeProfileDir: "/var/lib/mapache/chrome/profile"}),
+    git: git(false),
+  });
+  const target = targets.find((entry) => entry.name === "chrome-profile");
+
+  assert.ok(target);
+  assert.equal(target.mode, "chromeProfile");
+  assert.equal(target.localPath, "/var/lib/mapache/chrome/profile");
+  assert.equal(target.remotePath, "users/u/workspaces/w/.mapache-internal/chrome/chrome-profile.tar.gz");
+  assert.deepEqual(target.exclude, chromeProfileArchiveExcludePatterns());
+  assert.equal(chromeProfileArchiveRemotePath(baseConfig()), "");
+  assert.equal(chromeProfileArchiveRemotePath(baseConfig({chromeEnabled: true})),
+      "users/u/workspaces/w/.mapache-internal/chrome/chrome-profile.tar.gz");
 });
 
 test("adds .git archive target only for GitHub workspaces", () => {

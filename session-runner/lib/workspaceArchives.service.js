@@ -51,6 +51,11 @@ function codexHomeArchiveRemotePath(config) {
   return `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/");
 }
 
+function chromeProfileArchiveRemotePath(config) {
+  if (!config.prefix || !config.chromeEnabled) return "";
+  return `${config.prefix}/.mapache-internal/chrome/chrome-profile.tar.gz`.replace(/\/+/g, "/");
+}
+
 function legacyCodexHomeArchivePrefixes(config) {
   if (!config.prefix) return [];
   return [config.internalStorageDir, ...(config.legacyInternalStorageDirs || [])]
@@ -124,6 +129,20 @@ function createArchiveSyncTargets({config, git}) {
     });
   }
 
+  if (config.chromeEnabled) {
+    targets.push({
+      name: "chrome-profile",
+      mode: "chromeProfile",
+      localPath: config.chromeProfileDir,
+      bucketName: config.bucketName,
+      remotePath: chromeProfileArchiveRemotePath(config),
+      fallbackArchives: legacyArchiveRemotePaths(config, chromeProfileArchiveRemotePath(config)),
+      exclude: chromeProfileArchiveExcludePatterns(),
+      ensureLocalPath: true,
+      restoreOnStartup: true,
+    });
+  }
+
   if (git.isGithubWorkspace()) {
     targets.push({
       name: "workspace-git",
@@ -158,6 +177,29 @@ function homeArchiveExcludePatterns(config) {
     `${relative}/*`,
     `./${relative}`,
     `./${relative}/*`,
+  ];
+}
+
+function chromeProfileArchiveExcludePatterns() {
+  return [
+    "./Default/Cache",
+    "./Default/Cache/*",
+    "./Default/Code Cache",
+    "./Default/Code Cache/*",
+    "./Default/GPUCache",
+    "./Default/GPUCache/*",
+    "./Default/Service Worker/CacheStorage",
+    "./Default/Service Worker/CacheStorage/*",
+    "./Default/Crashpad",
+    "./Default/Crashpad/*",
+    "./Crash Reports",
+    "./Crash Reports/*",
+    "./Singleton*",
+    "./DevToolsActivePort",
+    "./Default/Downloads",
+    "./Default/Downloads/*",
+    "./tmp",
+    "./tmp/*",
   ];
 }
 
@@ -367,6 +409,8 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
 
 module.exports = {
   archiveRemotePath,
+  chromeProfileArchiveExcludePatterns,
+  chromeProfileArchiveRemotePath,
   codexHomeArchiveRemotePath,
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
