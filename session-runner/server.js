@@ -8,6 +8,7 @@ const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
 const {createBrowserQaService} = require("./lib/browserQa");
 const {createChromeRuntime} = require("./lib/chromeRuntime");
+const {createChromeDesktopService} = require("./lib/chromeDesktop");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
@@ -31,7 +32,9 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
-const chromeRuntime = createChromeRuntime(config);
+const chromeRuntime = createChromeRuntime(config, {
+  desktop: createChromeDesktopService(config),
+});
 const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
