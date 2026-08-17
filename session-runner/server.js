@@ -4,6 +4,7 @@ const path = require("path");
 const http = require("http");
 const crypto = require("crypto");
 const express = require("express");
+const {createVncBridge} = require("./lib/vncBridge");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
 const {createBrowserQaService} = require("./lib/browserQa");
@@ -30,11 +31,13 @@ const config = createConfig();
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
+const browserWss = new WebSocketServer({noServer: true});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
 const chromeRuntime = createChromeRuntime(config, {
   desktop: createChromeDesktopService(config),
 });
+const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
 const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
@@ -97,6 +100,20 @@ app.get("/capabilities", requireBrowserAccess, async (req, res) => {
 app.get("/browser/status", requireBrowserAccess, (req, res) => {
   res.json({ok: true, browser: chromeRuntime.status()});
 });
+
+if (config.chromeEnabled) {
+  app.get("/browser/", requireBrowserAccess, (req, res) => {
+    const target = new URL(req.originalUrl || "/browser/", "http://localhost");
+    target.pathname = "/browser/vnc.html";
+    target.searchParams.set("autoconnect", "true");
+    target.searchParams.set("resize", "remote");
+    target.searchParams.set("path", "browser/vnc");
+    res.redirect(`${target.pathname}?${target.searchParams.toString()}`);
+  });
+  app.use("/browser", requireBrowserAccess, express.static("/usr/share/novnc", {
+    fallthrough: false,
+  }));
+}
 
 app.post("/workspace/sync-down", async (req, res) => {
   if (!hasRunnerAccess(req)) {
@@ -511,6 +528,30 @@ wss.on("connection", (socket, request) => {
 
   socket.on("close", () => {
     terminalSession.detach(socket);
+  });
+});
+
+browserWss.on("connection", (socket) => {
+  const bridge = vncBridge.attach(socket);
+  socket.once("close", bridge.close);
+});
+
+server.on("upgrade", (request, socket, head) => {
+  let pathname = "";
+  try {
+    pathname = new URL(request.url || "/", "http://localhost").pathname;
+  } catch (error) {
+    socket.destroy();
+    return;
+  }
+  if (pathname !== "/browser/vnc") return;
+  if (!hasBrowserAccess(request)) {
+    socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  browserWss.handleUpgrade(request, socket, head, (client) => {
+    browserWss.emit("connection", client, request);
   });
 });
 
