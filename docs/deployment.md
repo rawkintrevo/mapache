@@ -31,6 +31,19 @@ firebase deploy --only functions --project pi-agents-cloud
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
 ```
 
+Chrome images must exist before the catalog makes them selectable. Build and push them from the `session-runner/` directory with the checked-in Cloud Build files:
+
+```bash
+cd session-runner
+gcloud builds submit . --config cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+gcloud builds submit . --config cloudbuild.codex-chrome.yaml --project pi-agents-cloud
+cd ..
+firebase deploy --only functions --project pi-agents-cloud
+firebase deploy --only hosting --project pi-agents-cloud
+```
+
+Record the resulting Artifact Registry digests and verify both `pi-chrome` and `codex-chrome` tags before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
+
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account.
 
 GitHub Actions preview and production workflows install root, `community/`, `functions/`, and `session-runner/` dependencies, run the fast checks, build the app/community output, and deploy to Firebase. Production writes `functions/.env.pi-agents-cloud` before deploy with the expected service account params plus `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and `QA_LOGIN_DISPLAY_NAME` from GitHub production environment variables.
@@ -51,7 +64,8 @@ Cloud Run create, update, and delete operations use a 240-second polling deadlin
 - Codex runner image changes, including the packaged GitHub CLI, require rebuilding and pushing `codex-basic` and `codex-web`; existing Codex sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
-- Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `codex-basic`, and `codex-web`.
+- Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `pi-chrome`, `codex-basic`, `codex-web`, and `codex-chrome`.
+- Chrome image builds run the bounded `check-chrome-runtime.js` and `chrome-smoke.js` checks before publishing, but production canary verification is still required after Functions and Hosting deploy.
 - The Codex runner Dockerfiles pin Codex CLI `0.140.0` and install the published Linux package tarball directly because that release's `codex-package_SHA256SUMS` file is missing the Linux standalone package entry and breaks the hosted `install.sh` flow.
 - Do not put developer maintenance notes under `community/`.
 

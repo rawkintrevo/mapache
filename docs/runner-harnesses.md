@@ -28,7 +28,7 @@ The supported harness ids are:
 - `pi`
 - `codex`
 
-The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64 capability flags. Each harness entry declares whether it supports:
+The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome capability flags. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. Each harness entry declares whether it supports:
 
 - auth materialization
 - workspace-local skills
@@ -100,6 +100,7 @@ Functions resolves the selected image to a harness before provisioning Cloud Run
 - `HARNESS_ID`
 - `TERMINAL_KIND`
 - `CODEX_CONFIG_PATH=/workspace/.codex/config.toml` for Codex sessions
+- Chrome-only connection guidance: `MAPACHE_BROWSER_CDP_URL`, `MAPACHE_BROWSER_STATUS_URL`, `MAPACHE_BROWSER_ACTIVITY_URL`, and `MAPACHE_BROWSER_STATUS_COMMAND`.
 
 Runner startup now resolves the active harness once, then executes harness hooks in order:
 
@@ -110,6 +111,8 @@ Runner startup now resolves the active harness once, then executes harness hooks
 5. `materializeSubagents`
 
 This keeps feature gating out of route handlers and UI inference code where possible. Runner-side Pi skill and subagent helpers are also instantiated lazily so shell and SSH harnesses do not fail startup just because those unsupported helper constructors exist in the same image.
+
+Chrome images seed the harness-neutral `mapache-chrome` skill at the active Pi or Codex workspace skill path when it is missing. The skill tells the agent to run `mapache-chrome-status`, attach to the existing loopback CDP endpoint through the pinned `chrome-devtools-mcp@1.6.0` server, and never launch a second browser or read the profile directory. The reserved `chrome-devtools` MCP entry deterministically replaces a workspace entry with the same name so the image-owned server always attaches to the user-visible browser.
 
 ## Frontend
 

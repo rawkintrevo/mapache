@@ -12,7 +12,7 @@ Read this before changing workspace/session workflow, authenticated app shape, s
 
 Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud terminal sessions. Authenticated users create workspaces, start isolated Cloud Run runner sessions, and work from a terminal-first browser UI. The public landing page is served from `/`; the authenticated workspace shell is served from `/app` and `/app/**`; the Docusaurus community site remains under `/community/**`.
 
-The selected-session view prioritizes the terminal. Web-capable sessions expose a `Preview` canvas beside the terminal. GitHub-backed sessions expose Git status, pull, stage/unstage, commit, push, and pull-request actions under the terminal controls. The left drawer owns workspace, file, and session navigation. The right drawer owns contextual tools: Authentication Center, Skills, and Extensions.
+The selected-session view prioritizes the terminal. Web-capable sessions expose a `Preview` canvas beside the terminal, and Chrome-capable sessions expose a `Persistent Chrome` canvas plus an `Open Chrome` action backed by a short-lived signed browser URL. GitHub-backed sessions expose Git status, pull, stage/unstage, commit, push, and pull-request actions under the terminal controls. The left drawer owns workspace, file, and session navigation. The right drawer owns contextual tools: Authentication Center, Skills, and Extensions.
 
 Admin users are identified by `isAdmin: true` on their `users/{uid}` Firestore document. They get an Admin page from the left drawer user menu for paginated user visibility, allowlist toggles, and per-user runner cost summaries.
 
@@ -65,6 +65,8 @@ Read [runtime-containers.md](./runtime-containers.md) and [session-runner-archit
 - Use Cloud Run per session for isolation and resource control.
 - Treat workspace source mode as an explicit domain concept.
 - Enforce one active Pi/agent session at a time for GitHub workspaces; shell sessions may run alongside for manual inspection.
+- Enforce at most one active Chrome-capable session per workspace; shell and other non-Chrome sessions may run alongside it.
+- Keep the Chrome profile in the workspace-owned internal archive path and never expose that archive, raw CDP, or VNC directly to users.
 - Keep Pi skills and package management additive to Pi terminal tooling by reading/writing the same workspace-local files.
 - Keep developer knowledge in `docs/` and user-facing community content in `community/`.
 
