@@ -18,6 +18,7 @@ COPY server.js ./
 COPY bin ./bin
 COPY lib ./lib
 COPY seeded-skills ./seeded-skills
+COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 
 RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
