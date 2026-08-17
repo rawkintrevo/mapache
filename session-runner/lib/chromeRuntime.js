@@ -117,7 +117,7 @@ function createChromeRuntime(config = {}, deps = {}) {
 function sanitizeBrowserError(error) {
   const value = compactErrorMessage(error && (error.publicMessage || error.message) || error || "browser runtime failed") || "browser runtime failed";
   return value
-      .replace(/(?:--user-data-dir|--remote-debugging-port|--remote-debugging-address)\s+\S+/gi, "<redacted-argument>")
+      .replace(/(?:--user-data-dir|--remote-debugging-port|--remote-debugging-address)(?:=|\s+)\S+/gi, "<redacted-argument>")
       .replace(/(?:\/[^\s]*)(?:profile|chrome|\.mapache)[^\s]*/gi, "<redacted-path>")
       .slice(0, 240);
 }

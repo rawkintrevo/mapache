@@ -2,11 +2,11 @@
 
 const path = require("path");
 const http = require("http");
-const crypto = require("crypto");
 const express = require("express");
 const {createVncBridge} = require("./lib/vncBridge");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
+const {createBrowserAccessVerifier} = require("./lib/browserAccess");
 const {createBrowserQaService} = require("./lib/browserQa");
 const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createChromeDesktopService} = require("./lib/chromeDesktop");
@@ -30,6 +30,10 @@ const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
 
 const config = createConfig();
+const browserAccess = createBrowserAccessVerifier({
+  secret: config.sessionBrowserTokenSecret,
+  sessionId: config.sessionId,
+});
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
@@ -674,58 +678,20 @@ function requireBrowserOrRunnerAccess(req, res, next) {
 }
 
 function hasBrowserAccess(req) {
-  const token = browserAccessToken(req);
-  if (!token || !verifyBrowserAccessToken(token)) return false;
+  const token = browserAccess.extractToken(req);
+  if (!token || !browserAccess.verify(token)) return false;
   req.mapacheAccessToken = token;
   return true;
 }
 
 function browserAccessToken(req) {
-  try {
-    const url = new URL(req.url || "/", "http://localhost");
-    const queryToken = url.searchParams.get("mapache_access");
-    if (queryToken) return queryToken;
-  } catch (error) {
-    return "";
-  }
-
-  const cookie = req.headers && req.headers.cookie || "";
-  const match = cookie.match(/(?:^|;\s*)mapache_access=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : "";
+  return browserAccess.extractToken(req);
 }
 
 function verifyBrowserAccessToken(token) {
-  if (!config.sessionBrowserTokenSecret) return false;
-  const parts = String(token || "").split(".");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
-  const expected = crypto
-      .createHmac("sha256", config.sessionBrowserTokenSecret)
-      .update(parts[0])
-      .digest("base64url");
-  if (!timingSafeEqual(parts[1], expected)) return false;
-
-  const payload = parseBrowserAccessPayload(parts[0]);
-  if (!payload || payload.sid !== config.sessionId) return false;
-  return Number(payload.exp || 0) > Math.floor(Date.now() / 1000);
-}
-
-function parseBrowserAccessPayload(value) {
-  try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-  } catch (error) {
-    return null;
-  }
+  return browserAccess.verify(token);
 }
 
 function browserAccessTokenMaxAgeMs(token) {
-  const payload = parseBrowserAccessPayload(String(token || "").split(".")[0] || "");
-  const expMs = Number(payload && payload.exp || 0) * 1000;
-  return Math.max(0, Math.min(expMs - Date.now(), 24 * 60 * 60 * 1000));
-}
-
-function timingSafeEqual(left, right) {
-  const leftBuffer = Buffer.from(String(left || ""));
-  const rightBuffer = Buffer.from(String(right || ""));
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  return browserAccess.maxAgeMs(token);
 }
