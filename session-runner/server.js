@@ -28,6 +28,7 @@ const {
 } = require("./lib/terminal");
 const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
+const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 
 const config = createConfig();
 const browserAccess = createBrowserAccessVerifier({
@@ -36,7 +37,7 @@ const browserAccess = createBrowserAccessVerifier({
 });
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({server, path: "/terminal"});
+const wss = new WebSocketServer({noServer: true});
 const browserWss = new WebSocketServer({noServer: true});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
@@ -563,24 +564,11 @@ browserWss.on("connection", (socket) => {
   socket.once("close", bridge.close);
 });
 
-server.on("upgrade", (request, socket, head) => {
-  let pathname = "";
-  try {
-    pathname = new URL(request.url || "/", "http://localhost").pathname;
-  } catch (error) {
-    socket.destroy();
-    return;
-  }
-  if (pathname !== "/browser/vnc") return;
-  if (!hasBrowserAccess(request)) {
-    socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
-    socket.destroy();
-    return;
-  }
-  browserWss.handleUpgrade(request, socket, head, (client) => {
-    browserWss.emit("connection", client, request);
-  });
-});
+server.on("upgrade", createWebSocketUpgradeRouter({
+  terminalWss: wss,
+  browserWss,
+  hasBrowserAccess,
+}));
 
 workspace.ensureWorkspace()
     .then(async () => {
