@@ -38,6 +38,18 @@
   border: 0;
 }
 
+.browser-canvas {
+  height: min(62vh, 720px);
+  min-height: 360px;
+}
+
+.browser-canvas__frame {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+}
+
 .terminal-placeholder {
   display: grid;
   place-items: center;
