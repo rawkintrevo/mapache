@@ -6,7 +6,7 @@ const express = require("express");
 const {createVncBridge} = require("./lib/vncBridge");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
-const {createBrowserAccessVerifier} = require("./lib/browserAccess");
+const {browserVncWebSocketPath, createBrowserAccessVerifier} = require("./lib/browserAccess");
 const {createBrowserQaService} = require("./lib/browserQa");
 const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createChromeDesktopService} = require("./lib/chromeDesktop");
@@ -130,7 +130,7 @@ if (config.chromeEnabled) {
     target.pathname = "/browser/vnc.html";
     target.searchParams.set("autoconnect", "true");
     target.searchParams.set("resize", "remote");
-    target.searchParams.set("path", "browser/vnc");
+    target.searchParams.set("path", browserVncWebSocketPath(req.mapacheAccessToken));
     res.redirect(`${target.pathname}?${target.searchParams.toString()}`);
   });
   app.use("/browser", requireBrowserAccess, express.static("/usr/share/novnc", {
@@ -650,6 +650,7 @@ function requireBrowserAccess(req, res, next) {
     res.cookie("mapache_access", req.mapacheAccessToken, {
       httpOnly: true,
       maxAge: browserAccessTokenMaxAgeMs(req.mapacheAccessToken),
+      partitioned: true,
       sameSite: "none",
       secure: true,
     });

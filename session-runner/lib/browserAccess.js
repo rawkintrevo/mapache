@@ -44,6 +44,12 @@ function createBrowserAccessVerifier({secret = "", sessionId = "", now = () => D
   }
 }
 
+function browserVncWebSocketPath(accessToken) {
+  const path = "browser/vnc";
+  const token = String(accessToken || "");
+  return token ? `${path}?mapache_access=${encodeURIComponent(token)}` : path;
+}
+
 function parsePayload(value) {
   try {
     return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
@@ -60,6 +66,7 @@ function timingSafeEqual(left, right) {
 }
 
 module.exports = {
+  browserVncWebSocketPath,
   createBrowserAccessVerifier,
   parsePayload,
 };

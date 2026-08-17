@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const test = require("node:test");
-const {createBrowserAccessVerifier} = require("./browserAccess");
+const {browserVncWebSocketPath, createBrowserAccessVerifier} = require("./browserAccess");
 
 function signedToken(secret, sessionId, exp) {
   const payload = Buffer.from(JSON.stringify({sid: sessionId, exp})).toString("base64url");
@@ -39,4 +39,15 @@ test("does not decode malformed cookie values or expose secrets through max age"
   const verifier = createBrowserAccessVerifier({secret: "browser-secret", sessionId: "session-1", now: () => 1_700_000_000_000});
   assert.equal(verifier.extractToken({url: "/", headers: {cookie: "mapache_access=%ZZ"}}), "");
   assert.equal(verifier.maxAgeMs("not-a-token"), 0);
+});
+
+test("carries browser access through noVNC's nested WebSocket path setting", () => {
+  const redirect = new URL("/browser/vnc.html", "https://runner.example");
+  redirect.searchParams.set("path", browserVncWebSocketPath("signed.token"));
+
+  assert.equal(
+      redirect.searchParams.get("path"),
+      "browser/vnc?mapache_access=signed.token",
+  );
+  assert.equal(browserVncWebSocketPath(""), "browser/vnc");
 });

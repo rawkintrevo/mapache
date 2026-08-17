@@ -26,6 +26,7 @@ COPY seeded-codex ./seeded-codex
 RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
   && ln -sf /app/bin/mapache-chrome-status.js /usr/local/bin/mapache-chrome-status \
+  && node /app/bin/patch-novnc-webutil.js \
   && node /app/bin/check-chrome-runtime.js \
   && node /app/bin/chrome-smoke.js
 
