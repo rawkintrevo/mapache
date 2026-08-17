@@ -51,9 +51,10 @@ Candidate flows:
 - Session create/open/stop/delete with terminal access-token validation.
 - GitHub workspace clone/resume/status/push behavior.
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
+- Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi-to-Codex handoff.
 - Skills and Extensions drawer smoke paths against a controlled runner fixture.
 
-Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, and `codex-web`.
+Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome`.
 
 E2E tests should not run in normal PR workflows until they are reliable, bounded, and credential-light. Run them manually before risky deploys and in scheduled workflows once automation exists.
 
@@ -115,6 +116,8 @@ QA manifests under `e2e/qa/` are executable instructions for agents, not default
 When running the local Vite app for browser QA, keep screenshots, console logs, network dumps, traces, and result JSON under `artifacts/qa/`. The dev server ignores `artifacts/**`, so writing QA evidence there does not consume extra file watchers or crash the app under test.
 
 Some sandboxed hosts still cannot launch a standalone local Chrome or Chromium CLI reliably for headless QA because the browser process itself fails before page load. In this repo, checked-in `e2e/qa/` manifests should be executed through Chrome DevTools-assisted QA rather than assuming raw headless-browser or Playwright launches are available everywhere.
+
+Chrome-image QA attaches to the runner-owned headed browser through CDP. It must verify that QA actions are visible in noVNC, that the shared browser and user tabs remain open after the run, and that reports stay under `$MAPACHE_QA_DIR` without cookies, response bodies, credentials, or profile paths. The checked-in `mapache-chrome` skill and `mapache-chrome-status` command are the supported diagnostics; QA must not launch a second Chromium instance.
 
 The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace files and editor behavior, session creation/lifecycle, Authentication Center, Pi auth selection, workspace skills for Pi and Codex sessions, Extensions, Git status, Git commit/push/PR flows, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
 

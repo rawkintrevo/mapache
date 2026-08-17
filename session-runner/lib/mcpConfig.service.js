@@ -5,6 +5,7 @@ const path = require("path");
 
 const CODEX_MCP_BEGIN = "# BEGIN MAPACHE MCP";
 const CODEX_MCP_END = "# END MAPACHE MCP";
+const CHROME_DEVTOOLS_MCP_PACKAGE = "chrome-devtools-mcp@1.6.0";
 
 function parseMcpConfig(value) {
   try {
@@ -20,7 +21,7 @@ function parseMcpConfig(value) {
 }
 
 function createMcpConfigService({config}) {
-  const mcpConfig = parseMcpConfig(config.mcpConfigRaw);
+  const mcpConfig = runnerMcpConfig(config);
 
   async function materializeMcpConfig(harness = null) {
     await writeJsonFile(path.join(config.workspaceDir, ".mcp.json"), mcpConfig);
@@ -37,6 +38,21 @@ function createMcpConfigService({config}) {
   }
 
   return {materializeMcpConfig};
+}
+
+function runnerMcpConfig(config = {}) {
+  const parsed = parseMcpConfig(config.mcpConfigRaw);
+  if (!config.chromeEnabled && !config.runnerCapabilities?.chrome) return parsed;
+  return {
+    mcpServers: {
+      ...parsed.mcpServers,
+      "chrome-devtools": {
+        command: "chrome-devtools-mcp",
+        args: ["--browser-url", config.browserCdpUrl || "http://127.0.0.1:9222", "--no-usage-statistics"],
+        env: {CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1"},
+      },
+    },
+  };
 }
 
 async function writeJsonFile(filePath, value) {
@@ -101,4 +117,11 @@ function tomlString(value) {
   return JSON.stringify(String(value || ""));
 }
 
-module.exports = {codexMcpToml, createMcpConfigService, mergeCodexMcpToml, parseMcpConfig};
+module.exports = {
+  CHROME_DEVTOOLS_MCP_PACKAGE,
+  codexMcpToml,
+  createMcpConfigService,
+  mergeCodexMcpToml,
+  parseMcpConfig,
+  runnerMcpConfig,
+};

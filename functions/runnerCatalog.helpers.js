@@ -56,6 +56,7 @@ function cloneCapabilities(capabilities) {
     previewQa: Boolean(capabilities && capabilities.previewQa),
     functions: Boolean(capabilities && capabilities.functions),
     n64: Boolean(capabilities && capabilities.n64),
+    chrome: Boolean(capabilities && capabilities.chrome),
   };
 }
 

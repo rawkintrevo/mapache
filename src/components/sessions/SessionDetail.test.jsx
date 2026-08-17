@@ -1,0 +1,57 @@
+import {render, screen} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import {describe, expect, test, vi} from "vitest";
+import {SessionDetail} from "./SessionDetail.jsx";
+
+function session(overrides = {}) {
+  return {
+    id: "session-1",
+    name: "Chrome smoke",
+    status: "running",
+    serviceUrl: "https://runner.example",
+    resources: {cpu: "1", memory: "1Gi"},
+    capabilities: {terminal: true, preview: false, chrome: true},
+    ...overrides,
+  };
+}
+
+function renderDetail(overrides = {}) {
+  return render(
+      <SessionDetail
+        busy={false}
+        gitStatus={null}
+        isGithubWorkspace={false}
+        session={session(overrides)}
+        sshForwards={{}}
+        workspaceId="workspace-1"
+        onGetSessionAccessUrls={vi.fn().mockResolvedValue({
+          terminalUrl: "https://runner.example/?mapache_access=terminal-token",
+          browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
+        })}
+        onResizeSession={vi.fn()}
+        onRestartSession={vi.fn()}
+      />,
+  );
+}
+
+describe("SessionDetail Chrome workflow", () => {
+  test("shows the Chrome canvas only for Chrome-capable sessions", async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    await user.click(screen.getByRole("tab", {name: "Chrome"}));
+    expect(await screen.findByTitle("Chrome Chrome smoke")).toHaveAttribute(
+        "src",
+        "https://runner.example/browser/?mapache_access=browser-token",
+    );
+  });
+
+  test("does not add a Chrome canvas to a normal terminal session", () => {
+    renderDetail({
+      name: "Pi smoke",
+      capabilities: {terminal: true, preview: false, chrome: false},
+    });
+
+    expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
+  });
+});

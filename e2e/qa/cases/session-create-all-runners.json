@@ -1,7 +1,7 @@
 {
   "id": "session.create-all-runners",
   "title": "Create sessions for all standard runners",
-  "description": "Log in, create a blank workspace, then create and clean up pi-basic, codex-basic, pi-web, and codex-web sessions.",
+  "description": "Log in, create a blank workspace, then create and clean up pi-basic, codex-basic, pi-web, codex-web, pi-chrome, and codex-chrome sessions.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/session.create-all-runners",
   "requires": {
@@ -33,6 +33,20 @@
     {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
     {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-codex-web"]},
     {"capture": "screenshot", "fileName": "codex-web-session.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-chrome-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi"}},
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-pi-chrome"]},
+    {"capture": "screenshot", "fileName": "pi-chrome-session.png"},
+    {"useScript": "scripts/delete-selected-session.json"},
+
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-codex-chrome-{{timestamp}}", "imageKey": "codex-chrome", "cpu": "1", "memory": "2Gi"}},
+    {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-codex-chrome"]},
+    {"capture": "screenshot", "fileName": "codex-chrome-session.png"},
     {"capture": "console"},
     {"capture": "network"},
     {"useScript": "scripts/delete-selected-session.json"},

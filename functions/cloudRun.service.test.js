@@ -152,6 +152,22 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(codexEnv.CODEX_HOME, "/tmp/mapache-codex/session-1");
   assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/codex-home");
 
+  const chromeEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+    sessionEnv: {},
+  }));
+  assert.strictEqual(chromeEnv.CHROME_PROFILE_DIR, "/var/lib/mapache/chrome/profile");
+  assert.strictEqual(chromeEnv.CHROME_CDP_URL, undefined);
+  assert.strictEqual(chromeEnv.MAPACHE_BROWSER_CDP_URL, "http://127.0.0.1:9222");
+  assert.strictEqual(chromeEnv.MAPACHE_BROWSER_STATUS_URL, "http://127.0.0.1:8080/browser/status");
+  assert.strictEqual(chromeEnv.MAPACHE_BROWSER_ACTIVITY_URL, "http://127.0.0.1:8080/browser/activity");
+
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",
     workspaceId: "workspace-1",

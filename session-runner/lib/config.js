@@ -25,9 +25,13 @@ function normalizePreviewBasePath(value) {
 }
 
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false};
+  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false};
   try {
-    return {...fallback, ...JSON.parse(process.env.RUNNER_CAPABILITIES || "{}")};
+    const parsed = JSON.parse(process.env.RUNNER_CAPABILITIES || "{}");
+    return Object.fromEntries(Object.keys(fallback).map((key) => [
+      key,
+      Boolean(parsed && Object.prototype.hasOwnProperty.call(parsed, key) ? parsed[key] : fallback[key]),
+    ]));
   } catch (error) {
     console.error("invalid RUNNER_CAPABILITIES, using fallback", error);
     return fallback;
@@ -58,6 +62,7 @@ function createConfig() {
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
   const runnerCapabilities = parseRunnerCapabilities();
+  const chromeEnabled = Boolean(runnerCapabilities.chrome);
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
@@ -75,6 +80,26 @@ function createConfig() {
     browserQaHeadless: envFlag(process.env.BROWSER_QA_HEADLESS, true),
     browserQaNavigationTimeoutMs: positiveNumber(process.env.BROWSER_QA_NAVIGATION_TIMEOUT_MS, 15000),
     browserQaStatePath: path.join(browserQaDir, "last-run.json"),
+    browserActivityUrl: chromeEnabled ?
+      normalizeEnvString(process.env.MAPACHE_BROWSER_ACTIVITY_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/activity` : "",
+    browserCdpUrl: chromeEnabled ?
+      normalizeEnvString(process.env.MAPACHE_BROWSER_CDP_URL) || `http://127.0.0.1:${positiveNumber(process.env.CHROME_CDP_PORT, 9222)}` : "",
+    browserStatusUrl: chromeEnabled ?
+      normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/status` : "",
+    browserStatusCommand: chromeEnabled ? normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_COMMAND) || "mapache-chrome-status" : "",
+    chromeCdpHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_CDP_HOST) || "127.0.0.1" : "",
+    chromeCdpPort: chromeEnabled ? positiveNumber(process.env.CHROME_CDP_PORT, 9222) : 0,
+    chromeDisplay: chromeEnabled ? normalizeEnvString(process.env.CHROME_DISPLAY) || ":99" : "",
+    chromeEnabled,
+    chromeNoVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_NOVNC_PORT, 6080) : 0,
+    chromeProfileDir: chromeEnabled ? path.resolve(process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
+    chromeStartupTimeoutMs: chromeEnabled ? positiveNumber(process.env.CHROME_STARTUP_TIMEOUT_MS, 30000) : 0,
+    chromeViewport: chromeEnabled ? {
+      width: positiveNumber(process.env.CHROME_VIEWPORT_WIDTH, 1440),
+      height: positiveNumber(process.env.CHROME_VIEWPORT_HEIGHT, 1000),
+    } : null,
+    chromeVncHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_VNC_HOST) || "127.0.0.1" : "",
+    chromeVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_VNC_PORT, 5900) : 0,
     bucketName,
     codexConfigPath,
     codexHomeDir,

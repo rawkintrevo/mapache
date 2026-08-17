@@ -40,9 +40,16 @@ The `codex-web` runner image is built from `session-runner/Dockerfile.codex-web`
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web
 ```
 
+The Chrome runner images add the same harness families with a persistent headed browser:
+
+```text
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-chrome
+```
+
 The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`.
 
-Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, and `n64`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
+Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, `n64`, and `chrome`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
 
 The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` contain the curated server-side image catalog. Session creation accepts `imageKey`, resolves the catalog entry plus its `harnessId`, persists both on the session document, and then provisions Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
 
@@ -72,6 +79,7 @@ Installed OS packages currently include:
 - `g++`
 - `ripgrep`
 - `tar`
+- `chromium`, `openbox`, `tint2`, `x11-utils`, `x11vnc`, `xvfb`, `novnc`, and `websockify` in Chrome images for the headed desktop and authenticated browser bridge
 
 `curl` is intentionally installed by default because users expect it in the browser terminal, and installing it manually inside ephemeral sessions is a poor default experience.
 
@@ -127,6 +135,18 @@ The runner stores a bounded raw-output replay buffer so a newly loaded iframe ca
 This persistence is scoped to the current Cloud Run container instance. A Cloud Run revision replacement, service stop, container crash, or scale-down still ends the PTY process.
 
 The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update `activeSocketCount`, `lastConnectedAt`, `lastDisconnectedAt`, and `lastActivityAt`; terminal input updates `lastActivityAt` with a short debounce to avoid one Firestore write per keystroke.
+
+## Chrome Runtime
+
+Chrome-capable images run one workspace-owned headed Chromium desktop alongside the terminal. `chromeDesktop.js` supervises Xvfb (`:99`), openbox, tint2, Chromium, and x11vnc; Chromium uses `/var/lib/mapache/chrome/profile`, CDP uses `127.0.0.1:9222`, and x11vnc uses `127.0.0.1:5900`. The noVNC assets are served through the runner on port 6080, never exposed as a raw Cloud Run port. The configured environment contract is `CHROME_PROFILE_DIR`, `CHROME_DISPLAY`, `CHROME_CDP_HOST`, `CHROME_CDP_PORT`, `CHROME_VNC_HOST`, `CHROME_VNC_PORT`, `CHROME_NOVNC_PORT`, `MAPACHE_BROWSER_CDP_URL`, `MAPACHE_BROWSER_STATUS_URL`, and `MAPACHE_BROWSER_ACTIVITY_URL`.
+
+The browser surface is protected by the same per-session HMAC browser token as the terminal and preview. `/browser/` serves authenticated noVNC, `/browser/status` reports safe desktop/CDP readiness, `/browser/activity` records meaningful agent browser actions, and the `/browser/vnc` WebSocket bridges only to loopback x11vnc. CDP and VNC ports are not public. `mapache-chrome-status` reports only readiness and browser version and exits nonzero when CDP is unavailable.
+
+Chrome profiles are not part of the visible workspace tree or the general home archive. The isolated archive target is `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`; the runner stages and sanitizes it before atomic restore, then serializes periodic and final snapshots. Cache, crash, download, lock, socket, and other transient paths are excluded. Shell sessions never create, restore, or overwrite this target.
+
+The Chrome DevTools MCP package is baked into both Chrome images at `chrome-devtools-mcp@1.6.0`. The runner materializes a reserved `chrome-devtools` MCP server with `--browser-url http://127.0.0.1:9222`, disables usage statistics/update checks, and attaches to the existing browser rather than launching another one. Chrome-image QA uses Playwright `connectOverCDP`; it closes only the temporary QA page and writes its normal reports under `$MAPACHE_QA_DIR`.
+
+Both Chrome Dockerfiles run `bin/check-chrome-runtime.js` and `bin/chrome-smoke.js` during image construction. The smoke check is bounded and credential-free: it verifies CDP, loopback VNC, multiple page targets, browser cookie/local-storage interaction, profile file creation, and clean desktop shutdown. Profile archive restore and cross-image Pi-to-Codex handoff remain covered by runner persistence tests and the canary checklist.
 
 For the default shell runner, that process is a login shell:
 
@@ -593,6 +613,8 @@ Existing services created before idle shutdown support do not have `SESSION_SHUT
 
 The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, home materialization env vars, workspace/session env vars, Pi skill endpoints, Pi package manager endpoints, Pi package archive targets, preview environment changes, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `HOME_STORAGE_*`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
 
+Existing sessions do not gain Chrome when the catalog or image is updated. A Chrome session must be newly created or explicitly restarted onto `pi-chrome`/`codex-chrome`; existing basic, web, N64, shell, and SSH sessions retain their current runtime and archive behavior.
+
 When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
 
 ```bash
@@ -604,6 +626,7 @@ Expected package-manager write locations:
 - Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
 - Workspace package cache archives: `{workspace.storagePrefix}/.mapache-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
 - Workspace-owned home archive: `{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz`
+- Workspace-owned Chrome profile archive: `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz` (Chrome images only)
 - User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
 
 ## Design Decisions
@@ -621,6 +644,7 @@ Expected package-manager write locations:
 - Workspace-local Pi package install directories should use archive-backed sync while `/workspace/.pi/settings.json` remains normal workspace configuration.
 - GitHub workspaces should allow only one active session at a time until the app has an explicit multi-session Git isolation model.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.
+- Chrome is a capability on the Pi/Codex harness, not a new terminal harness; the browser is shared by the user, MCP, and runner QA through authenticated attachments.
 
 ## Related Docs
 

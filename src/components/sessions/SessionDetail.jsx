@@ -2,6 +2,7 @@ import "./SessionDetail.css";
 import {Copy, ExternalLink, Mail, RotateCcw, Share2, UploadCloud} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
+import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
 
 const cpuOptions = ["1", "2", "4"];
@@ -43,6 +44,7 @@ export function SessionDetail({
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
+  const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
 
@@ -50,6 +52,7 @@ export function SessionDetail({
     let cancelled = false;
     setAccessUrls(null);
     setAccessError("");
+    setActiveCanvas("terminal");
     if (!workspaceId || !session.id || !session.serviceUrl || !onGetSessionAccessUrls) return undefined;
 
     onGetSessionAccessUrls(workspaceId, session.id)
@@ -102,7 +105,7 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
-      {capabilities.preview ? (
+      {capabilities.preview || capabilities.chrome ? (
         <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -112,19 +115,44 @@ export function SessionDetail({
           >
             Terminal
           </Button>
-          <Button
-            aria-selected={activeCanvas === "preview"}
-            disabled={!hasRunnerUrl}
-            role="tab"
-            variant={activeCanvas === "preview" ? "primary" : "secondary"}
-            onClick={() => setActiveCanvas("preview")}
-          >
-            Preview
-          </Button>
+          {capabilities.preview ? (
+            <Button
+              aria-selected={activeCanvas === "preview"}
+              disabled={!hasRunnerUrl}
+              role="tab"
+              variant={activeCanvas === "preview" ? "primary" : "secondary"}
+              onClick={() => setActiveCanvas("preview")}
+            >
+              Preview
+            </Button>
+          ) : null}
+          {capabilities.chrome ? (
+            <Button
+              aria-selected={activeCanvas === "chrome"}
+              disabled={!hasRunnerUrl}
+              role="tab"
+              variant={activeCanvas === "chrome" ? "primary" : "secondary"}
+              onClick={() => setActiveCanvas("chrome")}
+            >
+              Chrome
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <div className="canvas-shell">
-        {activeCanvas === "preview" && capabilities.preview ? (
+        {activeCanvas === "chrome" && capabilities.chrome ? (
+          hasBrowser ? (
+            <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
+          ) : (
+            <div className="terminal-placeholder">
+              <p>
+                Chrome access is not ready.
+                <br />
+                <code>{accessError || session.lastError || session.status}</code>
+              </p>
+            </div>
+          )
+        ) : activeCanvas === "preview" && capabilities.preview ? (
           hasPreview ? (
             <iframe
               allow="clipboard-read; clipboard-write; screen-wake-lock"

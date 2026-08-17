@@ -25,6 +25,7 @@ assert.deepStrictEqual(webImage.capabilities, {
   previewQa: true,
   functions: true,
   n64: false,
+  chrome: false,
 });
 assert.strictEqual(webImage.canProvision, true);
 
@@ -38,8 +39,18 @@ assert.deepStrictEqual(codexWebImage.capabilities, {
   previewQa: true,
   functions: true,
   n64: false,
+  chrome: false,
 });
 assert.strictEqual(codexWebImage.canProvision, true);
+
+const piChromeImage = resolveRunnerImage({imageKey: "pi-chrome"});
+assert.strictEqual(piChromeImage.terminalKind, "pi");
+assert.strictEqual(piChromeImage.capabilities.chrome, true);
+assert.strictEqual(piChromeImage.capabilities.previewQa, true);
+
+const codexChromeImage = resolveRunnerImage({imageKey: "codex-chrome"});
+assert.strictEqual(codexChromeImage.terminalKind, "codex");
+assert.strictEqual(codexChromeImage.capabilities.chrome, true);
 
 const shellImage = resolveRunnerImage({imageKey: "default"});
 assert.strictEqual(shellImage.key, "default");
@@ -69,6 +80,7 @@ assert.deepStrictEqual(runnerImageCapabilities("unknown"), {
   previewQa: false,
   functions: false,
   n64: false,
+  chrome: false,
 });
 
 assert.strictEqual(resolveRunnerImage({}, "").canProvision, false);

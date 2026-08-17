@@ -61,6 +61,10 @@ const {
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
 const {normalizeEnvMap} = require("./env.helpers");
+const {
+  findActiveChromeSession,
+  isChromeSession,
+} = require("./chromeReservation.helpers");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
 const {
@@ -86,6 +90,7 @@ const qaAuthService = createQaAuthService();
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
   markSessionStopped,
+  releaseChromeWorkspaceSession,
 });
 const {
   deleteSessionService,
@@ -363,7 +368,11 @@ async function createSession(uid, workspaceId, payload) {
     lastError: runnerImage.canProvision ? null : "Set SESSION_RUNNER_IMAGE before provisioning Cloud Run sessions.",
   };
 
-  if (isGithubWorkspace(workspace)) {
+  if (isChromeSession(session)) {
+    await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
+      githubWorkspace: isGithubWorkspace(workspace),
+    });
+  } else if (isGithubWorkspace(workspace)) {
     await reserveGithubWorkspaceSession(workspaceId, sessionRef, session);
   } else {
     await sessionRef.set(session);
@@ -380,6 +389,8 @@ async function createSession(uid, workspaceId, payload) {
         SSH_KNOWN_HOSTS: sshPayload.secrets.knownHosts,
       },
     } : session);
+  } else if (isChromeSession(session)) {
+    await releaseChromeWorkspaceSession(sessionRef, session, "needs_image");
   }
 
   return toClientDoc(await sessionRef.get());
@@ -417,12 +428,18 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId) {
   const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
   const previewUrl = appendQuery(`${baseUrl}/preview/`, "mapache_access", token);
   const sshForwardBaseUrl = appendQuery(`${baseUrl}/ssh/forward`, "mapache_access", token);
+  const browserUrl = session.capabilities && session.capabilities.chrome ?
+    appendQuery(`${baseUrl}/browser/`, "mapache_access", token) : null;
+  const browserStatusUrl = session.capabilities && session.capabilities.chrome ?
+    appendQuery(`${baseUrl}/browser/status`, "mapache_access", token) : null;
   return {
     ok: true,
     expiresAt: new Date(expiresAtMs).toISOString(),
     terminalUrl,
     previewUrl,
     sshForwardBaseUrl,
+    browserUrl,
+    browserStatusUrl,
   };
 }
 
@@ -664,6 +681,36 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
   });
 }
 
+async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
+  await db.runTransaction(async (transaction) => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
+    const activeChrome = findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
+    if (activeChrome) {
+      throw httpError(409, "This workspace already has an active Chrome session. Stop it before creating another one.");
+    }
+    if (options.githubWorkspace) {
+      const activeGithub = sessionsSnap.docs.find((doc) => {
+        if (doc.id === sessionRef.id) return false;
+        const active = doc.data();
+        return isActiveGithubWorkspaceSession(active) && !isShellSession(active);
+      });
+      if (activeGithub) {
+        throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
+      }
+    }
+    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    transaction.update(workspaceRef, {
+      activeChromeSessionId: sessionRef.id,
+      activeChromeSessionState: session.status || "provisioning",
+      activeChromeSessionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    if (options.create !== false) transaction.set(sessionRef, session);
+  });
+}
+
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session) {
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(sessionCollection(workspaceId));
@@ -726,6 +773,12 @@ async function restartSession(uid, workspaceId, sessionId) {
   const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
   if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
     await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session);
+  }
+  if (recreatingSessionService && isChromeSession(session)) {
+    await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
+      create: false,
+      githubWorkspace: isGithubWorkspace(workspace),
+    });
   }
 
   const restartedAt = admin.firestore.Timestamp.now();
@@ -915,6 +968,23 @@ async function markSessionStopped(sessionRef, session, reason) {
   if (reason === "idle_timeout") {
     stopped.autoStoppedAt = stoppedAt;
   }
+  if (isChromeSession(session)) {
+    await db.runTransaction(async (transaction) => {
+      const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
+      const workspaceSnap = await transaction.get(workspaceRef);
+      if (usageRecord) transaction.set(usageRecord.ref, usageRecord.data, {merge: true});
+      transaction.update(sessionRef, stopped);
+      if (workspaceSnap.exists && workspaceSnap.data().activeChromeSessionId === sessionRef.id) {
+        transaction.update(workspaceRef, {
+          activeChromeSessionId: admin.firestore.FieldValue.delete(),
+          activeChromeSessionState: "released",
+          activeChromeSessionReleasedAt: stoppedAt,
+          updatedAt: stoppedAt,
+        });
+      }
+    });
+    return;
+  }
   if (usageRecord) {
     stopped.usageAccountedAt = stoppedAt;
     const batch = db.batch();
@@ -924,6 +994,21 @@ async function markSessionStopped(sessionRef, session, reason) {
     return;
   }
   await sessionRef.update(stopped);
+}
+
+async function releaseChromeWorkspaceSession(sessionRef, session, reason) {
+  if (!isChromeSession(session) || !session.workspaceId) return;
+  const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
+  await db.runTransaction(async (transaction) => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    if (!workspaceSnap.exists || workspaceSnap.data().activeChromeSessionId !== sessionRef.id) return;
+    transaction.update(workspaceRef, {
+      activeChromeSessionId: admin.firestore.FieldValue.delete(),
+      activeChromeSessionState: reason ? `released:${cleanName(reason)}` : "released",
+      activeChromeSessionReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
 }
 
 function sessionSyncPolicyMetadata(workspace) {

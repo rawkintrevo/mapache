@@ -226,6 +226,36 @@
       }
     },
     {
+      "imageKey": "pi-chrome",
+      "harnessId": "pi",
+      "variant": "chrome",
+      "label": "pi-chrome",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+      "capabilities": {
+        "terminal": true,
+        "preview": true,
+        "previewQa": true,
+        "functions": true,
+        "n64": false,
+        "chrome": true
+      }
+    },
+    {
+      "imageKey": "codex-chrome",
+      "harnessId": "codex",
+      "variant": "chrome",
+      "label": "codex-chrome",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-chrome",
+      "capabilities": {
+        "terminal": true,
+        "preview": true,
+        "previewQa": true,
+        "functions": true,
+        "n64": false,
+        "chrome": true
+      }
+    },
+    {
       "imageKey": "pi-n64",
       "harnessId": "pi",
       "variant": "n64",

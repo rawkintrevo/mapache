@@ -2,6 +2,17 @@ import catalog from "../../functions/runnerCatalog.json";
 
 const harnesses = catalog.harnesses || {};
 
+function normalizeCapabilities(capabilities = {}) {
+  return {
+    terminal: Boolean(capabilities.terminal),
+    preview: Boolean(capabilities.preview),
+    previewQa: Boolean(capabilities.previewQa),
+    functions: Boolean(capabilities.functions),
+    n64: Boolean(capabilities.n64),
+    chrome: Boolean(capabilities.chrome),
+  };
+}
+
 function cleanValue(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -19,7 +30,7 @@ function cloneHarness(harness) {
 }
 
 export function listSessionImages() {
-  return catalog.images.map((image) => ({...image, capabilities: {...(image.capabilities || {})}}));
+  return catalog.images.map((image) => ({...image, capabilities: normalizeCapabilities(image.capabilities)}));
 }
 
 export function findSessionImage(imageValue) {
@@ -37,13 +48,7 @@ export function normalizeSessionImageKey(session = {}) {
 
 export function sessionImageCapabilities(imageValue) {
   const image = findSessionImage(imageValue);
-  return image ? {...(image.capabilities || {})} : {
-    terminal: true,
-    preview: false,
-    previewQa: false,
-    functions: false,
-    n64: false,
-  };
+  return image ? normalizeCapabilities(image.capabilities) : normalizeCapabilities({terminal: true});
 }
 
 export function resolveHarness(harnessId) {

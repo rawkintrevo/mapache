@@ -51,6 +51,11 @@ function codexHomeArchiveRemotePath(config) {
   return `${config.codexHomeStoragePrefix}/codex-home.tar.gz`.replace(/\/+/g, "/");
 }
 
+function chromeProfileArchiveRemotePath(config) {
+  if (!config.prefix || !config.chromeEnabled) return "";
+  return `${config.prefix}/.mapache-internal/chrome/chrome-profile.tar.gz`.replace(/\/+/g, "/");
+}
+
 function legacyCodexHomeArchivePrefixes(config) {
   if (!config.prefix) return [];
   return [config.internalStorageDir, ...(config.legacyInternalStorageDirs || [])]
@@ -124,6 +129,20 @@ function createArchiveSyncTargets({config, git}) {
     });
   }
 
+  if (config.chromeEnabled) {
+    targets.push({
+      name: "chrome-profile",
+      mode: "chromeProfile",
+      localPath: config.chromeProfileDir,
+      bucketName: config.bucketName,
+      remotePath: chromeProfileArchiveRemotePath(config),
+      fallbackArchives: legacyArchiveRemotePaths(config, chromeProfileArchiveRemotePath(config)),
+      exclude: chromeProfileArchiveExcludePatterns(),
+      ensureLocalPath: true,
+      restoreOnStartup: true,
+    });
+  }
+
   if (git.isGithubWorkspace()) {
     targets.push({
       name: "workspace-git",
@@ -161,13 +180,36 @@ function homeArchiveExcludePatterns(config) {
   ];
 }
 
+function chromeProfileArchiveExcludePatterns() {
+  return [
+    "./Default/Cache",
+    "./Default/Cache/*",
+    "./Default/Code Cache",
+    "./Default/Code Cache/*",
+    "./Default/GPUCache",
+    "./Default/GPUCache/*",
+    "./Default/Service Worker/CacheStorage",
+    "./Default/Service Worker/CacheStorage/*",
+    "./Default/Crashpad",
+    "./Default/Crashpad/*",
+    "./Crash Reports",
+    "./Crash Reports/*",
+    "./Singleton*",
+    "./DevToolsActivePort",
+    "./Default/Downloads",
+    "./Default/Downloads/*",
+    "./tmp",
+    "./tmp/*",
+  ];
+}
+
 function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
   const archiveSyncTargets = createArchiveSyncTargets({config, git});
 
   async function syncArchivesDown(options = {}) {
     const excludeModes = new Set(options.excludeModes || []);
     await Promise.all(archiveSyncTargets.map(async (target) => {
-      if (!target.restoreOnStartup || excludeModes.has(target.mode)) return;
+      if (!target.restoreOnStartup || target.mode === "chromeProfile" || excludeModes.has(target.mode)) return;
       try {
         const file = await findArchiveFile(target);
         if (!file) return;
@@ -253,7 +295,7 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
   }
 
   async function extractStorageArchive(file, target) {
-    const tar = spawn("tar", [...tarExcludeArgs(target), "-xzf", "-", "-C", target.localPath], {
+    const tar = spawn("tar", [...tarExtractArgs(target), "-xzf", "-", "-C", target.localPath], {
       stdio: ["pipe", "ignore", "pipe"],
     });
     const stderr = collectStderr(tar);
@@ -355,6 +397,16 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
     return (target.exclude || []).map((pattern) => `--exclude=${pattern}`);
   }
 
+  function tarExtractArgs(target) {
+    if (target.mode !== "chromeProfile") return tarExcludeArgs(target);
+    return [
+      "--no-absolute-names",
+      "--no-same-owner",
+      "--no-same-permissions",
+      ...tarExcludeArgs(target),
+    ];
+  }
+
   return {
     archiveFile,
     archiveSyncTargets,
@@ -367,6 +419,8 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
 
 module.exports = {
   archiveRemotePath,
+  chromeProfileArchiveExcludePatterns,
+  chromeProfileArchiveRemotePath,
   codexHomeArchiveRemotePath,
   createArchiveSyncTargets,
   createWorkspaceArchiveService,

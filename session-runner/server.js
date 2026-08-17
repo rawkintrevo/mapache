@@ -2,11 +2,16 @@
 
 const path = require("path");
 const http = require("http");
-const crypto = require("crypto");
 const express = require("express");
+const {createVncBridge} = require("./lib/vncBridge");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
+const {createBrowserAccessVerifier} = require("./lib/browserAccess");
 const {createBrowserQaService} = require("./lib/browserQa");
+const {createChromeRuntime} = require("./lib/chromeRuntime");
+const {createChromeDesktopService} = require("./lib/chromeDesktop");
+const {createChromeProfileService} = require("./lib/chromeProfile.service");
+const {createChromeProfileSnapshotService} = require("./lib/chromeProfileSnapshot.service");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
@@ -25,16 +30,31 @@ const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
 
 const config = createConfig();
+const browserAccess = createBrowserAccessVerifier({
+  secret: config.sessionBrowserTokenSecret,
+  sessionId: config.sessionId,
+});
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({server, path: "/terminal"});
+const browserWss = new WebSocketServer({noServer: true});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
+const chromeRuntime = createChromeRuntime(config, {
+  desktop: createChromeDesktopService(config),
+});
+const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
 const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
+const chromeProfile = createChromeProfileService({config, archives: workspace});
+const chromeProfileSnapshots = createChromeProfileSnapshotService({
+  config,
+  profile: chromeProfile,
+  snapshot: () => workspace.syncUp({includeArchives: true}),
+});
 const pi = createPiService({config, syncUp: workspace.syncUp});
 const mcpConfig = createMcpConfigService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
@@ -85,8 +105,37 @@ app.get("/capabilities", requireBrowserAccess, async (req, res) => {
     ok: true,
     capabilities: config.runnerCapabilities,
     preview: preview.capabilityStatus(),
+    browser: chromeRuntime.status(),
   });
 });
+
+app.get("/browser/status", requireBrowserAccess, (req, res) => {
+  res.json({ok: true, browser: chromeRuntime.status()});
+});
+
+app.post("/browser/activity", requireBrowserOrRunnerAccess, async (req, res) => {
+  const kind = String(req.body && req.body.kind || "browser").trim().slice(0, 32) || "browser";
+  await activity.updateSessionActivity({
+    lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastBrowserActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastBrowserActivityKind: kind,
+  });
+  res.json({ok: true, kind});
+});
+
+if (config.chromeEnabled) {
+  app.get("/browser/", requireBrowserAccess, (req, res) => {
+    const target = new URL(req.originalUrl || "/browser/", "http://localhost");
+    target.pathname = "/browser/vnc.html";
+    target.searchParams.set("autoconnect", "true");
+    target.searchParams.set("resize", "remote");
+    target.searchParams.set("path", "browser/vnc");
+    res.redirect(`${target.pathname}?${target.searchParams.toString()}`);
+  });
+  app.use("/browser", requireBrowserAccess, express.static("/usr/share/novnc", {
+    fallthrough: false,
+  }));
+}
 
 app.post("/workspace/sync-down", async (req, res) => {
   if (!hasRunnerAccess(req)) {
@@ -230,7 +279,13 @@ app.post("/shutdown", async (req, res) => {
 
   try {
     sshSession.closeAll();
-    await workspace.syncUp({includeArchives: true});
+    await chromeRuntime.stop();
+    if (chromeProfileSnapshots.enabled()) {
+      await chromeProfileSnapshots.stop();
+      await chromeProfileSnapshots.finalize();
+    } else {
+      await workspace.syncUp({includeArchives: true});
+    }
     await activity.updateSessionActivity({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -503,10 +558,36 @@ wss.on("connection", (socket, request) => {
   });
 });
 
+browserWss.on("connection", (socket) => {
+  const bridge = vncBridge.attach(socket);
+  socket.once("close", bridge.close);
+});
+
+server.on("upgrade", (request, socket, head) => {
+  let pathname = "";
+  try {
+    pathname = new URL(request.url || "/", "http://localhost").pathname;
+  } catch (error) {
+    socket.destroy();
+    return;
+  }
+  if (pathname !== "/browser/vnc") return;
+  if (!hasBrowserAccess(request)) {
+    socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  browserWss.handleUpgrade(request, socket, head, (client) => {
+    browserWss.emit("connection", client, request);
+  });
+});
+
 workspace.ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      await chromeProfile.restore();
+      await chromeRuntime.start();
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
       await activeHarness.materializeMcp();
@@ -515,6 +596,7 @@ workspace.ensureWorkspace()
       await activeHarness.materializeSubagents();
     })
     .then(() => {
+      chromeProfileSnapshots.start();
       startSyncLoop();
       server.listen(config.port, () => {
         console.log(`session runner listening on ${config.port}`);
@@ -551,8 +633,10 @@ function startSyncLoop() {
     if (syncUpRunning) return;
     syncUpRunning = true;
     const now = Date.now();
-    const includeArchives = now - lastArchiveSync >= config.archiveSyncIntervalMs;
-    workspace.syncUp({includeArchives})
+    const includeArchives = !chromeProfileSnapshots.enabled() &&
+      now - lastArchiveSync >= config.archiveSyncIntervalMs;
+    const sync = workspace.syncUp({includeArchives});
+    sync
         .then(() => {
           if (includeArchives) lastArchiveSync = now;
         })
@@ -585,59 +669,29 @@ function requireBrowserAccess(req, res, next) {
   next();
 }
 
+function requireBrowserOrRunnerAccess(req, res, next) {
+  if (!hasBrowserAccess(req) && !hasRunnerAccess(req)) {
+    res.status(404).type("text").send("not_found");
+    return;
+  }
+  next();
+}
+
 function hasBrowserAccess(req) {
-  const token = browserAccessToken(req);
-  if (!token || !verifyBrowserAccessToken(token)) return false;
+  const token = browserAccess.extractToken(req);
+  if (!token || !browserAccess.verify(token)) return false;
   req.mapacheAccessToken = token;
   return true;
 }
 
 function browserAccessToken(req) {
-  try {
-    const url = new URL(req.url || "/", "http://localhost");
-    const queryToken = url.searchParams.get("mapache_access");
-    if (queryToken) return queryToken;
-  } catch (error) {
-    return "";
-  }
-
-  const cookie = req.headers && req.headers.cookie || "";
-  const match = cookie.match(/(?:^|;\s*)mapache_access=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : "";
+  return browserAccess.extractToken(req);
 }
 
 function verifyBrowserAccessToken(token) {
-  if (!config.sessionBrowserTokenSecret) return false;
-  const parts = String(token || "").split(".");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
-  const expected = crypto
-      .createHmac("sha256", config.sessionBrowserTokenSecret)
-      .update(parts[0])
-      .digest("base64url");
-  if (!timingSafeEqual(parts[1], expected)) return false;
-
-  const payload = parseBrowserAccessPayload(parts[0]);
-  if (!payload || payload.sid !== config.sessionId) return false;
-  return Number(payload.exp || 0) > Math.floor(Date.now() / 1000);
-}
-
-function parseBrowserAccessPayload(value) {
-  try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-  } catch (error) {
-    return null;
-  }
+  return browserAccess.verify(token);
 }
 
 function browserAccessTokenMaxAgeMs(token) {
-  const payload = parseBrowserAccessPayload(String(token || "").split(".")[0] || "");
-  const expMs = Number(payload && payload.exp || 0) * 1000;
-  return Math.max(0, Math.min(expMs - Date.now(), 24 * 60 * 60 * 1000));
-}
-
-function timingSafeEqual(left, right) {
-  const leftBuffer = Buffer.from(String(left || ""));
-  const rightBuffer = Buffer.from(String(right || ""));
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  return browserAccess.maxAgeMs(token);
 }

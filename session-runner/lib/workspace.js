@@ -148,8 +148,10 @@ function createWorkspaceService({admin, config, db, git, storage}) {
   return {
     archiveSyncTargets: archives.archiveSyncTargets,
     ensureWorkspace,
+    findArchiveFile: archives.findArchiveFile,
     materializeAuthNow: auth.materializeAuthNow,
     prepareWorkspaceSource,
+    extractStorageArchive: archives.extractStorageArchive,
     syncArchivesDown: archives.syncArchivesDown,
     syncArchivesUp: archives.syncArchivesUp,
     syncDown,
