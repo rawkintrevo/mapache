@@ -1,6 +1,11 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {spawnSync} = require("node:child_process");
+const {Readable} = require("node:stream");
 const test = require("node:test");
 const {
   chromeProfileArchiveExcludePatterns,
@@ -9,6 +14,7 @@ const {
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
   homeArchiveRemotePath,
+  waitForArchiveExtraction,
 } = require("./workspaceArchives.service");
 
 function baseConfig(overrides = {}) {
@@ -187,6 +193,43 @@ test("finds latest historical per-session codex archive as migration fallback", 
 
   const target = archives.archiveSyncTargets.find((target) => target.name === "codex-home");
   assert.equal(await archives.findArchiveFile(target), latestArchive);
+});
+
+test("profile extraction reports the tar failure instead of a premature stream close", async () => {
+  const streamError = new Error("Premature close");
+  const tarError = new Error("extract chrome-profile failed with exit code 64: invalid option");
+
+  await assert.rejects(
+      waitForArchiveExtraction(Promise.reject(streamError), Promise.reject(tarError)),
+      tarError,
+  );
+  await assert.rejects(
+      waitForArchiveExtraction(Promise.reject(streamError), Promise.resolve()),
+      streamError,
+  );
+});
+
+test("extracts a Chrome profile with the runtime GNU tar", async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mapache-profile-extract-"));
+  t.after(() => fs.promises.rm(root, {recursive: true, force: true}));
+  const sourceDir = path.join(root, "source");
+  const targetDir = path.join(root, "target");
+  await fs.promises.mkdir(path.join(sourceDir, "Default"), {recursive: true});
+  await fs.promises.mkdir(targetDir, {recursive: true});
+  await fs.promises.writeFile(path.join(sourceDir, "Default", "Preferences"), "profile-ok");
+  const archive = spawnSync("tar", ["-czf", "-", "-C", sourceDir, "."]);
+  assert.equal(archive.status, 0, archive.stderr.toString());
+
+  const service = createWorkspaceArchiveService({
+    config: baseConfig({chromeEnabled: true, chromeProfileDir: targetDir}),
+    git: git(false),
+    pathHelpers: {shouldIgnoreInternalWorkspacePath: () => false},
+    storage: fakeStorage({}, []),
+  });
+  const target = service.archiveSyncTargets.find((entry) => entry.mode === "chromeProfile");
+  await service.extractStorageArchive({createReadStream: () => Readable.from(archive.stdout)}, target);
+
+  assert.equal(await fs.promises.readFile(path.join(targetDir, "Default", "Preferences"), "utf8"), "profile-ok");
 });
 
 function fakeFile(name, updated, options = {}) {

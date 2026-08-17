@@ -299,10 +299,10 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
       stdio: ["pipe", "ignore", "pipe"],
     });
     const stderr = collectStderr(tar);
-    await Promise.all([
+    await waitForArchiveExtraction(
       pipeline(file.createReadStream(), tar.stdin),
       waitForChild(tar, stderr, `extract ${target.name}`),
-    ]);
+    );
   }
 
   async function uploadDirectoryArchive(file, target) {
@@ -400,7 +400,6 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
   function tarExtractArgs(target) {
     if (target.mode !== "chromeProfile") return tarExcludeArgs(target);
     return [
-      "--no-absolute-names",
       "--no-same-owner",
       "--no-same-permissions",
       ...tarExcludeArgs(target),
@@ -417,6 +416,12 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
   };
 }
 
+async function waitForArchiveExtraction(streamPromise, childPromise) {
+  const [streamResult, childResult] = await Promise.allSettled([streamPromise, childPromise]);
+  if (childResult.status === "rejected") throw childResult.reason;
+  if (streamResult.status === "rejected") throw streamResult.reason;
+}
+
 module.exports = {
   archiveRemotePath,
   chromeProfileArchiveExcludePatterns,
@@ -425,4 +430,5 @@ module.exports = {
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
   homeArchiveRemotePath,
+  waitForArchiveExtraction,
 };
