@@ -10,6 +10,7 @@ const {createActivityService} = require("./lib/activity");
 const {createBrowserQaService} = require("./lib/browserQa");
 const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createChromeDesktopService} = require("./lib/chromeDesktop");
+const {createChromeProfileService} = require("./lib/chromeProfile.service");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
@@ -43,6 +44,7 @@ const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
+const chromeProfile = createChromeProfileService({config, archives: workspace});
 const pi = createPiService({config, syncUp: workspace.syncUp});
 const mcpConfig = createMcpConfigService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
@@ -559,6 +561,7 @@ workspace.ensureWorkspace()
     .then(async () => {
       console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      await chromeProfile.restore();
       await chromeRuntime.start();
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
