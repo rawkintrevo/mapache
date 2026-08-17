@@ -5,7 +5,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {createBrowserQaService, normalizeScenarioSpec} = require("./browserQa");
+const {createBrowserQaService, isPersistentBrowserConfig, normalizeScenarioSpec} = require("./browserQa");
 
 function qaConfig(workspaceDir) {
   const qaDir = path.join(workspaceDir, ".mapache", "qa");
@@ -43,6 +43,12 @@ test("browser QA status reports unavailable dependencies", async () => {
   assert.equal(status.available, false);
   assert.equal(status.state, "browser_automation_unavailable");
   assert.equal(status.unavailableReason, "playwright_not_available");
+});
+
+test("Chrome-capable QA attaches to the persistent browser", () => {
+  assert.equal(isPersistentBrowserConfig({chromeEnabled: true}), true);
+  assert.equal(isPersistentBrowserConfig({runnerCapabilities: {chrome: true}}), true);
+  assert.equal(isPersistentBrowserConfig({runnerCapabilities: {previewQa: true}}), false);
 });
 
 test("browser QA run writes reports and last-run state", async () => {

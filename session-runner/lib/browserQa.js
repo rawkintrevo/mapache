@@ -27,15 +27,17 @@ function createBrowserQaService(config, deps = {}) {
 
   function capabilityStatus() {
     const previewQaEnabled = Boolean(config.runnerCapabilities && config.runnerCapabilities.previewQa);
+    const persistentBrowser = isPersistentBrowserConfig(config);
     const executableReady = isExecutable(config.browserQaExecutablePath);
     const playwrightModulePath = resolveModule("@playwright/test");
-    const available = previewQaEnabled && executableReady && Boolean(playwrightModulePath);
+    const available = previewQaEnabled && Boolean(playwrightModulePath) && (persistentBrowser || executableReady);
 
     return {
       enabled: previewQaEnabled,
       available,
       engine: "playwright",
       browser: "chromium",
+      persistent: persistentBrowser,
       command: config.browserQaCommand,
       executablePath: config.browserQaExecutablePath,
       modulePath: playwrightModulePath,
@@ -46,6 +48,7 @@ function createBrowserQaService(config, deps = {}) {
         previewQaEnabled,
         executableReady,
         playwrightModulePath,
+        persistentBrowser,
       }),
     };
   }
@@ -183,11 +186,14 @@ function normalizeTargetDir(qaDir, requestedPath) {
 
 async function executeScenario({config, spec, targetDir}) {
   const {chromium} = require("@playwright/test");
-  const browser = await chromium.launch({
-    executablePath: config.browserQaExecutablePath,
-    headless: config.browserQaHeadless,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  const persistentBrowser = isPersistentBrowserConfig(config);
+  const browser = persistentBrowser ?
+    await chromium.connectOverCDP(config.browserCdpUrl || `http://${config.chromeCdpHost || "127.0.0.1"}:${config.chromeCdpPort || 9222}`) :
+    await chromium.launch({
+      executablePath: config.browserQaExecutablePath,
+      headless: config.browserQaHeadless,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    });
   const summary = {
     consoleErrors: [],
     consoleMessages: [],
@@ -198,24 +204,31 @@ async function executeScenario({config, spec, targetDir}) {
 
   try {
     for (const viewport of spec.viewports) {
-      const context = await browser.newContext({
-        isMobile: viewport.isMobile,
-        viewport: {width: viewport.width, height: viewport.height},
-      });
+      const context = persistentBrowser ?
+        browser.contexts()[0] || await browser.newContext() :
+        await browser.newContext({
+          isMobile: viewport.isMobile,
+          viewport: {width: viewport.width, height: viewport.height},
+        });
       const page = await context.newPage();
+      if (persistentBrowser) {
+        await page.setViewportSize({width: viewport.width, height: viewport.height});
+      }
       wirePageTelemetry(page, summary);
       await page.goto(spec.url, {
         timeout: config.browserQaNavigationTimeoutMs,
         waitUntil: "networkidle",
       });
-      await runScenarioSteps(page, spec.steps, viewport.name, config.browserQaActionTimeoutMs, targetDir, screenshots, spec.baseUrl);
+      await notifyBrowserActivity(config, "qa-navigation");
+      await runScenarioSteps(page, spec.steps, viewport.name, config.browserQaActionTimeoutMs, targetDir, screenshots, spec.baseUrl, config);
       const screenshotPath = path.join(targetDir, `${viewport.name}.png`);
       await page.screenshot({path: screenshotPath, fullPage: true});
       screenshots.push(screenshotPath);
-      await context.close();
+      await page.close();
+      if (!persistentBrowser) await context.close();
     }
   } finally {
-    await browser.close();
+    if (!persistentBrowser) await browser.close();
   }
 
   const status = summary.consoleErrors.length || summary.failedRequests.length || summary.pageErrors.length ? "failed" : "passed";
@@ -226,7 +239,7 @@ async function executeScenario({config, spec, targetDir}) {
   };
 }
 
-async function runScenarioSteps(page, steps, viewportName, timeoutMs, targetDir, screenshots, baseUrl) {
+async function runScenarioSteps(page, steps, viewportName, timeoutMs, targetDir, screenshots, baseUrl, config) {
   for (const step of steps) {
     if (Array.isArray(step.viewports) && step.viewports.length && !step.viewports.includes(viewportName)) {
       continue;
@@ -238,18 +251,22 @@ async function runScenarioSteps(page, steps, viewportName, timeoutMs, targetDir,
         timeout: positiveNumber(step.timeoutMs, timeoutMs),
         waitUntil: step.waitUntil || "networkidle",
       });
+      await notifyBrowserActivity(config, "qa-navigation");
       continue;
     }
     if (action === "click") {
       await page.locator(step.selector).click({timeout: positiveNumber(step.timeoutMs, timeoutMs)});
+      await notifyBrowserActivity(config, "qa-click");
       continue;
     }
     if (action === "fill") {
       await page.locator(step.selector).fill(String(step.value || ""), {timeout: positiveNumber(step.timeoutMs, timeoutMs)});
+      await notifyBrowserActivity(config, "qa-fill");
       continue;
     }
     if (action === "press") {
       await page.locator(step.selector).press(String(step.key || "Enter"), {timeout: positiveNumber(step.timeoutMs, timeoutMs)});
+      await notifyBrowserActivity(config, "qa-keyboard");
       continue;
     }
     if (action === "waitfor") {
@@ -269,6 +286,22 @@ async function runScenarioSteps(page, steps, viewportName, timeoutMs, targetDir,
       await page.screenshot({path: screenshotPath, fullPage: Boolean(step.fullPage !== false)});
       screenshots.push(screenshotPath);
     }
+  }
+}
+
+async function notifyBrowserActivity(config, kind) {
+  if (!config.browserActivityUrl || !config.shutdownToken || typeof fetch !== "function") return;
+  try {
+    await fetch(config.browserActivityUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-shutdown-token": config.shutdownToken,
+      },
+      body: JSON.stringify({kind}),
+    });
+  } catch (error) {
+    // Activity is best effort and must not fail an otherwise successful QA run.
   }
 }
 
@@ -326,11 +359,15 @@ function defaultResolveModule(name) {
   }
 }
 
-function browserAvailabilityReason({previewQaEnabled, executableReady, playwrightModulePath}) {
+function browserAvailabilityReason({previewQaEnabled, executableReady, playwrightModulePath, persistentBrowser}) {
   if (!previewQaEnabled) return "browser_qa_disabled";
-  if (!executableReady) return "chromium_not_available";
+  if (!persistentBrowser && !executableReady) return "chromium_not_available";
   if (!playwrightModulePath) return "playwright_not_available";
   return null;
+}
+
+function isPersistentBrowserConfig(config = {}) {
+  return Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
 }
 
 function compactBrowserQaError(error) {
@@ -366,6 +403,7 @@ function renderMarkdownReport(result = {}) {
 module.exports = {
   DEFAULT_VIEWPORTS,
   createBrowserQaService,
+  isPersistentBrowserConfig,
   normalizeScenarioSpec,
   normalizeTargetDir,
 };

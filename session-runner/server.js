@@ -109,7 +109,7 @@ app.get("/browser/status", requireBrowserAccess, (req, res) => {
   res.json({ok: true, browser: chromeRuntime.status()});
 });
 
-app.post("/browser/activity", requireBrowserAccess, async (req, res) => {
+app.post("/browser/activity", requireBrowserOrRunnerAccess, async (req, res) => {
   const kind = String(req.body && req.body.kind || "browser").trim().slice(0, 32) || "browser";
   await activity.updateSessionActivity({
     lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -661,6 +661,14 @@ function requireBrowserAccess(req, res, next) {
       sameSite: "none",
       secure: true,
     });
+  }
+  next();
+}
+
+function requireBrowserOrRunnerAccess(req, res, next) {
+  if (!hasBrowserAccess(req) && !hasRunnerAccess(req)) {
+    res.status(404).type("text").send("not_found");
+    return;
   }
   next();
 }
