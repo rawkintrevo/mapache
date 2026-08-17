@@ -39,8 +39,24 @@
 }
 
 .browser-canvas {
+  display: grid;
+  grid-template-rows: auto 1fr;
   height: min(62vh, 720px);
   min-height: 360px;
+}
+
+.browser-canvas__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .browser-canvas__frame {
