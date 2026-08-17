@@ -1,5 +1,16 @@
 import catalog from "../../functions/runnerCatalog.json";
 
+function normalizeCapabilities(capabilities = {}) {
+  return {
+    terminal: Boolean(capabilities.terminal),
+    preview: Boolean(capabilities.preview),
+    previewQa: Boolean(capabilities.previewQa),
+    functions: Boolean(capabilities.functions),
+    n64: Boolean(capabilities.n64),
+    chrome: Boolean(capabilities.chrome),
+  };
+}
+
 export const sessionImages = catalog.images.map((image) => ({
   key: image.imageKey,
   imageKey: image.imageKey,
@@ -8,7 +19,7 @@ export const sessionImages = catalog.images.map((image) => ({
   variant: image.variant,
   value: image.image,
   terminalKind: catalog.harnesses?.[image.harnessId]?.terminalKind || "shell",
-  capabilities: {...(image.capabilities || {})},
+  capabilities: normalizeCapabilities(image.capabilities),
 }));
 
 function cleanSessionImageValue(value) {
@@ -22,7 +33,7 @@ function findSessionImage(imageValue) {
 
 export function sessionImageCapabilities(imageValue) {
   const image = findSessionImage(imageValue);
-  return image ? image.capabilities : {terminal: true, preview: false, previewQa: false, functions: false, n64: false};
+  return image ? image.capabilities : normalizeCapabilities({terminal: true});
 }
 
 export function normalizeSessionImageKey(session = {}) {
