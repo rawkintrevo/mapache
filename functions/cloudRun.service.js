@@ -80,6 +80,16 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       lastError: publicGoogleError(provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    if (typeof dependencies.releaseChromeWorkspaceSession === "function") {
+      try {
+        await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "provision_failed");
+      } catch (releaseError) {
+        logger.warn("Chrome workspace reservation release failed", {
+          serviceId: session.serviceId,
+          error: publicGoogleError(releaseError),
+        });
+      }
+    }
   }
 }
 

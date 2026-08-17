@@ -90,6 +90,7 @@ const qaAuthService = createQaAuthService();
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
   markSessionStopped,
+  releaseChromeWorkspaceSession,
 });
 const {
   deleteSessionService,
@@ -960,6 +961,23 @@ async function markSessionStopped(sessionRef, session, reason) {
   if (reason) stopped.stopReason = reason;
   if (reason === "idle_timeout") {
     stopped.autoStoppedAt = stoppedAt;
+  }
+  if (isChromeSession(session)) {
+    await db.runTransaction(async (transaction) => {
+      const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
+      const workspaceSnap = await transaction.get(workspaceRef);
+      if (usageRecord) transaction.set(usageRecord.ref, usageRecord.data, {merge: true});
+      transaction.update(sessionRef, stopped);
+      if (workspaceSnap.exists && workspaceSnap.data().activeChromeSessionId === sessionRef.id) {
+        transaction.update(workspaceRef, {
+          activeChromeSessionId: admin.firestore.FieldValue.delete(),
+          activeChromeSessionState: "released",
+          activeChromeSessionReleasedAt: stoppedAt,
+          updatedAt: stoppedAt,
+        });
+      }
+    });
+    return;
   }
   if (usageRecord) {
     stopped.usageAccountedAt = stoppedAt;
