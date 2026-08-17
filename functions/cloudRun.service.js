@@ -359,6 +359,21 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     }
   }
 
+  if (capabilities.chrome) {
+    env.push(
+        {name: "CHROME_PROFILE_DIR", value: "/var/lib/mapache/chrome/profile"},
+        {name: "CHROME_CDP_HOST", value: "127.0.0.1"},
+        {name: "CHROME_CDP_PORT", value: "9222"},
+        {name: "CHROME_DISPLAY", value: ":99"},
+        {name: "CHROME_NOVNC_PORT", value: "6080"},
+        {name: "CHROME_VNC_HOST", value: "127.0.0.1"},
+        {name: "CHROME_VNC_PORT", value: "5900"},
+        {name: "MAPACHE_BROWSER_CDP_URL", value: "http://127.0.0.1:9222"},
+        {name: "MAPACHE_BROWSER_STATUS_URL", value: "http://127.0.0.1:8080/browser/status"},
+        {name: "MAPACHE_BROWSER_ACTIVITY_URL", value: "http://127.0.0.1:8080/browser/activity"},
+    );
+  }
+
   return env.filter(Boolean);
 }
 

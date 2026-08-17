@@ -428,12 +428,18 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId) {
   const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
   const previewUrl = appendQuery(`${baseUrl}/preview/`, "mapache_access", token);
   const sshForwardBaseUrl = appendQuery(`${baseUrl}/ssh/forward`, "mapache_access", token);
+  const browserUrl = session.capabilities && session.capabilities.chrome ?
+    appendQuery(`${baseUrl}/browser/`, "mapache_access", token) : null;
+  const browserStatusUrl = session.capabilities && session.capabilities.chrome ?
+    appendQuery(`${baseUrl}/browser/status`, "mapache_access", token) : null;
   return {
     ok: true,
     expiresAt: new Date(expiresAtMs).toISOString(),
     terminalUrl,
     previewUrl,
     sshForwardBaseUrl,
+    browserUrl,
+    browserStatusUrl,
   };
 }
 

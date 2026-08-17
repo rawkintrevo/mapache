@@ -109,6 +109,16 @@ app.get("/browser/status", requireBrowserAccess, (req, res) => {
   res.json({ok: true, browser: chromeRuntime.status()});
 });
 
+app.post("/browser/activity", requireBrowserAccess, async (req, res) => {
+  const kind = String(req.body && req.body.kind || "browser").trim().slice(0, 32) || "browser";
+  await activity.updateSessionActivity({
+    lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastBrowserActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastBrowserActivityKind: kind,
+  });
+  res.json({ok: true, kind});
+});
+
 if (config.chromeEnabled) {
   app.get("/browser/", requireBrowserAccess, (req, res) => {
     const target = new URL(req.originalUrl || "/browser/", "http://localhost");
