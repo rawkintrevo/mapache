@@ -11,6 +11,7 @@ const {createBrowserQaService} = require("./lib/browserQa");
 const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createChromeDesktopService} = require("./lib/chromeDesktop");
 const {createChromeProfileService} = require("./lib/chromeProfile.service");
+const {createChromeProfileSnapshotService} = require("./lib/chromeProfileSnapshot.service");
 const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
@@ -45,6 +46,11 @@ const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
 const chromeProfile = createChromeProfileService({config, archives: workspace});
+const chromeProfileSnapshots = createChromeProfileSnapshotService({
+  config,
+  profile: chromeProfile,
+  snapshot: () => workspace.syncUp({includeArchives: true}),
+});
 const pi = createPiService({config, syncUp: workspace.syncUp});
 const mcpConfig = createMcpConfigService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
@@ -260,7 +266,12 @@ app.post("/shutdown", async (req, res) => {
   try {
     sshSession.closeAll();
     await chromeRuntime.stop();
-    await workspace.syncUp({includeArchives: true});
+    if (chromeProfileSnapshots.enabled()) {
+      await chromeProfileSnapshots.stop();
+      await chromeProfileSnapshots.finalize();
+    } else {
+      await workspace.syncUp({includeArchives: true});
+    }
     await activity.updateSessionActivity({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -571,6 +582,7 @@ workspace.ensureWorkspace()
       await activeHarness.materializeSubagents();
     })
     .then(() => {
+      chromeProfileSnapshots.start();
       startSyncLoop();
       server.listen(config.port, () => {
         console.log(`session runner listening on ${config.port}`);
@@ -607,8 +619,10 @@ function startSyncLoop() {
     if (syncUpRunning) return;
     syncUpRunning = true;
     const now = Date.now();
-    const includeArchives = now - lastArchiveSync >= config.archiveSyncIntervalMs;
-    workspace.syncUp({includeArchives})
+    const includeArchives = !chromeProfileSnapshots.enabled() &&
+      now - lastArchiveSync >= config.archiveSyncIntervalMs;
+    const sync = workspace.syncUp({includeArchives});
+    sync
         .then(() => {
           if (includeArchives) lastArchiveSync = now;
         })
