@@ -1,0 +1,57 @@
+FROM node:24-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash bubblewrap ca-certificates chromium curl fd-find fonts-liberation git gh gzip novnc openbox openssh-client python3 make g++ ripgrep tar tint2 websockify wmctrl x11-utils x11vnc xvfb \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY install-codex-standalone.sh /usr/local/bin/install-codex-standalone.sh
+# Pin a working standalone release and install it directly because 0.140.0's
+# codex-package_SHA256SUMS asset is missing the Linux package entry.
+RUN chmod +x /usr/local/bin/install-codex-standalone.sh \
+  && CODEX_INSTALL_DIR=/usr/local/bin /usr/local/bin/install-codex-standalone.sh
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev \
+  && npm install -g @playwright/test
+COPY server.js ./
+COPY bin ./bin
+COPY lib ./lib
+COPY seeded-skills ./seeded-skills
+COPY seeded-codex ./seeded-codex
+
+RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js \
+  && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
+  && node /app/bin/check-chrome-runtime.js
+
+RUN mkdir -p /workspace /workspace/.mapache/qa /tmp/mapache-codex /var/lib/mapache/chrome/profile
+ENV PORT=8080
+ENV HOME=/root
+ENV WORKSPACE_DIR=/workspace
+ENV CODEX_HOME=/tmp/mapache-codex/session
+ENV TERMINAL_COMMAND=codex
+ENV TERMINAL_ARGS='[]'
+ENV PREVIEW_ENABLED=true
+ENV PREVIEW_BASE_PATH=/preview
+ENV PREVIEW_STATIC_ROOT=/workspace/build
+ENV PREVIEW_INJECT_LOGGER=true
+ENV PREVIEW_LOG_LIMIT=500
+ENV MAPACHE_RUNNER_URL=http://127.0.0.1:8080
+ENV MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/
+ENV MAPACHE_QA_DIR=/workspace/.mapache/qa
+ENV MAPACHE_BROWSER_QA_COMMAND=/usr/local/bin/mapache-preview-qa
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_PATH=/usr/local/lib/node_modules
+ENV CHROME_PROFILE_DIR=/var/lib/mapache/chrome/profile
+ENV CHROME_DISPLAY=:99
+ENV CHROME_CDP_HOST=127.0.0.1
+ENV CHROME_CDP_PORT=9222
+ENV CHROME_VNC_HOST=127.0.0.1
+ENV CHROME_VNC_PORT=5900
+ENV CHROME_NOVNC_PORT=6080
+ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true,"chrome":true}
+
+EXPOSE 8080
+CMD ["npm", "start"]
