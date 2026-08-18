@@ -91,6 +91,8 @@ function createConfig() {
     chromeCdpPort: chromeEnabled ? positiveNumber(process.env.CHROME_CDP_PORT, 9222) : 0,
     chromeDisplay: chromeEnabled ? normalizeEnvString(process.env.CHROME_DISPLAY) || ":99" : "",
     chromeEnabled,
+    chromeDesktopRestartBackoffMs: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_BACKOFF_MS, 250) : 0,
+    chromeDesktopRestartMaxAttempts: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_MAX_ATTEMPTS, 3) : 0,
     chromeNoVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_NOVNC_PORT, 6080) : 0,
     chromeProfileDir: chromeEnabled ? path.resolve(process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
     chromeStartupTimeoutMs: chromeEnabled ? positiveNumber(process.env.CHROME_STARTUP_TIMEOUT_MS, 30000) : 0,

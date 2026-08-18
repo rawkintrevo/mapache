@@ -66,6 +66,7 @@ Cloud Run create, update, and delete operations use a 240-second polling deadlin
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
 - Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `pi-chrome`, `codex-basic`, `codex-web`, and `codex-chrome`.
 - Chrome image builds run the bounded `check-chrome-runtime.js` and `chrome-smoke.js` checks before publishing, but production canary verification is still required after Functions and Hosting deploy.
+- Chrome desktop supervision changes require rebuilding and publishing both `pi-chrome` and `codex-chrome`; existing Cloud Run services retain their current runner revision until restarted or recreated. The runner now gates dependent process launch on Xvfb readiness and requires CDP plus loopback VNC readiness before reporting a browser runtime as ready. No Functions or Hosting deployment is needed when the browser status/API contract is unchanged.
 - The Codex runner Dockerfiles pin Codex CLI `0.140.0` and install the published Linux package tarball directly because that release's `codex-package_SHA256SUMS` file is missing the Linux standalone package entry and breaks the hosted `install.sh` flow.
 - Do not put developer maintenance notes under `community/`.
 
