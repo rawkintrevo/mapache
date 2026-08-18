@@ -108,6 +108,30 @@ async function collectDispatch({route, method = "GET", body, query = {}}) {
 
   assert.deepStrictEqual(await collectDispatch({
     method: "POST",
+    route: {name: "workspaceCreateFile", workspaceId: "workspace-1"},
+    body: {path: "src/App.jsx"},
+  }), {
+    status: 201,
+    payload: {
+      handler: "createWorkspaceFile",
+      args: ["user-1", "workspace-1", {path: "src/App.jsx"}],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "workspaceCreateDirectory", workspaceId: "workspace-1"},
+    body: {path: "src/components"},
+  }), {
+    status: 201,
+    payload: {
+      handler: "createWorkspaceDirectory",
+      args: ["user-1", "workspace-1", {path: "src/components"}],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
     route: {name: "gitCommit", workspaceId: "workspace-1", sessionId: "session-1"},
     body: {message: "hello"},
   }), {

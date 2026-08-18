@@ -102,6 +102,16 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(file.name)}`,
         file,
     ),
+    createWorkspaceFile: (workspaceId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/create-file`,
+        {method: "POST", body: {path}},
+    ),
+    createWorkspaceDirectory: (workspaceId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/create-directory`,
+        {method: "POST", body: {path}},
+    ),
     getSessions: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions`,

@@ -76,6 +76,72 @@ export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFile
   render();
 }
 
+export async function createWorkspaceFileState({state, path, loadWorkspaceFiles, render}) {
+  await createWorkspaceEntryState({
+    state,
+    path,
+    loadWorkspaceFiles,
+    render,
+    kind: "file",
+  });
+  if (state.workspaceFilesError || !state.selectedWorkspaceId) return;
+  await selectWorkspaceFileState({state, path: fullWorkspaceEntryPath(state, path), render});
+}
+
+export async function createWorkspaceDirectoryState({state, path, loadWorkspaceFiles, render}) {
+  await createWorkspaceEntryState({
+    state,
+    path,
+    loadWorkspaceFiles,
+    render,
+    kind: "directory",
+  });
+}
+
+async function createWorkspaceEntryState({state, path, loadWorkspaceFiles, render, kind}) {
+  if (!state.selectedWorkspaceId) return;
+  if (selectedSshSession(state)) {
+    state.workspaceFilesError = "SSH file creation is not available yet. Open or edit files from the SSH file tree.";
+    state.workspaceFilesUploadMessage = "";
+    render();
+    return;
+  }
+
+  let fullPath;
+  try {
+    fullPath = fullWorkspaceEntryPath(state, path);
+  } catch (error) {
+    state.workspaceFilesError = friendlyFilesError(error);
+    state.workspaceFilesUploadMessage = "";
+    render();
+    return;
+  }
+
+  state.workspaceFilesUploading = true;
+  state.workspaceFilesUploadMessage = `Creating ${kind} ${fullPath}...`;
+  state.workspaceFilesError = "";
+  render();
+
+  try {
+    const createEntry = kind === "directory" ? state.api.createWorkspaceDirectory : state.api.createWorkspaceFile;
+    if (typeof createEntry !== "function") throw new Error("not_found");
+    await createEntry(state.selectedWorkspaceId, fullPath);
+    if (state.api.syncWorkspaceFiles) {
+      state.workspaceFilesUploadMessage = "Syncing changes to active sessions...";
+      render();
+      await state.api.syncWorkspaceFiles(state.selectedWorkspaceId);
+    }
+    state.workspaceFilesUploadMessage = `Created ${kind} ${fullPath}.`;
+    await refreshWorkspaceFileTree({state, loadWorkspaceFiles});
+  } catch (error) {
+    state.workspaceFilesError = friendlyFilesError(error);
+    state.workspaceFilesUploadMessage = "";
+  } finally {
+    state.workspaceFilesUploading = false;
+  }
+  render();
+}
+
 export async function downloadWorkspaceFileState({state, render}) {
   const path = state.selectedWorkspaceFilePath;
   if (!state.selectedWorkspaceId || !path) return;
@@ -113,6 +179,7 @@ export async function downloadWorkspaceFileState({state, render}) {
 
 export async function toggleWorkspaceFileDirState({state, path, loadWorkspaceFiles, render}) {
   const cleanPath = cleanDirectoryPath(path);
+  state.workspaceFileActiveDirectory = cleanPath;
   const next = new Set(state.expandedFilePaths);
   if (next.has(cleanPath)) {
     next.delete(cleanPath);
@@ -130,6 +197,7 @@ export async function toggleWorkspaceFileDirState({state, path, loadWorkspaceFil
 
 export async function selectWorkspaceFileState({state, path, render}) {
   const workspaceId = state.selectedWorkspaceId;
+  state.workspaceFileActiveDirectory = parentDirectoryPath(path);
   state.selectedWorkspaceFilePath = path;
   state.fileEditor = createFileEditorState({
     open: true,
@@ -230,6 +298,28 @@ function workspaceFileScopeId(state) {
 
 function cleanDirectoryPath(path) {
   return String(path || "").replace(/^\/+|\/+$/g, "");
+}
+
+function fullWorkspaceEntryPath(state, path) {
+  const name = cleanDirectoryPath(path);
+  if (!name || name === "." || name === ".." || name.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error("empty_file_name");
+  }
+  const activeDirectory = cleanDirectoryPath(state.workspaceFileActiveDirectory);
+  return activeDirectory ? `${activeDirectory}/${name}` : name;
+}
+
+function parentDirectoryPath(path) {
+  const parts = cleanDirectoryPath(path).split("/").filter(Boolean);
+  return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+}
+
+async function refreshWorkspaceFileTree({state, loadWorkspaceFiles}) {
+  const activeDirectory = cleanDirectoryPath(state.workspaceFileActiveDirectory);
+  await loadWorkspaceFiles();
+  if (!activeDirectory) return;
+  state.expandedFilePaths = new Set([...state.expandedFilePaths, activeDirectory]);
+  await loadWorkspaceFiles(activeDirectory);
 }
 
 function mergeWorkspaceFileListing(state, directoryPath, files) {

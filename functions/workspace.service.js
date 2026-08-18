@@ -39,6 +39,8 @@ const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 function createWorkspaceService(dependencies = {}) {
   return {
     createWorkspace: (uid, payload) => createWorkspace(uid, payload, dependencies),
+    createWorkspaceDirectory,
+    createWorkspaceFile,
     createWorkspaceFileDownloadUrl,
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
@@ -470,6 +472,46 @@ async function uploadWorkspaceFile(uid, workspaceId, path, req) {
   };
 }
 
+async function createWorkspaceFile(uid, workspaceId, payload = {}) {
+  const {bucket, file, prefix, relativePath} = await workspaceEntryStorageFile(
+      uid,
+      workspaceId,
+      payload.path,
+  );
+  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
+  await file.save("", {
+    contentType: contentTypeForPath(relativePath),
+    resumable: false,
+  });
+
+  const [metadata] = await file.getMetadata();
+  return {
+    file: storageFileToClientFile(file, `${prefix}/`),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
+async function createWorkspaceDirectory(uid, workspaceId, payload = {}) {
+  const {bucket, prefix, relativePath} = await workspaceEntryStorageFile(
+      uid,
+      workspaceId,
+      payload.path,
+  );
+  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
+  const markerRelativePath = `${relativePath}/${DIRECTORY_MARKER_FILES[0]}`;
+  const markerFile = bucket.file(`${prefix}/${markerRelativePath}`);
+  await markerFile.save("", {
+    contentType: "application/x-mapache-directory",
+    resumable: false,
+  });
+
+  const [metadata] = await markerFile.getMetadata();
+  return {
+    file: storageFileToClientFile(markerFile, `${prefix}/`),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
 async function createWorkspaceFileDownloadUrl(uid, workspaceId, path) {
   const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
   const [exists] = await file.exists();
@@ -537,9 +579,34 @@ async function workspaceStorageFile(uid, workspaceId, path) {
   const relativePath = normalizeWorkspaceFilePath(path);
   if (!bucketName || !prefix) throw httpError(400, "workspace_storage_not_configured");
   return {
+    bucket: admin.storage().bucket(bucketName),
     file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
+    prefix,
     relativePath,
   };
+}
+
+async function workspaceEntryStorageFile(uid, workspaceId, path) {
+  if (!String(path || "").trim()) throw httpError(400, "empty_file_name");
+  return workspaceStorageFile(uid, workspaceId, path);
+}
+
+async function assertWorkspacePathAvailable(bucket, prefix, relativePath) {
+  const pathParts = relativePath.split("/");
+  for (let index = 1; index < pathParts.length; index += 1) {
+    const [parentFileExists] = await bucket.file(`${prefix}/${pathParts.slice(0, index).join("/")}`).exists();
+    if (parentFileExists) throw httpError(409, "workspace_path_conflict");
+  }
+
+  const [targetExists] = await bucket.file(`${prefix}/${relativePath}`).exists();
+  if (targetExists) throw httpError(409, "workspace_path_conflict");
+
+  const [children] = await bucket.getFiles({
+    autoPaginate: false,
+    maxResults: 1,
+    prefix: `${prefix}/${relativePath}/`,
+  });
+  if (children.length) throw httpError(409, "workspace_path_conflict");
 }
 
 function normalizeWorkspaceFilePath(value) {
@@ -594,6 +661,8 @@ function workspaceDirectoryPathFromMarker(relativePath) {
 
 module.exports = {
   createWorkspaceService,
+  createWorkspaceDirectory,
+  createWorkspaceFile,
   deleteWorkspaceStorageIfUnshared,
   isHiddenWorkspaceFilePath,
   listWorkspaceFiles,

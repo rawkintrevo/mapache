@@ -189,6 +189,7 @@ export function createInitialState() {
     workspaceFilesUploadMessage: "",
     workspaceFilesTruncated: false,
     workspaceFilesWorkspaceId: null,
+    workspaceFileActiveDirectory: "",
     expandedFilePaths: new Set(),
     selectedWorkspaceFilePath: "",
     fileEditor: createFileEditorState(),
