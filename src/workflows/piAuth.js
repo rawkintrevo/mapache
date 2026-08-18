@@ -46,9 +46,72 @@ export async function saveGenericEnvironmentKeyState({state, render}) {
   try {
     const data = form.id ? await state.api.updateGenericEnvironmentKey(form.id, form) : await state.api.createGenericEnvironmentKey(form);
     await loadPiAuthState({state, render});
-    state.piAuth = {...state.piAuth, saving: false, message: "Environment key saved. Select it for a session, then restart that runner to apply changes.", environmentForm: {id: "", name: "", label: "", value: ""}, lastEnvironmentEntry: data};
+    const selectedForSession = await selectGenericEnvironmentEntryForActiveSession(state, data.id);
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      message: selectedForSession ?
+        "Environment key saved and selected for this session. Restart the runner to apply changes." :
+        "Environment key saved. Select it for a session, then restart that runner to apply changes.",
+      environmentForm: {id: "", name: "", label: "", value: ""},
+      lastEnvironmentEntry: data,
+    };
   } catch (error) { state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error), message: ""}; }
   render();
+}
+
+export async function updateGenericEnvironmentSelectionState({state, entryId, selected, render}) {
+  const session = activeSession(state);
+  if (!session || !entryId) return;
+  const currentIds = selectedEnvironmentEntryIds(session);
+  const environmentEntryIds = selected ?
+    [...new Set([...currentIds, entryId])] :
+    currentIds.filter((id) => id !== entryId);
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving environment selection..."};
+  render();
+  try {
+    await saveEnvironmentSelection(state, session, environmentEntryIds);
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      message: "Environment selection saved. Restart the runner to apply changes.",
+    };
+  } catch (error) {
+    state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error), message: ""};
+  }
+  render();
+}
+
+async function selectGenericEnvironmentEntryForActiveSession(state, entryId) {
+  const session = activeSession(state);
+  if (!session || !entryId) return false;
+  const currentIds = selectedEnvironmentEntryIds(session);
+  if (currentIds.includes(entryId)) return true;
+  await saveEnvironmentSelection(state, session, [...currentIds, entryId]);
+  return true;
+}
+
+async function saveEnvironmentSelection(state, session, environmentEntryIds) {
+  const providers = session.authSelection?.providers || session.piAuthSelection || {};
+  const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, {
+    providers,
+    environmentEntryIds,
+  });
+  state.sessions = state.sessions.map((item) => item.id === session.id ? {
+    ...item,
+    authSelection: data.selection || {harness: session.harnessId || "", providers},
+    environmentEntryIds,
+  } : item);
+}
+
+function activeSession(state) {
+  return state.sessions?.find((session) => session.id === state.selectedSessionId) || null;
+}
+
+function selectedEnvironmentEntryIds(session) {
+  return Array.isArray(session?.environmentEntryIds) ?
+    session.environmentEntryIds :
+    (Array.isArray(session?.genericEnvironmentEntryIds) ? session.genericEnvironmentEntryIds : []);
 }
 
 export function editGenericEnvironmentKeyState(state, entry) {
@@ -59,6 +122,11 @@ export async function deleteGenericEnvironmentKeyState({state, entryId, render})
   state.piAuth = {...state.piAuth, saving: true, error: "", message: "Deleting environment key..."}; render();
   try {
     await state.api.deleteGenericEnvironmentKey(entryId);
+    const session = activeSession(state);
+    const currentIds = selectedEnvironmentEntryIds(session);
+    if (session && currentIds.includes(entryId)) {
+      await saveEnvironmentSelection(state, session, currentIds.filter((id) => id !== entryId));
+    }
     await loadPiAuthState({state, render});
     state.piAuth = {...state.piAuth, saving: false, message: "Environment key deleted."};
     render();
