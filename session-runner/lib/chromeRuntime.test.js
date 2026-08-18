@@ -1,8 +1,29 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
 const test = require("node:test");
-const {createChromeRuntime, sanitizeBrowserError} = require("./chromeRuntime");
+const {createChromeRuntime, probeTcpPort, sanitizeBrowserError} = require("./chromeRuntime");
+
+test("VNC TCP probes report a successful connection", async () => {
+  const socket = new EventEmitter();
+  let destroyed = false;
+  socket.destroy = () => {
+    destroyed = true;
+  };
+  socket.setTimeout = () => {};
+
+  const result = probeTcpPort({
+    connect: (options) => {
+      assert.deepEqual(options, {host: "127.0.0.1", port: 5900});
+      process.nextTick(() => socket.emit("connect"));
+      return socket;
+    },
+  }, "127.0.0.1", 5900);
+
+  assert.equal(await result, true);
+  assert.equal(destroyed, true);
+});
 
 test("non-Chrome runtimes stay disabled and do not start a desktop", async () => {
   let starts = 0;

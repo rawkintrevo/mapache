@@ -234,7 +234,8 @@ function probeTcpPort(netImpl, host, port) {
       if (typeof socket.destroy === "function") socket.destroy();
       callback(value);
     };
-    socket.once("connect", finish(resolve));
+    const onConnect = finish(resolve);
+    socket.once("connect", () => onConnect(true));
     socket.once("error", finish(reject));
     const onTimeout = finish(reject);
     socket.once("timeout", () => onTimeout(new Error("VNC readiness timed out")));
