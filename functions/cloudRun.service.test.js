@@ -116,6 +116,16 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(shellEnv.HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/home");
   assert.strictEqual(shellEnv.FOO, "workspace");
   assert.strictEqual(shellEnv.SHARED, "session");
+  const selectedEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    terminalKind: "shell",
+    genericEnvironmentEntryIds: ["env-1"],
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }, {}, {buildGenericEnvironmentEnv: async () => ({SERVICE_TOKEN: "secret-value"})}));
+  assert.strictEqual(selectedEnv.SERVICE_TOKEN, "secret-value");
+  assert.strictEqual(selectedEnv.environmentEntries, undefined);
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
   assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"-l\"]");
   assert.deepStrictEqual(JSON.parse(shellEnv.MCP_CONFIG), {

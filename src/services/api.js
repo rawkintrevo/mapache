@@ -28,6 +28,10 @@ export function createApiClient(getToken) {
         `/api/auth/entries/${encodeURIComponent(entryId)}`,
         {method: "DELETE"},
     ),
+    getGenericEnvironmentKeys: () => request(getToken, "/api/auth/environment"),
+    createGenericEnvironmentKey: (body) => request(getToken, "/api/auth/environment", {method: "POST", body}),
+    updateGenericEnvironmentKey: (entryId, body) => request(getToken, `/api/auth/environment/${encodeURIComponent(entryId)}`, {method: "PUT", body}),
+    deleteGenericEnvironmentKey: (entryId) => request(getToken, `/api/auth/environment/${encodeURIComponent(entryId)}`, {method: "DELETE"}),
     startOpenAiCodexDeviceLogin: () => request(
         getToken,
         "/api/auth/providers/openai-codex/device-code/start",
@@ -154,7 +158,7 @@ export function createApiClient(getToken) {
     saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/auth-selection`,
-        {method: "POST", body: {selection}},
+        {method: "POST", body: {selection: selection.providers || selection, environmentEntryIds: selection.environmentEntryIds || []}},
     ),
     getGitStatus: (workspaceId, sessionId) => request(
         getToken,

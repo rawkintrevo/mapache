@@ -46,6 +46,7 @@ export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
   }, [authHarness, piAuth]);
   const groupedEntries = useMemo(() => groupEntries(entries), [entries]);
   const [selection, setSelection] = useState(() => initialSelection(session, groupedEntries));
+  const [environmentEntryIds, setEnvironmentEntryIds] = useState(() => session?.environmentEntryIds || []);
 
   function updateProvider(providerKey, entryId) {
     setSelection((current) => {
@@ -89,9 +90,12 @@ export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
         ) : (
           <p className="empty">No saved auth entries are available for this harness.</p>
         )}
+        <h3>Generic environment keys</h3>
+        <p className="subtle">Selected keys are injected only into a newly provisioned or restarted runner.</p>
+        {(piAuth.environmentEntries || []).map((entry) => <label className="checkbox-label" key={entry.id}><input checked={environmentEntryIds.includes(entry.id)} type="checkbox" onChange={(event) => setEnvironmentEntryIds((current) => event.target.checked ? [...current, entry.id] : current.filter((id) => id !== entry.id))} /><span>{entry.label || entry.name} ({entry.name})</span></label>)}
         {piAuth.error ? <p className="empty">{piAuth.error}</p> : null}
         <div className="modal-actions">
-          <Button disabled={piAuth.saving || !entries.length} onClick={() => onSave({harness: authHarness?.id || "", providers: selection})}>Save</Button>
+          <Button disabled={piAuth.saving || (!entries.length && !environmentEntryIds.length)} onClick={() => onSave({harness: authHarness?.id || "", providers: selection, environmentEntryIds})}>Save</Button>
           <Button disabled={piAuth.saving} type="button" variant="secondary" onClick={onClose}>Cancel</Button>
         </div>
       </section>

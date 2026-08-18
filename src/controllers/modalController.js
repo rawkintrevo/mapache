@@ -72,6 +72,16 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
+  function openGenericEnvironmentModal() {
+    state.genericEnvironmentModalOpen = true;
+    render();
+  }
+
+  function closeGenericEnvironmentModal() {
+    state.genericEnvironmentModalOpen = false;
+    render();
+  }
+
   function closePiAuthManageModal() {
     state.piAuthManageModalOpen = false;
     render();
@@ -86,6 +96,8 @@ export function createModalController({state, render, loadPiAuth}) {
     closeWorkspaceModal,
     openAuthModal,
     openPiAuthManageModal,
+    openGenericEnvironmentModal,
+    closeGenericEnvironmentModal,
     openSessionModal,
     openWorkspaceSubagentModal,
     openWorkspaceSkillModal,

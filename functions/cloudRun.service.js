@@ -267,10 +267,13 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const homeDir = cleanHomeDir(session.homeDir || "/root");
   const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
   const codexHome = session.codexHomeDir || codexHomeDir(session.runnerSessionId || session.id || "");
+  const genericEnvironment = typeof dependencies.buildGenericEnvironmentEnv === "function" ?
+    await dependencies.buildGenericEnvironmentEnv(session) : {};
   const env = [
     ...envMapToCloudRunEnv({
       ...(session.workspaceEnv || {}),
       ...(session.sessionEnv || {}),
+      ...genericEnvironment,
     }),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "HOME", value: homeDir},

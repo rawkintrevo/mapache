@@ -33,6 +33,10 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "auth" && parts[1] === "entries") {
     return {name: "piAuthEntry", entryId: parts[2]};
   }
+  if (parts.length === 2 && parts[0] === "auth" && parts[1] === "environment") return {name: "genericEnv"};
+  if (parts.length === 3 && parts[0] === "auth" && parts[1] === "environment") {
+    return {name: "genericEnvEntry", entryId: parts[2]};
+  }
   if (
     parts.length === 5 &&
     parts[0] === "auth" &&
@@ -184,6 +188,8 @@ const ROUTE_METHODS = Object.freeze({
   piAuth: ["GET"],
   piAuthProvider: ["PUT", "DELETE"],
   piAuthEntry: ["DELETE"],
+  genericEnv: ["GET", "POST"],
+  genericEnvEntry: ["PUT", "DELETE"],
   openAiCodexDeviceCode: ["POST"],
   workspaces: ["GET", "POST"],
   workspace: ["DELETE"],

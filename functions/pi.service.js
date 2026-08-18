@@ -12,6 +12,7 @@ const {
   httpError,
   normalizeStoragePrefix,
 } = require("./backendUtils.helpers");
+const {normalizeEnvMap} = require("./env.helpers");
 
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
@@ -67,6 +68,11 @@ function createPiService(dependencies = {}) {
     deletePiSkill: (uid, workspaceId, sessionId, payload) =>
       deleteWorkspaceSkill(uid, workspaceId, sessionId, payload, dependencies),
     getPiAuth,
+    listGenericEnvironmentKeys,
+    createGenericEnvironmentKey,
+    updateGenericEnvironmentKey,
+    deleteGenericEnvironmentKey,
+    resolveGenericEnvironment: (uid, ids) => resolveGenericEnvironment(uid, ids),
     handleOpenAiCodexOAuthCallback,
     installPiPackage: (uid, workspaceId, sessionId, payload) =>
       installPiPackage(uid, workspaceId, sessionId, payload, dependencies),
@@ -99,6 +105,74 @@ function createPiService(dependencies = {}) {
 async function getPiAuth(uid) {
   const {providers, entries} = await readCompatiblePiAuthState(uid);
   return {providers, entries};
+}
+
+function genericEnvironmentCollection(uid) {
+  return db.collection("users").doc(uid).collection("private").doc("environmentKeys").collection("entries");
+}
+
+function genericEnvironmentEntryId(value) {
+  const id = cleanName(value);
+  if (!id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id)) throw httpError(400, "invalid_environment_entry");
+  return id;
+}
+
+function normalizeGenericEnvironmentPayload(payload = {}, requireValue = true) {
+  const name = String(payload.name || "").trim();
+  const env = normalizeEnvMap({[name]: requireValue ? payload.value : "x"}, {
+    errorCode: "invalid_environment_key",
+    invalidNameErrorCode: "invalid_environment_variable_name",
+    reservedNameErrorCode: "reserved_environment_variable_name",
+  });
+  const value = requireValue ? String(payload.value == null ? "" : payload.value) : undefined;
+  if (requireValue && !value) throw httpError(400, "environment_value_required");
+  const label = cleanName(payload.label || "").slice(0, 128);
+  return {name: Object.keys(env)[0], value, label};
+}
+
+function redactGenericEnvironmentEntry(doc) {
+  const data = doc.data() || {};
+  return {id: doc.id, name: data.name || "", label: data.label || "", updatedAt: data.updatedAt || null};
+}
+
+async function listGenericEnvironmentKeys(uid) {
+  const snap = await genericEnvironmentCollection(uid).get();
+  return {entries: snap.docs.map(redactGenericEnvironmentEntry).sort((a, b) => a.name.localeCompare(b.name))};
+}
+
+async function createGenericEnvironmentKey(uid, payload) {
+  const normalized = normalizeGenericEnvironmentPayload(payload);
+  const ref = genericEnvironmentCollection(uid).doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await ref.set({ownerUid: uid, ...normalized, createdAt: now, updatedAt: now});
+  return redactGenericEnvironmentEntry(await ref.get());
+}
+
+async function updateGenericEnvironmentKey(uid, entryId, payload) {
+  const ref = genericEnvironmentCollection(uid).doc(genericEnvironmentEntryId(entryId));
+  const snap = await ref.get();
+  if (!snap.exists) throw httpError(404, "environment_entry_not_found");
+  const normalized = normalizeGenericEnvironmentPayload(payload);
+  await ref.set({...normalized, updatedAt: admin.firestore.FieldValue.serverTimestamp()}, {merge: true});
+  return redactGenericEnvironmentEntry(await ref.get());
+}
+
+async function deleteGenericEnvironmentKey(uid, entryId) {
+  const ref = genericEnvironmentCollection(uid).doc(genericEnvironmentEntryId(entryId));
+  await ref.delete();
+  return {ok: true, id: ref.id};
+}
+
+async function resolveGenericEnvironment(uid, ids = []) {
+  const requested = Array.isArray(ids) ? [...new Set(ids.map(genericEnvironmentEntryId))] : [];
+  if (requested.length > 50) throw httpError(400, "too_many_environment_entries");
+  const docs = await Promise.all(requested.map((id) => genericEnvironmentCollection(uid).doc(id).get()));
+  if (docs.some((doc) => !doc.exists)) throw httpError(400, "environment_entry_not_found");
+  return docs.reduce((acc, doc) => {
+    const data = doc.data() || {};
+    acc[data.name] = String(data.value || "");
+    return acc;
+  }, {});
 }
 
 async function savePiAuthProvider(uid, provider, payload) {
@@ -375,10 +449,12 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   const harnessId = sessionHarnessId(session);
-  if (!["pi", "codex"].includes(harnessId)) {
+  const environmentEntryIds = Array.isArray(payload?.environmentEntryIds) ?
+    [...new Set(payload.environmentEntryIds.map(genericEnvironmentEntryId))] : [];
+  if (!["pi", "codex"].includes(harnessId) && !environmentEntryIds.length) {
     throw httpError(400, "auth_selection_unsupported");
   }
-  const piAuth = await getPiAuth(uid);
+  const piAuth = ["pi", "codex"].includes(harnessId) ? await getPiAuth(uid) : {entries: {}};
   const selection = {
     harness: harnessId,
     providers: normalizePiAuthSelection(payload && payload.selection && payload.selection.providers ? payload.selection.providers : payload && payload.selection, piAuth.entries),
@@ -386,12 +462,13 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   await sessionSnap.ref.set({
     authSelection: selection,
     piAuthSelection: selection.providers,
+    environmentEntryIds,
     authSelectionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, {merge: true});
 
-  let materialized = {ok: true, appliedToRunner: false, providerCount: Object.keys(selection.providers).length};
+  let materialized = {ok: true, appliedToRunner: false, providerCount: Object.keys(selection.providers).length, environmentCount: environmentEntryIds.length};
   if (session.serviceUrl && session.shutdownToken) {
-    materialized = await requestRunnerAuthMaterialize(session, {selection}, dependencies);
+    materialized = await requestRunnerAuthMaterialize(session, {selection, environmentEntryIds}, dependencies);
   }
   return {ok: true, selection, materialized};
 }
@@ -1191,6 +1268,7 @@ module.exports = {
   normalizePiAuthProviders,
   normalizePiAuthSelection,
   normalizePiAuthStoredProviderKey,
+  normalizeGenericEnvironmentPayload,
   normalizePiPackageSource,
   normalizePiSkillContent,
   normalizePiSkillDescription,
@@ -1207,4 +1285,5 @@ module.exports = {
   sessionSupportsWorkspaceSkills,
   sessionSupportsWorkspaceSubagents,
   writePiAuthMaps,
+  resolveGenericEnvironment,
 };

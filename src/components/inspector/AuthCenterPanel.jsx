@@ -62,6 +62,7 @@ export function AuthCenterPanel({
   onDeletePiAuthProvider,
   onOpenAuthModal,
   onOpenPiAuthManage,
+  onOpenGenericEnvironment,
   onRefreshPiAuth,
   onToggleDrawerSection,
 }) {
@@ -126,6 +127,8 @@ export function AuthCenterPanel({
           {authHarness?.manageTitle || "Manage Auth"}
         </Button>
       ) : null}
+      <Button className="auth-center-manage" variant="secondary" onClick={onOpenGenericEnvironment}>Manage generic environment keys</Button>
+      {status.environmentEntries?.length ? <p className="subtle">{status.environmentEntries.length} saved generic key(s); secrets are masked.</p> : null}
       {status.error ? <p className="empty">{status.error}</p> : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
       {providerEntriesForHarness.length ? (

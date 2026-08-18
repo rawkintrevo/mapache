@@ -3,6 +3,10 @@ import {
   loadPiAuthState,
   savePiAuthProviderState,
   saveSessionPiAuthSelectionState,
+  saveGenericEnvironmentKeyState,
+  deleteGenericEnvironmentKeyState,
+  editGenericEnvironmentKeyState,
+  updateGenericEnvironmentFormState,
   startOpenAiCodexDeviceLoginState,
   updatePiAuthFormState,
 } from "../workflows/piAuth.js";
@@ -97,6 +101,11 @@ export function createPiPanelsController({state, render}) {
   async function refreshPiAuth() {
     await loadPiAuth({showMessage: true});
   }
+
+  function updateGenericEnvironmentForm(patch) { updateGenericEnvironmentFormState(state, patch); render(); }
+  function editGenericEnvironmentKey(entry) { editGenericEnvironmentKeyState(state, entry); render(); }
+  async function saveGenericEnvironmentKey() { await saveGenericEnvironmentKeyState({state, render}); }
+  async function deleteGenericEnvironmentKey(id) { await deleteGenericEnvironmentKeyState({state, entryId: id, render}); }
 
   async function refreshWorkspaceSubagents() {
     await loadWorkspaceSubagents();
@@ -250,6 +259,10 @@ export function createPiPanelsController({state, render}) {
     loadWorkspaceSubagents,
     loadWorkspaceSkills,
     refreshPiAuth,
+    updateGenericEnvironmentForm,
+    editGenericEnvironmentKey,
+    saveGenericEnvironmentKey,
+    deleteGenericEnvironmentKey,
     refreshMcpServers,
     refreshPiPackages,
     refreshPiSkills: refreshWorkspaceSkills,

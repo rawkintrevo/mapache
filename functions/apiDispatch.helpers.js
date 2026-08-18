@@ -31,6 +31,10 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["PUT", "piAuthProvider", jsonResult(({handlers, req, route, user}) => handlers.savePiAuthProvider(user.uid, route.provider, req.body || {}))],
     ["DELETE", "piAuthProvider", jsonResult(({handlers, route, user}) => handlers.deletePiAuthProvider(user.uid, route.provider))],
     ["DELETE", "piAuthEntry", jsonResult(({handlers, route, user}) => handlers.deletePiAuthEntry(user.uid, route.entryId))],
+    ["GET", "genericEnv", jsonResult(({handlers, user}) => handlers.listGenericEnvironmentKeys(user.uid))],
+    ["POST", "genericEnv", createdJsonResult(({handlers, req, user}) => handlers.createGenericEnvironmentKey(user.uid, req.body || {}))],
+    ["PUT", "genericEnvEntry", jsonResult(({handlers, req, route, user}) => handlers.updateGenericEnvironmentKey(user.uid, route.entryId, req.body || {}))],
+    ["DELETE", "genericEnvEntry", jsonResult(({handlers, route, user}) => handlers.deleteGenericEnvironmentKey(user.uid, route.entryId))],
     ["POST", "openAiCodexDeviceCode", jsonResult(({handlers, req, route, user}) => {
       if (route.action === "start") return handlers.startOpenAiCodexDeviceCode();
       if (route.action === "complete") return handlers.completeOpenAiCodexDeviceCode(user.uid, req.body || {});

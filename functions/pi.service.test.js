@@ -16,6 +16,7 @@ const {
   normalizePiAuthProviders,
   normalizePiAuthSelection,
   normalizePiAuthStoredProviderKey,
+  normalizeGenericEnvironmentPayload,
   normalizePiPackageSource,
   normalizePiSkillContent,
   normalizePiSkillDescription,
@@ -185,6 +186,11 @@ assert.strictEqual(normalizePiAuthProviderKey("github-cli"), "github-cli");
 assert.throws(() => normalizePiAuthProviderKey("unknown-provider"), (error) => publicMessage(error) === "invalid_pi_auth_provider");
 assert.strictEqual(normalizePiAuthStoredProviderKey("custom-provider"), "custom-provider");
 assert.throws(() => normalizePiAuthApiKey(""), (error) => publicMessage(error) === "invalid_pi_auth_key");
+assert.deepStrictEqual(normalizeGenericEnvironmentPayload({name: " PROVIDER_TOKEN ", label: "Provider", value: "secret"}), {
+  name: "PROVIDER_TOKEN", label: "Provider", value: "secret",
+});
+assert.throws(() => normalizeGenericEnvironmentPayload({name: "BAD-NAME", value: "secret"}), (error) => publicMessage(error) === "invalid_environment_variable_name");
+assert.throws(() => normalizeGenericEnvironmentPayload({name: "SESSION_ID", value: "secret"}), (error) => publicMessage(error) === "reserved_environment_variable_name");
 assert.strictEqual(normalizePiAuthApiKey(" key "), "key");
 
 const openAiCredential1 = {type: "oauth", access: "first"};

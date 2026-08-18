@@ -89,6 +89,7 @@ const piService = createPiService({
 const qaAuthService = createQaAuthService();
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
+  buildGenericEnvironmentEnv: (session) => piService.resolveGenericEnvironment(session.ownerUid, session.environmentEntryIds),
   markSessionStopped,
   releaseChromeWorkspaceSession,
 });
@@ -112,6 +113,10 @@ const API_HANDLERS = {
   savePiAuthProvider: piService.savePiAuthProvider,
   deletePiAuthProvider: piService.deletePiAuthProvider,
   deletePiAuthEntry: piService.deletePiAuthEntry,
+  listGenericEnvironmentKeys: piService.listGenericEnvironmentKeys,
+  createGenericEnvironmentKey: piService.createGenericEnvironmentKey,
+  updateGenericEnvironmentKey: piService.updateGenericEnvironmentKey,
+  deleteGenericEnvironmentKey: piService.deleteGenericEnvironmentKey,
   startOpenAiCodexDeviceCode: piService.startOpenAiCodexDeviceCode,
   completeOpenAiCodexDeviceCode: piService.completeOpenAiCodexDeviceCode,
   listWorkspaces: workspaceService.listWorkspaces,
@@ -336,6 +341,10 @@ async function createSession(uid, workspaceId, payload) {
     ...sessionSyncPolicyMetadata(workspace),
     ...sessionHomePolicyMetadata(workspace),
     ...sessionEnvMetadata(workspace, payload),
+    genericEnvironmentEntryIds: [...new Set([
+      ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
+      ...(Array.isArray(payload.environmentEntryIds) ? payload.environmentEntryIds : []),
+    ])],
     ...(sshPayload ? {
       sshTarget: sshPayload.public,
       sessionEnv: {

@@ -1,5 +1,6 @@
 import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
+import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
@@ -19,6 +20,7 @@ export function ModalStack(props) {
           busy={state.busy}
           error={state.error}
           selectedWorkspace={props.selectedWorkspace}
+          environmentEntries={state.piAuth.environmentEntries}
           onClose={modals.closeSessionModal}
           onCreateSession={sessions.createSession}
         />
@@ -26,6 +28,7 @@ export function ModalStack(props) {
       {state.workspaceModalOpen ? (
         <WorkspaceModal
           repoPicker={state.repoPicker}
+          environmentEntries={state.piAuth.environmentEntries}
           onClose={modals.closeWorkspaceModal}
           onConnectGithub={github.connectGithub}
           onCreateWorkspace={(payload) => {
@@ -44,6 +47,7 @@ export function ModalStack(props) {
           onUpdate={pi.updatePiAuthForm}
         />
       ) : null}
+      {state.genericEnvironmentModalOpen ? <GenericEnvironmentModal piAuth={state.piAuth} onClose={modals.closeGenericEnvironmentModal} onSave={pi.saveGenericEnvironmentKey} onUpdate={pi.updateGenericEnvironmentForm} onEdit={pi.editGenericEnvironmentKey} onDelete={pi.deleteGenericEnvironmentKey} /> : null}
       {state.piAuthManageModalOpen ? (
         <PiAuthManageModal
           piAuth={state.piAuth}

@@ -101,6 +101,7 @@ export function AppShell(props) {
           onEditWorkspaceSubagent={pi.editWorkspaceSubagent}
           onOpenAuthModal={modals.openAuthModal}
           onOpenPiAuthManage={modals.openPiAuthManageModal}
+          onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
           onOpenWorkspaceSkillModal={modals.openWorkspaceSkillModal}
           onOpenWorkspaceSubagentModal={modals.openWorkspaceSubagentModal}
           onRefreshMcpServers={pi.refreshMcpServers}

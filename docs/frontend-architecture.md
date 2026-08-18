@@ -36,6 +36,8 @@ Workspace file browsing is lazy. `src/workflows/workspaceFiles.js` loads the roo
 
 The right inspector also owns workspace-scoped MCP server management through `state.mcpServers`. The MCP panel edits the selected workspace's shared MCP config, not a single session; newly created sessions receive the config snapshot automatically and active sessions pick up edits after restart. Harness capability routing is centralized in `src/utils/sessionHarnesses.js` so panels do not guess behavior from image prefixes. The Skills inspector uses harness-neutral state under `state.workspaceSkills` and chooses the active workspace skill root from the selected session's harness metadata. Pi sessions write `.pi/skills/**`; Codex sessions write `.agents/skills/**`; shell and SSH sessions show an unsupported-state message instead of the edit form. The Subagents inspector mirrors that model under `state.workspaceSubagents`, writing `.pi/agents/*.md` for Pi and `.codex/agents/*.toml` for Codex.
 
+The Authentication Center also manages generic environment keys through `src/components/modals/GenericEnvironmentModal.jsx` and the Pi auth workflow. Names and labels are visible, but values are write-only after save. Workspace and session creation forms select saved key IDs, and the Pi auth management modal can change the selected IDs for an existing runner; applying a changed selection requires restart or reprovisioning.
+
 ## Styling
 
 Global CSS enters through `src/styles.css`, which imports `src/styles/tokens.css`, `src/styles/base.css`, `src/styles/primitives.css`, and `src/styles/layout.css`. Component-specific selectors live beside their React components as plain CSS sidecars when practical. See [css-decomposition.md](./css-decomposition.md).

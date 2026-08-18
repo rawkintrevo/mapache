@@ -156,6 +156,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
       invalidNameErrorCode: "invalid_workspace_env_name",
       reservedNameErrorCode: "reserved_workspace_env_name",
     }),
+    environmentEntryIds: Array.isArray(payload.environmentEntryIds) ? [...new Set(payload.environmentEntryIds.map((id) => String(id || "").trim()).filter(Boolean))] : [],
     mcpConfig: normalizeMcpConfigPayload(payload.mcpConfig || {}),
     storagePrefix,
     createdAt: now,

@@ -12,6 +12,7 @@ export async function loadPiAuthState({state, render, options = {}}) {
 
   try {
     const data = await state.api.getPiAuth();
+    const environment = await state.api.getGenericEnvironmentKeys();
     state.piAuth = {
       ...state.piAuth,
       loading: false,
@@ -19,6 +20,7 @@ export async function loadPiAuthState({state, render, options = {}}) {
       message: options.showMessage ? "Authentication providers refreshed." : "",
       providers: data.providers || {},
       entries: data.entries || {},
+      environmentEntries: environment.entries || [],
     };
   } catch (error) {
     state.piAuth = {
@@ -29,6 +31,34 @@ export async function loadPiAuthState({state, render, options = {}}) {
     };
   }
   render();
+}
+
+export function updateGenericEnvironmentFormState(state, patch) {
+  state.piAuth = {...state.piAuth, environmentForm: {...state.piAuth.environmentForm, ...patch}, error: "", message: ""};
+}
+
+export async function saveGenericEnvironmentKeyState({state, render}) {
+  const form = state.piAuth.environmentForm || {};
+  if (!String(form.name || "").trim() || !String(form.value || "")) {
+    state.piAuth = {...state.piAuth, error: "Enter a variable name and secret value."}; render(); return;
+  }
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving environment key..."}; render();
+  try {
+    const data = form.id ? await state.api.updateGenericEnvironmentKey(form.id, form) : await state.api.createGenericEnvironmentKey(form);
+    await loadPiAuthState({state, render});
+    state.piAuth = {...state.piAuth, saving: false, message: "Environment key saved. Select it for a session, then restart that runner to apply changes.", environmentForm: {id: "", name: "", label: "", value: ""}, lastEnvironmentEntry: data};
+  } catch (error) { state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error), message: ""}; }
+  render();
+}
+
+export function editGenericEnvironmentKeyState(state, entry) {
+  state.piAuth = {...state.piAuth, environmentForm: {...entry, value: ""}, error: "", message: ""};
+}
+
+export async function deleteGenericEnvironmentKeyState({state, entryId, render}) {
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Deleting environment key..."}; render();
+  try { await state.api.deleteGenericEnvironmentKey(entryId); await loadPiAuthState({state, render}); }
+  catch (error) { state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error)}; render(); }
 }
 
 export function updatePiAuthFormState(state, patch) {
@@ -219,7 +249,7 @@ export async function saveSessionPiAuthSelectionState({state, session, selection
   render();
   try {
     const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, selection);
-    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, authSelection: data.selection || selection} : item);
+    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, authSelection: data.selection || selection, environmentEntryIds: selection.environmentEntryIds || []} : item);
     state.piAuth = {
       ...state.piAuth,
       saving: false,

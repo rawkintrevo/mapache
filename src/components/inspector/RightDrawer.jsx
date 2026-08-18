@@ -21,6 +21,7 @@ export function RightDrawer({
   onEditWorkspaceSubagent,
   onOpenAuthModal,
   onOpenPiAuthManage,
+  onOpenGenericEnvironment,
   onOpenWorkspaceSkillModal,
   onOpenWorkspaceSubagentModal,
   onRefreshPiAuth,
@@ -69,6 +70,7 @@ export function RightDrawer({
         onDeletePiAuthProvider={onDeletePiAuthProvider}
         onOpenAuthModal={onOpenAuthModal}
         onOpenPiAuthManage={onOpenPiAuthManage}
+        onOpenGenericEnvironment={onOpenGenericEnvironment}
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}
       />

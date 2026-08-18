@@ -11,7 +11,7 @@ function formatMemory(value) {
   return value.replace("Gi", " GiB");
 }
 
-export function SessionModal({busy, error = "", selectedWorkspace = null, onClose, onCreateSession}) {
+export function SessionModal({busy, error = "", selectedWorkspace = null, environmentEntries = [], onClose, onCreateSession}) {
   const workspaceSsh = selectedWorkspace?.source?.type === "ssh";
   const sessionType = workspaceSsh ? "ssh" : "cloud";
   return (
@@ -29,6 +29,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
           onSubmit={(event) => {
             event.preventDefault();
             const formData = new FormData(event.currentTarget);
+            const environmentEntryIds = formData.getAll("environmentEntryId");
             const base = {
               name: String(formData.get("name") || "").trim() || "Terminal session",
               sessionType,
@@ -36,6 +37,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
               memory: formData.get("memory"),
               env: parseEnvText(formData.get("env")),
             };
+            if (environmentEntryIds.length) base.environmentEntryIds = environmentEntryIds;
             onCreateSession(sessionType === "ssh" ? {
               ...base,
             } : {
@@ -65,6 +67,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
             <span>Session env</span>
             <textarea name="env" placeholder={"FOO=session-value\nAPI_BASE=http://localhost:3000"} rows={4} />
           </label>
+          {environmentEntries.length ? <fieldset><legend>Saved generic environment keys</legend>{environmentEntries.map((entry) => <label className="checkbox-label" key={entry.id}><input name="environmentEntryId" type="checkbox" value={entry.id} /><span>{entry.label || entry.name} ({entry.name})</span></label>)}<p className="subtle">Secrets are injected when this runner is provisioned.</p></fieldset> : null}
           <Button disabled={busy} type="submit">
             <Plus aria-hidden="true" />
             Create session
