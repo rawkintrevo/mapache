@@ -116,6 +116,10 @@
   width: min(680px, 100%);
 }
 
+.generic-environment-panel {
+  width: min(760px, 100%);
+}
+
 .modal-form {
   display: grid;
   gap: 12px;

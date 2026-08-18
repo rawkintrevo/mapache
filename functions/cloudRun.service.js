@@ -267,8 +267,9 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const homeDir = cleanHomeDir(session.homeDir || "/root");
   const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
   const codexHome = session.codexHomeDir || codexHomeDir(session.runnerSessionId || session.id || "");
+  const environmentEntryIds = sessionEnvironmentEntryIds(session);
   const genericEnvironment = typeof dependencies.buildGenericEnvironmentEnv === "function" ?
-    await dependencies.buildGenericEnvironmentEnv(session) : {};
+    await dependencies.buildGenericEnvironmentEnv(session, environmentEntryIds) : {};
   const env = [
     ...envMapToCloudRunEnv({
       ...(session.workspaceEnv || {}),
@@ -378,6 +379,13 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   }
 
   return env.filter(Boolean);
+}
+
+function sessionEnvironmentEntryIds(session = {}) {
+  const selected = Array.isArray(session.environmentEntryIds) ?
+    session.environmentEntryIds :
+    (Array.isArray(session.genericEnvironmentEntryIds) ? session.genericEnvironmentEntryIds : []);
+  return [...new Set(selected.map((id) => String(id || "").trim()).filter(Boolean))];
 }
 
 function terminalCommandEnv(session) {
@@ -569,6 +577,7 @@ module.exports = {
   requireRunnerServiceAccount,
   resourceLimits,
   runnerServiceAccountValue,
+  sessionEnvironmentEntryIds,
   sessionRunnerEnv,
   stringifyMcpConfig,
   stringifySyncPolicyExclude,

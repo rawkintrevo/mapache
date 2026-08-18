@@ -57,7 +57,12 @@ export function editGenericEnvironmentKeyState(state, entry) {
 
 export async function deleteGenericEnvironmentKeyState({state, entryId, render}) {
   state.piAuth = {...state.piAuth, saving: true, error: "", message: "Deleting environment key..."}; render();
-  try { await state.api.deleteGenericEnvironmentKey(entryId); await loadPiAuthState({state, render}); }
+  try {
+    await state.api.deleteGenericEnvironmentKey(entryId);
+    await loadPiAuthState({state, render});
+    state.piAuth = {...state.piAuth, saving: false, message: "Environment key deleted."};
+    render();
+  }
   catch (error) { state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error)}; render(); }
 }
 
