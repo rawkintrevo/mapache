@@ -56,6 +56,8 @@ function createHandlers(overrides = {}) {
     },
     files: {
       closeFileEditor: vi.fn(),
+      createWorkspaceDirectory: vi.fn(),
+      createWorkspaceFile: vi.fn(),
       downloadWorkspaceFile: vi.fn(),
       refreshWorkspaceFiles: vi.fn(),
       saveFileEditor: vi.fn(),
@@ -225,6 +227,28 @@ function renderShell(stateOverrides = {}, handlerOverrides = {}) {
 }
 
 describe("frontend smoke coverage", () => {
+  test("opens the accessible Files action menu and closes it with Escape", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell();
+    const trigger = screen.getByRole("button", {name: "File actions"});
+
+    await user.click(trigger);
+    expect(screen.getByRole("menu", {name: "File actions"})).toBeInTheDocument();
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Upload file",
+      "Create file",
+      "Create directory",
+    ]);
+
+    await user.click(screen.getByRole("menuitem", {name: "Create file"}));
+    expect(handlers.files.createWorkspaceFile).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu", {name: "File actions"})).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu", {name: "File actions"})).not.toBeInTheDocument();
+  });
+
   test("routes public and signed-in users through the expected app surfaces", async () => {
     const user = userEvent.setup();
     const onSignIn = vi.fn();

@@ -35,6 +35,8 @@ export function AppShell(props) {
           onRefresh={app.refreshAll}
           onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}
           onDownloadWorkspaceFile={files.downloadWorkspaceFile}
+          onCreateWorkspaceDirectory={files.createWorkspaceDirectory}
+          onCreateWorkspaceFile={files.createWorkspaceFile}
           onUploadWorkspaceFiles={files.uploadWorkspaceFiles}
           onSelectSession={sessions.selectSession}
           onSelectWorkspace={workspaces.selectWorkspace}

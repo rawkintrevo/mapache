@@ -62,6 +62,7 @@ export function resetWorkspaceFiles(state) {
   state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
   state.workspaceFilesWorkspaceId = state.selectedWorkspaceId;
+  state.workspaceFileActiveDirectory = "";
   state.expandedFilePaths = new Set();
   state.selectedWorkspaceFilePath = "";
   resetFileEditor(state);
@@ -77,6 +78,7 @@ export function resetSignedOutState(state) {
   state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
   state.workspaceFilesWorkspaceId = null;
+  state.workspaceFileActiveDirectory = "";
   state.expandedFilePaths = new Set();
   state.selectedWorkspaceFilePath = "";
   resetFileEditor(state);

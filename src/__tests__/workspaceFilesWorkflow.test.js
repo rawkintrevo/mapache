@@ -1,5 +1,7 @@
 import {describe, expect, test, vi} from "vitest";
 import {
+  createWorkspaceDirectoryState,
+  createWorkspaceFileState as createWorkspaceFileEntryState,
   loadWorkspaceFilesState,
   toggleWorkspaceFileDirState,
 } from "../workflows/workspaceFiles.js";
@@ -56,5 +58,56 @@ describe("workspace file workflow", () => {
       "src/components",
     ]);
     expect(state.workspaceFileLoadedDirs.has("src")).toBe(true);
+  });
+
+  test("creates a file in the active directory, refreshes it, and opens the editor", async () => {
+    const state = createWorkspaceFileState();
+    state.workspaceFileActiveDirectory = "src";
+    state.api.createWorkspaceFile = vi.fn(async () => ({file: {path: "src/New.md"}}));
+    state.api.syncWorkspaceFiles = vi.fn(async () => ({}));
+    state.api.getWorkspaceFile = vi.fn(async () => ({name: "New.md", content: ""}));
+    const render = vi.fn();
+
+    await createWorkspaceFileEntryState({
+      state,
+      path: "New.md",
+      loadWorkspaceFiles: (path) => loadWorkspaceFilesState(state, path),
+      render,
+    });
+
+    expect(state.api.createWorkspaceFile).toHaveBeenCalledWith("workspace-1", "src/New.md");
+    expect(state.api.syncWorkspaceFiles).toHaveBeenCalledWith("workspace-1");
+    expect(state.api.getWorkspaceFile).toHaveBeenCalledWith("workspace-1", "src/New.md");
+    expect(state.fileEditor).toMatchObject({
+      content: "",
+      open: true,
+      path: "src/New.md",
+      saving: false,
+    });
+    expect(state.workspaceFilesUploadMessage).toBe("Created file src/New.md.");
+  });
+
+  test("creates a directory and rejects empty or unsafe names", async () => {
+    const state = createWorkspaceFileState();
+    state.api.createWorkspaceDirectory = vi.fn(async () => ({file: {path: "docs"}}));
+    state.api.syncWorkspaceFiles = vi.fn(async () => ({}));
+    const render = vi.fn();
+
+    await createWorkspaceDirectoryState({
+      state,
+      path: "docs",
+      loadWorkspaceFiles: (path) => loadWorkspaceFilesState(state, path),
+      render,
+    });
+    expect(state.api.createWorkspaceDirectory).toHaveBeenCalledWith("workspace-1", "docs");
+
+    await createWorkspaceDirectoryState({
+      state,
+      path: "../secrets",
+      loadWorkspaceFiles: (path) => loadWorkspaceFilesState(state, path),
+      render,
+    });
+    expect(state.workspaceFilesError).toBe("Enter a file or directory name.");
+    expect(state.api.createWorkspaceDirectory).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,7 @@
 import {
   closeFileEditorState,
+  createWorkspaceDirectoryState,
+  createWorkspaceFileState,
   downloadWorkspaceFileState,
   loadWorkspaceFilesState,
   saveFileEditorState,
@@ -24,6 +26,22 @@ export function createWorkspaceFilesController({state, render, runBusy}) {
 
   async function uploadWorkspaceFiles(files) {
     await uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render});
+  }
+
+  async function createWorkspaceFile(path) {
+    if (path === undefined) {
+      path = window.prompt("Create file: enter a name or path.", "");
+      if (path === null) return;
+    }
+    await createWorkspaceFileState({state, path, loadWorkspaceFiles, render});
+  }
+
+  async function createWorkspaceDirectory(path) {
+    if (path === undefined) {
+      path = window.prompt("Create directory: enter a name or path.", "");
+      if (path === null) return;
+    }
+    await createWorkspaceDirectoryState({state, path, loadWorkspaceFiles, render});
   }
 
   async function downloadWorkspaceFile() {
@@ -62,6 +80,8 @@ export function createWorkspaceFilesController({state, render, runBusy}) {
 
   return {
     closeFileEditor,
+    createWorkspaceDirectory,
+    createWorkspaceFile,
     downloadWorkspaceFile,
     loadWorkspaceFiles,
     refreshWorkspaceFiles,

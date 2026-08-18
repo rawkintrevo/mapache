@@ -167,7 +167,9 @@ export function friendlyFilesError(error) {
   if (message === "not_found") return "Files API is not deployed yet.";
   if (message === "empty_file_upload") return "Choose a non-empty file to upload.";
   if (message === "file_too_large") return "That file is too large for this workspace file action.";
-  if (message === "invalid_file_path") return "That filename cannot be uploaded.";
+  if (message === "invalid_file_path") return "Enter a valid file or directory name or path.";
+  if (message === "empty_file_name") return "Enter a file or directory name.";
+  if (message === "workspace_path_conflict") return "A file or directory already exists at that path.";
   if (message === "workspace_storage_not_configured") return "Workspace storage is not configured.";
   return message;
 }

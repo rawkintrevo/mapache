@@ -126,6 +126,8 @@ const API_HANDLERS = {
   readWorkspaceFile: workspaceService.readWorkspaceFile,
   saveWorkspaceFile: workspaceService.saveWorkspaceFile,
   uploadWorkspaceFile: workspaceService.uploadWorkspaceFile,
+  createWorkspaceFile: workspaceService.createWorkspaceFile,
+  createWorkspaceDirectory: workspaceService.createWorkspaceDirectory,
   syncWorkspaceFiles,
   createWorkspaceFileDownloadUrl: workspaceService.createWorkspaceFileDownloadUrl,
   getWorkspaceMcpConfig: workspaceService.getWorkspaceMcpConfig,

@@ -59,6 +59,45 @@
   gap: 8px;
 }
 
+.files-action-menu {
+  position: relative;
+}
+
+.files-action-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 6;
+  display: grid;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px rgba(16, 24, 32, 0.18);
+}
+
+.files-action-popover .button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.files-action-popover .button:hover {
+  background: #eef2f6;
+}
+
+.files-action-popover .button:disabled {
+  background: transparent;
+  color: var(--muted);
+}
+
 .drawer-section.is-collapsed {
   gap: 0;
 }
