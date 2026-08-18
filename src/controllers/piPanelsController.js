@@ -6,6 +6,7 @@ import {
   saveGenericEnvironmentKeyState,
   deleteGenericEnvironmentKeyState,
   editGenericEnvironmentKeyState,
+  updateGenericEnvironmentSelectionState,
   updateGenericEnvironmentFormState,
   startOpenAiCodexDeviceLoginState,
   updatePiAuthFormState,
@@ -106,6 +107,9 @@ export function createPiPanelsController({state, render}) {
   function editGenericEnvironmentKey(entry) { editGenericEnvironmentKeyState(state, entry); render(); }
   async function saveGenericEnvironmentKey() { await saveGenericEnvironmentKeyState({state, render}); }
   async function deleteGenericEnvironmentKey(id) { await deleteGenericEnvironmentKeyState({state, entryId: id, render}); }
+  async function updateGenericEnvironmentSelection(id, selected) {
+    await updateGenericEnvironmentSelectionState({state, entryId: id, selected, render});
+  }
 
   async function refreshWorkspaceSubagents() {
     await loadWorkspaceSubagents();
@@ -260,6 +264,7 @@ export function createPiPanelsController({state, render}) {
     loadWorkspaceSkills,
     refreshPiAuth,
     updateGenericEnvironmentForm,
+    updateGenericEnvironmentSelection,
     editGenericEnvironmentKey,
     saveGenericEnvironmentKey,
     deleteGenericEnvironmentKey,

@@ -47,7 +47,7 @@ export function ModalStack(props) {
           onUpdate={pi.updatePiAuthForm}
         />
       ) : null}
-      {state.genericEnvironmentModalOpen ? <GenericEnvironmentModal piAuth={state.piAuth} onClose={modals.closeGenericEnvironmentModal} onSave={pi.saveGenericEnvironmentKey} onUpdate={pi.updateGenericEnvironmentForm} onEdit={pi.editGenericEnvironmentKey} onDelete={pi.deleteGenericEnvironmentKey} /> : null}
+      {state.genericEnvironmentModalOpen ? <GenericEnvironmentModal piAuth={state.piAuth} selectedSession={props.selectedSession} onClose={modals.closeGenericEnvironmentModal} onSave={pi.saveGenericEnvironmentKey} onUpdate={pi.updateGenericEnvironmentForm} onEdit={pi.editGenericEnvironmentKey} onDelete={pi.deleteGenericEnvironmentKey} onToggleSelection={pi.updateGenericEnvironmentSelection} /> : null}
       {state.piAuthManageModalOpen ? (
         <PiAuthManageModal
           piAuth={state.piAuth}

@@ -289,6 +289,10 @@ function serviceForSession(sessionSnap, calls = []) {
       400,
       "auth_selection_unsupported",
   );
+  const shellSelectionCalls = [];
+  await serviceForSession(shellSessionSnap, shellSelectionCalls)
+      .saveSessionPiAuthSelection("uid", "workspace", "session", {selection: {}, environmentEntryIds: []});
+  assert.deepStrictEqual(shellSelectionCalls[0].options.body.environmentEntryIds, []);
   await assertServiceError(
       () => serviceForSession(shellSessionSnap).saveWorkspaceSkill("uid", "workspace", "session", {
         name: "review-code",

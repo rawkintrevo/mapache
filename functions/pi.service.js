@@ -167,8 +167,7 @@ async function resolveGenericEnvironment(uid, ids = []) {
   const requested = Array.isArray(ids) ? [...new Set(ids.map(genericEnvironmentEntryId))] : [];
   if (requested.length > 50) throw httpError(400, "too_many_environment_entries");
   const docs = await Promise.all(requested.map((id) => genericEnvironmentCollection(uid).doc(id).get()));
-  if (docs.some((doc) => !doc.exists)) throw httpError(400, "environment_entry_not_found");
-  return docs.reduce((acc, doc) => {
+  return docs.filter((doc) => doc.exists).reduce((acc, doc) => {
     const data = doc.data() || {};
     acc[data.name] = String(data.value || "");
     return acc;
@@ -449,9 +448,10 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   const harnessId = sessionHarnessId(session);
-  const environmentEntryIds = Array.isArray(payload?.environmentEntryIds) ?
+  const hasEnvironmentSelection = Array.isArray(payload?.environmentEntryIds);
+  const environmentEntryIds = hasEnvironmentSelection ?
     [...new Set(payload.environmentEntryIds.map(genericEnvironmentEntryId))] : [];
-  if (!["pi", "codex"].includes(harnessId) && !environmentEntryIds.length) {
+  if (!["pi", "codex"].includes(harnessId) && !hasEnvironmentSelection) {
     throw httpError(400, "auth_selection_unsupported");
   }
   const piAuth = ["pi", "codex"].includes(harnessId) ? await getPiAuth(uid) : {entries: {}};
