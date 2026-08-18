@@ -46,7 +46,8 @@ export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
   }, [authHarness, piAuth]);
   const groupedEntries = useMemo(() => groupEntries(entries), [entries]);
   const [selection, setSelection] = useState(() => initialSelection(session, groupedEntries));
-  const [environmentEntryIds, setEnvironmentEntryIds] = useState(() => session?.environmentEntryIds || []);
+  const [environmentEntryIds, setEnvironmentEntryIds] = useState(() => Array.isArray(session?.environmentEntryIds) ?
+    session.environmentEntryIds : session?.genericEnvironmentEntryIds || []);
 
   function updateProvider(providerKey, entryId) {
     setSelection((current) => {

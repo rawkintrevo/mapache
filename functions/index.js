@@ -89,7 +89,7 @@ const piService = createPiService({
 const qaAuthService = createQaAuthService();
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
-  buildGenericEnvironmentEnv: (session) => piService.resolveGenericEnvironment(session.ownerUid, session.environmentEntryIds),
+  buildGenericEnvironmentEnv: (session, entryIds) => piService.resolveGenericEnvironment(session.ownerUid, entryIds),
   markSessionStopped,
   releaseChromeWorkspaceSession,
 });
@@ -341,7 +341,7 @@ async function createSession(uid, workspaceId, payload) {
     ...sessionSyncPolicyMetadata(workspace),
     ...sessionHomePolicyMetadata(workspace),
     ...sessionEnvMetadata(workspace, payload),
-    genericEnvironmentEntryIds: [...new Set([
+    environmentEntryIds: [...new Set([
       ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
       ...(Array.isArray(payload.environmentEntryIds) ? payload.environmentEntryIds : []),
     ])],
@@ -807,6 +807,10 @@ async function restartSession(uid, workspaceId, sessionId) {
     lastError: null,
     updatedAt: restartedAt,
   };
+
+  if (!Array.isArray(session.environmentEntryIds) && Array.isArray(session.genericEnvironmentEntryIds)) {
+    restartUpdate.environmentEntryIds = [...new Set(session.genericEnvironmentEntryIds)];
+  }
 
   if (recreatingSessionService) {
     Object.assign(restartUpdate, {

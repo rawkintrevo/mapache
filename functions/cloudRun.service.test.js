@@ -14,6 +14,7 @@ const {
   requireRunnerServiceAccount,
   resourceLimits,
   runnerServiceAccountValue,
+  sessionEnvironmentEntryIds,
   sessionRunnerEnv,
   stringifySyncPolicyExclude,
   terminalCommandEnv,
@@ -68,6 +69,9 @@ assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.p
 assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/pi-session");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
+assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [" env-1 ", "env-1", ""]}), ["env-1"]);
+assert.deepStrictEqual(sessionEnvironmentEntryIds({genericEnvironmentEntryIds: ["legacy-env"]}), ["legacy-env"]);
+assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [], genericEnvironmentEntryIds: ["legacy-env"]}), []);
 
 assert.deepStrictEqual(terminalCommandEnv({terminalKind: "shell"}), {
   command: "bash",
@@ -121,9 +125,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     workspaceId: "workspace-1",
     runnerSessionId: "session-1",
     terminalKind: "shell",
-    genericEnvironmentEntryIds: ["env-1"],
+    environmentEntryIds: ["env-1"],
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
-  }, {}, {buildGenericEnvironmentEnv: async () => ({SERVICE_TOKEN: "secret-value"})}));
+  }, {}, {buildGenericEnvironmentEnv: async (session, entryIds) => {
+    assert.strictEqual(session.ownerUid, "uid-1");
+    assert.deepStrictEqual(entryIds, ["env-1"]);
+    return {SERVICE_TOKEN: "secret-value"};
+  }}));
   assert.strictEqual(selectedEnv.SERVICE_TOKEN, "secret-value");
   assert.strictEqual(selectedEnv.environmentEntries, undefined);
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");

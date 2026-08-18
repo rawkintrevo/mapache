@@ -4,7 +4,7 @@ import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 export function GenericEnvironmentModal({piAuth, onClose, onSave, onUpdate, onEdit, onDelete}) {
   const form = piAuth.environmentForm || {};
-  return <ModalBackdrop onClose={onClose}><section aria-modal="true" className="modal-panel" role="dialog">
+  return <ModalBackdrop onClose={onClose}><section aria-modal="true" className="modal-panel generic-environment-panel" role="dialog">
     <div className="modal-heading"><h2>Generic environment keys</h2><Button aria-label="Close" icon={true} variant="secondary" onClick={onClose}><X /></Button></div>
     <p className="subtle">Secrets are stored privately and never shown after saving. Select keys for a session in Manage Auth.</p>
     <form className="modal-form" onSubmit={(event) => {event.preventDefault(); onSave();}}>
