@@ -25,7 +25,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Preview publication, public serving, and signed session access URLs: `functions/preview.service.js`
 - SSH session file and port-forward proxies: `functions/sshSession.service.js`
 - Git session status/action/PR proxies: `functions/gitSession.service.js`
-- GitHub account connection workflows: `functions/githubConnection.service.js`; source/PR orchestration: `functions/github.service.js`; injected GitHub HTTP/JWT client: `functions/githubClient.service.js`
+- GitHub account connection workflows: `functions/githubConnection.service.js`; repository catalog: `functions/githubRepositoryCatalog.service.js`; PR orchestration: `functions/githubPullRequest.service.js`; source composition: `functions/github.service.js`; injected GitHub HTTP/JWT client: `functions/githubClient.service.js`
 - Generic environment-key storage, redaction, CRUD, and runner resolution: `functions/environmentKeys.service.js`
 - Agent credential storage, compatibility reads/writes, selection, and materialization: `functions/agentAuth.service.js`
 - OpenAI Codex device-code/OAuth flow and token normalization: `functions/openAiCodexAuth.service.js`

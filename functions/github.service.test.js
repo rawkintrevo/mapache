@@ -2,21 +2,15 @@
 
 const assert = require("assert");
 const {
-  buildWorkingBranchName,
   cleanGithubApiMessage,
   cleanGithubErrorBody,
   cleanGithubNumericId,
   cleanGithubValue,
   encodeGithubContentPath,
-  githubRepoMapKey,
   isConnectedGithubSourcePayload,
-  normalizeBranchDescription,
   normalizeGithubConnectedRepo,
   normalizeGithubInstallationId,
   normalizeGithubTokenPermissions,
-  normalizePullRequestBody,
-  normalizePullRequestTitle,
-  normalizeStoredGithubRepositoryRecord,
   sessionSourceMetadata,
 } = require("./github.service");
 
@@ -45,71 +39,6 @@ assert.deepStrictEqual(normalizeGithubTokenPermissions({
 });
 assert.deepStrictEqual(normalizeGithubTokenPermissions(null), {});
 assert.deepStrictEqual(normalizeGithubTokenPermissions(["contents"]), {});
-
-assert.deepStrictEqual(normalizeStoredGithubRepositoryRecord("uid-1", "42", "99", {
-  ownerUid: "uid-1",
-  installationId: "42",
-  ownerLogin: "octo-org",
-  name: "mapache",
-  defaultBranch: "main",
-  private: true,
-  cloneUrl: "https://github.com/octo-org/mapache.git",
-  htmlUrl: "https://github.com/octo-org/mapache",
-}), {
-  repoId: "99",
-  owner: "octo-org",
-  name: "mapache",
-  fullName: "octo-org/mapache",
-  defaultBranch: "main",
-  private: true,
-  cloneUrl: "https://github.com/octo-org/mapache.git",
-  htmlUrl: "https://github.com/octo-org/mapache",
-});
-assert.strictEqual(normalizeStoredGithubRepositoryRecord("uid-1", "42", "99", {ownerUid: "other"}), null);
-assert.strictEqual(normalizeStoredGithubRepositoryRecord("uid-1", "42", "99", {installationId: "7"}), null);
-assert.strictEqual(normalizeStoredGithubRepositoryRecord("uid-1", "42", "99", {accessible: false}), null);
-
-assert.strictEqual(githubRepoMapKey({id: "99"}), "id:99");
-assert.strictEqual(githubRepoMapKey({owner: {login: "Octo"}, name: "Mapache"}), "name:octo/mapache");
-assert.strictEqual(githubRepoMapKey({full_name: "Octo/Mapache"}), "name:octo/mapache");
-
-assert.deepStrictEqual(normalizeGithubConnectedRepo(
-    {installationId: "42", githubAccountLogin: "octo-org", repositorySelection: "selected"},
-    {
-      id: "99",
-      owner: {login: "octo-org"},
-      name: "mapache",
-      full_name: "octo-org/mapache",
-      default_branch: "main",
-      private: false,
-      visibility: "public",
-      clone_url: "https://github.com/octo-org/mapache.git",
-      html_url: "https://github.com/octo-org/mapache",
-    },
-    null,
-    "all",
-), {
-  repoId: "99",
-  installationId: "42",
-  owner: "octo-org",
-  name: "mapache",
-  fullName: "octo-org/mapache",
-  defaultBranch: "main",
-  private: false,
-  visibility: "public",
-  cloneUrl: "https://github.com/octo-org/mapache.git",
-  repoUrl: "https://github.com/octo-org/mapache",
-  repositorySelection: "all",
-});
-assert.strictEqual(normalizeGithubConnectedRepo({installationId: "42"}, {owner: {login: ""}}, null, ""), null);
-
-assert.strictEqual(normalizeBranchDescription(" Fix: Add GitHub PR! "), "fix-add-github-pr");
-assert.strictEqual(normalizeBranchDescription("x".repeat(80)).length, 48);
-assert.strictEqual(buildWorkingBranchName(" Fix: Add GitHub PR! "), "mapache/fix-add-github-pr");
-assert.strictEqual(buildWorkingBranchName("!!!"), "");
-
-assert.strictEqual(normalizePullRequestTitle(` ${"t".repeat(300)} `).length, 256);
-assert.strictEqual(normalizePullRequestBody(` ${"b".repeat(25000)} `).length, 20000);
 
 assert.strictEqual(cleanGithubApiMessage({message: "Validation Failed", errors: [{field: "head"}]}), "Validation Failed: head");
 assert.strictEqual(cleanGithubApiMessage({message: "Missing", errors: ["details"]}), "Missing: details");
