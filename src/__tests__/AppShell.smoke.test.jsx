@@ -475,7 +475,7 @@ describe("frontend smoke coverage", () => {
       cpu: "1",
       env: {},
       imageKey: "default",
-      memory: "1Gi",
+      memory: "2Gi",
       name: "Agent Shell",
       sessionType: "cloud",
     });

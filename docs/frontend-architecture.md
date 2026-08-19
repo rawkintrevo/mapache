@@ -40,6 +40,10 @@ The right inspector also owns workspace-scoped MCP server management through `st
 
 The Authentication Center also manages generic environment keys through `src/components/modals/GenericEnvironmentModal.jsx` and the Pi auth workflow. Names and labels are visible, but values are write-only after save. Saving a key while a session is selected automatically adds it to that session, and each registered-key row exposes a checkbox for changing the active session selection. Workspace and session creation forms can also select saved key IDs, while the Pi auth management modal provides the same existing-runner selection control; applying a changed selection requires restart or reprovisioning.
 
+Cloud runner creation and resize use the shared resource catalog in `functions/sessionResourceCatalog.json`, imported by `src/utils/sessionResources.js`. `SessionResourceSelector` renders the priced `Small`, `Medium`, and `Large` presets as the primary control and keeps CPU/memory selectors under an accessible `Advanced settings` disclosure. Presets and advanced edits update the same normalized CPU/memory state; an exact preset is labeled by name and every other supported pair is labeled `Custom`. `SessionModal` uses the Small mapping by default for Cloud sessions, while SSH-backed creation retains its existing explicit CPU/memory controls. `SessionDetail` uses the same selector for resize and only submits when the user presses `Resize`. `SessionList` and `DrawerSessionList` summarize matched allocations with the preset label and show `Custom` for legacy or non-preset pairs.
+
+The catalog currently maps Small to `1 vCPU / 2 GiB`, Medium to `2 vCPU / 4 GiB`, and Large to `4 vCPU / 8 GiB`. Displayed prices are compute-only hourly estimates from the catalog's us-central1 rate metadata; they exclude free tier, discounts, network, storage, build, and other charges. Existing CPU/memory values remain the submitted API fields, so the UI does not require or persist a size key.
+
 ## Styling
 
 Global CSS enters through `src/styles.css`, which imports `src/styles/tokens.css`, `src/styles/base.css`, `src/styles/primitives.css`, and `src/styles/layout.css`. Component-specific selectors live beside their React components as plain CSS sidecars when practical. See [css-decomposition.md](./css-decomposition.md).
@@ -49,6 +53,7 @@ Global CSS enters through `src/styles.css`, which imports `src/styles/tokens.css
 - Keep terminal-first selected-session behavior.
 - Keep `src/main.js` as the state orchestration point until a touched area is deliberately extracted.
 - Add new feature logic to focused controllers, workflows, services, or components instead of expanding monoliths.
+- Keep the shared session resource catalog and pricing helpers authoritative; do not duplicate preset or rate literals in session components.
 - Update [ui-components.md](./ui-components.md) when adding significant components.
 - Keep `community/` out of frontend app refactors unless the task explicitly targets user-facing community docs.
 

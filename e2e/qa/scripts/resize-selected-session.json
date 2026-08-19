@@ -6,6 +6,7 @@
     "memory": "2Gi"
   },
   "actions": [
+    {"type": "click", "text": "Advanced settings"},
     {"type": "select", "name": "resizeCpu", "value": "{{cpu}}"},
     {"type": "select", "name": "resizeMemory", "value": "{{memory}}"},
     {"type": "click", "role": "button", "name": "Resize"},

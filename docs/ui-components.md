@@ -38,10 +38,11 @@ This document serves as an index for significant UI components in the applicatio
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, resize controls, restart controls, SSH port-forward controls, and Git status placement for the selected session. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, priced preset/custom resize controls, restart controls, SSH port-forward controls, and Git status placement for the selected session. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
-| `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace. |
+| `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace with preset/custom CPU and memory summaries. |
+| `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced Small/Medium/Large selector and Advanced CPU/memory controls used by Cloud session creation and resize. |
 | `SessionStatusSummary` | `src/components/sessions/SessionStatusSummary.jsx` | Shared session-row accessory that renders the accessible status light tooltip and hyphen-split runner tags for both session list variants. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
@@ -49,7 +50,7 @@ This document serves as an index for significant UI components in the applicatio
 | `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | React modal for creating, replacing, and deleting masked generic environment keys. |
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
-| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session or SSH target session, defaulting to SSH for Dev machine workspaces. |
+| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
 | `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for creating and editing workspace-local Markdown skills from the right inspector Skills panel. |

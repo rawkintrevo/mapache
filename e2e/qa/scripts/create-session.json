@@ -5,13 +5,14 @@
     "sessionName": "qa-session-{{timestamp}}",
     "imageKey": "pi-basic",
     "cpu": "1",
-    "memory": "1Gi",
+    "memory": "2Gi",
     "sessionEnv": "QA_SESSION=1"
   },
   "actions": [
     {"useScript": "scripts/open-session-modal.json"},
     {"type": "fill", "label": "Name", "value": "{{sessionName}}"},
     {"type": "select", "name": "imageKey", "value": "{{imageKey}}"},
+    {"type": "click", "text": "Advanced settings"},
     {"type": "select", "name": "cpu", "value": "{{cpu}}"},
     {"type": "select", "name": "memory", "value": "{{memory}}"},
     {"type": "fill", "label": "Session env", "value": "{{sessionEnv}}"},

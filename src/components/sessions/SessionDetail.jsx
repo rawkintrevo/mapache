@@ -1,16 +1,10 @@
 import "./SessionDetail.css";
 import {Copy, ExternalLink, Mail, RotateCcw, Share2, UploadCloud} from "lucide-react";
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
-
-const cpuOptions = ["1", "2", "4"];
-const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
-
-function formatMemory(value) {
-  return value.replace("Gi", " GiB");
-}
+import {SessionResourceFields, SessionResourceSelector} from "./SessionResourceSelector.jsx";
 
 export function SessionDetail({
   busy,
@@ -34,12 +28,12 @@ export function SessionDetail({
   onUpdateGitCommitMessage,
   onUpdateSshForwardPort,
 }) {
-  const formRef = useRef(null);
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [accessUrls, setAccessUrls] = useState(null);
   const [accessError, setAccessError] = useState("");
   const [shareState, setShareState] = useState({loading: false, error: "", preview: null, copied: false});
   const [publishOpen, setPublishOpen] = useState(false);
+  const [resources, setResources] = useState(() => session.resources || {cpu: "1", memory: "1Gi"});
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
@@ -47,6 +41,10 @@ export function SessionDetail({
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
+
+  useEffect(() => {
+    setResources(session.resources || {cpu: "1", memory: "1Gi"});
+  }, [session.id, session.resources?.cpu, session.resources?.memory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,13 +74,7 @@ export function SessionDetail({
   }, [workspaceId, session.id]);
 
   const handleResize = () => {
-    const form = formRef.current;
-    if (!form) return;
-    const formData = new FormData(form);
-    onResizeSession(session.id, {
-      cpu: formData.get("resizeCpu"),
-      memory: formData.get("resizeMemory"),
-    });
+    onResizeSession(session.id, resources);
   };
 
   const handleSharePreview = async () => {
@@ -185,19 +177,25 @@ export function SessionDetail({
           </div>
         )}
       </div>
-      <form className="toolbar" ref={formRef}>
-        <label>
-          <span>CPU</span>
-          <select defaultValue={session.resources.cpu} name="resizeCpu">
-            {cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Memory</span>
-          <select defaultValue={session.resources.memory} name="resizeMemory">
-            {memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}
-          </select>
-        </label>
+      <div className="toolbar">
+        {isSshSession ? (
+          <SessionResourceFields
+            cpu={resources.cpu}
+            cpuName="resizeCpu"
+            memory={resources.memory}
+            memoryName="resizeMemory"
+            onChange={setResources}
+          />
+        ) : (
+          <SessionResourceSelector
+            cpu={resources.cpu}
+            cpuName="resizeCpu"
+            memory={resources.memory}
+            memoryName="resizeMemory"
+            onChange={setResources}
+            sizeName="resizeSize"
+          />
+        )}
         <div className="session-actions">
           <Button disabled={busy} onClick={handleResize}>Resize</Button>
           {capabilities.preview ? (
@@ -222,7 +220,7 @@ export function SessionDetail({
           </Button>
 
         </div>
-      </form>
+      </div>
       {capabilities.preview ? (
         <div className="preview-share-panel" aria-live="polite">
           {shareState.error ? (

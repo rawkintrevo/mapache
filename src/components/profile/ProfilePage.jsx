@@ -2,6 +2,7 @@ import "./ProfilePage.css";
 import {ExternalLink, GitBranch, LogOut, RefreshCw, Unplug} from "lucide-react";
 import {useState} from "react";
 import {Button} from "../common/Button.jsx";
+import {calculateEstimatedUsageCost} from "../../utils/sessionResources.js";
 
 function profileValue(value, fallback = "—") {
   return value ? String(value) : fallback;
@@ -43,9 +44,7 @@ function formatPoints(value) {
 }
 
 function estimatedUsageCost(usage) {
-  const cpuSeconds = Number(usage?.cpuSeconds || 0);
-  const memoryGbSeconds = Number(usage?.memoryGbSeconds || 0);
-  return (cpuSeconds * 0.000018) + (memoryGbSeconds * 0.000002);
+  return calculateEstimatedUsageCost(usage);
 }
 
 function estimatedRewardsPoints(usage) {

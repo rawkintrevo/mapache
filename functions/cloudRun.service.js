@@ -24,6 +24,7 @@ const {
   publicGoogleError,
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
+const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
 
@@ -550,10 +551,9 @@ async function getProjectId() {
 }
 
 function normalizeResources(payload) {
-  return {
-    cpu: cleanName(payload.cpu || DEFAULT_CPU),
-    memory: cleanName(payload.memory || DEFAULT_MEMORY),
-  };
+  return normalizeSessionResources(payload, {
+    defaultResources: {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY},
+  });
 }
 
 function resourceLimits(resources) {
