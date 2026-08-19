@@ -82,10 +82,7 @@ export function resetSignedOutState(state) {
   state.expandedFilePaths = new Set();
   state.selectedWorkspaceFilePath = "";
   resetFileEditor(state);
-  state.profile = null;
   resetAdmin(state);
-  state.selectedWorkspaceId = null;
-  state.selectedSessionId = null;
   state.collapsedDrawerSections = new Set();
   resetGitStatus(state);
   resetPiPackages(state);

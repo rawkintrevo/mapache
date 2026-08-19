@@ -1,6 +1,8 @@
-export function createModalController({state, render, loadPiAuth}) {
+import {APP_ACTIONS} from "../state/appStore.js";
+
+export function createModalController({state, dispatch = () => {}, render, loadPiAuth}) {
   function showProfile() {
-    state.activePage = "profile";
+    dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
     render();
   }

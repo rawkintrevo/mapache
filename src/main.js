@@ -13,6 +13,7 @@ import {
 import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
+import {APP_ACTIONS, createAppStore} from "./state/appStore.js";
 import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
@@ -52,7 +53,12 @@ import {
   stopSessionState,
 } from "./workflows/sessionLifecycle.js";
 
-const state = createInitialState();
+const appStore = createAppStore(createInitialState());
+const state = appStore.state;
+
+function dispatch(action) {
+  appStore.dispatch(action);
+}
 
 const rootElement = document.querySelector("#root");
 const reactRoot = createRoot(rootElement);
@@ -67,6 +73,7 @@ const workspaceFilesController = createWorkspaceFilesController({state, render, 
 const piPanelsController = createPiPanelsController({state, render});
 const modalController = createModalController({
   state,
+  dispatch,
   render,
   loadPiAuth: piPanelsController.loadPiAuth,
 });
@@ -132,12 +139,15 @@ async function start() {
   try {
     const auth = await initializeFirebase();
     watchAuth(auth, async (user) => {
-      state.user = user;
-      state.api = user ? createApiClient(() => user.getIdToken()) : null;
-      state.error = "";
+      dispatch({
+        type: APP_ACTIONS.SET_IDENTITY,
+        user,
+        api: user ? createApiClient(() => user.getIdToken()) : null,
+      });
       if (!user) {
         detachSessionListener();
         resetSignedOutState(state);
+        dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
         return;
       }
@@ -211,19 +221,25 @@ function resetSshForwards() {
 async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
-    state.profile = me.user || null;
+    dispatch({type: APP_ACTIONS.SET_PROFILE, profile: me.user || null});
     await loadGithubConnectionState({state, render, silent: true});
     if (state.activePage === "admin" && state.profile?.isAdmin !== true) {
-      state.activePage = "workspace";
+      dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     }
     const data = await state.api.getWorkspaces();
     const previousWorkspaceId = state.selectedWorkspaceId;
     state.workspaces = data.workspaces || [];
     if (!state.selectedWorkspaceId && state.workspaces.length) {
-      state.selectedWorkspaceId = state.workspaces[0].id;
+      dispatch({
+        type: APP_ACTIONS.SET_SELECTED_WORKSPACE,
+        workspaceId: state.workspaces[0].id,
+      });
     }
     if (!state.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)) {
-      state.selectedWorkspaceId = state.workspaces[0] ? state.workspaces[0].id : null;
+      dispatch({
+        type: APP_ACTIONS.SET_SELECTED_WORKSPACE,
+        workspaceId: state.workspaces[0] ? state.workspaces[0].id : null,
+      });
     }
     if (previousWorkspaceId !== state.selectedWorkspaceId) {
       workspaceFilesController.resetWorkspaceFiles();
@@ -246,7 +262,7 @@ async function refreshAll() {
 
 async function showAdmin() {
   if (state.profile?.isAdmin !== true) return;
-  state.activePage = "admin";
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "admin"});
   await loadAdminUsers({cursor: "", cursorStack: []});
 }
 
@@ -316,7 +332,7 @@ async function setAdminUserWhitelisted(uid, whitelisted) {
 async function loadSessions() {
   detachSessionListener();
   state.sessions = [];
-  state.selectedSessionId = null;
+  dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
   if (!state.selectedWorkspaceId) return;
 
   await attachSessionListener(state.selectedWorkspaceId);
@@ -342,7 +358,10 @@ function attachSessionListener(workspaceId) {
         },
         (error) => {
           if (sessionsListenerWorkspaceId !== workspaceId) return;
-          state.error = error.message || "Session listener failed";
+          dispatch({
+            type: APP_ACTIONS.SET_ERROR,
+            error: error.message || "Session listener failed",
+          });
           if (!resolved) {
             resolved = true;
             resolve();
@@ -372,7 +391,10 @@ function applySessionSnapshot(workspaceId, sessions) {
   state.sessions = sessions;
 
   if (!state.sessions.some((session) => session.id === state.selectedSessionId)) {
-    state.selectedSessionId = state.sessions[0] ? state.sessions[0].id : null;
+    dispatch({
+      type: APP_ACTIONS.SET_SELECTED_SESSION,
+      sessionId: state.sessions[0] ? state.sessions[0].id : null,
+    });
   }
 
   const nextSession = getSelectedSession();
@@ -419,8 +441,11 @@ async function createWorkspace(payload) {
     } catch (error) {
       throw new Error(friendlyWorkspaceError(error));
     }
-    state.selectedWorkspaceId = data.workspace.id;
-    state.selectedSessionId = null;
+    dispatch({
+      type: APP_ACTIONS.SET_SELECTED_WORKSPACE,
+      workspaceId: data.workspace.id,
+    });
+    dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
     workspaceFilesController.resetWorkspaceFiles();
     await refreshAll();
   });
@@ -456,8 +481,8 @@ async function deleteWorkspace(workspaceId) {
   await runBusy(async () => {
     await state.api.deleteWorkspace(workspaceId);
     if (state.selectedWorkspaceId === workspaceId) {
-      state.selectedWorkspaceId = null;
-      state.selectedSessionId = null;
+      dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId: null});
+      dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
       workspaceFilesController.resetWorkspaceFiles();
       resetGitStatus();
       resetPiPackages();
@@ -470,8 +495,8 @@ async function deleteWorkspace(workspaceId) {
 }
 
 async function selectWorkspace(workspaceId) {
-  state.activePage = "workspace";
-  state.selectedWorkspaceId = workspaceId;
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
+  dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId});
   state.sessionModalOpen = false;
   workspaceFilesController.resetWorkspaceFiles();
   resetGitStatus();
@@ -491,15 +516,15 @@ async function createSession(payload) {
   if (!state.selectedWorkspaceId) return;
   await runBusy(async () => {
     const data = await state.api.createSession(state.selectedWorkspaceId, payload);
-    state.selectedSessionId = data.session.id;
+    dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: data.session.id});
     state.sessionModalOpen = false;
     await loadSelectedSessionPanels();
   });
 }
 
 async function selectSession(sessionId) {
-  state.activePage = "workspace";
-  state.selectedSessionId = sessionId;
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
+  dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId});
   await loadSelectedSessionPanels();
   render();
 }
@@ -608,22 +633,22 @@ function getSelectedSession() {
 }
 
 async function resizeSession(sessionId, payload) {
-  await runBusy(() => resizeSessionState(state, sessionId, payload));
+  await runBusy(() => resizeSessionState(state, sessionId, payload, dispatch));
 }
 
 async function restartSession(sessionId) {
-  await runBusy(() => restartSessionState(state, sessionId));
+  await runBusy(() => restartSessionState(state, sessionId, dispatch));
 }
 
 async function stopSession(sessionId) {
-  await runBusy(() => stopSessionState(state, sessionId));
+  await runBusy(() => stopSessionState(state, sessionId, dispatch));
 }
 
 async function deleteSession(sessionId) {
   if (!window.confirm("Delete this session? Running sessions will be stopped first.")) return;
 
   await runBusy(async () => {
-    await deleteSessionState(state, sessionId);
+    await deleteSessionState(state, sessionId, dispatch);
     await loadSelectedSessionPanels();
   });
 }
@@ -680,17 +705,15 @@ async function closeSshSessionForward(port) {
 }
 
 async function runBusy(task, message = "Working...") {
-  state.busy = true;
-  state.busyMessage = message;
-  state.error = "";
+  dispatch({type: APP_ACTIONS.SET_BUSY, busy: true, message});
+  dispatch({type: APP_ACTIONS.SET_ERROR, error: ""});
   render();
   try {
     await task();
   } catch (error) {
-    state.error = friendlyGlobalError(error);
+    dispatch({type: APP_ACTIONS.SET_ERROR, error: friendlyGlobalError(error)});
   } finally {
-    state.busy = false;
-    state.busyMessage = "";
+    dispatch({type: APP_ACTIONS.SET_BUSY, busy: false});
     render();
   }
 }
