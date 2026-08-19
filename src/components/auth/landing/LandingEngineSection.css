@@ -1,0 +1,117 @@
+.landing-product {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 0.8fr;
+  gap: 12px;
+  min-width: 0;
+  min-height: 520px;
+  padding: 18px;
+  border: 1px solid rgb(23 33 43 / 12%);
+  border-radius: 8px;
+  background: #17212b;
+  box-shadow: 0 28px 80px rgb(16 24 32 / 14%);
+}
+
+.landing-product__panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: #0d1117;
+}
+
+.landing-product__panel span {
+  color: #98a2b3;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.landing-product code {
+  display: block;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 7%);
+  color: #d6deeb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.landing-product__panel--agent {
+  background: #0b1613;
+}
+
+.landing-product__panel--files {
+  background: #f8fafc;
+}
+
+.landing-product__panel--files ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-product__panel--files li {
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #eef2f6;
+  color: var(--color-text-main);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.landing-product__panel--files li.is-active {
+  background: #e9f6f2;
+  color: var(--accent-dark);
+}
+
+.landing-product code.is-success {
+  color: #86efac;
+}
+
+.landing-tooltip {
+  position: absolute;
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #e9f6f2;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+}
+
+.landing-tooltip--one {
+  left: 10%;
+  bottom: 26px;
+}
+
+.landing-tooltip--two {
+  left: 42%;
+  top: 24px;
+}
+
+.landing-tooltip--three {
+  right: 5%;
+  bottom: 26px;
+}
+
+@media (max-width: 980px) {
+  .landing-product {
+    width: 100%;
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .landing-tooltip {
+    position: static;
+    width: fit-content;
+  }
+}
