@@ -1,0 +1,14 @@
+{
+  "id": "script.selectWorkspaceByName",
+  "title": "Select a workspace by its QA name",
+  "parameters": {
+    "workspaceName": ""
+  },
+  "actions": [
+    {"type": "click", "text": "{{workspaceName}}"},
+    {"type": "waitForSnapshotText", "text": "{{workspaceName}}", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The requested workspace is selected"
+  ]
+}

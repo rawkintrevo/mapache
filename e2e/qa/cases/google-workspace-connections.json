@@ -1,0 +1,51 @@
+{
+  "id": "google.workspace-connections",
+  "title": "Google accounts stay isolated per workspace",
+  "description": "Use the browser-only OAuth test double to bind different Google accounts to two workspaces, verify isolation, disconnect one account, and capture restart guidance.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/google.workspace-connections",
+  "requires": {
+    "chromeDevtools": true,
+    "devServer": "npm run dev",
+    "oauth": "The checked-in browser-only test double; no real Google account or OAuth secret is used"
+  },
+  "steps": [
+    {"useScript": "scripts/enable-google-workspace-mock.json"},
+    {"useCase": "cases/login.json"},
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-google-a-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=google-workspace-connections"
+      }
+    },
+    {"useScript": "scripts/expand-inspector.json"},
+    {"assert": "snapshot-text", "expected": "Google Workspace"},
+    {"useScript": "scripts/connect-google-qa-account.json"},
+    {"assert": "snapshot-text", "expected": "Restart active session"},
+    {"capture": "screenshot", "fileName": "workspace-a-account-a.png"},
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-google-b-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=google-workspace-connections"
+      }
+    },
+    {"useScript": "scripts/expand-inspector.json"},
+    {"useScript": "scripts/connect-google-qa-account.json"},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-google-a-{{timestamp}}"}},
+    {"assert": "snapshot-text", "expected": "google-a@example.test"},
+    {"capture": "screenshot", "fileName": "workspace-a-still-account-a.png"},
+    {"useScript": "scripts/disconnect-google-workspace.json"},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-google-b-{{timestamp}}"}},
+    {"assert": "snapshot-text", "expected": "google-b@example.test"},
+    {"assert": "snapshot-text", "expected": "Connected to this workspace"},
+    {"capture": "screenshot", "fileName": "workspace-b-still-account-b.png"}
+  ],
+  "cleanup": [
+    {"useScript": "scripts/delete-selected-workspace.json", "description": "Delete workspace B and its test binding"},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-google-a-{{timestamp}}"}},
+    {"useScript": "scripts/delete-selected-workspace.json", "description": "Delete workspace A, its test binding, and the QA session"},
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaGoogleMock"]}
+  ]
+}

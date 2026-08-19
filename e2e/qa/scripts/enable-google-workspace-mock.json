@@ -1,0 +1,19 @@
+{
+  "id": "script.enableGoogleWorkspaceMock",
+  "title": "Enable the local Google Workspace OAuth test double",
+  "requires": {
+    "devServer": "VITE development server; the mock is disabled in production builds"
+  },
+  "actions": [
+    {
+      "type": "setLocalStorage",
+      "origin": "{{baseUrl}}",
+      "values": {
+        "mapache.qaGoogleMock": "1"
+      }
+    }
+  ],
+  "successSignals": [
+    "Google Workspace API methods use the deterministic browser-only OAuth test double"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "script.disconnectGoogleWorkspace",
+  "title": "Disconnect Google from the selected workspace",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Disconnect Google from this workspace"},
+    {"type": "waitForSnapshotText", "text": "No Google account is connected to this workspace.", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The selected workspace no longer shows a bound Google account"
+  ]
+}

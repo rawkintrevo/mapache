@@ -1,5 +1,7 @@
+import {createGoogleWorkspaceQaMock} from "./googleWorkspaceQaMock.js";
+
 export function createApiClient(getToken) {
-  return {
+  const api = {
     getMe: () => request(getToken, "/api/me"),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
@@ -307,6 +309,7 @@ export function createApiClient(getToken) {
         `/api/github/connect?returnTo=${encodeURIComponent(window.location.href)}`,
     ),
   };
+  return {...api, ...createGoogleWorkspaceQaMock()};
 }
 
 async function uploadFile(getToken, path, file) {

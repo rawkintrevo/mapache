@@ -1,0 +1,15 @@
+{
+  "id": "script.connectGoogleQaAccount",
+  "title": "Connect the next deterministic Google test account",
+  "actions": [
+    {"type": "click", "role": "checkbox", "name": "Gmail Google service"},
+    {"type": "click", "role": "button", "name": "Connect Google account"},
+    {"type": "waitForSnapshotText", "text": "Connected to this workspace", "timeoutMs": 10000},
+    {"type": "click", "role": "button", "name": "Apply selected services"},
+    {"type": "waitForSnapshotText", "text": "Google services applied.", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The mocked OAuth popup completes and the account is bound to the selected workspace",
+    "Applying the binding produces the restart guidance message"
+  ]
+}
