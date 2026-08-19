@@ -55,6 +55,7 @@ const {
 } = require("./chromeReservation.helpers");
 const {createGithubService} = require("./github.service");
 const {createGitSessionService} = require("./gitSession.service");
+const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
@@ -90,6 +91,7 @@ const piService = createPiService({
   requireWorkspace,
   requestRunnerJson,
 });
+const environmentKeysService = createEnvironmentKeysService({admin, db});
 const qaAuthService = createQaAuthService();
 const previewService = createPreviewService({
   admin,
@@ -155,7 +157,8 @@ const {
 } = syncWriterLeaseService;
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
-  buildGenericEnvironmentEnv: (session, entryIds) => piService.resolveGenericEnvironment(session.ownerUid, entryIds),
+  buildGenericEnvironmentEnv: (session, entryIds) =>
+    environmentKeysService.resolveGenericEnvironment(session.ownerUid, entryIds),
   markSessionStopped,
   releaseChromeWorkspaceSession,
   getCurrentRunnerImageDigest: getCurrentRunnerImageDigestForSession,
@@ -192,6 +195,7 @@ const workspaceService = createWorkspaceService({
 });
 
 const API_HANDLERS = createApiHandlers({
+  environmentKeysService,
   piService,
   workspaceService,
   githubService,

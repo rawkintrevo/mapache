@@ -99,6 +99,7 @@ function createTestApiHandlers() {
   const operations = Object.fromEntries(operationNames.map((name) => [name, stub]));
   const service = new Proxy({}, {get: () => stub});
   return createApiHandlers({
+    environmentKeysService: service,
     piService: service,
     workspaceService: service,
     githubService: service,
