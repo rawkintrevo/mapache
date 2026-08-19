@@ -12,6 +12,7 @@ Read this before changing frontend startup, workspace/session state, modals, dra
 
 - Startup and global state: `src/main.js`
 - Workspace refresh, selection, creation, and deletion: `src/controllers/workspaceController.js`
+- Session subscription and selection repair: `src/controllers/sessionSubscriptionController.js`
 - React root: `src/App.jsx`
 - Shell and layout: `src/components/layout/`
 - Domain workflows: `src/workflows/`

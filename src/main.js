@@ -27,6 +27,7 @@ import {createAdminController} from "./controllers/adminController.js";
 import {createDrawerController} from "./controllers/drawerController.js";
 import {createModalController} from "./controllers/modalController.js";
 import {createPiPanelsController} from "./controllers/piPanelsController.js";
+import {createSessionSubscriptionController} from "./controllers/sessionSubscriptionController.js";
 import {createWorkspaceFilesController} from "./controllers/workspaceFilesController.js";
 import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {
@@ -65,8 +66,6 @@ function dispatch(action) {
 const rootElement = document.querySelector("#root");
 const reactRoot = createRoot(rootElement);
 let fatalError = null;
-let unsubscribeSessions = null;
-let sessionsListenerWorkspaceId = null;
 
 const APP_PATH = "/app";
 
@@ -74,6 +73,14 @@ const drawerController = createDrawerController({state, render});
 const adminController = createAdminController({state, render, dispatch});
 const workspaceFilesController = createWorkspaceFilesController({state, render, runBusy});
 const piPanelsController = createPiPanelsController({state, render});
+const sessionSubscriptionController = createSessionSubscriptionController({
+  state,
+  dispatch,
+  render,
+  getFirestoreDb,
+  listenToWorkspaceSessions,
+  onSelectedSessionChanged: loadSelectedSessionPanels,
+});
 const modalController = createModalController({
   state,
   dispatch,
@@ -148,7 +155,7 @@ async function start() {
         api: user ? createApiClient(() => user.getIdToken()) : null,
       });
       if (!user) {
-        detachSessionListener();
+        sessionSubscriptionController.detach();
         resetSignedOutState(state);
         dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
@@ -251,81 +258,7 @@ async function refreshAll() {
 }
 
 async function loadSessions() {
-  detachSessionListener();
-  state.sessions = [];
-  dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
-  if (!state.selectedWorkspaceId) return;
-
-  await attachSessionListener(state.selectedWorkspaceId);
-}
-
-function attachSessionListener(workspaceId) {
-  const db = getFirestoreDb();
-  sessionsListenerWorkspaceId = workspaceId;
-
-  return new Promise((resolve) => {
-    let resolved = false;
-    unsubscribeSessions = listenToWorkspaceSessions(
-        db,
-        workspaceId,
-        (sessions) => {
-          const selectedSessionChanged = applySessionSnapshot(workspaceId, sessions);
-          if (!resolved) {
-            resolved = true;
-            resolve();
-          }
-          void refreshSelectedSessionPanelsAfterSnapshot(selectedSessionChanged);
-          render();
-        },
-        (error) => {
-          if (sessionsListenerWorkspaceId !== workspaceId) return;
-          dispatch({
-            type: APP_ACTIONS.SET_ERROR,
-            error: error.message || "Session listener failed",
-          });
-          if (!resolved) {
-            resolved = true;
-            resolve();
-          }
-          render();
-        },
-    );
-  });
-}
-
-function detachSessionListener() {
-  if (unsubscribeSessions) {
-    unsubscribeSessions();
-  }
-  unsubscribeSessions = null;
-  sessionsListenerWorkspaceId = null;
-}
-
-function applySessionSnapshot(workspaceId, sessions) {
-  if (sessionsListenerWorkspaceId !== workspaceId || state.selectedWorkspaceId !== workspaceId) {
-    return false;
-  }
-
-  const previousSession = getSelectedSession();
-  const previousSessionId = state.selectedSessionId;
-  const previousServiceUrl = previousSession?.serviceUrl || "";
-  state.sessions = sessions;
-
-  if (!state.sessions.some((session) => session.id === state.selectedSessionId)) {
-    dispatch({
-      type: APP_ACTIONS.SET_SELECTED_SESSION,
-      sessionId: state.sessions[0] ? state.sessions[0].id : null,
-    });
-  }
-
-  const nextSession = getSelectedSession();
-  return previousSessionId !== state.selectedSessionId ||
-    previousServiceUrl !== (nextSession?.serviceUrl || "");
-}
-
-async function refreshSelectedSessionPanelsAfterSnapshot(selectedSessionChanged) {
-  if (!selectedSessionChanged) return;
-  await loadSelectedSessionPanels();
+  await sessionSubscriptionController.loadSessions();
 }
 
 async function loadConnectedRepos() {
@@ -467,7 +400,7 @@ async function submitPullRequest() {
 }
 
 function getSelectedSession() {
-  return state.sessions.find((session) => session.id === state.selectedSessionId) || null;
+  return sessionSubscriptionController.getSelectedSession();
 }
 
 async function resizeSession(sessionId, payload) {
