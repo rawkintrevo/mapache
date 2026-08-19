@@ -1,4 +1,5 @@
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
+import {formatSessionMemory, formatSessionSizeLabel, inferSessionSize} from "../../utils/sessionResources.js";
 
 const SUCCESS_STATUSES = new Set(["running", "ready", "success"]);
 const TRANSITION_STATUSES = new Set(["provisioning", "restarting", "resizing", "stopping", "deleting", "updating", "needs_service"]);
@@ -28,4 +29,11 @@ export function getSessionRunnerTags(session) {
       .split("-")
       .map((segment) => segment.trim())
       .filter(Boolean);
+}
+
+export function getSessionResourceSummary(session) {
+  const cpu = String(session?.resources?.cpu || "").trim();
+  const memory = String(session?.resources?.memory || "").trim();
+  const size = formatSessionSizeLabel(inferSessionSize(cpu, memory));
+  return `${size} · ${cpu || "—"} vCPU / ${formatSessionMemory(memory) || "—"}`;
 }

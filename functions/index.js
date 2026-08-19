@@ -11,8 +11,10 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
+  DEFAULT_CPU,
   DEFAULT_IDLE_TIMEOUT_MINUTES,
   DEFAULT_IMAGE,
+  DEFAULT_MEMORY,
   DEFAULT_REGION,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
@@ -55,11 +57,14 @@ const {
   codexHomeStoragePrefix,
   createCloudRunService,
   homeStoragePrefix,
-  normalizeResources,
   piSessionDir,
   piSessionStoragePrefix,
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
+const {
+  SESSION_RESOURCE_ERROR_CODE,
+  normalizeSessionResources,
+} = require("./sessionResources.helpers");
 const {normalizeEnvMap} = require("./env.helpers");
 const {
   findActiveChromeSession,
@@ -283,6 +288,7 @@ async function syncWorkspaceFiles(uid, workspaceId) {
 }
 
 async function createSession(uid, workspaceId, payload) {
+  payload = payload || {};
   const workspace = await requireWorkspace(uid, workspaceId);
   const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
   const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
@@ -292,7 +298,12 @@ async function createSession(uid, workspaceId, payload) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const sessionRef = sessionCollection(workspaceId).doc();
   const region = cleanName(payload.region || DEFAULT_REGION);
-  const resources = normalizeResources(payload);
+  const resources = normalizeRequestedSessionResources(payload, {
+    defaultResources: sshPayload ?
+      {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} :
+      (process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
+        {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} : undefined),
+  });
   const idleTimeoutMinutes = positiveNumber(
       payload.idleTimeoutMinutes,
       DEFAULT_IDLE_TIMEOUT_MINUTES,
@@ -761,7 +772,7 @@ function shouldRecreateSessionServiceOnRestart(session) {
 
 async function resizeSession(uid, workspaceId, sessionId, payload) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const resources = normalizeResources(payload);
+  const resources = normalizeRequestedSessionResources(payload, {defaultResources: null});
   const resizedAt = admin.firestore.Timestamp.now();
   await sessionRef.update({
     ...accrueSessionUsage(sessionSnap.data(), resizedAt),
@@ -771,6 +782,17 @@ async function resizeSession(uid, workspaceId, sessionId, payload) {
   });
   await patchSessionService(sessionRef, {...sessionSnap.data(), resources});
   return toClientDoc(await sessionRef.get());
+}
+
+function normalizeRequestedSessionResources(payload, options = {}) {
+  try {
+    return normalizeSessionResources(payload, options);
+  } catch (error) {
+    if (error && error.code === SESSION_RESOURCE_ERROR_CODE) {
+      throw httpError(400, SESSION_RESOURCE_ERROR_CODE, error);
+    }
+    throw error;
+  }
 }
 
 async function restartSession(uid, workspaceId, sessionId) {

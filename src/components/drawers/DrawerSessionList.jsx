@@ -1,5 +1,6 @@
 import {Square, Trash2} from "lucide-react";
 import {SessionStatusSummary} from "../sessions/SessionStatusSummary.jsx";
+import {getSessionResourceSummary} from "../sessions/sessionPresentation.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
 export function DrawerSessionList({state, onDeleteSession, onSelectSession, onStopSession}) {
@@ -50,7 +51,7 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
             actions={actions}
             active={session.id === state.selectedSessionId}
             key={session.id}
-            meta={`${session.resources.cpu} CPU / ${session.resources.memory}`}
+            meta={getSessionResourceSummary(session)}
             title={session.name}
             titleAccessory={<SessionStatusSummary session={session} />}
             onSelect={() => onSelectSession(session.id)}

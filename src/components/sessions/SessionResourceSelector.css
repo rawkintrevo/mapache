@@ -1,0 +1,122 @@
+.session-resource-selector {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.session-resource-selector legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.session-size-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.session-size-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+  text-transform: none;
+}
+
+.session-size-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(20, 125, 100, 0.14);
+}
+
+.session-size-card input {
+  width: 16px;
+  min-height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.session-size-card__body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-size-card__body strong {
+  font-size: 14px;
+}
+
+.session-size-card__body span,
+.session-size-card__body small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.session-size-card__body small {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.session-resource-estimate {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.session-resource-estimate a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.session-resource-selector details {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.session-resource-selector summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.session-resource-advanced {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.session-resource-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.session-resource-fields label {
+  display: grid;
+  gap: 5px;
+}
+
+.session-resource-fields label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+@media (max-width: 620px) {
+  .session-size-options,
+  .session-resource-fields {
+    grid-template-columns: 1fr;
+  }
+}

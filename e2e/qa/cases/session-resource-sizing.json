@@ -1,0 +1,34 @@
+{
+  "id": "session.resource-sizing",
+  "title": "Priced session sizing and advanced resource controls",
+  "description": "Verify Cloud Run size presets, estimate text, Custom inference, invalid-pair prevention, resize, and session summaries.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session-resource-sizing",
+  "requires": {
+    "cloudRun": "Creates and resizes a billable Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-resource-sizing-ws-{{timestamp}}"}},
+    {"useScript": "scripts/open-session-modal.json"},
+    {"assert": "snapshot-text", "expected": "Small selection: $0.0792/hr estimate"},
+    {"type": "click", "text": "Medium"},
+    {"assert": "snapshot-text", "expected": "Medium selection: $0.1584/hr estimate"},
+    {"type": "click", "text": "Advanced settings"},
+    {"type": "select", "name": "cpu", "value": "2"},
+    {"type": "select", "name": "memory", "value": "2Gi"},
+    {"assert": "snapshot-text", "expected": "Custom selection"},
+    {"assert": "resource-option-disabled", "name": "memory", "value": "8Gi"},
+    {"type": "fill", "label": "Name", "value": "qa-resource-sizing-{{timestamp}}"},
+    {"type": "submit", "buttonName": "Create session"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201, "timeoutMs": 30000},
+    {"type": "waitForSnapshotText", "text": "Custom", "timeoutMs": 15000},
+    {"useScript": "scripts/resize-selected-session.json", "parameters": {"cpu": "1", "memory": "2Gi"}},
+    {"assert": "snapshot-text", "expected": "Small"},
+    {"capture": "screenshot", "fileName": "session-resource-sizing.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

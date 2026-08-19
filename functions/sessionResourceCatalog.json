@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "region": "us-central1",
+  "pricing": {
+    "vcpuSecondUsd": 0.000018,
+    "gibSecondUsd": 0.000002,
+    "sourceUrl": "https://cloud.google.com/run/pricing",
+    "asOf": "2026-08-19"
+  },
+  "advanced": {
+    "cpu": ["1", "2", "4"],
+    "memory": ["1Gi", "2Gi", "4Gi", "8Gi"]
+  },
+  "constraints": {
+    "minMemoryGiBByCpu": {
+      "4": 2
+    },
+    "maxMemoryGiBByCpu": {
+      "1": 4
+    }
+  },
+  "presets": [
+    {"key": "small", "label": "Small", "cpu": "1", "memory": "2Gi"},
+    {"key": "medium", "label": "Medium", "cpu": "2", "memory": "4Gi"},
+    {"key": "large", "label": "Large", "cpu": "4", "memory": "8Gi"}
+  ]
+}

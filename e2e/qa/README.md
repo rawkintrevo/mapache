@@ -64,6 +64,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/session-sidebar-entry-point.json`: Single create-session action in the left sidebar.
 - `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
+- `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
 - `cases/mcp-servers-crud.json`: Right-drawer MCP server save path for selected workspaces.

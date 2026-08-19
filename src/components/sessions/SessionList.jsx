@@ -1,5 +1,6 @@
 import "./SessionDetail.css";
 import {SessionStatusSummary} from "./SessionStatusSummary.jsx";
+import {getSessionResourceSummary} from "./sessionPresentation.js";
 
 export function SessionList({selectedSessionId, selectedWorkspaceId, sessions, onSelectSession}) {
   if (!selectedWorkspaceId) return null;
@@ -25,7 +26,7 @@ export function SessionList({selectedSessionId, selectedWorkspaceId, sessions, o
             <span>{session.name}</span>
             <SessionStatusSummary session={session} />
           </span>
-          <span className="subtle">{session.resources.cpu} CPU / {session.resources.memory}</span>
+          <span className="subtle">{getSessionResourceSummary(session)}</span>
         </button>
       ))}
     </div>

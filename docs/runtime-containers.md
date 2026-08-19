@@ -528,7 +528,7 @@ Each session service is named with the session id:
 session-<lowercase-session-id>
 ```
 
-Cloud Run resource limits are derived from the session's CPU and memory settings.
+Cloud Run resource limits are derived from the session's CPU and memory settings. The accepted session resource catalog lives in `functions/sessionResourceCatalog.json` and is consumed by both Functions and the Vite frontend. Its current mappings are Small `1 vCPU / 2 GiB`, Medium `2 vCPU / 4 GiB`, and Large `4 vCPU / 8 GiB`; `1 vCPU / 8 GiB` and `4 vCPU / 1 GiB` are rejected as incompatible pairs. The catalog records the us-central1 on-demand rates of `0.000018` USD/vCPU-second and `0.000002` USD/GiB-second, equivalent to `0.0648` and `0.0072` USD per vCPU/GiB-hour. UI prices are estimates only and exclude free tier, discounts, network, storage, build, and other charges. CPU and memory remain the canonical session document fields, which lets older `1 vCPU / 1 GiB` records reopen as `Custom` without rewriting them.
 
 Each session service must run as the dedicated runner service account configured by the Cloud Functions parameter/environment value `SESSION_RUNNER_SERVICE_ACCOUNT`. In production this is `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. The backend sets Cloud Run `template.serviceAccount` on create, resize, and restart. If that value is missing, session provisioning fails closed instead of allowing Cloud Run to fall back to the project's default Compute Engine service account. Existing session records may also carry the resolved `serviceAccount` value, which the backend can use as a fallback when recreating an older stopped session.
 
@@ -659,4 +659,5 @@ Expected package-manager write locations:
 - [Pi skills manager](./pi-skills-manager.md)
 - [Pi extension manager](./pi-extension-manager.md)
 - [SSH-backed sessions guide](./guides/ssh-backed-sessions.md)
+- [Session resource benchmark](./guides/session-resource-benchmark.md)
 - [Deployment](./deployment.md)

@@ -1,19 +1,16 @@
 import {Plus, X} from "lucide-react";
+import {useState} from "react";
 import {sessionImages} from "../../config/sessionImages.js";
 import {parseEnvText} from "../../utils/envText.js";
+import {getDefaultSessionResources} from "../../utils/sessionResources.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
-
-const cpuOptions = ["1", "2", "4"];
-const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
-
-function formatMemory(value) {
-  return value.replace("Gi", " GiB");
-}
+import {SessionResourceFields, SessionResourceSelector} from "../sessions/SessionResourceSelector.jsx";
 
 export function SessionModal({busy, error = "", selectedWorkspace = null, environmentEntries = [], onClose, onCreateSession}) {
   const workspaceSsh = selectedWorkspace?.source?.type === "ssh";
   const sessionType = workspaceSsh ? "ssh" : "cloud";
+  const [resources, setResources] = useState(() => workspaceSsh ? {cpu: "1", memory: "1Gi"} : getDefaultSessionResources());
   return (
     <ModalBackdrop onClose={onClose}>
       <section aria-labelledby="session-modal-title" aria-modal="true" className="modal-panel" role="dialog">
@@ -61,8 +58,19 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, enviro
               </p>
             </div>
           ) : null}
-          <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label><span>Memory</span><select name="memory" defaultValue="1Gi">{memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}</select></label>
+          {sessionType === "cloud" ? (
+            <SessionResourceSelector
+              cpu={resources.cpu}
+              memory={resources.memory}
+              onChange={setResources}
+            />
+          ) : (
+            <SessionResourceFields
+              cpu={resources.cpu}
+              memory={resources.memory}
+              onChange={setResources}
+            />
+          )}
           <label>
             <span>Session env</span>
             <textarea name="env" placeholder={"FOO=session-value\nAPI_BASE=http://localhost:3000"} rows={4} />

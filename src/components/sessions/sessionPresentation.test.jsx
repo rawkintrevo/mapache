@@ -2,7 +2,7 @@ import {render, screen, within} from "@testing-library/react";
 import {describe, expect, test, vi} from "vitest";
 import {DrawerSessionList} from "../drawers/DrawerSessionList.jsx";
 import {SessionList} from "./SessionList.jsx";
-import {getSessionRunnerTags, getSessionStatusTone} from "./sessionPresentation.js";
+import {getSessionResourceSummary, getSessionRunnerTags, getSessionStatusTone} from "./sessionPresentation.js";
 
 const baseSession = {
   id: "session-1",
@@ -32,6 +32,12 @@ describe("session presentation helpers", () => {
           image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
         }),
     ).toEqual(["pi", "n64"]);
+  });
+
+  test("summarizes preset, custom, and missing resources safely", () => {
+    expect(getSessionResourceSummary({...baseSession, resources: {cpu: "1", memory: "2Gi"}})).toBe("Small · 1 vCPU / 2 GiB");
+    expect(getSessionResourceSummary({...baseSession, resources: {cpu: "1", memory: "1Gi"}})).toBe("Custom · 1 vCPU / 1 GiB");
+    expect(getSessionResourceSummary({...baseSession, resources: null})).toBe("Custom · — vCPU / —");
   });
 });
 
