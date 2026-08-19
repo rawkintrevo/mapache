@@ -66,7 +66,7 @@ export async function loadGoogleWorkspaceState({state, render, silent = false}) 
   render();
 }
 
-export async function startGoogleWorkspaceConnectionState({state, render, openPopup = defaultOpenPopup}) {
+export async function startGoogleWorkspaceConnectionState({state, render, openPopup = defaultOpenPopup, loadState}) {
   const workspaceId = state.selectedWorkspaceId;
   const services = selectedServices(state);
   if (!workspaceId) {
@@ -93,6 +93,7 @@ export async function startGoogleWorkspaceConnectionState({state, render, openPo
       connecting: false,
       message: popup ? "Complete Google authorization in the popup, then return here." : "Google authorization opened in a new tab.",
     };
+    if (popup && typeof loadState === "function") watchPopup(popup, () => loadState({silent: true}));
   } catch (error) {
     state.googleWorkspace = {...state.googleWorkspace, connecting: false, error: friendlyMcpConfigError(error), message: ""};
   }
@@ -148,4 +149,12 @@ export async function deleteGoogleConnectionState({state, render, connectionId, 
 
 function defaultOpenPopup(url) {
   return window.open(url, "mapache-google-oauth", "popup,width=520,height=720");
+}
+
+function watchPopup(popup, onClosed) {
+  const timer = window.setInterval(() => {
+    if (!popup.closed) return;
+    window.clearInterval(timer);
+    onClosed();
+  }, 500);
 }
