@@ -8,6 +8,8 @@ const MAX_MCP_ARG_LENGTH = 512;
 const MAX_MCP_ENV_VALUE_LENGTH = 4096;
 const MCP_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const MCP_LIFECYCLES = new Set(["", "lazy", "eager", "keep-alive"]);
+const MCP_AUTH_MODES = new Set(["none", "oauth2", "bearer_env"]);
+const MCP_ENV_REF_PATTERN = /^[A-Z][A-Z0-9_]{0,127}$/;
 
 function normalizeMcpConfigPayload(payload = {}) {
   const sourceServers = payload.mcpServers && typeof payload.mcpServers === "object" && !Array.isArray(payload.mcpServers) ?
@@ -40,6 +42,7 @@ function normalizeMcpServer(source = {}) {
 
   const lifecycle = cleanText(source.lifecycle, 32).toLowerCase();
   if (!MCP_LIFECYCLES.has(lifecycle)) throw httpError(400, "invalid_mcp_lifecycle");
+  rejectLiteralSecretFields(source);
 
   const config = command ? {
     command,
@@ -57,7 +60,90 @@ function normalizeMcpServer(source = {}) {
   if (lifecycle) config.lifecycle = lifecycle;
   if (source.directTools === true || source.directTools === false) config.directTools = source.directTools;
 
+  const auth = normalizeMcpAuth(source, Boolean(url), headers);
+  Object.assign(config, auth);
+
   return {name, config};
+}
+
+function normalizeMcpAuth(source, hasUrl, headers) {
+  const hasAuthFields = ["authMode", "scopes", "oauthClientRef", "bearerTokenEnv", "secretRefs", "oauthRedirectUri"]
+      .some((key) => source[key] != null && source[key] !== "");
+  const authMode = cleanText(source.authMode, 32).toLowerCase() || "none";
+  if (!MCP_AUTH_MODES.has(authMode)) throw httpError(400, "invalid_mcp_auth_mode");
+  const scopes = normalizeScopes(source.scopes);
+  const oauthClientRef = cleanReference(source.oauthClientRef, "invalid_mcp_oauth_client_ref");
+  const bearerTokenEnv = cleanEnvReference(source.bearerTokenEnv, "invalid_mcp_bearer_token_env");
+  const secretRefs = normalizeSecretRefs(source.secretRefs);
+  const oauthRedirectUri = cleanText(source.oauthRedirectUri, MAX_MCP_ENV_VALUE_LENGTH);
+
+  if (authMode !== "none" && !hasUrl) throw httpError(400, "invalid_mcp_auth_transport");
+  if (authMode === "oauth2" && (!oauthClientRef || !scopes.length)) {
+    throw httpError(400, "invalid_mcp_oauth_config");
+  }
+  if (authMode === "bearer_env" && !bearerTokenEnv) {
+    throw httpError(400, "invalid_mcp_bearer_config");
+  }
+  if (authMode === "none" && (oauthClientRef || scopes.length || bearerTokenEnv || Object.keys(secretRefs).length || oauthRedirectUri)) {
+    throw httpError(400, "invalid_mcp_auth_config");
+  }
+  if (authMode === "oauth2" && Object.keys(headers).some((key) => key.toLowerCase() === "authorization")) {
+    throw httpError(400, "literal_mcp_credential_not_allowed");
+  }
+  if (authMode === "none" && !hasAuthFields) return {};
+
+  const result = {authMode};
+  if (oauthClientRef) result.oauthClientRef = oauthClientRef;
+  if (scopes.length) result.scopes = scopes;
+  if (bearerTokenEnv) result.bearerTokenEnv = bearerTokenEnv;
+  if (Object.keys(secretRefs).length) result.secretRefs = secretRefs;
+  if (oauthRedirectUri) result.oauthRedirectUri = oauthRedirectUri;
+  return result;
+}
+
+function normalizeScopes(value) {
+  if (value == null || value === "") return [];
+  if (!Array.isArray(value)) throw httpError(400, "invalid_mcp_scopes");
+  const scopes = [...new Set(value.map((scope) => cleanText(scope, MAX_MCP_ENV_VALUE_LENGTH)))].filter(Boolean);
+  if (scopes.some((scope) => !/^https:\/\/[^\s]+$/.test(scope))) throw httpError(400, "invalid_mcp_scopes");
+  return scopes;
+}
+
+function normalizeSecretRefs(value) {
+  if (value == null || value === "") return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw httpError(400, "invalid_mcp_secret_refs");
+  const result = {};
+  for (const [key, rawValue] of Object.entries(value)) {
+    if (!/^(accessToken|refreshToken|clientSecret|authorizationCode)$/.test(key)) {
+      throw httpError(400, "invalid_mcp_secret_refs");
+    }
+    result[key] = cleanEnvReference(rawValue, "invalid_mcp_secret_refs");
+  }
+  return result;
+}
+
+function cleanReference(value, errorCode) {
+  if (value == null || value === "") return "";
+  const reference = cleanText(value, 256);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,255}$/.test(reference)) throw httpError(400, errorCode);
+  return reference;
+}
+
+function cleanEnvReference(value, errorCode) {
+  if (value == null || value === "") return "";
+  const reference = cleanText(value, 128);
+  if (!MCP_ENV_REF_PATTERN.test(reference)) throw httpError(400, errorCode);
+  return reference;
+}
+
+function rejectLiteralSecretFields(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  for (const [key, nested] of Object.entries(value)) {
+    if (/^(accessToken|refreshToken|clientSecret|authorizationCode|clientSecretValue)$/.test(key)) {
+      throw httpError(400, "literal_mcp_credential_not_allowed");
+    }
+    if (key !== "headers" && key !== "env" && key !== "secretRefs") rejectLiteralSecretFields(nested);
+  }
 }
 
 function cleanMcpName(value) {
