@@ -2,16 +2,11 @@
 
 const assert = require("assert");
 const {
-  buildGitPackageSource,
   createPiService,
-  normalizeGitPackageSource,
-  normalizePiPackageSource,
   normalizePiSkillContent,
   normalizePiSkillDescription,
   normalizePiSkillName,
   normalizePiSkillPayload,
-  parseGitPackageSource,
-  piPackageCatalogDocId,
   sessionSupportsWorkspaceSkills,
 } = require("./pi.service");
 
@@ -35,44 +30,6 @@ assert.throws(() => normalizePiSkillDescription(""), (error) => publicMessage(er
 assert.strictEqual(normalizePiSkillContent("x".repeat(128 * 1024)).length, 128 * 1024);
 assert.throws(() => normalizePiSkillContent("bad\u0000content"), (error) => publicMessage(error) === "invalid_skill_content");
 
-assert.deepStrictEqual(normalizePiPackageSource("npm:@scope/pkg@1.2.3"), {
-  source: "npm:@scope/pkg@1.2.3",
-  type: "npm",
-  identity: "npm:@scope/pkg",
-  name: "@scope/pkg",
-  pinned: true,
-});
-assert.deepStrictEqual(normalizePiPackageSource("github:owner/repo#main"), {
-  source: "github:owner/repo#main",
-  type: "git",
-  identity: "git:github.com/owner/repo",
-  host: "github.com",
-  path: "owner/repo",
-  pinned: true,
-});
-assert.deepStrictEqual(normalizeGitPackageSource("git+ssh://github.com/Owner/Repo.git#v1"), {
-  source: "git+ssh://github.com/Owner/Repo.git#v1",
-  type: "git",
-  identity: "git:github.com/Owner/Repo",
-  host: "github.com",
-  path: "Owner/Repo",
-  pinned: true,
-});
-assert.deepStrictEqual(parseGitPackageSource("git@github.com:owner/repo.git#main"), {
-  host: "github.com",
-  path: "owner/repo",
-  ref: "main",
-});
-assert.deepStrictEqual(buildGitPackageSource("GitHub.COM", "/owner/repo.git"), {
-  host: "github.com",
-  path: "owner/repo",
-  ref: "",
-});
-assert.throws(() => normalizePiPackageSource("npm:not valid"), (error) => publicMessage(error) === "invalid_package_source");
-assert.throws(() => normalizePiPackageSource("https://user:pass@example.com/repo"), (error) => publicMessage(error) === "package_source_must_not_include_credentials");
-assert.throws(() => normalizePiPackageSource("ftp://example.com/repo"), (error) => publicMessage(error) === "unsupported_package_source");
-assert.strictEqual(piPackageCatalogDocId("git:github.com/owner/repo"), "git%3Agithub.com%2Fowner%2Frepo");
-
 assert.strictEqual(sessionSupportsWorkspaceSkills({terminalKind: "pi"}), true);
 assert.strictEqual(sessionSupportsWorkspaceSkills({terminalKind: "codex"}), true);
 assert.strictEqual(sessionSupportsWorkspaceSkills({terminalKind: "shell"}), false);
@@ -81,14 +38,6 @@ async function assertServiceError(fn, expectedStatus, expectedMessage) {
   await assert.rejects(fn, (error) => error.status === expectedStatus && error.publicMessage === expectedMessage);
 }
 
-const stoppedSessionSnap = {
-  data: () => ({serviceUrl: "", shutdownToken: "token", terminalKind: "pi"}),
-  ref: {set: async () => {}},
-};
-const unsupportedSessionSnap = {
-  data: () => ({serviceUrl: "https://runner", shutdownToken: "", terminalKind: "pi"}),
-  ref: {set: async () => {}},
-};
 const runningSessionSnap = {
   data: () => ({serviceUrl: "https://runner", shutdownToken: "token", terminalKind: "pi"}),
   ref: {set: async () => {}},
@@ -110,16 +59,6 @@ function serviceForSession(sessionSnap, calls = []) {
 }
 
 (async () => {
-  await assertServiceError(
-      () => serviceForSession(stoppedSessionSnap).listPiPackages("uid", "workspace", "session"),
-      409,
-      "no_active_session",
-  );
-  await assertServiceError(
-      () => serviceForSession(unsupportedSessionSnap).listPiPackages("uid", "workspace", "session"),
-      501,
-      "runner_package_listing_unsupported",
-  );
   await assertServiceError(
       () => serviceForSession(shellSessionSnap).saveWorkspaceSkill("uid", "workspace", "session", {
         name: "review-code",

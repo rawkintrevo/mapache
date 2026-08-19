@@ -29,7 +29,8 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Generic environment-key storage, redaction, CRUD, and runner resolution: `functions/environmentKeys.service.js`
 - Agent credential storage, compatibility reads/writes, selection, and materialization: `functions/agentAuth.service.js`
 - OpenAI Codex device-code/OAuth flow and token normalization: `functions/openAiCodexAuth.service.js`
-- Pi packages, workspace skills, and workspace subagents: `functions/pi.service.js`
+- Pi package proxies, source parsing, and observed catalog: `functions/piPackages.service.js`
+- Workspace skills and workspace subagents: `functions/pi.service.js`
 - Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Session resource catalog and validation: `functions/sessionResourceCatalog.json`, `functions/sessionResources.helpers.js`
 - Usage rollups: `functions/userUsage.service.js`
