@@ -27,7 +27,8 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Git session status/action/PR proxies: `functions/gitSession.service.js`
 - GitHub App and PR flows: `functions/github.service.js`
 - Generic environment-key storage, redaction, CRUD, and runner resolution: `functions/environmentKeys.service.js`
-- Pi auth, packages, workspace skills, and workspace subagents: `functions/pi.service.js`
+- Agent credential storage, compatibility reads/writes, selection, and materialization: `functions/agentAuth.service.js`
+- Pi OAuth flow, packages, workspace skills, and workspace subagents: `functions/pi.service.js`
 - Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Session resource catalog and validation: `functions/sessionResourceCatalog.json`, `functions/sessionResources.helpers.js`
 - Usage rollups: `functions/userUsage.service.js`

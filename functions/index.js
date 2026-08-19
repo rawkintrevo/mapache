@@ -55,6 +55,7 @@ const {
 } = require("./chromeReservation.helpers");
 const {createGithubService} = require("./github.service");
 const {createGitSessionService} = require("./gitSession.service");
+const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
@@ -86,7 +87,15 @@ const {
   restartSession,
   stopSession,
 } = sessionLifecycleService;
+const agentAuthService = createAgentAuthService({
+  admin,
+  db,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
 const piService = createPiService({
+  agentAuthService,
   requireSession,
   requireWorkspace,
   requestRunnerJson,

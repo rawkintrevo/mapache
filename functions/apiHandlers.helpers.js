@@ -1,19 +1,19 @@
 "use strict";
 
-function createApiHandlers({piService, environmentKeysService, workspaceService, githubService, operations}) {
+function createApiHandlers({piService, agentAuthService, environmentKeysService, workspaceService, githubService, operations}) {
   return Object.freeze({
     ...operations,
-    getPiAuth: piService.getPiAuth,
-    savePiAuthProvider: piService.savePiAuthProvider,
-    deletePiAuthProvider: piService.deletePiAuthProvider,
-    deletePiAuthEntry: piService.deletePiAuthEntry,
+    getPiAuth: agentAuthService.getPiAuth,
+    savePiAuthProvider: agentAuthService.savePiAuthProvider,
+    deletePiAuthProvider: agentAuthService.deletePiAuthProvider,
+    deletePiAuthEntry: agentAuthService.deletePiAuthEntry,
     listGenericEnvironmentKeys: environmentKeysService.listGenericEnvironmentKeys,
     createGenericEnvironmentKey: environmentKeysService.createGenericEnvironmentKey,
     updateGenericEnvironmentKey: environmentKeysService.updateGenericEnvironmentKey,
     deleteGenericEnvironmentKey: environmentKeysService.deleteGenericEnvironmentKey,
     startOpenAiCodexDeviceCode: piService.startOpenAiCodexDeviceCode,
     completeOpenAiCodexDeviceCode: piService.completeOpenAiCodexDeviceCode,
-    saveSessionPiAuthSelection: piService.saveSessionPiAuthSelection,
+    saveSessionPiAuthSelection: agentAuthService.saveSessionPiAuthSelection,
     listPiPackages: piService.listPiPackages,
     installPiPackage: piService.installPiPackage,
     removePiPackage: piService.removePiPackage,
