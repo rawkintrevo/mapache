@@ -8,6 +8,7 @@ import {friendlyFilesError} from "../utils/friendlyErrors.js";
 import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
 export async function loadWorkspaceFilesState(state, path = "", request) {
+  if (!isCurrentSessionRequest(request)) return;
   const cleanPath = cleanDirectoryPath(path);
   state.workspaceFilesError = "";
   state.workspaceFilesWorkspaceId = workspaceFileScopeId(state);

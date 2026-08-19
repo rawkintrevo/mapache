@@ -38,7 +38,7 @@ Workflow modules under `src/workflows/` own cohesive API/state sequences such as
 
 Workspace file browsing is lazy. `src/workflows/workspaceFiles.js` loads the root directory first, tracks loaded directories in `state.workspaceFileLoadedDirs`, and fetches a directory's immediate children only when `WorkspaceFileTree` expands that folder. The workflow supports both Cloud Storage-backed workspaces and selected SSH sessions through the same directory-scoped API shape.
 
-Selected-session panel loads capture the current workspace/session identity through `src/utils/sessionRequest.js`. Git, Pi packages, skills, subagents, workspace files, and SSH forwarding ignore responses from requests that belong to an older selection.
+Selected-session panel loads capture the current workspace/session identity through `src/utils/sessionRequest.js`. Git, Pi packages, skills, subagents, workspace files, and SSH forwarding ignore responses from requests that belong to an older selection. Independent panel requests launch concurrently through `src/workflows/selectedSessionPanels.js`, while capability-gated panels retain their existing reset and error states.
 
 The Files section action trigger opens an accessible popover with upload, create-file, and create-directory actions. New Cloud Storage-backed files and directory markers are created through the workspace API in the active directory (the selected file's parent or the last expanded directory), then synced and reloaded; new files are opened in the editor automatically. SSH-backed file scopes keep creation disabled and surface the existing unsupported-action message for uploads.
 

@@ -57,6 +57,7 @@ export function cancelWorkspaceSubagentEditState(state) {
 }
 
 export async function loadWorkspaceSubagentsState({state, render, request}) {
+  if (!isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   const session = selectedSession(state);
@@ -71,7 +72,6 @@ export async function loadWorkspaceSubagentsState({state, render, request}) {
     render();
     return;
   }
-  if (!isCurrentSessionRequest(request)) return;
   if (!sessionSupportsSubagents(session)) {
     state.workspaceSubagents = {
       ...state.workspaceSubagents,

@@ -123,6 +123,7 @@ export async function updatePiPackageState({state, source = "", loadPiPackages, 
 }
 
 export async function loadPiPackagesState({state, resetPiPackages, render, request}) {
+  if (!isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   if (!workspaceId || !sessionId) {
@@ -136,8 +137,6 @@ export async function loadPiPackagesState({state, resetPiPackages, render, reque
     render();
     return;
   }
-  if (!isCurrentSessionRequest(request)) return;
-
   state.piPackages = {
     ...state.piPackages,
     loading: true,

@@ -61,6 +61,7 @@ export function cancelWorkspaceSkillEditState(state) {
 }
 
 export async function loadWorkspaceSkillsState({state, render, request}) {
+  if (!isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   const session = selectedSession(state);
@@ -76,7 +77,6 @@ export async function loadWorkspaceSkillsState({state, render, request}) {
     render();
     return;
   }
-  if (!isCurrentSessionRequest(request)) return;
   if (!sessionSupportsWorkspaceSkills(session)) {
     state.workspaceSkills = {
       ...state.workspaceSkills,

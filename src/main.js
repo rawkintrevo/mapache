@@ -56,6 +56,7 @@ import {
   stopSessionState,
 } from "./workflows/sessionLifecycle.js";
 import {createSessionRequestTracker, isCurrentSessionRequest} from "./utils/sessionRequest.js";
+import {loadSelectedSessionPanelsConcurrently} from "./workflows/selectedSessionPanels.js";
 
 const appStore = createAppStore(createInitialState());
 const state = appStore.state;
@@ -331,22 +332,24 @@ async function loadSelectedSessionPanels() {
     resetPiPackages();
     resetWorkspaceSkills();
     resetWorkspaceSubagents();
-    await workspaceFilesController.loadWorkspaceFiles("", request);
+    await loadSelectedSessionPanelsConcurrently({
+      files: () => workspaceFilesController.loadWorkspaceFiles("", request),
+      sshForwards: () => loadSshForwards(request),
+    });
     if (!request.isCurrent()) return;
-    await loadSshForwards(request);
+    render();
     return;
   }
-  await loadGitStatus(request);
+  await loadSelectedSessionPanelsConcurrently({
+    git: () => loadGitStatus(request),
+    packages: () => piPanelsController.loadPiPackages(request),
+    skills: () => piPanelsController.loadWorkspaceSkills(request),
+    subagents: () => piPanelsController.loadWorkspaceSubagents(request),
+    files: () => workspaceFilesController.loadWorkspaceFiles("", request),
+    sshForwards: () => loadSshForwards(request),
+  });
   if (!request.isCurrent()) return;
-  await piPanelsController.loadPiPackages(request);
-  if (!request.isCurrent()) return;
-  await piPanelsController.loadWorkspaceSkills(request);
-  if (!request.isCurrent()) return;
-  await piPanelsController.loadWorkspaceSubagents(request);
-  if (!request.isCurrent()) return;
-  await workspaceFilesController.loadWorkspaceFiles("", request);
-  if (!request.isCurrent()) return;
-  await loadSshForwards(request);
+  render();
 }
 
 function isSshSession(session) {
@@ -457,12 +460,12 @@ function updateSshForwardPort(port) {
 }
 
 async function loadSshForwards(request = sessionRequestTracker.capture()) {
+  if (!isCurrentSessionRequest(request)) return;
   const session = getSelectedSession();
   if (!session || (session.sessionType !== "ssh" && session.terminalKind !== "ssh") || !session.serviceUrl) {
     resetSshForwards();
     return;
   }
-  if (!isCurrentSessionRequest(request)) return;
   state.sshForwards.loading = true;
   state.sshForwards.error = "";
   render();

@@ -4,14 +4,13 @@ import {canOpenPullRequestForSession} from "../utils/gitStatus.js";
 import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
 export async function loadGitStatusState({state, getSelectedSession, resetGitStatus, render, request}) {
+  if (!isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   if (!workspaceId || !sessionId) {
     resetGitStatus();
     return;
   }
-  if (!isCurrentSessionRequest(request)) return;
-
   state.gitStatus = {
     loading: true,
     error: "",
