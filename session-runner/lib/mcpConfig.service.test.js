@@ -102,6 +102,7 @@ assert.deepStrictEqual(piMcpConfig(googleConfig), {
   },
 });
 const googleToml = codexMcpToml(googleConfig);
+assert.match(googleToml, /mcp_oauth_credentials_store = "file"/);
 assert.match(googleToml, /http_headers|env_http_headers|oauth = \{ client_id = "google-client-prod" \}/);
 assert.match(googleToml, /scopes = \["https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly"\]/);
 assert.match(googleToml, /bearer_token_env_var = "GOOGLE_BEARER_TOKEN"/);
