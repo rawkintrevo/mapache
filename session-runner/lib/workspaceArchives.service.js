@@ -56,6 +56,11 @@ function chromeProfileArchiveRemotePath(config) {
   return `${config.prefix}/.mapache-internal/chrome/chrome-profile.tar.gz`.replace(/\/+/g, "/");
 }
 
+function piMcpOAuthArchiveRemotePath(config) {
+  if (!config.prefix || !config.piAgentDir) return "";
+  return `${config.prefix}/${config.internalStorageDir || ".mapache-internal"}/pi-mcp-oauth/mcp-oauth.tar.gz`;
+}
+
 function legacyCodexHomeArchivePrefixes(config) {
   if (!config.prefix) return [];
   return [config.internalStorageDir, ...(config.legacyInternalStorageDirs || [])]
@@ -104,6 +109,15 @@ function createArchiveSyncTargets({config, git}) {
       }, homeArchiveRemotePath(config)),
       exclude: homeArchiveExcludePatterns(config),
       ensureLocalPath: true,
+      restoreOnStartup: config.homeSyncMode !== "ephemeral",
+    },
+    {
+      name: "pi-mcp-oauth",
+      mode: "directory",
+      localPath: path.join(config.piAgentDir, "mcp-oauth"),
+      remotePath: piMcpOAuthArchiveRemotePath(config),
+      fallbackArchives: legacyArchiveRemotePaths(config, piMcpOAuthArchiveRemotePath(config)),
+      ensureLocalPath: false,
       restoreOnStartup: config.homeSyncMode !== "ephemeral",
     },
   ];
@@ -163,12 +177,15 @@ function homeArchiveExcludePatterns(config) {
   if (!homeDir) return [];
   const piAgentDir = path.resolve(config.piAgentDir || path.join(homeDir, ".pi", "agent"));
   const piNodeModulesDir = path.join(piAgentDir, "npm", "node_modules");
+  const piMcpOAuthDir = path.join(piAgentDir, "mcp-oauth");
   const relative = path.relative(homeDir, piNodeModulesDir).split(path.sep).join("/");
+  const oauthRelative = path.relative(homeDir, piMcpOAuthDir).split(path.sep).join("/");
   const excludes = [
     ".config/gh/hosts.yml",
     "./.config/gh/hosts.yml",
   ];
-  if (!relative || relative.startsWith("../") || relative === ".." || path.isAbsolute(relative)) {
+  if (!relative || relative.startsWith("../") || relative === ".." || path.isAbsolute(relative) ||
+      !oauthRelative || oauthRelative.startsWith("../") || oauthRelative === ".." || path.isAbsolute(oauthRelative)) {
     return excludes;
   }
   return [
@@ -177,6 +194,10 @@ function homeArchiveExcludePatterns(config) {
     `${relative}/*`,
     `./${relative}`,
     `./${relative}/*`,
+    oauthRelative,
+    `${oauthRelative}/*`,
+    `./${oauthRelative}`,
+    `./${oauthRelative}/*`,
   ];
 }
 
@@ -430,5 +451,6 @@ module.exports = {
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
   homeArchiveRemotePath,
+  piMcpOAuthArchiveRemotePath,
   waitForArchiveExtraction,
 };

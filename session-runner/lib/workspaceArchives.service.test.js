@@ -14,6 +14,7 @@ const {
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
   homeArchiveRemotePath,
+  piMcpOAuthArchiveRemotePath,
   waitForArchiveExtraction,
 } = require("./workspaceArchives.service");
 
@@ -57,6 +58,7 @@ test("selects default archive targets for blank workspaces", () => {
     "workspace-pi-npm",
     "workspace-pi-git",
     "home",
+    "pi-mcp-oauth",
     "codex-home",
   ]);
   assert.equal(targets.find((target) => target.name === "workspace-node-modules").remotePath,
@@ -80,6 +82,10 @@ test("selects default archive targets for blank workspaces", () => {
     ".pi/agent/npm/node_modules/*",
     "./.pi/agent/npm/node_modules",
     "./.pi/agent/npm/node_modules/*",
+    ".pi/agent/mcp-oauth",
+    ".pi/agent/mcp-oauth/*",
+    "./.pi/agent/mcp-oauth",
+    "./.pi/agent/mcp-oauth/*",
   ]);
   assert.equal(targets.find((target) => target.name === "home").restoreOnStartup, true);
   assert.equal(targets.find((target) => target.name === "codex-home").localPath, "/tmp/codex-home/session-1");
@@ -95,6 +101,9 @@ test("selects default archive targets for blank workspaces", () => {
     "users/u/workspaces/w/.mapahce-internal/sessions/",
   ]);
   assert.equal(targets.find((target) => target.name === "codex-home").restoreOnStartup, true);
+  assert.equal(targets.find((target) => target.name === "pi-mcp-oauth").localPath, "/root/.pi/agent/mcp-oauth");
+  assert.equal(targets.find((target) => target.name === "pi-mcp-oauth").remotePath,
+      "users/u/workspaces/w/.mapache-internal/pi-mcp-oauth/mcp-oauth.tar.gz");
 });
 
 test("adds a Chrome-only profile archive outside normal workspace files", () => {
@@ -151,6 +160,13 @@ test("does not add Pi npm excludes when Pi agent dir is outside home", () => {
 
 test("builds home archive path from workspace-owned home prefix", () => {
   assert.equal(homeArchiveRemotePath(baseConfig()), "users/u/workspaces/w/.mapache-internal/home/home.tar.gz");
+});
+
+test("namespaces Pi MCP OAuth archives by workspace", () => {
+  const first = baseConfig({prefix: "users/u/workspaces/one"});
+  const second = baseConfig({prefix: "users/u/workspaces/two"});
+  assert.notEqual(piMcpOAuthArchiveRemotePath(first), piMcpOAuthArchiveRemotePath(second));
+  assert.match(piMcpOAuthArchiveRemotePath(first), /users\/u\/workspaces\/one\/.mapache-internal\/pi-mcp-oauth/);
 });
 
 test("builds codex home archive path from workspace-owned codex prefix", () => {
