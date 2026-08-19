@@ -89,4 +89,5 @@ GitHub connector account routes live under `/api/github/**` and are implemented 
 - [Pi skills manager](./pi-skills-manager.md)
 - [Pi extension manager](./pi-extension-manager.md)
 - [Deployment](./deployment.md)
+- [Session lifecycle](./guides/session-lifecycle.md)
 - [SSH-backed sessions guide](./guides/ssh-backed-sessions.md)

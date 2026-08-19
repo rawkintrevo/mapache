@@ -27,6 +27,7 @@ const {envMapToCloudRunEnv} = require("./env.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
+const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -51,12 +52,11 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     await waitForOperation(client, response.data, dependencies);
     await setPublicInvoker(client, serviceName);
     const service = await getCloudRunService(client, serviceName);
-    await sessionRef.update({
-      status: "running",
+    await sessionRef.update(sessionStatusUpdate(session, "running", {
       serviceUrl: service.uri || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
     let provisioningError = error;
     if (client && isCloudRunOperationTimeout(error)) {
@@ -64,23 +64,21 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       if (service) {
         try {
           await setPublicInvoker(client, serviceName);
-          await sessionRef.update({
-            status: "running",
+          await sessionRef.update(sessionStatusUpdate(session, "running", {
             serviceUrl: service.uri,
             lastError: null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+          }, {reconciliationReason: "cloud_run_timeout_reconciled"}));
           return;
         } catch (reconciliationError) {
           provisioningError = reconciliationError;
         }
       }
     }
-    await sessionRef.update({
-      status: "provision_failed",
+    await sessionRef.update(sessionStatusUpdate(session, "provision_failed", {
       lastError: publicGoogleError(provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_provisioning_failed"}));
     if (typeof dependencies.releaseChromeWorkspaceSession === "function") {
       try {
         await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "provision_failed");
@@ -128,11 +126,10 @@ function isCloudRunServiceReady(service) {
 
 async function patchSessionService(sessionRef, session, options = {}, dependencies = {}) {
   if (!session.serviceName) {
-    await sessionRef.update({
-      status: "needs_service",
+    await sessionRef.update(sessionStatusUpdate(session, "needs_service", {
       lastError: "This session has no Cloud Run serviceName yet.",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "missing_cloud_run_service"}));
     return;
   }
 
@@ -150,18 +147,16 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     });
     await waitForOperation(client, response.data);
     const service = await getCloudRunService(client, session.serviceName);
-    await sessionRef.update({
-      status: "running",
+    await sessionRef.update(sessionStatusUpdate(session, "running", {
       serviceUrl: service.uri || session.serviceUrl || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
-    await sessionRef.update({
-      status: "update_failed",
+    await sessionRef.update(sessionStatusUpdate(session, "update_failed", {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_update_failed"}));
   }
 }
 
@@ -185,11 +180,10 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       return true;
     }
 
-    await sessionRef.update({
-      status: "stop_failed",
+    await sessionRef.update(sessionStatusUpdate(session, "stop_failed", {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_stop_failed"}));
     return false;
   }
 }

@@ -13,6 +13,7 @@ const {
   cleanName,
   timestampMillis,
 } = require("./backendUtils.helpers");
+const {isSessionTerminal} = require("./sessionLifecycle.helpers");
 
 async function userWithUsage(user) {
   return {
@@ -221,7 +222,7 @@ function parseMemoryGb(value) {
 }
 
 function isTerminalSessionStatus(status) {
-  return ["stopped", "provision_failed", "needs_image"].includes(cleanName(status));
+  return isSessionTerminal(status) || ["provision_failed"].includes(cleanName(status));
 }
 
 module.exports = {

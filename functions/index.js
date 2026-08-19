@@ -85,6 +85,7 @@ const {
   parseRunnerResponseBody,
 } = require("./runnerProxy.helpers");
 const {normalizeSshSessionPayload} = require("./sshSession.helpers");
+const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 
 const githubService = createGithubService();
 const piService = createPiService({
@@ -201,11 +202,10 @@ exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
       sessionId: doc.id,
       serviceId: session.serviceId,
     });
-    await doc.ref.update({
-      status: "stopping",
+    await doc.ref.update(sessionStatusUpdate(session, "stopping", {
       stopReason: "idle_timeout",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }));
     await deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
     return true;
   }));
@@ -743,12 +743,11 @@ async function resizeSession(uid, workspaceId, sessionId, payload) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
   const resources = normalizeRequestedSessionResources(payload, {defaultResources: null});
   const resizedAt = admin.firestore.Timestamp.now();
-  await sessionRef.update({
+  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "resizing", {
     ...accrueSessionUsage(sessionSnap.data(), resizedAt),
     resources,
-    status: "resizing",
     updatedAt: resizedAt,
-  });
+  }));
   await patchSessionService(sessionRef, {...sessionSnap.data(), resources});
   return toClientDoc(await sessionRef.get());
 }
@@ -787,8 +786,7 @@ async function restartSession(uid, workspaceId, sessionId) {
   const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
   const restartNonce = Date.now().toString();
   const mcpConfig = mcpConfigForRunner(workspace);
-  const restartUpdate = {
-    status: recreatingSessionService ? "provisioning" : "restarting",
+  const restartUpdate = sessionStatusUpdate(session, recreatingSessionService ? "provisioning" : "restarting", {
     browserAccessTokenSecret,
     mcpConfig,
     restartNonce,
@@ -799,7 +797,7 @@ async function restartSession(uid, workspaceId, sessionId) {
     serviceUrl: null,
     lastError: null,
     updatedAt: restartedAt,
-  };
+  });
 
   if (!Array.isArray(session.environmentEntryIds) && Array.isArray(session.genericEnvironmentEntryIds)) {
     restartUpdate.environmentEntryIds = [...new Set(session.genericEnvironmentEntryIds)];
@@ -838,20 +836,18 @@ async function restartSession(uid, workspaceId, sessionId) {
 
 async function stopSession(uid, workspaceId, sessionId) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  await sessionRef.update({
-    status: "stopping",
+  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "stopping", {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  }));
   await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "manual"});
   return toClientDoc(await sessionRef.get());
 }
 
 async function deleteSession(uid, workspaceId, sessionId) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  await sessionRef.update({
-    status: "deleting",
+  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "deleting", {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  }));
   const serviceDeleted = await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "deleted"});
   if (!serviceDeleted) {
     throw httpError(502, "session_delete_failed");
@@ -962,14 +958,13 @@ function sessionCollection(workspaceId) {
 async function markSessionStopped(sessionRef, session, reason) {
   const stoppedAt = admin.firestore.Timestamp.now();
   const usageRecord = sessionUsageRecord(sessionRef, session, stoppedAt);
-  const stopped = {
-    status: "stopped",
+  const stopped = sessionStatusUpdate(session, "stopped", {
     activeSocketCount: 0,
     serviceUrl: null,
     stoppedAt,
     lastError: null,
     updatedAt: stoppedAt,
-  };
+  }, {reconciliationReason: reason || "service_deleted"});
   if (reason) stopped.stopReason = reason;
   if (reason === "idle_timeout") {
     stopped.autoStoppedAt = stoppedAt;
