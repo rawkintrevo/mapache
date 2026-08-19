@@ -12,6 +12,7 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 
 - Entrypoint/composition root: `session-runner/server.js`
 - HTTP route registrars: `session-runner/routes/browserPreviewRoutes.js`, `sshRoutes.js`, `workspaceRoutes.js`, `agentRoutes.js`, and `gitRoutes.js`
+- Startup/shutdown coordination: `session-runner/lib/runnerLifecycle.js`
 - Browser QA orchestration: `session-runner/lib/browserQa.js` and `session-runner/bin/mapache-preview-qa.js`
 - Shared config: `session-runner/lib/config.js`
 - Harness metadata and startup hooks: `session-runner/lib/harnesses/`
@@ -30,7 +31,7 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 
 ## Current Behavior
 
-`server.js` bootstraps Express, constructs the shared services and HTTP/WebSocket servers, delegates route registration to focused modules, restores workspace state, starts the terminal process, and wires the shared upgrade dispatcher. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve. Harness resolution now happens once at startup through `createRunnerHarnessRegistry()`, which provides ordered hooks for config, auth, MCP, seeded skills, and future harness-specific initialization. Route registrars receive their service dependencies explicitly; they do not create a second server or own startup lifecycle.
+`server.js` bootstraps Express, constructs the shared services and HTTP/WebSocket servers, delegates route registration to focused modules, and wires the shared upgrade dispatcher. `runnerLifecycle.js` owns the ordered workspace restore, Chrome startup, harness materialization, Git automation setup, snapshot startup, sync-loop startup, and server listen sequence. It also owns shutdown ordering so SSH forwards close before the final profile/archive snapshot and activity update. Startup rejects before the listen step when any preparation step fails. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve. Harness resolution now happens once at startup through `createRunnerHarnessRegistry()`, which provides ordered hooks for config, auth, MCP, seeded skills, and future harness-specific initialization. Route registrars receive their service dependencies explicitly; they do not create a second server or own startup lifecycle.
 
 The protected `POST /workspace/sync-down` route lets Functions ask a running cloud session to pull workspace files from Cloud Storage into the live workspace directory after browser-side file writes. This keeps the file browser and terminal pointed at the same workspace without waiting for a later runner restart. File listing is intentionally lazy: Cloud Storage-backed listings are directory-scoped through the Functions API, and SSH-backed listings flow through `/ssh/files?path=...` so the runner inspects only the requested remote directory.
 

@@ -103,13 +103,9 @@ test("browser routes retain browser middleware and terminal response contract", 
 test("workspace routes keep runner-only sync-down protection and response code", async () => {
   const app = createFakeApp();
   registerWorkspaceRoutes({
-    activity: {updateSessionActivity: async () => {}},
-    admin: {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
     app,
-    chromeProfileSnapshots: {enabled: () => false},
-    chromeRuntime: {stop: async () => {}},
     hasRunnerAccess: () => false,
-    sshSession: {closeAll: () => {}},
+    shutdown: async () => {},
     workspaceSync: {syncDown: async () => {}, syncUp: async () => {}},
   });
 

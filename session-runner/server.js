@@ -30,6 +30,7 @@ const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
+const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
 const {registerGitRoutes} = require("./routes/gitRoutes");
@@ -86,6 +87,20 @@ const terminalSession = createTerminalSession({
     }
   },
 });
+const runnerLifecycle = createRunnerLifecycleCoordinator({
+  activity,
+  activeHarness,
+  admin,
+  chromeProfile,
+  chromeProfileSnapshots,
+  chromeRuntime,
+  config,
+  git,
+  listen: (onListening) => server.listen(config.port, onListening),
+  sshSession,
+  workspace,
+  workspaceSync,
+});
 
 app.use(express.json());
 app.use(
@@ -113,13 +128,9 @@ registerBrowserRoutes({
 registerSshRoutes({app, hasRunnerAccess, requireBrowserAccess, sshSession});
 registerPreviewRoutes({app, browserQa, config, hasRunnerAccess, preview, requireBrowserAccess, storage});
 registerWorkspaceRoutes({
-  activity,
-  admin,
   app,
-  chromeProfileSnapshots,
-  chromeRuntime,
   hasRunnerAccess,
-  sshSession,
+  shutdown: runnerLifecycle.shutdown,
   workspaceSync,
 });
 registerAgentRoutes({app, hasRunnerAccess, pi, sendPiPackageError, sendPiSkillError, workspace});
@@ -153,51 +164,11 @@ server.on("upgrade", createWebSocketUpgradeRouter({
   hasBrowserAccess,
 }));
 
-workspace.ensureWorkspace()
-    .then(async () => {
-      console.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
-      await workspace.prepareWorkspaceSource();
-      await chromeProfile.restore();
-      await chromeRuntime.start();
-      await activeHarness.materializeConfig();
-      await activeHarness.materializeAuth();
-      await activeHarness.materializeMcp();
-      await git.prepareGithubAutomationBranch();
-      await activeHarness.materializeSkills();
-      await activeHarness.materializeSubagents();
-    })
-    .then(() => {
-      chromeProfileSnapshots.start();
-      startSyncLoop();
-      server.listen(config.port, () => {
-        console.log(`session runner listening on ${config.port}`);
-      });
-    })
+runnerLifecycle.start()
     .catch((error) => {
       console.error("session runner failed to start", error);
       process.exit(1);
     });
-
-function startSyncLoop() {
-  let lastArchiveSync = 0;
-  let syncUpRunning = false;
-  setInterval(() => {
-    if (syncUpRunning) return;
-    syncUpRunning = true;
-    const now = Date.now();
-    const includeArchives = !chromeProfileSnapshots.enabled() &&
-      now - lastArchiveSync >= config.archiveSyncIntervalMs;
-    const sync = workspaceSync.syncUp({includeArchives});
-    sync
-        .then(() => {
-          if (includeArchives) lastArchiveSync = now;
-        })
-        .catch((error) => console.error("sync up failed", error))
-        .finally(() => {
-          syncUpRunning = false;
-        });
-  }, config.syncIntervalMs);
-}
 
 function hasRunnerAccess(req) {
   return Boolean(config.shutdownToken) && req.get("x-shutdown-token") === config.shutdownToken;

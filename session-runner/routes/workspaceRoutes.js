@@ -1,13 +1,9 @@
 "use strict";
 
 function registerWorkspaceRoutes({
-  activity,
-  admin,
   app,
-  chromeProfileSnapshots,
-  chromeRuntime,
   hasRunnerAccess,
-  sshSession,
+  shutdown,
   workspaceSync,
 }) {
   app.post("/workspace/sync-down", async (req, res) => {
@@ -32,18 +28,7 @@ function registerWorkspaceRoutes({
     }
 
     try {
-      sshSession.closeAll();
-      await chromeRuntime.stop();
-      if (chromeProfileSnapshots.enabled()) {
-        await chromeProfileSnapshots.stop();
-        await chromeProfileSnapshots.finalize();
-      } else {
-        await workspaceSync.syncUp({includeArchives: true});
-      }
-      await activity.updateSessionActivity({
-        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-        shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      await shutdown();
       res.json({ok: true});
     } catch (error) {
       console.error("shutdown sync failed", error);
