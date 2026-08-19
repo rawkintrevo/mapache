@@ -23,6 +23,7 @@ function createProvisioningWorker(dependencies = {}) {
       prepareProvisioningSession,
       provisionSessionService,
       releaseChromeWorkspaceSession: dependencies.releaseChromeWorkspaceSession,
+      releaseWorkspaceSyncWriterLease: dependencies.releaseWorkspaceSyncWriterLease,
       db: dependencies.db,
     }),
   };
@@ -53,6 +54,17 @@ async function provisionQueuedSession(event, dependencies) {
         await dependencies.releaseChromeWorkspaceSession(after.ref, session, "provision_failed");
       } catch (releaseError) {
         logger.warn("Chrome workspace reservation release failed after worker setup error", {
+          workspaceId,
+          sessionId: after.id,
+          error: publicGoogleError(releaseError),
+        });
+      }
+    }
+    if (markedFailure && typeof dependencies.releaseWorkspaceSyncWriterLease === "function") {
+      try {
+        await dependencies.releaseWorkspaceSyncWriterLease(after.ref, session, "provision_failed");
+      } catch (releaseError) {
+        logger.warn("Workspace sync-writer lease release failed after worker setup error", {
           workspaceId,
           sessionId: after.id,
           error: publicGoogleError(releaseError),

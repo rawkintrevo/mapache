@@ -116,6 +116,16 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
         });
       }
     }
+    if (typeof dependencies.releaseWorkspaceSyncWriterLease === "function") {
+      try {
+        await dependencies.releaseWorkspaceSyncWriterLease(sessionRef, claimedSession, "provision_failed");
+      } catch (releaseError) {
+        logger.warn("Workspace sync-writer lease release failed", {
+          serviceId: claimedSession.serviceId,
+          error: publicGoogleError(releaseError),
+        });
+      }
+    }
   }
 }
 
@@ -408,6 +418,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
+    {name: "WORKSPACE_SYNC_ROLE", value: cleanName(session.syncWriterRole || "writer") || "writer"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},
     {name: "MCP_CONFIG", value: stringifyMcpConfig(session.mcpConfig)},

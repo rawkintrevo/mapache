@@ -380,7 +380,7 @@ It is not safe for GitHub workspaces once `.git` cache and working tree cache be
 - `.git` archive upload
 - final shutdown sync
 
-The implementation therefore enforces a single active Pi/agent writer session per workspace while allowing shell-kind sessions for manual access. Later expansion to multiple agent sessions should only happen with explicit isolation, such as per-session worktrees or branch sandboxes.
+The implementation therefore enforces a single active Pi/agent writer session per workspace while allowing shell-kind sessions for manual access. Functions records this as a workspace sync-writer lease: the first eligible non-SSH session is the `writer`, additional eligible sessions are `reader` sessions, and lease release promotes the next active reader transactionally. Later expansion to multiple agent sessions should only happen with explicit isolation, such as per-session branches, worktrees, or branch sandboxes.
 
 ## Deployment Implications
 

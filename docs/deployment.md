@@ -58,6 +58,8 @@ Cloud Run create, update, and delete operations use a 240-second polling deadlin
 
 Provisioning is idempotent by operation ID. Session creation persists the operation and attempt metadata before queueing, and the Functions transaction claims each worker attempt before sending a Cloud Run create request. Retries with the same `operationId` converge on the same session and Cloud Run service; completed operations return the existing session, while failures retain a safe error plus a retryable flag for controlled retry paths. The deployed `provisionQueuedSession` Firestore trigger handles queued records outside the client request, so create-session callers should treat the returned session as in progress and follow its Firestore status changes.
 
+Workspace sync-writer ownership is also controlled by Functions transactions. Session reservation persists one writer lease per workspace and marks additional eligible sessions as readers; stop, delete, worker/Cloud Run provisioning failure, and the `reconcileWorkspaceSyncWriters` scheduled function release or repair the lease. Deploy the scheduled function with the Functions revision so existing workspaces can recover from stale owners.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.

@@ -88,6 +88,8 @@ const {
 const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {createProvisioningWorker} = require("./provisioning.worker");
+const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
+const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
 const {
   initialProvisioningMetadata,
   normalizeProvisioningOperationId,
@@ -101,11 +103,17 @@ const piService = createPiService({
   requestRunnerJson,
 });
 const qaAuthService = createQaAuthService();
+const syncWriterLeaseService = createSyncWriterLeaseService({db});
+const {
+  reconcileWorkspaceSyncWriterLease,
+  releaseWorkspaceSyncWriterLease,
+} = syncWriterLeaseService;
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
   buildGenericEnvironmentEnv: (session, entryIds) => piService.resolveGenericEnvironment(session.ownerUid, entryIds),
   markSessionStopped,
   releaseChromeWorkspaceSession,
+  releaseWorkspaceSyncWriterLease,
 });
 const {
   deleteSessionService,
@@ -118,6 +126,7 @@ const {provisionQueuedSession} = createProvisioningWorker({
   provisionSessionService,
   requireWorkspace,
   releaseChromeWorkspaceSession,
+  releaseWorkspaceSyncWriterLease,
 });
 
 const workspaceService = createWorkspaceService({
@@ -207,6 +216,19 @@ exports.provisionQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
   timeoutSeconds: 300,
 }, provisionQueuedSession);
+
+exports.reconcileWorkspaceSyncWriters = onSchedule("every 5 minutes", async () => {
+  const workspaceSnap = await db.collection("workspaces").get();
+  const results = await Promise.allSettled(workspaceSnap.docs.map((workspaceDoc) =>
+    reconcileWorkspaceSyncWriterLease(workspaceDoc.id),
+  ));
+  const failed = results.filter((result) => result.status === "rejected");
+  failed.forEach((result) => logger.error("workspace sync-writer reconciliation failed", result.reason));
+  logger.info("workspace sync-writer reconciliation complete", {
+    checked: workspaceSnap.size,
+    failed: failed.length,
+  });
+});
 
 exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
   const snap = await db.collectionGroup("sessions")
@@ -400,14 +422,16 @@ async function createSession(uid, workspaceId, payload) {
     lastError: runnerImage.canProvision ? null : "Set SESSION_RUNNER_IMAGE before provisioning Cloud Run sessions.",
   };
 
+  const syncWriterEligible = runnerImage.canProvision;
   if (isChromeSession(session)) {
     await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
       githubWorkspace: isGithubWorkspace(workspace),
+      syncWriterEligible,
     });
   } else if (isGithubWorkspace(workspace)) {
-    await reserveGithubWorkspaceSession(workspaceId, sessionRef, session);
+    await reserveGithubWorkspaceSession(workspaceId, sessionRef, session, {syncWriterEligible});
   } else {
-    await sessionRef.set(session);
+    await reserveWorkspaceSyncSession(workspaceId, sessionRef, session, {syncWriterEligible});
   }
 
   if (runnerImage.canProvision) {
@@ -709,17 +733,56 @@ function publicPreviewContentType(filePath) {
   return types[extension] || "application/octet-stream";
 }
 
-async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
+async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, options = {}) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
   await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(sessionCollection(workspaceId));
-    const activeSession = snap.docs.find((doc) => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
+    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    const lease = resolveSyncWriterLease(
+        workspaceSnap.data(),
+        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
+        session,
+        sessionRef.id,
+        {
+          eligible: options.syncWriterEligible,
+          now: admin.firestore.FieldValue.serverTimestamp(),
+        },
+    );
+    if (Object.keys(lease.workspaceUpdates).length) transaction.update(workspaceRef, lease.workspaceUpdates);
+    if (options.create === false) {
+      transaction.update(sessionRef, lease.sessionUpdates);
+    } else {
+      transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
+    }
+  });
+}
+
+async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
+  await db.runTransaction(async (transaction) => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
+    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    const activeSession = sessionsSnap.docs.find((doc) => {
       const active = doc.data();
       return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
     }
-    transaction.set(sessionRef, session);
+    const lease = resolveSyncWriterLease(
+        workspaceSnap.data(),
+        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
+        session,
+        sessionRef.id,
+        {
+          eligible: options.syncWriterEligible,
+          now: admin.firestore.FieldValue.serverTimestamp(),
+        },
+    );
+    if (Object.keys(lease.workspaceUpdates).length) transaction.update(workspaceRef, lease.workspaceUpdates);
+    transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
   });
 }
 
@@ -743,13 +806,25 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       }
     }
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    const lease = resolveSyncWriterLease(
+        workspaceSnap.data(),
+        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
+        session,
+        sessionRef.id,
+        {
+          eligible: options.syncWriterEligible,
+          now: admin.firestore.FieldValue.serverTimestamp(),
+        },
+    );
     transaction.update(workspaceRef, {
       activeChromeSessionId: sessionRef.id,
       activeChromeSessionState: session.status || "provisioning",
       activeChromeSessionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...lease.workspaceUpdates,
     });
-    if (options.create !== false) transaction.set(sessionRef, session);
+    if (options.create !== false) transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
+    else transaction.update(sessionRef, lease.sessionUpdates);
   });
 }
 
@@ -830,6 +905,7 @@ async function restartSession(uid, workspaceId, sessionId) {
     await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
       create: false,
       githubWorkspace: isGithubWorkspace(workspace),
+      syncWriterEligible: true,
     });
   }
 
@@ -879,6 +955,13 @@ async function restartSession(uid, workspaceId, sessionId) {
     serviceId: session.serviceId || `session-${sessionId.toLowerCase()}`,
     serviceName: session.serviceName || cloudRunServiceName(session.region || DEFAULT_REGION, session.serviceId || `session-${sessionId.toLowerCase()}`),
   };
+
+  if (recreatingSessionService && !isChromeSession(session)) {
+    await reserveWorkspaceSyncSession(workspaceId, sessionRef, restartedSession, {
+      create: false,
+      syncWriterEligible: true,
+    });
+  }
 
   if (recreatingSessionService) {
     await provisionSessionService(
@@ -1015,6 +1098,16 @@ function sessionCollection(workspaceId) {
 }
 
 async function markSessionStopped(sessionRef, session, reason) {
+  try {
+    await releaseWorkspaceSyncWriterLease(sessionRef, session, reason);
+  } catch (error) {
+    logger.warn("Workspace sync-writer lease release failed while stopping session", {
+      workspaceId: session.workspaceId,
+      sessionId: sessionRef.id,
+      reason: reason || "unspecified",
+      error: error.message || String(error),
+    });
+  }
   const stoppedAt = admin.firestore.Timestamp.now();
   const usageRecord = sessionUsageRecord(sessionRef, session, stoppedAt);
   const stopped = sessionStatusUpdate(session, "stopped", {
