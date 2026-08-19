@@ -34,6 +34,26 @@ function createWorkspaceFileState() {
 }
 
 describe("workspace file workflow", () => {
+  test("ignores a file response after the selected session changes", async () => {
+    const state = createWorkspaceFileState();
+    let resolveRequest;
+    state.api.getWorkspaceFiles = vi.fn(() => new Promise((resolve) => {
+      resolveRequest = resolve;
+    }));
+    const request = {isCurrent: () => state.selectedSessionId === "session-a"};
+    state.selectedSessionId = "session-a";
+
+    const load = loadWorkspaceFilesState(state, "", request);
+    state.selectedSessionId = "session-b";
+    resolveRequest({
+      files: [{path: "from-session-a.md", name: "from-session-a.md", type: "file", size: 1}],
+      truncated: false,
+    });
+    await load;
+
+    expect(state.workspaceFiles).toEqual([]);
+  });
+
   test("loads root files first and fetches directory children on expansion", async () => {
     const state = createWorkspaceFileState();
     await loadWorkspaceFilesState(state);

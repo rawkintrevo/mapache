@@ -15,9 +15,9 @@ import {
   resetWorkspaceFiles as resetWorkspaceFilesState,
 } from "../state/resetters.js";
 
-export function createWorkspaceFilesController({state, render, runBusy}) {
-  async function loadWorkspaceFiles(path = "") {
-    await loadWorkspaceFilesState(state, path);
+export function createWorkspaceFilesController({state, render, runBusy, captureSessionRequest = () => undefined}) {
+  async function loadWorkspaceFiles(path = "", request = captureSessionRequest()) {
+    await loadWorkspaceFilesState(state, path, request);
   }
 
   async function refreshWorkspaceFiles() {

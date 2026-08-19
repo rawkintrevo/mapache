@@ -4,6 +4,7 @@ import {
   friendlyWorkspaceSubagentSaveError,
 } from "../utils/friendlyErrors.js";
 import {sessionSubagentHarness, sessionSupportsSubagents} from "../utils/sessionHarnesses.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
 function createDefaultSubagentInstructions(harness) {
   const label = harness?.label || "the active harness";
@@ -55,7 +56,7 @@ export function cancelWorkspaceSubagentEditState(state) {
   };
 }
 
-export async function loadWorkspaceSubagentsState({state, render}) {
+export async function loadWorkspaceSubagentsState({state, render, request}) {
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   const session = selectedSession(state);
@@ -70,6 +71,7 @@ export async function loadWorkspaceSubagentsState({state, render}) {
     render();
     return;
   }
+  if (!isCurrentSessionRequest(request)) return;
   if (!sessionSupportsSubagents(session)) {
     state.workspaceSubagents = {
       ...state.workspaceSubagents,
@@ -93,6 +95,7 @@ export async function loadWorkspaceSubagentsState({state, render}) {
 
   try {
     const data = await state.api.getWorkspaceSubagents(workspaceId, sessionId);
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceSubagents = {
       ...state.workspaceSubagents,
       loading: false,
@@ -101,6 +104,7 @@ export async function loadWorkspaceSubagentsState({state, render}) {
       data: data || {subagents: []},
     };
   } catch (error) {
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceSubagents = {
       ...state.workspaceSubagents,
       loading: false,

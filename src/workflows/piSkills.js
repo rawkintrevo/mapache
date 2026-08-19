@@ -4,6 +4,7 @@ import {
   friendlyWorkspaceSkillSaveError,
 } from "../utils/friendlyErrors.js";
 import {sessionSkillHarness, sessionSupportsWorkspaceSkills} from "../utils/sessionSkills.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
 function stripFrontmatter(content) {
   return String(content || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
@@ -59,7 +60,7 @@ export function cancelWorkspaceSkillEditState(state) {
   };
 }
 
-export async function loadWorkspaceSkillsState({state, render}) {
+export async function loadWorkspaceSkillsState({state, render, request}) {
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   const session = selectedSession(state);
@@ -75,6 +76,7 @@ export async function loadWorkspaceSkillsState({state, render}) {
     render();
     return;
   }
+  if (!isCurrentSessionRequest(request)) return;
   if (!sessionSupportsWorkspaceSkills(session)) {
     state.workspaceSkills = {
       ...state.workspaceSkills,
@@ -98,6 +100,7 @@ export async function loadWorkspaceSkillsState({state, render}) {
 
   try {
     const data = await state.api.getWorkspaceSkills(workspaceId, sessionId);
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceSkills = {
       ...state.workspaceSkills,
       loading: false,
@@ -106,6 +109,7 @@ export async function loadWorkspaceSkillsState({state, render}) {
       data: data || {skills: [], harness: harness?.id || ""},
     };
   } catch (error) {
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceSkills = {
       ...state.workspaceSkills,
       loading: false,

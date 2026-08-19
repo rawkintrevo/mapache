@@ -50,7 +50,7 @@ import {
 import {sessionSkillHarness} from "../utils/sessionSkills.js";
 import {sessionSubagentHarness} from "../utils/sessionHarnesses.js";
 
-export function createPiPanelsController({state, render}) {
+export function createPiPanelsController({state, render, captureSessionRequest = () => undefined}) {
   function resetPiPackages() {
     resetPiPackagesState(state);
   }
@@ -71,20 +71,20 @@ export function createPiPanelsController({state, render}) {
     resetMcpServersState(state);
   }
 
-  async function loadPiPackages() {
-    await loadPiPackagesState({state, resetPiPackages, render});
+  async function loadPiPackages(request = captureSessionRequest()) {
+    await loadPiPackagesState({state, resetPiPackages, render, request});
   }
 
-  async function loadWorkspaceSkills() {
-    await loadWorkspaceSkillsState({state, render});
+  async function loadWorkspaceSkills(request = captureSessionRequest()) {
+    await loadWorkspaceSkillsState({state, render, request});
   }
 
   async function loadPiAuth(options = {}) {
     await loadPiAuthState({state, render, options});
   }
 
-  async function loadWorkspaceSubagents() {
-    await loadWorkspaceSubagentsState({state, render});
+  async function loadWorkspaceSubagents(request = captureSessionRequest()) {
+    await loadWorkspaceSubagentsState({state, render, request});
   }
 
   async function loadMcpServers() {

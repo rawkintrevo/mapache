@@ -5,8 +5,9 @@ import {
 } from "../services/workspaceStorage.js";
 import {resetFileEditor as resetFileEditorState} from "../state/resetters.js";
 import {friendlyFilesError} from "../utils/friendlyErrors.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
-export async function loadWorkspaceFilesState(state, path = "") {
+export async function loadWorkspaceFilesState(state, path = "", request) {
   const cleanPath = cleanDirectoryPath(path);
   state.workspaceFilesError = "";
   state.workspaceFilesWorkspaceId = workspaceFileScopeId(state);
@@ -17,6 +18,7 @@ export async function loadWorkspaceFilesState(state, path = "") {
     const data = sshSession ?
       await state.api.getSshSessionFiles(state.selectedWorkspaceId, sshSession.id, cleanPath) :
       await state.api.getWorkspaceFiles(state.selectedWorkspaceId, cleanPath);
+    if (!isCurrentSessionRequest(request)) return;
     if (!cleanPath) {
       state.workspaceFileLoadedDirs = new Set();
       state.expandedFilePaths = new Set();
@@ -25,6 +27,7 @@ export async function loadWorkspaceFilesState(state, path = "") {
     state.workspaceFileLoadedDirs.add(cleanPath);
     state.workspaceFilesTruncated = Boolean(data.truncated);
   } catch (error) {
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceFilesError = friendlyFilesError(error);
   }
 }
