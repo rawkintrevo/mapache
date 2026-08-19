@@ -25,7 +25,8 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 - Chrome harness integration: `session-runner/lib/mcpConfig.service.js`, `browserQa.js`, `workspaceSkillCatalog.js`, `seeded-skills/mapache-chrome/`, and `bin/mapache-chrome-status.js`
 - GitHub workspace reconstruction: `session-runner/lib/workspaceGithub.service.js`
 - Harness-backed auth materialization: `session-runner/lib/workspaceAuth.service.js`, `session-runner/lib/workspacePiAuth.service.js`
-- Git endpoints: `session-runner/lib/git.js` and `git*.service.js`
+- Git facade and manual endpoints: `session-runner/lib/git.js` and `git*.service.js`
+- GitHub automation lifecycle: `session-runner/lib/gitAutomation.service.js`
 - Pi/package/workspace-skill/subagent endpoints: `session-runner/lib/pi.js`, `piPackage.service.js`, `workspaceSkill.service.js`, `piSkill.service.js`, `workspaceSubagent.service.js`
 - Harness-neutral seeded skill catalog and profiles: `session-runner/lib/workspaceSkillCatalog.js` and `session-runner/seeded-skills/`
 - Codex workspace guidance and native skill materialization: `session-runner/lib/codex.js`, `session-runner/lib/codexSeededWorkspace.service.js`, and `session-runner/seeded-codex/AGENTS.md`
