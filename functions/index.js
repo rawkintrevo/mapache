@@ -82,6 +82,7 @@ const {
 const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
+const {createSshSessionService} = require("./sshSession.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
@@ -122,6 +123,15 @@ const {
   servePublicPreview,
   shareSessionPreview,
 } = previewService;
+const sshSessionService = createSshSessionService({requestRunnerJson, requireSession});
+const {
+  closeSshSessionForward,
+  createSshSessionForward,
+  listSshSessionFiles,
+  listSshSessionForwards,
+  readSshSessionFile,
+  saveSshSessionFile,
+} = sshSessionService;
 const runnerImageFreshnessService = createRunnerImageFreshnessService();
 const {getCurrentRunnerImageDigest} = runnerImageFreshnessService;
 const getCurrentRunnerImageDigestForSession = (session) =>
@@ -552,63 +562,6 @@ async function prepareSessionForProvisioning(session = {}) {
       SSH_KNOWN_HOSTS: secrets.knownHosts || "",
     },
   };
-}
-
-async function listSshSessionFiles(uid, workspaceId, sessionId, directoryPath = "") {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/files?path=${encodeURIComponent(String(directoryPath || ""))}`, {
-    unavailableError: "runner_ssh_files_unavailable",
-  });
-}
-
-async function readSshSessionFile(uid, workspaceId, sessionId, filePath) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/file?path=${encodeURIComponent(String(filePath || ""))}`, {
-    unavailableError: "runner_ssh_file_unavailable",
-  });
-}
-
-async function saveSshSessionFile(uid, workspaceId, sessionId, filePath, payload) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/file?path=${encodeURIComponent(String(filePath || ""))}`, {
-    method: "PUT",
-    body: {content: String(payload && payload.content || "")},
-    unavailableError: "runner_ssh_file_save_unavailable",
-  });
-}
-
-async function listSshSessionForwards(uid, workspaceId, sessionId) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, "/ssh/ports", {
-    unavailableError: "runner_ssh_ports_unavailable",
-  });
-}
-
-async function createSshSessionForward(uid, workspaceId, sessionId, payload) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, "/ssh/ports", {
-    method: "POST",
-    body: {port: payload && payload.port},
-    unavailableError: "runner_ssh_port_unavailable",
-  });
-}
-
-async function closeSshSessionForward(uid, workspaceId, sessionId, port) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/ports/${encodeURIComponent(String(port || ""))}`, {
-    method: "DELETE",
-    unavailableError: "runner_ssh_port_close_unavailable",
-  });
-}
-
-async function requireRunningSshSession(uid, workspaceId, sessionId) {
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") {
-    throw httpError(400, "ssh_session_required");
-  }
-  if (!session.serviceUrl || !session.shutdownToken) throw httpError(409, "session_not_running");
-  return session;
 }
 
 async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, options = {}) {

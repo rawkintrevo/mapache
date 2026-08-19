@@ -21,6 +21,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Workspaces/files: `functions/workspace.service.js`, with live runner materialization coordinated by `functions/index.js`
 - Cloud Run sessions: `functions/cloudRun.service.js`
 - Preview publication, public serving, and signed session access URLs: `functions/preview.service.js`
+- SSH session file and port-forward proxies: `functions/sshSession.service.js`
 - GitHub App and PR flows: `functions/github.service.js`
 - Pi auth, packages, workspace skills, and workspace subagents: `functions/pi.service.js`
 - Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
