@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {registerBrowserRoutes} = require("./browserPreviewRoutes");
 const {registerWorkspaceRoutes} = require("./workspaceRoutes");
+const {registerGoogleMcpRoutes} = require("./googleMcpRoutes");
 
 function createFakeApp() {
   const routes = [];
@@ -115,4 +116,20 @@ test("workspace routes keep runner-only sync-down protection and response code",
 
   assert.equal(res.statusCode, 404);
   assert.deepEqual(res.body, {error: "not_found"});
+});
+
+test("Google MCP status route requires runner access and returns safe status", async () => {
+  const app = createFakeApp();
+  registerGoogleMcpRoutes({
+    app,
+    googleMcpStatus: () => ({ok: true, supported: true, servers: []}),
+    hasRunnerAccess: (req) => req.authorized === true,
+  });
+  const route = app.routes.find(({method, path}) => method === "GET" && path === "/google/mcp/status");
+  const unauthorized = createResponse();
+  await route.handlers[0]({authorized: false}, unauthorized);
+  assert.equal(unauthorized.statusCode, 404);
+  const authorized = createResponse();
+  await route.handlers[0]({authorized: true}, authorized);
+  assert.deepEqual(authorized.body, {ok: true, supported: true, servers: []});
 });

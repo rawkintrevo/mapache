@@ -18,6 +18,7 @@ const {createGitService} = require("./lib/git");
 const {createRunnerHarnessRegistry} = require("./lib/harnesses");
 const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
 const {createMcpConfigService} = require("./lib/mcpConfig.service");
+const {createGoogleMcpStatusService} = require("./lib/googleMcpStatus.service");
 const {createPreviewService} = require("./lib/preview");
 const {createSshSessionService} = require("./lib/sshSession");
 const {admin, db, storage} = require("./lib/services");
@@ -34,6 +35,7 @@ const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
 const {registerGitRoutes} = require("./routes/gitRoutes");
+const {registerGoogleMcpRoutes} = require("./routes/googleMcpRoutes");
 const {registerSshRoutes} = require("./routes/sshRoutes");
 const {registerWorkspaceRoutes} = require("./routes/workspaceRoutes");
 
@@ -70,6 +72,7 @@ const chromeProfileSnapshots = createChromeProfileSnapshotService({
 });
 const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const mcpConfig = createMcpConfigService({config});
+const googleMcpStatus = createGoogleMcpStatusService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
 const terminalSession = createTerminalSession({
@@ -136,6 +139,7 @@ registerWorkspaceRoutes({
 });
 registerAgentRoutes({app, hasRunnerAccess, pi, sendPiPackageError, sendPiSkillError, workspace});
 registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAccess});
+registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 
 wss.on("connection", (socket, request) => {
   if (!hasBrowserAccess(request)) {

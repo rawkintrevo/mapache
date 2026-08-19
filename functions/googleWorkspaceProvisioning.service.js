@@ -39,7 +39,13 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
   ]));
   return {
     mcpConfig: normalizeMcpConfigPayload({mcpServers: {...base.mcpServers, ...googleServers}}),
-    env: {[ACCESS_TOKEN_ENV]: refreshed.accessToken},
+    env: {
+      [ACCESS_TOKEN_ENV]: refreshed.accessToken,
+      GOOGLE_MCP_CONNECTION_STATUS: "connected",
+      GOOGLE_MCP_ACCOUNT_EMAIL: connection.email || "",
+      GOOGLE_MCP_ACCOUNT_NAME: connection.displayName || "",
+      GOOGLE_MCP_ENABLED_SERVICES: JSON.stringify(services.map((service) => service.key)),
+    },
     connection: {
       connectionId: connection.connectionId,
       email: connection.email,
