@@ -25,7 +25,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Preview publication, public serving, and signed session access URLs: `functions/preview.service.js`
 - SSH session file and port-forward proxies: `functions/sshSession.service.js`
 - Git session status/action/PR proxies: `functions/gitSession.service.js`
-- GitHub App and PR orchestration: `functions/github.service.js`; injected GitHub HTTP/JWT client: `functions/githubClient.service.js`
+- GitHub account connection workflows: `functions/githubConnection.service.js`; source/PR orchestration: `functions/github.service.js`; injected GitHub HTTP/JWT client: `functions/githubClient.service.js`
 - Generic environment-key storage, redaction, CRUD, and runner resolution: `functions/environmentKeys.service.js`
 - Agent credential storage, compatibility reads/writes, selection, and materialization: `functions/agentAuth.service.js`
 - OpenAI Codex device-code/OAuth flow and token normalization: `functions/openAiCodexAuth.service.js`
@@ -65,7 +65,7 @@ Workspace subagents use parallel neutral session routes at `/api/workspaces/{wor
 
 Website sessions with preview capability can create a public share preview through `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/share-preview`. The API verifies workspace/session ownership, requires a running preview-capable session, generates an unguessable token, asks the runner to upload only the configured static preview root, and stores metadata in `publicPreviews/{token}`. Public reads use unauthenticated `GET /api/public-previews/{token}/...`, which serves objects from the recorded Cloud Storage prefix with SPA fallback to `index.html`. These public routes do not expose source files, session runner URLs, browser-access tokens, shutdown tokens, environment variables, or workspace storage prefixes.
 
-GitHub connector account routes live under `/api/github/**` and are orchestrated by `functions/github.service.js`, which delegates OAuth, App JWT, installation-token, repository, pagination, and pull-request HTTP calls to the injected `functions/githubClient.service.js`. `GET /api/github/connection` returns safe connection metadata from `githubUsers/{uid}` and installation docs without token material. `GET /api/github/repos` refreshes the connected repository view through short-lived installation tokens. `POST /api/github/disconnect` performs a soft disconnect by marking the user connection disconnected and installation docs removed; it does not delete workspace source metadata or revoke/delete any secret material.
+GitHub connector account routes live under `/api/github/**` and are implemented by `functions/githubConnection.service.js`, which delegates OAuth and installation HTTP calls to the injected `functions/githubClient.service.js`. `GET /api/github/connection` returns safe connection metadata from `githubUsers/{uid}` and installation docs without token material. `GET /api/github/repos` refreshes the connected repository view through the GitHub service and short-lived installation tokens. `POST /api/github/disconnect` performs a soft disconnect by marking the user connection disconnected and installation docs removed; it does not delete workspace source metadata or revoke/delete any secret material.
 
 ## Invariants
 

@@ -1,9 +1,7 @@
 "use strict";
 
-const crypto = require("crypto");
 const logger = require("firebase-functions/logger");
 const {
-  admin,
   db,
 } = require("./backendContext");
 const {
@@ -20,20 +18,31 @@ const {
   normalizeGithubInstallationId,
   normalizeGithubTokenPermissions,
 } = require("./githubClient.service");
+const {
+  createGithubConnectionService,
+  normalizeGithubConnectionStatus,
+  normalizeGithubInstallationIds,
+  normalizeGithubInstallationRecord,
+  normalizeGithubReturnTo,
+} = require("./githubConnection.service");
 
 function createGithubService(dependencies = {}) {
   const githubClient = dependencies.githubClient || createGithubClientService(dependencies);
+  const githubConnection = dependencies.githubConnectionService || createGithubConnectionService({
+    ...dependencies,
+    githubClient,
+  });
   return {
     buildGithubAuthEnv: (session) => buildGithubAuthEnv(session, githubClient),
-    createGithubConnectUrl: (uid, req) => createGithubConnectUrl(uid, req, githubClient),
+    createGithubConnectUrl: githubConnection.createGithubConnectUrl,
     createGithubInstallationToken: githubClient.createGithubInstallationToken,
-    disconnectGithub,
-    getGithubConnection,
-    handleGithubCallback: (req, res) => handleGithubCallback(req, res, githubClient),
+    disconnectGithub: githubConnection.disconnectGithub,
+    getGithubConnection: githubConnection.getGithubConnection,
+    handleGithubCallback: githubConnection.handleGithubCallback,
     isConnectedGithubSourcePayload,
     listConnectedRepos: (uid) => listConnectedRepos(uid, githubClient),
     normalizeConnectedGithubSourcePayload: (uid, source, options) =>
-      normalizeConnectedGithubSourcePayload(uid, source, options, githubClient),
+      normalizeConnectedGithubSourcePayload(uid, source, options, githubClient, githubConnection),
     openPullRequestForSession: (session, payload, requestRunnerGitOpenPr) =>
       openPullRequestForSession(session, payload, requestRunnerGitOpenPr, githubClient),
     sessionSourceMetadata,
@@ -48,7 +57,7 @@ function isConnectedGithubSourcePayload(source) {
   return Boolean(cleanGithubNumericId(source && source.installationId) || cleanGithubNumericId(source && source.repoId));
 }
 
-async function normalizeConnectedGithubSourcePayload(uid, source, options = {}, githubClient) {
+async function normalizeConnectedGithubSourcePayload(uid, source, options = {}, githubClient, githubConnection) {
   if (!githubClient.isGithubAppConfigured()) {
     throw httpError(503, "github_app_not_configured");
   }
@@ -58,7 +67,7 @@ async function normalizeConnectedGithubSourcePayload(uid, source, options = {}, 
   const expectedOwner = cleanGithubValue(source.owner).toLowerCase();
   const expectedRepo = cleanGithubValue(source.repo).toLowerCase();
   const requestedRepoUrl = cleanGithubValue(source.repoUrl || source.url);
-  await requireGithubInstallationForUser(uid, installationId);
+  await githubConnection.requireGithubInstallationForUser(uid, installationId);
   const tokenResponse = await githubClient.createGithubInstallationToken(installationId);
   const repos = await githubClient.listGithubInstallationRepositories(installationId, tokenResponse.token);
   const matchedRepo = repos.find((repo) => {
@@ -102,24 +111,6 @@ async function normalizeConnectedGithubSourcePayload(uid, source, options = {}, 
       ownerUid: uid,
     },
   };
-}
-
-async function requireGithubInstallationForUser(uid, installationId) {
-  const [userSnap, installationDoc] = await Promise.all([
-    githubUserDoc(uid).get(),
-    githubInstallationCollection(uid).doc(installationId).get(),
-  ]);
-  if (!installationDoc.exists) {
-    throw httpError(403, "github_installation_forbidden");
-  }
-
-  const userData = userSnap.exists ? userSnap.data() || {} : {};
-  const allowedInstallationIds = new Set(normalizeGithubInstallationIds(userData.installationIds));
-  const installation = normalizeGithubInstallationRecord(uid, installationDoc.id, installationDoc.data(), allowedInstallationIds);
-  if (!installation) {
-    throw httpError(403, "github_installation_forbidden");
-  }
-  return installation;
 }
 
 async function buildGithubAuthEnv(session, githubClient) {
@@ -243,105 +234,6 @@ async function listConnectedRepos(uid, githubClient) {
   return {repos};
 }
 
-async function getGithubConnection(uid) {
-  const [userSnap, installationSnap] = await Promise.all([
-    githubUserDoc(uid).get(),
-    githubInstallationCollection(uid).get(),
-  ]);
-  return normalizeGithubConnectionStatus(
-      uid,
-      userSnap.exists ? userSnap.data() || {} : null,
-      installationSnap.docs.map((doc) => ({id: doc.id, data: doc.data() || {}})),
-  );
-}
-
-async function disconnectGithub(uid) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const installationSnap = await githubInstallationCollection(uid).get();
-  const batch = db.batch();
-  batch.set(githubUserDoc(uid), {
-    firebaseUid: uid,
-    connectionStatus: "disconnected",
-    installationIds: [],
-    updatedAt: now,
-  }, {merge: true});
-  installationSnap.docs.forEach((doc) => {
-    batch.set(doc.ref, {
-      installationStatus: "removed",
-      removedAt: now,
-      updatedAt: now,
-    }, {merge: true});
-  });
-  await batch.commit();
-  return getGithubConnection(uid);
-}
-
-async function createGithubConnectUrl(uid, req, githubClient) {
-  if (!githubClient.isGithubOAuthConfigured()) {
-    throw httpError(503, "github_oauth_not_configured");
-  }
-
-  const state = crypto.randomBytes(24).toString("base64url");
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  await githubOAuthStateDoc(state).set({
-    uid,
-    returnTo: normalizeGithubReturnTo(req.query.returnTo || req.get("referer") || req.get("origin")),
-    createdAt: now,
-    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (10 * 60 * 1000)),
-  });
-
-  const url = new URL("https://github.com/login/oauth/authorize");
-  url.searchParams.set("client_id", githubClient.getGithubOAuthClientId());
-  url.searchParams.set("state", state);
-  url.searchParams.set("redirect_uri", githubCallbackUrl(req));
-  return {url: url.toString()};
-}
-
-async function handleGithubCallback(req, res, githubClient) {
-  const code = cleanGithubValue(req.query.code);
-  const state = cleanGithubValue(req.query.state);
-  if (!code || !state) {
-    res.status(400).send("Missing GitHub authorization code or state.");
-    return;
-  }
-  if (!githubClient.isGithubOAuthConfigured()) {
-    res.status(503).send("GitHub OAuth is not configured.");
-    return;
-  }
-
-  const stateRef = githubOAuthStateDoc(state);
-  const stateSnap = await stateRef.get();
-  if (!stateSnap.exists) {
-    res.status(400).send("GitHub authorization state expired or was not found.");
-    return;
-  }
-
-  const stateData = stateSnap.data() || {};
-  await stateRef.delete();
-  const uid = cleanGithubValue(stateData.uid);
-  if (!uid || githubStateExpired(stateData)) {
-    res.status(400).send("GitHub authorization state expired or was invalid.");
-    return;
-  }
-
-  const tokenResponse = await githubClient.exchangeGithubOAuthCode(code, githubCallbackUrl(req));
-  const accessToken = cleanGithubToken(tokenResponse.access_token);
-  if (!accessToken) {
-    throw httpError(502, "github_oauth_token_failed");
-  }
-
-  const [githubUser, installations] = await Promise.all([
-    githubClient.requestGithubJson("https://api.github.com/user", accessToken, {
-      failureError: "github_user_lookup_failed",
-    }),
-    githubClient.listGithubUserInstallations(accessToken),
-  ]);
-  await storeGithubConnection(uid, githubUser, installations);
-
-  const redirectTo = cleanGithubValue(stateData.returnTo) || "/";
-  res.status(302).set("Location", redirectTo).send("GitHub connected.");
-}
-
 async function openPullRequestForSession(session, payload, requestRunnerGitOpenPr, githubClient) {
   if (cleanName(session.sourceType) !== "github") {
     throw httpError(400, "not_git_workspace");
@@ -413,78 +305,6 @@ async function openPullRequestForSession(session, payload, requestRunnerGitOpenP
   };
 }
 
-function githubCallbackUrl(req) {
-  const host = req.get("x-forwarded-host") || req.get("host") || "";
-  const proto = req.get("x-forwarded-proto") || req.protocol || "https";
-  return `${proto}://${host}/api/github/callback`;
-}
-
-function normalizeGithubReturnTo(value) {
-  const fallback = "/";
-  const rawValue = String(value || "").trim();
-  if (!rawValue) {
-    return fallback;
-  }
-  try {
-    const url = new URL(rawValue);
-    if (url.protocol === "https:" || url.protocol === "http:") {
-      return url.toString().slice(0, 512);
-    }
-  } catch (error) {
-    return fallback;
-  }
-  return fallback;
-}
-
-function githubStateExpired(value) {
-  const expiresAt = value && value.expiresAt;
-  return expiresAt && typeof expiresAt.toMillis === "function" && expiresAt.toMillis() < Date.now();
-}
-
-async function storeGithubConnection(uid, githubUser, installations) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const installationIds = installations
-      .map((installation) => cleanGithubNumericId(installation && installation.id))
-      .filter(Boolean);
-  const batch = db.batch();
-  batch.set(githubUserDoc(uid), {
-    firebaseUid: uid,
-    githubUserId: cleanGithubNumericId(githubUser && githubUser.id),
-    githubLogin: cleanGithubValue(githubUser && githubUser.login),
-    displayName: cleanGithubValue(githubUser && githubUser.name),
-    avatarUrl: cleanGithubValue(githubUser && githubUser.avatar_url),
-    connectionStatus: "connected",
-    installationIds,
-    updatedAt: now,
-    lastSyncedAt: now,
-    createdAt: now,
-  }, {merge: true});
-
-  installations.forEach((installation) => {
-    const installationId = cleanGithubNumericId(installation && installation.id);
-    if (!installationId) return;
-    const account = installation.account || {};
-    batch.set(githubInstallationCollection(uid).doc(installationId), {
-      installationId,
-      ownerUid: uid,
-      githubAccountId: cleanGithubNumericId(account.id),
-      githubAccountLogin: cleanGithubValue(account.login),
-      githubAccountType: cleanGithubValue(account.type),
-      repositorySelection: cleanGithubValue(installation.repository_selection),
-      appId: cleanGithubNumericId(installation.app_id),
-      permissionSet: normalizeGithubTokenPermissions(installation.permissions),
-      installationStatus: "active",
-      webhookConfigured: true,
-      updatedAt: now,
-      lastSyncedAt: now,
-      createdAt: now,
-      removedAt: null,
-    }, {merge: true});
-  });
-
-  await batch.commit();
-}
-
 function githubUserDoc(uid) {
   return db.collection("githubUsers").doc(uid);
 }
@@ -495,108 +315,6 @@ function githubInstallationCollection(uid) {
 
 function githubInstallationRepoCollection(uid, installationId) {
   return githubInstallationCollection(uid).doc(installationId).collection("repositories");
-}
-
-function githubOAuthStateDoc(state) {
-  return db.collection("githubOAuthStates").doc(state);
-}
-
-function normalizeGithubInstallationIds(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-      .map(cleanGithubNumericId)
-      .filter(Boolean);
-}
-
-function normalizeGithubInstallationRecord(uid, installationId, value, allowedInstallationIds) {
-  const normalizedInstallationId = cleanGithubNumericId(installationId || value && value.installationId);
-  if (!normalizedInstallationId) {
-    return null;
-  }
-  if (allowedInstallationIds.size && !allowedInstallationIds.has(normalizedInstallationId)) {
-    return null;
-  }
-
-  const ownerUid = cleanGithubValue(value && value.ownerUid);
-  if (ownerUid && ownerUid !== uid) {
-    return null;
-  }
-
-  const status = cleanName(value && value.installationStatus).toLowerCase();
-  if (status && status !== "active") {
-    return null;
-  }
-
-  return {
-    installationId: normalizedInstallationId,
-    githubAccountLogin: cleanGithubValue(value && value.githubAccountLogin),
-    repositorySelection: cleanGithubValue(value && value.repositorySelection),
-  };
-}
-
-function normalizeGithubConnectionStatus(uid, userData, installationRecords) {
-  const data = userData && typeof userData === "object" ? userData : {};
-  const allowedInstallationIds = new Set(normalizeGithubInstallationIds(data.installationIds));
-  const installations = (Array.isArray(installationRecords) ? installationRecords : [])
-      .map((record) => normalizeGithubConnectionInstallation(
-          uid,
-          record && record.id,
-          record && record.data,
-          allowedInstallationIds,
-      ))
-      .filter(Boolean);
-  const statusFromData = cleanName(data.connectionStatus).toLowerCase();
-  let connectionStatus = statusFromData || (
-    cleanGithubValue(data.githubLogin) || cleanGithubNumericId(data.githubUserId) ? "connected" : "not_connected"
-  );
-  if (connectionStatus === "disconnected") {
-    connectionStatus = "not_connected";
-  }
-  if (connectionStatus === "connected" && installations.some((installation) => installation.status === "needs_reauth")) {
-    connectionStatus = "needs_reauth";
-  }
-
-  return {
-    connected: connectionStatus === "connected" || connectionStatus === "needs_reauth",
-    connectionStatus,
-    githubUserId: cleanGithubNumericId(data.githubUserId),
-    githubLogin: cleanGithubValue(data.githubLogin),
-    displayName: cleanGithubValue(data.displayName),
-    avatarUrl: cleanGithubValue(data.avatarUrl),
-    installationCount: installations.length,
-    installationAccounts: installations,
-  };
-}
-
-function normalizeGithubConnectionInstallation(uid, installationId, value, allowedInstallationIds) {
-  const data = value && typeof value === "object" ? value : {};
-  const normalizedInstallationId = cleanGithubNumericId(installationId || data.installationId);
-  if (!normalizedInstallationId) {
-    return null;
-  }
-  if (allowedInstallationIds.size && !allowedInstallationIds.has(normalizedInstallationId)) {
-    return null;
-  }
-
-  const ownerUid = cleanGithubValue(data.ownerUid);
-  if (ownerUid && ownerUid !== uid) {
-    return null;
-  }
-
-  const status = cleanName(data.installationStatus).toLowerCase() || "active";
-  if (status === "removed" || status === "disconnected") {
-    return null;
-  }
-
-  return {
-    installationId: normalizedInstallationId,
-    accountLogin: cleanGithubValue(data.githubAccountLogin),
-    accountType: cleanGithubValue(data.githubAccountType),
-    repositorySelection: cleanGithubValue(data.repositorySelection),
-    status,
-  };
 }
 
 async function listStoredGithubInstallationRepositories(uid, installationId) {
