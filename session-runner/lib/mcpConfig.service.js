@@ -24,7 +24,7 @@ function createMcpConfigService({config}) {
   const mcpConfig = runnerMcpConfig(config);
 
   async function materializeMcpConfig(harness = null) {
-    await writeJsonFile(path.join(config.workspaceDir, ".mcp.json"), mcpConfig);
+    await writeJsonFile(path.join(config.workspaceDir, ".mcp.json"), piMcpConfig(mcpConfig));
     const harnessId = harness && harness.id ? harness.id : String(config.harnessId || config.terminalKind || "").trim().toLowerCase();
     if (harnessId === "codex") {
       const targetPath = config.codexConfigPath || path.join(config.workspaceDir, ".codex", "config.toml");
@@ -53,6 +53,35 @@ function runnerMcpConfig(config = {}) {
       },
     },
   };
+}
+
+function piMcpConfig(mcpConfig = {}) {
+  return {
+    mcpServers: Object.fromEntries(Object.entries(mcpConfig.mcpServers || {}).map(([name, server]) => [
+      name,
+      piMcpServer(server),
+    ])),
+  };
+}
+
+function piMcpServer(server = {}) {
+  const result = {};
+  for (const key of ["command", "args", "env", "url", "cwd", "headers", "lifecycle", "directTools"]) {
+    if (server[key] != null) result[key] = server[key];
+  }
+  if (server.authMode === "oauth2") {
+    result.auth = "oauth";
+    result.oauth = {
+      ...(server.oauthClientRef ? {clientId: server.oauthClientRef} : {}),
+      ...(server.scopes?.length ? {scope: server.scopes.join(" ")} : {}),
+      ...(server.oauthRedirectUri ? {redirectUri: server.oauthRedirectUri} : {}),
+      ...(server.secretRefs?.clientSecret ? {clientSecret: `\${${server.secretRefs.clientSecret}}`} : {}),
+    };
+  } else if (server.authMode === "bearer_env") {
+    result.auth = "bearer";
+    if (server.bearerTokenEnv) result.bearerTokenEnv = server.bearerTokenEnv;
+  }
+  return result;
 }
 
 async function writeJsonFile(filePath, value) {
@@ -85,12 +114,45 @@ function codexMcpToml(mcpConfig) {
     if (server.env && typeof server.env === "object" && Object.keys(server.env).length) {
       lines.push("env = { " + tomlInlineTable(server.env) + " }");
     }
-    if (server.headers && typeof server.headers === "object" && Object.keys(server.headers).length) {
-      lines.push("headers = { " + tomlInlineTable(server.headers) + " }");
+    const {staticHeaders, envHeaders} = splitCodexHeaders(server);
+    if (staticHeaders && Object.keys(staticHeaders).length) {
+      lines.push("http_headers = { " + tomlInlineTable(staticHeaders) + " }");
+    }
+    if (envHeaders && Object.keys(envHeaders).length) {
+      lines.push("env_http_headers = { " + tomlInlineTable(envHeaders) + " }");
+    }
+    if (server.bearerTokenEnv) lines.push("bearer_token_env_var = " + tomlString(server.bearerTokenEnv));
+    if (Array.isArray(server.scopes) && server.scopes.length) {
+      lines.push("scopes = [" + server.scopes.map(tomlString).join(", ") + "]");
+    }
+    if (server.oauthClientRef) {
+      lines.push("oauth = { client_id = " + tomlString(server.oauthClientRef) + " }");
     }
   }
   lines.push("", CODEX_MCP_END);
   return lines.join("\n") + "\n";
+}
+
+function splitCodexHeaders(server = {}) {
+  const staticHeaders = {};
+  const envHeaders = {};
+  for (const [name, value] of Object.entries(server.headers || {})) {
+    const envReference = parseEnvReference(value);
+    if (envReference) envHeaders[name] = envReference;
+    else staticHeaders[name] = value;
+  }
+  for (const [secretName, envReference] of Object.entries(server.secretRefs || {})) {
+    if (secretName === "accessToken") {
+      envHeaders.Authorization = envReference;
+    }
+  }
+  return {staticHeaders, envHeaders};
+}
+
+function parseEnvReference(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^\$\{([A-Z][A-Z0-9_]*)\}$|^\$env:([A-Z][A-Z0-9_]*)$/);
+  return match ? (match[1] || match[2]) : "";
 }
 
 function mergeCodexMcpToml(existing, mcpConfig) {
@@ -123,5 +185,7 @@ module.exports = {
   createMcpConfigService,
   mergeCodexMcpToml,
   parseMcpConfig,
+  piMcpConfig,
+  piMcpServer,
   runnerMcpConfig,
 };

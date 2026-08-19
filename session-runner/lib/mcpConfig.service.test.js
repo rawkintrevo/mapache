@@ -6,6 +6,7 @@ const {
   CHROME_DEVTOOLS_MCP_PACKAGE,
   mergeCodexMcpToml,
   parseMcpConfig,
+  piMcpConfig,
   runnerMcpConfig,
 } = require("./mcpConfig.service");
 
@@ -58,10 +59,54 @@ const toml = codexMcpToml({
 });
 assert.match(toml, /\[mcp_servers\.context7\]/);
 assert.match(toml, /url = "https:\/\/mcp\.context7\.com\/mcp"/);
-assert.match(toml, /headers = \{ AUTHORIZATION = "Bearer CONTEXT7_TOKEN" \}/);
+assert.match(toml, /http_headers = \{ AUTHORIZATION = "Bearer CONTEXT7_TOKEN" \}/);
 assert.match(toml, /\[mcp_servers\.chrome-devtools\]/);
 assert.match(toml, /command = "npx"/);
 assert.match(toml, /args = \["-y", "chrome-devtools-mcp@latest"\]/);
+
+const googleConfig = {
+  mcpServers: {
+    gmail: {
+      url: "https://gmailmcp.googleapis.com/mcp/v1",
+      authMode: "oauth2",
+      oauthClientRef: "google-client-prod",
+      scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      headers: {"X-Google-Account": "${GOOGLE_ACCOUNT_REF}"},
+      oauthRedirectUri: "https://mapache.example.com/api/google/callback",
+      secretRefs: {refreshToken: "GOOGLE_REFRESH_TOKEN"},
+    },
+    drive: {
+      url: "https://drivemcp.googleapis.com/mcp/v1",
+      authMode: "bearer_env",
+      bearerTokenEnv: "GOOGLE_BEARER_TOKEN",
+    },
+  },
+};
+assert.deepStrictEqual(piMcpConfig(googleConfig), {
+  mcpServers: {
+    gmail: {
+      url: "https://gmailmcp.googleapis.com/mcp/v1",
+      headers: {"X-Google-Account": "${GOOGLE_ACCOUNT_REF}"},
+      auth: "oauth",
+      oauth: {
+        clientId: "google-client-prod",
+        scope: "https://www.googleapis.com/auth/gmail.readonly",
+        redirectUri: "https://mapache.example.com/api/google/callback",
+      },
+    },
+    drive: {
+      url: "https://drivemcp.googleapis.com/mcp/v1",
+      auth: "bearer",
+      bearerTokenEnv: "GOOGLE_BEARER_TOKEN",
+    },
+  },
+});
+const googleToml = codexMcpToml(googleConfig);
+assert.match(googleToml, /http_headers|env_http_headers|oauth = \{ client_id = "google-client-prod" \}/);
+assert.match(googleToml, /scopes = \["https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly"\]/);
+assert.match(googleToml, /bearer_token_env_var = "GOOGLE_BEARER_TOKEN"/);
+assert.doesNotMatch(googleToml, /GOOGLE_REFRESH_TOKEN/);
+assert.match(googleToml, /env_http_headers = \{ X-Google-Account = "GOOGLE_ACCOUNT_REF" \}/);
 
 const merged = mergeCodexMcpToml("approval_policy = \"never\"\n", {
   mcpServers: {demo: {command: "node"}},
