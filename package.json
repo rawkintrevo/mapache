@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "docs:check": "node scripts/check-doc-links.js",
+    "generate:runner-catalog": "node scripts/generate-runner-catalog.mjs",
     "test:frontend": "vitest run",
     "build:main": "vite build",
     "build:community": "cd community && npm run build",
