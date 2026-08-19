@@ -15,9 +15,7 @@ const {
 const {normalizeEnvMap} = require("./env.helpers");
 
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
-const OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 const OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
-const OPENAI_CODEX_SCOPE = "openid profile email offline_access";
 const OPENAI_CODEX_DEVICE_USER_CODE_URL = "https://auth.openai.com/api/accounts/deviceauth/usercode";
 const OPENAI_CODEX_DEVICE_TOKEN_URL = "https://auth.openai.com/api/accounts/deviceauth/token";
 const OPENAI_CODEX_DEVICE_VERIFICATION_URI = "https://auth.openai.com/codex/device";
@@ -73,7 +71,6 @@ function createPiService(dependencies = {}) {
     updateGenericEnvironmentKey,
     deleteGenericEnvironmentKey,
     resolveGenericEnvironment: (uid, ids) => resolveGenericEnvironment(uid, ids),
-    handleOpenAiCodexOAuthCallback,
     installPiPackage: (uid, workspaceId, sessionId, payload) =>
       installPiPackage(uid, workspaceId, sessionId, payload, dependencies),
     listPiPackages: (uid, workspaceId, sessionId) =>
@@ -96,7 +93,6 @@ function createPiService(dependencies = {}) {
     saveSessionPiAuthSelection: (uid, workspaceId, sessionId, payload) =>
       saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, dependencies),
     startOpenAiCodexDeviceCode,
-    startOpenAiCodexOAuth,
     updatePiPackage: (uid, workspaceId, sessionId, payload) =>
       updatePiPackage(uid, workspaceId, sessionId, payload, dependencies),
   };
@@ -283,67 +279,6 @@ async function savePiAuthCredential(uid, providerKey, credential, label = "") {
       createdAt: now,
     });
   });
-}
-
-async function startOpenAiCodexOAuth(uid, payload) {
-  const returnTo = normalizeOpenAiCodexReturnTo(payload.returnTo);
-  const redirectUri = `${new URL(returnTo).origin}/api/pi-auth/providers/${OPENAI_CODEX_PROVIDER}/callback`;
-  const state = crypto.randomBytes(16).toString("hex");
-  const verifier = base64Url(crypto.randomBytes(32));
-  const challenge = base64Url(crypto.createHash("sha256").update(verifier).digest());
-  const expiresAt = Date.now() + 15 * 60 * 1000;
-
-  await openAiCodexOAuthStateDoc(state).set({
-    uid,
-    verifier,
-    redirectUri,
-    returnTo,
-    expiresAt,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  const url = new URL(OPENAI_CODEX_AUTHORIZE_URL);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", OPENAI_CODEX_CLIENT_ID);
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", OPENAI_CODEX_SCOPE);
-  url.searchParams.set("code_challenge", challenge);
-  url.searchParams.set("code_challenge_method", "S256");
-  url.searchParams.set("state", state);
-  url.searchParams.set("id_token_add_organizations", "true");
-  url.searchParams.set("codex_cli_simplified_flow", "true");
-  url.searchParams.set("originator", "pi");
-
-  return {authUrl: url.toString(), redirectUri};
-}
-
-async function handleOpenAiCodexOAuthCallback(req, res) {
-  const state = String(req.query.state || "").trim();
-  const code = String(req.query.code || "").trim();
-  const providerError = String(req.query.error || "").trim();
-  const ref = openAiCodexOAuthStateDoc(state);
-  const snap = state ? await ref.get() : null;
-  const record = snap && snap.exists ? snap.data() : null;
-  const returnTo = record?.returnTo || "/";
-
-  try {
-    if (!record) throw httpError(400, "openai_codex_oauth_state_not_found");
-    if (Number(record.expiresAt || 0) < Date.now()) throw httpError(400, "openai_codex_oauth_state_expired");
-    if (providerError) throw httpError(400, `openai_codex_oauth_error: ${providerError}`);
-    if (!code) throw httpError(400, "openai_codex_oauth_missing_code");
-
-    const oauth = await exchangeOpenAiCodexAuthorizationCode(code, record.verifier, record.redirectUri);
-    await savePiAuthCredential(record.uid, OPENAI_CODEX_PROVIDER, {type: "oauth", ...oauth});
-    await ref.delete().catch(() => {});
-    res.redirect(303, appendQuery(returnTo, {openAiCodexLogin: "success"}));
-  } catch (error) {
-    logger.error("openai codex oauth callback failed", error);
-    await ref.delete().catch(() => {});
-    res.redirect(303, appendQuery(returnTo, {
-      openAiCodexLogin: "error",
-      error: publicErrorMessage(error),
-    }));
-  }
 }
 
 async function startOpenAiCodexDeviceCode() {
@@ -642,45 +577,6 @@ async function mergeObservedPiPackageCatalogEntry(uid, workspaceId, source) {
     }), {merge: true});
   });
   return normalized;
-}
-
-function normalizeOpenAiCodexReturnTo(value) {
-  const text = String(value || "").trim();
-  try {
-    const url = new URL(text);
-    if (!["http:", "https:"].includes(url.protocol)) throw new Error("invalid protocol");
-    url.hash = "";
-    return url.toString();
-  } catch (error) {
-    throw httpError(400, "invalid_openai_codex_return_url");
-  }
-}
-
-function openAiCodexOAuthStateDoc(state) {
-  return db.collection("oauthStates").doc(`${OPENAI_CODEX_PROVIDER}-${state}`);
-}
-
-function base64Url(buffer) {
-  return Buffer.from(buffer)
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/g, "");
-}
-
-function appendQuery(url, params) {
-  try {
-    const parsed = new URL(url);
-    Object.entries(params).forEach(([key, value]) => parsed.searchParams.set(key, String(value || "")));
-    return parsed.toString();
-  } catch (error) {
-    const query = new URLSearchParams(params).toString();
-    return `/?${query}`;
-  }
-}
-
-function publicErrorMessage(error) {
-  return error?.publicMessage || error?.message || "openai_codex_oauth_failed";
 }
 
 function cleanOpenAiCodexDeviceField(value) {
@@ -1253,14 +1149,12 @@ async function requestRunnerJsonDependency(dependencies, session, routePath, opt
 }
 
 module.exports = {
-  appendQuery,
   buildGitPackageSource,
   cleanOpenAiCodexDeviceField,
   createPiService,
   mergePiPackageCatalogEntry,
   normalizeGitPackageSource,
   mergeCompatiblePiAuthState,
-  normalizeOpenAiCodexReturnTo,
   normalizePiAuthApiKey,
   normalizePiAuthEntries,
   normalizePiAuthEntryId,

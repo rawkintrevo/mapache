@@ -2,13 +2,11 @@
 
 const assert = require("assert");
 const {
-  appendQuery,
   buildGitPackageSource,
   cleanOpenAiCodexDeviceField,
   createPiService,
   mergeCompatiblePiAuthState,
   normalizeGitPackageSource,
-  normalizeOpenAiCodexReturnTo,
   normalizePiAuthApiKey,
   normalizePiAuthEntries,
   normalizePiAuthEntryId,
@@ -227,11 +225,6 @@ assert.strictEqual(cleanOpenAiCodexDeviceField("bad\ncode"), "");
 assert.strictEqual(parseOpenAiCodexErrorCode(JSON.stringify({error: "slow_down"})), "slow_down");
 assert.strictEqual(parseOpenAiCodexErrorCode(JSON.stringify({error: {code: "deviceauth_authorization_pending"}})), "deviceauth_authorization_pending");
 assert.strictEqual(parseOpenAiCodexErrorCode("not-json"), "");
-assert.strictEqual(normalizeOpenAiCodexReturnTo("https://example.com/app#secret"), "https://example.com/app");
-assert.throws(() => normalizeOpenAiCodexReturnTo("javascript:alert(1)"), (error) => publicMessage(error) === "invalid_openai_codex_return_url");
-assert.strictEqual(appendQuery("https://example.com/app?x=1", {status: "ok"}), "https://example.com/app?x=1&status=ok");
-assert.strictEqual(appendQuery("not a url", {status: "ok"}), "/?status=ok");
-
 const accountPayload = Buffer.from(JSON.stringify({
   "https://api.openai.com/auth": {chatgpt_account_id: "acct_123"},
 })).toString("base64url");
