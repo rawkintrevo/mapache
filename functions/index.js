@@ -57,6 +57,7 @@ const {createGithubService} = require("./github.service");
 const {createGitSessionService} = require("./gitSession.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
+const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
 const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
@@ -94,6 +95,7 @@ const agentAuthService = createAgentAuthService({
   requireSession,
   requireWorkspace,
 });
+const openAiCodexAuthService = createOpenAiCodexAuthService({agentAuthService});
 const piService = createPiService({
   agentAuthService,
   requireSession,
@@ -206,6 +208,7 @@ const workspaceService = createWorkspaceService({
 const API_HANDLERS = createApiHandlers({
   environmentKeysService,
   piService,
+  openAiCodexAuthService,
   workspaceService,
   githubService,
   operations: {

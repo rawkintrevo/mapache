@@ -3,7 +3,6 @@
 const assert = require("assert");
 const {
   buildGitPackageSource,
-  cleanOpenAiCodexDeviceField,
   createPiService,
   normalizeGitPackageSource,
   normalizePiPackageSource,
@@ -11,9 +10,7 @@ const {
   normalizePiSkillDescription,
   normalizePiSkillName,
   normalizePiSkillPayload,
-  openAiCodexAccountId,
   parseGitPackageSource,
-  parseOpenAiCodexErrorCode,
   piPackageCatalogDocId,
   sessionSupportsWorkspaceSkills,
 } = require("./pi.service");
@@ -76,16 +73,6 @@ assert.throws(() => normalizePiPackageSource("https://user:pass@example.com/repo
 assert.throws(() => normalizePiPackageSource("ftp://example.com/repo"), (error) => publicMessage(error) === "unsupported_package_source");
 assert.strictEqual(piPackageCatalogDocId("git:github.com/owner/repo"), "git%3Agithub.com%2Fowner%2Frepo");
 
-assert.strictEqual(cleanOpenAiCodexDeviceField(" code "), "code");
-assert.strictEqual(cleanOpenAiCodexDeviceField("bad\ncode"), "");
-assert.strictEqual(parseOpenAiCodexErrorCode(JSON.stringify({error: "slow_down"})), "slow_down");
-assert.strictEqual(parseOpenAiCodexErrorCode(JSON.stringify({error: {code: "deviceauth_authorization_pending"}})), "deviceauth_authorization_pending");
-assert.strictEqual(parseOpenAiCodexErrorCode("not-json"), "");
-const accountPayload = Buffer.from(JSON.stringify({
-  "https://api.openai.com/auth": {chatgpt_account_id: "acct_123"},
-})).toString("base64url");
-assert.strictEqual(openAiCodexAccountId(`header.${accountPayload}.signature`), "acct_123");
-assert.strictEqual(openAiCodexAccountId("bad-token"), "");
 assert.strictEqual(sessionSupportsWorkspaceSkills({terminalKind: "pi"}), true);
 assert.strictEqual(sessionSupportsWorkspaceSkills({terminalKind: "codex"}), true);
 assert.strictEqual(sessionSupportsWorkspaceSkills({terminalKind: "shell"}), false);

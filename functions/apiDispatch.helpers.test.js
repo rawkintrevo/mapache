@@ -101,6 +101,7 @@ function createTestApiHandlers() {
   return createApiHandlers({
     agentAuthService: service,
     environmentKeysService: service,
+    openAiCodexAuthService: service,
     piService: service,
     workspaceService: service,
     githubService: service,
