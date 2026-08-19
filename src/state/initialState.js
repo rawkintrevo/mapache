@@ -214,8 +214,8 @@ export function createInitialState() {
     authModalOpen: false,
     piAuthManageModalOpen: false,
     genericEnvironmentModalOpen: false,
-    busy: false,
-    busyMessage: "",
+    pendingOperations: {},
+    operationSequence: 0,
     error: "",
   };
 }

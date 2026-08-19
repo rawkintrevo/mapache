@@ -1,6 +1,7 @@
 import "./AdminPage.css";
 import {ChevronLeft, ChevronRight, RefreshCw} from "lucide-react";
 import {Button} from "../common/Button.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 function userLabel(user) {
   return user.displayName || user.email || user.uid || "Unknown user";
@@ -25,6 +26,7 @@ export function AdminPage({
   const users = admin.users || [];
   const hasPrevious = Boolean(admin.cursorStack && admin.cursorStack.length);
   const hasNext = Boolean(admin.nextCursor);
+  const busy = hasPendingOperations(state.pendingOperations);
 
   return (
     <section className="workspace admin-page">
@@ -33,7 +35,7 @@ export function AdminPage({
           <h2>Admin</h2>
           <p className="subtle">Users, allowlist status, and allocated runner cost.</p>
         </div>
-        <Button disabled={state.busy || admin.loading} variant="secondary" onClick={onRefresh}>
+        <Button disabled={busy || admin.loading} variant="secondary" onClick={onRefresh}>
           <RefreshCw aria-hidden="true" />
           {admin.loading ? "Loading..." : "Refresh"}
         </Button>
@@ -60,7 +62,7 @@ export function AdminPage({
                     <input
                       aria-label={`White list ${userLabel(user)}`}
                       checked={user.whitelisted === true}
-                      disabled={state.busy || admin.loading}
+                      disabled={busy || admin.loading}
                       name={`whitelist-${user.uid}`}
                       type="checkbox"
                       onChange={(event) => onSetWhitelisted(user.uid, event.target.checked)}
@@ -100,12 +102,12 @@ export function AdminPage({
       </div>
 
       <div className="admin-pagination">
-        <Button disabled={!hasPrevious || state.busy || admin.loading} variant="secondary" onClick={onPreviousPage}>
+        <Button disabled={!hasPrevious || busy || admin.loading} variant="secondary" onClick={onPreviousPage}>
           <ChevronLeft aria-hidden="true" />
           Previous
         </Button>
         <span className="subtle">{users.length} users</span>
-        <Button disabled={!hasNext || state.busy || admin.loading} variant="secondary" onClick={onNextPage}>
+        <Button disabled={!hasNext || busy || admin.loading} variant="secondary" onClick={onNextPage}>
           Next
           <ChevronRight aria-hidden="true" />
         </Button>

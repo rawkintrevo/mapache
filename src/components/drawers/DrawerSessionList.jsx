@@ -1,9 +1,11 @@
 import {Square, Trash2} from "lucide-react";
 import {SessionStatusSummary} from "../sessions/SessionStatusSummary.jsx";
 import {getSessionResourceSummary} from "../sessions/sessionPresentation.js";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
 export function DrawerSessionList({state, onDeleteSession, onSelectSession, onStopSession}) {
+  const busy = hasPendingOperations(state.pendingOperations);
   if (!state.selectedWorkspaceId) {
     return <p className="empty">Select a workspace to view sessions.</p>;
   }
@@ -19,7 +21,7 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
         if (session.status === "running") {
           actions.push(
             <DrawerListActionButton
-              disabled={state.busy}
+              disabled={busy}
               icon={<Square aria-hidden="true" />}
               key="stop"
               label={`Stop ${session.name}`}
@@ -33,7 +35,7 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
         }
         actions.push(
           <DrawerListActionButton
-            disabled={state.busy}
+            disabled={busy}
             icon={<Trash2 aria-hidden="true" />}
             key="delete"
             label={`Delete ${session.name}`}

@@ -154,8 +154,7 @@ function createState(overrides = {}) {
     },
     api: {},
     authModalOpen: false,
-    busy: false,
-    busyMessage: "",
+    pendingOperations: {},
     collapsedDrawerSections: new Set(),
     drawerCollapsed: false,
     error: "",
@@ -356,7 +355,11 @@ describe("frontend smoke coverage", () => {
   });
 
   test("shows an accessible global action indicator while busy", () => {
-    renderShell({busy: true, busyMessage: "Refreshing workspace..."});
+    renderShell({
+      pendingOperations: {
+        "app.refresh": {count: 1, message: "Refreshing workspace...", order: 1},
+      },
+    });
 
     expect(screen.getByRole("status")).toHaveTextContent("Refreshing workspace...");
     expect(screen.getByRole("button", {name: "Refresh app state"})).toBeDisabled();

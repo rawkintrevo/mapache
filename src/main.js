@@ -56,6 +56,7 @@ import {
   stopSessionState,
 } from "./workflows/sessionLifecycle.js";
 import {createSessionRequestTracker, isCurrentSessionRequest} from "./utils/sessionRequest.js";
+import {OPERATION_KEYS} from "./utils/operationKeys.js";
 import {loadSelectedSessionPanelsConcurrently} from "./workflows/selectedSessionPanels.js";
 
 const appStore = createAppStore(createInitialState());
@@ -266,7 +267,7 @@ async function refreshAll() {
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {
       await adminController.loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
     }
-  });
+  }, "Working...", OPERATION_KEYS.APP_REFRESH);
 }
 
 async function loadSessions() {
@@ -302,7 +303,7 @@ async function createSession(payload) {
     dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: data.session.id});
     state.sessionModalOpen = false;
     await loadSelectedSessionPanels();
-  });
+  }, "Working...", OPERATION_KEYS.SESSION_CREATE);
 }
 
 async function selectSession(sessionId) {
@@ -363,7 +364,7 @@ async function loadGitStatus(request = sessionRequestTracker.capture()) {
 }
 
 async function pullGit() {
-  await runBusy(() => pullGitState({state, loadGitStatus, render}));
+  await runBusy(() => pullGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PULL);
 }
 
 async function stageGitPath(path) {
@@ -387,7 +388,7 @@ async function runGitFileAction(path, action, actionMessage, requestAction) {
     requestAction,
     loadGitStatus,
     render,
-  }));
+  }), "Working...", action === "stage" ? OPERATION_KEYS.GIT_STAGE : OPERATION_KEYS.GIT_UNSTAGE);
 }
 
 function updateGitCommitMessage(message) {
@@ -395,11 +396,11 @@ function updateGitCommitMessage(message) {
 }
 
 async function commitGit() {
-  await runBusy(() => commitGitState({state, loadGitStatus, render}));
+  await runBusy(() => commitGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_COMMIT);
 }
 
 async function pushGit() {
-  await runBusy(() => pushGitState({state, loadGitStatus, render}));
+  await runBusy(() => pushGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PUSH);
 }
 
 function openPullRequestModal() {
@@ -418,7 +419,7 @@ function updatePullRequestForm(patch) {
 }
 
 async function submitPullRequest() {
-  await runBusy(() => submitPullRequestState({state, loadGitStatus, render}));
+  await runBusy(() => submitPullRequestState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PULL_REQUEST);
 }
 
 function getSelectedSession() {
@@ -426,15 +427,15 @@ function getSelectedSession() {
 }
 
 async function resizeSession(sessionId, payload) {
-  await runBusy(() => resizeSessionState(state, sessionId, payload, dispatch));
+  await runBusy(() => resizeSessionState(state, sessionId, payload, dispatch), "Working...", OPERATION_KEYS.SESSION_RESIZE);
 }
 
 async function restartSession(sessionId) {
-  await runBusy(() => restartSessionState(state, sessionId, dispatch));
+  await runBusy(() => restartSessionState(state, sessionId, dispatch), "Working...", OPERATION_KEYS.SESSION_RESTART);
 }
 
 async function stopSession(sessionId) {
-  await runBusy(() => stopSessionState(state, sessionId, dispatch));
+  await runBusy(() => stopSessionState(state, sessionId, dispatch), "Working...", OPERATION_KEYS.SESSION_STOP);
 }
 
 async function deleteSession(sessionId) {
@@ -443,7 +444,7 @@ async function deleteSession(sessionId) {
   await runBusy(async () => {
     await deleteSessionState(state, sessionId, dispatch);
     await loadSelectedSessionPanels();
-  });
+  }, "Working...", OPERATION_KEYS.SESSION_DELETE);
 }
 
 async function getSessionAccessUrls(workspaceId, sessionId) {
@@ -488,7 +489,7 @@ async function createSshSessionForward() {
     await state.api.createSshSessionForward(state.selectedWorkspaceId, session.id, state.sshForwards.port);
     state.sshForwards.port = "";
     await loadSshForwards();
-  });
+  }, "Working...", OPERATION_KEYS.SSH_FORWARD_CREATE);
 }
 
 async function closeSshSessionForward(port) {
@@ -497,11 +498,11 @@ async function closeSshSessionForward(port) {
   await runBusy(async () => {
     await state.api.closeSshSessionForward(state.selectedWorkspaceId, session.id, port);
     await loadSshForwards();
-  });
+  }, "Working...", OPERATION_KEYS.SSH_FORWARD_CLOSE);
 }
 
-async function runBusy(task, message = "Working...") {
-  dispatch({type: APP_ACTIONS.SET_BUSY, busy: true, message});
+async function runBusy(task, message = "Working...", operationKey = "global") {
+  dispatch({type: APP_ACTIONS.START_OPERATION, key: operationKey, message});
   dispatch({type: APP_ACTIONS.SET_ERROR, error: ""});
   render();
   try {
@@ -509,7 +510,7 @@ async function runBusy(task, message = "Working...") {
   } catch (error) {
     dispatch({type: APP_ACTIONS.SET_ERROR, error: friendlyGlobalError(error)});
   } finally {
-    dispatch({type: APP_ACTIONS.SET_BUSY, busy: false});
+    dispatch({type: APP_ACTIONS.END_OPERATION, key: operationKey});
     render();
   }
 }

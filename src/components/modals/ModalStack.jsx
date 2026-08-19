@@ -8,16 +8,18 @@ import {SessionModal} from "./SessionModal.jsx";
 import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
 import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
   const {handlers, state} = props;
   const {files, git, github, modals, pi, sessions, workspaces} = handlers;
+  const busy = hasPendingOperations(state.pendingOperations);
 
   return (
     <>
       {state.sessionModalOpen ? (
         <SessionModal
-          busy={state.busy}
+          busy={busy}
           error={state.error}
           selectedWorkspace={props.selectedWorkspace}
           environmentEntries={state.piAuth.environmentEntries}

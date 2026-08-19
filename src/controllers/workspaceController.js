@@ -1,5 +1,6 @@
 import {APP_ACTIONS} from "../state/appStore.js";
 import {friendlyWorkspaceError} from "../utils/friendlyErrors.js";
+import {OPERATION_KEYS} from "../utils/operationKeys.js";
 
 export function normalizeCreateWorkspaceSource(payload = {}) {
   const source = payload.source && typeof payload.source === "object" ? payload.source : {};
@@ -67,7 +68,7 @@ export function createWorkspaceController({
       dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
       resetWorkspacePanels();
       await refreshAll();
-    });
+    }, "Working...", OPERATION_KEYS.WORKSPACE_CREATE);
   }
 
   async function deleteWorkspace(workspaceId) {
@@ -84,7 +85,7 @@ export function createWorkspaceController({
         resetWorkspacePanels({includeMcp: false});
       }
       await refreshAll();
-    });
+    }, "Working...", OPERATION_KEYS.WORKSPACE_DELETE);
   }
 
   async function selectWorkspace(workspaceId) {
@@ -96,7 +97,7 @@ export function createWorkspaceController({
       await loadSessions();
       await loadMcpServers();
       await loadSelectedSessionPanels();
-    });
+    }, "Working...", OPERATION_KEYS.WORKSPACE_SELECT);
   }
 
   return {

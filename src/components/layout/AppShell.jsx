@@ -3,6 +3,7 @@ import {LazySurfaceFallback} from "../common/LazySurfaceFallback.jsx";
 import {LeftDrawer} from "../drawers/LeftDrawer.jsx";
 import {RightDrawer} from "../inspector/RightDrawer.jsx";
 import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
+import {hasPendingOperations, getPendingOperationMessage} from "../../state/pendingOperations.js";
 import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
 import {Topbar} from "./Topbar.jsx";
 
@@ -23,6 +24,7 @@ export function AppShell(props) {
     state.drawerCollapsed ? "drawer-collapsed" : "",
     state.rightDrawerCollapsed ? "right-drawer-collapsed" : "",
   ].filter(Boolean).join(" ");
+  const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
     state.fileEditor?.open ||
     state.genericEnvironmentModalOpen ||
@@ -36,7 +38,7 @@ export function AppShell(props) {
   return (
     <div className="app">
       <Topbar state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
-      <GlobalActionIndicator busy={state.busy} message={state.busyMessage} />
+      <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
       <main className={shellClassName}>
         <LeftDrawer
           state={state}

@@ -1,6 +1,7 @@
 import {SessionDetail} from "../sessions/SessionDetail.jsx";
 import {SessionList} from "../sessions/SessionList.jsx";
 import {WorkspaceHeader} from "./WorkspaceHeader.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function WorkspacePanel({
   selectedSession,
@@ -24,12 +25,13 @@ export function WorkspacePanel({
   onUpdateSshForwardPort,
 }) {
   const isGithubWorkspace = selectedWorkspace?.source?.type === "github" || selectedSession?.sourceType === "github";
+  const busy = hasPendingOperations(state.pendingOperations);
 
   if (selectedSession) {
     return (
       <section className="workspace">
         <SessionDetail
-          busy={state.busy}
+          busy={busy}
           gitStatus={state.gitStatus}
           isGithubWorkspace={isGithubWorkspace}
           session={selectedSession}

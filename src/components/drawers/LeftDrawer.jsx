@@ -7,6 +7,7 @@ import {UserMenu} from "./UserMenu.jsx";
 import {WorkspaceDrawerList} from "./WorkspaceDrawerList.jsx";
 import {Button} from "../common/Button.jsx";
 import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function LeftDrawer({
   state,
@@ -35,6 +36,7 @@ export function LeftDrawer({
   const fileActionsRef = useRef(null);
   const [fileActionsOpen, setFileActionsOpen] = useState(false);
   const selectedSession = (state.sessions || []).find((session) => session.id === state.selectedSessionId);
+  const busy = hasPendingOperations(state.pendingOperations);
   const fileScopeIsSsh = Boolean(
       selectedSession &&
       (selectedSession.sessionType === "ssh" || selectedSession.terminalKind === "ssh") &&
@@ -121,7 +123,7 @@ export function LeftDrawer({
           onToggleDrawerSection={onToggleDrawerSection}
         >
           <WorkspaceDrawerList
-            busy={state.busy}
+            busy={busy}
             selectedWorkspaceId={state.selectedWorkspaceId}
             workspaces={state.workspaces}
             onDeleteWorkspace={onDeleteWorkspace}
@@ -137,7 +139,7 @@ export function LeftDrawer({
                 aria-haspopup="menu"
                 aria-label="File actions"
                 className="files-action-trigger"
-                disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
+                disabled={busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
                 icon={true}
                 size="compact"
                 title="File actions"
@@ -176,7 +178,7 @@ export function LeftDrawer({
             </div>,
             <Button
               aria-label="Download selected file"
-              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceFilePath}
+              disabled={busy || state.workspaceFilesUploading || !state.selectedWorkspaceFilePath}
               icon={true}
               key="download-file"
               size="compact"
@@ -189,7 +191,7 @@ export function LeftDrawer({
             </Button>,
             <Button
               aria-label="Refresh files"
-              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
+              disabled={busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
               icon={true}
               key="refresh-files"
               size="compact"
@@ -227,7 +229,7 @@ export function LeftDrawer({
           actions={[
             <Button
               aria-label="Create session"
-              disabled={state.busy || !state.selectedWorkspaceId}
+              disabled={busy || !state.selectedWorkspaceId}
               icon={true}
               key="create-session"
               size="compact"

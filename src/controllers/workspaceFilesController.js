@@ -14,6 +14,7 @@ import {
   resetFileEditor as resetFileEditorState,
   resetWorkspaceFiles as resetWorkspaceFilesState,
 } from "../state/resetters.js";
+import {OPERATION_KEYS} from "../utils/operationKeys.js";
 
 export function createWorkspaceFilesController({state, render, runBusy, captureSessionRequest = () => undefined}) {
   async function loadWorkspaceFiles(path = "", request = captureSessionRequest()) {
@@ -21,7 +22,7 @@ export function createWorkspaceFilesController({state, render, runBusy, captureS
   }
 
   async function refreshWorkspaceFiles() {
-    await runBusy(loadWorkspaceFiles);
+    await runBusy(loadWorkspaceFiles, "Working...", OPERATION_KEYS.WORKSPACE_FILES_REFRESH);
   }
 
   async function uploadWorkspaceFiles(files) {

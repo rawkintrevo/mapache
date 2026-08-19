@@ -1,8 +1,10 @@
 import "./Topbar.css";
 import {RefreshCw} from "lucide-react";
 import {Button} from "../common/Button.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function Topbar({state, onRefresh}) {
+  const busy = hasPendingOperations(state.pendingOperations);
   return (
     <header className="topbar">
       <div className="brand">
@@ -14,9 +16,9 @@ export function Topbar({state, onRefresh}) {
         <a className="topbar-link" href="/community/docs/intro/">Docs</a>
         <Button
           aria-label="Refresh app state"
-          disabled={state.busy}
+          disabled={busy}
           icon
-          title={state.busy ? "Working..." : "Refresh"}
+          title={busy ? "Working..." : "Refresh"}
           variant="secondary"
           onClick={onRefresh}
         >
