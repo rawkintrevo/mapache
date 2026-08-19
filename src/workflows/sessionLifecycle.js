@@ -10,6 +10,10 @@ export async function restartSessionState(state, sessionId, dispatch) {
   await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
 }
 
+export async function retryProvisioningSessionState(state, sessionId) {
+  await state.api.restartSession(state.selectedWorkspaceId, sessionId);
+}
+
 export async function stopSessionState(state, sessionId, dispatch) {
   await state.api.stopSession(state.selectedWorkspaceId, sessionId);
   await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);

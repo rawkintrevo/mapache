@@ -9,6 +9,7 @@ export const OPERATION_KEYS = Object.freeze({
   SESSION_CREATE: "session.create",
   SESSION_DELETE: "session.delete",
   SESSION_RESIZE: "session.resize",
+  SESSION_RETRY: "session.retry",
   SESSION_RESTART: "session.restart",
   SESSION_STOP: "session.stop",
   SSH_FORWARD_CLOSE: "ssh.forward-close",

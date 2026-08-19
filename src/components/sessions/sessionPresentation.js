@@ -2,7 +2,7 @@ import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {formatSessionMemory, formatSessionSizeLabel, inferSessionSize} from "../../utils/sessionResources.js";
 
 const SUCCESS_STATUSES = new Set(["running", "ready", "success"]);
-const TRANSITION_STATUSES = new Set(["provisioning", "restarting", "resizing", "stopping", "deleting", "updating", "needs_service"]);
+const TRANSITION_STATUSES = new Set(["queued", "provisioning", "restarting", "resizing", "stopping", "deleting", "updating", "needs_service"]);
 const FAILURE_STATUSES = new Set(["provision_failed", "update_failed", "stop_failed", "delete_failed"]);
 const INACTIVE_STATUSES = new Set(["stopped", "inactive", "needs_image"]);
 
@@ -10,8 +10,10 @@ function trimSessionStatus(status) {
   return String(status || "").trim();
 }
 
-export function getSessionStatusLabel(status) {
-  const label = trimSessionStatus(status);
+export function getSessionStatusLabel(statusOrSession) {
+  const session = statusOrSession && typeof statusOrSession === "object" ? statusOrSession : null;
+  const label = trimSessionStatus(session ? session.status : statusOrSession);
+  if (session && label.toLowerCase() === "provisioning" && session.provisioningState === "queued") return "queued";
   return label || "unknown";
 }
 
@@ -22,6 +24,10 @@ export function getSessionStatusTone(status) {
   if (FAILURE_STATUSES.has(cleanStatus)) return "danger";
   if (INACTIVE_STATUSES.has(cleanStatus)) return "neutral";
   return "unknown";
+}
+
+export function isRetryableProvisioningFailure(session) {
+  return session?.status === "provision_failed" && session.provisioningRetryable === true;
 }
 
 export function getSessionRunnerTags(session) {

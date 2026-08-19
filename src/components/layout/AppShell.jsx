@@ -45,6 +45,7 @@ export function AppShell(props) {
           onDeleteSession={sessions.deleteSession}
           onDeleteWorkspace={workspaces.deleteWorkspace}
           onOpenSessionModal={modals.openSessionModal}
+          onRetryProvisioningSession={sessions.retryProvisioningSession}
           onOpenWorkspaceModal={modals.openWorkspaceModal}
           onRefresh={app.refreshAll}
           onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}
@@ -96,6 +97,7 @@ export function AppShell(props) {
             onPullGit={git.pullGit}
             onPushGit={git.pushGit}
             onResizeSession={sessions.resizeSession}
+            onRetryProvisioningSession={sessions.retryProvisioningSession}
             onRestartSession={sessions.restartSession}
             onShareSessionPreview={sessions.shareSessionPreview}
             onCloseSshSessionForward={sessions.closeSshSessionForward}

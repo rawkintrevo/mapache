@@ -4,7 +4,7 @@ import "./SessionStatusSummary.css";
 
 export function SessionStatusSummary({session}) {
   const tooltipId = useId();
-  const statusLabel = getSessionStatusLabel(session?.status);
+  const statusLabel = getSessionStatusLabel(session);
   const statusTone = getSessionStatusTone(statusLabel);
   const runnerTags = getSessionRunnerTags(session);
 

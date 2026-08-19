@@ -15,10 +15,10 @@ function session(overrides = {}) {
   };
 }
 
-function renderDetail(overrides = {}) {
+function renderDetail(overrides = {}, options = {}) {
   return render(
       <SessionDetail
-        busy={false}
+        busy={options.busy || false}
         gitStatus={null}
         isGithubWorkspace={false}
         session={session(overrides)}
@@ -29,7 +29,8 @@ function renderDetail(overrides = {}) {
           browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
         })}
         onResizeSession={vi.fn()}
-        onRestartSession={vi.fn()}
+        onRetryProvisioningSession={options.onRetryProvisioningSession}
+        onRestartSession={options.onRestartSession || vi.fn()}
       />,
   );
 }
@@ -83,5 +84,38 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.getByText(/Custom selection/)).toBeInTheDocument();
     expect(screen.getByRole("combobox", {name: "CPU"})).toHaveValue("1");
     expect(screen.getByRole("combobox", {name: "Memory"})).toHaveValue("1Gi");
+  });
+
+  test("shows queued provisioning progress and hides restart until a runner exists", () => {
+    renderDetail({status: "provisioning", provisioningState: "queued", serviceUrl: null});
+
+    expect(screen.getByText("Queued for provisioning")).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Restart"})).not.toBeInTheDocument();
+  });
+
+  test("shows one retry action for retryable failures", async () => {
+    const user = userEvent.setup();
+    const onRetryProvisioningSession = vi.fn();
+    renderDetail(
+        {status: "provision_failed", provisioningRetryable: true, serviceUrl: null},
+        {busy: false, onRetryProvisioningSession},
+    );
+
+    const retry = screen.getByRole("button", {name: "Retry provisioning"});
+    await user.click(retry);
+    expect(onRetryProvisioningSession).toHaveBeenCalledOnce();
+  });
+
+  test("does not show retry for non-retryable failures", () => {
+    renderDetail({status: "provision_failed", provisioningRetryable: false, serviceUrl: null});
+    expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
+  });
+
+  test("disables retry while another operation is pending", () => {
+    renderDetail(
+        {status: "provision_failed", provisioningRetryable: true, serviceUrl: null},
+        {busy: true, onRetryProvisioningSession: vi.fn()},
+    );
+    expect(screen.getByRole("button", {name: "Retry provisioning"})).toBeDisabled();
   });
 });

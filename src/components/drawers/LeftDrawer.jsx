@@ -17,6 +17,7 @@ export function LeftDrawer({
   onOpenWorkspaceModal,
   onRefresh,
   onRefreshWorkspaceFiles,
+  onRetryProvisioningSession,
   onDownloadWorkspaceFile,
   onCreateWorkspaceDirectory,
   onCreateWorkspaceFile,
@@ -249,6 +250,7 @@ export function LeftDrawer({
           <DrawerSessionList
             state={state}
             onDeleteSession={onDeleteSession}
+            onRetryProvisioningSession={onRetryProvisioningSession}
             onSelectSession={onSelectSession}
             onStopSession={onStopSession}
           />

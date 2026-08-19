@@ -1,10 +1,10 @@
-import {Square, Trash2} from "lucide-react";
+import {RotateCcw, Square, Trash2} from "lucide-react";
 import {SessionStatusSummary} from "../sessions/SessionStatusSummary.jsx";
-import {getSessionResourceSummary} from "../sessions/sessionPresentation.js";
+import {getSessionResourceSummary, isRetryableProvisioningFailure} from "../sessions/sessionPresentation.js";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
-export function DrawerSessionList({state, onDeleteSession, onSelectSession, onStopSession}) {
+export function DrawerSessionList({state, onDeleteSession, onRetryProvisioningSession, onSelectSession, onStopSession}) {
   const busy = hasPendingOperations(state.pendingOperations);
   if (!state.selectedWorkspaceId) {
     return <p className="empty">Select a workspace to view sessions.</p>;
@@ -18,6 +18,21 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
     <DrawerList>
       {state.sessions.map((session) => {
         const actions = [];
+        if (isRetryableProvisioningFailure(session)) {
+          actions.push(
+            <DrawerListActionButton
+              disabled={busy}
+              icon={<RotateCcw aria-hidden="true" />}
+              key="retry-provisioning"
+              label={`Retry provisioning for ${session.name}`}
+              title={`Retry provisioning for ${session.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRetryProvisioningSession?.(session.id);
+              }}
+            />,
+          );
+        }
         if (session.status === "running") {
           actions.push(
             <DrawerListActionButton

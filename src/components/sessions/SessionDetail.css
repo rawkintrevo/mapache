@@ -30,6 +30,29 @@
   border: 1px solid #1f2937;
 }
 
+.provisioning-status {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.provisioning-status strong {
+  color: var(--text);
+}
+
+.provisioning-status--failure {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+}
+
+.provisioning-status--failure strong {
+  color: var(--danger);
+}
+
 .canvas-shell iframe,
 .terminal-placeholder {
   width: 100%;

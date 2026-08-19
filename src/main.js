@@ -52,6 +52,7 @@ import {
 import {
   deleteSessionState,
   resizeSessionState,
+  retryProvisioningSessionState,
   restartSessionState,
   stopSessionState,
 } from "./workflows/sessionLifecycle.js";
@@ -146,6 +147,7 @@ const handlers = {
     deleteSession,
     getSessionAccessUrls,
     resizeSession,
+    retryProvisioningSession,
     restartSession,
     shareSessionPreview,
     selectSession,
@@ -432,6 +434,17 @@ async function resizeSession(sessionId, payload) {
 
 async function restartSession(sessionId) {
   await runBusy(() => restartSessionState(state, sessionId, dispatch), "Working...", OPERATION_KEYS.SESSION_RESTART);
+}
+
+async function retryProvisioningSession(sessionId) {
+  const session = state.sessions.find((candidate) => candidate.id === sessionId);
+  if (!session || session.status !== "provision_failed" || session.provisioningRetryable !== true) return;
+  if (state.pendingOperations[OPERATION_KEYS.SESSION_RETRY]?.count > 0) return;
+  await runBusy(
+      () => retryProvisioningSessionState(state, sessionId),
+      "Retrying provisioning...",
+      OPERATION_KEYS.SESSION_RETRY,
+  );
 }
 
 async function stopSession(sessionId) {

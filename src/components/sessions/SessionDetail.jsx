@@ -5,6 +5,7 @@ import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
 import {SessionResourceFields, SessionResourceSelector} from "./SessionResourceSelector.jsx";
+import {isRetryableProvisioningFailure} from "./sessionPresentation.js";
 
 export function SessionDetail({
   busy,
@@ -19,6 +20,7 @@ export function SessionDetail({
   onPullGit,
   onPushGit,
   onResizeSession,
+  onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
   onCloseSshSessionForward,
@@ -41,6 +43,9 @@ export function SessionDetail({
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
+  const isProvisioning = session.status === "provisioning";
+  const isProvisioningFailure = session.status === "provision_failed";
+  const isRetryableFailure = isRetryableProvisioningFailure(session);
 
   useEffect(() => {
     setResources(session.resources || {cpu: "1", memory: "1Gi"});
@@ -131,6 +136,18 @@ export function SessionDetail({
           ) : null}
         </div>
       ) : null}
+      {isProvisioning ? (
+        <div aria-live="polite" className="provisioning-status">
+          <strong>{session.provisioningState === "queued" ? "Queued for provisioning" : "Provisioning in progress"}</strong>
+          <span>The session will become available when its runner is ready.</span>
+        </div>
+      ) : null}
+      {isProvisioningFailure ? (
+        <div aria-live="polite" className="provisioning-status provisioning-status--failure">
+          <strong>Provisioning failed</strong>
+          <span>{isRetryableFailure ? "Retry provisioning to try again." : "This failure cannot be retried automatically."}</span>
+        </div>
+      ) : null}
       <div className="canvas-shell">
         {activeCanvas === "chrome" && capabilities.chrome ? (
           hasBrowser ? (
@@ -214,10 +231,22 @@ export function SessionDetail({
               </Button>
             </>
           ) : null}
-          <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
-            <RotateCcw aria-hidden="true" />
-            Restart
-          </Button>
+          {isRetryableFailure ? (
+            <Button
+              disabled={busy}
+              title="Retry provisioning"
+              variant="secondary"
+              onClick={() => onRetryProvisioningSession?.(session.id)}
+            >
+              <RotateCcw aria-hidden="true" />
+              Retry provisioning
+            </Button>
+          ) : isProvisioningFailure || isProvisioning ? null : (
+            <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
+              <RotateCcw aria-hidden="true" />
+              Restart
+            </Button>
+          )}
 
         </div>
       </div>

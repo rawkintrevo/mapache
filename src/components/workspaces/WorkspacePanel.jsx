@@ -14,6 +14,7 @@ export function WorkspacePanel({
   onPullGit,
   onPushGit,
   onResizeSession,
+  onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
   onCloseSshSessionForward,
@@ -44,6 +45,7 @@ export function WorkspacePanel({
           onPullGit={onPullGit}
           onPushGit={onPushGit}
           onResizeSession={onResizeSession}
+          onRetryProvisioningSession={onRetryProvisioningSession}
           onRestartSession={onRestartSession}
           onShareSessionPreview={onShareSessionPreview}
           onCloseSshSessionForward={onCloseSshSessionForward}
