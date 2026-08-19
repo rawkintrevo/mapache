@@ -1,5 +1,7 @@
 "use strict";
 
+const {routeAllowsMethod} = require("./apiRoutes.helpers");
+
 function jsonResult(handler) {
   return async (context) => ({body: await handler(context)});
 }
@@ -108,6 +110,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
 
 function findRouteDispatcher(method, routeName) {
   const normalizedMethod = String(method || "").toUpperCase();
+  if (!routeAllowsMethod({name: routeName}, normalizedMethod)) return null;
   for (const group of Object.values(ROUTE_DISPATCHERS)) {
     for (const [entryMethod, entryRouteName, dispatcher] of group) {
       if (entryMethod === normalizedMethod && entryRouteName === routeName) return dispatcher;

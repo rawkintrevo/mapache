@@ -1,6 +1,7 @@
 "use strict";
 
 const OPENAI_CODEX_PROVIDER = "openai-codex";
+const {ROUTE_METHODS} = require("./apiRouteManifest");
 
 function routeRequest(path) {
   const parts = String(path || "").replace(/^\/api\/?/, "/").split("/").filter(Boolean);
@@ -113,7 +114,6 @@ function routeRequest(path) {
     ["skills", "sessionSkills"],
     ["pi-skills", "sessionSkills"],
     ["subagents", "sessionSubagents"],
-    ["subagent-chains", "sessionSubagentChains"],
     ["ssh-files", "sshSessionFiles"],
     ["ssh-file", "sshSessionFile"],
     ["ssh-ports", "sshSessionForwards"],
@@ -158,11 +158,11 @@ function routeRequest(path) {
     parts.length === 6 &&
     parts[0] === "workspaces" &&
     parts[2] === "sessions" &&
-    (parts[4] === "subagents" || parts[4] === "subagent-chains") &&
+    parts[4] === "subagents" &&
     parts[5] === "delete"
   ) {
     return {
-      name: parts[4] === "subagents" ? "sessionSubagentDelete" : "sessionSubagentChainDelete",
+      name: "sessionSubagentDelete",
       workspaceId: parts[1],
       sessionId: parts[3],
     };
@@ -184,62 +184,6 @@ function routeRequest(path) {
   }
   return {name: "unknown"};
 }
-
-const ROUTE_METHODS = Object.freeze({
-  githubCallback: ["GET"],
-  me: ["GET"],
-  adminUsers: ["GET"],
-  adminUserWhitelist: ["POST"],
-  qaCustomToken: ["POST"],
-  piAuth: ["GET"],
-  piAuthProvider: ["PUT", "DELETE"],
-  piAuthEntry: ["DELETE"],
-  genericEnv: ["GET", "POST"],
-  genericEnvEntry: ["PUT", "DELETE"],
-  openAiCodexDeviceCode: ["POST"],
-  workspaces: ["GET", "POST"],
-  workspace: ["DELETE"],
-  workspaceMcp: ["GET", "PUT"],
-  workspaceFiles: ["GET"],
-  workspaceSyncFiles: ["POST"],
-  workspaceFile: ["GET", "PUT", "POST"],
-  workspaceCreateFile: ["POST"],
-  workspaceCreateDirectory: ["POST"],
-  workspaceFileDownloadUrl: ["POST"],
-  sessions: ["GET", "POST"],
-  session: ["DELETE"],
-  resizeSession: ["POST"],
-  restartSession: ["POST"],
-  stopSession: ["POST"],
-  sessionAccess: ["POST"],
-  sessionSharePreview: ["POST"],
-  sessionPiAuthSelection: ["POST"],
-  gitStatus: ["GET"],
-  gitPull: ["POST"],
-  gitStage: ["POST"],
-  gitUnstage: ["POST"],
-  gitCommit: ["POST"],
-  gitPush: ["POST"],
-  gitOpenPr: ["POST"],
-  piPackages: ["GET"],
-  piPackageInstall: ["POST"],
-  piPackageRemove: ["POST"],
-  piPackageUpdate: ["POST"],
-  sessionSkills: ["GET", "POST"],
-  sessionSkillDelete: ["POST"],
-  sessionSubagents: ["GET", "POST"],
-  sessionSubagentDelete: ["POST"],
-  sessionSubagentChains: ["GET", "POST"],
-  sessionSubagentChainDelete: ["POST"],
-  sshSessionFiles: ["GET"],
-  sshSessionFile: ["GET", "PUT"],
-  sshSessionForwards: ["GET", "POST"],
-  sshSessionForward: ["DELETE"],
-  githubRepos: ["GET"],
-  githubConnect: ["GET"],
-  githubConnection: ["GET"],
-  githubDisconnect: ["POST"],
-});
 
 function routeAllowsMethod(route, method) {
   if (String(method || "").toUpperCase() === "OPTIONS") return true;

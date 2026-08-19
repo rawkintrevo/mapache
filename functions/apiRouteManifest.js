@@ -1,0 +1,63 @@
+"use strict";
+
+// Authenticated API route methods live here so route validation and dispatch
+// tests share one contract. Public callback/preview routes remain explicit
+// special cases in index.js.
+const ROUTE_METHODS = Object.freeze(Object.fromEntries([
+  ["githubCallback", ["GET"]],
+  ["me", ["GET"]],
+  ["adminUsers", ["GET"]],
+  ["adminUserWhitelist", ["POST"]],
+  ["qaCustomToken", ["POST"]],
+  ["publicPreview", ["GET"]],
+  ["piAuth", ["GET"]],
+  ["piAuthProvider", ["PUT", "DELETE"]],
+  ["piAuthEntry", ["DELETE"]],
+  ["genericEnv", ["GET", "POST"]],
+  ["genericEnvEntry", ["PUT", "DELETE"]],
+  ["openAiCodexDeviceCode", ["POST"]],
+  ["workspaces", ["GET", "POST"]],
+  ["workspace", ["DELETE"]],
+  ["workspaceMcp", ["GET", "PUT"]],
+  ["workspaceFiles", ["GET"]],
+  ["workspaceSyncFiles", ["POST"]],
+  ["workspaceFile", ["GET", "PUT", "POST"]],
+  ["workspaceCreateFile", ["POST"]],
+  ["workspaceCreateDirectory", ["POST"]],
+  ["workspaceFileDownloadUrl", ["POST"]],
+  ["sessions", ["GET", "POST"]],
+  ["session", ["DELETE"]],
+  ["resizeSession", ["POST"]],
+  ["restartSession", ["POST"]],
+  ["stopSession", ["POST"]],
+  ["sessionAccess", ["POST"]],
+  ["sessionSharePreview", ["POST"]],
+  ["sessionPiAuthSelection", ["POST"]],
+  ["gitStatus", ["GET"]],
+  ["gitPull", ["POST"]],
+  ["gitStage", ["POST"]],
+  ["gitUnstage", ["POST"]],
+  ["gitCommit", ["POST"]],
+  ["gitPush", ["POST"]],
+  ["gitOpenPr", ["POST"]],
+  ["piPackages", ["GET"]],
+  ["piPackageInstall", ["POST"]],
+  ["piPackageRemove", ["POST"]],
+  ["piPackageUpdate", ["POST"]],
+  ["sessionSkills", ["GET", "POST"]],
+  ["sessionSkillDelete", ["POST"]],
+  ["sessionSubagents", ["GET", "POST"]],
+  ["sessionSubagentDelete", ["POST"]],
+  ["sshSessionFiles", ["GET"]],
+  ["sshSessionFile", ["GET", "PUT"]],
+  ["sshSessionForwards", ["GET", "POST"]],
+  ["sshSessionForward", ["DELETE"]],
+  ["githubRepos", ["GET"]],
+  ["githubConnect", ["GET"]],
+  ["githubConnection", ["GET"]],
+  ["githubDisconnect", ["POST"]],
+].map(([name, methods]) => [name, Object.freeze(methods)])));
+
+const SPECIAL_ROUTE_NAMES = Object.freeze(["githubCallback", "qaCustomToken", "publicPreview"]);
+
+module.exports = {ROUTE_METHODS, SPECIAL_ROUTE_NAMES};

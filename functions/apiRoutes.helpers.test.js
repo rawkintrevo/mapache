@@ -141,6 +141,18 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills/delete", {
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagents", {
+  name: "sessionSubagents",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagents/delete", {
+  name: "sessionSubagentDelete",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagent-chains", {name: "unknown"});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagent-chains/delete", {name: "unknown"});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-skills/delete", {
   name: "sessionSkillDelete",
   workspaceId: "workspace-1",
@@ -163,6 +175,8 @@ assert.strictEqual(routeAllowsMethod({name: "workspaces"}, "GET"), true);
 assert.strictEqual(routeAllowsMethod({name: "workspaces"}, "PATCH"), false);
 assert.strictEqual(routeAllowsMethod({name: "unknown"}, "GET"), false);
 assert.strictEqual(routeAllowsMethod({name: "unknown"}, "OPTIONS"), true);
+assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "GET"), true);
+assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "POST"), false);
 
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "GET"), false);
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "POST"), true);
