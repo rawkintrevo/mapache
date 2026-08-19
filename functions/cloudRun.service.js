@@ -28,6 +28,7 @@ const {envMapToCloudRunEnv} = require("./env.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
+const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 
@@ -76,10 +77,12 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     }
     await setPublicInvoker(client, serviceName);
     const service = await getCloudRunService(client, serviceName);
+    const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
       serviceUrl: service.uri || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...runnerImageMetadata,
       ...provisioningCompletionUpdates(claimedSession, operationName),
     }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
@@ -89,10 +92,12 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       if (service) {
         try {
           await setPublicInvoker(client, serviceName);
+          const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
           await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
             serviceUrl: service.uri,
             lastError: null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...runnerImageMetadata,
             ...provisioningCompletionUpdates(claimedSession, operationName),
           }, {reconciliationReason: "cloud_run_timeout_reconciled"}));
           return;
@@ -266,10 +271,12 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     });
     await waitForOperation(client, response.data);
     const service = await getCloudRunService(client, session.serviceName);
+    const runnerImageMetadata = await deployedRunnerImageMetadata(client, session.serviceName, session, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(session, "running", {
       serviceUrl: service.uri || session.serviceUrl || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...runnerImageMetadata,
     }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
     await sessionRef.update(sessionStatusUpdate(session, "update_failed", {
@@ -658,6 +665,47 @@ async function getCloudRunService(client, serviceName) {
   const url = `https://run.googleapis.com/v2/${serviceName}`;
   const response = await client.request({url, method: "GET"});
   return response.data || {};
+}
+
+async function deployedRunnerImageMetadata(client, serviceName, session, service, dependencies = {}) {
+  try {
+    const revisionName = service.latestReadyRevision ||
+      service.latestReadyRevisionName ||
+      service.latestCreatedRevision ||
+      service.latestCreatedRevisionName;
+    if (!revisionName) return {};
+    const fullRevisionName = revisionName.startsWith("projects/") ?
+      revisionName : `${serviceName.slice(0, serviceName.lastIndexOf("/services/"))}/revisions/${revisionName}`;
+    const response = await client.request({
+      url: `https://run.googleapis.com/v2/${fullRevisionName}`,
+      method: "GET",
+    });
+    const revision = response.data || {};
+    const digest = revision.imageDigest ||
+      revision.containers?.[0]?.imageDigest ||
+      revision.template?.containers?.[0]?.imageDigest ||
+      "";
+    if (!digest) return {};
+    let currentDigest = null;
+    if (typeof dependencies.getCurrentRunnerImageDigest === "function") {
+      currentDigest = await dependencies.getCurrentRunnerImageDigest(session);
+    }
+    return {
+      runnerImageDigest: digest,
+      runnerImageCurrentDigest: currentDigest || null,
+      runnerImageFreshness: getSessionImageFreshness({
+        ...session,
+        status: "running",
+        runnerImageDigest: digest,
+      }, currentDigest),
+    };
+  } catch (error) {
+    logger.warn("runner image deployment metadata lookup failed", {
+      serviceId: session.serviceId,
+      error: error.message || String(error),
+    });
+    return {};
+  }
 }
 
 async function getProjectId() {

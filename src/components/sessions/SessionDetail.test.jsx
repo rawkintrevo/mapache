@@ -118,4 +118,13 @@ describe("SessionDetail Chrome workflow", () => {
     );
     expect(screen.getByRole("button", {name: "Retry provisioning"})).toBeDisabled();
   });
+
+  test("emphasizes restart when the running image is stale", () => {
+    renderDetail({runnerImageFreshness: "stale"});
+    const restart = screen.getByRole("button", {name: "Restart session to pick up the latest container image"});
+    expect(restart).toHaveClass("session-restart-button--stale");
+    expect(restart).toHaveAttribute("title", "Restart to pick up the latest container image");
+    expect(screen.getByText("Stale image")).toBeInTheDocument();
+    expect(screen.getByText(/older runner image/)).toBeInTheDocument();
+  });
 });

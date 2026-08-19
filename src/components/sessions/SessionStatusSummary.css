@@ -75,6 +75,61 @@
   z-index: 2;
 }
 
+.session-image-freshness-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.session-image-freshness {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  outline: 0;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.session-image-freshness--success {
+  background: #22c55e;
+}
+
+.session-image-freshness--warning {
+  background: #f59e0b;
+}
+
+.session-image-freshness--neutral {
+  background: #cbd5e1;
+}
+
+.session-image-freshness:focus-visible {
+  box-shadow: 0 0 0 2px rgba(20, 125, 100, 0.18);
+}
+
+.session-image-freshness-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 2;
+}
+
+.session-image-freshness:hover + .session-image-freshness-tooltip,
+.session-image-freshness:focus-visible + .session-image-freshness-tooltip {
+  opacity: 1;
+}
+
 .session-status-light:hover + .session-status-tooltip,
 .session-status-light:focus-visible + .session-status-tooltip {
   opacity: 1;

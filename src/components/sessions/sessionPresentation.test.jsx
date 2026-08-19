@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {DrawerSessionList} from "../drawers/DrawerSessionList.jsx";
 import {SessionList} from "./SessionList.jsx";
-import {getSessionResourceSummary, getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone, isRetryableProvisioningFailure} from "./sessionPresentation.js";
+import {getSessionImageFreshness, getSessionResourceSummary, getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 
 const baseSession = {
   id: "session-1",
@@ -27,6 +27,21 @@ describe("session presentation helpers", () => {
     expect(getSessionStatusTone("queued")).toBe("warning");
     expect(isRetryableProvisioningFailure({status: "provision_failed", provisioningRetryable: true})).toBe(true);
     expect(isRetryableProvisioningFailure({status: "provision_failed", provisioningRetryable: false})).toBe(false);
+    expect(getSessionImageFreshness({status: "running", runnerImageFreshness: "latest"})).toMatchObject({
+      state: "latest",
+      label: "Latest image",
+      tone: "success",
+    });
+    expect(getSessionImageFreshness({status: "running", runnerImageFreshness: "stale"})).toMatchObject({
+      state: "stale",
+      label: "Stale image",
+      tone: "warning",
+    });
+    expect(getSessionImageFreshness({status: "stopped", runnerImageFreshness: "latest"})).toMatchObject({
+      state: "unknown",
+      label: "Unknown",
+      tone: "neutral",
+    });
   });
 
   test("derives runner tags from normalized keys and legacy image values", () => {

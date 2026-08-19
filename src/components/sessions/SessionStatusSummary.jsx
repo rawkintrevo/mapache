@@ -1,11 +1,12 @@
 import {useId} from "react";
-import {getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone} from "./sessionPresentation.js";
+import {getSessionImageFreshness, getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone} from "./sessionPresentation.js";
 import "./SessionStatusSummary.css";
 
 export function SessionStatusSummary({session}) {
   const tooltipId = useId();
   const statusLabel = getSessionStatusLabel(session);
   const statusTone = getSessionStatusTone(statusLabel);
+  const imageFreshness = getSessionImageFreshness(session);
   const runnerTags = getSessionRunnerTags(session);
 
   return (
@@ -20,6 +21,18 @@ export function SessionStatusSummary({session}) {
         />
         <span className="session-status-tooltip" id={tooltipId} role="tooltip">
           {statusLabel}
+        </span>
+      </span>
+      <span className="session-image-freshness-shell">
+        <span
+          aria-label={`Image freshness: ${imageFreshness.label}`}
+          className={`session-image-freshness session-image-freshness--${imageFreshness.tone}`}
+          role="img"
+          tabIndex={0}
+          title={imageFreshness.message}
+        />
+        <span className="session-image-freshness-tooltip" role="tooltip">
+          {imageFreshness.message}
         </span>
       </span>
       {runnerTags.length ? (

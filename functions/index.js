@@ -88,6 +88,10 @@ const {
 const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {createProvisioningWorker} = require("./provisioning.worker");
+const {
+  createRunnerImageFreshnessService,
+  getSessionImageFreshness,
+} = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
 const {
@@ -103,6 +107,10 @@ const piService = createPiService({
   requestRunnerJson,
 });
 const qaAuthService = createQaAuthService();
+const runnerImageFreshnessService = createRunnerImageFreshnessService();
+const {getCurrentRunnerImageDigest} = runnerImageFreshnessService;
+const getCurrentRunnerImageDigestForSession = (session) =>
+  getCurrentRunnerImageDigest(currentRunnerImageReference(session));
 const syncWriterLeaseService = createSyncWriterLeaseService({db});
 const {
   reconcileWorkspaceSyncWriterLease,
@@ -113,6 +121,7 @@ const cloudRunService = createCloudRunService({
   buildGenericEnvironmentEnv: (session, entryIds) => piService.resolveGenericEnvironment(session.ownerUid, entryIds),
   markSessionStopped,
   releaseChromeWorkspaceSession,
+  getCurrentRunnerImageDigest: getCurrentRunnerImageDigestForSession,
   releaseWorkspaceSyncWriterLease,
 });
 const {
@@ -230,6 +239,33 @@ exports.reconcileWorkspaceSyncWriters = onSchedule("every 5 minutes", async () =
   });
 });
 
+exports.refreshRunnerImageFreshness = onSchedule("every 5 minutes", async () => {
+  const snap = await db.collectionGroup("sessions")
+      .where("status", "==", "running")
+      .get();
+  const results = await Promise.allSettled(snap.docs.map(async (doc) => {
+    const session = {id: doc.id, ...doc.data()};
+    const currentDigest = await getCurrentRunnerImageDigestForSession(session);
+    const freshness = getSessionImageFreshness(session, currentDigest);
+    const currentValue = currentDigest || null;
+    if (session.runnerImageCurrentDigest === currentValue && session.runnerImageFreshness === freshness) return false;
+    await doc.ref.update({
+      runnerImageCurrentDigest: currentValue,
+      runnerImageFreshness: freshness,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  }));
+  const updated = results.filter((result) => result.status === "fulfilled" && result.value).length;
+  const failed = results.filter((result) => result.status === "rejected");
+  failed.forEach((result) => logger.error("runner image freshness refresh failed", result.reason));
+  logger.info("runner image freshness refresh complete", {
+    checked: snap.size,
+    updated,
+    failed: failed.length,
+  });
+});
+
 exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
   const snap = await db.collectionGroup("sessions")
       .where("status", "==", "running")
@@ -262,7 +298,30 @@ async function listSessions(uid, workspaceId) {
   const snap = await sessionCollection(workspaceId)
       .orderBy("updatedAt", "desc")
       .get();
-  return snap.docs.map(toClientDoc);
+  return Promise.all(snap.docs.map(async (doc) => {
+    const session = toClientDoc(doc);
+    const currentDigest = await getCurrentRunnerImageDigestForSession(session);
+    return {
+      ...session,
+      runnerImageCurrentDigest: currentDigest || session.runnerImageCurrentDigest || null,
+      runnerImageFreshness: getSessionImageFreshness(session, currentDigest),
+    };
+  }));
+}
+
+function currentRunnerImageReference(session = {}) {
+  try {
+    if (session.imageKey) {
+      const resolved = resolveRunnerImage({imageKey: session.imageKey}, DEFAULT_IMAGE);
+      if (resolved.image) return resolved.image;
+    }
+  } catch (error) {
+    logger.warn("current runner image catalog lookup failed", {
+      imageKey: session.imageKey,
+      error: error.message || String(error),
+    });
+  }
+  return session.image || "";
 }
 
 async function syncWorkspaceFiles(uid, workspaceId) {

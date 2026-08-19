@@ -53,6 +53,34 @@
   color: var(--danger);
 }
 
+.image-freshness-status {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.image-freshness-status strong {
+  color: var(--text);
+}
+
+.image-freshness-status--success {
+  border-color: color-mix(in srgb, #22c55e 45%, var(--line));
+}
+
+.image-freshness-status--warning {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--line));
+}
+
+.session-restart-button--stale {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+}
+
 .canvas-shell iframe,
 .terminal-placeholder {
   width: 100%;

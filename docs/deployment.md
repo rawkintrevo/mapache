@@ -62,6 +62,8 @@ Workspace sync-writer ownership is also controlled by Functions transactions. Se
 
 The runner's compatibility default for a missing `WORKSPACE_SYNC_ROLE` is `writer`, preserving upload behavior for existing services. New reader services receive the role from Functions and skip worktree/archive uploads and deletion reconciliation; they can still restore workspace state at startup and use explicit sync-down.
 
+Running sessions also persist the immutable Cloud Run image digest. The `refreshRunnerImageFreshness` scheduled function compares that digest with the current Artifact Registry digest behind each curated image tag and records `latest`, `stale`, or `unknown` for the frontend. Artifact Registry lookup failures remain unknown and never claim that a session is current.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.

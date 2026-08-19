@@ -5,7 +5,7 @@ import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
 import {SessionResourceFields, SessionResourceSelector} from "./SessionResourceSelector.jsx";
-import {isRetryableProvisioningFailure} from "./sessionPresentation.js";
+import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 
 export function SessionDetail({
   busy,
@@ -46,6 +46,8 @@ export function SessionDetail({
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
   const isRetryableFailure = isRetryableProvisioningFailure(session);
+  const imageFreshness = getSessionImageFreshness(session);
+  const isStaleImage = imageFreshness.state === "stale";
 
   useEffect(() => {
     setResources(session.resources || {cpu: "1", memory: "1Gi"});
@@ -148,6 +150,12 @@ export function SessionDetail({
           <span>{isRetryableFailure ? "Retry provisioning to try again." : "This failure cannot be retried automatically."}</span>
         </div>
       ) : null}
+      {imageFreshness.state !== "unknown" ? (
+        <div className={`image-freshness-status image-freshness-status--${imageFreshness.tone}`} role="status">
+          <strong>{imageFreshness.label}</strong>
+          <span>{imageFreshness.message}</span>
+        </div>
+      ) : null}
       <div className="canvas-shell">
         {activeCanvas === "chrome" && capabilities.chrome ? (
           hasBrowser ? (
@@ -242,7 +250,14 @@ export function SessionDetail({
               Retry provisioning
             </Button>
           ) : isProvisioningFailure || isProvisioning ? null : (
-            <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
+            <Button
+              aria-label={isStaleImage ? "Restart session to pick up the latest container image" : "Restart"}
+              className={isStaleImage ? "session-restart-button--stale" : ""}
+              disabled={busy}
+              title={isStaleImage ? "Restart to pick up the latest container image" : "Restart"}
+              variant="secondary"
+              onClick={() => onRestartSession(session.id)}
+            >
               <RotateCcw aria-hidden="true" />
               Restart
             </Button>
