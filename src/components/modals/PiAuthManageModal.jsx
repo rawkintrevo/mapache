@@ -28,7 +28,6 @@ function groupEntries(entries) {
 function initialSelection(session, groupedEntries) {
   const selection = session?.authSelection?.providers && typeof session.authSelection.providers === "object" ?
     session.authSelection.providers :
-    session?.piAuthSelection && typeof session.piAuthSelection === "object" ? session.piAuthSelection :
       null;
   if (selection) return {...selection};
   return Object.entries(groupedEntries).reduce((acc, [providerKey, entries]) => {

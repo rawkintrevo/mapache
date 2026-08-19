@@ -3,7 +3,6 @@
 const assert = require("assert");
 const {
   createAgentAuthService,
-  mergeCompatiblePiAuthState,
   normalizePiAuthApiKey,
   normalizePiAuthEntries,
   normalizePiAuthEntryId,
@@ -44,60 +43,6 @@ assert.deepStrictEqual(normalizePiAuthEntries({}, {openai: {type: "api_key", key
     label: "openai",
     credential: {type: "api_key", key: "sk"},
     createdAt: "",
-  },
-});
-assert.deepStrictEqual(mergeCompatiblePiAuthState({
-  providers: {openai: {type: "api_key", key: "new"}},
-  entries: {
-    "entry-new": {
-      id: "entry-new",
-      providerKey: "openai",
-      label: "new",
-      credential: {type: "api_key", key: "new"},
-      createdAt: "2026-06-23T00:00:00.000Z",
-    },
-  },
-}, {
-  providers: {
-    openai: {type: "api_key", key: "old"},
-    anthropic: {type: "api_key", key: "legacy"},
-  },
-  entries: {
-    "entry-old": {
-      id: "entry-old",
-      providerKey: "openai",
-      label: "old",
-      credential: {type: "api_key", key: "old"},
-      createdAt: "2026-06-22T00:00:00.000Z",
-    },
-  },
-}), {
-  providers: {
-    openai: {type: "api_key", key: "new"},
-    anthropic: {type: "api_key", key: "legacy"},
-  },
-  entries: {
-    "entry-old": {
-      id: "entry-old",
-      providerKey: "openai",
-      label: "old",
-      credential: {type: "api_key", key: "old"},
-      createdAt: "2026-06-22T00:00:00.000Z",
-    },
-    "entry-new": {
-      id: "entry-new",
-      providerKey: "openai",
-      label: "new",
-      credential: {type: "api_key", key: "new"},
-      createdAt: "2026-06-23T00:00:00.000Z",
-    },
-    "legacy-anthropic": {
-      id: "legacy-anthropic",
-      providerKey: "anthropic",
-      label: "anthropic",
-      credential: {type: "api_key", key: "legacy"},
-      createdAt: "",
-    },
   },
 });
 assert.deepStrictEqual(normalizePiAuthSelection({
@@ -201,7 +146,7 @@ function createFakeDependencies() {
   assert.strictEqual(Object.keys(auth.entries).length, 1);
   const entryId = Object.keys(auth.entries)[0];
   assert.ok(fake.documents.has("uid-1/private/agentAuth"));
-  assert.ok(fake.documents.has("uid-1/private/piAuth"));
+  assert.ok(!fake.documents.has("uid-1/private/piAuth"));
   await service.deletePiAuthEntry("uid-1", entryId);
   assert.deepStrictEqual((await service.getPiAuth("uid-1")).providers, {});
 
@@ -220,6 +165,7 @@ function createFakeDependencies() {
   });
   assert.deepStrictEqual(selectionResult.selection, {harness: "codex", providers: {}});
   assert.deepStrictEqual(sessionData.environmentEntryIds, ["env-1"]);
+  assert.ok(!Object.prototype.hasOwnProperty.call(sessionData, "piAuthSelection"));
   assert.strictEqual(calls[0].routePath, "/auth/materialize");
   assert.deepStrictEqual(calls[0].options.body.environmentEntryIds, ["env-1"]);
 

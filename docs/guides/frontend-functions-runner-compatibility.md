@@ -13,7 +13,7 @@ revision that has not been restarted or replaced.
 | Browser terminal and preview | Uses signed session access URLs returned by the API. | Mints browser/status URLs and forwards the protected runner token only through backend requests. | Accepts browser HMAC tokens for `/terminal`, `/preview/*`, `/healthz`, and `/capabilities`; keeps management routes behind the shutdown token. | A Functions revision can talk to a previous runner only when the requested route and token gate already exist. |
 | Workspace skills | Calls neutral `/skills` routes for Pi and Codex sessions. | Proxies neutral routes and falls back to legacy `/pi/skills*` routes for older runners. | Serves neutral routes plus `/pi/skills*` aliases and writes harness-native files. | Current frontend + current Functions + previous runner remains supported by the legacy fallback. |
 | Workspace subagents | Calls neutral `/subagents` routes. | Proxies neutral routes and validates the selected harness. | Serves neutral `/subagents` routes and preserves native Pi/Codex file formats. | The Functions API does not advertise V1 chain routes; internal runner chain routes are not a public compatibility promise. |
-| Agent auth | Uses `agentAuth` and `authSelection` through the Authentication Center. | Reads/writes canonical fields and mirrors legacy `piAuth` and `piAuthSelection` during rollout. | Reads canonical fields and falls back to legacy fields for older sessions. | Keep aliases until running revisions and saved data migrate; removal is tracked by #125. |
+| Agent auth | Uses `agentAuth` and `authSelection` through the Authentication Center. | Reads/writes canonical `agentAuth` and `authSelection` fields. | Reads canonical fields and materializes native Pi/Codex auth files. | Existing sessions must be recreated or resaved after the compatibility removal deployment. |
 | MCP | Saves workspace config and expects restart guidance. | Snapshots workspace config into `MCP_CONFIG` during create/restart. | Materializes `.mcp.json` or Codex config from `MCP_CONFIG`. | Existing sessions do not receive changed MCP config until restart or recreation. |
 | File sync | Browser writes call `/sync-files` after Storage writes. | Verifies ownership and calls runner `/workspace/sync-down`. | Pulls Storage objects into the live workspace and periodically syncs local changes up. | A runner sync change requires a new image revision. |
 | Generic environment | Selects entry IDs, never secret values. | Resolves private entries while provisioning and writes only runner environment variables. | Consumes resolved environment without persisting it in workspace files or logs. | A previous runner ignores new optional entries; reserved-name validation remains backend-owned. |
@@ -35,7 +35,7 @@ updated.
 ## Local contract evidence
 
 The current/previous expectations are protected by local tests for neutral skill and
-subagent routes, legacy skill fallback, canonical and legacy auth reads, runner access
+subagent routes, legacy skill fallback, canonical auth reads, runner access
 token gates, image catalog resolution, and workspace sync path filtering. When a new
 cross-layer field or route is added, add a focused fixture/test at the owning boundary
 before changing the deployment order above.

@@ -92,7 +92,7 @@ async function selectGenericEnvironmentEntryForActiveSession(state, entryId) {
 }
 
 async function saveEnvironmentSelection(state, session, environmentEntryIds) {
-  const providers = session.authSelection?.providers || session.piAuthSelection || {};
+  const providers = session.authSelection?.providers || {};
   const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, {
     providers,
     environmentEntryIds,
