@@ -99,3 +99,32 @@ test("status includes browser QA readiness when the service is provided", async 
   assert.equal(status.qa.available, true);
   assert.equal(preview.capabilityStatus().qa.command, "mapache-preview-qa");
 });
+
+test("preview facade selects configured N64 and proxy modes", async () => {
+  const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-preview-"));
+  const config = {
+    ...previewConfig(workspaceDir),
+    runnerCapabilities: {preview: true, n64: true},
+  };
+  await fs.mkdir(path.dirname(config.previewConfigPath), {recursive: true});
+  await fs.mkdir(path.dirname(config.previewN64RomPath), {recursive: true});
+  await fs.writeFile(config.previewN64RomPath, Buffer.alloc(128));
+  const preview = createPreviewService(config);
+
+  await fs.writeFile(config.previewConfigPath, JSON.stringify({
+    core: "parallel_n64",
+    mode: "n64",
+  }));
+  const n64Status = await preview.status();
+  assert.equal(n64Status.mode, "n64");
+  assert.equal(n64Status.ready, true);
+  assert.equal(n64Status.n64.emulatorCore, "parallel-n64");
+
+  await fs.writeFile(config.previewConfigPath, JSON.stringify({
+    mode: "proxy",
+    upstream: "http://127.0.0.1:1",
+  }));
+  const proxyStatus = await preview.status();
+  assert.equal(proxyStatus.mode, "proxy");
+  assert.equal(proxyStatus.ready, false);
+});
