@@ -32,6 +32,7 @@ export function RightDrawer({
   onRefreshPiPackages,
   onRefreshPiSkills,
   onRefreshWorkspaceSubagents,
+  onRestartSession,
   onRemovePiPackage,
   onToggleDrawerSection,
   onToggleRightDrawer,
@@ -115,10 +116,12 @@ export function RightDrawer({
       />
       <GoogleWorkspacePanel
         googleWorkspace={state.googleWorkspace}
+        selectedSession={selectedSession}
         state={state}
         onBindConnection={onBindGoogleConnection}
         onDeleteConnection={onDeleteGoogleConnection}
         onRefresh={onRefreshGoogleWorkspace}
+        onRestartSession={onRestartSession}
         onStartConnection={onStartGoogleConnection}
         onToggleDrawerSection={onToggleDrawerSection}
         onUnbindConnection={onUnbindGoogleConnection}

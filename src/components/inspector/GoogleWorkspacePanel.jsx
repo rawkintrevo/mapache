@@ -9,10 +9,12 @@ function serviceLabel(service) {
 
 export function GoogleWorkspacePanel({
   googleWorkspace,
+  selectedSession,
   state,
   onBindConnection,
   onDeleteConnection,
   onRefresh,
+  onRestartSession,
   onStartConnection,
   onToggleDrawerSection,
   onUnbindConnection,
@@ -28,6 +30,7 @@ export function GoogleWorkspacePanel({
   const boundConnection = data.connection;
   const busy = status.loading || status.connecting || status.saving || status.deleting;
   const canWrite = [...selected].every((key) => services.find((service) => service.key === key)?.accessLevels?.includes("write"));
+  const canRestart = selectedSession?.status === "running" && Boolean(onRestartSession);
 
   return (
     <DrawerSection
@@ -56,6 +59,16 @@ export function GoogleWorkspacePanel({
       </p>
       {status.error ? <p className="empty">{status.error}</p> : null}
       {status.message ? <p className="subtle">{status.message}</p> : null}
+      {status.message?.includes("Restart active sessions") && canRestart ? (
+        <Button
+          className="google-workspace-restart"
+          disabled={busy}
+          variant="secondary"
+          onClick={() => onRestartSession(selectedSession.id)}
+        >
+          Restart active session
+        </Button>
+      ) : null}
       {boundConnection ? (
         <div className="google-workspace-account google-workspace-account--active">
           <Cloud aria-hidden="true" />
@@ -80,6 +93,7 @@ export function GoogleWorkspacePanel({
           {services.map((service) => (
             <label className="google-workspace-service" key={service.key}>
               <input
+                aria-label={`${serviceLabel(service)} Google service`}
                 checked={selected.has(service.key)}
                 disabled={busy}
                 type="checkbox"
@@ -128,6 +142,7 @@ export function GoogleWorkspacePanel({
               <DrawerListItem
                 actions={[
                   <Button
+                    aria-label={`Use ${account.email}`}
                     disabled={busy || binding?.connectionId === account.connectionId}
                     key="use"
                     size="compact"
@@ -143,11 +158,16 @@ export function GoogleWorkspacePanel({
                     label={`Remove ${account.email}`}
                     tone="danger"
                     onClick={() => {
-                      if (window.confirm(`Remove Google account ${account.email}?`)) onDeleteConnection?.(account.connectionId);
+                      const count = Number(account.workspaceUsage?.count || 0);
+                      const usage = count ? ` It is used by ${count} workspace${count === 1 ? "" : "s"}; those bindings will be disconnected.` : "";
+                      if (window.confirm(`Remove Google account ${account.email}?${usage}`)) onDeleteConnection?.(account.connectionId);
                     }}
                   />,
                 ]}
-                detail={<span className="subtle">{account.status === "connected" ? "Ready" : "Reconnect required"}</span>}
+                detail={<span className="subtle">
+                  {account.status === "connected" ? "Ready" : "Reconnect required"}
+                  {account.workspaceUsage?.count ? ` · ${account.workspaceUsage.count} workspace${account.workspaceUsage.count === 1 ? "" : "s"}` : ""}
+                </span>}
                 key={account.connectionId}
                 meta={account.displayName || "Google account"}
                 title={account.email}

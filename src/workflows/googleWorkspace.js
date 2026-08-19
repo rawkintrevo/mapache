@@ -93,6 +93,7 @@ export async function startGoogleWorkspaceConnectionState({state, render, openPo
       connecting: false,
       message: popup ? "Complete Google authorization in the popup, then return here." : "Google authorization opened in a new tab.",
     };
+    if (data.authorizationCompleted && typeof loadState === "function") await loadState({silent: true});
     if (popup && typeof loadState === "function") watchPopup(popup, () => loadState({silent: true}));
   } catch (error) {
     state.googleWorkspace = {...state.googleWorkspace, connecting: false, error: friendlyMcpConfigError(error), message: ""};
@@ -110,7 +111,7 @@ export async function bindGoogleWorkspaceConnectionState({state, render, connect
       connectionId,
       enabledServices: enabledServices || selectedServices(state),
     });
-    state.googleWorkspace = {...state.googleWorkspace, saving: false, message: "Google services applied."};
+    state.googleWorkspace = {...state.googleWorkspace, saving: false, message: "Google services applied. Restart active sessions to load the new MCP servers."};
     await loadState({silent: true});
   } catch (error) {
     state.googleWorkspace = {...state.googleWorkspace, saving: false, error: friendlyMcpConfigError(error), message: ""};
@@ -125,7 +126,7 @@ export async function unbindGoogleWorkspaceConnectionState({state, render, loadS
   render();
   try {
     await state.api.unbindGoogleConnection(workspaceId);
-    state.googleWorkspace = {...state.googleWorkspace, saving: false, message: "Google disconnected from this workspace."};
+    state.googleWorkspace = {...state.googleWorkspace, saving: false, message: "Google disconnected from this workspace. Restart active sessions to clear its MCP servers."};
     await loadState({silent: true});
   } catch (error) {
     state.googleWorkspace = {...state.googleWorkspace, saving: false, error: friendlyMcpConfigError(error), message: ""};

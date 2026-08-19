@@ -44,7 +44,12 @@ const db = {collection() { return {where(_field, _operator, value) { return {asy
     db,
     requireWorkspace: async () => {},
   });
-  assert.deepStrictEqual(await service.listGoogleConnections("user-1"), {connections: [connection]});
+  assert.deepStrictEqual(await service.listGoogleConnections("user-1"), {
+    connections: [{
+      ...connection,
+      workspaceUsage: {count: 1, workspaces: [{id: "workspace-1", name: "One"}]},
+    }],
+  });
   assert.deepStrictEqual(await service.getGoogleConnection("user-1", "google-1"), {
     connection,
     workspaceUsage: {count: 1, workspaces: [{id: "workspace-1", name: "One"}]},

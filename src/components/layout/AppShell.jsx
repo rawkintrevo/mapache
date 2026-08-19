@@ -98,7 +98,6 @@ export function AppShell(props) {
             onPushGit={git.pushGit}
             onResizeSession={sessions.resizeSession}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
-            onRestartSession={sessions.restartSession}
             onShareSessionPreview={sessions.shareSessionPreview}
             onCloseSshSessionForward={sessions.closeSshSessionForward}
             onCreateSshSessionForward={sessions.createSshSessionForward}
@@ -133,6 +132,7 @@ export function AppShell(props) {
           onRefreshPiPackages={pi.refreshPiPackages}
           onRefreshPiSkills={pi.refreshPiSkills}
           onRefreshWorkspaceSubagents={pi.refreshWorkspaceSubagents}
+          onRestartSession={sessions.restartSession}
           onRemovePiPackage={pi.removePiPackage}
           onToggleDrawerSection={drawer.toggleDrawerSection}
           onToggleRightDrawer={drawer.toggleRightDrawer}

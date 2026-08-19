@@ -11,7 +11,7 @@ function createGoogleWorkspaceApiService(dependencies = {}) {
 
   return {
     listGoogleWorkspaceServices: () => googleWorkspaceServiceCatalog(),
-    listGoogleConnections: (uid) => connections.listGoogleConnections(uid),
+    listGoogleConnections: (uid) => listGoogleConnections(uid, dependencies),
     getGoogleConnection: (uid, connectionId) => getGoogleConnection(uid, connectionId, dependencies),
     deleteGoogleConnection: (uid, connectionId) => deleteGoogleConnection(uid, connectionId, dependencies),
     startGoogleConnection: (uid, workspaceId, payload) => oauth.startGoogleConnection(uid, workspaceId, payload),
@@ -28,6 +28,15 @@ async function getGoogleConnection(uid, connectionId, dependencies) {
   const connection = await dependencies.connectionsService.getGoogleConnection(uid, connectionId);
   const workspaceUsage = await workspaceUsageFor(uid, connectionId, dependencies);
   return {connection, workspaceUsage};
+}
+
+async function listGoogleConnections(uid, dependencies) {
+  const result = await dependencies.connectionsService.listGoogleConnections(uid);
+  const connections = await Promise.all((result.connections || []).map(async (connection) => ({
+    ...connection,
+    workspaceUsage: await workspaceUsageFor(uid, connection.connectionId, dependencies),
+  })));
+  return {connections};
 }
 
 async function deleteGoogleConnection(uid, connectionId, dependencies) {
