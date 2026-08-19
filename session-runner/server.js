@@ -28,6 +28,7 @@ const {
 } = require("./lib/terminal");
 const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
+const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 
 const config = createConfig();
@@ -50,13 +51,17 @@ const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
+const workspaceSync = createWorkspaceSyncCoordinator({
+  syncDown: workspace.syncDown,
+  syncUp: workspace.syncUp,
+});
 const chromeProfile = createChromeProfileService({config, archives: workspace});
 const chromeProfileSnapshots = createChromeProfileSnapshotService({
   config,
   profile: chromeProfile,
-  snapshot: () => workspace.syncUp({includeArchives: true}),
+  snapshot: () => workspaceSync.syncUp({includeArchives: true}),
 });
-const pi = createPiService({config, syncUp: workspace.syncUp});
+const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const mcpConfig = createMcpConfigService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
@@ -68,11 +73,11 @@ const terminalSession = createTerminalSession({
     const executable = path.basename(String(command && command.file || ""));
     if (executable === "pi") {
       await git.finalizeGithubAutomationBranch(exitCode);
-      await workspace.syncUp({includeArchives: true});
+      await workspaceSync.syncUp({includeArchives: true});
       return;
     }
     if (executable === "codex") {
-      await workspace.syncUp({includeArchives: true});
+      await workspaceSync.syncUp({includeArchives: true});
     }
   },
 });
@@ -145,7 +150,7 @@ app.post("/workspace/sync-down", async (req, res) => {
   }
 
   try {
-    await workspace.syncDown();
+    await workspaceSync.syncDown();
     res.json({ok: true});
   } catch (error) {
     console.error("workspace sync down failed", error);
@@ -285,7 +290,7 @@ app.post("/shutdown", async (req, res) => {
       await chromeProfileSnapshots.stop();
       await chromeProfileSnapshots.finalize();
     } else {
-      await workspace.syncUp({includeArchives: true});
+      await workspaceSync.syncUp({includeArchives: true});
     }
     await activity.updateSessionActivity({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -623,7 +628,7 @@ function startSyncLoop() {
     const now = Date.now();
     const includeArchives = !chromeProfileSnapshots.enabled() &&
       now - lastArchiveSync >= config.archiveSyncIntervalMs;
-    const sync = workspace.syncUp({includeArchives});
+    const sync = workspaceSync.syncUp({includeArchives});
     sync
         .then(() => {
           if (includeArchives) lastArchiveSync = now;
