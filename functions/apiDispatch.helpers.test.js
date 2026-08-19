@@ -103,7 +103,7 @@ function createTestApiHandlers() {
     environmentKeysService: service,
     openAiCodexAuthService: service,
     piPackagesService: service,
-    piService: service,
+    workspaceAgentAssetsService: service,
     workspaceService: service,
     githubService: service,
     operations,

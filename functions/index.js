@@ -59,12 +59,12 @@ const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
 const {createPiPackagesService} = require("./piPackages.service");
-const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
 const {createSshSessionService} = require("./sshSession.service");
+const {createWorkspaceAgentAssetsService} = require("./workspaceAgentAssets.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
@@ -104,8 +104,7 @@ const piPackagesService = createPiPackagesService({
   requireSession,
   requireWorkspace,
 });
-const piService = createPiService({
-  agentAuthService,
+const workspaceAgentAssetsService = createWorkspaceAgentAssetsService({
   requireSession,
   requireWorkspace,
   requestRunnerJson,
@@ -215,9 +214,9 @@ const workspaceService = createWorkspaceService({
 
 const API_HANDLERS = createApiHandlers({
   environmentKeysService,
-  piService,
   openAiCodexAuthService,
   piPackagesService,
+  workspaceAgentAssetsService,
   workspaceService,
   githubService,
   operations: {

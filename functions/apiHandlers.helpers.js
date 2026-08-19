@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({piService, agentAuthService, environmentKeysService, openAiCodexAuthService, piPackagesService, workspaceService, githubService, operations}) {
+function createApiHandlers({agentAuthService, environmentKeysService, openAiCodexAuthService, piPackagesService, workspaceAgentAssetsService, workspaceService, githubService, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -18,15 +18,15 @@ function createApiHandlers({piService, agentAuthService, environmentKeysService,
     installPiPackage: piPackagesService.installPiPackage,
     removePiPackage: piPackagesService.removePiPackage,
     updatePiPackage: piPackagesService.updatePiPackage,
-    listWorkspaceSkills: piService.listWorkspaceSkills,
-    saveWorkspaceSkill: piService.saveWorkspaceSkill,
-    deleteWorkspaceSkill: piService.deleteWorkspaceSkill,
-    listPiSkills: piService.listPiSkills,
-    savePiSkill: piService.savePiSkill,
-    deletePiSkill: piService.deletePiSkill,
-    listWorkspaceSubagents: piService.listWorkspaceSubagents,
-    saveWorkspaceSubagent: piService.saveWorkspaceSubagent,
-    deleteWorkspaceSubagent: piService.deleteWorkspaceSubagent,
+    listWorkspaceSkills: workspaceAgentAssetsService.listWorkspaceSkills,
+    saveWorkspaceSkill: workspaceAgentAssetsService.saveWorkspaceSkill,
+    deleteWorkspaceSkill: workspaceAgentAssetsService.deleteWorkspaceSkill,
+    listPiSkills: workspaceAgentAssetsService.listPiSkills,
+    savePiSkill: workspaceAgentAssetsService.savePiSkill,
+    deletePiSkill: workspaceAgentAssetsService.deletePiSkill,
+    listWorkspaceSubagents: workspaceAgentAssetsService.listWorkspaceSubagents,
+    saveWorkspaceSubagent: workspaceAgentAssetsService.saveWorkspaceSubagent,
+    deleteWorkspaceSubagent: workspaceAgentAssetsService.deleteWorkspaceSubagent,
     listWorkspaces: workspaceService.listWorkspaces,
     createWorkspace: workspaceService.createWorkspace,
     deleteWorkspace: workspaceService.deleteWorkspace,

@@ -30,7 +30,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Agent credential storage, compatibility reads/writes, selection, and materialization: `functions/agentAuth.service.js`
 - OpenAI Codex device-code/OAuth flow and token normalization: `functions/openAiCodexAuth.service.js`
 - Pi package proxies, source parsing, and observed catalog: `functions/piPackages.service.js`
-- Workspace skills and workspace subagents: `functions/pi.service.js`
+- Workspace skills and workspace subagents: `functions/workspaceAgentAssets.service.js`
 - Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Session resource catalog and validation: `functions/sessionResourceCatalog.json`, `functions/sessionResources.helpers.js`
 - Usage rollups: `functions/userUsage.service.js`
@@ -59,7 +59,7 @@ Generic environment keys use the private `users/{uid}/private/environmentKeys/en
 
 Workspace auth now uses neutral account routes at `/api/auth/*` plus the per-session route `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/auth-selection`. Saved credentials persist in `users/{uid}/private/agentAuth`, but the backend still reads and mirrors writes to legacy `users/{uid}/private/piAuth` during rollout compatibility. Session selection persists in `authSelection` on the session document, and backend writes still mirror the provider map to legacy `piAuthSelection` so older Pi sessions continue to materialize the intended credentials until the compatibility layer is removed. Legacy `/api/pi-auth/*` and `/api/.../pi-auth-selection` aliases remain available for rollout compatibility.
 
-Workspace skills now use neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/skills` and `/skills/delete`. `functions/pi.service.js` still owns validation and compatibility because Pi and Codex share the same name/description/content rules and the same rollout path. The service gates skill management to Pi and Codex sessions, prefers the neutral runner `/skills*` endpoints, and falls back to legacy `/pi/skills*` routes when an older runner revision is still serving an existing session.
+Workspace skills now use neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/skills` and `/skills/delete`. `functions/workspaceAgentAssets.service.js` owns validation and compatibility because Pi and Codex share the same name/description/content rules and the same rollout path. The service gates skill and subagent management to Pi and Codex sessions, prefers neutral runner endpoints, and falls back to legacy `/pi/skills*` routes when an older runner revision is still serving an existing session.
 
 Workspace subagents use parallel neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/subagents` and `/subagents/delete`. The backend gates subagent CRUD to Pi and Codex sessions, validates the shared name/description/instructions rules, and proxies to runner-managed native files. The runner may expose `/subagent-chains` for future internal work, but the Functions API does not advertise or dispatch chain routes in V1.
 

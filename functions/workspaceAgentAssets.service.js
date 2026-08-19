@@ -1,11 +1,9 @@
 "use strict";
 
 const {sessionHarnessId} = require("./agentAuth.service");
-const {
-  httpError,
-} = require("./backendUtils.helpers");
+const {httpError} = require("./backendUtils.helpers");
 
-function createPiService(dependencies = {}) {
+function createWorkspaceAgentAssetsService(dependencies = {}) {
   return {
     deleteWorkspaceSubagent: (uid, workspaceId, sessionId, payload) =>
       deleteWorkspaceSubagent(uid, workspaceId, sessionId, payload, dependencies),
@@ -92,6 +90,14 @@ async function deleteWorkspaceSubagent(uid, workspaceId, sessionId, payload, dep
   return requestRunnerWorkspaceSubagentDelete(session, {name: subagentName}, dependencies);
 }
 
+function sessionSupportsWorkspaceSkills(session = {}) {
+  return ["pi", "codex"].includes(sessionHarnessId(session));
+}
+
+function sessionSupportsWorkspaceSubagents(session = {}) {
+  return ["pi", "codex"].includes(sessionHarnessId(session));
+}
+
 async function requestRunnerWorkspaceSkills(session, dependencies = {}) {
   return requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
     legacyRoutePath: "/pi/skills",
@@ -153,7 +159,7 @@ async function requestRunnerWorkspaceSubagentSave(session, body, dependencies = 
     notFoundError: "runner_subagent_save_unsupported",
     notFoundStatus: 501,
     failureError: "subagent_save_failed",
-    unavailableError: "runner_subagent_save_unavailable",
+    unavailableError: "subagent_save_unavailable",
     timeoutMs: 30000,
   });
 }
@@ -165,30 +171,16 @@ async function requestRunnerWorkspaceSubagentDelete(session, body, dependencies 
     notFoundError: "runner_subagent_delete_unsupported",
     notFoundStatus: 501,
     failureError: "subagent_delete_failed",
-    unavailableError: "runner_subagent_delete_unavailable",
+    unavailableError: "subagent_delete_unavailable",
     timeoutMs: 30000,
   });
 }
 
-function sessionSupportsWorkspaceSkills(session = {}) {
-  return ["pi", "codex"].includes(sessionHarnessId(session));
-}
-
-function sessionSupportsWorkspaceSubagents(session = {}) {
-  return ["pi", "codex"].includes(sessionHarnessId(session));
-}
-
-async function requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {
-  routePath,
-  legacyRoutePath,
-  requestOptions,
-}) {
+async function requestRunnerWorkspaceSkillRouteFallback(dependencies, session, {routePath, legacyRoutePath, requestOptions}) {
   try {
     return await requestRunnerJsonDependency(dependencies, session, routePath, requestOptions);
   } catch (error) {
-    if (error?.status !== (requestOptions.notFoundStatus || 501) || error?.publicMessage !== requestOptions.notFoundError) {
-      throw error;
-    }
+    if (error?.status !== (requestOptions.notFoundStatus || 501) || error?.publicMessage !== requestOptions.notFoundError) throw error;
     return requestRunnerJsonDependency(dependencies, session, legacyRoutePath, requestOptions);
   }
 }
@@ -203,25 +195,19 @@ function normalizePiSkillPayload(payload) {
 
 function normalizePiSkillName(value) {
   const name = String(value || "").trim().toLowerCase();
-  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
-    throw httpError(400, "invalid_skill_name");
-  }
+  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw httpError(400, "invalid_skill_name");
   return name;
 }
 
 function normalizePiSkillDescription(value) {
   const description = String(value || "").trim();
-  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) {
-    throw httpError(400, "invalid_skill_description");
-  }
+  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) throw httpError(400, "invalid_skill_description");
   return description;
 }
 
 function normalizePiSkillContent(value) {
   const content = String(value || "").trim();
-  if (!content || content.length > 128 * 1024 || /\u0000/.test(content)) {
-    throw httpError(400, "invalid_skill_content");
-  }
+  if (!content || content.length > 128 * 1024 || /\u0000/.test(content)) throw httpError(400, "invalid_skill_content");
   return content;
 }
 
@@ -235,55 +221,47 @@ function normalizeWorkspaceSubagentPayload(payload) {
 
 function normalizeWorkspaceSubagentName(value) {
   const name = String(value || "").trim().toLowerCase();
-  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
-    throw httpError(400, "invalid_subagent_name");
-  }
+  if (!name || name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw httpError(400, "invalid_subagent_name");
   return name;
 }
 
 function normalizeWorkspaceSubagentDescription(value) {
   const description = String(value || "").trim();
-  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) {
-    throw httpError(400, "invalid_subagent_description");
-  }
+  if (!description || description.length > 1024 || /[\u0000-\u001f\u007f]/.test(description)) throw httpError(400, "invalid_subagent_description");
   return description;
 }
 
 function normalizeWorkspaceSubagentInstructions(value) {
   const instructions = String(value || "").trim();
-  if (!instructions || instructions.length > 128 * 1024 || /\u0000/.test(instructions)) {
-    throw httpError(400, "invalid_subagent_content");
-  }
+  if (!instructions || instructions.length > 128 * 1024 || /\u0000/.test(instructions)) throw httpError(400, "invalid_subagent_content");
   return instructions;
 }
 
 async function requireWorkspaceDependency(dependencies, uid, workspaceId) {
-  if (typeof dependencies.requireWorkspace !== "function") {
-    throw new Error("Pi service requires a requireWorkspace dependency.");
-  }
+  if (typeof dependencies.requireWorkspace !== "function") throw new Error("Workspace agent assets service requires a requireWorkspace dependency.");
   return dependencies.requireWorkspace(uid, workspaceId);
 }
 
 async function requireSessionDependency(dependencies, uid, workspaceId, sessionId) {
-  if (typeof dependencies.requireSession !== "function") {
-    throw new Error("Pi service requires a requireSession dependency.");
-  }
+  if (typeof dependencies.requireSession !== "function") throw new Error("Workspace agent assets service requires a requireSession dependency.");
   return dependencies.requireSession(uid, workspaceId, sessionId);
 }
 
 async function requestRunnerJsonDependency(dependencies, session, routePath, options = {}) {
-  if (typeof dependencies.requestRunnerJson !== "function") {
-    throw new Error("Pi service requires a requestRunnerJson dependency.");
-  }
+  if (typeof dependencies.requestRunnerJson !== "function") throw new Error("Workspace agent assets service requires a requestRunnerJson dependency.");
   return dependencies.requestRunnerJson(session, routePath, options);
 }
 
 module.exports = {
-  createPiService,
+  createWorkspaceAgentAssetsService,
   normalizePiSkillContent,
   normalizePiSkillDescription,
   normalizePiSkillName,
   normalizePiSkillPayload,
+  normalizeWorkspaceSubagentDescription,
+  normalizeWorkspaceSubagentInstructions,
+  normalizeWorkspaceSubagentName,
+  normalizeWorkspaceSubagentPayload,
   sessionSupportsWorkspaceSkills,
   sessionSupportsWorkspaceSubagents,
 };
