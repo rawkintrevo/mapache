@@ -51,7 +51,6 @@ const {
 } = require("./userUsage.service");
 const {
   createWorkspaceService,
-  normalizeWorkspaceFilePath,
   requireWorkspace,
 } = require("./workspace.service");
 const {
@@ -75,10 +74,10 @@ const {
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
 const {
-  cleanGithubNumericId,
   createGithubService,
   sessionSourceMetadata,
 } = require("./github.service");
+const {createGitSessionService} = require("./gitSession.service");
 const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
@@ -132,6 +131,21 @@ const {
   readSshSessionFile,
   saveSshSessionFile,
 } = sshSessionService;
+const gitSessionService = createGitSessionService({
+  githubService,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
+const {
+  commitGit,
+  getGitStatusSummary,
+  openPullRequest,
+  pullGit,
+  pushGit,
+  stageGit,
+  unstageGit,
+} = gitSessionService;
 const runnerImageFreshnessService = createRunnerImageFreshnessService();
 const {getCurrentRunnerImageDigest} = runnerImageFreshnessService;
 const getCurrentRunnerImageDigestForSession = (session) =>
@@ -830,90 +844,6 @@ async function deleteSession(uid, workspaceId, sessionId) {
 }
 
 
-async function getGitStatusSummary(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-
-  if (!session.serviceUrl) {
-    throw httpError(409, "session_not_running");
-  }
-  if (!session.shutdownToken) {
-    throw httpError(503, "runner_git_status_unavailable");
-  }
-
-  return requestRunnerGitStatus(session);
-}
-
-async function pullGit(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-
-  if (!session.serviceUrl) {
-    throw httpError(409, "session_not_running");
-  }
-  if (!session.shutdownToken) {
-    throw httpError(503, "runner_git_pull_unavailable");
-  }
-
-  return requestRunnerGitPull(session);
-}
-
-async function stageGit(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_stage_unavailable");
-  return requestRunnerGitStage(session, {paths: normalizeGitActionPayloadPaths(payload)});
-}
-
-async function unstageGit(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_unstage_unavailable");
-  return requestRunnerGitUnstage(session, {paths: normalizeGitActionPayloadPaths(payload)});
-}
-
-async function commitGit(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_commit_unavailable");
-  return requestRunnerGitCommit(session, {message: normalizeGitCommitMessage(payload)});
-}
-
-async function pushGit(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
-  if (cleanName(session.sourceType) === "github" && cleanName(session.sourceMode) === "connected") {
-    const installationId = cleanGithubNumericId(session.sourceInstallationId);
-    if (!installationId) {
-      throw httpError(503, "github_push_auth_unavailable");
-    }
-    const tokenResponse = await githubService.createGithubInstallationToken(installationId);
-    return requestRunnerGitPush(session, {
-      pushToken: tokenResponse.token,
-      pushUsername: "x-access-token",
-    });
-  }
-  return requestRunnerGitPush(session);
-}
-
-async function openPullRequest(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  return githubService.openPullRequestForSession(session, payload, requestRunnerGitOpenPr);
-}
-
 async function requireSession(uid, workspaceId, sessionId) {
   await requireWorkspace(uid, workspaceId);
   const sessionRef = sessionCollection(workspaceId).doc(sessionId);
@@ -1037,59 +967,6 @@ function sessionEnvMetadata(workspace, payload) {
   };
 }
 
-async function requestRunnerGitStatus(session) {
-  return requestRunnerJson(session, "/git/status", {
-    unavailableError: "runner_git_status_unavailable",
-  });
-}
-
-async function requestRunnerGitPull(session) {
-  return requestRunnerJson(session, "/git/pull", {
-    method: "POST",
-    unavailableError: "runner_git_pull_unavailable",
-  });
-}
-
-async function requestRunnerGitStage(session, body) {
-  return requestRunnerJson(session, "/git/stage", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_stage_unavailable",
-  });
-}
-
-async function requestRunnerGitUnstage(session, body) {
-  return requestRunnerJson(session, "/git/unstage", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_unstage_unavailable",
-  });
-}
-
-async function requestRunnerGitCommit(session, body) {
-  return requestRunnerJson(session, "/git/commit", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_commit_unavailable",
-  });
-}
-
-async function requestRunnerGitPush(session, body) {
-  return requestRunnerJson(session, "/git/push", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_push_unavailable",
-  });
-}
-
-async function requestRunnerGitOpenPr(session, body) {
-  return requestRunnerJson(session, "/git/open-pr", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_open_pr_unavailable",
-  });
-}
-
 async function requestRunnerWorkspaceSyncDown(session) {
   return requestRunnerJson(session, "/workspace/sync-down", {
     method: "POST",
@@ -1150,20 +1027,4 @@ function isIdleSession(session, now) {
   );
   if (!idleSince) return false;
   return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
-}
-
-function normalizeGitActionPayloadPaths(payload) {
-  const paths = payload && Array.isArray(payload.paths) ? payload.paths : null;
-  if (!paths || !paths.length) {
-    throw httpError(400, "invalid_git_paths");
-  }
-  return paths.map((value) => normalizeWorkspaceFilePath(value));
-}
-
-function normalizeGitCommitMessage(payload) {
-  const message = cleanName(payload && payload.message ? payload.message : "").trim();
-  if (!message) {
-    throw httpError(400, "missing_commit_message");
-  }
-  return message;
 }
