@@ -384,6 +384,72 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(timeoutUpdates[0].status, "provision_failed");
   assert.match(timeoutUpdates[0].lastError, /timed out after 4000ms/);
 
+  const idempotentSession = {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "idempotent",
+    serviceId: "session-idempotent",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+    status: "provisioning",
+    provisioningOperationId: "operation-idempotent",
+    provisioningState: "pending",
+    provisioningAttempt: 0,
+    provisioningRetryable: false,
+  };
+  let idempotentDoc = {...idempotentSession};
+  let idempotentPostCount = 0;
+  const idempotentRef = {
+    get: async () => ({exists: true, data: () => idempotentDoc}),
+    update: async (updates) => Object.assign(idempotentDoc, updates),
+  };
+  const idempotentDb = {
+    runTransaction: async (callback) => callback({
+      get: async () => ({exists: true, data: () => idempotentDoc}),
+      update: (ref, updates) => Object.assign(idempotentDoc, updates),
+    }),
+  };
+  const idempotentClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        idempotentPostCount += 1;
+        return {data: {name: "operations/idempotent-create"}};
+      }
+      if (method === "GET" && url.endsWith("operations/idempotent-create")) {
+        return {data: {done: true}};
+      }
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      if (method === "GET" && url.includes("/services/session-idempotent")) {
+        return {data: {uri: "https://session-idempotent.example.run.app"}};
+      }
+      throw new Error(`Unexpected idempotent provisioning request: ${method} ${url}`);
+    },
+  };
+  const idempotentService = createCloudRunService({
+    auth: {getClient: async () => idempotentClient},
+    db: idempotentDb,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await idempotentService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, idempotentRef, idempotentSession);
+  await idempotentService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, idempotentRef, idempotentSession);
+  assert.strictEqual(idempotentPostCount, 1);
+  assert.strictEqual(idempotentDoc.provisioningAttempt, 1);
+  assert.strictEqual(idempotentDoc.provisioningState, "completed");
+  assert.strictEqual(idempotentDoc.provisioningCloudRunOperationName, "operations/idempotent-create");
+
   if (originalProject === undefined) delete process.env.GCLOUD_PROJECT;
   else process.env.GCLOUD_PROJECT = originalProject;
   if (originalRunnerServiceAccount === undefined) delete process.env.SESSION_RUNNER_SERVICE_ACCOUNT;

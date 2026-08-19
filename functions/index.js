@@ -86,6 +86,11 @@ const {
 } = require("./runnerProxy.helpers");
 const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
+const {
+  initialProvisioningMetadata,
+  normalizeProvisioningOperationId,
+  provisioningSessionId,
+} = require("./provisioning.helpers");
 
 const githubService = createGithubService();
 const piService = createPiService({
@@ -259,13 +264,33 @@ async function syncWorkspaceFiles(uid, workspaceId) {
 async function createSession(uid, workspaceId, payload) {
   payload = payload || {};
   const workspace = await requireWorkspace(uid, workspaceId);
+  let provisioningOperationId;
+  try {
+    provisioningOperationId = normalizeProvisioningOperationId(
+        payload.operationId || payload.provisioningOperationId || payload.idempotencyKey,
+    );
+  } catch (error) {
+    if (error && error.code === "invalid_provisioning_operation_id") {
+      throw httpError(400, error.code, error);
+    }
+    throw error;
+  }
+  const sessionCollectionRef = sessionCollection(workspaceId);
+  const sessionRef = sessionCollectionRef.doc(provisioningSessionId(provisioningOperationId));
+  const existingSessionSnap = await sessionRef.get();
+  if (existingSessionSnap.exists) {
+    const existingSession = existingSessionSnap.data() || {};
+    if (existingSession.ownerUid && existingSession.ownerUid !== uid) {
+      throw httpError(403, "session_forbidden");
+    }
+    return toClientDoc(existingSessionSnap);
+  }
   const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
   const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
   const sshPayload = sessionType === "ssh" ?
     await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) :
     null;
   const now = admin.firestore.FieldValue.serverTimestamp();
-  const sessionRef = sessionCollection(workspaceId).doc();
   const region = cleanName(payload.region || DEFAULT_REGION);
   const resources = normalizeRequestedSessionResources(payload, {
     defaultResources: sshPayload ?
@@ -306,6 +331,7 @@ async function createSession(uid, workspaceId, payload) {
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
     status: runnerImage.canProvision ? "provisioning" : "needs_image",
+    ...initialProvisioningMetadata(provisioningOperationId),
     region,
     image: runnerImage.image,
     imageKey: runnerImage.key,
@@ -798,6 +824,10 @@ async function restartSession(uid, workspaceId, sessionId) {
     lastError: null,
     updatedAt: restartedAt,
   });
+
+  if (recreatingSessionService) {
+    Object.assign(restartUpdate, initialProvisioningMetadata(crypto.randomUUID()));
+  }
 
   if (!Array.isArray(session.environmentEntryIds) && Array.isArray(session.genericEnvironmentEntryIds)) {
     restartUpdate.environmentEntryIds = [...new Set(session.genericEnvironmentEntryIds)];

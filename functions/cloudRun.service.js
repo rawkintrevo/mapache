@@ -3,6 +3,7 @@
 const logger = require("firebase-functions/logger");
 const {
   admin,
+  db,
   auth,
 } = require("./backendContext");
 const {
@@ -28,6 +29,7 @@ const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {runnerImageCapabilities} = require("./runnerImages.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
+const {isRetryableProvisioningError} = require("./provisioning.helpers");
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -42,20 +44,43 @@ function createCloudRunService(dependencies = {}) {
 
 async function provisionSessionService(workspace, sessionRef, session, dependencies = {}) {
   let client;
+  let claimedSession = session;
+  let operationName = session.provisioningCloudRunOperationName || null;
   const parent = `projects/${await getProjectId()}/locations/${session.region}`;
   const serviceName = `${parent}/services/${session.serviceId}`;
   try {
+    let claim;
+    if (session.provisioningOperationId) {
+      claim = await claimProvisioningAttempt(sessionRef, session, dependencies);
+      if (["completed", "failed", "in_progress", "stale"].includes(claim.action)) return;
+      claimedSession = claim.session;
+      operationName = claim.operationName || operationName;
+    }
+
     client = await (dependencies.auth || auth).getClient();
-    const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${session.serviceId}`;
-    const body = await buildCloudRunService(workspace, session, dependencies);
-    const response = await client.request({url, method: "POST", data: body});
-    await waitForOperation(client, response.data, dependencies);
+    if (claim && claim.action === "poll") {
+      await waitForOperation(client, {name: operationName}, dependencies);
+    } else {
+      const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${claimedSession.serviceId}`;
+      const body = await buildCloudRunService(workspace, claimedSession, dependencies);
+      const response = await client.request({url, method: "POST", data: body});
+      operationName = response.data && response.data.name || null;
+      if (claimedSession.provisioningOperationId) {
+        await sessionRef.update({
+          provisioningCloudRunOperationName: operationName,
+          provisioningState: "running",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      await waitForOperation(client, response.data, dependencies);
+    }
     await setPublicInvoker(client, serviceName);
     const service = await getCloudRunService(client, serviceName);
-    await sessionRef.update(sessionStatusUpdate(session, "running", {
+    await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
       serviceUrl: service.uri || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...provisioningCompletionUpdates(claimedSession, operationName),
     }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
     let provisioningError = error;
@@ -64,10 +89,11 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       if (service) {
         try {
           await setPublicInvoker(client, serviceName);
-          await sessionRef.update(sessionStatusUpdate(session, "running", {
+          await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
             serviceUrl: service.uri,
             lastError: null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...provisioningCompletionUpdates(claimedSession, operationName),
           }, {reconciliationReason: "cloud_run_timeout_reconciled"}));
           return;
         } catch (reconciliationError) {
@@ -75,21 +101,104 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
         }
       }
     }
-    await sessionRef.update(sessionStatusUpdate(session, "provision_failed", {
+    await sessionRef.update(sessionStatusUpdate(claimedSession, "provision_failed", {
       lastError: publicGoogleError(provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...provisioningFailureUpdates(claimedSession, operationName, provisioningError),
     }, {reconciliationReason: "cloud_run_provisioning_failed"}));
     if (typeof dependencies.releaseChromeWorkspaceSession === "function") {
       try {
-        await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "provision_failed");
+        await dependencies.releaseChromeWorkspaceSession(sessionRef, claimedSession, "provision_failed");
       } catch (releaseError) {
         logger.warn("Chrome workspace reservation release failed", {
-          serviceId: session.serviceId,
+          serviceId: claimedSession.serviceId,
           error: publicGoogleError(releaseError),
         });
       }
     }
   }
+}
+
+async function claimProvisioningAttempt(sessionRef, session, dependencies = {}) {
+  const firestore = dependencies.db || db;
+
+  const claim = async (transaction) => {
+    const snapshot = transaction ? await transaction.get(sessionRef) : await sessionRef.get();
+    if (!snapshot.exists) return {action: "stale", session};
+
+    const latest = {...session, ...snapshot.data()};
+    if (latest.provisioningOperationId && latest.provisioningOperationId !== session.provisioningOperationId) {
+      return {action: "stale", session: latest};
+    }
+
+    const state = provisioningState(latest);
+    if (state === "completed") return {action: "completed", session: latest};
+    if (state === "failed" && !latest.provisioningRetryable) {
+      return {action: "failed", session: latest};
+    }
+    if (state === "running") {
+      if (latest.provisioningCloudRunOperationName) {
+        return {
+          action: "poll",
+          operationName: latest.provisioningCloudRunOperationName,
+          session: latest,
+        };
+      }
+      return {action: "in_progress", session: latest};
+    }
+
+    const updates = {
+      provisioningAttempt: Number(latest.provisioningAttempt || 0) + 1,
+      provisioningState: "running",
+      provisioningAttemptStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      provisioningAttemptCompletedAt: null,
+      provisioningCloudRunOperationName: null,
+      provisioningRetryable: false,
+      provisioningLastError: null,
+    };
+    if (transaction) transaction.update(sessionRef, updates);
+    else await sessionRef.update(updates);
+    return {
+      action: "start",
+      operationName: null,
+      session: {...latest, ...updates},
+    };
+  };
+
+  if (firestore && typeof firestore.runTransaction === "function") {
+    return firestore.runTransaction((transaction) => claim(transaction));
+  }
+  return claim();
+}
+
+function provisioningState(session = {}) {
+  if (session.provisioningState === "completed") return "completed";
+  if (session.status === "running" && session.serviceUrl) return "completed";
+  if (session.provisioningState === "failed" || session.status === "provision_failed") return "failed";
+  if (session.provisioningState === "running") return "running";
+  return "pending";
+}
+
+function provisioningCompletionUpdates(session, operationName) {
+  if (!session.provisioningOperationId) return {};
+  return {
+    provisioningState: "completed",
+    provisioningCloudRunOperationName: operationName || session.provisioningCloudRunOperationName || null,
+    provisioningAttemptCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    provisioningRetryable: false,
+    provisioningLastError: null,
+  };
+}
+
+function provisioningFailureUpdates(session, operationName, error) {
+  if (!session.provisioningOperationId) return {};
+  return {
+    provisioningState: "failed",
+    provisioningCloudRunOperationName: operationName || session.provisioningCloudRunOperationName || null,
+    provisioningAttemptCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    provisioningRetryable: isRetryableProvisioningError(error),
+    provisioningLastError: publicGoogleError(error),
+  };
 }
 
 async function reconcileProvisioningTimeout(client, serviceName) {
