@@ -1,0 +1,123 @@
+name: Runner Images
+
+on:
+  pull_request:
+    paths:
+      - "session-runner/**"
+      - "functions/runnerCatalog.json"
+      - "functions/runnerCatalog.helpers.js"
+  push:
+    branches:
+      - main
+    paths:
+      - "session-runner/**"
+      - "functions/runnerCatalog.json"
+      - "functions/runnerCatalog.helpers.js"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish compatibility tags as well as the immutable revision tag
+        required: true
+        default: false
+        type: boolean
+      variants:
+        description: Comma-separated variants, or all for the standard matrix
+        required: false
+        default: all
+        type: string
+      include_n64:
+        description: Include pi-n64 in an otherwise standard matrix
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect affected runner variants
+    runs-on: ubuntu-latest
+    outputs:
+      variants: ${{ steps.variants.outputs.variants }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute affected variants
+        id: variants
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          INPUT_VARIANTS: ${{ inputs.variants }}
+          INPUT_INCLUDE_N64: ${{ inputs.include_n64 }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            files=$(git ls-files session-runner functions/runnerCatalog.json functions/runnerCatalog.helpers.js)
+          else
+            files=$(git diff --name-only HEAD^ HEAD)
+          fi
+          variants="$INPUT_VARIANTS"
+          if [ "$variants" = "all" ]; then variants=""; fi
+          json=$(node scripts/affected-runner-images.mjs \
+            --files="$(printf '%s' "$files" | paste -sd, -)" \
+            --variants="$variants" \
+            --include-n64="$INPUT_INCLUDE_N64")
+          echo "Affected variants: $json"
+          echo "variants=$json" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.variant }}
+    needs: detect
+    if: needs.detect.outputs.variants != '[]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(needs.detect.outputs.variants) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PI_AGENTS_CLOUD }}
+          project_id: pi-agents-cloud
+
+      - name: Build runner image
+        env:
+          VARIANT: ${{ matrix.variant }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            source_tag="pr-${PR_NUMBER}-${GITHUB_SHA::12}"
+          else
+            source_tag="${GITHUB_SHA}"
+          fi
+          image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${VARIANT}-${source_tag}"
+          if [ "$VARIANT" = "default" ]; then
+            gcloud builds submit session-runner --project pi-agents-cloud --tag "$image"
+          else
+            gcloud builds submit session-runner \
+              --config "session-runner/cloudbuild.${VARIANT}.yaml" \
+              --project pi-agents-cloud \
+              --substitutions="_IMAGE=$image"
+          fi
+          digest=$(gcloud artifacts docker images describe "$image" --project pi-agents-cloud --format='value(image_summary.digest)')
+          echo "variant=$VARIANT tag=$image digest=$digest source=$GITHUB_SHA"
+          if [ "$PUBLISH" = "true" ]; then
+            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${VARIANT}"
+            gcloud artifacts docker tags add "$image" "$compatibility" --project pi-agents-cloud
+            echo "published compatibility tag=$compatibility"
+          fi
