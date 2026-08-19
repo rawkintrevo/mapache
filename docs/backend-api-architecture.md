@@ -34,6 +34,8 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Session resource catalog and validation: `functions/sessionResourceCatalog.json`, `functions/sessionResources.helpers.js`
 - Usage rollups: `functions/userUsage.service.js`
+- Google Workspace connection models/catalog: `functions/googleWorkspace.models.js`, `functions/googleWorkspace.catalog.js`
+- Google Workspace private connections, OAuth, API, and provisioning: `functions/googleWorkspaceConnections.service.js`, `functions/googleWorkspaceOAuth.service.js`, `functions/googleWorkspaceApi.service.js`, `functions/googleWorkspaceProvisioning.service.js`
 
 ## Current Behavior
 
@@ -42,6 +44,8 @@ The frontend calls authenticated JSON routes under `/api/**`. Cloud Functions ve
 The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is unauthenticated but gated by the `QA_LOGIN_SECRET` Functions secret and the configured QA UID/email parameters. It mints a Firebase custom token for a controlled QA account so browser automation can reach the signed-in app shell; all subsequent API calls still use normal Firebase ID-token verification and app allowlist checks.
 
 Workspace documents live at `workspaces/{workspaceId}` and carry `ownerUid`, `userPath`, source metadata, storage bucket, storage prefix, and workspace-scoped MCP server config. Sessions live under `workspaces/{workspaceId}/sessions/{sessionId}` and repeat ownership metadata for explicit checks and operational queries.
+
+Google account credentials are user-private under `users/{uid}/private/googleConnections/entries/{connectionId}`. Workspaces store only a validated `googleWorkspaceBinding` containing a connection ID and selected service keys; the encrypted refresh token is never returned to clients. The Google API routes expose catalog and safe connection summaries, workspace binding, signed OAuth start/callback, bind/unbind, refresh, and revoke behavior. Cloud Run provisioning resolves the binding at session creation/restart time, refreshes the token, and passes it ephemerally through `GOOGLE_MCP_ACCESS_TOKEN` while `MCP_CONFIG` references that environment name. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md) for the complete contract and operational recovery notes.
 
 File browser writes use Cloud Storage as the workspace source of truth. After a web upload or editor save, the frontend calls `POST /api/workspaces/{workspaceId}/sync-files`; Functions verifies workspace ownership, finds running cloud sessions for that workspace, and asks each runner to pull current storage into its live `/workspace` directory. The sync request is best-effort per session so a storage write does not fail solely because one active runner is temporarily unavailable.
 

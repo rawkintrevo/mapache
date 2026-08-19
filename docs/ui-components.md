@@ -37,6 +37,7 @@ This document serves as an index for significant UI components in the applicatio
 | `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing saved user-scoped auth entries filtered to the selected session harness. |
 | `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
+| `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | React workspace-scoped Google account, service binding, reconnect, disconnect, delete-impact, and active-session restart guidance panel. |
 | `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | React Skills panel for workspace-local Markdown skills, switching between Pi `.pi/skills` and Codex `.agents/skills` based on the selected session harness. |
 | `SubagentsPanel` | `src/components/inspector/SubagentsPanel.jsx` | React Subagents panel for workspace-local Pi `.pi/agents/*.md` and Codex `.codex/agents/*.toml` files based on the selected session harness. |
 | `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for harness-gated workspace-local packages, currently Pi-only. |
