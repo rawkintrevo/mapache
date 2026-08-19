@@ -21,6 +21,7 @@ This document serves as an index for significant UI components in the applicatio
 | `LandingTransparencySection` | `src/components/auth/landing/LandingTransparencySection.jsx` | Landing-page open-build trust copy, CTA, and usage carousel. |
 | `Button` | `src/components/common/Button.jsx` | Shared button component for semantic variants, icon sizing, and icon-only tooltips. |
 | `FatalError` | `src/components/common/FatalError.jsx` | React configuration/startup error screen. |
+| `LazySurfaceFallback` | `src/components/common/LazySurfaceFallback.jsx` | Lightweight status surface shown while deferred pages or dialogs load. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | React signed-in shell that owns the app wrapper, top bar, grid layout, drawers, workspace panel, and modal stack. |
 | `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, user label, refresh, and sign-out controls. |
 | `GlobalActionIndicator` | `src/components/layout/GlobalActionIndicator.jsx` | Shell-level live status indicator shown while global `state.busy` actions are running. |

@@ -1,0 +1,7 @@
+.lazy-surface-fallback {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  padding: 24px;
+  color: var(--color-text-muted);
+}

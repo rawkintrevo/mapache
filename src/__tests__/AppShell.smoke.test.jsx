@@ -264,7 +264,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    await user.click(screen.getAllByRole("button", {name: "Sign up with Google"})[0]);
+    await user.click((await screen.findAllByRole("button", {name: "Sign up with Google"}))[0]);
     expect(onSignIn).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -276,7 +276,7 @@ describe("frontend smoke coverage", () => {
           user={{displayName: "Ada"}}
         />,
     );
-    await user.click(screen.getAllByRole("button", {name: "Open app"})[0]);
+    await user.click((await screen.findAllByRole("button", {name: "Open app"}))[0]);
     expect(onOpenApp).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -386,7 +386,7 @@ describe("frontend smoke coverage", () => {
       }),
     });
 
-    expect(screen.getByRole("heading", {name: "GitHub"})).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: "GitHub"})).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
     expect(screen.getByText("@octocat")).toBeInTheDocument();
 
@@ -454,8 +454,8 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    expect(screen.getByRole("heading", {name: "Admin"})).toBeInTheDocument();
-    expect(screen.getByText("Grace")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: "Admin"})).toBeInTheDocument();
+    expect(await screen.findByText("Grace")).toBeInTheDocument();
     expect(screen.getByText("$0.025")).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox"));
     expect(handlers.admin.setAdminUserWhitelisted).toHaveBeenCalledWith("uid-1", false);
@@ -465,7 +465,7 @@ describe("frontend smoke coverage", () => {
     const user = userEvent.setup();
     const {handlers: sessionHandlers, unmount} = renderShell({sessionModalOpen: true});
 
-    const sessionDialog = screen.getByRole("dialog", {name: "New session"});
+    const sessionDialog = await screen.findByRole("dialog", {name: "New session"});
     expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
     expect(within(sessionDialog).getByLabelText("Container image")).toBeInTheDocument();
     await user.type(within(sessionDialog).getByLabelText("Name"), "Agent Shell");
@@ -489,7 +489,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const workspaceDialog = screen.getByRole("dialog", {name: "Create Workspace"});
+    const workspaceDialog = await screen.findByRole("dialog", {name: "Create Workspace"});
     await user.type(within(workspaceDialog).getByLabelText("Workspace Name"), "Smoke Workspace");
     await user.click(within(workspaceDialog).getByRole("button", {name: "Create Workspace"}));
 
@@ -525,7 +525,7 @@ describe("frontend smoke coverage", () => {
       workspaces: [sshWorkspace],
     });
 
-    const sessionDialog = screen.getByRole("dialog", {name: "New session"});
+    const sessionDialog = await screen.findByRole("dialog", {name: "New session"});
     expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
     expect(within(sessionDialog).queryByLabelText("Container image")).not.toBeInTheDocument();
     expect(within(sessionDialog).getByText("This session will connect to developer@dev.example.com.")).toBeInTheDocument();
@@ -552,7 +552,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const dialog = screen.getByRole("dialog", {name: "Create Workspace"});
+    const dialog = await screen.findByRole("dialog", {name: "Create Workspace"});
     await user.type(within(dialog).getByLabelText("Workspace Name"), "Dev Box");
     await user.click(within(dialog).getByLabelText("Dev machine"));
     await user.type(within(dialog).getByLabelText("Host"), "dev.example.com");
@@ -597,7 +597,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const dialog = screen.getByRole("dialog", {name: "New skill"});
+    const dialog = await screen.findByRole("dialog", {name: "New skill"});
     expect(within(dialog).getByLabelText("Skill name")).toHaveValue("modal-skill");
     await user.click(within(dialog).getByRole("button", {name: "Create skill"}));
     expect(handlers.pi.savePiSkill).toHaveBeenCalledTimes(1);
