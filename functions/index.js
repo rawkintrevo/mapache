@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const {onRequest} = require("firebase-functions/v2/https");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const {
@@ -86,6 +87,7 @@ const {
 } = require("./runnerProxy.helpers");
 const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
+const {createProvisioningWorker} = require("./provisioning.worker");
 const {
   initialProvisioningMetadata,
   normalizeProvisioningOperationId,
@@ -110,6 +112,10 @@ const {
   patchSessionService,
   provisionSessionService,
 } = cloudRunService;
+const {provisionQueuedSession} = createProvisioningWorker({
+  provisionSessionService,
+  requireWorkspace,
+});
 
 const workspaceService = createWorkspaceService({
   deleteSessionService,
@@ -193,6 +199,11 @@ exports.api = onRequest({
     res.status(status).json({error: error.publicMessage || "internal_error"});
   }
 });
+
+exports.provisionQueuedSession = onDocumentWritten({
+  document: "workspaces/{workspaceId}/sessions/{sessionId}",
+  timeoutSeconds: 300,
+}, provisionQueuedSession);
 
 exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
   const snap = await db.collectionGroup("sessions")
