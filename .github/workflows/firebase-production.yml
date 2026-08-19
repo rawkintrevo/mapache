@@ -45,17 +45,8 @@ jobs:
       - name: Install session runner dependencies
         run: npm ci --prefix session-runner
 
-      - name: Test functions
-        run: npm --prefix functions test
-
-      - name: Check session runner syntax
-        run: npm --prefix session-runner run lint
-
-      - name: Test frontend smoke coverage
-        run: npm run test:frontend
-
-      - name: Build app
-        run: npm run build
+      - name: Run canonical verification
+        run: npm run check
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
