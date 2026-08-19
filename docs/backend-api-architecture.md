@@ -20,6 +20,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - QA custom token login: `functions/qaAuth.service.js`
 - Workspaces/files: `functions/workspace.service.js`, with live runner materialization coordinated by `functions/index.js`
 - Cloud Run sessions: `functions/cloudRun.service.js`
+- Session creation and persisted session metadata: `functions/sessionCreation.service.js`
 - Preview publication, public serving, and signed session access URLs: `functions/preview.service.js`
 - SSH session file and port-forward proxies: `functions/sshSession.service.js`
 - Git session status/action/PR proxies: `functions/gitSession.service.js`
