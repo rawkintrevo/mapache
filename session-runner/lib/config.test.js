@@ -4,6 +4,21 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createConfig} = require("./config");
 
+test("workspace sync role defaults to writer for compatibility and accepts reader mode", () => {
+  const previous = process.env.WORKSPACE_SYNC_ROLE;
+  try {
+    delete process.env.WORKSPACE_SYNC_ROLE;
+    assert.equal(createConfig().workspaceSyncRole, "writer");
+    process.env.WORKSPACE_SYNC_ROLE = "reader";
+    assert.equal(createConfig().workspaceSyncRole, "reader");
+    process.env.WORKSPACE_SYNC_ROLE = "unexpected";
+    assert.equal(createConfig().workspaceSyncRole, "writer");
+  } finally {
+    if (previous === undefined) delete process.env.WORKSPACE_SYNC_ROLE;
+    else process.env.WORKSPACE_SYNC_ROLE = previous;
+  }
+});
+
 test("Chrome runner configuration exposes stable browser contract URLs", () => {
   const names = [
     "RUNNER_CAPABILITIES",

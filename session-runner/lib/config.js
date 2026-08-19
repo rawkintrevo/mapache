@@ -19,6 +19,11 @@ function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
 }
 
+function normalizeWorkspaceSyncRole(value) {
+  const role = normalizeEnvString(value).toLowerCase();
+  return role === "reader" || role === "none" ? role : "writer";
+}
+
 function normalizePreviewBasePath(value) {
   const clean = `/${String(value || "/preview").replace(/^\/+|\/+$/g, "")}`;
   return clean === "/" ? "/preview" : clean;
@@ -59,6 +64,7 @@ function createConfig() {
   const codexConfigPath = path.resolve(process.env.CODEX_CONFIG_PATH || path.join(workspaceDir, ".codex", "config.toml"));
   const harnessId = normalizeEnvString(process.env.HARNESS_ID) || normalizeEnvString(process.env.TERMINAL_KIND) || "shell";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
+  const workspaceSyncRole = normalizeWorkspaceSyncRole(process.env.WORKSPACE_SYNC_ROLE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
   const runnerCapabilities = parseRunnerCapabilities();
@@ -170,6 +176,7 @@ function createConfig() {
     workspaceDir,
     workspaceId: process.env.WORKSPACE_ID || "",
     workspaceSourceMode,
+    workspaceSyncRole,
     workspaceSyncPolicyExclude,
     workspaceSyncPolicyMode,
   };
@@ -179,5 +186,6 @@ module.exports = {
   createConfig,
   normalizePreviewBasePath,
   normalizeWorkspaceSourceMode,
+  normalizeWorkspaceSyncRole,
   parseRunnerCapabilities,
 };

@@ -60,6 +60,8 @@ Provisioning is idempotent by operation ID. Session creation persists the operat
 
 Workspace sync-writer ownership is also controlled by Functions transactions. Session reservation persists one writer lease per workspace and marks additional eligible sessions as readers; stop, delete, worker/Cloud Run provisioning failure, and the `reconcileWorkspaceSyncWriters` scheduled function release or repair the lease. Deploy the scheduled function with the Functions revision so existing workspaces can recover from stale owners.
 
+The runner's compatibility default for a missing `WORKSPACE_SYNC_ROLE` is `writer`, preserving upload behavior for existing services. New reader services receive the role from Functions and skip worktree/archive uploads and deletion reconciliation; they can still restore workspace state at startup and use explicit sync-down.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.

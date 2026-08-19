@@ -1,10 +1,11 @@
 "use strict";
 
-function createWorkspaceSyncCoordinator({syncUp, syncDown}) {
+function createWorkspaceSyncCoordinator({syncUp: performSyncUp, syncDown: performSyncDown, syncWriterRole = "writer", logger = console}) {
   let active = null;
   let pendingUp = null;
   let pendingDown = null;
   let sequence = 0;
+  let uploadSkipLogged = false;
 
   function enqueue(kind, options = {}) {
     const pending = kind === "up" ? pendingUp : pendingDown;
@@ -41,8 +42,8 @@ function createWorkspaceSyncCoordinator({syncUp, syncDown}) {
     active = request;
     try {
       const result = request.kind === "up" ?
-        await syncUp({includeArchives: request.includeArchives}) :
-        await syncDown();
+        await performSyncUp({includeArchives: request.includeArchives}) :
+        await performSyncDown();
       request.resolve(result);
     } catch (error) {
       request.reject(error);
@@ -60,10 +61,25 @@ function createWorkspaceSyncCoordinator({syncUp, syncDown}) {
     }
   }
 
+  function syncUp(options = {}) {
+    if (syncWriterRole !== "writer") {
+      if (!uploadSkipLogged) {
+        logger.log(`workspace sync up skipped: sync-writer role is ${syncWriterRole}`);
+        uploadSkipLogged = true;
+      }
+      return Promise.resolve({
+        conflicts: [],
+        role: syncWriterRole,
+        skipped: "sync_writer_lease",
+      });
+    }
+    return enqueue("up", options);
+  }
+
   return {
     flush,
     syncDown: () => enqueue("down"),
-    syncUp: (options = {}) => enqueue("up", options),
+    syncUp,
   };
 }
 

@@ -65,3 +65,28 @@ test("a final archive sync is awaited and never dropped", async () => {
   await final;
   assert.equal(settled, true);
 });
+
+test("reader sessions skip uploads but keep an explicit status result", async () => {
+  const events = [];
+  const logs = [];
+  const coordinator = createWorkspaceSyncCoordinator({
+    syncUp: async () => events.push("uploaded"),
+    syncDown: async () => events.push("downloaded"),
+    syncWriterRole: "reader",
+    logger: {log: (message) => logs.push(message)},
+  });
+
+  assert.deepEqual(await coordinator.syncUp({includeArchives: true}), {
+    conflicts: [],
+    role: "reader",
+    skipped: "sync_writer_lease",
+  });
+  assert.deepEqual(await coordinator.syncUp(), {
+    conflicts: [],
+    role: "reader",
+    skipped: "sync_writer_lease",
+  });
+  await coordinator.syncDown();
+  assert.deepEqual(events, ["downloaded"]);
+  assert.deepEqual(logs, ["workspace sync up skipped: sync-writer role is reader"]);
+});

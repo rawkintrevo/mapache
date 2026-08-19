@@ -60,6 +60,7 @@ const workspace = createWorkspaceService({admin, config, db, git, storage});
 const workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
   syncUp: workspace.syncUp,
+  syncWriterRole: config.workspaceSyncRole,
 });
 const chromeProfile = createChromeProfileService({config, archives: workspace});
 const chromeProfileSnapshots = createChromeProfileSnapshotService({

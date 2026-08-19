@@ -18,7 +18,7 @@ function createRunnerLifecycleCoordinator({
 }) {
   async function start() {
     await workspace.ensureWorkspace();
-    logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
+    logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
     await workspace.prepareWorkspaceSource();
     await chromeProfile.restore();
     await chromeRuntime.start();
