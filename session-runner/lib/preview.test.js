@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const {createPreviewService} = require("./preview");
+const {createPreviewShareService} = require("./previewShare.service");
 
 function previewConfig(workspaceDir) {
   return {
@@ -41,11 +42,12 @@ test("shareStaticBuild uploads files under the configured static root", async ()
   await fs.writeFile(path.join(workspaceDir, "build", "assets", "app.js"), "console.log('hi');");
 
   const uploaded = [];
-  const preview = createPreviewService(previewConfig(workspaceDir));
-  const result = await preview.shareStaticBuild(mockStorage(uploaded), {
+  const config = previewConfig(workspaceDir);
+  const previewShare = createPreviewShareService();
+  const result = await previewShare.shareStaticBuild(mockStorage(uploaded), {
     bucketName: "bucket-1",
     storagePrefix: "/public-previews/token-1/",
-  });
+  }, config.previewStaticRoot);
 
   assert.equal(result.ok, true);
   assert.equal(result.fileCount, 2);
@@ -59,10 +61,11 @@ test("shareStaticBuild uploads files under the configured static root", async ()
 
 test("shareStaticBuild rejects missing and non-static preview output", async () => {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-preview-"));
-  const preview = createPreviewService(previewConfig(workspaceDir));
+  const config = previewConfig(workspaceDir);
+  const previewShare = createPreviewShareService();
 
   await assert.rejects(
-      () => preview.shareStaticBuild(mockStorage([]), {bucketName: "bucket-1", storagePrefix: "preview"}),
+      () => previewShare.shareStaticBuild(mockStorage([]), {bucketName: "bucket-1", storagePrefix: "preview"}, config.previewStaticRoot),
       (error) => error.publicMessage === "preview_static_build_not_ready",
   );
 
@@ -71,6 +74,7 @@ test("shareStaticBuild rejects missing and non-static preview output", async () 
     mode: "proxy",
     upstream: "http://127.0.0.1:3000",
   }));
+  const preview = createPreviewService(config);
 
   await assert.rejects(
       () => preview.shareStaticBuild(mockStorage([]), {bucketName: "bucket-1", storagePrefix: "preview"}),
