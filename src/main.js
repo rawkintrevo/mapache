@@ -14,7 +14,7 @@ import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
 import {APP_ACTIONS, createAppStore} from "./state/appStore.js";
-import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
+import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
   resetMcpServers as resetMcpServersState,
@@ -28,6 +28,7 @@ import {createDrawerController} from "./controllers/drawerController.js";
 import {createModalController} from "./controllers/modalController.js";
 import {createPiPanelsController} from "./controllers/piPanelsController.js";
 import {createWorkspaceFilesController} from "./controllers/workspaceFilesController.js";
+import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {
   closePullRequestModalState,
   commitGitState,
@@ -79,6 +80,16 @@ const modalController = createModalController({
   render,
   loadPiAuth: piPanelsController.loadPiAuth,
 });
+const workspaceController = createWorkspaceController({
+  state,
+  dispatch,
+  runBusy,
+  refreshAll,
+  loadSessions,
+  loadMcpServers: piPanelsController.loadMcpServers,
+  loadSelectedSessionPanels,
+  resetWorkspacePanels: resetWorkspaceScopedPanels,
+});
 const handlers = {
   admin: adminController,
   app: {
@@ -121,11 +132,7 @@ const handlers = {
     stopSession,
     updateSshForwardPort,
   },
-  workspaces: {
-    createWorkspace,
-    deleteWorkspace,
-    selectWorkspace,
-  },
+  workspaces: workspaceController,
 };
 
 start();
@@ -214,6 +221,16 @@ function resetSshForwards() {
   resetSshForwardsState(state);
 }
 
+function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
+  workspaceFilesController.resetWorkspaceFiles();
+  resetGitStatus();
+  resetPiPackages();
+  resetWorkspaceSkills();
+  resetWorkspaceSubagents();
+  if (includeMcp) resetMcpServers();
+  resetSshForwards();
+}
+
 async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
@@ -222,30 +239,7 @@ async function refreshAll() {
     if (state.activePage === "admin" && state.profile?.isAdmin !== true) {
       dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     }
-    const data = await state.api.getWorkspaces();
-    const previousWorkspaceId = state.selectedWorkspaceId;
-    state.workspaces = data.workspaces || [];
-    if (!state.selectedWorkspaceId && state.workspaces.length) {
-      dispatch({
-        type: APP_ACTIONS.SET_SELECTED_WORKSPACE,
-        workspaceId: state.workspaces[0].id,
-      });
-    }
-    if (!state.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)) {
-      dispatch({
-        type: APP_ACTIONS.SET_SELECTED_WORKSPACE,
-        workspaceId: state.workspaces[0] ? state.workspaces[0].id : null,
-      });
-    }
-    if (previousWorkspaceId !== state.selectedWorkspaceId) {
-      workspaceFilesController.resetWorkspaceFiles();
-      resetGitStatus();
-      resetPiPackages();
-      resetWorkspaceSkills();
-      resetWorkspaceSubagents();
-      resetMcpServers();
-      resetSshForwards();
-    }
+    await workspaceController.refreshWorkspaceList();
     await loadSessions();
     await piPanelsController.loadMcpServers();
     await piPanelsController.loadPiAuth();
@@ -354,89 +348,6 @@ async function disconnectGithub() {
   const ok = window.confirm("Disconnect GitHub from this Mapache account?");
   if (!ok) return;
   await disconnectGithubState({state, render, loadGithubConnection});
-}
-
-async function createWorkspace(payload) {
-  await runBusy(async () => {
-    let data;
-    try {
-      data = await state.api.createWorkspace({
-        name: payload.name,
-        source: normalizeCreateWorkspaceSource(payload),
-        env: payload.env || {},
-      });
-    } catch (error) {
-      throw new Error(friendlyWorkspaceError(error));
-    }
-    dispatch({
-      type: APP_ACTIONS.SET_SELECTED_WORKSPACE,
-      workspaceId: data.workspace.id,
-    });
-    dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
-    workspaceFilesController.resetWorkspaceFiles();
-    await refreshAll();
-  });
-}
-
-function normalizeCreateWorkspaceSource(payload = {}) {
-  const source = payload.source && typeof payload.source === "object" ? payload.source : {};
-  const sourceType = String(source.type || payload.source || "blank").trim().toLowerCase();
-  if (sourceType !== "github") {
-    if (sourceType === "ssh") {
-      return {
-        ...source,
-        type: "ssh",
-      };
-    }
-    return {type: "blank"};
-  }
-
-  return {
-    ...source,
-    type: "github",
-    repoUrl: source.repoUrl || payload.repoUrl || "",
-    requestedBranch: source.requestedBranch || payload.branch || "",
-  };
-}
-
-async function deleteWorkspace(workspaceId) {
-  const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
-  const name = workspace?.name || workspaceId;
-  const ok = window.confirm(`Delete workspace ${name}? Sessions will be stopped and workspace files will be removed.`);
-  if (!ok) return;
-
-  await runBusy(async () => {
-    await state.api.deleteWorkspace(workspaceId);
-    if (state.selectedWorkspaceId === workspaceId) {
-      dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId: null});
-      dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: null});
-      workspaceFilesController.resetWorkspaceFiles();
-      resetGitStatus();
-      resetPiPackages();
-      resetWorkspaceSkills();
-      resetWorkspaceSubagents();
-      resetSshForwards();
-    }
-    await refreshAll();
-  });
-}
-
-async function selectWorkspace(workspaceId) {
-  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
-  dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId});
-  state.sessionModalOpen = false;
-  workspaceFilesController.resetWorkspaceFiles();
-  resetGitStatus();
-  resetPiPackages();
-  resetWorkspaceSkills();
-  resetWorkspaceSubagents();
-  resetMcpServers();
-  resetSshForwards();
-  await runBusy(async () => {
-    await loadSessions();
-    await piPanelsController.loadMcpServers();
-    await loadSelectedSessionPanels();
-  });
 }
 
 async function createSession(payload) {
