@@ -1,6 +1,5 @@
 "use strict";
 
-const crypto = require("crypto");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
@@ -12,9 +11,7 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
-  DEFAULT_IDLE_TIMEOUT_MINUTES,
   DEFAULT_IMAGE,
-  DEFAULT_REGION,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
@@ -24,10 +21,7 @@ const {
 } = require("./backendConfig");
 const {
   cleanName,
-  cloudRunServiceName,
   httpError,
-  latestTimestampMillis,
-  positiveNumber,
   toClientDoc,
 } = require("./backendUtils.helpers");
 const {resolveHarness} = require("./runnerCatalog.helpers");
@@ -41,9 +35,6 @@ const {
 } = require("./admin.service");
 const {requireUser} = require("./auth.service");
 const {
-  accrueSessionUsage,
-  isTerminalSessionStatus,
-  sessionUsageRecord,
   userWithUsage,
 } = require("./userUsage.service");
 const {
@@ -62,19 +53,18 @@ const {
   findActiveChromeSession,
   isChromeSession,
 } = require("./chromeReservation.helpers");
-const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {createGithubService} = require("./github.service");
 const {createGitSessionService} = require("./gitSession.service");
 const {createPiService} = require("./pi.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
+const {createSessionLifecycleService} = require("./sessionLifecycle.service");
 const {createSshSessionService} = require("./sshSession.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
 } = require("./runnerProxy.helpers");
-const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {createProvisioningWorker} = require("./provisioning.worker");
 const {
   createRunnerImageFreshnessService,
@@ -82,11 +72,19 @@ const {
 } = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
-const {
-  initialProvisioningMetadata,
-} = require("./provisioning.helpers");
 
 const githubService = createGithubService();
+const lifecycleDependencies = {admin, db, requireWorkspace, sessionCollection};
+const sessionLifecycleService = createSessionLifecycleService(lifecycleDependencies);
+const {
+  deleteSession,
+  markSessionStopped,
+  reapIdleSessions,
+  requireSession,
+  resizeSession,
+  restartSession,
+  stopSession,
+} = sessionLifecycleService;
 const piService = createPiService({
   requireSession,
   requireWorkspace,
@@ -168,6 +166,16 @@ const {
   patchSessionService,
   provisionSessionService,
 } = cloudRunService;
+Object.assign(lifecycleDependencies, {
+  deleteSessionService,
+  patchSessionService,
+  prepareSessionForProvisioning,
+  provisionSessionService,
+  releaseChromeWorkspaceSession,
+  releaseWorkspaceSyncWriterLease,
+  reserveChromeWorkspaceSession,
+  reserveWorkspaceSyncSession,
+});
 const {provisionQueuedSession} = createProvisioningWorker({
   db,
   prepareProvisioningSession: prepareSessionForProvisioning,
@@ -305,32 +313,7 @@ exports.refreshRunnerImageFreshness = onSchedule("every 5 minutes", async () => 
   });
 });
 
-exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
-  const snap = await db.collectionGroup("sessions")
-      .where("status", "==", "running")
-      .get();
-  const now = Date.now();
-  const results = await Promise.allSettled(snap.docs.map(async (doc) => {
-    const session = doc.data();
-    if (!isIdleSession(session, now)) return false;
-    logger.info("stopping idle session", {
-      workspaceId: session.workspaceId,
-      sessionId: doc.id,
-      serviceId: session.serviceId,
-    });
-    await doc.ref.update(sessionStatusUpdate(session, "stopping", {
-      stopReason: "idle_timeout",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }));
-    await deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
-    return true;
-  }));
-
-  const stopped = results.filter((result) => result.status === "fulfilled" && result.value).length;
-  const failed = results.filter((result) => result.status === "rejected");
-  failed.forEach((result) => logger.error("idle session stop failed", result.reason));
-  logger.info("idle session reap complete", {checked: snap.size, stopped, failed: failed.length});
-});
+exports.reapIdleSessions = onSchedule("every 5 minutes", reapIdleSessions);
 
 async function listSessions(uid, workspaceId) {
   await requireWorkspace(uid, workspaceId);
@@ -522,42 +505,6 @@ async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, sess
   });
 }
 
-function isGithubWorkspace(workspace) {
-  return workspace && workspace.source && workspace.source.type === "github";
-}
-
-function isActiveGithubWorkspaceSession(session) {
-  return !isTerminalSessionStatus(session && session.status);
-}
-
-function isShellSession(session) {
-  return cleanName(session && session.terminalKind) === "shell";
-}
-
-function shouldRecreateSessionServiceOnRestart(session) {
-  if (isTerminalSessionStatus(session && session.status)) return true;
-  if (cleanName(session && session.status) !== "update_failed") return false;
-  if (!session.serviceUrl) return true;
-
-  const lastError = String(session.lastError || "").toLowerCase();
-  return lastError.includes("\"code\":404") ||
-    lastError.includes("does not exist") ||
-    lastError.includes("not found");
-}
-
-async function resizeSession(uid, workspaceId, sessionId, payload) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const resources = normalizeRequestedSessionResources(payload, {defaultResources: null});
-  const resizedAt = admin.firestore.Timestamp.now();
-  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "resizing", {
-    ...accrueSessionUsage(sessionSnap.data(), resizedAt),
-    resources,
-    updatedAt: resizedAt,
-  }));
-  await patchSessionService(sessionRef, {...sessionSnap.data(), resources});
-  return toClientDoc(await sessionRef.get());
-}
-
 function normalizeRequestedSessionResources(payload, options = {}) {
   try {
     return normalizeSessionResources(payload, options);
@@ -569,180 +516,8 @@ function normalizeRequestedSessionResources(payload, options = {}) {
   }
 }
 
-async function restartSession(uid, workspaceId, sessionId) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
-  const session = sessionSnap.data();
-  if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
-
-  const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
-  if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
-    await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session);
-  }
-  if (recreatingSessionService && isChromeSession(session)) {
-    await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
-      create: false,
-      githubWorkspace: isGithubWorkspace(workspace),
-      syncWriterEligible: true,
-    });
-  }
-
-  const restartedAt = admin.firestore.Timestamp.now();
-  const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
-  const restartNonce = Date.now().toString();
-  const mcpConfig = mcpConfigForRunner(workspace);
-  const restartUpdate = sessionStatusUpdate(session, recreatingSessionService ? "provisioning" : "restarting", {
-    browserAccessTokenSecret,
-    mcpConfig,
-    restartNonce,
-    restartedAt,
-    stoppedAt: null,
-    autoStoppedAt: null,
-    stopReason: null,
-    serviceUrl: null,
-    lastError: null,
-    updatedAt: restartedAt,
-  });
-
-  if (recreatingSessionService) {
-    Object.assign(restartUpdate, initialProvisioningMetadata(crypto.randomUUID()));
-  }
-
-  if (!Array.isArray(session.environmentEntryIds) && Array.isArray(session.genericEnvironmentEntryIds)) {
-    restartUpdate.environmentEntryIds = [...new Set(session.genericEnvironmentEntryIds)];
-  }
-
-  if (recreatingSessionService) {
-    Object.assign(restartUpdate, {
-      ...accrueSessionUsage(session, restartedAt),
-      usageAccountedAt: null,
-      activeSocketCount: 0,
-    });
-  }
-
-  await sessionRef.update(restartUpdate);
-
-  const restartedSession = {
-    ...session,
-    ...restartUpdate,
-    browserAccessTokenSecret,
-    restartNonce,
-    workspaceId,
-    workspaceStorageBucket: session.workspaceStorageBucket || workspace.bucket || DEFAULT_BUCKET,
-    workspaceStoragePrefix: session.workspaceStoragePrefix || workspace.storagePrefix,
-    serviceId: session.serviceId || `session-${sessionId.toLowerCase()}`,
-    serviceName: session.serviceName || cloudRunServiceName(session.region || DEFAULT_REGION, session.serviceId || `session-${sessionId.toLowerCase()}`),
-  };
-
-  if (recreatingSessionService && !isChromeSession(session)) {
-    await reserveWorkspaceSyncSession(workspaceId, sessionRef, restartedSession, {
-      create: false,
-      syncWriterEligible: true,
-    });
-  }
-
-  if (recreatingSessionService) {
-    await provisionSessionService(
-        workspace,
-        sessionRef,
-        await prepareSessionForProvisioning(restartedSession),
-    );
-  } else {
-    await patchSessionService(sessionRef, restartedSession, {restart: true});
-  }
-
-  return toClientDoc(await sessionRef.get());
-}
-
-async function stopSession(uid, workspaceId, sessionId) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "stopping", {
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }));
-  await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "manual"});
-  return toClientDoc(await sessionRef.get());
-}
-
-async function deleteSession(uid, workspaceId, sessionId) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "deleting", {
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }));
-  const serviceDeleted = await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "deleted"});
-  if (!serviceDeleted) {
-    throw httpError(502, "session_delete_failed");
-  }
-  await sessionRef.delete();
-  return {ok: true};
-}
-
-
-async function requireSession(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
-  const data = sessionSnap.data();
-  if (data.ownerUid && data.ownerUid !== uid) throw httpError(403, "session_forbidden");
-  return {sessionRef, sessionSnap};
-}
-
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
-}
-
-async function markSessionStopped(sessionRef, session, reason) {
-  try {
-    await releaseWorkspaceSyncWriterLease(sessionRef, session, reason);
-  } catch (error) {
-    logger.warn("Workspace sync-writer lease release failed while stopping session", {
-      workspaceId: session.workspaceId,
-      sessionId: sessionRef.id,
-      reason: reason || "unspecified",
-      error: error.message || String(error),
-    });
-  }
-  const stoppedAt = admin.firestore.Timestamp.now();
-  const usageRecord = sessionUsageRecord(sessionRef, session, stoppedAt);
-  const stopped = sessionStatusUpdate(session, "stopped", {
-    activeSocketCount: 0,
-    serviceUrl: null,
-    stoppedAt,
-    lastError: null,
-    updatedAt: stoppedAt,
-  }, {reconciliationReason: reason || "service_deleted"});
-  if (reason) stopped.stopReason = reason;
-  if (reason === "idle_timeout") {
-    stopped.autoStoppedAt = stoppedAt;
-  }
-  if (isChromeSession(session)) {
-    await db.runTransaction(async (transaction) => {
-      const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
-      const workspaceSnap = await transaction.get(workspaceRef);
-      if (usageRecord) transaction.set(usageRecord.ref, usageRecord.data, {merge: true});
-      transaction.update(sessionRef, stopped);
-      if (workspaceSnap.exists && workspaceSnap.data().activeChromeSessionId === sessionRef.id) {
-        transaction.update(workspaceRef, {
-          activeChromeSessionId: admin.firestore.FieldValue.delete(),
-          activeChromeSessionState: "released",
-          activeChromeSessionReleasedAt: stoppedAt,
-          updatedAt: stoppedAt,
-        });
-      }
-    });
-    return;
-  }
-  if (usageRecord) {
-    stopped.usageAccountedAt = stoppedAt;
-    const batch = db.batch();
-    batch.set(usageRecord.ref, usageRecord.data, {merge: true});
-    batch.update(sessionRef, stopped);
-    await batch.commit();
-    return;
-  }
-  await sessionRef.update(stopped);
 }
 
 async function releaseChromeWorkspaceSession(sessionRef, session, reason) {
@@ -804,20 +579,4 @@ async function requestRunnerJson(session, routePath, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
-}
-
-function isIdleSession(session, now) {
-  const idleTimeoutMinutes = Math.min(
-      positiveNumber(session.idleTimeoutMinutes, DEFAULT_IDLE_TIMEOUT_MINUTES),
-      DEFAULT_IDLE_TIMEOUT_MINUTES,
-  );
-  const idleSince = latestTimestampMillis(
-      session.lastActivityAt,
-      session.lastConnectedAt,
-      session.lastDisconnectedAt,
-      session.updatedAt,
-      session.createdAt,
-  );
-  if (!idleSince) return false;
-  return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
 }
