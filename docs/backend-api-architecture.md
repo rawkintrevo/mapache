@@ -11,7 +11,8 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 ## Canonical Owner
 
 - Entrypoint: `functions/index.js`
-- Route parsing and dispatch: `functions/apiRoutes.helpers.js`, `functions/apiDispatch.helpers.js`
+- Route contract, parsing, and dispatch: `functions/apiRouteManifest.js`, `functions/apiRoutes.helpers.js`, `functions/apiDispatch.helpers.js`
+- Production handler registry: `functions/apiHandlers.helpers.js`, composed by `functions/index.js`
 - Backend setup/config: `functions/backendContext.js`, `functions/backendConfig.js`
 - Shared validation/errors: `functions/backendUtils.helpers.js`
 - Auth/profile: `functions/auth.service.js`
@@ -26,7 +27,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 
 ## Current Behavior
 
-The frontend calls authenticated JSON routes under `/api/**`. Cloud Functions verifies Firebase ID tokens, applies the optional `appConfig/access` allow list, upserts `users/{uid}`, then serves user-owned workspace and session data. Users whose Firestore profile document has `isAdmin: true` can also call `/api/admin/users` to page through user summaries and `/api/admin/users/{uid}/whitelist` to toggle explicit allowlist entries for other users.
+The frontend calls authenticated JSON routes under `/api/**`. Cloud Functions verifies Firebase ID tokens, applies the optional `appConfig/access` allow list, upserts `users/{uid}`, then serves user-owned workspace and session data. Users whose Firestore profile document has `isAdmin: true` can also call `/api/admin/users` to page through user summaries and `/api/admin/users/{uid}/whitelist` to toggle explicit allowlist entries for other users. The route method manifest is shared by route validation and dispatch lookup, while `createApiHandlers` assembles the production registry in a Firebase-free helper so contract tests can enumerate every dispatcher dependency without starting the Functions runtime.
 
 The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is unauthenticated but gated by the `QA_LOGIN_SECRET` Functions secret and the configured QA UID/email parameters. It mints a Firebase custom token for a controlled QA account so browser automation can reach the signed-in app shell; all subsequent API calls still use normal Firebase ID-token verification and app allowlist checks.
 
@@ -50,7 +51,7 @@ Workspace auth now uses neutral account routes at `/api/auth/*` plus the per-ses
 
 Workspace skills now use neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/skills` and `/skills/delete`. `functions/pi.service.js` still owns validation and compatibility because Pi and Codex share the same name/description/content rules and the same rollout path. The service gates skill management to Pi and Codex sessions, prefers the neutral runner `/skills*` endpoints, and falls back to legacy `/pi/skills*` routes when an older runner revision is still serving an existing session.
 
-Workspace subagents use parallel neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/subagents` and `/subagents/delete`. The backend gates subagent CRUD to Pi and Codex sessions, validates the shared name/description/instructions rules, and proxies to runner-managed native files. `GET /subagent-chains` is also wired through for future chain UI, but V1 chain writes still return unsupported errors from the runner.
+Workspace subagents use parallel neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/subagents` and `/subagents/delete`. The backend gates subagent CRUD to Pi and Codex sessions, validates the shared name/description/instructions rules, and proxies to runner-managed native files. The runner may expose `/subagent-chains` for future internal work, but the Functions API does not advertise or dispatch chain routes in V1.
 
 Website sessions with preview capability can create a public share preview through `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/share-preview`. The API verifies workspace/session ownership, requires a running preview-capable session, generates an unguessable token, asks the runner to upload only the configured static preview root, and stores metadata in `publicPreviews/{token}`. Public reads use unauthenticated `GET /api/public-previews/{token}/...`, which serves objects from the recorded Cloud Storage prefix with SPA fallback to `index.html`. These public routes do not expose source files, session runner URLs, browser-access tokens, shutdown tokens, environment variables, or workspace storage prefixes.
 
