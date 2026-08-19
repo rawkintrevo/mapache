@@ -81,8 +81,8 @@ npm run check
 It runs:
 
 1. Developer docs relative-link validation.
-2. Cloud Functions unit tests.
-3. Session runner JavaScript syntax checks.
+2. Cloud Functions unit tests and syntax lint.
+3. Session runner JavaScript syntax lint and unit tests.
 4. Frontend smoke tests.
 5. Full Vite app and Docusaurus community build.
 
