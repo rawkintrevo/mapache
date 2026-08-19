@@ -23,6 +23,7 @@ import {
   resetWorkspaceSkills as resetWorkspaceSkillsState,
   resetSignedOutState,
 } from "./state/resetters.js";
+import {createAdminController} from "./controllers/adminController.js";
 import {createDrawerController} from "./controllers/drawerController.js";
 import {createModalController} from "./controllers/modalController.js";
 import {createPiPanelsController} from "./controllers/piPanelsController.js";
@@ -69,6 +70,7 @@ let sessionsListenerWorkspaceId = null;
 const APP_PATH = "/app";
 
 const drawerController = createDrawerController({state, render});
+const adminController = createAdminController({state, render, dispatch});
 const workspaceFilesController = createWorkspaceFilesController({state, render, runBusy});
 const piPanelsController = createPiPanelsController({state, render});
 const modalController = createModalController({
@@ -78,13 +80,7 @@ const modalController = createModalController({
   loadPiAuth: piPanelsController.loadPiAuth,
 });
 const handlers = {
-  admin: {
-    nextAdminUsersPage,
-    previousAdminUsersPage,
-    refreshAdminUsers,
-    setAdminUserWhitelisted,
-    showAdmin,
-  },
+  admin: adminController,
   app: {
     refreshAll,
     signOut,
@@ -255,78 +251,9 @@ async function refreshAll() {
     await piPanelsController.loadPiAuth();
     await workspaceFilesController.loadWorkspaceFiles();
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {
-      await loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
+      await adminController.loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
     }
   });
-}
-
-async function showAdmin() {
-  if (state.profile?.isAdmin !== true) return;
-  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "admin"});
-  await loadAdminUsers({cursor: "", cursorStack: []});
-}
-
-async function refreshAdminUsers() {
-  await loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
-}
-
-async function nextAdminUsersPage() {
-  if (!state.admin.nextCursor) return;
-  await loadAdminUsers({
-    cursor: state.admin.nextCursor,
-    cursorStack: [...state.admin.cursorStack, state.admin.cursor],
-  });
-}
-
-async function previousAdminUsersPage() {
-  const cursorStack = [...state.admin.cursorStack];
-  const previousCursor = cursorStack.pop();
-  if (previousCursor === undefined) return;
-  await loadAdminUsers({cursor: previousCursor, cursorStack});
-}
-
-async function loadAdminUsers({cursor = "", cursorStack = []} = {}) {
-  state.admin.loading = true;
-  state.admin.error = "";
-  render();
-  try {
-    const data = await state.api.getAdminUsers({
-      cursor,
-      pageSize: state.admin.pageSize,
-    });
-    state.admin = {
-      ...state.admin,
-      users: data.users || [],
-      cursor,
-      cursorStack,
-      nextCursor: data.nextCursor || "",
-      allowList: data.allowList || null,
-      loading: false,
-      error: "",
-    };
-  } catch (error) {
-    state.admin.loading = false;
-    state.admin.error = friendlyGlobalError(error);
-  }
-  render();
-}
-
-async function setAdminUserWhitelisted(uid, whitelisted) {
-  state.admin.loading = true;
-  state.admin.error = "";
-  render();
-  try {
-    const data = await state.api.setAdminUserWhitelisted(uid, whitelisted);
-    const updatedUser = data.user;
-    state.admin.users = state.admin.users.map((user) => (
-      user.uid === uid && updatedUser ? updatedUser : user
-    ));
-  } catch (error) {
-    state.admin.error = friendlyGlobalError(error);
-  } finally {
-    state.admin.loading = false;
-    render();
-  }
 }
 
 async function loadSessions() {
