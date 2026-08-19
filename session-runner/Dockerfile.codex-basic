@@ -16,6 +16,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY server.js ./
 COPY lib ./lib
+COPY routes ./routes
 COPY seeded-skills ./seeded-skills
 COPY seeded-codex ./seeded-codex
 

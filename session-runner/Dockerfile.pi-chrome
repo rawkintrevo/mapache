@@ -17,6 +17,7 @@ RUN npm install --omit=dev \
 COPY server.js ./
 COPY bin ./bin
 COPY lib ./lib
+COPY routes ./routes
 COPY seeded-skills ./seeded-skills
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 
