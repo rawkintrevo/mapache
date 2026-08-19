@@ -5,6 +5,7 @@
 // special cases in index.js.
 const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["githubCallback", ["GET"]],
+  ["googleCallback", ["GET"]],
   ["me", ["GET"]],
   ["adminUsers", ["GET"]],
   ["adminUserWhitelist", ["POST"]],
@@ -56,8 +57,14 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["githubConnect", ["GET"]],
   ["githubConnection", ["GET"]],
   ["githubDisconnect", ["POST"]],
+  ["googleCatalog", ["GET"]],
+  ["googleConnections", ["GET"]],
+  ["googleConnection", ["GET", "DELETE"]],
+  ["workspaceGoogle", ["GET"]],
+  ["googleConnectionStart", ["POST"]],
+  ["googleBinding", ["POST", "DELETE"]],
 ].map(([name, methods]) => [name, Object.freeze(methods)])));
 
-const SPECIAL_ROUTE_NAMES = Object.freeze(["githubCallback", "qaCustomToken", "publicPreview"]);
+const SPECIAL_ROUTE_NAMES = Object.freeze(["githubCallback", "googleCallback", "qaCustomToken", "publicPreview"]);
 
 module.exports = {ROUTE_METHODS, SPECIAL_ROUTE_NAMES};

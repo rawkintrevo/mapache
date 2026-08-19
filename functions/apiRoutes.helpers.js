@@ -182,6 +182,27 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "repos") {
     return {name: "githubRepos"};
   }
+  if (parts.length === 2 && parts[0] === "google" && parts[1] === "callback") {
+    return {name: "googleCallback"};
+  }
+  if (parts.length === 2 && parts[0] === "google" && parts[1] === "services") {
+    return {name: "googleCatalog"};
+  }
+  if (parts.length === 2 && parts[0] === "google" && parts[1] === "connections") {
+    return {name: "googleConnections"};
+  }
+  if (parts.length === 3 && parts[0] === "google" && parts[1] === "connections") {
+    return {name: "googleConnection", connectionId: parts[2]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "google") {
+    return {name: "workspaceGoogle", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "google" && parts[3] === "connect") {
+    return {name: "googleConnectionStart", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "google" && parts[3] === "binding") {
+    return {name: "googleBinding", workspaceId: parts[1]};
+  }
   return {name: "unknown"};
 }
 
@@ -196,7 +217,8 @@ function routeRequiresAuth(route, method) {
   if (normalizedMethod === "OPTIONS") return false;
   if (normalizedMethod === "POST" && route && route.name === "qaCustomToken") return false;
   if (normalizedMethod === "GET" && route && route.name === "publicPreview") return false;
-  return !(normalizedMethod === "GET" && route && route.name === "githubCallback");
+  return !(normalizedMethod === "GET" && route &&
+    (route.name === "githubCallback" || route.name === "googleCallback"));
 }
 
 module.exports = {

@@ -16,6 +16,11 @@ const {
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
   GITHUB_APP_PRIVATE_KEY_SECRET,
+  GOOGLE_OAUTH_CLIENT_ID,
+  GOOGLE_OAUTH_CLIENT_SECRET,
+  GOOGLE_OAUTH_ENCRYPTION_KEY,
+  GOOGLE_OAUTH_REDIRECT_URI,
+  GOOGLE_OAUTH_STATE_SECRET,
   QA_LOGIN_SECRET,
   SESSION_BROWSER_ACCESS_TTL_MS,
 } = require("./backendConfig");
@@ -54,6 +59,10 @@ const {
   isChromeSession,
 } = require("./chromeReservation.helpers");
 const {createGithubService} = require("./github.service");
+const {createGoogleWorkspaceConnectionsService} = require("./googleWorkspaceConnections.service");
+const {createGoogleWorkspaceOAuthService, callbackPage} = require("./googleWorkspaceOAuth.service");
+const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.service");
+const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
 const {createGitSessionService} = require("./gitSession.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
@@ -211,6 +220,41 @@ const workspaceService = createWorkspaceService({
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
 });
+const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
+const googleWorkspaceOAuthStateService = createGoogleOAuthStateService({
+  secret: secretValue(GOOGLE_OAUTH_STATE_SECRET),
+});
+const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({
+  clientId: paramValue(GOOGLE_OAUTH_CLIENT_ID),
+  clientSecret: secretValue(GOOGLE_OAUTH_CLIENT_SECRET),
+  encryptionKey: secretValue(GOOGLE_OAUTH_ENCRYPTION_KEY),
+  redirectUri: paramValue(GOOGLE_OAUTH_REDIRECT_URI),
+  connectionsService: googleWorkspaceConnectionsService,
+  requireWorkspace,
+  stateService: googleWorkspaceOAuthStateService,
+});
+const googleWorkspaceApiService = createGoogleWorkspaceApiService({
+  connectionsService: googleWorkspaceConnectionsService,
+  db,
+  oauthService: googleWorkspaceOAuthService,
+  requireWorkspace,
+});
+
+function paramValue(param) {
+  try {
+    return param.value();
+  } catch (error) {
+    return "";
+  }
+}
+
+function secretValue(secret) {
+  try {
+    return secret.value();
+  } catch (error) {
+    return "";
+  }
+}
 
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
@@ -220,6 +264,7 @@ const API_HANDLERS = createApiHandlers({
   workspaceAgentAssetsService,
   workspaceService,
   githubService,
+  googleWorkspaceService: googleWorkspaceApiService,
   operations: {
     userWithUsage,
     listAdminUsers,
@@ -257,6 +302,9 @@ exports.api = onRequest({
     GITHUB_APP_CLIENT_ID_SECRET,
     GITHUB_APP_CLIENT_SECRET_SECRET,
     GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
     QA_LOGIN_SECRET,
   ],
 }, async (req, res) => {
@@ -270,6 +318,17 @@ exports.api = onRequest({
 
     if (req.method === "GET" && route.name === "githubCallback") {
       await githubService.handleGithubCallback(req, res);
+      return;
+    }
+
+    if (req.method === "GET" && route.name === "googleCallback") {
+      try {
+        const result = await googleWorkspaceApiService.completeGoogleConnection(req.query || {});
+        res.status(result.status || 200).type("html").send(result.html);
+      } catch (error) {
+        logger.warn("Google OAuth callback failed", {error: error.publicMessage || error.message});
+        res.status(error.status || 400).type("html").send(callbackPage(false, "Google connection could not be completed."));
+      }
       return;
     }
 

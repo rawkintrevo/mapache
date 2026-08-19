@@ -163,6 +163,13 @@ assertRoute("/api/github/connection", {name: "githubConnection"});
 assertRoute("/api/github/disconnect", {name: "githubDisconnect"});
 assertRoute("/api/github/callback", {name: "githubCallback"});
 assertRoute("/api/github/repos", {name: "githubRepos"});
+assertRoute("/api/google/callback", {name: "googleCallback"});
+assertRoute("/api/google/services", {name: "googleCatalog"});
+assertRoute("/api/google/connections", {name: "googleConnections"});
+assertRoute("/api/google/connections/google-1", {name: "googleConnection", connectionId: "google-1"});
+assertRoute("/api/workspaces/workspace-1/google", {name: "workspaceGoogle", workspaceId: "workspace-1"});
+assertRoute("/api/workspaces/workspace-1/google/connect", {name: "googleConnectionStart", workspaceId: "workspace-1"});
+assertRoute("/api/workspaces/workspace-1/google/binding", {name: "googleBinding", workspaceId: "workspace-1"});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/nope", {name: "unknown"});
 
 for (const [routeName, methods] of Object.entries(ROUTE_METHODS)) {
@@ -179,6 +186,7 @@ assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "GET"), true);
 assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "POST"), false);
 
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "GET"), false);
+assert.strictEqual(routeRequiresAuth({name: "googleCallback"}, "GET"), false);
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "POST"), true);
 assert.strictEqual(routeRequiresAuth({name: "qaCustomToken"}, "POST"), false);
 assert.strictEqual(routeRequiresAuth({name: "publicPreview"}, "GET"), false);

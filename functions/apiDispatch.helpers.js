@@ -106,6 +106,18 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["GET", "githubConnection", jsonResult(({handlers, user}) => handlers.getGithubConnection(user.uid))],
     ["POST", "githubDisconnect", jsonResult(({handlers, user}) => handlers.disconnectGithub(user.uid))],
   ]),
+  google: Object.freeze([
+    ["GET", "googleCatalog", jsonResult(({handlers}) => handlers.listGoogleWorkspaceServices())],
+    ["GET", "googleConnections", jsonResult(({handlers, user}) => handlers.listGoogleConnections(user.uid))],
+    ["GET", "googleConnection", jsonResult(({handlers, route, user}) => handlers.getGoogleConnection(user.uid, route.connectionId))],
+    ["DELETE", "googleConnection", jsonResult(({handlers, route, user}) => handlers.deleteGoogleConnection(user.uid, route.connectionId))],
+  ]),
+  googleWorkspace: Object.freeze([
+    ["GET", "workspaceGoogle", jsonResult(({handlers, route, user}) => handlers.getWorkspaceGoogleConnection(user.uid, route.workspaceId))],
+    ["POST", "googleConnectionStart", jsonResult(({handlers, req, route, user}) => handlers.startGoogleConnection(user.uid, route.workspaceId, req.body || {}))],
+    ["POST", "googleBinding", jsonResult(({handlers, req, route, user}) => handlers.bindWorkspaceGoogleConnection(user.uid, route.workspaceId, req.body || {}))],
+    ["DELETE", "googleBinding", jsonResult(({handlers, route, user}) => handlers.unbindWorkspaceGoogleConnection(user.uid, route.workspaceId))],
+  ]),
 });
 
 function findRouteDispatcher(method, routeName) {

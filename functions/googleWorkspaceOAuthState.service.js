@@ -7,7 +7,6 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000;
 
 function createGoogleOAuthStateService(dependencies = {}) {
   const secret = String(dependencies.secret || process.env.GOOGLE_OAUTH_STATE_SECRET || "");
-  if (!secret) throw new Error("Google OAuth state secret is not configured.");
   const now = dependencies.now || (() => Date.now());
   const ttlMs = Number(dependencies.ttlMs || DEFAULT_TTL_MS);
   const consumed = dependencies.consumed || new Set();
@@ -18,6 +17,7 @@ function createGoogleOAuthStateService(dependencies = {}) {
 }
 
 function issueGoogleOAuthState(input = {}, dependencies = {}) {
+  if (!dependencies.secret) throw httpError(503, "google_oauth_state_unavailable");
   const uid = cleanContext(input.uid, "invalid_google_oauth_state");
   const workspaceId = cleanContext(input.workspaceId, "invalid_google_oauth_state");
   const attemptId = cleanAttemptId(input.attemptId || crypto.randomUUID());
@@ -42,6 +42,7 @@ function issueGoogleOAuthState(input = {}, dependencies = {}) {
 }
 
 function consumeGoogleOAuthState(token, expected = {}, dependencies = {}) {
+  if (!dependencies.secret) throw httpError(503, "google_oauth_state_unavailable");
   const [encodedPayload, signature, extra] = String(token || "").split(".");
   if (!encodedPayload || !signature || extra || !safeEqual(signature, sign(encodedPayload, dependencies.secret))) {
     throw httpError(400, "invalid_google_oauth_state");

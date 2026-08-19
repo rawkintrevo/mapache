@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({agentAuthService, environmentKeysService, openAiCodexAuthService, piPackagesService, workspaceAgentAssetsService, workspaceService, githubService, operations}) {
+function createApiHandlers({agentAuthService, environmentKeysService, openAiCodexAuthService, piPackagesService, workspaceAgentAssetsService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -43,6 +43,14 @@ function createApiHandlers({agentAuthService, environmentKeysService, openAiCode
     createGithubConnectUrl: githubService.createGithubConnectUrl,
     getGithubConnection: githubService.getGithubConnection,
     disconnectGithub: githubService.disconnectGithub,
+    listGoogleWorkspaceServices: googleWorkspaceService.listGoogleWorkspaceServices,
+    listGoogleConnections: googleWorkspaceService.listGoogleConnections,
+    getGoogleConnection: googleWorkspaceService.getGoogleConnection,
+    deleteGoogleConnection: googleWorkspaceService.deleteGoogleConnection,
+    startGoogleConnection: googleWorkspaceService.startGoogleConnection,
+    getWorkspaceGoogleConnection: googleWorkspaceService.getWorkspaceGoogleConnection,
+    bindWorkspaceGoogleConnection: googleWorkspaceService.bindWorkspaceGoogleConnection,
+    unbindWorkspaceGoogleConnection: googleWorkspaceService.unbindWorkspaceGoogleConnection,
   });
 }
 

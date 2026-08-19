@@ -106,6 +106,7 @@ function createTestApiHandlers() {
     workspaceAgentAssetsService: service,
     workspaceService: service,
     githubService: service,
+    googleWorkspaceService: service,
     operations,
   });
 }
@@ -245,6 +246,27 @@ function createTestApiHandlers() {
       handler: "disconnectGithub",
       args: ["user-1"],
     },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
+    route: {name: "googleCatalog"},
+  }), {
+    status: 200,
+    payload: {handler: "listGoogleWorkspaceServices", args: []},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    route: {name: "googleConnection", connectionId: "google-1"},
+  }), {
+    status: 200,
+    payload: {handler: "getGoogleConnection", args: ["user-1", "google-1"]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "googleConnectionStart", workspaceId: "workspace-1"},
+    body: {serviceKeys: ["drive"]},
+  }), {
+    status: 200,
+    payload: {handler: "startGoogleConnection", args: ["user-1", "workspace-1", {serviceKeys: ["drive"]}]},
   });
 
   assert.deepStrictEqual(await collectDispatch({

@@ -215,7 +215,8 @@ function normalizeSelection(payload) {
 }
 
 function requireConfigured(config, action) {
-  if (!config.clientId || !config.clientSecret || !config.redirectUri || !config.encryptionKey) {
+  const missingEncryptionKey = action !== "start" && !config.encryptionKey;
+  if (!config.clientId || !config.clientSecret || !config.redirectUri || missingEncryptionKey) {
     throw httpError(503, `google_oauth_not_configured_${action}`);
   }
 }
