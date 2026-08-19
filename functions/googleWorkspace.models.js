@@ -18,6 +18,11 @@ const SECRET_FIELD_PATTERN = /(?:access|refresh|client|authorization|bearer|toke
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SCOPE_PATTERN = /^https:\/\/[^\s]+$/;
+const SAFE_FIELD_NAMES = new Set([
+  "connectionId", "id", "googleSubject", "subject", "email", "displayName",
+  "grantedScopes", "scopes", "enabledServices", "serviceKeys", "oauthClientRef",
+  "status", "createdAt", "updatedAt", "lastRefreshedAt",
+]);
 
 function normalizeGoogleConnectionMetadata(input = {}) {
   assertPlainObject(input, "invalid_google_connection");
@@ -130,7 +135,7 @@ function assertPlainObject(value, errorCode) {
 
 function rejectSecretFields(value) {
   for (const [key, nested] of Object.entries(value)) {
-    if (key !== "oauthClientRef" && SECRET_FIELD_PATTERN.test(key)) {
+    if (!SAFE_FIELD_NAMES.has(key) && SECRET_FIELD_PATTERN.test(key)) {
       throw httpError(400, "google_credential_material_not_allowed");
     }
     if (nested && typeof nested === "object") rejectSecretFields(nested);
