@@ -33,7 +33,7 @@ function createWorkspacePathHelpers({config}) {
     return normalizeRelativeWorkspacePath(String(remotePath || "").slice(config.prefix.length).replace(/^\/+/, ""));
   }
 
-  function shouldManageGithubWorktreeRemotePath(remotePath) {
+  function shouldManageWorkspaceRemotePath(remotePath) {
     if (!remotePath || remotePath.endsWith("/")) return false;
     const relative = normalizeRemoteWorkspacePath(remotePath);
     if (!relative) return false;
@@ -41,7 +41,7 @@ function createWorkspacePathHelpers({config}) {
     if (isInternalStorageDirName(relative) || isInternalStorageDirName(relative.split("/")[0])) {
       return false;
     }
-    return true;
+    return !shouldIgnoreWorkspacePath(relative);
   }
 
   function workspaceRemotePath(relativePath) {
@@ -52,7 +52,8 @@ function createWorkspacePathHelpers({config}) {
     normalizeRemoteWorkspacePath,
     shouldIgnoreInternalWorkspacePath,
     shouldIgnoreWorkspacePath,
-    shouldManageGithubWorktreeRemotePath,
+    shouldManageWorkspaceRemotePath,
+    shouldManageGithubWorktreeRemotePath: shouldManageWorkspaceRemotePath,
     workspaceRemotePath,
   };
 }

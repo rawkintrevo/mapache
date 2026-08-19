@@ -30,16 +30,19 @@ test("filters archive-backed and policy-excluded workspace paths", () => {
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath("reports/tmp/cache.json"), true);
 });
 
-test("selects GitHub worktree cache objects that can be reconciled", () => {
+test("selects managed workspace objects that can be reconciled", () => {
   const pathHelpers = helpers();
 
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/src/app.js"), true);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapache-directory"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapahce-directory"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapache-internal/archives/workspace-git.tar.gz"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapahce-internal/archives/workspace-git.tar.gz"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/node_modules/pkg/index.js"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/build/app.js"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath(""), false);
   assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath("users/u/workspaces/w/src/app.js"), true);
-  assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath("users/u/workspaces/w/.mapache-directory"), false);
-  assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath("users/u/workspaces/w/.mapahce-directory"), false);
-  assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath("users/u/workspaces/w/.mapache-internal/archives/workspace-git.tar.gz"), false);
-  assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath("users/u/workspaces/w/.mapahce-internal/archives/workspace-git.tar.gz"), false);
-  assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath("users/u/workspaces/w/"), false);
-  assert.equal(pathHelpers.shouldManageGithubWorktreeRemotePath(""), false);
 });
 
 test("builds normalized workspace remote paths", () => {

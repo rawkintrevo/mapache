@@ -84,19 +84,18 @@ function createWorkspaceService({admin, config, db, git, storage}) {
       await syncFileUpPreservingNewerRemote(localPath, remotePath);
     }));
 
-    if (git.isGithubWorkspace()) {
-      await reconcileGithubRemoteWorktree(desiredRemotePaths);
-    }
+    await reconcileManagedRemoteWorktree(desiredRemotePaths);
 
     if (options.includeArchives) {
       await archives.syncArchivesUp();
     }
   }
 
-  async function reconcileGithubRemoteWorktree(desiredRemotePaths) {
+  async function reconcileManagedRemoteWorktree(desiredRemotePaths) {
+    if (!git.isGithubWorkspace() && !git.isBlankWorkspace()) return;
     const [remoteFiles] = await storage.bucket(config.bucketName).getFiles({prefix: `${config.prefix}/`});
     await Promise.all(remoteFiles.map(async (file) => {
-      if (!pathHelpers.shouldManageGithubWorktreeRemotePath(file.name)) return;
+      if (!pathHelpers.shouldManageWorkspaceRemotePath(file.name)) return;
       if (desiredRemotePaths.has(file.name)) return;
       await file.delete({ignoreNotFound: true});
     }));
