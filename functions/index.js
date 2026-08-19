@@ -213,6 +213,7 @@ const workspaceService = createWorkspaceService({
 });
 
 const API_HANDLERS = createApiHandlers({
+  agentAuthService,
   environmentKeysService,
   openAiCodexAuthService,
   piPackagesService,
