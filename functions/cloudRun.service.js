@@ -391,11 +391,14 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const environmentEntryIds = sessionEnvironmentEntryIds(session);
   const genericEnvironment = typeof dependencies.buildGenericEnvironmentEnv === "function" ?
     await dependencies.buildGenericEnvironmentEnv(session, environmentEntryIds) : {};
+  const googleMcpRuntime = typeof dependencies.resolveGoogleMcpRuntime === "function" ?
+    await dependencies.resolveGoogleMcpRuntime(session) : {mcpConfig: session.mcpConfig, env: {}};
   const env = [
     ...envMapToCloudRunEnv({
       ...(session.workspaceEnv || {}),
       ...(session.sessionEnv || {}),
       ...genericEnvironment,
+      ...(googleMcpRuntime.env || {}),
     }),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "HOME", value: homeDir},
@@ -428,7 +431,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "WORKSPACE_SYNC_ROLE", value: cleanName(session.syncWriterRole || "writer") || "writer"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},
-    {name: "MCP_CONFIG", value: stringifyMcpConfig(session.mcpConfig)},
+    {name: "MCP_CONFIG", value: stringifyMcpConfig(googleMcpRuntime.mcpConfig || session.mcpConfig)},
     {name: "RUNNER_CAPABILITIES", value: JSON.stringify(capabilities)},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];

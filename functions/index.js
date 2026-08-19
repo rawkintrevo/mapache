@@ -63,6 +63,7 @@ const {createGoogleWorkspaceConnectionsService} = require("./googleWorkspaceConn
 const {createGoogleWorkspaceOAuthService, callbackPage} = require("./googleWorkspaceOAuth.service");
 const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.service");
 const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
+const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
 const {createGitSessionService} = require("./gitSession.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
@@ -120,6 +121,23 @@ const workspaceAgentAssetsService = createWorkspaceAgentAssetsService({
 });
 const environmentKeysService = createEnvironmentKeysService({admin, db});
 const qaAuthService = createQaAuthService();
+const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
+const googleWorkspaceOAuthStateService = createGoogleOAuthStateService({
+  secret: secretValue(GOOGLE_OAUTH_STATE_SECRET),
+});
+const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({
+  clientId: paramValue(GOOGLE_OAUTH_CLIENT_ID),
+  clientSecret: secretValue(GOOGLE_OAUTH_CLIENT_SECRET),
+  encryptionKey: secretValue(GOOGLE_OAUTH_ENCRYPTION_KEY),
+  redirectUri: paramValue(GOOGLE_OAUTH_REDIRECT_URI),
+  connectionsService: googleWorkspaceConnectionsService,
+  requireWorkspace,
+  stateService: googleWorkspaceOAuthStateService,
+});
+const googleWorkspaceProvisioningService = createGoogleWorkspaceProvisioningService({
+  connectionsService: googleWorkspaceConnectionsService,
+  oauthService: googleWorkspaceOAuthService,
+});
 const previewService = createPreviewService({
   admin,
   browserAccessTtlMs: SESSION_BROWSER_ACCESS_TTL_MS,
@@ -189,6 +207,11 @@ const cloudRunService = createCloudRunService({
   markSessionStopped,
   releaseChromeWorkspaceSession,
   getCurrentRunnerImageDigest: getCurrentRunnerImageDigestForSession,
+  resolveGoogleMcpRuntime: (session) => googleWorkspaceProvisioningService.resolveGoogleMcpRuntime(
+      session.ownerUid,
+      session.workspaceId,
+      session.mcpConfig,
+  ),
   releaseWorkspaceSyncWriterLease,
 });
 const {
@@ -219,19 +242,6 @@ const workspaceService = createWorkspaceService({
   deleteSessionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
-});
-const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
-const googleWorkspaceOAuthStateService = createGoogleOAuthStateService({
-  secret: secretValue(GOOGLE_OAUTH_STATE_SECRET),
-});
-const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({
-  clientId: paramValue(GOOGLE_OAUTH_CLIENT_ID),
-  clientSecret: secretValue(GOOGLE_OAUTH_CLIENT_SECRET),
-  encryptionKey: secretValue(GOOGLE_OAUTH_ENCRYPTION_KEY),
-  redirectUri: paramValue(GOOGLE_OAUTH_REDIRECT_URI),
-  connectionsService: googleWorkspaceConnectionsService,
-  requireWorkspace,
-  stateService: googleWorkspaceOAuthStateService,
 });
 const googleWorkspaceApiService = createGoogleWorkspaceApiService({
   connectionsService: googleWorkspaceConnectionsService,
