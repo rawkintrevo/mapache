@@ -85,3 +85,4 @@ Cloud Run create, update, and delete operations use a 240-second polling deadlin
 - [Testing](./testing.md)
 - [Runtime containers](./runtime-containers.md)
 - [Backend API architecture](./backend-api-architecture.md)
+- [Frontend/Functions/runner compatibility matrix](./guides/frontend-functions-runner-compatibility.md)

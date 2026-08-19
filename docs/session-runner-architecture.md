@@ -73,3 +73,4 @@ Workspace subagent CRUD now uses neutral runner routes at `/subagents` and `/sub
 - [GitHub workspaces](./github-workspaces.md)
 - [Pi skills manager](./pi-skills-manager.md)
 - [Pi extension manager](./pi-extension-manager.md)
+- [Frontend/Functions/runner compatibility matrix](./guides/frontend-functions-runner-compatibility.md)
