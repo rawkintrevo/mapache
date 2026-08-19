@@ -113,8 +113,11 @@ const {
   provisionSessionService,
 } = cloudRunService;
 const {provisionQueuedSession} = createProvisioningWorker({
+  db,
+  prepareProvisioningSession: prepareSessionForProvisioning,
   provisionSessionService,
   requireWorkspace,
+  releaseChromeWorkspaceSession,
 });
 
 const workspaceService = createWorkspaceService({
@@ -343,6 +346,7 @@ async function createSession(uid, workspaceId, payload) {
     name: cleanName(payload.name || "Terminal session"),
     status: runnerImage.canProvision ? "provisioning" : "needs_image",
     ...initialProvisioningMetadata(provisioningOperationId),
+    provisioningState: runnerImage.canProvision ? "queued" : "pending",
     region,
     image: runnerImage.image,
     imageKey: runnerImage.key,
@@ -407,16 +411,8 @@ async function createSession(uid, workspaceId, payload) {
   }
 
   if (runnerImage.canProvision) {
-    await provisionSessionService(workspace, sessionRef, sshPayload ? {
-      ...session,
-      sessionEnv: {
-        ...(session.sessionEnv || {}),
-        SSH_AUTH_MODE: sshPayload.secrets.authMode || "private-key",
-        SSH_PRIVATE_KEY: sshPayload.secrets.privateKey,
-        SSH_CERTIFICATE: sshPayload.secrets.certificate,
-        SSH_KNOWN_HOSTS: sshPayload.secrets.knownHosts,
-      },
-    } : session);
+    // Queued sessions are provisioned by the Firestore worker so this request
+    // can return without holding the client open for Cloud Run readiness.
   } else if (isChromeSession(session)) {
     await releaseChromeWorkspaceSession(sessionRef, session, "needs_image");
   }
@@ -440,6 +436,24 @@ async function normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSo
       strictHostKeyChecking: workspaceSshSource.target?.auth?.strictHostKeyChecking,
     },
   });
+}
+
+async function prepareSessionForProvisioning(session = {}) {
+  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") return session;
+  const secretDocId = session.sshProvisioningSecretDocId || `sshWorkspace_${session.workspaceId}`;
+  const privateSnap = await db.collection("users").doc(session.ownerUid).collection("private").doc(secretDocId).get();
+  if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
+  const secrets = privateSnap.data() || {};
+  return {
+    ...session,
+    sessionEnv: {
+      ...(session.sessionEnv || {}),
+      SSH_AUTH_MODE: secrets.authMode || session.sessionEnv?.SSH_AUTH_MODE || "private-key",
+      SSH_PRIVATE_KEY: secrets.privateKey || "",
+      SSH_CERTIFICATE: secrets.certificate || "",
+      SSH_KNOWN_HOSTS: secrets.knownHosts || "",
+    },
+  };
 }
 
 async function createSessionAccessUrls(uid, workspaceId, sessionId) {
@@ -867,7 +881,11 @@ async function restartSession(uid, workspaceId, sessionId) {
   };
 
   if (recreatingSessionService) {
-    await provisionSessionService(workspace, sessionRef, restartedSession);
+    await provisionSessionService(
+        workspace,
+        sessionRef,
+        await prepareSessionForProvisioning(restartedSession),
+    );
   } else {
     await patchSessionService(sessionRef, restartedSession, {restart: true});
   }

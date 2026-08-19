@@ -68,7 +68,14 @@ assert.strictEqual(isQueuedProvisioningSession({status: "running", provisioningS
 
   const failureUpdates = [];
   const failureRef = {update: async (update) => failureUpdates.push(update)};
+  const failureDb = {
+    runTransaction: async (callback) => callback({
+      get: async () => ({exists: true, data: () => session}),
+      update: (ref, update) => failureUpdates.push(update),
+    }),
+  };
   const failureWorker = createProvisioningWorker({
+    db: failureDb,
     requireWorkspace: async () => {
       throw new Error("workspace lookup failed");
     },
