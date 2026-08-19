@@ -101,9 +101,9 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            source_tag="pr-${PR_NUMBER}-${GITHUB_SHA::12}"
+            source_tag=$(node scripts/runner-image-release.mjs --variant="$VARIANT" --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
           else
-            source_tag="${GITHUB_SHA}"
+            source_tag=$(node scripts/runner-image-release.mjs --variant="$VARIANT" --sha="$GITHUB_SHA")
           fi
           image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${VARIANT}-${source_tag}"
           if [ "$VARIANT" = "default" ]; then
