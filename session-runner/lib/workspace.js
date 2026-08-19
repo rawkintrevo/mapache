@@ -6,6 +6,7 @@ const {createWorkspaceArchiveService} = require("./workspaceArchives.service");
 const {createGithubWorkspaceRestoreService} = require("./workspaceGithub.service");
 const {createWorkspacePathHelpers} = require("./workspacePath.helpers");
 const {createWorkspaceAuthService} = require("./workspaceAuth.service");
+const {generationMatchOptions, isStorageGenerationConflict} = require("./workspaceSyncGeneration.helpers");
 const {normalizeRelativeWorkspacePath} = require("./utils");
 
 function createWorkspaceService({admin, config, db, git, storage}) {
@@ -62,7 +63,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
 
   async function syncUp(options = {}) {
     await auth.synchronizeAuth({materialize: true});
-    if (!config.bucketName || !config.prefix) return;
+    if (!config.bucketName || !config.prefix) return {conflicts: []};
     const {directories, files} = await walkWorkspace(config.workspaceDir);
     const desiredRemotePaths = new Set();
 
@@ -77,51 +78,80 @@ function createWorkspaceService({admin, config, db, git, storage}) {
       });
     }));
 
-    await Promise.all(files.map(async (localPath) => {
+    const uploadResults = await Promise.all(files.map(async (localPath) => {
       const relative = normalizeRelativeWorkspacePath(path.relative(config.workspaceDir, localPath));
       const remotePath = pathHelpers.workspaceRemotePath(relative);
       desiredRemotePaths.add(remotePath);
-      await syncFileUpPreservingNewerRemote(localPath, remotePath);
+      return syncFileUpPreservingNewerRemote(localPath, remotePath);
     }));
 
-    await reconcileManagedRemoteWorktree(desiredRemotePaths);
+    const reconcileConflicts = await reconcileManagedRemoteWorktree(desiredRemotePaths);
 
     if (options.includeArchives) {
       await archives.syncArchivesUp();
     }
+    return {
+      conflicts: [
+        ...uploadResults.filter((result) => result?.status === "conflict"),
+        ...reconcileConflicts,
+      ],
+    };
   }
 
   async function reconcileManagedRemoteWorktree(desiredRemotePaths) {
-    if (!git.isGithubWorkspace() && !git.isBlankWorkspace()) return;
+    if (!git.isGithubWorkspace() && !git.isBlankWorkspace()) return [];
     const [remoteFiles] = await storage.bucket(config.bucketName).getFiles({prefix: `${config.prefix}/`});
-    await Promise.all(remoteFiles.map(async (file) => {
-      if (!pathHelpers.shouldManageWorkspaceRemotePath(file.name)) return;
-      if (desiredRemotePaths.has(file.name)) return;
-      await file.delete({ignoreNotFound: true});
+    const results = await Promise.all(remoteFiles.map(async (file) => {
+      if (!pathHelpers.shouldManageWorkspaceRemotePath(file.name)) return null;
+      if (desiredRemotePaths.has(file.name)) return null;
+      let metadata;
+      try {
+        [metadata] = await file.getMetadata();
+      } catch (error) {
+        if (error && (error.code === 404 || error.code === "ENOENT")) return null;
+        throw error;
+      }
+      try {
+        await file.delete({ignoreNotFound: true, ifGenerationMatch: metadata.generation});
+        return null;
+      } catch (error) {
+        if (isStorageGenerationConflict(error)) return {status: "conflict", path: file.name};
+        throw error;
+      }
     }));
+    return results.filter(Boolean);
   }
 
   async function syncFileUpPreservingNewerRemote(localPath, remotePath) {
     const file = storage.bucket(config.bucketName).file(remotePath);
-    if (await remoteObjectNewerThanLocal(file, localPath)) {
+    let metadata = null;
+    try {
+      [metadata] = await file.getMetadata();
+    } catch (error) {
+      if (!(error && (error.code === 404 || error.code === "ENOENT"))) throw error;
+    }
+    if (metadata && await remoteObjectNewerThanLocal(metadata, localPath)) {
       await fs.promises.mkdir(path.dirname(localPath), {recursive: true});
       await file.download({destination: localPath});
-      return;
+      return {status: "remote_newer", path: remotePath};
     }
-    await storage.bucket(config.bucketName).upload(localPath, {destination: remotePath});
-  }
-
-  async function remoteObjectNewerThanLocal(file, localPath) {
     try {
-      const [metadata] = await file.getMetadata();
-      const localStat = await fs.promises.stat(localPath);
-      const remoteUpdatedMs = Date.parse(metadata.updated || metadata.timeCreated || "");
-      if (!Number.isFinite(remoteUpdatedMs)) return false;
-      return remoteUpdatedMs > localStat.mtimeMs + 1000;
+      await storage.bucket(config.bucketName).upload(localPath, {
+        destination: remotePath,
+        ...generationMatchOptions(metadata?.generation),
+      });
+      return {status: "uploaded", path: remotePath};
     } catch (error) {
-      if (error && (error.code === 404 || error.code === "ENOENT")) return false;
+      if (isStorageGenerationConflict(error)) return {status: "conflict", path: remotePath};
       throw error;
     }
+  }
+
+  async function remoteObjectNewerThanLocal(metadata, localPath) {
+    const localStat = await fs.promises.stat(localPath);
+    const remoteUpdatedMs = Date.parse(metadata.updated || metadata.timeCreated || "");
+    if (!Number.isFinite(remoteUpdatedMs)) return false;
+    return remoteUpdatedMs > localStat.mtimeMs + 1000;
   }
 
   async function walkWorkspace(dir) {
