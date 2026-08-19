@@ -13,7 +13,7 @@ const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({Profi
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, drawer, files, git, github, modals, pi, sessions, workspaces} = handlers;
+  const {admin, app, drawer, files, git, github, google = {}, modals, pi, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -116,6 +116,7 @@ export function AppShell(props) {
           onInstallPiPackage={pi.installPiPackage}
           onCancelPiSkillEdit={pi.cancelPiSkillEdit}
           onDeleteMcpServer={pi.deleteMcpServer}
+          onDeleteGoogleConnection={google.deleteConnection}
           onDeletePiAuthProvider={pi.deletePiAuthProvider}
           onDeletePiSkill={pi.deletePiSkill}
           onDeleteWorkspaceSubagent={pi.deleteWorkspaceSubagent}
@@ -127,6 +128,7 @@ export function AppShell(props) {
           onOpenWorkspaceSkillModal={modals.openWorkspaceSkillModal}
           onOpenWorkspaceSubagentModal={modals.openWorkspaceSubagentModal}
           onRefreshMcpServers={pi.refreshMcpServers}
+          onRefreshGoogleWorkspace={google.loadGoogleWorkspace}
           onRefreshPiAuth={pi.refreshPiAuth}
           onRefreshPiPackages={pi.refreshPiPackages}
           onRefreshPiSkills={pi.refreshPiSkills}
@@ -138,6 +140,11 @@ export function AppShell(props) {
           onUpdatePiInstallSource={pi.updatePiInstallSource}
           onUpdatePiPackage={pi.updatePiPackage}
           onSaveMcpServer={pi.saveMcpServer}
+          onStartGoogleConnection={google.startConnection}
+          onBindGoogleConnection={google.bindConnection}
+          onUnbindGoogleConnection={google.unbindConnection}
+          onUpdateGoogleAccessLevel={google.updateAccessLevel}
+          onUpdateGoogleService={google.updateService}
         />
       </main>
       {hasOpenModal ? (

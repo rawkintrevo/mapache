@@ -17,6 +17,7 @@ import {APP_ACTIONS, createAppStore} from "./state/appStore.js";
 import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
+  resetGoogleWorkspace as resetGoogleWorkspaceState,
   resetMcpServers as resetMcpServersState,
   resetSshForwards as resetSshForwardsState,
   resetWorkspaceSubagents as resetWorkspaceSubagentsState,
@@ -30,6 +31,7 @@ import {createPiPanelsController} from "./controllers/piPanelsController.js";
 import {createSessionSubscriptionController} from "./controllers/sessionSubscriptionController.js";
 import {createWorkspaceFilesController} from "./controllers/workspaceFilesController.js";
 import {createWorkspaceController} from "./controllers/workspaceController.js";
+import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
 import {
   closePullRequestModalState,
   commitGitState,
@@ -87,6 +89,7 @@ const piPanelsController = createPiPanelsController({
   render,
   captureSessionRequest: () => sessionRequestTracker.capture(),
 });
+const googleWorkspaceController = createGoogleWorkspaceController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -108,6 +111,7 @@ const workspaceController = createWorkspaceController({
   refreshAll,
   loadSessions,
   loadMcpServers: piPanelsController.loadMcpServers,
+  loadGoogleWorkspace: googleWorkspaceController.loadGoogleWorkspace,
   loadSelectedSessionPanels,
   resetWorkspacePanels: resetWorkspaceScopedPanels,
 });
@@ -138,6 +142,7 @@ const handlers = {
     loadConnectedRepos,
     refreshGithubRepositories,
   },
+  google: googleWorkspaceController,
   modals: modalController,
   pi: piPanelsController,
   sessions: {
@@ -239,6 +244,10 @@ function resetMcpServers() {
   resetMcpServersState(state);
 }
 
+function resetGoogleWorkspace() {
+  resetGoogleWorkspaceState(state);
+}
+
 function resetSshForwards() {
   resetSshForwardsState(state);
 }
@@ -250,6 +259,7 @@ function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
   resetWorkspaceSkills();
   resetWorkspaceSubagents();
   if (includeMcp) resetMcpServers();
+  resetGoogleWorkspace();
   resetSshForwards();
 }
 
@@ -264,6 +274,7 @@ async function refreshAll() {
     await workspaceController.refreshWorkspaceList();
     await loadSessions();
     await piPanelsController.loadMcpServers();
+    await googleWorkspaceController.loadGoogleWorkspace({silent: true});
     await piPanelsController.loadPiAuth();
     await workspaceFilesController.loadWorkspaceFiles();
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {

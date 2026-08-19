@@ -4,6 +4,7 @@ import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
+import {GoogleWorkspacePanel} from "./GoogleWorkspacePanel.jsx";
 import {McpServersPanel} from "./McpServersPanel.jsx";
 import {SkillsPanel} from "./SkillsPanel.jsx";
 import {SubagentsPanel} from "./SubagentsPanel.jsx";
@@ -17,6 +18,7 @@ export function RightDrawer({
   onDeletePiSkill,
   onDeleteWorkspaceSubagent,
   onDeleteMcpServer,
+  onDeleteGoogleConnection,
   onEditPiSkill,
   onEditWorkspaceSubagent,
   onOpenAuthModal,
@@ -26,6 +28,7 @@ export function RightDrawer({
   onOpenWorkspaceSubagentModal,
   onRefreshPiAuth,
   onRefreshMcpServers,
+  onRefreshGoogleWorkspace,
   onRefreshPiPackages,
   onRefreshPiSkills,
   onRefreshWorkspaceSubagents,
@@ -36,6 +39,11 @@ export function RightDrawer({
   onUpdateMcpServerForm,
   onUpdatePiPackage,
   onSaveMcpServer,
+  onStartGoogleConnection,
+  onBindGoogleConnection,
+  onUnbindGoogleConnection,
+  onUpdateGoogleAccessLevel,
+  onUpdateGoogleService,
   onCancelWorkspaceSubagentEdit,
 }) {
   const toggleButton = (
@@ -104,6 +112,18 @@ export function RightDrawer({
         onSaveMcpServer={onSaveMcpServer}
         onToggleDrawerSection={onToggleDrawerSection}
         onUpdateMcpServerForm={onUpdateMcpServerForm}
+      />
+      <GoogleWorkspacePanel
+        googleWorkspace={state.googleWorkspace}
+        state={state}
+        onBindConnection={onBindGoogleConnection}
+        onDeleteConnection={onDeleteGoogleConnection}
+        onRefresh={onRefreshGoogleWorkspace}
+        onStartConnection={onStartGoogleConnection}
+        onToggleDrawerSection={onToggleDrawerSection}
+        onUnbindConnection={onUnbindGoogleConnection}
+        onUpdateAccessLevel={onUpdateGoogleAccessLevel}
+        onUpdateService={onUpdateGoogleService}
       />
       <ExtensionsPanel
         piPackages={state.piPackages}

@@ -3,6 +3,57 @@
   padding: 0;
 }
 
+.google-workspace-services,
+.google-workspace-accounts {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.google-workspace-account,
+.google-workspace-service {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.google-workspace-account {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.google-workspace-account > div,
+.google-workspace-service > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.google-workspace-account > div {
+  flex: 1;
+}
+
+.google-workspace-account svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.google-workspace-service {
+  cursor: pointer;
+  justify-content: flex-start;
+}
+
+.google-workspace-service input {
+  accent-color: var(--accent);
+}
+
+.google-workspace-services > .button {
+  justify-content: center;
+  width: 100%;
+}
+
 .package-list,
 .skill-list {
   display: grid;

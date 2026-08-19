@@ -97,6 +97,36 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/mcp`,
         {method: "PUT", body},
     ),
+    getGoogleWorkspaceServices: () => request(getToken, "/api/google/services"),
+    getGoogleConnections: () => request(getToken, "/api/google/connections"),
+    getGoogleConnection: (connectionId) => request(
+        getToken,
+        `/api/google/connections/${encodeURIComponent(connectionId)}`,
+    ),
+    deleteGoogleConnection: (connectionId) => request(
+        getToken,
+        `/api/google/connections/${encodeURIComponent(connectionId)}`,
+        {method: "DELETE"},
+    ),
+    getWorkspaceGoogleConnection: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google`,
+    ),
+    startGoogleConnection: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google/connect`,
+        {method: "POST", body},
+    ),
+    bindGoogleConnection: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google/binding`,
+        {method: "POST", body},
+    ),
+    unbindGoogleConnection: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google/binding`,
+        {method: "DELETE"},
+    ),
     uploadWorkspaceFile: (workspaceId, file) => uploadFile(
         getToken,
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(file.name)}`,

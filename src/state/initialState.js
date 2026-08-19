@@ -149,6 +149,22 @@ export function createGithubConnectionState(overrides = {}) {
   };
 }
 
+export function createGoogleWorkspaceState(overrides = {}) {
+  return {
+    loading: false,
+    connecting: false,
+    saving: false,
+    deleting: false,
+    error: "",
+    message: "",
+    data: null,
+    attempted: false,
+    accessLevel: "read",
+    selectedServices: [],
+    ...overrides,
+  };
+}
+
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -205,6 +221,7 @@ export function createInitialState() {
     pullRequestForm: createPullRequestFormState(),
     repoPicker: createRepoPickerState(),
     githubConnection: createGithubConnectionState(),
+    googleWorkspace: createGoogleWorkspaceState(),
     drawerCollapsed: false,
     rightDrawerCollapsed: true,
     collapsedDrawerSections: new Set(),

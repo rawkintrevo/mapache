@@ -2,6 +2,7 @@ import {
   createAdminState,
   createFileEditorState,
   createGitStatusState,
+  createGoogleWorkspaceState,
   createMcpServersState,
   createPiAuthState,
   createPiPackagesState,
@@ -54,6 +55,10 @@ export function resetSshForwards(state) {
   state.sshForwards = createSshForwardsState();
 }
 
+export function resetGoogleWorkspace(state) {
+  state.googleWorkspace = createGoogleWorkspaceState();
+}
+
 export function resetWorkspaceFiles(state) {
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
@@ -91,4 +96,5 @@ export function resetSignedOutState(state) {
   resetMcpServers(state);
   resetPiAuth(state);
   resetSshForwards(state);
+  resetGoogleWorkspace(state);
 }
