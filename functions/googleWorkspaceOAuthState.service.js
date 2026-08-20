@@ -9,10 +9,13 @@ function createGoogleOAuthStateService(dependencies = {}) {
   const secret = String(dependencies.secret || process.env.GOOGLE_OAUTH_STATE_SECRET || "");
   const now = dependencies.now || (() => Date.now());
   const ttlMs = Number(dependencies.ttlMs || DEFAULT_TTL_MS);
-  const consumed = dependencies.consumed || new Set();
+  const db = dependencies.db;
+  if (!db || typeof db.runTransaction !== "function") {
+    throw new Error("Google OAuth state service requires a Firestore database.");
+  }
   return {
     issue: (input) => issueGoogleOAuthState(input, {secret, now, ttlMs}),
-    consume: (token, expected) => consumeGoogleOAuthState(token, expected, {secret, now, consumed}),
+    consume: (token, expected) => consumeGoogleOAuthState(token, expected, {secret, now, db}),
   };
 }
 
@@ -32,6 +35,7 @@ function issueGoogleOAuthState(input = {}, dependencies = {}) {
     uid,
     workspaceId,
     attemptId,
+    reconnect: Boolean(input.reconnect),
     serviceKeys,
     iat: now,
     exp: expiresAt,
@@ -41,7 +45,7 @@ function issueGoogleOAuthState(input = {}, dependencies = {}) {
   return `${encodedPayload}.${sign(encodedPayload, dependencies.secret)}`;
 }
 
-function consumeGoogleOAuthState(token, expected = {}, dependencies = {}) {
+async function consumeGoogleOAuthState(token, expected = {}, dependencies = {}) {
   if (!dependencies.secret) throw httpError(503, "google_oauth_state_unavailable");
   const [encodedPayload, signature, extra] = String(token || "").split(".");
   if (!encodedPayload || !signature || extra || !safeEqual(signature, sign(encodedPayload, dependencies.secret))) {
@@ -62,16 +66,41 @@ function consumeGoogleOAuthState(token, expected = {}, dependencies = {}) {
       expected.workspaceId && payload.workspaceId !== expected.workspaceId) {
     throw httpError(403, "google_oauth_state_mismatch");
   }
-  if (dependencies.consumed.has(payload.nonce)) throw httpError(400, "replayed_google_oauth_state");
-  dependencies.consumed.add(payload.nonce);
+  if (!dependencies.db || typeof dependencies.db.runTransaction !== "function") {
+    throw new Error("Google OAuth state consumption requires a Firestore database.");
+  }
+  await consumeGoogleOAuthStateDurably(payload, now, dependencies.db);
   return {
     uid: payload.uid,
     workspaceId: payload.workspaceId,
     attemptId: payload.attemptId,
+    reconnect: payload.reconnect === true,
     serviceKeys: normalizeServiceKeys(payload.serviceKeys || []),
     issuedAt: payload.iat,
     expiresAt: payload.exp,
   };
+}
+
+async function consumeGoogleOAuthStateDurably(payload, consumedAt, db) {
+  const stateRef = db.collection("users")
+      .doc(payload.uid)
+      .collection("private")
+      .doc("googleOAuthState")
+      .collection("attempts")
+      .doc(payload.nonce);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(stateRef);
+    if (snapshot.exists) throw httpError(400, "replayed_google_oauth_state");
+    transaction.create(stateRef, {
+      uid: payload.uid,
+      workspaceId: payload.workspaceId,
+      attemptId: payload.attemptId,
+      reconnect: payload.reconnect === true,
+      issuedAt: payload.iat,
+      expiresAt: payload.exp,
+      consumedAt,
+    });
+  });
 }
 
 function encode(value) {

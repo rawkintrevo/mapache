@@ -108,7 +108,7 @@ jobs:
           else
             source_tag=$(node scripts/runner-image-release.mjs --variant="$VARIANT" --sha="$GITHUB_SHA")
           fi
-          image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${VARIANT}-${source_tag}"
+          image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${source_tag}"
           if [ "$VARIANT" = "default" ]; then
             gcloud builds submit session-runner --project pi-agents-cloud --tag "$image"
           else

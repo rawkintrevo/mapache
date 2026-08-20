@@ -66,7 +66,7 @@ export async function loadGoogleWorkspaceState({state, render, silent = false}) 
   render();
 }
 
-export async function startGoogleWorkspaceConnectionState({state, render, openPopup = defaultOpenPopup, loadState}) {
+export async function startGoogleWorkspaceConnectionState({state, render, openPopup = defaultOpenPopup, loadState, reconnect = false}) {
   const workspaceId = state.selectedWorkspaceId;
   const services = selectedServices(state);
   if (!workspaceId) {
@@ -85,6 +85,7 @@ export async function startGoogleWorkspaceConnectionState({state, render, openPo
     const data = await state.api.startGoogleConnection(workspaceId, {
       serviceKeys: services,
       accessLevel: state.googleWorkspace.accessLevel || "read",
+      reconnect: Boolean(reconnect),
     });
     const popup = openPopup(data.authorizationUrl);
     if (popup && typeof popup.focus === "function") popup.focus();

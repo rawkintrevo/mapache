@@ -123,6 +123,7 @@ const environmentKeysService = createEnvironmentKeysService({admin, db});
 const qaAuthService = createQaAuthService();
 const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
 const googleWorkspaceOAuthStateService = createGoogleOAuthStateService({
+  db,
   secret: secretValue(GOOGLE_OAUTH_STATE_SECRET),
 });
 const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({

@@ -13,6 +13,26 @@ function response(status, body) {
   return {ok: status >= 200 && status < 300, status, json: async () => body};
 }
 
+function createFakeDb() {
+  const records = new Map();
+  function reference(parts) {
+    return {
+      path: parts.join("/"),
+      collection: (name) => reference([...parts, name]),
+      doc: (name) => reference([...parts, name]),
+    };
+  }
+  return {
+    collection: (name) => reference([name]),
+    async runTransaction(callback) {
+      return callback({
+        get: async (ref) => ({exists: records.has(ref.path)}),
+        create: (ref, value) => records.set(ref.path, value),
+      });
+    },
+  };
+}
+
 (async () => {
   assert.deepStrictEqual(normalizeSelection({serviceKeys: ["gmail"], accessLevel: "write"}), {
     serviceKeys: ["gmail"],
@@ -55,8 +75,9 @@ function response(status, body) {
     },
     async listGoogleConnections() { return {connections: []}; },
   };
-  const state = createGoogleOAuthStateService({secret: "state-secret", now: () => 1000, ttlMs: 100000});
+  const state = createGoogleOAuthStateService({secret: "state-secret", now: () => 1000, ttlMs: 100000, db: createFakeDb()});
   const calls = [];
+  let includeRefreshToken = true;
   const oauth = createGoogleWorkspaceOAuthService({
     clientId: "client-id",
     clientSecret: "client-secret",
@@ -69,7 +90,7 @@ function response(status, body) {
       calls.push({url, options});
       if (url === "https://oauth2.googleapis.com/token") return response(200, {
         access_token: "access-fake",
-        refresh_token: "refresh-fake",
+        ...(includeRefreshToken ? {refresh_token: "refresh-fake"} : {}),
         scope: "https://www.googleapis.com/auth/gmail.readonly",
       });
       return response(200, {sub: "subject-a", email: "a@example.com", name: "Account A"});
@@ -96,6 +117,15 @@ function response(status, body) {
   const encrypted = encryptSecret("another-secret", "encryption-secret");
   assert.strictEqual(decryptSecret(encrypted, "encryption-secret"), "another-secret");
   await assert.rejects(oauth.completeGoogleConnection({state: params.get("state"), code: "code-fake"}), /replayed_google_oauth_state/);
+
+  const reconnect = await oauth.startGoogleConnection("user-a", "workspace-a", {serviceKeys: ["gmail"], reconnect: true});
+  const reconnectParams = new URL(reconnect.authorizationUrl).searchParams;
+  assert.strictEqual(reconnectParams.get("prompt"), "consent select_account");
+  includeRefreshToken = false;
+  await assert.rejects(
+      oauth.completeGoogleConnection({state: reconnectParams.get("state"), code: "reconnect-code"}),
+      /google_refresh_token_missing/,
+  );
   console.log("google workspace OAuth service tests passed");
 })().catch((error) => {
   console.error(error);

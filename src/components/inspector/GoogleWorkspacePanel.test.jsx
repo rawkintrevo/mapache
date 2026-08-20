@@ -48,9 +48,11 @@ describe("GoogleWorkspacePanel", () => {
     const user = userEvent.setup();
     const onUpdateService = vi.fn();
     const onRestartSession = vi.fn();
+    const onStartConnection = vi.fn();
     renderPanel({
       onUpdateService,
       onRestartSession,
+      onStartConnection,
       googleWorkspace: {
         loading: false,
         connecting: false,
@@ -81,6 +83,8 @@ describe("GoogleWorkspacePanel", () => {
     expect(onUpdateService).toHaveBeenCalledWith("gmail", false);
     await user.click(screen.getByRole("button", {name: "Restart active session"}));
     expect(onRestartSession).toHaveBeenCalledWith("session-a");
+    await user.click(screen.getByRole("button", {name: "Reconnect / change account"}));
+    expect(onStartConnection).toHaveBeenCalledWith({reconnect: true});
   });
 
   test("deletion confirmation names affected workspace count", async () => {

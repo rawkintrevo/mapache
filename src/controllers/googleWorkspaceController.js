@@ -24,8 +24,13 @@ export function createGoogleWorkspaceController({state, render}) {
     render();
   }
 
-  async function startConnection() {
-    await startGoogleWorkspaceConnectionState({state, render, loadState: loadGoogleWorkspace});
+  async function startConnection(options = {}) {
+    await startGoogleWorkspaceConnectionState({
+      state,
+      render,
+      loadState: loadGoogleWorkspace,
+      reconnect: options.reconnect === true,
+    });
   }
 
   async function bindConnection(connectionId) {

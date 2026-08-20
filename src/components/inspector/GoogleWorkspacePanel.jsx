@@ -118,7 +118,7 @@ export function GoogleWorkspacePanel({
           </label>
           <Button
             disabled={busy || !selected.size || !onStartConnection}
-            onClick={onStartConnection}
+            onClick={() => onStartConnection?.({reconnect: Boolean(boundConnection)})}
           >
             <ExternalLink aria-hidden="true" />
             {status.connecting ? "Opening Google..." : boundConnection ? "Reconnect / change account" : "Connect Google account"}

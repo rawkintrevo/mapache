@@ -47,12 +47,14 @@ function createGoogleWorkspaceOAuthService(dependencies = {}) {
 async function startGoogleConnection(uid, workspaceId, payload = {}, dependencies) {
   if (typeof dependencies.requireWorkspace === "function") await dependencies.requireWorkspace(uid, workspaceId);
   const selection = normalizeSelection(payload);
+  const reconnect = payload.reconnect === true;
   requireConfigured(dependencies.config, "start");
   const attemptId = crypto.randomUUID();
   const stateToken = dependencies.state.issue({
     uid,
     workspaceId,
     attemptId,
+    reconnect,
     serviceKeys: selection.serviceKeys,
   });
   const url = new URL(GOOGLE_AUTHORIZATION_URL);
@@ -60,7 +62,7 @@ async function startGoogleConnection(uid, workspaceId, payload = {}, dependencie
   url.searchParams.set("redirect_uri", dependencies.config.redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "select_account");
+  url.searchParams.set("prompt", reconnect ? "consent select_account" : "select_account");
   url.searchParams.set("scope", selection.scopes.join(" "));
   url.searchParams.set("state", stateToken);
   return {
@@ -77,13 +79,13 @@ async function completeGoogleConnection(query = {}, dependencies) {
   const code = cleanQueryValue(query.code);
   if (query.error) return {status: 400, html: callbackPage(false, "Google authorization was not completed.")};
   if (!stateToken || !code) throw httpError(400, "invalid_google_oauth_callback");
-  const context = dependencies.state.consume(stateToken);
+  const context = await dependencies.state.consume(stateToken);
   requireConfigured(dependencies.config, "callback");
   const tokenData = await exchangeAuthorizationCode(code, dependencies);
   const identity = await fetchGoogleIdentity(tokenData.access_token, dependencies.fetchImpl);
   const selectedScopes = context.serviceKeys.length ? googleWorkspaceScopeSelection(context.serviceKeys, "read") : [];
   const connectionId = `google-${crypto.createHash("sha256").update(`${context.uid}:${identity.sub}`).digest("hex").slice(0, 32)}`;
-  const refreshToken = tokenData.refresh_token || await existingRefreshToken(context.uid, connectionId, dependencies);
+  const refreshToken = tokenData.refresh_token || (context.reconnect ? "" : await existingRefreshToken(context.uid, connectionId, dependencies));
   if (!refreshToken) throw httpError(502, "google_refresh_token_missing");
   const grantedScopes = String(tokenData.scope || "").split(/\s+/).filter(Boolean).slice(0, 100);
   const metadata = {
