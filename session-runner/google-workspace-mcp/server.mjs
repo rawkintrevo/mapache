@@ -14,6 +14,7 @@ import {registerDocsWriteTools} from "./docsWrites.mjs";
 import {registerSheetsReadTools} from "./sheets.mjs";
 import {registerSheetsWriteTools} from "./sheetsWrites.mjs";
 import {registerSlidesReadTools} from "./slides.mjs";
+import {registerSlidesWriteTools} from "./slidesWrites.mjs";
 
 const SERVER_NAME = "mapache-google-workspace";
 const SERVER_VERSION = "0.1.0";
@@ -48,6 +49,7 @@ export function createGoogleWorkspaceServer(config = createGoogleWorkspaceConfig
   registerSheetsReadTools(server, {client, config});
   registerSheetsWriteTools(server, {client, config});
   registerSlidesReadTools(server, {client, config});
+  registerSlidesWriteTools(server, {client, config});
 
   return server;
 }
