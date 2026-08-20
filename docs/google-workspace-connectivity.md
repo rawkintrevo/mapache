@@ -109,5 +109,6 @@ Before production use, verify the three OAuth secrets, redirect URI, Google Clou
 - `npm run docs:check`
 - `npm --prefix functions test && npm --prefix functions run lint`
 - `npm --prefix session-runner run lint && npm --prefix session-runner test`
+- `functions/googleWorkspaceIsolation.test.js` and `session-runner/google-workspace-mcp/isolation.test.mjs` cover workspace token isolation, secret redaction, and read-only/write tool gating.
 - `npm run test:frontend && npm run build`
 - Chrome DevTools QA through the existing browser at `127.0.0.1:9222` using `e2e/qa/cases/google-workspace-connections.json`
