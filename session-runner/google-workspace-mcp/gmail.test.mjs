@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {compactMessage, decodeMimeText, getMessage, registerGmailReadTools} from "./gmail.mjs";
+import {compactMessage, decodeMimeText, getMessage, listDrafts, registerGmailReadTools, searchThreads} from "./gmail.mjs";
 
 function fakeServer() {
   const tools = new Map();
@@ -51,4 +51,45 @@ test("gets one message through the bounded REST client", async () => {
   }}, {messageId: "message-1"});
   assert.match(calls[0], /messages\/message-1/);
   assert.equal(result.message.plainText, "World");
+});
+
+test("searches Gmail thread responses without discarding their threads field", async () => {
+  const calls = [];
+  const result = await searchThreads({
+    paginate: async (requestPage, options) => {
+      calls.push(options);
+      const page = await requestPage({pageToken: "next-page"});
+      return {
+        items: page[options.itemsKey],
+        pages: 1,
+        truncated: false,
+        nextPageToken: null,
+      };
+    },
+    request: async (url) => {
+      calls.push(url);
+      return {threads: [{id: "thread-1", historyId: "history-1"}]};
+    },
+  }, {query: "from:person@example.com", pageSize: 25, maxItems: 25});
+
+  assert.deepEqual(calls[0], {itemsKey: "threads", maxItems: 25});
+  assert.match(calls[1], /q=from%3Aperson%40example.com/);
+  assert.match(calls[1], /maxResults=25/);
+  assert.match(calls[1], /pageToken=next-page/);
+  assert.deepEqual(result.threads, [{id: "thread-1", snippet: null, historyId: "history-1"}]);
+});
+
+test("lists Gmail draft responses without discarding their drafts field", async () => {
+  const result = await listDrafts({
+    paginate: async (_requestPage, options) => ({
+      items: options.itemsKey === "drafts" ? [{id: "draft-1", message: {id: "message-1"}}] : [],
+      pages: 1,
+      truncated: false,
+      nextPageToken: null,
+    }),
+  }, {maxItems: 10});
+
+  assert.equal(result.drafts.length, 1);
+  assert.equal(result.drafts[0].id, "draft-1");
+  assert.equal(result.drafts[0].message.id, "message-1");
 });

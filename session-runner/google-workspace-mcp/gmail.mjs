@@ -40,7 +40,7 @@ export async function searchThreads(client, input = {}) {
     ...params,
     q: input.query || "",
     maxResults: boundedPageSize(input.pageSize),
-  })}`), {maxItems: boundedItemLimit(input.maxItems)});
+  })}`), {itemsKey: "threads", maxItems: boundedItemLimit(input.maxItems)});
   return {threads: result.items.map((thread) => ({id: thread.id || null, snippet: thread.snippet || null, historyId: thread.historyId || null})), pages: result.pages, truncated: result.truncated, nextPageToken: result.nextPageToken};
 }
 
@@ -69,7 +69,7 @@ export async function listDrafts(client, input = {}) {
   const result = await client.paginate((params) => client.request(`${GMAIL_API}/drafts?${queryParams({
     ...params,
     maxResults: boundedPageSize(input.pageSize),
-  })}`), {maxItems: boundedItemLimit(input.maxItems)});
+  })}`), {itemsKey: "drafts", maxItems: boundedItemLimit(input.maxItems)});
   return {drafts: result.items.map((draft) => ({id: draft.id || null, message: draft.message ? compactMessage(draft.message) : null})), pages: result.pages, truncated: result.truncated, nextPageToken: result.nextPageToken};
 }
 
