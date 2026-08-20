@@ -38,6 +38,7 @@ export function createGoogleRestClient({
     if (!token) throw new GoogleRestError("google_access_token_missing", "Google access token is not configured.");
 
     const url = resolveUrl(baseUrl, pathOrUrl);
+    const {responseType = "json", maxResponseBytes: requestMaxResponseBytes, ...fetchOptions} = options;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), boundedTimeout(timeoutMs));
     const headers = new Headers(options.headers || {});
@@ -47,7 +48,7 @@ export function createGoogleRestClient({
 
     let response;
     try {
-      response = await fetchImpl(url, {...options, headers, signal: controller.signal});
+      response = await fetchImpl(url, {...fetchOptions, headers, signal: controller.signal});
     } catch (error) {
       if (controller.signal.aborted) {
         throw new GoogleRestError("google_request_timeout", "Google request timed out.", {cause: error});
@@ -57,7 +58,12 @@ export function createGoogleRestClient({
       clearTimeout(timeout);
     }
 
-    const bodyText = await readBoundedBody(response, maxResponseBytes);
+    const bytes = await readBoundedBody(response, Math.min(
+        positiveInteger(requestMaxResponseBytes, maxResponseBytes),
+        positiveInteger(maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES),
+    ));
+    if (responseType === "bytes") return bytes;
+    const bodyText = new TextDecoder().decode(bytes);
     const body = parseJsonBody(bodyText, response.status);
     if (!response.ok) throw normalizedResponseError(response.status, body, token);
     return body;
@@ -122,12 +128,12 @@ async function readBoundedBody(response, maxResponseBytes) {
       }
       chunks.push(value);
     }
-    return new TextDecoder().decode(concatBytes(chunks, total));
+    return concatBytes(chunks, total);
   }
 
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > limit) throw new GoogleRestError("google_response_too_large", "Google response exceeds the configured size limit.");
-  return new TextDecoder().decode(buffer);
+  return new Uint8Array(buffer);
 }
 
 function concatBytes(chunks, total) {
