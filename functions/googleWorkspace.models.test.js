@@ -14,7 +14,7 @@ const base = {
   googleSubject: "subject-a",
   email: "AccountA@example.com",
   displayName: "Account A",
-  grantedScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+  grantedScopes: ["openid", "email", "profile", "https://www.googleapis.com/auth/gmail.readonly"],
   enabledServices: services,
   oauthClientRef: "google-client-prod",
   createdAt: "2026-08-19T00:00:00Z",
@@ -53,6 +53,7 @@ for (const payload of [
 }
 assert.throws(() => normalizeGoogleConnectionMetadata({...base, enabledServices: ["unknown"]}), /invalid_google_service_keys/);
 assert.throws(() => normalizeGoogleConnectionMetadata({...base, email: "not-an-email"}), /invalid_google_email/);
+assert.throws(() => normalizeGoogleConnectionMetadata({...base, grantedScopes: ["arbitrary"]}), /invalid_google_scopes/);
 assert.throws(() => normalizeGoogleWorkspaceBinding({connectionId: "a", enabledServices: []}), /google_services_required/);
 assert.throws(() => normalizeGoogleWorkspaceBinding({connectionId: "a", enabledServices: ["gmail"], refreshToken: "x"}), /google_credential_material_not_allowed/);
 

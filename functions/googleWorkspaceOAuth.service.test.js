@@ -94,7 +94,7 @@ function createFakeDb() {
       if (url === "https://oauth2.googleapis.com/token") return response(200, {
         access_token: "access-fake",
         ...(includeRefreshToken ? {refresh_token: "refresh-fake"} : {}),
-        scope: "https://www.googleapis.com/auth/gmail.readonly",
+        scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly",
       });
       return response(200, {sub: "subject-a", email: "a@example.com", name: "Account A"});
     },
@@ -112,6 +112,7 @@ function createFakeDb() {
   assert.strictEqual(bindings.get("user-a:workspace-a").enabledServices[0], "gmail");
   assert.strictEqual(calls[0].options.body.toString().includes("code-fake"), true);
   const stored = [...connections.values()][0];
+  assert.deepStrictEqual(stored.metadata.grantedScopes.slice(0, 3), ["openid", "email", "profile"]);
   assert.strictEqual(decryptSecret(stored.encryptedCredentials, "encryption-secret"), "refresh-fake");
   assert.strictEqual(JSON.stringify(stored.summary).includes("refresh-fake"), false);
 

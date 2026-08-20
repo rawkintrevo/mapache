@@ -18,6 +18,7 @@ const SECRET_FIELD_PATTERN = /(?:access|refresh|client|authorization|bearer|toke
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SCOPE_PATTERN = /^https:\/\/[^\s]+$/;
+const OIDC_SCOPE_NAMES = new Set(["openid", "email", "profile"]);
 const SAFE_FIELD_NAMES = new Set([
   "connectionId", "id", "googleSubject", "subject", "email", "displayName",
   "grantedScopes", "scopes", "enabledServices", "serviceKeys", "oauthClientRef",
@@ -88,7 +89,9 @@ function normalizeServiceKeys(value) {
 function normalizeScopes(value) {
   if (!Array.isArray(value)) throw httpError(400, "invalid_google_scopes");
   const scopes = [...new Set(value.map((scope) => String(scope || "").trim()))];
-  if (scopes.some((scope) => !SCOPE_PATTERN.test(scope))) throw httpError(400, "invalid_google_scopes");
+  if (scopes.some((scope) => !SCOPE_PATTERN.test(scope) && !OIDC_SCOPE_NAMES.has(scope))) {
+    throw httpError(400, "invalid_google_scopes");
+  }
   return scopes;
 }
 
