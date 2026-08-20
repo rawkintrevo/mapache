@@ -56,9 +56,8 @@ The encryption key must remain stable while records exist. Rotating it requires 
 
 ## Provisioning and runner behavior
 
-When a new Cloud Run session is created, or an existing session is restarted, Functions resolves the workspace binding, refreshes the Google connection, and builds an ephemeral runner-specific runtime. `GOOGLE_MCP_EXECUTION_MODE` defaults to `local`; setting it explicitly to `hosted` remains the rollback path while the rollout is verified:
+When a new Cloud Run session is created, or an existing session is restarted, Functions resolves the workspace binding, refreshes the Google connection, and builds an ephemeral runner-specific runtime:
 
-- hosted mode merges selected Google MCP servers into the workspace MCP config using Google's HTTPS MCP URLs;
 - local mode merges one `google-workspace` stdio entry running `/app/google-workspace-mcp/server.mjs`;
 - selected service keys and granted scopes are passed as non-secret `GOOGLE_MCP_ENABLED_SERVICES` and `GOOGLE_MCP_GRANTED_SCOPES` values;
 - Google MCP entries request automatic modern/legacy protocol negotiation so Pi can connect to Google's stateless MCP endpoints instead of defaulting to the adapter's legacy-only handshake;
@@ -102,7 +101,7 @@ The runner status and Pi archive changes require a rebuilt runner image. Build t
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
 ```
 
-Before production use, verify the three OAuth secrets, redirect URI, Google Cloud APIs, consent screen, and any Workspace administrator policy. The OAuth consent screen's Data Access configuration must include `https://www.googleapis.com/auth/calendar.events` before users connect Calendar with read/write access. After adding or changing scopes, users must reconnect the saved Google account and restart or recreate affected sessions to receive a token containing the new grant. If a rollout must be reversed, deploy the previous Functions revision/image, restart affected sessions, and revoke or delete the saved Google connections through the UI/API. Existing sessions retain their already-provisioned environment until they are stopped or restarted.
+Before production use, verify the three OAuth secrets, redirect URI, Google Cloud APIs, consent screen, and any Workspace administrator policy. The OAuth consent screen's Data Access configuration must include `https://www.googleapis.com/auth/calendar.events` before users connect Calendar with read/write access. After adding or changing scopes, users must reconnect the saved Google account and restart or recreate affected sessions to receive a token containing the new grant. If a rollout must be reversed, deploy the previous Functions commit/revision and its matching runner image tags, restart affected sessions, and revoke or delete the saved Google connections through the UI/API. Existing sessions retain their already-provisioned environment until they are stopped or restarted.
 
 ## Verification
 

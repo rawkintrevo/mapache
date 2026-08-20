@@ -5,7 +5,6 @@ const {googleWorkspaceServiceCatalog} = require("./googleWorkspace.catalog");
 const {normalizeMcpConfigPayload} = require("./mcpConfig.helpers");
 
 const ACCESS_TOKEN_ENV = "GOOGLE_MCP_ACCESS_TOKEN";
-const EXECUTION_MODE_ENV = "GOOGLE_MCP_EXECUTION_MODE";
 const ENABLED_SERVICES_ENV = "GOOGLE_MCP_ENABLED_SERVICES";
 const GRANTED_SCOPES_ENV = "GOOGLE_MCP_GRANTED_SCOPES";
 const LOCAL_MCP_COMMAND = "node";
@@ -33,31 +32,20 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
   const refreshed = await dependencies.oauth.refreshGoogleConnection(uid, binding.connectionId);
   if (!refreshed.accessToken) throw httpError(502, "google_access_token_missing");
 
-  const executionMode = normalizeExecutionMode(dependencies.executionMode);
   const services = googleWorkspaceServiceCatalog().filter((service) =>
-    binding.enabledServices.includes(service.key) && (executionMode === "hosted" || LOCAL_SERVICE_KEYS.has(service.key)));
+    binding.enabledServices.includes(service.key) && LOCAL_SERVICE_KEYS.has(service.key));
   if (!services.length) throw httpError(409, "google_service_binding_empty");
   const grantedScopes = normalizeGrantedScopes(connection.grantedScopes, services);
-  const googleServers = executionMode === "local" ? {
-    "google-workspace": {
-      command: LOCAL_MCP_COMMAND,
-      args: [...LOCAL_MCP_ARGS],
-    },
-  } : Object.fromEntries(services.map((service) => [
-    `google-${service.key}`,
-    {
-      url: service.serverUrl,
-      authMode: "bearer_env",
-      bearerTokenEnv: ACCESS_TOKEN_ENV,
-      protocolVersion: "auto",
-      scopes: service.readScopes,
-    },
-  ]));
   return {
-    mcpConfig: normalizeMcpConfigPayload({mcpServers: {...base.mcpServers, ...googleServers}}),
+    mcpConfig: normalizeMcpConfigPayload({mcpServers: {
+      ...base.mcpServers,
+      "google-workspace": {
+        command: LOCAL_MCP_COMMAND,
+        args: [...LOCAL_MCP_ARGS],
+      },
+    }}),
     env: {
       [ACCESS_TOKEN_ENV]: refreshed.accessToken,
-      [EXECUTION_MODE_ENV]: executionMode,
       GOOGLE_MCP_CONNECTION_STATUS: "connected",
       GOOGLE_MCP_ACCOUNT_EMAIL: connection.email || "",
       GOOGLE_MCP_ACCOUNT_NAME: connection.displayName || "",
@@ -73,10 +61,6 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
   };
 }
 
-function normalizeExecutionMode(value) {
-  return String(value || process.env.GOOGLE_MCP_EXECUTION_MODE || "local").trim().toLowerCase() === "local" ? "local" : "hosted";
-}
-
 function normalizeGrantedScopes(value, services) {
   const scopes = Array.isArray(value) ? value.map((scope) => String(scope || "").trim()).filter(Boolean) : [];
   if (scopes.length) return [...new Set(scopes)];
@@ -86,11 +70,9 @@ function normalizeGrantedScopes(value, services) {
 module.exports = {
   ACCESS_TOKEN_ENV,
   ENABLED_SERVICES_ENV,
-  EXECUTION_MODE_ENV,
   GRANTED_SCOPES_ENV,
   LOCAL_MCP_ARGS,
   LOCAL_MCP_COMMAND,
   createGoogleWorkspaceProvisioningService,
-  normalizeExecutionMode,
   resolveGoogleMcpRuntime,
 };
