@@ -23,7 +23,11 @@ const {
   isTerminalSessionStatus,
   sessionUsageRecord,
 } = require("./userUsage.service");
-const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
+const {
+  isActiveGithubWorkspaceSession,
+  isShellSession,
+  sessionStatusUpdate,
+} = require("./sessionLifecycle.helpers");
 
 function createSessionLifecycleService(dependencies = {}) {
   return {
@@ -270,14 +274,6 @@ function shouldRecreateSessionServiceOnRestart(session) {
 
 function isGithubWorkspace(workspace) {
   return workspace && workspace.source && workspace.source.type === "github";
-}
-
-function isActiveGithubWorkspaceSession(session) {
-  return !isTerminalSessionStatus(session && session.status);
-}
-
-function isShellSession(session) {
-  return cleanName(session && session.terminalKind) === "shell";
 }
 
 function isIdleSession(session, now) {

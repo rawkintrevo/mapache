@@ -86,6 +86,10 @@ const {
 } = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
+const {
+  isActiveGithubWorkspaceSession,
+  isShellSession,
+} = require("./sessionLifecycle.helpers");
 
 const githubService = createGithubService();
 const lifecycleDependencies = {admin, db, requireWorkspace, sessionCollection};

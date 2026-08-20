@@ -24,8 +24,8 @@ function createRunnerLifecycleCoordinator({
     await chromeRuntime.start();
     await activeHarness.materializeConfig();
     await activeHarness.materializeAuth();
-    await activeHarness.materializeMcp();
     await git.prepareGithubAutomationBranch();
+    await activeHarness.materializeMcp();
     await activeHarness.materializeSkills();
     await activeHarness.materializeSubagents();
     chromeProfileSnapshots.start();

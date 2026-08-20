@@ -40,6 +40,15 @@ function isSessionFailure(status) {
   return FAILURE_STATES.has(normalizeSessionState(status));
 }
 
+function isActiveGithubWorkspaceSession(session) {
+  const status = normalizeSessionState(session && session.status);
+  return !isSessionTerminal(status) && status !== "provision_failed";
+}
+
+function isShellSession(session) {
+  return String(session && session.terminalKind || "").trim().toLowerCase() === "shell";
+}
+
 function canTransitionSession(currentStatus, nextStatus, options = {}) {
   const current = normalizeSessionState(currentStatus);
   const next = normalizeSessionState(nextStatus);
@@ -62,8 +71,10 @@ function sessionStatusUpdate(session, nextStatus, updates = {}, options = {}) {
 module.exports = {
   SESSION_STATES,
   canTransitionSession,
+  isActiveGithubWorkspaceSession,
   isKnownSessionState,
   isSessionFailure,
+  isShellSession,
   isSessionTerminal,
   normalizeSessionState,
   sessionStatusUpdate,
