@@ -21,6 +21,7 @@ COPY server.js ./
 COPY bin ./bin
 COPY lib ./lib
 COPY routes ./routes
+COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 COPY seeded-codex ./seeded-codex

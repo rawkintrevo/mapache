@@ -13,6 +13,7 @@ RUN npm install --omit=dev
 COPY server.js ./
 COPY lib ./lib
 COPY routes ./routes
+COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
 
 RUN mkdir -p /workspace /root/.pi
