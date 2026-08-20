@@ -12,6 +12,7 @@ import {
 
 const GMAIL_READ = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_WRITE = "https://www.googleapis.com/auth/gmail.compose";
+const GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify";
 
 test("parses empty, JSON, CSV, and duplicate service configuration", () => {
   assert.deepEqual(parseEnabledServices(""), []);
@@ -37,7 +38,7 @@ test("parses and validates granted scopes without accepting token values", () =>
 test("exposes enabled/read/write scope helpers", () => {
   const config = createGoogleWorkspaceConfig({env: {
     GOOGLE_MCP_ENABLED_SERVICES: '["gmail", "drive"]',
-    GOOGLE_MCP_GRANTED_SCOPES: JSON.stringify([GMAIL_READ, GMAIL_WRITE]),
+    GOOGLE_MCP_GRANTED_SCOPES: JSON.stringify([GMAIL_READ, GMAIL_WRITE, GMAIL_MODIFY]),
   }});
   assert.equal(isServiceEnabled(config, "gmail"), true);
   assert.equal(config.isServiceEnabled("drive"), true);

@@ -43,6 +43,7 @@ function createFakeDb() {
       "profile",
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.compose",
+      "https://www.googleapis.com/auth/gmail.modify",
     ],
   });
   assert.throws(() => normalizeSelection({serviceKeys: ["people"], accessLevel: "write"}), /google_write_access_unsupported/);

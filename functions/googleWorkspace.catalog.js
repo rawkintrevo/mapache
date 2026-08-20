@@ -38,7 +38,10 @@ const READ_SCOPE = Object.freeze({
 });
 
 const WRITE_SCOPE = Object.freeze({
-  gmail: ["https://www.googleapis.com/auth/gmail.compose"],
+  gmail: [
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/gmail.modify",
+  ],
   drive: ["https://www.googleapis.com/auth/drive.file"],
   docs: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/documents"],
   sheets: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/spreadsheets"],

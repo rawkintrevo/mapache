@@ -18,6 +18,7 @@ assert.deepStrictEqual(googleWorkspaceScopeSelection(["gmail"], "read"), [
 assert.deepStrictEqual(googleWorkspaceScopeSelection(["gmail"], "write"), [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
 ]);
 assert.deepStrictEqual(googleWorkspaceScopeSelection(["calendar"], "write"), [
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",

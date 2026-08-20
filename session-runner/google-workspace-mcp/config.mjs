@@ -20,7 +20,10 @@ export const GOOGLE_WORKSPACE_SCOPE_CATALOG = Object.freeze({
   }),
   gmail: Object.freeze({
     read: Object.freeze([`${GOOGLE_AUTH_SCOPE_PREFIX}gmail.readonly`]),
-    write: Object.freeze([`${GOOGLE_AUTH_SCOPE_PREFIX}gmail.compose`]),
+    write: Object.freeze([
+      `${GOOGLE_AUTH_SCOPE_PREFIX}gmail.compose`,
+      `${GOOGLE_AUTH_SCOPE_PREFIX}gmail.modify`,
+    ]),
   }),
   drive: Object.freeze({
     read: Object.freeze([`${GOOGLE_AUTH_SCOPE_PREFIX}drive.readonly`]),
@@ -117,6 +120,10 @@ export function hasWriteScope(config, serviceKey) {
   const key = String(serviceKey || "").trim().toLowerCase();
   const required = GOOGLE_WORKSPACE_SCOPE_CATALOG[key]?.write || [];
   return hasReadScope(config, key) && required.every((scope) => config.grantedScopes?.includes(scope));
+}
+
+export function hasGrantedScope(config, serviceKey, scope) {
+  return isServiceEnabled(config, serviceKey) && config.grantedScopes?.includes(scope) === true;
 }
 
 function parseListValue(value, errorCode) {
