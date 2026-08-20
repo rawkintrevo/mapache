@@ -8,7 +8,7 @@ const {
 } = require("./googleWorkspace.catalog");
 
 const catalog = googleWorkspaceServiceCatalog();
-assert.deepStrictEqual(catalog.map((entry) => entry.key), ["gmail", "drive", "docs", "sheets", "slides", "calendar", "chat", "people"]);
+assert.deepStrictEqual(catalog.map((entry) => entry.key), ["gmail", "drive", "docs", "sheets", "slides", "calendar"]);
 assert.strictEqual(new Set(catalog.map((entry) => entry.serverUrl)).size, catalog.length);
 assert.ok(catalog.every((entry) => entry.readScopes.length && entry.serverUrl.startsWith("https://")));
 assert.strictEqual(getGoogleWorkspaceService("GMAIL").serverUrl, "https://gmailmcp.googleapis.com/mcp/v1");

@@ -9,8 +9,6 @@ const GOOGLE_SERVICE_KEYS = Object.freeze([
   "sheets",
   "slides",
   "calendar",
-  "chat",
-  "people",
 ]);
 const GOOGLE_SERVICE_KEY_SET = new Set(GOOGLE_SERVICE_KEYS);
 const CONNECTION_STATUSES = new Set(["connected", "reconnect_required", "revoked", "disconnected"]);

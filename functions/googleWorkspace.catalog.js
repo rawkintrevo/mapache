@@ -24,17 +24,6 @@ const READ_SCOPE = Object.freeze({
     "https://www.googleapis.com/auth/calendar.events.freebusy",
     "https://www.googleapis.com/auth/calendar.events.readonly",
   ],
-  chat: [
-    "https://www.googleapis.com/auth/chat.spaces.readonly",
-    "https://www.googleapis.com/auth/chat.memberships.readonly",
-    "https://www.googleapis.com/auth/chat.messages.readonly",
-    "https://www.googleapis.com/auth/chat.users.readstate.readonly",
-  ],
-  people: [
-    "https://www.googleapis.com/auth/directory.readonly",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/contacts.readonly",
-  ],
 });
 
 const WRITE_SCOPE = Object.freeze({
@@ -47,19 +36,17 @@ const WRITE_SCOPE = Object.freeze({
   sheets: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/spreadsheets"],
   slides: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/presentations"],
   calendar: ["https://www.googleapis.com/auth/calendar.events"],
-  chat: ["https://www.googleapis.com/auth/chat.messages.create"],
-  people: [],
 });
 
 const CATALOG = Object.freeze(GOOGLE_SERVICE_KEYS.map((key) => Object.freeze({
   key,
-  displayName: key === "people" ? "People" : key[0].toUpperCase() + key.slice(1),
-  serverUrl: `https://${key === "people" ? "people" : `${key}mcp`}.googleapis.com/mcp/v1`,
+  displayName: key[0].toUpperCase() + key.slice(1),
+  serverUrl: `https://${key}mcp.googleapis.com/mcp/v1`,
   readScopes: Object.freeze([...READ_SCOPE[key]]),
   writeScopes: Object.freeze([...WRITE_SCOPE[key]]),
   accessLevels: Object.freeze(WRITE_SCOPE[key].length ? ["read", "write"] : ["read"]),
   apiService: key === "calendar" ? "calendar-json.googleapis.com" : `${key}.googleapis.com`,
-  mcpService: key === "people" ? "people.googleapis.com" : `${key}mcp.googleapis.com`,
+  mcpService: `${key}mcp.googleapis.com`,
 })));
 
 const CATALOG_BY_KEY = new Map(CATALOG.map((entry) => [entry.key, entry]));

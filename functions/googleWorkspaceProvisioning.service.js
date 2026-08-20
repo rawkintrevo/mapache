@@ -74,7 +74,7 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
 }
 
 function normalizeExecutionMode(value) {
-  return String(value || process.env.GOOGLE_MCP_EXECUTION_MODE || "hosted").trim().toLowerCase() === "local" ? "local" : "hosted";
+  return String(value || process.env.GOOGLE_MCP_EXECUTION_MODE || "local").trim().toLowerCase() === "local" ? "local" : "hosted";
 }
 
 function normalizeGrantedScopes(value, services) {

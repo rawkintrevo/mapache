@@ -46,7 +46,7 @@ function createFakeDb() {
       "https://www.googleapis.com/auth/gmail.modify",
     ],
   });
-  assert.throws(() => normalizeSelection({serviceKeys: ["people"], accessLevel: "write"}), /google_write_access_unsupported/);
+  assert.throws(() => normalizeSelection({serviceKeys: ["people"], accessLevel: "write"}), /invalid_google_service_selection/);
   assert.throws(() => normalizeSelection({serviceKeys: []}), /invalid_google_service_selection/);
 
   const connections = new Map();

@@ -9,6 +9,7 @@ const {
   LOCAL_MCP_ARGS,
   LOCAL_MCP_COMMAND,
   createGoogleWorkspaceProvisioningService,
+  normalizeExecutionMode,
 } = require("./googleWorkspaceProvisioning.service");
 
 const calls = [];
@@ -39,6 +40,8 @@ const oauth = {
 };
 
 (async () => {
+  assert.strictEqual(normalizeExecutionMode(), "local");
+  assert.strictEqual(normalizeExecutionMode("hosted"), "hosted");
   const service = createGoogleWorkspaceProvisioningService({connectionsService: connections, executionMode: "hosted", oauthService: oauth});
   const runtime = await service.resolveGoogleMcpRuntime("user-a", "workspace-a", {
     mcpServers: {custom: {command: "node"}},

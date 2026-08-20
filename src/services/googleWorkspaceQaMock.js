@@ -2,6 +2,9 @@ const GOOGLE_SERVICES = [
   {key: "gmail", displayName: "Gmail", accessLevels: ["read", "write"]},
   {key: "drive", displayName: "Google Drive", accessLevels: ["read", "write"]},
   {key: "docs", displayName: "Google Docs", accessLevels: ["read", "write"]},
+  {key: "sheets", displayName: "Google Sheets", accessLevels: ["read", "write"]},
+  {key: "slides", displayName: "Google Slides", accessLevels: ["read", "write"]},
+  {key: "calendar", displayName: "Google Calendar", accessLevels: ["read", "write"]},
 ];
 
 function mockEnabled() {

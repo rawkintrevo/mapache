@@ -3,6 +3,7 @@
   "title": "Connect the next deterministic Google test account",
   "actions": [
     {"type": "click", "role": "checkbox", "name": "Gmail Google service"},
+    {"type": "select", "label": "Access level", "value": "write"},
     {"type": "click", "role": "button", "name": "Connect Google account"},
     {"type": "waitForSnapshotText", "text": "Connected to this workspace", "timeoutMs": 10000},
     {"type": "click", "role": "button", "name": "Apply selected services"},
@@ -10,6 +11,7 @@
   ],
   "successSignals": [
     "The mocked OAuth popup completes and the account is bound to the selected workspace",
+    "The selected Google service accepts the Read and write access level",
     "Applying the binding produces the restart guidance message"
   ]
 }
