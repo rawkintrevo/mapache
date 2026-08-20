@@ -38,6 +38,9 @@ function createFakeDb() {
     serviceKeys: ["gmail"],
     accessLevel: "write",
     scopes: [
+      "openid",
+      "email",
+      "profile",
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.compose",
     ],
@@ -100,6 +103,8 @@ function createFakeDb() {
   const params = new URL(start.authorizationUrl).searchParams;
   assert.strictEqual(params.get("prompt"), "select_account");
   assert.strictEqual(params.get("redirect_uri"), "https://mapache.test/api/google/callback");
+  assert.deepStrictEqual(params.get("scope").split(" ").slice(0, 3), ["openid", "email", "profile"]);
+  assert.strictEqual(params.get("scope").includes("https://www.googleapis.com/auth/gmail.readonly"), true);
   assert.strictEqual(start.authorizationUrl.includes("client-secret"), false);
   const completed = await oauth.completeGoogleConnection({state: params.get("state"), code: "code-fake"});
   assert.strictEqual(completed.status, 200);

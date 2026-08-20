@@ -12,6 +12,7 @@ const GOOGLE_AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_REVOCATION_URL = "https://oauth2.googleapis.com/revoke";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+const GOOGLE_IDENTITY_SCOPES = Object.freeze(["openid", "email", "profile"]);
 const refreshLocks = new Map();
 
 function createGoogleWorkspaceOAuthService(dependencies = {}) {
@@ -213,7 +214,11 @@ function normalizeSelection(payload) {
   if (accessLevel === "write" && serviceKeys.some((key) => !getGoogleWorkspaceService(key).writeScopes.length)) {
     throw httpError(400, "google_write_access_unsupported");
   }
-  return {serviceKeys, accessLevel, scopes: googleWorkspaceScopeSelection(serviceKeys, accessLevel)};
+  return {
+    serviceKeys,
+    accessLevel,
+    scopes: [...GOOGLE_IDENTITY_SCOPES, ...googleWorkspaceScopeSelection(serviceKeys, accessLevel)],
+  };
 }
 
 function requireConfigured(config, action) {
