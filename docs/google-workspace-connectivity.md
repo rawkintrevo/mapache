@@ -24,7 +24,7 @@ Connection records are private to the Firebase user:
 users/{uid}/private/googleConnections/entries/{connectionId}
 ```
 
-The record contains non-secret metadata such as the Google subject, email, display name, status, selected scopes, and timestamps. Scope metadata accepts HTTPS Google API scopes plus the exact standard OpenID Connect scope names `openid`, `email`, and `profile`; other non-URL scope values are rejected. The encrypted refresh token is stored in the same private record and is never returned by the API. The connection ID is deterministic for a user and Google subject, so reconnecting the same account updates the existing record instead of creating duplicates.
+The record contains non-secret metadata such as the Google subject, email, display name, status, selected scopes, and timestamps. Scope metadata accepts HTTPS Google API scopes plus the exact standard OpenID Connect scope names `openid`, `email`, and `profile`; other non-URL scope values are rejected. The non-secret OAuth client reference accepts the bounded dotted identifier format used by Google client IDs, including the `.apps.googleusercontent.com` suffix. The encrypted refresh token is stored in the same private record and is never returned by the API. The connection ID is deterministic for a user and Google subject, so reconnecting the same account updates the existing record instead of creating duplicates.
 
 Workspace documents store only the binding:
 

@@ -82,7 +82,7 @@ function createFakeDb() {
   const calls = [];
   let includeRefreshToken = true;
   const oauth = createGoogleWorkspaceOAuthService({
-    clientId: "client-id",
+    clientId: "299764728235-example.apps.googleusercontent.com",
     clientSecret: "client-secret",
     redirectUri: "https://mapache.test/api/google/callback",
     encryptionKey: "encryption-secret",
@@ -105,6 +105,7 @@ function createFakeDb() {
   assert.strictEqual(params.get("redirect_uri"), "https://mapache.test/api/google/callback");
   assert.deepStrictEqual(params.get("scope").split(" ").slice(0, 3), ["openid", "email", "profile"]);
   assert.strictEqual(params.get("scope").includes("https://www.googleapis.com/auth/gmail.readonly"), true);
+  assert.strictEqual(params.get("client_id"), "299764728235-example.apps.googleusercontent.com");
   assert.strictEqual(start.authorizationUrl.includes("client-secret"), false);
   const completed = await oauth.completeGoogleConnection({state: params.get("state"), code: "code-fake"});
   assert.strictEqual(completed.status, 200);

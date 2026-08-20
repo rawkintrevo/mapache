@@ -16,6 +16,7 @@ const GOOGLE_SERVICE_KEY_SET = new Set(GOOGLE_SERVICE_KEYS);
 const CONNECTION_STATUSES = new Set(["connected", "reconnect_required", "revoked", "disconnected"]);
 const SECRET_FIELD_PATTERN = /(?:access|refresh|client|authorization|bearer|token|secret|code)/i;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+const OAUTH_CLIENT_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SCOPE_PATTERN = /^https:\/\/[^\s]+$/;
 const OIDC_SCOPE_NAMES = new Set(["openid", "email", "profile"]);
@@ -35,7 +36,7 @@ function normalizeGoogleConnectionMetadata(input = {}) {
   const displayName = optionalText(input.displayName, 256);
   const grantedScopes = normalizeScopes(input.grantedScopes || input.scopes);
   const enabledServices = normalizeServiceKeys(input.enabledServices || input.serviceKeys);
-  const oauthClientRef = requiredId(input.oauthClientRef, "invalid_google_oauth_client_ref");
+  const oauthClientRef = requiredOauthClientRef(input.oauthClientRef);
   const status = String(input.status || "connected").trim().toLowerCase();
   if (!CONNECTION_STATUSES.has(status)) throw httpError(400, "invalid_google_connection_status");
 
@@ -112,6 +113,12 @@ function requiredId(value, errorCode) {
   const id = String(value || "").trim();
   if (!ID_PATTERN.test(id)) throw httpError(400, errorCode);
   return id;
+}
+
+function requiredOauthClientRef(value) {
+  const ref = String(value || "").trim();
+  if (!OAUTH_CLIENT_REF_PATTERN.test(ref)) throw httpError(400, "invalid_google_oauth_client_ref");
+  return ref;
 }
 
 function requiredText(value, errorCode, maxLength) {
