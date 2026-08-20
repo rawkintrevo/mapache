@@ -59,6 +59,7 @@ The encryption key must remain stable while records exist. Rotating it requires 
 When a new Cloud Run session is created, or an existing session is restarted, Functions resolves the workspace binding, refreshes the Google connection, and builds an ephemeral runner-specific runtime:
 
 - selected Google MCP servers are merged into the workspace MCP config using Google's HTTPS MCP URLs;
+- Google MCP entries request automatic modern/legacy protocol negotiation so Pi can connect to Google's stateless MCP endpoints instead of defaulting to the adapter's legacy-only handshake;
 - the refreshed access token is passed only as the `GOOGLE_MCP_ACCESS_TOKEN` Cloud Run environment value;
 - safe account and service metadata is passed separately for status reporting;
 - `MCP_CONFIG` contains a `bearer_env` entry that refers to the token environment variable, never the token literal.

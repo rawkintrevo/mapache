@@ -9,6 +9,7 @@ const MAX_MCP_ENV_VALUE_LENGTH = 4096;
 const MCP_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const MCP_LIFECYCLES = new Set(["", "lazy", "eager", "keep-alive"]);
 const MCP_AUTH_MODES = new Set(["none", "oauth2", "bearer_env"]);
+const MCP_PROTOCOL_VERSIONS = new Set(["", "legacy", "auto", "2026-07-28"]);
 const MCP_ENV_REF_PATTERN = /^[A-Z][A-Z0-9_]{0,127}$/;
 
 function normalizeMcpConfigPayload(payload = {}) {
@@ -42,6 +43,8 @@ function normalizeMcpServer(source = {}) {
 
   const lifecycle = cleanText(source.lifecycle, 32).toLowerCase();
   if (!MCP_LIFECYCLES.has(lifecycle)) throw httpError(400, "invalid_mcp_lifecycle");
+  const protocolVersion = cleanText(source.protocolVersion, 32).toLowerCase();
+  if (!MCP_PROTOCOL_VERSIONS.has(protocolVersion)) throw httpError(400, "invalid_mcp_protocol_version");
   rejectLiteralSecretFields(source);
 
   const config = command ? {
@@ -58,6 +61,7 @@ function normalizeMcpServer(source = {}) {
   if (Object.keys(headers).length) config.headers = headers;
   if (cwd) config.cwd = cwd;
   if (lifecycle) config.lifecycle = lifecycle;
+  if (protocolVersion) config.protocolVersion = protocolVersion;
   if (source.directTools === true || source.directTools === false) config.directTools = source.directTools;
 
   const auth = normalizeMcpAuth(source, Boolean(url), headers);

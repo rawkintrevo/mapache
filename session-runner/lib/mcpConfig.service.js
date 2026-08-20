@@ -66,7 +66,7 @@ function piMcpConfig(mcpConfig = {}) {
 
 function piMcpServer(server = {}) {
   const result = {};
-  for (const key of ["command", "args", "env", "url", "cwd", "headers", "lifecycle", "directTools"]) {
+  for (const key of ["command", "args", "env", "url", "cwd", "headers", "lifecycle", "directTools", "protocolVersion"]) {
     if (server[key] != null) result[key] = server[key];
   }
   if (server.authMode === "oauth2") {

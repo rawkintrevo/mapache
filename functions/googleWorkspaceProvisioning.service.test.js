@@ -32,6 +32,7 @@ const oauth = {
   assert.deepStrictEqual(Object.keys(runtime.mcpConfig.mcpServers), ["custom", "google-gmail", "google-drive"]);
   assert.strictEqual(runtime.mcpConfig.mcpServers["google-gmail"].authMode, "bearer_env");
   assert.strictEqual(runtime.mcpConfig.mcpServers["google-gmail"].bearerTokenEnv, ACCESS_TOKEN_ENV);
+  assert.strictEqual(runtime.mcpConfig.mcpServers["google-gmail"].protocolVersion, "auto");
   assert.deepStrictEqual(runtime.env, {
     [ACCESS_TOKEN_ENV]: "fake-access-token",
     GOOGLE_MCP_CONNECTION_STATUS: "connected",

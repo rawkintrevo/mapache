@@ -79,6 +79,7 @@ const googleConfig = {
       url: "https://drivemcp.googleapis.com/mcp/v1",
       authMode: "bearer_env",
       bearerTokenEnv: "GOOGLE_BEARER_TOKEN",
+      protocolVersion: "auto",
     },
   },
 };
@@ -98,6 +99,7 @@ assert.deepStrictEqual(piMcpConfig(googleConfig), {
       url: "https://drivemcp.googleapis.com/mcp/v1",
       auth: "bearer",
       bearerTokenEnv: "GOOGLE_BEARER_TOKEN",
+      protocolVersion: "auto",
     },
   },
 });

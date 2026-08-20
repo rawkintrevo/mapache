@@ -34,6 +34,7 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
       url: service.serverUrl,
       authMode: "bearer_env",
       bearerTokenEnv: ACCESS_TOKEN_ENV,
+      protocolVersion: "auto",
       scopes: service.readScopes,
     },
   ]));

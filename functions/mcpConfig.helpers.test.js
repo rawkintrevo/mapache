@@ -56,6 +56,7 @@ assert.deepStrictEqual(normalizeMcpConfigPayload({
       url: "https://drivemcp.googleapis.com/mcp/v1",
       authMode: "bearer_env",
       bearerTokenEnv: "GOOGLE_BEARER_TOKEN",
+      protocolVersion: "auto",
     },
   },
 }), {
@@ -65,6 +66,7 @@ assert.deepStrictEqual(normalizeMcpConfigPayload({
       url: "https://drivemcp.googleapis.com/mcp/v1",
       authMode: "bearer_env",
       bearerTokenEnv: "GOOGLE_BEARER_TOKEN",
+      protocolVersion: "auto",
     },
   },
 });
@@ -92,6 +94,7 @@ assert.throws(() => normalizeMcpConfigPayload({servers: [{name: "x", command: "n
 assert.throws(() => normalizeMcpConfigPayload({servers: [{name: "x", url: "https://example.com", authMode: "oauth2", oauthClientRef: "client", scopes: [], clientSecret: "secret"}]}), /literal_mcp_credential_not_allowed/);
 assert.throws(() => normalizeMcpConfigPayload({servers: [{name: "x", url: "https://example.com", authMode: "oauth2", oauthClientRef: "client", scopes: ["not-a-scope"]}]}), /invalid_mcp_scopes/);
 assert.throws(() => normalizeMcpConfigPayload({servers: [{name: "x", url: "https://example.com", authMode: "bearer_env", bearerTokenEnv: "literal-token"}]}), /invalid_mcp_bearer_token_env/);
+assert.throws(() => normalizeMcpConfigPayload({servers: [{name: "x", url: "https://example.com", protocolVersion: "future"}]}), /invalid_mcp_protocol_version/);
 assert.deepStrictEqual(mcpConfigForRunner({mcpConfig: {mcpServers: {demo: {command: "node"}}}}), {
   version: 1,
   mcpServers: {demo: {command: "node", args: []}},
