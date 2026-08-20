@@ -98,6 +98,7 @@ export function AppShell(props) {
             onPushGit={git.pushGit}
             onResizeSession={sessions.resizeSession}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
+            onRestartSession={sessions.restartSession}
             onShareSessionPreview={sessions.shareSessionPreview}
             onCloseSshSessionForward={sessions.closeSshSessionForward}
             onCreateSshSessionForward={sessions.createSshSessionForward}

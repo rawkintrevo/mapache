@@ -329,10 +329,14 @@ describe("frontend smoke coverage", () => {
   });
 
   test("renders a selected running session without live runner access", async () => {
+    const user = userEvent.setup();
     const {handlers} = renderShell({selectedSessionId: session.id});
 
     expect(screen.getByText("Terminal access is not ready.")).toBeInTheDocument();
     expect(screen.getAllByRole("button", {name: "Manage Pi Auth"})[0]).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: "Restart"}));
+    expect(handlers.sessions.restartSession).toHaveBeenCalledWith(session.id);
 
     await waitFor(() => {
       expect(handlers.sessions.getSessionAccessUrls).toHaveBeenCalledWith(workspace.id, session.id);
