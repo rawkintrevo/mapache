@@ -7,6 +7,7 @@ import {registerCalendarReadTools} from "./calendar.mjs";
 import {registerCalendarWriteTools} from "./calendarWrites.mjs";
 import {registerGmailReadTools} from "./gmail.mjs";
 import {registerGmailWriteTools} from "./gmailWrites.mjs";
+import {registerDriveReadTools} from "./drive.mjs";
 
 const SERVER_NAME = "mapache-google-workspace";
 const SERVER_VERSION = "0.1.0";
@@ -34,6 +35,7 @@ export function createGoogleWorkspaceServer(config = createGoogleWorkspaceConfig
   registerCalendarWriteTools(server, {client, config});
   registerGmailReadTools(server, {client, config});
   registerGmailWriteTools(server, {client, config});
+  registerDriveReadTools(server, {client, config});
 
   return server;
 }
