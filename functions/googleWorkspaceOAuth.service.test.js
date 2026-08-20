@@ -101,7 +101,7 @@ function createFakeDb() {
   });
   const start = await oauth.startGoogleConnection("user-a", "workspace-a", {serviceKeys: ["gmail"]});
   const params = new URL(start.authorizationUrl).searchParams;
-  assert.strictEqual(params.get("prompt"), "select_account");
+  assert.strictEqual(params.get("prompt"), "consent select_account");
   assert.strictEqual(params.get("redirect_uri"), "https://mapache.test/api/google/callback");
   assert.deepStrictEqual(params.get("scope").split(" ").slice(0, 3), ["openid", "email", "profile"]);
   assert.strictEqual(params.get("scope").includes("https://www.googleapis.com/auth/gmail.readonly"), true);

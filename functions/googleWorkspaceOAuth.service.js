@@ -63,7 +63,7 @@ async function startGoogleConnection(uid, workspaceId, payload = {}, dependencie
   url.searchParams.set("redirect_uri", dependencies.config.redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", reconnect ? "consent select_account" : "select_account");
+  url.searchParams.set("prompt", "consent select_account");
   url.searchParams.set("scope", selection.scopes.join(" "));
   url.searchParams.set("state", stateToken);
   return {
