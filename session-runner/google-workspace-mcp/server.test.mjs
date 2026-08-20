@@ -43,11 +43,11 @@ function startServer(env = {}) {
   };
 }
 
-async function initializedServer() {
-  const server = startServer({
+async function initializedServer(env = {
     GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
     GOOGLE_MCP_GRANTED_SCOPES: '["https://www.googleapis.com/auth/gmail.readonly"]',
-  });
+  }) {
+  const server = startServer(env);
   const initialize = await server.request("initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
@@ -58,7 +58,28 @@ async function initializedServer() {
   return server;
 }
 
-test("initialize succeeds and tools/list exposes only health", async () => {
+test("Drive-only initialize exposes readable content tools", async () => {
+  const server = await initializedServer({
+    GOOGLE_MCP_ENABLED_SERVICES: '["drive"]',
+    GOOGLE_MCP_GRANTED_SCOPES: '["https://www.googleapis.com/auth/drive.readonly"]',
+  });
+  try {
+    const result = await server.request("tools/list");
+    assert.deepEqual(result.result.tools.map((tool) => tool.name), [
+      "google_workspace_health",
+      "drive_search_files",
+      "drive_list_recent_files",
+      "drive_get_file_metadata",
+      "drive_get_file_permissions",
+      "drive_read_file",
+      "drive_download_file",
+    ]);
+  } finally {
+    await server.close();
+  }
+});
+
+test("Gmail-only initialize exposes its read tools", async () => {
   const server = await initializedServer();
   try {
     const result = await server.request("tools/list");

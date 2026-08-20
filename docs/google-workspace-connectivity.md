@@ -47,6 +47,8 @@ The backend starts authorization with a signed, short-lived, single-use state co
 
 The catalog exposes Gmail, Drive, Docs, Sheets, Slides, and Calendar. Chat and People remain intentionally outside the supported product set. Read-only access is the default; write access is offered only for services whose catalog entry explicitly lists write scopes. Calendar write access requests the least-privilege `https://www.googleapis.com/auth/calendar.events` scope so its MCP server can create, update, respond to, and delete events. The local REST-backed path does not require Google's Developer Preview program or hosted MCP-service enablement. Google API enablement, OAuth consent-screen configuration, Workspace administrator restrictions, and user consent remain deployment prerequisites outside the app.
 
+Drive read access includes a unified `drive_read_file` tool. It returns ordinary textual files as bounded UTF-8, exports Google Docs and Slides as plain text, exports Google Sheets as CSV, and preserves a bounded base64 fallback for binary files. Native export uses the existing Drive read-only scope, so users who enabled Drive can inspect native content without separately enabling the Docs, Sheets, or Slides service. The legacy `drive_download_file` tool remains available for callers that explicitly need base64 bytes and continues to reject Google-native files.
+
 The required Functions configuration is:
 
 - `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_REDIRECT_URI` parameters.
