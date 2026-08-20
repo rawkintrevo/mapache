@@ -62,7 +62,14 @@ test("initialize succeeds and tools/list exposes only health", async () => {
   const server = await initializedServer();
   try {
     const result = await server.request("tools/list");
-    assert.deepEqual(result.result.tools.map((tool) => tool.name), ["google_workspace_health"]);
+    assert.deepEqual(result.result.tools.map((tool) => tool.name), [
+      "google_workspace_health",
+      "gmail_search_threads",
+      "gmail_get_thread",
+      "gmail_get_message",
+      "gmail_list_labels",
+      "gmail_list_drafts",
+    ]);
   } finally {
     await server.close();
   }
