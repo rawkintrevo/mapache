@@ -43,7 +43,7 @@ const WRITE_SCOPE = Object.freeze({
   docs: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/documents"],
   sheets: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/spreadsheets"],
   slides: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/presentations"],
-  calendar: [],
+  calendar: ["https://www.googleapis.com/auth/calendar.events"],
   chat: ["https://www.googleapis.com/auth/chat.messages.create"],
   people: [],
 });

@@ -19,6 +19,13 @@ assert.deepStrictEqual(googleWorkspaceScopeSelection(["gmail"], "write"), [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
 ]);
+assert.deepStrictEqual(googleWorkspaceScopeSelection(["calendar"], "write"), [
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+  "https://www.googleapis.com/auth/calendar.events.freebusy",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
+]);
+assert.deepStrictEqual(getGoogleWorkspaceService("calendar").accessLevels, ["read", "write"]);
 assert.deepStrictEqual(googleWorkspaceScopeSelection(["unknown", "gmail"], "read"), [
   "https://www.googleapis.com/auth/gmail.readonly",
 ]);
