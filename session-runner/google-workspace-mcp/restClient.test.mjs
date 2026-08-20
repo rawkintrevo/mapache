@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import {test} from "node:test";
+import {createGoogleRestClient, GoogleRestError} from "./restClient.mjs";
+
+function response(body, status = 200) {
+  return new Response(body == null ? "" : JSON.stringify(body), {
+    status,
+    headers: {"content-type": "application/json"},
+  });
+}
+
+test("reads the token per request and sends only a bearer authorization header", async () => {
+  const calls = [];
+  const env = {GOOGLE_MCP_ACCESS_TOKEN: "token-a"};
+  const client = createGoogleRestClient({
+    env,
+    fetchImpl: async (url, options) => {
+      calls.push({url, authorization: options.headers.get("authorization")});
+      return response({ok: true});
+    },
+  });
+  await client.request("/calendar/v3/users/me/calendarList");
+  env.GOOGLE_MCP_ACCESS_TOKEN = "token-b";
+  await client.request("/calendar/v3/users/me/calendarList");
+  assert.deepEqual(calls, [
+    {url: "https://www.googleapis.com/calendar/v3/users/me/calendarList", authorization: "Bearer token-a"},
+    {url: "https://www.googleapis.com/calendar/v3/users/me/calendarList", authorization: "Bearer token-b"},
+  ]);
+});
+
+test("fails before fetch when the token is missing", async () => {
+  let called = false;
+  const client = createGoogleRestClient({env: {}, fetchImpl: async () => {
+    called = true;
+    return response({});
+  }});
+  await assert.rejects(client.request("/drive/v3/files"), (error) => error.code === "google_access_token_missing");
+  assert.equal(called, false);
+});
+
+test("parses successful JSON and normalizes provider error statuses", async () => {
+  const statuses = [401, 403, 404, 409, 429, 500, 503];
+  for (const status of statuses) {
+    const client = createGoogleRestClient({env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"}, fetchImpl: async () => response({error: {message: "safe provider message"}}, status)});
+    await assert.rejects(client.request("/drive/v3/files"), (error) => {
+      assert.ok(error instanceof GoogleRestError);
+      assert.equal(error.status, status);
+      assert.match(error.code, /^google_/);
+      assert.doesNotMatch(error.message, /secret-token/);
+      return true;
+    });
+  }
+  const client = createGoogleRestClient({env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"}, fetchImpl: async () => response({files: []})});
+  assert.deepEqual(await client.request("/drive/v3/files"), {files: []});
+});
+
+test("aborts requests after the configured timeout", async () => {
+  const client = createGoogleRestClient({
+    env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"},
+    timeoutMs: 5,
+    fetchImpl: (_url, {signal}) => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("aborted")), {once: true});
+    }),
+  });
+  await assert.rejects(client.request("/drive/v3/files"), (error) => error.code === "google_request_timeout");
+});
+
+test("rejects oversized response bodies", async () => {
+  const client = createGoogleRestClient({
+    env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"},
+    maxResponseBytes: 20,
+    fetchImpl: async () => response({value: "this is too large"}),
+  });
+  await assert.rejects(client.request("/drive/v3/files"), (error) => error.code === "google_response_too_large");
+});
+
+test("collects page-token results within page and item limits", async () => {
+  const calls = [];
+  const client = createGoogleRestClient({env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"}, fetchImpl: async () => response({})});
+  const result = await client.paginate(async (params) => {
+    calls.push(params);
+    if (!params.pageToken) return {items: [1, 2], nextPageToken: "page-2"};
+    return {items: [3, 4], nextPageToken: "page-3"};
+  }, {initialParams: {pageSize: 2}, maxPages: 2, maxItems: 3});
+  assert.deepEqual(result, {items: [1, 2, 3], pages: 2, nextPageToken: "page-3", truncated: true});
+  assert.deepEqual(calls, [{pageSize: 2}, {pageSize: 2, pageToken: "page-2"}]);
+});
