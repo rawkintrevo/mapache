@@ -3,6 +3,11 @@
 const assert = require("assert");
 const {
   ACCESS_TOKEN_ENV,
+  ENABLED_SERVICES_ENV,
+  EXECUTION_MODE_ENV,
+  GRANTED_SCOPES_ENV,
+  LOCAL_MCP_ARGS,
+  LOCAL_MCP_COMMAND,
   createGoogleWorkspaceProvisioningService,
 } = require("./googleWorkspaceProvisioning.service");
 
@@ -14,7 +19,16 @@ const connections = {
   },
   async getGoogleConnection(uid, connectionId) {
     calls.push(["connection", uid, connectionId]);
-    return {connectionId, email: "a@example.com", displayName: "Account A", status: "connected"};
+    return {metadata: {
+      connectionId,
+      email: "a@example.com",
+      displayName: "Account A",
+      grantedScopes: [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/drive.readonly",
+      ],
+      status: "connected",
+    }};
   },
 };
 const oauth = {
@@ -25,7 +39,7 @@ const oauth = {
 };
 
 (async () => {
-  const service = createGoogleWorkspaceProvisioningService({connectionsService: connections, oauthService: oauth});
+  const service = createGoogleWorkspaceProvisioningService({connectionsService: connections, executionMode: "hosted", oauthService: oauth});
   const runtime = await service.resolveGoogleMcpRuntime("user-a", "workspace-a", {
     mcpServers: {custom: {command: "node"}},
   });
@@ -35,10 +49,12 @@ const oauth = {
   assert.strictEqual(runtime.mcpConfig.mcpServers["google-gmail"].protocolVersion, "auto");
   assert.deepStrictEqual(runtime.env, {
     [ACCESS_TOKEN_ENV]: "fake-access-token",
+    [EXECUTION_MODE_ENV]: "hosted",
     GOOGLE_MCP_CONNECTION_STATUS: "connected",
     GOOGLE_MCP_ACCOUNT_EMAIL: "a@example.com",
     GOOGLE_MCP_ACCOUNT_NAME: "Account A",
-    GOOGLE_MCP_ENABLED_SERVICES: "[\"gmail\",\"drive\"]",
+    [ENABLED_SERVICES_ENV]: "[\"gmail\",\"drive\"]",
+    [GRANTED_SCOPES_ENV]: "[\"https://www.googleapis.com/auth/gmail.readonly\",\"https://www.googleapis.com/auth/drive.readonly\"]",
   });
   assert.deepStrictEqual(await service.resolveGoogleMcpRuntime("user-a", "workspace-empty", {mcpServers: {custom: {command: "node"}}}), {
     mcpConfig: {version: 1, mcpServers: {custom: {command: "node", args: []}}},
@@ -50,6 +66,17 @@ const oauth = {
     ["refresh", "user-a", "connection-a"],
     ["binding", "user-a", "workspace-empty"],
   ]);
+
+  const local = createGoogleWorkspaceProvisioningService({connectionsService: connections, executionMode: "local", oauthService: oauth});
+  const localRuntime = await local.resolveGoogleMcpRuntime("user-a", "workspace-a", {mcpServers: {custom: {command: "node"}}});
+  assert.deepStrictEqual(localRuntime.mcpConfig.mcpServers["google-workspace"], {
+    command: LOCAL_MCP_COMMAND,
+    args: LOCAL_MCP_ARGS,
+  });
+  assert.equal(localRuntime.mcpConfig.mcpServers["google-gmail"], undefined);
+  assert.equal(localRuntime.env[ACCESS_TOKEN_ENV], "fake-access-token");
+  assert.equal(localRuntime.env[ENABLED_SERVICES_ENV], "[\"gmail\",\"drive\"]");
+  assert.equal(localRuntime.env[GRANTED_SCOPES_ENV].includes("fake-access-token"), false);
   console.log("google workspace provisioning service tests passed");
 })().catch((error) => {
   console.error(error);

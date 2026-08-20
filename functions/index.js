@@ -21,6 +21,7 @@ const {
   GOOGLE_OAUTH_ENCRYPTION_KEY,
   GOOGLE_OAUTH_REDIRECT_URI,
   GOOGLE_OAUTH_STATE_SECRET,
+  GOOGLE_MCP_EXECUTION_MODE,
   QA_LOGIN_SECRET,
   SESSION_BROWSER_ACCESS_TTL_MS,
 } = require("./backendConfig");
@@ -141,6 +142,7 @@ const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({
 });
 const googleWorkspaceProvisioningService = createGoogleWorkspaceProvisioningService({
   connectionsService: googleWorkspaceConnectionsService,
+  executionMode: paramValue(GOOGLE_MCP_EXECUTION_MODE),
   oauthService: googleWorkspaceOAuthService,
 });
 const previewService = createPreviewService({

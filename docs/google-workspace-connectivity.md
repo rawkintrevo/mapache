@@ -45,7 +45,7 @@ Every read and mutation verifies the authenticated user owns the connection and 
 
 The backend starts authorization with a signed, short-lived, single-use state containing the user, workspace, nonce, reconnect intent, and requested services. Every authorization request includes the base `openid`, `email`, and `profile` scopes required to identify the connected account, in addition to the selected Workspace service scopes. It requests consent and account selection together so Google reliably returns the offline refresh token even when the user previously granted the OAuth client access but Mapache has no saved connection. Before exchanging the code, the callback atomically creates a nonce record at `users/{uid}/private/googleOAuthState/attempts/{nonce}` in Firestore. This makes replay protection durable across Functions instances and cold starts; a second callback is rejected before token exchange. These records contain no tokens and retain their signed expiry for cleanup. An explicit reconnect/change-account flow does not fall back to an old refresh token if Google omits a replacement.
 
-The catalog currently exposes Gmail, Drive, Docs, Sheets, Slides, Calendar, Chat, and People. The service URLs and scope choices follow Google's [Configure Google Workspace MCP servers](https://developers.google.com/workspace/guides/configure-mcp-servers) guide and the individual MCP tool references. Read-only access is the default; write access is offered only for services whose catalog entry explicitly lists write scopes. Calendar write access requests the least-privilege `https://www.googleapis.com/auth/calendar.events` scope so its MCP server can create, update, respond to, and delete events. People remains read-only. Google Cloud API enablement, OAuth consent-screen configuration, Workspace administrator restrictions, and user consent remain deployment prerequisites outside the app.
+The catalog currently exposes Gmail, Drive, Docs, Sheets, Slides, Calendar, Chat, and People. The hosted compatibility path follows Google's [Configure Google Workspace MCP servers](https://developers.google.com/workspace/guides/configure-mcp-servers) guide and the individual MCP tool references. The local REST-backed path supports Gmail, Drive, Docs, Sheets, Slides, and Calendar; Chat and People remain intentionally unsupported there. Read-only access is the default; write access is offered only for services whose catalog entry explicitly lists write scopes. Calendar write access requests the least-privilege `https://www.googleapis.com/auth/calendar.events` scope so its MCP server can create, update, respond to, and delete events. Google Cloud API enablement, OAuth consent-screen configuration, Workspace administrator restrictions, and user consent remain deployment prerequisites outside the app.
 
 The required Functions configuration is:
 
@@ -56,11 +56,13 @@ The encryption key must remain stable while records exist. Rotating it requires 
 
 ## Provisioning and runner behavior
 
-When a new Cloud Run session is created, or an existing session is restarted, Functions resolves the workspace binding, refreshes the Google connection, and builds an ephemeral runner-specific runtime:
+When a new Cloud Run session is created, or an existing session is restarted, Functions resolves the workspace binding, refreshes the Google connection, and builds an ephemeral runner-specific runtime. `GOOGLE_MCP_EXECUTION_MODE` is a temporary server-side compatibility switch; it defaults to `hosted` and can select the local server while product tools are being rolled out:
 
-- selected Google MCP servers are merged into the workspace MCP config using Google's HTTPS MCP URLs;
+- hosted mode merges selected Google MCP servers into the workspace MCP config using Google's HTTPS MCP URLs;
+- local mode merges one `google-workspace` stdio entry running `/app/google-workspace-mcp/server.mjs`;
+- selected service keys and granted scopes are passed as non-secret `GOOGLE_MCP_ENABLED_SERVICES` and `GOOGLE_MCP_GRANTED_SCOPES` values;
 - Google MCP entries request automatic modern/legacy protocol negotiation so Pi can connect to Google's stateless MCP endpoints instead of defaulting to the adapter's legacy-only handshake;
-- the refreshed access token is passed only as the `GOOGLE_MCP_ACCESS_TOKEN` Cloud Run environment value;
+- the refreshed access token is passed only as the `GOOGLE_MCP_ACCESS_TOKEN` Cloud Run environment value in either mode;
 - safe account and service metadata is passed separately for status reporting;
 - `MCP_CONFIG` contains a `bearer_env` entry that refers to the token environment variable, never the token literal.
 

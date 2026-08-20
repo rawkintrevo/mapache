@@ -111,6 +111,15 @@ assert.match(googleToml, /bearer_token_env_var = "GOOGLE_BEARER_TOKEN"/);
 assert.doesNotMatch(googleToml, /GOOGLE_REFRESH_TOKEN/);
 assert.match(googleToml, /env_http_headers = \{ X-Google-Account = "GOOGLE_ACCOUNT_REF" \}/);
 
+const localGoogleConfig = {mcpServers: {
+  "google-workspace": {command: "node", args: ["/app/google-workspace-mcp/server.mjs"]},
+}};
+assert.deepStrictEqual(piMcpConfig(localGoogleConfig), localGoogleConfig);
+const localGoogleToml = codexMcpToml(localGoogleConfig);
+assert.match(localGoogleToml, /\[mcp_servers\.google-workspace\]/);
+assert.match(localGoogleToml, /args = \["\/app\/google-workspace-mcp\/server\.mjs"\]/);
+assert.doesNotMatch(localGoogleToml, /fake-access-token|GOOGLE_MCP_ACCESS_TOKEN/);
+
 const merged = mergeCodexMcpToml("approval_policy = \"never\"\n", {
   mcpServers: {demo: {command: "node"}},
 });
