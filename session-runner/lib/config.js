@@ -126,6 +126,7 @@ function createConfig() {
     googleMcpAccountEmail: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_EMAIL),
     googleMcpAccountName: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_NAME),
     googleMcpConnectionStatus: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_STATUS),
+    googleMcpEnabledServices: normalizeEnvString(process.env.GOOGLE_MCP_ENABLED_SERVICES),
     harnessId,
     homeArchiveName,
     homeDir,

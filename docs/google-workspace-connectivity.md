@@ -74,7 +74,7 @@ Pi and Codex render the normalized MCP config through their native adapters. Pi 
 {workspaceStoragePrefix}/.mapache-internal/pi-mcp-oauth/mcp-oauth.tar.gz
 ```
 
-The general home archive excludes that directory so it cannot be duplicated across archive targets. Codex MCP configuration is workspace-local at `/workspace/.codex/config.toml`; Codex CLI state remains in its workspace-scoped `CODEX_HOME` archive. Runner `GET /google/mcp/status` reports only configured services, connection state, adapter, and safe account metadata. It never reports tokens, credential file contents, or archive paths.
+The general home archive excludes that directory so it cannot be duplicated across archive targets. Codex MCP configuration is workspace-local at `/workspace/.codex/config.toml`; Codex CLI state remains in its workspace-scoped `CODEX_HOME` archive. Runner `GET /google/mcp/status` reports only enabled services, adapter, safe account metadata, and evidence-backed state. For local mode, the runner performs a local MCP initialize/tools-list readiness probe without calling Google user-data APIs; it reports `configured`, `connected`, `expired`, `reconnect_required`, or `local_server_failed` as appropriate. It never reports tokens, credential file contents, commands, or archive paths.
 
 ## API surface
 
