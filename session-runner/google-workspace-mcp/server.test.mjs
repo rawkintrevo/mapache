@@ -6,9 +6,10 @@ import {fileURLToPath} from "node:url";
 
 const serverPath = fileURLToPath(new URL("./server.mjs", import.meta.url));
 
-function startServer() {
+function startServer(env = {}) {
   const child = spawn(process.execPath, [serverPath], {
     stdio: ["pipe", "pipe", "pipe"],
+    env: {...process.env, ...env},
   });
   let buffer = "";
   const pending = new Map();
@@ -43,7 +44,10 @@ function startServer() {
 }
 
 async function initializedServer() {
-  const server = startServer();
+  const server = startServer({
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: '["https://www.googleapis.com/auth/gmail.readonly"]',
+  });
   const initialize = await server.request("initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
@@ -82,6 +86,23 @@ test("unknown tools return an MCP error", async () => {
     const result = await server.request("tools/call", {name: "not_a_real_tool", arguments: {}});
     assert.equal(result.result, undefined);
     assert.equal(result.error.code, -32602);
+  } finally {
+    await server.close();
+  }
+});
+
+test("does not expose the temporary health tool without enabled services", async () => {
+  const server = startServer({GOOGLE_MCP_ENABLED_SERVICES: "[]"});
+  try {
+    const initialize = await server.request("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: {name: "mapache-test", version: "0.1.0"},
+    });
+    assert.equal(initialize.error, undefined);
+    server.child.stdin.write(JSON.stringify({jsonrpc: "2.0", method: "notifications/initialized", params: {}}) + "\n");
+    const result = await server.request("tools/list");
+    assert.deepEqual(result.result.tools, []);
   } finally {
     await server.close();
   }

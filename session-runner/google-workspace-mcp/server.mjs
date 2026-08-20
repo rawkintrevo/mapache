@@ -1,14 +1,18 @@
 import {McpServer} from "@modelcontextprotocol/server";
 import {serveStdio} from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
+import {createGoogleWorkspaceConfig} from "./config.mjs";
 
 const SERVER_NAME = "mapache-google-workspace";
 const SERVER_VERSION = "0.1.0";
 
-export function createGoogleWorkspaceServer() {
-  const server = new McpServer({name: SERVER_NAME, version: SERVER_VERSION});
+export function createGoogleWorkspaceServer(config = createGoogleWorkspaceConfig()) {
+  const server = new McpServer(
+      {name: SERVER_NAME, version: SERVER_VERSION},
+      {capabilities: {tools: {}}},
+  );
 
-  server.registerTool(
+  if (config.enabledServices.length) server.registerTool(
       "google_workspace_health",
       {
         description: "Report whether the local Google Workspace MCP process is ready.",
