@@ -41,7 +41,7 @@ This document serves as an index for significant UI components in the applicatio
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing saved user-scoped auth entries filtered to the selected session harness. |
 | `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
 | `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | React workspace-scoped Google account, service binding, reconnect, disconnect, delete-impact, and active-session restart guidance panel. |
-| `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | React Skills panel for workspace-local Markdown skills, switching between Pi `.pi/skills` and Codex `.agents/skills` based on the selected session harness. |
+| `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | Compact React Skills panel that launches the selected harness's discovered-skill management modal. |
 | `SubagentsPanel` | `src/components/inspector/SubagentsPanel.jsx` | React Subagents panel for workspace-local Pi `.pi/agents/*.md` and Codex `.codex/agents/*.toml` files based on the selected session harness. |
 | `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for harness-gated workspace-local packages, currently Pi-only. |
 | `PackageInstallForm` | `src/components/inspector/PackageInstallForm.jsx` | React form for installing Pi packages into the active workspace. |
@@ -64,7 +64,7 @@ This document serves as an index for significant UI components in the applicatio
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
-| `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for creating and editing workspace-local Markdown skills from the right inspector Skills panel. |
+| `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for adding skills and listing all recursively discovered local skills with discovery checkboxes plus writable-root edit/delete actions. |
 | `WorkspaceSubagentModal` | `src/components/modals/WorkspaceSubagentModal.jsx` | React modal for creating and editing workspace-local subagents from the right inspector Subagents panel. |
 
 When adding new UI components, please update this index.

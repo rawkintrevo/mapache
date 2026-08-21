@@ -135,17 +135,17 @@ export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, rende
   if (!workspaceId || !sessionId) {
     state.workspaceSkills = {...state.workspaceSkills, error: "Start an active session before saving a skill."};
     render();
-    return;
+    return false;
   }
   if (!sessionSupportsWorkspaceSkills(session)) {
     state.workspaceSkills = {...state.workspaceSkills, error: "Workspace skill management is available for Pi and Codex sessions only."};
     render();
-    return;
+    return false;
   }
   if (!payload.name || !payload.description || !payload.content) {
     state.workspaceSkills = {...state.workspaceSkills, error: "Enter a skill name, description, and Markdown instructions."};
     render();
-    return;
+    return false;
   }
 
   state.workspaceSkills = {
@@ -170,6 +170,7 @@ export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, rende
       },
     };
     await loadWorkspaceSkills();
+    return true;
   } catch (error) {
     state.workspaceSkills = {
       ...state.workspaceSkills,
@@ -178,6 +179,7 @@ export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, rende
       message: "",
     };
     render();
+    return false;
   }
 }
 

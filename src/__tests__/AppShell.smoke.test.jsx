@@ -311,17 +311,13 @@ describe("frontend smoke coverage", () => {
     expect(container).not.toHaveTextContent("super");
     expect(container).not.toHaveTextContent("tkey");
     expect(screen.queryByText(/User-scoped Pi auth/)).not.toBeInTheDocument();
-    expect(screen.getByText("preview-qa")).toBeInTheDocument();
+    expect(screen.queryByText("preview-qa")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Skill name")).not.toBeInTheDocument();
     expect(screen.getByText("npm:@team/workspace-package")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", {name: "New skill"}));
+    await user.click(screen.getByRole("button", {name: "Manage skills"}));
     expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(1);
     expect(handlers.modals.openWorkspaceSkillModal).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole("button", {name: "Edit preview-qa"}));
-    expect(handlers.pi.editPiSkill).toHaveBeenCalledWith(expect.objectContaining({name: "preview-qa"}));
-    expect(handlers.modals.openWorkspaceSkillModal).toHaveBeenCalledTimes(2);
 
     const sessionRows = screen.getAllByRole("button", {name: /Pi smoke/i});
     await user.click(sessionRows[0]);
@@ -582,10 +578,10 @@ describe("frontend smoke coverage", () => {
     }));
   });
 
-  test("submits and closes the workspace skill modal", async () => {
+  test("creates a skill from the management modal", async () => {
     const user = userEvent.setup();
     const handlers = createHandlers();
-    handlers.pi.savePiSkill.mockResolvedValue();
+    handlers.pi.savePiSkill.mockResolvedValue(true);
     render(
         <AppShell
           handlers={handlers}
@@ -604,14 +600,45 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const dialog = await screen.findByRole("dialog", {name: "New skill"});
+    const dialog = await screen.findByRole("dialog", {name: "Manage skills"});
+    await user.click(within(dialog).getByRole("button", {name: "Add skill"}));
     expect(within(dialog).getByLabelText("Skill name")).toHaveValue("modal-skill");
     await user.click(within(dialog).getByRole("button", {name: "Create skill"}));
     expect(handlers.pi.savePiSkill).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(within(dialog).getByRole("button", {name: "Add skill"})).toBeInTheDocument());
 
     await user.click(within(dialog).getByRole("button", {name: "Close"}));
-    expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(1);
-    expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(2);
+    expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(2);
+    expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(1);
+  });
+
+  test("manages discovered skills in the workspace skill modal", async () => {
+    const user = userEvent.setup();
+    const handlers = createHandlers();
+    const editableSkill = {
+      content: "---\nname: local-skill\ndescription: Local skill\n---\n\nUse it.",
+      description: "Local skill",
+      discovered: true,
+      editable: true,
+      name: "local-skill",
+      path: ".pi/skills/local-skill/SKILL.md",
+    };
+    render(
+        <AppShell
+          handlers={handlers}
+          state={createState({
+            selectedSessionId: session.id,
+            workspaceSkillModalOpen: true,
+            workspaceSkills: createWorkspaceSkillsState({data: {skills: [editableSkill]}}),
+          })}
+        />,
+    );
+
+    const dialog = await screen.findByRole("dialog", {name: "Manage skills"});
+    expect(within(dialog).getByLabelText("local-skill is discovered")).toBeChecked();
+    await user.click(within(dialog).getByRole("button", {name: "Delete local-skill"}));
+    expect(handlers.pi.deletePiSkill).toHaveBeenCalledWith("local-skill");
+    await user.click(within(dialog).getByRole("button", {name: "Edit local-skill"}));
+    expect(handlers.pi.editPiSkill).toHaveBeenCalledWith(editableSkill);
   });
 });

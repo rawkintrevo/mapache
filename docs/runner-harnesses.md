@@ -74,6 +74,8 @@ Harness metadata also drives workspace-local file locations:
 - Pi subagents: `.pi/agents/{name}.md`
 - Codex subagents: `.codex/agents/{name}.toml`
 
+Those first two paths are the writable roots used by the web manager. Inspector listing is broader and recursive so it matches local harness discovery: Pi also reads workspace and user `.agents/skills` plus `~/.pi/agent/skills`, while Codex also reads `$CODEX_HOME/skills` and user `~/.agents/skills`. Alternate-root and user-local rows are visible as discovered but remain read-only in the workspace manager.
+
 Neutral runner routes now cover both supported harnesses:
 
 ```text

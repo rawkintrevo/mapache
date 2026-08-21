@@ -21,7 +21,10 @@ Pi uses `.pi/skills/{skill-name}/SKILL.md`. Codex uses `.agents/skills/{skill-na
 
 ## Behavior
 
-- The right drawer `Skills` panel lists workspace-local skills from the active runner.
+- The right drawer `Skills` panel stays compact and opens `WorkspaceSkillModal`. The modal owns the add action and the discovered-skill inventory, including discovery checkboxes and edit/delete actions for skills in the active harness's writable workspace root.
+- Discovery is recursive and mirrors the local roots used by the selected harness. Pi includes workspace `.pi/skills`, shared workspace `.agents/skills`, user `~/.pi/agent/skills`, and user `~/.agents/skills`. Codex includes workspace `.agents/skills`, `$CODEX_HOME/skills`, and user `~/.agents/skills`.
+- A checked row means the selected harness discovers that skill. User-local skills and skills from an alternate workspace root are visible but read-only in this surface; create/edit/delete remain scoped to the selected harness's native writable workspace root.
+- When the same skill name appears in more than one root, the active workspace root wins, followed by the other roots in the order above. Exact duplicates reached through multiple discovery paths are shown once.
 - Creating or editing a skill writes Markdown with required frontmatter:
   - `name`
   - `description`
@@ -44,7 +47,7 @@ POST /skills/delete
 
 The neutral routes pick the correct native workspace directory from the session harness. Compatibility aliases remain available at `/pi/skills*` so older clients and mixed deploys keep working during rollout.
 
-The endpoints operate inside `/workspace`, then run normal workspace sync so skill files are persisted to Cloud Storage as ordinary workspace files.
+The write endpoints operate inside `/workspace`, then run normal workspace sync so skill files are persisted to Cloud Storage as ordinary workspace files. Listing also reads the selected harness's session-local user directories so the inspector matches skills available to that agent; those external roots are never mutated by the workspace CRUD endpoints.
 
 Skills do not use archive-backed sync. Unlike Pi packages, skills are small Markdown files and should remain visible in normal workspace file state.
 

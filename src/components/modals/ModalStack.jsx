@@ -76,12 +76,9 @@ export function ModalStack(props) {
           workspaceSkills={state.workspaceSkills}
           onCancelWorkspaceSkillEdit={pi.cancelPiSkillEdit}
           onClose={modals.closeWorkspaceSkillModal}
-          onSaveWorkspaceSkill={async () => {
-            await pi.savePiSkill();
-            if (!state.workspaceSkills?.error) {
-              modals.closeWorkspaceSkillModal();
-            }
-          }}
+          onDeleteWorkspaceSkill={pi.deletePiSkill}
+          onEditWorkspaceSkill={pi.editPiSkill}
+          onSaveWorkspaceSkill={pi.savePiSkill}
           onUpdateWorkspaceSkillForm={pi.updatePiSkillForm}
         />
       ) : null}

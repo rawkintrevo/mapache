@@ -164,7 +164,7 @@ export function createPiPanelsController({state, render, captureSessionRequest =
   }
 
   async function saveWorkspaceSkill() {
-    await saveWorkspaceSkillState({state, loadWorkspaceSkills, render});
+    return saveWorkspaceSkillState({state, loadWorkspaceSkills, render});
   }
 
   async function deleteWorkspaceSkill(name) {
