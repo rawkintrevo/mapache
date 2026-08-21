@@ -103,6 +103,7 @@ const modalController = createModalController({
   dispatch,
   render,
   loadPiAuth: piPanelsController.loadPiAuth,
+  loadPiModels,
 });
 const workspaceController = createWorkspaceController({
   state,
@@ -151,9 +152,11 @@ const handlers = {
     createSshSessionForward,
     deleteSession,
     getSessionAccessUrls,
+    loadPiModels,
     resizeSession,
     retryProvisioningSession,
     restartSession,
+    savePiModelScope,
     shareSessionPreview,
     selectSession,
     stopSession,
@@ -473,6 +476,43 @@ async function deleteSession(sessionId) {
 
 async function getSessionAccessUrls(workspaceId, sessionId) {
   return state.api.getSessionAccessUrls(workspaceId, sessionId);
+}
+
+async function loadPiModels() {
+  const session = getSelectedSession();
+  if (!state.api || !session?.id || !state.selectedWorkspaceId) return;
+  state.piModels = {...state.piModels, loading: true, error: ""};
+  render();
+  try {
+    const data = await state.api.getPiModels(state.selectedWorkspaceId, session.id);
+    state.piModels = {
+      ...state.piModels,
+      loading: false,
+      error: "",
+      models: data.models || [],
+      scopedModels: data.scopedModels || [],
+    };
+  } catch (error) {
+    state.piModels = {...state.piModels, loading: false, error: friendlyGlobalError(error)};
+  }
+  render();
+}
+
+async function savePiModelScope(scopedModels) {
+  const session = getSelectedSession();
+  if (!state.api || !session?.id || !state.selectedWorkspaceId) return;
+  state.piModels = {...state.piModels, saving: true, error: ""};
+  render();
+  try {
+    const data = await state.api.savePiModelScope(state.selectedWorkspaceId, session.id, scopedModels);
+    const saved = data.scopedModels || [];
+    state.piModels = {...state.piModels, saving: false, scopedModels: saved};
+    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, piScopedModels: saved} : item);
+    state.piModelsModalOpen = false;
+  } catch (error) {
+    state.piModels = {...state.piModels, saving: false, error: friendlyGlobalError(error)};
+  }
+  render();
 }
 
 async function shareSessionPreview(workspaceId, sessionId) {

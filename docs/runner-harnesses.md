@@ -112,6 +112,8 @@ Runner startup now resolves the active harness once, then executes harness hooks
 
 This keeps feature gating out of route handlers and UI inference code where possible. Runner-side Pi skill and subagent helpers are also instantiated lazily so shell and SSH harnesses do not fail startup just because those unsupported helper constructors exist in the same image.
 
+For Pi, startup also restores the current session's `piScopedModels` into `$PI_CODING_AGENT_DIR/settings.json` after the workspace home archive is available and before the harness starts. Periodic and shutdown sync copy a saved `enabledModels` list back to that session field. Sessions without that canonical field, including sessions created before this behavior existed, clear any model scope inherited through the shared home archive and initialize an empty scope. This keeps `/scoped-models` restart-durable without hiding authenticated providers because another session saved a different filter.
+
 Chrome images seed the harness-neutral `mapache-chrome` skill at the active Pi or Codex workspace skill path when it is missing. The skill tells the agent to run `mapache-chrome-status`, attach to the existing loopback CDP endpoint through the pinned `chrome-devtools-mcp@1.6.0` server, and never launch a second browser or read the profile directory. The reserved `chrome-devtools` MCP entry deterministically replaces a workspace entry with the same name so the image-owned server always attaches to the user-visible browser.
 
 ## Frontend

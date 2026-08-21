@@ -4,6 +4,7 @@ import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
+import {PiModelsModal} from "./PiModelsModal.jsx";
 import {SessionModal} from "./SessionModal.jsx";
 import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
 import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
@@ -56,6 +57,14 @@ export function ModalStack(props) {
           session={props.selectedSession}
           onClose={modals.closePiAuthManageModal}
           onSave={pi.saveSessionPiAuthSelection}
+        />
+      ) : null}
+      {state.piModelsModalOpen ? (
+        <PiModelsModal
+          modelState={state.piModels}
+          onClose={modals.closePiModelsModal}
+          onRefresh={sessions.loadPiModels}
+          onSave={sessions.savePiModelScope}
         />
       ) : null}
       {state.workspaceSkillModalOpen ? (

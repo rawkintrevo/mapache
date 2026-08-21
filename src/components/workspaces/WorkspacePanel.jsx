@@ -10,6 +10,7 @@ export function WorkspacePanel({
   onGetSessionAccessUrls,
   onCommitGit,
   onOpenPiAuthManage,
+  onOpenPiModels,
   onOpenPullRequest,
   onPullGit,
   onPushGit,
@@ -41,6 +42,7 @@ export function WorkspacePanel({
           onCommitGit={onCommitGit}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
           onOpenPiAuthManage={onOpenPiAuthManage}
+          onOpenPiModels={onOpenPiModels}
           onOpenPullRequest={onOpenPullRequest}
           onPullGit={onPullGit}
           onPushGit={onPushGit}

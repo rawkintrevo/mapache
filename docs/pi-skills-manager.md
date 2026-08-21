@@ -81,6 +81,8 @@ The `n64` profile includes:
 
 The runner creates native files only when missing. User-edited files with the same names are not overwritten. Codex additionally imports missing user-authored Pi skills for compatibility; bundled Mapache skills no longer have a separate Codex template tree.
 
+For GitHub-backed Pi sessions, automation branch preparation preserves both `.pi/skills/` and `.agents/skills/` while cleaning other untracked worktree files. Workspace sync restores those skill roots before branch preparation, and startup seeding then fills only missing Mapache-owned skills. Keep these exclusions on every `git clean` pass in `session-runner/lib/gitAutomation.service.js`; otherwise a restart deletes user-authored skills and leaves only the subsequently injected catalog entries.
+
 ## Backend API
 
 Cloud Functions proxies authenticated requests to the active runner:

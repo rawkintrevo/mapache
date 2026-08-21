@@ -29,6 +29,7 @@ export function AppShell(props) {
     state.fileEditor?.open ||
     state.genericEnvironmentModalOpen ||
     state.piAuthManageModalOpen ||
+    state.piModelsModalOpen ||
     state.pullRequestForm?.open ||
     state.sessionModalOpen ||
     state.workspaceModalOpen ||
@@ -93,6 +94,7 @@ export function AppShell(props) {
             onCommitGit={git.commitGit}
             onGetSessionAccessUrls={sessions.getSessionAccessUrls}
             onOpenPiAuthManage={modals.openPiAuthManageModal}
+            onOpenPiModels={modals.openPiModelsModal}
             onOpenPullRequest={git.openPullRequestModal}
             onPullGit={git.pullGit}
             onPushGit={git.pushGit}

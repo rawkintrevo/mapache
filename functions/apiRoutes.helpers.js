@@ -111,6 +111,7 @@ function routeRequest(path) {
     ["git-push", "gitPush"],
     ["git-open-pr", "gitOpenPr"],
     ["pi-packages", "piPackages"],
+    ["models", "piModels"],
     ["skills", "sessionSkills"],
     ["pi-skills", "sessionSkills"],
     ["subagents", "sessionSubagents"],

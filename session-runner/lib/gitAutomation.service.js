@@ -8,6 +8,15 @@ const {
 const {normalizeBranchDescription} = require("./gitValidation.helpers");
 const {compactErrorMessage, normalizeEnvString} = require("./utils");
 
+const CLEAN_WORKTREE_ARGS = Object.freeze([
+  "clean",
+  "-fd",
+  "-e",
+  ".pi/skills/",
+  "-e",
+  ".agents/skills/",
+]);
+
 function createGithubAutomationService({
   activity,
   buildAutomationCommitMessage = defaultBuildAutomationCommitMessage,
@@ -36,7 +45,7 @@ function createGithubAutomationService({
     console.log(`preparing GitHub automation branch from ${automationBaseBranch || automationBaseCommit || "HEAD"}`);
 
     await runGitCommand(["reset", "--hard", "HEAD"]);
-    await runGitCommand(["clean", "-fd"]);
+    await runGitCommand([...CLEAN_WORKTREE_ARGS]);
 
     if (automationBaseBranch) {
       await withGithubAutomationAuth((env) => runGitCommand(["fetch", "origin", automationBaseBranch, "--prune"], {env}));
@@ -44,7 +53,7 @@ function createGithubAutomationService({
     }
 
     await runGitCommand(["reset", "--hard", "HEAD"]);
-    await runGitCommand(["clean", "-fd"]);
+    await runGitCommand([...CLEAN_WORKTREE_ARGS]);
 
     automationBaseCommit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
     automationBranch = await uniqueAutomationBranchName();

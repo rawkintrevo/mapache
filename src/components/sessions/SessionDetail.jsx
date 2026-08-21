@@ -1,5 +1,5 @@
 import "./SessionDetail.css";
-import {Copy, ExternalLink, Mail, RotateCcw, Share2, UploadCloud} from "lucide-react";
+import {Copy, ExternalLink, Mail, RotateCcw, Share2, SlidersHorizontal, UploadCloud} from "lucide-react";
 import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
@@ -17,6 +17,7 @@ export function SessionDetail({
   onCommitGit,
   onGetSessionAccessUrls,
   onOpenPullRequest,
+  onOpenPiModels,
   onPullGit,
   onPushGit,
   onResizeSession,
@@ -223,6 +224,12 @@ export function SessionDetail({
         )}
         <div className="session-actions">
           <Button disabled={busy} onClick={handleResize}>Resize</Button>
+          {session.harnessId === "pi" || session.terminalKind === "pi" ? (
+            <Button disabled={busy || !hasRunnerUrl} variant="secondary" onClick={onOpenPiModels}>
+              <SlidersHorizontal aria-hidden="true" />
+              Models
+            </Button>
+          ) : null}
           {capabilities.preview ? (
             <>
               <Button

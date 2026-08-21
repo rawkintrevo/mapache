@@ -17,6 +17,7 @@ const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
 const {createRunnerHarnessRegistry} = require("./lib/harnesses");
 const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
+const {createPiModelScopeService} = require("./lib/piModelScope.service");
 const {createMcpConfigService} = require("./lib/mcpConfig.service");
 const {createGoogleMcpStatusService} = require("./lib/googleMcpStatus.service");
 const {createPreviewService} = require("./lib/preview");
@@ -71,6 +72,7 @@ const chromeProfileSnapshots = createChromeProfileSnapshotService({
   snapshot: () => workspaceSync.syncUp({includeArchives: true}),
 });
 const pi = createPiService({config, syncUp: workspaceSync.syncUp});
+const piModelScope = createPiModelScopeService({admin, config, db});
 const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
@@ -101,6 +103,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   config,
   git,
   listen: (onListening) => server.listen(config.port, onListening),
+  piModelScope,
   sshSession,
   workspace,
   workspaceSync,
@@ -137,7 +140,7 @@ registerWorkspaceRoutes({
   shutdown: runnerLifecycle.shutdown,
   workspaceSync,
 });
-registerAgentRoutes({app, hasRunnerAccess, pi, sendPiPackageError, sendPiSkillError, workspace});
+registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace});
 registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAccess});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 

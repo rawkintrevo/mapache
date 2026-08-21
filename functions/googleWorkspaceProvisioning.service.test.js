@@ -3,10 +3,12 @@
 const assert = require("assert");
 const {
   ACCESS_TOKEN_ENV,
+  CONNECTION_ID_ENV,
   ENABLED_SERVICES_ENV,
   GRANTED_SCOPES_ENV,
   LOCAL_MCP_ARGS,
   LOCAL_MCP_COMMAND,
+  TOKEN_REFRESH_URL_ENV,
   createGoogleWorkspaceProvisioningService,
 } = require("./googleWorkspaceProvisioning.service");
 
@@ -38,7 +40,12 @@ const oauth = {
 };
 
 (async () => {
-  const service = createGoogleWorkspaceProvisioningService({connectionsService: connections, executionMode: "hosted", oauthService: oauth});
+  const service = createGoogleWorkspaceProvisioningService({
+    connectionsService: connections,
+    executionMode: "hosted",
+    oauthService: oauth,
+    tokenRefreshUrl: "https://us-central1-example.cloudfunctions.net/googleMcpToken",
+  });
   const runtime = await service.resolveGoogleMcpRuntime("user-a", "workspace-a", {
     mcpServers: {custom: {command: "node"}},
   });
@@ -49,11 +56,13 @@ const oauth = {
   });
   assert.deepStrictEqual(runtime.env, {
     [ACCESS_TOKEN_ENV]: "fake-access-token",
+    [CONNECTION_ID_ENV]: "connection-a",
     GOOGLE_MCP_CONNECTION_STATUS: "connected",
     GOOGLE_MCP_ACCOUNT_EMAIL: "a@example.com",
     GOOGLE_MCP_ACCOUNT_NAME: "Account A",
     [ENABLED_SERVICES_ENV]: "[\"gmail\",\"drive\"]",
     [GRANTED_SCOPES_ENV]: "[\"https://www.googleapis.com/auth/gmail.readonly\",\"https://www.googleapis.com/auth/drive.readonly\"]",
+    [TOKEN_REFRESH_URL_ENV]: "https://us-central1-example.cloudfunctions.net/googleMcpToken",
   });
   assert.deepStrictEqual(await service.resolveGoogleMcpRuntime("user-a", "workspace-empty", {mcpServers: {custom: {command: "node"}}}), {
     mcpConfig: {version: 1, mcpServers: {custom: {command: "node", args: []}}},
@@ -74,6 +83,7 @@ const oauth = {
   });
   assert.equal(localRuntime.mcpConfig.mcpServers["google-gmail"], undefined);
   assert.equal(localRuntime.env[ACCESS_TOKEN_ENV], "fake-access-token");
+  assert.equal(localRuntime.env[CONNECTION_ID_ENV], "connection-a");
   assert.equal(localRuntime.env[ENABLED_SERVICES_ENV], "[\"gmail\",\"drive\"]");
   assert.equal(localRuntime.env[GRANTED_SCOPES_ENV].includes("fake-access-token"), false);
   console.log("google workspace provisioning service tests passed");

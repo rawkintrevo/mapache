@@ -42,6 +42,10 @@ function createLifecycleHarness(events, overrides = {}) {
     git: overrides.git || service("prepareGithubAutomationBranch", "git.prepareGithubAutomationBranch"),
     listen: overrides.listen || (() => events.push("server.listen")),
     logger: overrides.logger || {error: () => {}, log: () => {}},
+    piModelScope: overrides.piModelScope || {
+      persist: async () => events.push("piModelScope.persist"),
+      restore: async () => events.push("piModelScope.restore"),
+    },
     setIntervalFn: overrides.setIntervalFn || (() => {
       events.push("syncLoop.start");
       return {unref: () => {}};
@@ -64,6 +68,7 @@ test("startup runs ordered preparation before snapshots, sync, and listen", asyn
   assert.deepEqual(events, [
     "workspace.ensureWorkspace",
     "workspace.prepareWorkspaceSource",
+    "piModelScope.restore",
     "chromeProfile.restore",
     "chromeRuntime.start",
     "activeHarness.materializeConfig",
@@ -103,6 +108,7 @@ test("shutdown closes forwards before final profile snapshot and activity update
   assert.deepEqual(events, [
     "sshSession.closeAll",
     "chromeRuntime.stop",
+    "piModelScope.persist",
     "chromeProfileSnapshots.stop",
     "chromeProfileSnapshots.finalize",
     "activity.updateSessionActivity",
@@ -125,6 +131,7 @@ test("shutdown syncs archives directly for non-Chrome runners", async () => {
   assert.deepEqual(events, [
     "sshSession.closeAll",
     "chromeRuntime.stop",
+    "piModelScope.persist",
     "workspaceSync.syncUp",
     "activity.updateSessionActivity",
   ]);

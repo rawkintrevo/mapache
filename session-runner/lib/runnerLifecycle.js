@@ -11,6 +11,7 @@ function createRunnerLifecycleCoordinator({
   git,
   listen,
   logger = console,
+  piModelScope,
   setIntervalFn = setInterval,
   sshSession,
   workspace,
@@ -20,6 +21,7 @@ function createRunnerLifecycleCoordinator({
     await workspace.ensureWorkspace();
     logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
     await workspace.prepareWorkspaceSource();
+    await piModelScope.restore();
     await chromeProfile.restore();
     await chromeRuntime.start();
     await activeHarness.materializeConfig();
@@ -38,6 +40,7 @@ function createRunnerLifecycleCoordinator({
   async function shutdown() {
     sshSession.closeAll();
     await chromeRuntime.stop();
+    await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
     if (chromeProfileSnapshots.enabled()) {
       await chromeProfileSnapshots.stop();
       await chromeProfileSnapshots.finalize();
@@ -59,7 +62,10 @@ function createRunnerLifecycleCoordinator({
       const now = Date.now();
       const includeArchives = !chromeProfileSnapshots.enabled() &&
         now - lastArchiveSync >= config.archiveSyncIntervalMs;
-      const sync = workspaceSync.syncUp({includeArchives});
+      const sync = Promise.all([
+        piModelScope.persist(),
+        workspaceSync.syncUp({includeArchives}),
+      ]);
       sync
           .then(() => {
             if (includeArchives) lastArchiveSync = now;

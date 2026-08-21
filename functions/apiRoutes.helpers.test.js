@@ -131,6 +131,11 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-packages/install"
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/models", {
+  name: "piModels",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills", {
   name: "sessionSkills",
   workspaceId: "workspace-1",

@@ -48,6 +48,12 @@ test("automation commits changed files before opening a pull request", async () 
   const harness = createAutomationHarness({commitCount: 1, status: " M src/app.js"});
   await harness.service.prepareGithubAutomationBranch();
 
+  const cleanCommands = harness.commands.filter((args) => args[0] === "clean");
+  assert.equal(cleanCommands.length, 2);
+  assert.ok(cleanCommands.every((args) => (
+    args.includes(".pi/skills/") && args.includes(".agents/skills/")
+  )));
+
   const result = await harness.service.finalizeGithubAutomationBranch(0);
 
   assert.equal(result.pullRequest.number, 7);

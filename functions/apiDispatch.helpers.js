@@ -87,6 +87,10 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "piPackageRemove", jsonResult(({handlers, req, route, user}) => handlers.removePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "piPackageUpdate", jsonResult(({handlers, req, route, user}) => handlers.updatePiPackage(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
   ]),
+  piModels: Object.freeze([
+    ["GET", "piModels", jsonResult(({handlers, route, user}) => handlers.listPiModels(user.uid, route.workspaceId, route.sessionId))],
+    ["PUT", "piModels", jsonResult(({handlers, req, route, user}) => handlers.savePiModelScope(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+  ]),
   workspaceSkills: Object.freeze([
     ["GET", "sessionSkills", jsonResult(({handlers, route, user}) => handlers.listWorkspaceSkills(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "sessionSkills", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceSkill(user.uid, route.workspaceId, route.sessionId, req.body || {}))],

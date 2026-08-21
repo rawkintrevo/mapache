@@ -1,6 +1,6 @@
 import {APP_ACTIONS} from "../state/appStore.js";
 
-export function createModalController({state, dispatch = () => {}, render, loadPiAuth}) {
+export function createModalController({state, dispatch = () => {}, render, loadPiAuth, loadPiModels}) {
   function showProfile() {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
@@ -89,15 +89,28 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
+  function openPiModelsModal() {
+    state.piModelsModalOpen = true;
+    void loadPiModels();
+    render();
+  }
+
+  function closePiModelsModal() {
+    state.piModelsModalOpen = false;
+    render();
+  }
+
   return {
     closeAuthModal,
     closePiAuthManageModal,
+    closePiModelsModal,
     closeSessionModal,
     closeWorkspaceSubagentModal,
     closeWorkspaceSkillModal,
     closeWorkspaceModal,
     openAuthModal,
     openPiAuthManageModal,
+    openPiModelsModal,
     openGenericEnvironmentModal,
     closeGenericEnvironmentModal,
     openSessionModal,

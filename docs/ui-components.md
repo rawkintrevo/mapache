@@ -56,6 +56,7 @@ This document serves as an index for significant UI components in the applicatio
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
 | `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | React modal for creating, replacing, and deleting masked generic environment keys. |
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file. |
+| `PiModelsModal` | `src/components/modals/PiModelsModal.jsx` | React modal for loading the active Pi runner's authenticated model catalog and saving an ordered session-scoped model selection. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |

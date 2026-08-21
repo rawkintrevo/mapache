@@ -240,6 +240,15 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages`,
     ),
+    getPiModels: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/models`,
+    ),
+    savePiModelScope: (workspaceId, sessionId, scopedModels) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/models`,
+        {method: "PUT", body: {scopedModels}},
+    ),
     installPiPackage: (workspaceId, sessionId, source) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages/install`,

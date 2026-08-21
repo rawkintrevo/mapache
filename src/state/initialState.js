@@ -39,6 +39,17 @@ export function createPiPackagesState(overrides = {}) {
   };
 }
 
+export function createPiModelsState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    error: "",
+    models: [],
+    scopedModels: [],
+    ...overrides,
+  };
+}
+
 export function createWorkspaceSkillsState(overrides = {}) {
   return {
     loading: false,
@@ -214,6 +225,7 @@ export function createInitialState() {
     activePage: "workspace",
     gitStatus: createGitStatusState(),
     piPackages: createPiPackagesState(),
+    piModels: createPiModelsState(),
     workspaceSkills: createWorkspaceSkillsState(),
     workspaceSubagents: createWorkspaceSubagentsState(),
     mcpServers: createMcpServersState(),
@@ -230,6 +242,7 @@ export function createInitialState() {
     workspaceSubagentModalOpen: false,
     authModalOpen: false,
     piAuthManageModalOpen: false,
+    piModelsModalOpen: false,
     genericEnvironmentModalOpen: false,
     pendingOperations: {},
     operationSequence: 0,

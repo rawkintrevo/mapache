@@ -11,6 +11,7 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
+  DEFAULT_FUNCTION_REGION,
   DEFAULT_IMAGE,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
@@ -64,10 +65,12 @@ const {createGoogleWorkspaceOAuthService, callbackPage} = require("./googleWorks
 const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.service");
 const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
 const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
+const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
 const {createGitSessionService} = require("./gitSession.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
+const {createPiModelsService} = require("./piModels.service");
 const {createPiPackagesService} = require("./piPackages.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
@@ -118,6 +121,12 @@ const piPackagesService = createPiPackagesService({
   requireSession,
   requireWorkspace,
 });
+const piModelsService = createPiModelsService({
+  admin,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
 const workspaceAgentAssetsService = createWorkspaceAgentAssetsService({
   requireSession,
   requireWorkspace,
@@ -142,6 +151,12 @@ const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({
 const googleWorkspaceProvisioningService = createGoogleWorkspaceProvisioningService({
   connectionsService: googleWorkspaceConnectionsService,
   oauthService: googleWorkspaceOAuthService,
+  tokenRefreshUrl: googleMcpTokenRefreshUrl(),
+});
+const googleMcpTokenBrokerService = createGoogleMcpTokenBrokerService({
+  connectionsService: googleWorkspaceConnectionsService,
+  oauthService: googleWorkspaceOAuthService,
+  sessionCollection,
 });
 const previewService = createPreviewService({
   admin,
@@ -271,10 +286,17 @@ function secretValue(secret) {
   }
 }
 
+function googleMcpTokenRefreshUrl() {
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
+  return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/googleMcpToken`;
+}
+
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
   environmentKeysService,
   openAiCodexAuthService,
+  piModelsService,
   piPackagesService,
   workspaceAgentAssetsService,
   workspaceService,
@@ -363,6 +385,28 @@ exports.api = onRequest({
   } catch (error) {
     logger.error("api request failed", error);
     const status = error.status || 500;
+    res.status(status).json({error: error.publicMessage || "internal_error"});
+  }
+});
+
+exports.googleMcpToken = onRequest({
+  cors: false,
+  timeoutSeconds: 30,
+  secrets: [
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const result = await googleMcpTokenBrokerService.refreshAccessToken(req);
+    res.status(200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    logger.warn("Google MCP access-token refresh failed", {
+      status,
+      error: error.publicMessage || "internal_error",
+    });
     res.status(status).json({error: error.publicMessage || "internal_error"});
   }
 });

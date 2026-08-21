@@ -5,6 +5,7 @@ import {
   createGoogleWorkspaceState,
   createMcpServersState,
   createPiAuthState,
+  createPiModelsState,
   createPiPackagesState,
   createWorkspaceSubagentsState,
   createWorkspaceSkillsState,
@@ -23,6 +24,10 @@ export function resetGitStatus(state) {
 
 export function resetPiPackages(state) {
   state.piPackages = createPiPackagesState();
+}
+
+export function resetPiModels(state) {
+  state.piModels = createPiModelsState();
 }
 
 export function resetPiAuth(state) {
@@ -91,6 +96,7 @@ export function resetSignedOutState(state) {
   state.collapsedDrawerSections = new Set();
   resetGitStatus(state);
   resetPiPackages(state);
+  resetPiModels(state);
   resetWorkspaceSkills(state);
   resetWorkspaceSubagents(state);
   resetMcpServers(state);

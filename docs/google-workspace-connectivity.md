@@ -9,6 +9,7 @@ This page documents the workspace-scoped Google account workflow added for issue
 - Google metadata and service catalog: `functions/googleWorkspace.models.js` and `functions/googleWorkspace.catalog.js`
 - Private connection records and workspace bindings: `functions/googleWorkspaceConnections.service.js`
 - Signed OAuth state, token exchange, refresh, encryption, and revoke: `functions/googleWorkspaceOAuthState.service.js` and `functions/googleWorkspaceOAuth.service.js`
+- Running-session access-token broker: `functions/googleMcpTokenBroker.service.js` and the `googleMcpToken` Function export in `functions/index.js`
 - Authenticated API handlers and route registration: `functions/googleWorkspaceApi.service.js`, `functions/apiRouteManifest.js`, `functions/apiRoutes.helpers.js`, and `functions/apiDispatch.helpers.js`
 - Cloud Run environment and MCP injection: `functions/googleWorkspaceProvisioning.service.js` and `functions/cloudRun.service.js`
 - Frontend state, controller, workflow, and inspector: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/workflows/googleWorkspace.js`, and `src/components/inspector/GoogleWorkspacePanel.jsx`
@@ -66,10 +67,13 @@ When a new Cloud Run session is created, or an existing session is restarted, Fu
 - selected service keys and granted scopes are passed as non-secret `GOOGLE_MCP_ENABLED_SERVICES` and `GOOGLE_MCP_GRANTED_SCOPES` values;
 - Google MCP entries request automatic modern/legacy protocol negotiation so Pi can connect to Google's stateless MCP endpoints instead of defaulting to the adapter's legacy-only handshake;
 - the refreshed access token is passed only as the `GOOGLE_MCP_ACCESS_TOKEN` Cloud Run environment value in either mode;
+- the safe connection identifier and dedicated `googleMcpToken` Function URL are passed separately so the local MCP process can renew an expired access token without receiving the Google refresh token or OAuth client secret;
 - safe account and service metadata is passed separately for status reporting;
 - `MCP_CONFIG` contains a `bearer_env` entry that refers to the token environment variable, never the token literal.
 
 If refresh returns `invalid_grant`, the connection is marked `reconnect_required` and provisioning stops with a reconnectable error. The frontend tells users that current sessions need restart after changing or disconnecting a binding. Restart uses the latest workspace binding and refreshes the token again; sessions created before a change do not silently change their MCP servers.
+
+The local REST client retries a Google request once after a 401. It calls the dedicated token-broker Function with the workspace ID, session ID, provisioned connection ID, and the existing per-session shutdown credential. The broker verifies that the session exists, is running, owns that shutdown credential, and is still bound to the same Google connection before Functions decrypts the saved refresh token. Successful responses contain only a new short-lived access token, use `Cache-Control: no-store`, and are cached only in the MCP process. Concurrent 401 responses share one in-process refresh request, and a second 401 is returned without another retry. The broker never returns or provisions the Google refresh token, OAuth client secret, or encryption key.
 
 Pi and Codex render the normalized MCP config through their native adapters. Pi OAuth material is archived separately under the hidden workspace prefix:
 
@@ -89,6 +93,7 @@ The general home archive excludes that directory so it cannot be duplicated acro
 | `GET` | `/api/workspaces/{workspaceId}/google` | Read the workspace binding and catalog. |
 | `POST` | `/api/workspaces/{workspaceId}/google/connect` | Start OAuth for the selected services. |
 | `POST` / `DELETE` | `/api/workspaces/{workspaceId}/google/binding` | Bind, change, or unbind a saved connection. |
+| `POST` | `googleMcpToken` Function URL | Refresh a running session's short-lived Google access token; protected by its shutdown credential and connection binding. |
 | `GET` | `/google/mcp/status` | Read safe runner-local MCP status; protected by the runner shutdown token. |
 
 ## Deployment and recovery
@@ -99,7 +104,7 @@ Deploy Functions with the explicit production project:
 firebase deploy --only functions --project pi-agents-cloud
 ```
 
-The runner status and Pi archive changes require a rebuilt runner image. Build the affected standard images with the checked-in Cloud Build configuration and explicit project flag, then restart or recreate existing sessions before expecting them to use the new runtime:
+The runner status, Pi archive, and local Google REST client changes require rebuilt runner images. Build the affected standard images with the checked-in Cloud Build configuration and explicit project flag, then restart or recreate existing sessions before expecting them to use the new runtime. Token renewal specifically requires both the Function and runner revisions: an older session does not have the broker URL and connection metadata in its environment.
 
 ```bash
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest

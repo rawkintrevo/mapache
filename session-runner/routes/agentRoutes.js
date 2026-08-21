@@ -1,6 +1,6 @@
 "use strict";
 
-function registerAgentRoutes({app, hasRunnerAccess, pi, sendPiPackageError, sendPiSkillError, workspace}) {
+function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace}) {
   async function handleAuthMaterialize(req, res) {
     if (!hasRunnerAccess(req)) {
       res.status(404).json({error: "not_found"});
@@ -17,6 +17,26 @@ function registerAgentRoutes({app, hasRunnerAccess, pi, sendPiPackageError, send
 
   app.post("/auth/materialize", handleAuthMaterialize);
   app.post("/pi/auth/materialize", handleAuthMaterialize);
+
+  app.get("/models", async (req, res) => {
+    if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
+    try {
+      res.json(await piModelScope.listModels());
+    } catch (error) {
+      console.error("pi model list failed", error);
+      res.status(500).json({error: "pi_model_list_failed"});
+    }
+  });
+
+  app.put("/models", async (req, res) => {
+    if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
+    try {
+      res.json(await piModelScope.save(req.body && req.body.scopedModels));
+    } catch (error) {
+      console.error("pi model scope save failed", error);
+      res.status(500).json({error: "pi_model_scope_save_failed"});
+    }
+  });
 
   app.get("/pi/packages", async (req, res) => {
     if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});

@@ -5,8 +5,10 @@ const {googleWorkspaceServiceCatalog} = require("./googleWorkspace.catalog");
 const {normalizeMcpConfigPayload} = require("./mcpConfig.helpers");
 
 const ACCESS_TOKEN_ENV = "GOOGLE_MCP_ACCESS_TOKEN";
+const CONNECTION_ID_ENV = "GOOGLE_MCP_CONNECTION_ID";
 const ENABLED_SERVICES_ENV = "GOOGLE_MCP_ENABLED_SERVICES";
 const GRANTED_SCOPES_ENV = "GOOGLE_MCP_GRANTED_SCOPES";
+const TOKEN_REFRESH_URL_ENV = "GOOGLE_MCP_TOKEN_REFRESH_URL";
 const LOCAL_MCP_COMMAND = "node";
 const LOCAL_MCP_ARGS = Object.freeze(["/app/google-workspace-mcp/server.mjs"]);
 const LOCAL_SERVICE_KEYS = new Set(["calendar", "gmail", "drive", "docs", "sheets", "slides"]);
@@ -36,6 +38,7 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
     binding.enabledServices.includes(service.key) && LOCAL_SERVICE_KEYS.has(service.key));
   if (!services.length) throw httpError(409, "google_service_binding_empty");
   const grantedScopes = normalizeGrantedScopes(connection.grantedScopes, services);
+  const tokenRefreshUrl = normalizeTokenRefreshUrl(dependencies.tokenRefreshUrl);
   return {
     mcpConfig: normalizeMcpConfigPayload({mcpServers: {
       ...base.mcpServers,
@@ -46,11 +49,13 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
     }}),
     env: {
       [ACCESS_TOKEN_ENV]: refreshed.accessToken,
+      [CONNECTION_ID_ENV]: connection.connectionId,
       GOOGLE_MCP_CONNECTION_STATUS: "connected",
       GOOGLE_MCP_ACCOUNT_EMAIL: connection.email || "",
       GOOGLE_MCP_ACCOUNT_NAME: connection.displayName || "",
       [ENABLED_SERVICES_ENV]: JSON.stringify(services.map((service) => service.key)),
       [GRANTED_SCOPES_ENV]: JSON.stringify(grantedScopes),
+      ...(tokenRefreshUrl ? {[TOKEN_REFRESH_URL_ENV]: tokenRefreshUrl} : {}),
     },
     connection: {
       connectionId: connection.connectionId,
@@ -61,6 +66,17 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
   };
 }
 
+function normalizeTokenRefreshUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch (error) {
+    return "";
+  }
+}
+
 function normalizeGrantedScopes(value, services) {
   const scopes = Array.isArray(value) ? value.map((scope) => String(scope || "").trim()).filter(Boolean) : [];
   if (scopes.length) return [...new Set(scopes)];
@@ -69,10 +85,12 @@ function normalizeGrantedScopes(value, services) {
 
 module.exports = {
   ACCESS_TOKEN_ENV,
+  CONNECTION_ID_ENV,
   ENABLED_SERVICES_ENV,
   GRANTED_SCOPES_ENV,
   LOCAL_MCP_ARGS,
   LOCAL_MCP_COMMAND,
+  TOKEN_REFRESH_URL_ENV,
   createGoogleWorkspaceProvisioningService,
   resolveGoogleMcpRuntime,
 };
