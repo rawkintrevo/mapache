@@ -134,6 +134,23 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   }}));
   assert.strictEqual(selectedEnv.SERVICE_TOKEN, "secret-value");
   assert.strictEqual(selectedEnv.environmentEntries, undefined);
+  const googleRuntimeEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }, {}, {
+    resolveGoogleMcpRuntime: async () => ({
+      mcpConfig: {mcpServers: {}},
+      env: {
+        GOOGLE_MCP_ACCESS_TOKEN: "short-lived-token",
+        GOOGLE_MCP_CONNECTION_ID: "connection-1",
+      },
+    }),
+  }));
+  assert.strictEqual(googleRuntimeEnv.GOOGLE_MCP_ACCESS_TOKEN, "short-lived-token");
+  assert.strictEqual(googleRuntimeEnv.GOOGLE_MCP_CONNECTION_ID, "connection-1");
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
   assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"-l\"]");
   assert.deepStrictEqual(JSON.parse(shellEnv.MCP_CONFIG), {

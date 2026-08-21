@@ -398,8 +398,8 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
       ...(session.workspaceEnv || {}),
       ...(session.sessionEnv || {}),
       ...genericEnvironment,
-      ...(googleMcpRuntime.env || {}),
     }),
+    ...trustedRuntimeEnv(googleMcpRuntime.env),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "HOME", value: homeDir},
     {name: "MAPACHE_HOME_DIR", value: homeDir},
@@ -504,6 +504,14 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   }
 
   return env.filter(Boolean);
+}
+
+function trustedRuntimeEnv(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value).map(([name, item]) => ({
+    name,
+    value: item == null ? "" : String(item),
+  }));
 }
 
 function sessionEnvironmentEntryIds(session = {}) {
