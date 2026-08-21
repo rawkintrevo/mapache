@@ -44,6 +44,16 @@ describe("InspectorResourcePanel", () => {
     expect(onDelete).toHaveBeenCalledWith({id: "widget-a", name: "Widget A"});
   });
 
+  test("places the labeled create action before existing resources", () => {
+    renderResource();
+
+    const createButton = screen.getByRole("button", {name: "New widget"});
+    const existingResource = screen.getByText("Widget A");
+
+    expect(createButton).toHaveTextContent("New widget");
+    expect(createButton.compareDocumentPosition(existingResource) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   test("renders the shared status messages and disables actions while busy", () => {
     const props = renderResource({status: {loading: true, error: "Could not load widgets.", message: "Loading widgets..."}});
 

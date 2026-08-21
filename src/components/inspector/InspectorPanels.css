@@ -100,8 +100,13 @@
   margin: 0;
 }
 
+.inspector-resource-create {
+  justify-content: center;
+  width: 100%;
+}
+
 .mcp-list {
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .skill-form-actions {

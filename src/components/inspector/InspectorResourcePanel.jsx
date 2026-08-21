@@ -27,25 +27,6 @@ export function InspectorResourcePanel({
   const createLabel = create?.label || `New ${singularLabel}`;
   const actions = [];
 
-  if (create) {
-    actions.push(
-      <Button
-        aria-label={createLabel}
-        className={create.className || ""}
-        disabled={busy || create.disabled || !create.onClick}
-        icon={true}
-        key="create"
-        size="compact"
-        title={createLabel}
-        tooltip={createLabel}
-        variant="secondary"
-        onClick={create.onClick}
-      >
-        <Plus aria-hidden="true" />
-      </Button>,
-    );
-  }
-
   if (refresh) {
     actions.push(
       <Button
@@ -76,6 +57,17 @@ export function InspectorResourcePanel({
       title={title}
       onToggleDrawerSection={onToggleDrawerSection}
     >
+      {create ? (
+        <Button
+          className={["inspector-resource-create", create.className || ""].filter(Boolean).join(" ")}
+          disabled={busy || create.disabled || !create.onClick}
+          variant="secondary"
+          onClick={create.onClick}
+        >
+          <Plus aria-hidden="true" />
+          {createLabel}
+        </Button>
+      ) : null}
       {description ? <p className="subtle inspector-resource-description">{description}</p> : null}
       {status.error ? <p className="empty inspector-resource-error">{status.error}</p> : null}
       {status.message ? <p className="subtle inspector-resource-message">{status.message}</p> : null}

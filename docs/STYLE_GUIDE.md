@@ -89,7 +89,7 @@ Drawers should share a unified structure.
 
 ### Inspector resource panels
 
-Inspector sections that manage a resource list should compose `InspectorResourcePanel` and `InspectorResourceRow` from `src/components/inspector/InspectorResourcePanel.jsx`. The shared panel owns the section header, New/Refresh action order, status messaging, and accessibility treatment. Domain panels may provide capability-specific descriptions, editor forms, and extra actions, but should keep list rows on the shared resource row primitive. Use `InspectorEditorModal` for modal-backed create/edit forms and preserve domain-specific verbs such as Connect, Reconnect, Install, or Update through configurable labels.
+Inspector sections that manage a resource list should compose `InspectorResourcePanel` and `InspectorResourceRow` from `src/components/inspector/InspectorResourcePanel.jsx`. The shared panel owns status messaging and accessibility treatment. In an expanded section, place the full-width labeled create or connect action above the existing resource list; keep refresh and exceptional bulk actions as compact header controls. Domain panels may provide capability-specific descriptions, editor forms, and extra actions, but should keep list rows on the shared resource row primitive. Use `InspectorEditorModal` for modal-backed create/edit forms and preserve domain-specific verbs such as Connect, Reconnect, Install, or Update through configurable labels.
 
 ### Forms & Inputs
 *   Inputs, textareas, and selects must share the same height, border, and focus states.
