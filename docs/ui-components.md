@@ -35,6 +35,9 @@ This document serves as an index for significant UI components in the applicatio
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
 | `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
+| `InspectorResourcePanel` | `src/components/inspector/InspectorResourcePanel.jsx` | Shared inspector section chrome for resource create, refresh, status, list, edit, and delete workflows. |
+| `InspectorResourceRow` | `src/components/inspector/InspectorResourcePanel.jsx` | Shared inspector resource row with configurable edit, delete, and domain-specific actions. |
+| `InspectorEditorModal` | `src/components/inspector/InspectorEditorModal.jsx` | Shared create/edit dialog shell used by inspector resource editors. |
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing saved user-scoped auth entries filtered to the selected session harness. |
 | `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
 | `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | React workspace-scoped Google account, service binding, reconnect, disconnect, delete-impact, and active-session restart guidance panel. |

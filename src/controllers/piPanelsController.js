@@ -36,7 +36,9 @@ import {
 } from "../workflows/subagents.js";
 import {
   deleteMcpServerState,
+  editMcpServerFormState,
   loadMcpServersState,
+  resetMcpServerFormState,
   saveMcpServerState,
   updateMcpServerFormState,
 } from "../workflows/mcpServers.js";
@@ -124,8 +126,18 @@ export function createPiPanelsController({state, render, captureSessionRequest =
     render();
   }
 
+  function newMcpServer() {
+    resetMcpServerFormState(state);
+    render();
+  }
+
+  function editMcpServer(entry) {
+    editMcpServerFormState(state, entry);
+    render();
+  }
+
   async function saveMcpServer() {
-    await saveMcpServerState({state, loadMcpServers, render});
+    return saveMcpServerState({state, loadMcpServers, render});
   }
 
   async function deleteMcpServer(name) {
@@ -232,8 +244,13 @@ export function createPiPanelsController({state, render, captureSessionRequest =
     render();
   }
 
+  function newPiPackage() {
+    updatePiInstallSourceState(state, "");
+    render();
+  }
+
   async function installPiPackage(source) {
-    await installPiPackageState({state, source, loadPiPackages, render});
+    return installPiPackageState({state, source, loadPiPackages, render});
   }
 
   async function removePiPackage(source) {
@@ -256,6 +273,7 @@ export function createPiPanelsController({state, render, captureSessionRequest =
     editWorkspaceSkill,
     installPiPackage,
     deleteMcpServer,
+    editMcpServer,
     loadMcpServers,
     loadPiAuth,
     loadPiPackages,
@@ -269,6 +287,8 @@ export function createPiPanelsController({state, render, captureSessionRequest =
     saveGenericEnvironmentKey,
     deleteGenericEnvironmentKey,
     refreshMcpServers,
+    newMcpServer,
+    newPiPackage,
     refreshPiPackages,
     refreshPiSkills: refreshWorkspaceSkills,
     refreshWorkspaceSubagents,

@@ -1,9 +1,9 @@
-import {KeyRound, Plus, RefreshCw, RotateCw, Trash2} from "lucide-react";
+import {KeyRound, RotateCw} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 import {Button} from "../common/Button.jsx";
-import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
-import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {DrawerList} from "../drawers/DrawerList.jsx";
+import {InspectorResourcePanel, InspectorResourceRow, resourceBusy} from "./InspectorResourcePanel.jsx";
 
 function normalizeEntries(status) {
   const entries = status.entries && typeof status.entries === "object" ? status.entries : {};
@@ -28,29 +28,23 @@ function AuthProviderRow({entry, disabled, onDelete, onRelogin}) {
   );
 
   return (
-    <DrawerListItem
-      actions={[
-        ...(credential.type === "oauth" ? [
-          <DrawerListActionButton
-            disabled={disabled || !onRelogin}
-            icon={<RotateCw aria-hidden="true" />}
-            key="relogin"
-            label={`Log in again for ${entry.label || piAuthProviderLabel(entry.providerKey)}`}
-            onClick={() => onRelogin?.(entry.providerKey)}
-          />,
-        ] : []),
-        <DrawerListActionButton
-          disabled={disabled || !onDelete}
-          icon={<Trash2 aria-hidden="true" />}
-          key="delete"
-          label={`Delete ${entry.label || piAuthProviderLabel(entry.providerKey)}`}
-          tone="danger"
-          onClick={() => onDelete?.(entry.id)}
-        />,
-      ]}
+    <InspectorResourceRow
+      busy={disabled}
       detail={detail}
       meta={piAuthProviderLabel(entry.providerKey)}
+      resource={entry}
       title={entry.label || piAuthProviderLabel(entry.providerKey)}
+      edit={credential.type === "oauth" ? {
+        disabled: !onRelogin,
+        icon: <RotateCw aria-hidden="true" />,
+        label: `Log in again for ${entry.label || piAuthProviderLabel(entry.providerKey)}`,
+        onClick: () => onRelogin?.(entry.providerKey),
+      } : null}
+      onDelete={{
+        disabled: !onDelete,
+        label: `Delete ${entry.label || piAuthProviderLabel(entry.providerKey)}`,
+        onClick: (item) => onDelete?.(item.id),
+      }}
     />
   );
 }
@@ -82,38 +76,15 @@ export function AuthCenterPanel({
   const showManagePiAuth = sessionSupportsAuth(selectedSession);
 
   return (
-    <DrawerSection
-      actions={[
-        <Button
-          aria-label="Refresh"
-          className="auth-center-refresh"
-          disabled={status.loading || status.saving || !onRefreshPiAuth}
-          icon={true}
-          key="refresh-auth"
-          size="compact"
-          tooltip="Refresh"
-          variant="secondary"
-          onClick={onRefreshPiAuth}
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>,
-        <Button
-          aria-label="Add"
-          className="auth-center-add"
-          icon={true}
-          key="add-auth"
-          size="compact"
-          tooltip="Add"
-          variant="secondary"
-          onClick={onOpenAuthModal}
-        >
-          <Plus aria-hidden="true" />
-        </Button>,
-      ]}
+    <InspectorResourcePanel
       className="auth-center-panel"
+      create={{label: "Add authentication provider", onClick: onOpenAuthModal}}
       id="right-authentication"
+      refresh={{className: "auth-center-refresh", onClick: onRefreshPiAuth}}
       state={state}
+      status={status}
       title="Authentication Center"
+      singularLabel="authentication provider"
       onToggleDrawerSection={onToggleDrawerSection}
     >
       {showManagePiAuth ? (
@@ -129,13 +100,11 @@ export function AuthCenterPanel({
       ) : null}
       <Button className="auth-center-manage" variant="secondary" onClick={onOpenGenericEnvironment}>Manage generic environment keys</Button>
       {status.environmentEntries?.length ? <p className="subtle">{status.environmentEntries.length} saved generic key(s); secrets are masked.</p> : null}
-      {status.error ? <p className="empty">{status.error}</p> : null}
-      {status.message ? <p className="subtle">{status.message}</p> : null}
       {providerEntriesForHarness.length ? (
         <DrawerList>
           {providerEntriesForHarness.map((entry) => (
             <AuthProviderRow
-              disabled={status.loading || status.saving}
+              disabled={resourceBusy(status)}
               entry={entry}
               key={entry.id}
               onDelete={onDeletePiAuthProvider}
@@ -146,6 +115,6 @@ export function AuthCenterPanel({
       ) : (
         <p className="empty">No saved auth providers are available for this harness yet.</p>
       )}
-    </DrawerSection>
+    </InspectorResourcePanel>
   );
 }

@@ -18,6 +18,7 @@ export function RightDrawer({
   onDeletePiSkill,
   onDeleteWorkspaceSubagent,
   onDeleteMcpServer,
+  onEditMcpServer,
   onDeleteGoogleConnection,
   onEditPiSkill,
   onEditWorkspaceSubagent,
@@ -26,6 +27,8 @@ export function RightDrawer({
   onOpenGenericEnvironment,
   onOpenWorkspaceSkillModal,
   onOpenWorkspaceSubagentModal,
+  onNewMcpServer,
+  onNewPiPackage,
   onRefreshPiAuth,
   onRefreshMcpServers,
   onRefreshGoogleWorkspace,
@@ -109,6 +112,8 @@ export function RightDrawer({
         mcpServers={state.mcpServers}
         state={state}
         onDeleteMcpServer={onDeleteMcpServer}
+        onEditMcpServer={onEditMcpServer}
+        onNewMcpServer={onNewMcpServer}
         onRefreshMcpServers={onRefreshMcpServers}
         onSaveMcpServer={onSaveMcpServer}
         onToggleDrawerSection={onToggleDrawerSection}
@@ -133,6 +138,7 @@ export function RightDrawer({
         selectedSession={selectedSession}
         state={state}
         onInstallPiPackage={onInstallPiPackage}
+        onNewPiPackage={onNewPiPackage}
         onRefreshPiPackages={onRefreshPiPackages}
         onRemovePiPackage={onRemovePiPackage}
         onToggleDrawerSection={onToggleDrawerSection}

@@ -25,7 +25,7 @@ export async function installPiPackageState({state, source, loadPiPackages, rend
       error: packageSource ? "Start an active session before installing." : "Enter an npm: or git package source.",
     };
     render();
-    return;
+    return false;
   }
 
   state.piPackages = {
@@ -45,6 +45,7 @@ export async function installPiPackageState({state, source, loadPiPackages, rend
       installMessage: "Package installed into this workspace.",
     };
     await loadPiPackages();
+    return true;
   } catch (error) {
     state.piPackages = {
       ...state.piPackages,
@@ -53,6 +54,7 @@ export async function installPiPackageState({state, source, loadPiPackages, rend
       installMessage: "",
     };
     render();
+    return false;
   }
 }
 

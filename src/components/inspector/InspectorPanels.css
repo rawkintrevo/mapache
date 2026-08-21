@@ -78,7 +78,8 @@
 }
 
 .mcp-form textarea,
-.skill-form textarea {
+.skill-form textarea,
+.inspector-editor-form textarea {
   min-height: 150px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
@@ -86,6 +87,17 @@
 
 .mcp-form textarea {
   min-height: 82px;
+}
+
+.inspector-editor-modal {
+  width: min(680px, 100%);
+}
+
+.inspector-resource-description,
+.inspector-resource-error,
+.inspector-resource-message,
+.inspector-resource-empty {
+  margin: 0;
 }
 
 .mcp-list {

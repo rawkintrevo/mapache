@@ -1,7 +1,7 @@
-import {Cloud, ExternalLink, RefreshCw, Trash2, Unplug} from "lucide-react";
+import {Check, Cloud, ExternalLink, Link2, Unplug} from "lucide-react";
 import {Button} from "../common/Button.jsx";
-import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
-import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {DrawerList, DrawerListActionButton} from "../drawers/DrawerList.jsx";
+import {InspectorResourcePanel, InspectorResourceRow, resourceBusy} from "./InspectorResourcePanel.jsx";
 
 function serviceLabel(service) {
   return service.displayName || service.key;
@@ -28,37 +28,27 @@ export function GoogleWorkspacePanel({
   const binding = data.binding;
   const selected = new Set(status.selectedServices || []);
   const boundConnection = data.connection;
-  const busy = status.loading || status.connecting || status.saving || status.deleting;
+  const busy = resourceBusy(status);
   const canWrite = [...selected].every((key) => services.find((service) => service.key === key)?.accessLevels?.includes("write"));
   const canRestart = selectedSession?.status === "running" && Boolean(onRestartSession);
 
   return (
-    <DrawerSection
-      actions={[
-        <Button
-          aria-label="Refresh Google Workspace"
-          disabled={busy || !onRefresh}
-          icon={true}
-          key="refresh-google"
-          size="compact"
-          tooltip="Refresh"
-          variant="secondary"
-          onClick={onRefresh}
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>,
-      ]}
+    <InspectorResourcePanel
       className="google-workspace-panel"
+      create={{
+        disabled: !onStartConnection,
+        label: "Connect Google account",
+        onClick: () => onStartConnection?.({reconnect: false}),
+      }}
       id="right-google-workspace"
+      description="Connect a Google account to this workspace. Only the services you select are exposed to new MCP sessions."
+      refresh={{label: "Refresh Google Workspace", onClick: onRefresh}}
       state={state}
+      status={status}
       title="Google Workspace"
+      singularLabel="Google account"
       onToggleDrawerSection={onToggleDrawerSection}
     >
-      <p className="subtle">
-        Connect a Google account to this workspace. Only the services you select are exposed to new MCP sessions.
-      </p>
-      {status.error ? <p className="empty">{status.error}</p> : null}
-      {status.message ? <p className="subtle">{status.message}</p> : null}
       {status.message?.includes("Restart active sessions") && canRestart ? (
         <Button
           className="google-workspace-restart"
@@ -139,43 +129,42 @@ export function GoogleWorkspacePanel({
           <strong>Saved Google accounts</strong>
           <DrawerList>
             {accounts.map((account) => (
-              <DrawerListItem
-                actions={[
-                  <Button
-                    aria-label={`Use ${account.email}`}
-                    disabled={busy || binding?.connectionId === account.connectionId}
-                    key="use"
-                    size="compact"
-                    variant="secondary"
-                    onClick={() => onBindConnection?.(account.connectionId)}
-                  >
-                    {binding?.connectionId === account.connectionId ? "In use" : "Use"}
-                  </Button>,
-                  <DrawerListActionButton
-                    disabled={busy}
-                    icon={<Trash2 aria-hidden="true" />}
-                    key="delete"
-                    label={`Remove ${account.email}`}
-                    tone="danger"
-                    onClick={() => {
-                      const count = Number(account.workspaceUsage?.count || 0);
-                      const usage = count ? ` It is used by ${count} workspace${count === 1 ? "" : "s"}; those bindings will be disconnected.` : "";
-                      if (window.confirm(`Remove Google account ${account.email}?${usage}`)) onDeleteConnection?.(account.connectionId);
-                    }}
-                  />,
-                ]}
+              <InspectorResourceRow
+                busy={busy}
                 detail={<span className="subtle">
                   {account.status === "connected" ? "Ready" : "Reconnect required"}
                   {account.workspaceUsage?.count ? ` · ${account.workspaceUsage.count} workspace${account.workspaceUsage.count === 1 ? "" : "s"}` : ""}
                 </span>}
-                key={account.connectionId}
                 meta={account.displayName || "Google account"}
+                resource={account}
+                key={account.connectionId}
                 title={account.email}
+                extraActions={[
+                  <DrawerListActionButton
+                    disabled={busy || binding?.connectionId === account.connectionId}
+                    icon={binding?.connectionId === account.connectionId ? <Check aria-hidden="true" /> : <Link2 aria-hidden="true" />}
+                    key="use"
+                    label={`${binding?.connectionId === account.connectionId ? "In use" : "Use"} ${account.email}`}
+                    onClick={() => onBindConnection?.(account.connectionId)}
+                  />,
+                ]}
+                edit={{
+                  label: `Reconnect ${account.email}`,
+                  onClick: () => onStartConnection?.({reconnect: true}),
+                }}
+                onDelete={{
+                  label: `Remove ${account.email}`,
+                  onClick: (item) => {
+                    const count = Number(item.workspaceUsage?.count || 0);
+                    const usage = count ? ` It is used by ${count} workspace${count === 1 ? "" : "s"}; those bindings will be disconnected.` : "";
+                    if (window.confirm(`Remove Google account ${item.email}?${usage}`)) onDeleteConnection?.(item.connectionId);
+                  },
+                }}
               />
             ))}
           </DrawerList>
         </div>
       ) : null}
-    </DrawerSection>
+    </InspectorResourcePanel>
   );
 }

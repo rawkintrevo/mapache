@@ -118,6 +118,7 @@ export function AppShell(props) {
           onInstallPiPackage={pi.installPiPackage}
           onCancelPiSkillEdit={pi.cancelPiSkillEdit}
           onDeleteMcpServer={pi.deleteMcpServer}
+          onEditMcpServer={pi.editMcpServer}
           onDeleteGoogleConnection={google.deleteConnection}
           onDeletePiAuthProvider={pi.deletePiAuthProvider}
           onDeletePiSkill={pi.deletePiSkill}
@@ -129,6 +130,8 @@ export function AppShell(props) {
           onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
           onOpenWorkspaceSkillModal={modals.openWorkspaceSkillModal}
           onOpenWorkspaceSubagentModal={modals.openWorkspaceSubagentModal}
+          onNewMcpServer={pi.newMcpServer}
+          onNewPiPackage={pi.newPiPackage}
           onRefreshMcpServers={pi.refreshMcpServers}
           onRefreshGoogleWorkspace={google.loadGoogleWorkspace}
           onRefreshPiAuth={pi.refreshPiAuth}

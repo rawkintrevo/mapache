@@ -17,6 +17,35 @@ function resetForm() {
   };
 }
 
+export function resetMcpServerFormState(state) {
+  state.mcpServers = {
+    ...state.mcpServers,
+    error: "",
+    message: "",
+    form: resetForm(),
+  };
+}
+
+export function editMcpServerFormState(state, entry) {
+  const server = entry?.server && typeof entry.server === "object" ? entry.server : {};
+  const transport = server.url ? "url" : "stdio";
+  state.mcpServers = {
+    ...state.mcpServers,
+    error: "",
+    message: "",
+    form: {
+      name: entry?.name || "",
+      originalName: entry?.name || "",
+      editing: true,
+      transport,
+      command: server.command || "",
+      args: Array.isArray(server.args) ? server.args.join(" ") : "",
+      url: server.url || "",
+      env: Object.entries(server.env || {}).map(([key, value]) => `${key}=${value}`).join("\n"),
+    },
+  };
+}
+
 export function updateMcpServerFormState(state, patch) {
   state.mcpServers = {
     ...state.mcpServers,
@@ -56,7 +85,7 @@ export async function saveMcpServerState({state, loadMcpServers, render}) {
   if (!workspaceId || !name) {
     state.mcpServers = {...state.mcpServers, error: name ? "Select a workspace before saving MCP servers." : "Enter an MCP server name."};
     render();
-    return;
+    return false;
   }
 
   const server = transport === "url" ?
@@ -77,11 +106,19 @@ export async function saveMcpServerState({state, loadMcpServers, render}) {
         [name]: server,
       },
     });
+    const originalName = String(form.originalName || "").trim().toLowerCase();
+    if (form.editing && originalName && originalName !== name) {
+      const renamedServers = {...currentServers(state)};
+      delete renamedServers[originalName];
+      await state.api.saveWorkspaceMcpConfig(workspaceId, {mcpServers: renamedServers});
+    }
     state.mcpServers = {...state.mcpServers, saving: false, form: resetForm(), message: "MCP server saved. Restart active sessions to apply changes."};
     await loadMcpServers();
+    return true;
   } catch (error) {
     state.mcpServers = {...state.mcpServers, saving: false, error: friendlyMcpConfigError(error), message: ""};
     render();
+    return false;
   }
 }
 

@@ -87,6 +87,10 @@ Drawers should share a unified structure.
 *   **Section header actions:** Actions displayed inline with a drawer section title in either sidebar, such as add workspace, create session, add auth provider, refresh, update all, or extension actions, must be compact, icon-only, secondary buttons with `aria-label` and native `title` tooltip text. Do not use labeled text buttons, primary buttons, or mixed variants for drawer section header actions.
 *   **Listed items:** Workspaces, sessions, authentication providers, skills, and extensions must use the shared drawer list row primitives. Rows may expose different actions by domain, but common actions must reuse the same button treatment. Drawer row actions must be compact, icon-only, secondary buttons with `aria-label`/`title` text. Destructive row actions must use that same secondary button shape with only the destructive icon colored by `--color-danger`; do not use a larger labeled delete/remove button or a full danger-filled button in drawer rows.
 
+### Inspector resource panels
+
+Inspector sections that manage a resource list should compose `InspectorResourcePanel` and `InspectorResourceRow` from `src/components/inspector/InspectorResourcePanel.jsx`. The shared panel owns the section header, New/Refresh action order, status messaging, and accessibility treatment. Domain panels may provide capability-specific descriptions, editor forms, and extra actions, but should keep list rows on the shared resource row primitive. Use `InspectorEditorModal` for modal-backed create/edit forms and preserve domain-specific verbs such as Connect, Reconnect, Install, or Update through configurable labels.
+
 ### Forms & Inputs
 *   Inputs, textareas, and selects must share the same height, border, and focus states.
 *   Labels must be styled consistently (uppercase, small, bold, muted color).

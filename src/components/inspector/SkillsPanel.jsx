@@ -1,8 +1,8 @@
-import {Edit3, Plus, RefreshCw, Save, Trash2, X} from "lucide-react";
+import {Edit3, Save, X} from "lucide-react";
 import {Button} from "../common/Button.jsx";
-import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
-import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {DrawerList} from "../drawers/DrawerList.jsx";
 import {sessionSkillHarness, sessionSupportsWorkspaceSkills} from "../../utils/sessionSkills.js";
+import {InspectorResourcePanel, InspectorResourceRow} from "./InspectorResourcePanel.jsx";
 
 function stripFrontmatter(content) {
   return String(content || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
@@ -17,27 +17,22 @@ function SkillRow({busy, skill, onDeleteWorkspaceSkill, onEditWorkspaceSkill}) {
   );
 
   return (
-    <DrawerListItem
-      actions={[
-        <DrawerListActionButton
-          disabled={busy || !onEditWorkspaceSkill}
-          icon={<Edit3 aria-hidden="true" />}
-          key="edit"
-          label={`Edit ${skill.name}`}
-          onClick={() => onEditWorkspaceSkill?.(skill)}
-        />,
-        <DrawerListActionButton
-          disabled={busy || !onDeleteWorkspaceSkill}
-          icon={<Trash2 aria-hidden="true" />}
-          key="delete"
-          label={`Delete ${skill.name}`}
-          tone="danger"
-          onClick={() => onDeleteWorkspaceSkill?.(skill.name)}
-        />,
-      ]}
+    <InspectorResourceRow
+      busy={busy}
       detail={detail}
       meta={skill.kind || "skill"}
+      resource={skill}
       title={skill.name || "unnamed skill"}
+      edit={{
+        disabled: !onEditWorkspaceSkill,
+        icon: <Edit3 aria-hidden="true" />,
+        onClick: onEditWorkspaceSkill,
+      }}
+      onDelete={{
+        disabled: !onDeleteWorkspaceSkill,
+        label: `Delete ${skill.name}`,
+        onClick: (item) => onDeleteWorkspaceSkill?.(item.name),
+      }}
     />
   );
 }
@@ -120,9 +115,6 @@ function SkillsBody({selectedSession, skills, status, onDeleteWorkspaceSkill, on
   if (status.loading) {
     return <p className="empty">Loading workspace skills...</p>;
   }
-  if (status.error) {
-    return <p className="empty">{status.error}</p>;
-  }
   if (!skills.length) {
     return <p className="empty">No workspace skills yet. Skills created here are written to {harness?.examplePath || "/workspace/<skill-path>"}.</p>;
   }
@@ -158,49 +150,27 @@ export function SkillsPanel({
   const canManageSkills = selectedSession && sessionSupportsWorkspaceSkills(selectedSession);
 
   return (
-    <DrawerSection
-      actions={[
-        <Button
-          aria-label="New skill"
-          disabled={status.loading || status.saving || !canManageSkills || !onOpenWorkspaceSkillModal}
-          icon={true}
-          key="new-skill"
-          size="compact"
-          title="New skill"
-          tooltip="New skill"
-          variant="secondary"
-          onClick={() => {
-            onCancelWorkspaceSkillEdit?.();
-            onOpenWorkspaceSkillModal?.();
-          }}
-        >
-          <Plus aria-hidden="true" />
-        </Button>,
-        <Button
-          aria-label="Refresh"
-          disabled={status.loading || status.saving || !onRefreshWorkspaceSkills}
-          icon={true}
-          key="refresh-skills"
-          size="compact"
-          tooltip="Refresh"
-          variant="secondary"
-          onClick={onRefreshWorkspaceSkills}
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>,
-      ]}
+    <InspectorResourcePanel
       className="skills-panel"
+      create={{
+        disabled: !canManageSkills || !onOpenWorkspaceSkillModal,
+        label: "New skill",
+        onClick: () => {
+          onCancelWorkspaceSkillEdit?.();
+          onOpenWorkspaceSkillModal?.();
+        },
+      }}
       id="right-skills"
+      description={harness ?
+        `${harness.label} discovers Markdown skill files under ${harness.relativeSkillsPath}; ${harness.restartHint.charAt(0).toLowerCase()}${harness.restartHint.slice(1)}` :
+        "Workspace-local skills for the active Pi or Codex harness."}
+      refresh={{onClick: onRefreshWorkspaceSkills}}
       state={state}
+      status={status}
       title="Skills"
+      singularLabel="skill"
       onToggleDrawerSection={onToggleDrawerSection}
     >
-      <p className="subtle">
-        {harness ?
-          `${harness.label} discovers Markdown skill files under ${harness.relativeSkillsPath}; ${harness.restartHint.charAt(0).toLowerCase()}${harness.restartHint.slice(1)}` :
-          "Workspace-local skills for the active Pi or Codex harness."}
-      </p>
-      {status.message ? <p className="subtle">{status.message}</p> : null}
       <SkillsBody
         selectedSession={selectedSession}
         skills={skills.map((skill) => ({...skill, contentBody: stripFrontmatter(skill.content)}))}
@@ -211,6 +181,6 @@ export function SkillsPanel({
           onOpenWorkspaceSkillModal?.();
         }}
       />
-    </DrawerSection>
+    </InspectorResourcePanel>
   );
 }
