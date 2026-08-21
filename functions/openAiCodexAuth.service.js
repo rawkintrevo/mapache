@@ -76,7 +76,22 @@ async function completeOpenAiCodexDeviceCode(uid, payload, dependencies = {}) {
       deviceToken.code_verifier,
   );
   if (!dependencies.agentAuthService) throw new Error("OpenAI Codex auth requires an agentAuthService dependency.");
-  await dependencies.agentAuthService.savePiAuthCredential(uid, OPENAI_CODEX_PROVIDER, {type: "oauth", ...oauth});
+  if (payload && payload.entryId) {
+    await dependencies.agentAuthService.updatePiAuthCredential(
+        uid,
+        payload.entryId,
+        OPENAI_CODEX_PROVIDER,
+        {type: "oauth", ...oauth},
+        payload.label,
+    );
+  } else {
+    await dependencies.agentAuthService.savePiAuthCredential(
+        uid,
+        OPENAI_CODEX_PROVIDER,
+        {type: "oauth", ...oauth},
+        payload && payload.label,
+    );
+  }
   return {status: "complete", ...(await dependencies.agentAuthService.getPiAuth(uid))};
 }
 

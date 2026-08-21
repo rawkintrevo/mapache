@@ -15,10 +15,10 @@ export function createApiClient(getToken) {
         {method: "POST", body: {whitelisted}},
     ),
     getPiAuth: () => request(getToken, "/api/auth"),
-    savePiAuthProvider: (provider, key, label = "") => request(
+    savePiAuthProvider: (provider, key, label = "", entryId = "") => request(
         getToken,
         `/api/auth/providers/${encodeURIComponent(provider)}`,
-        {method: "PUT", body: {key, label}},
+        {method: "PUT", body: {key, label, entryId}},
     ),
     deletePiAuthProvider: (provider) => request(
         getToken,
@@ -39,10 +39,10 @@ export function createApiClient(getToken) {
         "/api/auth/providers/openai-codex/device-code/start",
         {method: "POST", body: {}},
     ),
-    completeOpenAiCodexDeviceLogin: (deviceAuthId, userCode) => request(
+    completeOpenAiCodexDeviceLogin: (deviceAuthId, userCode, entryId = "", label = "") => request(
         getToken,
         "/api/auth/providers/openai-codex/device-code/complete",
-        {method: "POST", body: {deviceAuthId, userCode}},
+        {method: "POST", body: {deviceAuthId, userCode, entryId, label}},
     ),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
     createWorkspace: (body) => request(getToken, "/api/workspaces", {
@@ -197,11 +197,15 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-ports/${encodeURIComponent(port)}`,
         {method: "DELETE"},
     ),
-    saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/auth-selection`,
-        {method: "POST", body: {selection: selection.providers || selection, environmentEntryIds: selection.environmentEntryIds || []}},
-    ),
+    saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => {
+      const body = {selection: selection.providers || selection};
+      if (Array.isArray(selection.environmentEntryIds)) body.environmentEntryIds = selection.environmentEntryIds;
+      return request(
+          getToken,
+          `/api/workspaces/${workspaceId}/sessions/${sessionId}/auth-selection`,
+          {method: "POST", body},
+      );
+    },
     getGitStatus: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,

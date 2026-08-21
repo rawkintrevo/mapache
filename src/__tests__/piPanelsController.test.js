@@ -22,7 +22,7 @@ describe("createPiPanelsController", () => {
 
     await controller.savePiAuthProvider("anthropic", "qa-key", "QA entry");
 
-    expect(savePiAuthProvider).toHaveBeenCalledWith("anthropic", "qa-key", "QA entry");
+    expect(savePiAuthProvider).toHaveBeenCalledWith("anthropic", "qa-key", "QA entry", "");
     expect(state.piAuth.error).toBe("");
   });
 });

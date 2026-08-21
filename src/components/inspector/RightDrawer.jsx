@@ -14,7 +14,6 @@ export function RightDrawer({
   state,
   onInstallPiPackage,
   onCancelPiSkillEdit,
-  onDeletePiAuthProvider,
   onDeletePiSkill,
   onDeleteWorkspaceSubagent,
   onDeleteMcpServer,
@@ -22,7 +21,6 @@ export function RightDrawer({
   onDeleteGoogleConnection,
   onEditPiSkill,
   onEditWorkspaceSubagent,
-  onOpenAuthModal,
   onOpenPiAuthManage,
   onOpenGenericEnvironment,
   onOpenWorkspaceSkillModal,
@@ -79,8 +77,6 @@ export function RightDrawer({
         piAuth={state.piAuth}
         selectedSession={selectedSession}
         state={state}
-        onDeletePiAuthProvider={onDeletePiAuthProvider}
-        onOpenAuthModal={onOpenAuthModal}
         onOpenPiAuthManage={onOpenPiAuthManage}
         onOpenGenericEnvironment={onOpenGenericEnvironment}
         onRefreshPiAuth={onRefreshPiAuth}

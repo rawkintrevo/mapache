@@ -16,6 +16,7 @@ export function AuthModal({
   const selectedProvider = piAuth.selectedProvider || piAuthProviders[0]?.key || "";
   const apiKey = piAuth.apiKey || "";
   const entryLabel = piAuth.entryLabel || "";
+  const editing = Boolean(piAuth.editEntryId);
   const isOpenAiCodex = selectedProvider === OPENAI_CODEX_PROVIDER;
   const isGitHubCli = selectedProvider === GITHUB_CLI_PROVIDER;
   const device = piAuth.openAiCodexDevice;
@@ -24,7 +25,7 @@ export function AuthModal({
     <ModalBackdrop onClose={onClose}>
       <section aria-labelledby="auth-modal-title" aria-modal="true" className="modal-panel" role="dialog">
         <div className="modal-heading">
-          <h2 id="auth-modal-title">Add Authentication Provider</h2>
+          <h2 id="auth-modal-title">{editing ? "Edit Authentication Provider" : "Add Authentication Provider"}</h2>
           <Button aria-label="Close" icon={true} tooltip="Close" variant="secondary" onClick={onClose}>
             <X aria-hidden="true" />
           </Button>
@@ -43,6 +44,7 @@ export function AuthModal({
         >
           <select
             className="auth-provider-select"
+            disabled={editing}
             name="provider"
             value={selectedProvider}
             onChange={(event) => onUpdate?.({
@@ -83,7 +85,7 @@ export function AuthModal({
           <div className="modal-actions">
             <Button disabled={piAuth.saving} type="submit">
               {!isOpenAiCodex ? <Save aria-hidden="true" /> : null}
-              {isOpenAiCodex ? "Start Device Login" : "Save"}
+              {isOpenAiCodex ? "Start Device Login" : editing ? "Save changes" : "Save"}
             </Button>
           </div>
         </form>

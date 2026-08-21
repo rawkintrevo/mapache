@@ -48,23 +48,29 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
-  function openAuthModal(provider = "") {
-    const selectedProvider = typeof provider === "string" ? provider.trim() : "";
-    if (selectedProvider) {
-      state.piAuth = {
-        ...state.piAuth,
-        selectedProvider,
-        openAiCodexDevice: null,
-        error: "",
-        message: "",
-      };
-    }
+  function openAuthModal(providerOrEntry = "") {
+    const entry = providerOrEntry?.providerKey ? providerOrEntry : null;
+    const selectedProvider = entry?.providerKey || (typeof providerOrEntry === "string" ? providerOrEntry.trim() : "");
+    state.authReturnToManage = Boolean(state.piAuthManageModalOpen);
+    state.piAuthManageModalOpen = false;
+    state.piAuth = {
+      ...state.piAuth,
+      selectedProvider: selectedProvider || state.piAuth.selectedProvider,
+      editEntryId: entry?.id || "",
+      entryLabel: entry?.label || "",
+      apiKey: "",
+      openAiCodexDevice: null,
+      error: "",
+      message: "",
+    };
     state.authModalOpen = true;
     render();
   }
 
   function closeAuthModal() {
     state.authModalOpen = false;
+    if (state.authReturnToManage) state.piAuthManageModalOpen = true;
+    state.authReturnToManage = false;
     render();
   }
 

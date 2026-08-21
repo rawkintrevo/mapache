@@ -120,12 +120,10 @@ export function AppShell(props) {
           onDeleteMcpServer={pi.deleteMcpServer}
           onEditMcpServer={pi.editMcpServer}
           onDeleteGoogleConnection={google.deleteConnection}
-          onDeletePiAuthProvider={pi.deletePiAuthProvider}
           onDeletePiSkill={pi.deletePiSkill}
           onDeleteWorkspaceSubagent={pi.deleteWorkspaceSubagent}
           onEditPiSkill={pi.editPiSkill}
           onEditWorkspaceSubagent={pi.editWorkspaceSubagent}
-          onOpenAuthModal={modals.openAuthModal}
           onOpenPiAuthManage={modals.openPiAuthManageModal}
           onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
           onOpenWorkspaceSkillModal={modals.openWorkspaceSkillModal}

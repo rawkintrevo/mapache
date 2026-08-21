@@ -223,7 +223,12 @@ async function pollOpenAiCodexLoginState({state, render}) {
     const current = state.piAuth.openAiCodexDevice;
     if (current?.deviceAuthId !== device.deviceAuthId) return;
     try {
-      const data = await state.api.completeOpenAiCodexDeviceLogin(device.deviceAuthId, device.userCode);
+      const data = await state.api.completeOpenAiCodexDeviceLogin(
+          device.deviceAuthId,
+          device.userCode,
+          state.piAuth.editEntryId || "",
+          state.piAuth.entryLabel || "",
+      );
       if (data.status === "pending") {
         state.piAuth = {
           ...state.piAuth,
@@ -240,6 +245,8 @@ async function pollOpenAiCodexLoginState({state, render}) {
         message: "OpenAI Codex subscription login saved. New sessions can materialize it into the selected harness auth file.",
         providers: data.providers || state.piAuth.providers || {},
         entries: data.entries || state.piAuth.entries || {},
+        editEntryId: "",
+        entryLabel: "",
         openAiCodexDevice: {...device, status: "complete"},
       };
       render();
@@ -293,7 +300,12 @@ export async function savePiAuthProviderState({state, render}) {
   render();
 
   try {
-    const data = await state.api.savePiAuthProvider(provider, apiKey, state.piAuth.entryLabel || "");
+    const data = await state.api.savePiAuthProvider(
+        provider,
+        apiKey,
+        state.piAuth.entryLabel || "",
+        state.piAuth.editEntryId || "",
+    );
     state.piAuth = {
       ...state.piAuth,
       saving: false,
@@ -303,6 +315,7 @@ export async function savePiAuthProviderState({state, render}) {
       entries: data.entries || state.piAuth.entries || {},
       apiKey: "",
       entryLabel: "",
+      editEntryId: "",
       openAiCodexDevice: null,
     };
   } catch (error) {
@@ -322,7 +335,11 @@ export async function saveSessionPiAuthSelectionState({state, session, selection
   render();
   try {
     const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, selection);
-    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, authSelection: data.selection || selection, environmentEntryIds: selection.environmentEntryIds || []} : item);
+    state.sessions = state.sessions.map((item) => item.id === session.id ? {
+      ...item,
+      authSelection: data.selection || selection,
+      ...(Array.isArray(selection.environmentEntryIds) ? {environmentEntryIds: selection.environmentEntryIds} : {}),
+    } : item);
     state.piAuth = {
       ...state.piAuth,
       saving: false,

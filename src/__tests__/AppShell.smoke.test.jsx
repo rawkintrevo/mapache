@@ -306,8 +306,8 @@ describe("frontend smoke coverage", () => {
     expect(screen.queryByRole("button", {name: `Create session in ${workspace.name}`})).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Create session"}));
     expect(handlers.modals.openSessionModal).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Main Anthropic")).toBeInTheDocument();
-    expect(screen.getByText("API key")).toBeInTheDocument();
+    expect(screen.queryByText("Main Anthropic")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Add authentication provider"})).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent("super");
     expect(container).not.toHaveTextContent("tkey");
     expect(screen.queryByText(/User-scoped Pi auth/)).not.toBeInTheDocument();

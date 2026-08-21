@@ -55,7 +55,10 @@ export function ModalStack(props) {
         <PiAuthManageModal
           piAuth={state.piAuth}
           session={props.selectedSession}
+          onAdd={() => modals.openAuthModal()}
           onClose={modals.closePiAuthManageModal}
+          onDelete={pi.deletePiAuthProvider}
+          onEdit={modals.openAuthModal}
           onSave={pi.saveSessionPiAuthSelection}
         />
       ) : null}

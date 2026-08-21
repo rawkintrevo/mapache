@@ -43,6 +43,8 @@ function createAgentAuthService(dependencies = {}) {
     savePiAuthProvider: (uid, provider, payload) => savePiAuthProvider(uid, provider, payload, dependencies),
     deletePiAuthProvider: (uid, provider) => deletePiAuthProvider(uid, provider, dependencies),
     deletePiAuthEntry: (uid, entryId) => deletePiAuthEntry(uid, entryId, dependencies),
+    updatePiAuthCredential: (uid, entryId, providerKey, credential, label) =>
+      updatePiAuthCredential(uid, entryId, providerKey, credential, label, dependencies),
     savePiAuthCredential: (uid, providerKey, credential, label) =>
       savePiAuthCredential(uid, providerKey, credential, label, dependencies),
     saveSessionPiAuthSelection: (uid, workspaceId, sessionId, payload) =>
@@ -58,7 +60,18 @@ async function getPiAuth(uid, dependencies = {}) {
 async function savePiAuthProvider(uid, provider, payload, dependencies = {}) {
   const providerKey = normalizePiAuthProviderKey(provider);
   const apiKey = normalizePiAuthApiKey(payload && payload.key);
-  await savePiAuthCredential(uid, providerKey, {type: "api_key", key: apiKey}, payload && payload.label, dependencies);
+  if (payload && payload.entryId) {
+    await updatePiAuthCredential(
+        uid,
+        payload.entryId,
+        providerKey,
+        {type: "api_key", key: apiKey},
+        payload.label,
+        dependencies,
+    );
+  } else {
+    await savePiAuthCredential(uid, providerKey, {type: "api_key", key: apiKey}, payload && payload.label, dependencies);
+  }
   return getPiAuth(uid, dependencies);
 }
 
@@ -123,6 +136,37 @@ async function savePiAuthCredential(uid, providerKey, credential, label = "", de
   });
 }
 
+async function updatePiAuthCredential(uid, entryId, providerKey, credential, label = "", dependencies = {}) {
+  const normalizedEntryId = normalizePiAuthEntryId(entryId);
+  const normalizedProviderKey = normalizePiAuthStoredProviderKey(providerKey);
+  const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
+  await dependencies.db.runTransaction(async (transaction) => {
+    const state = await readPiAuthTransactionState(transaction, uid, dependencies);
+    const current = state.entries[normalizedEntryId];
+    if (!current || current.providerKey !== normalizedProviderKey) {
+      throw httpError(404, "pi_auth_entry_not_found");
+    }
+    const cleanCredential = normalizePlainObject(credential);
+    writePiAuthMaps(transaction, state.ref, state.snap, {
+      providers: {
+        ...state.providers,
+        [normalizedProviderKey]: cleanCredential,
+      },
+      entries: {
+        ...state.entries,
+        [normalizedEntryId]: {
+          ...current,
+          label: cleanName(label) || current.label,
+          credential: cleanCredential,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: now,
+      createdAt: now,
+    });
+  });
+}
+
 async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, dependencies = {}) {
   await requireWorkspaceDependency(dependencies, uid, workspaceId);
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
@@ -130,7 +174,8 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   const harnessId = sessionHarnessId(session);
   const hasEnvironmentSelection = Array.isArray(payload?.environmentEntryIds);
   const environmentEntryIds = hasEnvironmentSelection ?
-    normalizeEnvironmentEntryIds(payload.environmentEntryIds) : [];
+    normalizeEnvironmentEntryIds(payload.environmentEntryIds) :
+    normalizeEnvironmentEntryIds(session.environmentEntryIds || session.genericEnvironmentEntryIds || []);
   if (!["pi", "codex"].includes(harnessId) && !hasEnvironmentSelection) {
     throw httpError(400, "auth_selection_unsupported");
   }

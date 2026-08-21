@@ -145,12 +145,20 @@ function createFakeDependencies() {
   assert.strictEqual(auth.providers.openai.key, "secret");
   assert.strictEqual(Object.keys(auth.entries).length, 1);
   const entryId = Object.keys(auth.entries)[0];
+  const updatedAuth = await service.savePiAuthProvider("uid-1", "openai", {
+    entryId,
+    label: "Updated OpenAI",
+    key: "replacement-secret",
+  });
+  assert.deepStrictEqual(Object.keys(updatedAuth.entries), [entryId]);
+  assert.strictEqual(updatedAuth.entries[entryId].label, "Updated OpenAI");
+  assert.strictEqual(updatedAuth.entries[entryId].credential.key, "replacement-secret");
   assert.ok(fake.documents.has("uid-1/private/agentAuth"));
   assert.ok(!fake.documents.has("uid-1/private/piAuth"));
   await service.deletePiAuthEntry("uid-1", entryId);
   assert.deepStrictEqual((await service.getPiAuth("uid-1")).providers, {});
 
-  let sessionData = {terminalKind: "codex", serviceUrl: "https://runner", shutdownToken: "token"};
+  let sessionData = {terminalKind: "codex", serviceUrl: "https://runner", shutdownToken: "token", environmentEntryIds: ["env-existing"]};
   const sessionSnap = {
     data: () => sessionData,
     ref: {set: async (data, options) => {
@@ -168,6 +176,8 @@ function createFakeDependencies() {
   assert.ok(!Object.prototype.hasOwnProperty.call(sessionData, "piAuthSelection"));
   assert.strictEqual(calls[0].routePath, "/auth/materialize");
   assert.deepStrictEqual(calls[0].options.body.environmentEntryIds, ["env-1"]);
+  await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {selection: {}});
+  assert.deepStrictEqual(sessionData.environmentEntryIds, ["env-1"]);
 
   sessionData = {terminalKind: "shell", serviceUrl: "", shutdownToken: ""};
   await assert.rejects(

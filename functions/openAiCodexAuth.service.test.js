@@ -36,8 +36,10 @@ assert.strictEqual(openAiCodexAccountId("bad-token"), "");
   const originalFetch = global.fetch;
   const calls = [];
   const saved = [];
+  const updated = [];
   const agentAuthService = {
     savePiAuthCredential: async (...args) => saved.push(args),
+    updatePiAuthCredential: async (...args) => updated.push(args),
     getPiAuth: async () => ({providers: {"openai-codex": {type: "oauth"}}, entries: {}}),
   };
   const service = createOpenAiCodexAuthService({agentAuthService});
@@ -95,6 +97,19 @@ assert.strictEqual(openAiCodexAccountId("bad-token"), "");
       accountId: "acct_123",
       expires: saved[0][2].expires,
     });
+
+    successCall = 0;
+    const edited = await service.completeOpenAiCodexDeviceCode("uid-1", {
+      deviceAuthId: "device-1",
+      userCode: "ABCD",
+      entryId: "openai-codex-existing",
+      label: "Work account",
+    });
+    assert.strictEqual(edited.status, "complete");
+    assert.strictEqual(updated[0][0], "uid-1");
+    assert.strictEqual(updated[0][1], "openai-codex-existing");
+    assert.strictEqual(updated[0][2], "openai-codex");
+    assert.strictEqual(updated[0][4], "Work account");
 
     await assert.rejects(
         service.completeOpenAiCodexDeviceCode("uid-1", {deviceAuthId: "bad\nvalue", userCode: "ABCD"}),
