@@ -1,6 +1,7 @@
 import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
 import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
+import {GoogleWorkspaceModal} from "./GoogleWorkspaceModal.jsx";
 import {FileEditorDialog} from "./FileEditorDialog.jsx";
 import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
@@ -13,7 +14,7 @@ import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
   const {handlers, state} = props;
-  const {files, git, github, modals, pi, sessions, workspaces} = handlers;
+  const {files, git, github, google, modals, pi, sessions, workspaces} = handlers;
   const busy = hasPendingOperations(state.pendingOperations);
 
   return (
@@ -51,6 +52,15 @@ export function ModalStack(props) {
         />
       ) : null}
       {state.genericEnvironmentModalOpen ? <GenericEnvironmentModal piAuth={state.piAuth} selectedSession={props.selectedSession} onClose={modals.closeGenericEnvironmentModal} onSave={pi.saveGenericEnvironmentKey} onUpdate={pi.updateGenericEnvironmentForm} onEdit={pi.editGenericEnvironmentKey} onDelete={pi.deleteGenericEnvironmentKey} onToggleSelection={pi.updateGenericEnvironmentSelection} /> : null}
+      {state.googleWorkspaceModalOpen ? (
+        <GoogleWorkspaceModal
+          googleWorkspace={state.googleWorkspace}
+          onClose={modals.closeGoogleWorkspaceModal}
+          onStartConnection={google.startConnection}
+          onUpdateAccessLevel={google.updateAccessLevel}
+          onUpdateService={google.updateService}
+        />
+      ) : null}
       {state.piAuthManageModalOpen ? (
         <PiAuthManageModal
           piAuth={state.piAuth}

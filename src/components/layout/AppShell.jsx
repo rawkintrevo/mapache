@@ -28,6 +28,7 @@ export function AppShell(props) {
   const hasOpenModal = state.authModalOpen ||
     state.fileEditor?.open ||
     state.genericEnvironmentModalOpen ||
+    state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
     state.piModelsModalOpen ||
     state.pullRequestForm?.open ||
@@ -120,6 +121,7 @@ export function AppShell(props) {
           onDeleteMcpServer={pi.deleteMcpServer}
           onEditMcpServer={pi.editMcpServer}
           onDeleteGoogleConnection={google.deleteConnection}
+          onEditGoogleConnection={modals.openGoogleWorkspaceModal}
           onDeletePiSkill={pi.deletePiSkill}
           onDeleteWorkspaceSubagent={pi.deleteWorkspaceSubagent}
           onEditPiSkill={pi.editPiSkill}
@@ -136,7 +138,6 @@ export function AppShell(props) {
           onRefreshPiPackages={pi.refreshPiPackages}
           onRefreshPiSkills={pi.refreshPiSkills}
           onRefreshWorkspaceSubagents={pi.refreshWorkspaceSubagents}
-          onRestartSession={sessions.restartSession}
           onRemovePiPackage={pi.removePiPackage}
           onToggleDrawerSection={drawer.toggleDrawerSection}
           onToggleRightDrawer={drawer.toggleRightDrawer}
@@ -144,11 +145,8 @@ export function AppShell(props) {
           onUpdatePiInstallSource={pi.updatePiInstallSource}
           onUpdatePiPackage={pi.updatePiPackage}
           onSaveMcpServer={pi.saveMcpServer}
-          onStartGoogleConnection={google.startConnection}
           onBindGoogleConnection={google.bindConnection}
           onUnbindGoogleConnection={google.unbindConnection}
-          onUpdateGoogleAccessLevel={google.updateAccessLevel}
-          onUpdateGoogleService={google.updateService}
         />
       </main>
       {hasOpenModal ? (

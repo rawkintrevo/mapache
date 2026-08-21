@@ -172,6 +172,7 @@ export function createGoogleWorkspaceState(overrides = {}) {
     data: null,
     attempted: false,
     accessLevel: "read",
+    editingConnectionId: "",
     selectedServices: [],
     ...overrides,
   };
@@ -246,6 +247,7 @@ export function createInitialState() {
     piAuthManageModalOpen: false,
     piModelsModalOpen: false,
     genericEnvironmentModalOpen: false,
+    googleWorkspaceModalOpen: false,
     pendingOperations: {},
     operationSequence: 0,
     error: "",

@@ -41,4 +41,22 @@ describe("createModalController", () => {
     expect(state.authModalOpen).toBe(false);
     expect(state.piAuthManageModalOpen).toBe(true);
   });
+
+  test("opens Google account editing with the account's authorized services", () => {
+    const state = {
+      googleWorkspaceModalOpen: false,
+      googleWorkspace: {accessLevel: "write", error: "old", selectedServices: ["drive"]},
+    };
+    const controller = createModalController({state, render: vi.fn(), loadPiAuth: vi.fn()});
+
+    controller.openGoogleWorkspaceModal({connectionId: "connection-a", enabledServices: ["gmail", "calendar"]});
+
+    expect(state.googleWorkspaceModalOpen).toBe(true);
+    expect(state.googleWorkspace).toMatchObject({
+      accessLevel: "read",
+      editingConnectionId: "connection-a",
+      error: "",
+      selectedServices: ["gmail", "calendar"],
+    });
+  });
 });

@@ -33,11 +33,12 @@ export function createGoogleWorkspaceController({state, render}) {
     });
   }
 
-  async function bindConnection(connectionId) {
+  async function bindConnection(connectionId, enabledServices) {
     await bindGoogleWorkspaceConnectionState({
       state,
       render,
       connectionId,
+      enabledServices,
       loadState: loadGoogleWorkspace,
     });
   }

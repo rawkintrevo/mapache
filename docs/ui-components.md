@@ -40,7 +40,7 @@ This document serves as an index for significant UI components in the applicatio
 | `InspectorEditorModal` | `src/components/inspector/InspectorEditorModal.jsx` | Shared create/edit dialog shell used by inspector resource editors. |
 | `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing saved user-scoped auth entries filtered to the selected session harness. |
 | `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
-| `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | React workspace-scoped Google account, service binding, reconnect, disconnect, delete-impact, and active-session restart guidance panel. |
+| `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | Compact saved-Google-account list with checked/unplugged workspace-binding toggles plus add, edit, and delete actions. |
 | `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | Compact React Skills panel that launches the selected harness's discovered-skill management modal. |
 | `SubagentsPanel` | `src/components/inspector/SubagentsPanel.jsx` | React Subagents panel for workspace-local Pi `.pi/agents/*.md` and Codex `.codex/agents/*.toml` files based on the selected session harness. |
 | `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for harness-gated workspace-local packages, currently Pi-only. |
@@ -60,6 +60,7 @@ This document serves as an index for significant UI components in the applicatio
 | `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | React modal for creating, replacing, and deleting masked generic environment keys. |
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file. |
 | `PiModelsModal` | `src/components/modals/PiModelsModal.jsx` | React modal for loading the active Pi runner's authenticated model catalog and saving an ordered session-scoped model selection. |
+| `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | React modal for choosing Google Workspace services and read-only/read-write access before starting add or reconnect OAuth. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |

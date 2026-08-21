@@ -19,6 +19,7 @@ export function RightDrawer({
   onDeleteMcpServer,
   onEditMcpServer,
   onDeleteGoogleConnection,
+  onEditGoogleConnection,
   onEditPiSkill,
   onEditWorkspaceSubagent,
   onOpenPiAuthManage,
@@ -33,7 +34,6 @@ export function RightDrawer({
   onRefreshPiPackages,
   onRefreshPiSkills,
   onRefreshWorkspaceSubagents,
-  onRestartSession,
   onRemovePiPackage,
   onToggleDrawerSection,
   onToggleRightDrawer,
@@ -41,11 +41,8 @@ export function RightDrawer({
   onUpdateMcpServerForm,
   onUpdatePiPackage,
   onSaveMcpServer,
-  onStartGoogleConnection,
   onBindGoogleConnection,
   onUnbindGoogleConnection,
-  onUpdateGoogleAccessLevel,
-  onUpdateGoogleService,
   onCancelWorkspaceSubagentEdit,
 }) {
   const toggleButton = (
@@ -117,17 +114,13 @@ export function RightDrawer({
       />
       <GoogleWorkspacePanel
         googleWorkspace={state.googleWorkspace}
-        selectedSession={selectedSession}
         state={state}
         onBindConnection={onBindGoogleConnection}
         onDeleteConnection={onDeleteGoogleConnection}
+        onEditConnection={onEditGoogleConnection}
         onRefresh={onRefreshGoogleWorkspace}
-        onRestartSession={onRestartSession}
-        onStartConnection={onStartGoogleConnection}
         onToggleDrawerSection={onToggleDrawerSection}
         onUnbindConnection={onUnbindGoogleConnection}
-        onUpdateAccessLevel={onUpdateGoogleAccessLevel}
-        onUpdateService={onUpdateGoogleService}
       />
       <ExtensionsPanel
         piPackages={state.piPackages}

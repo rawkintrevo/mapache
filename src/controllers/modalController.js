@@ -38,6 +38,25 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
+  function openGoogleWorkspaceModal(connection = null) {
+    const enabledServices = Array.isArray(connection?.enabledServices) ? connection.enabledServices : [];
+    state.googleWorkspace = {
+      ...state.googleWorkspace,
+      accessLevel: "read",
+      editingConnectionId: connection?.connectionId || "",
+      error: "",
+      message: "",
+      selectedServices: enabledServices,
+    };
+    state.googleWorkspaceModalOpen = true;
+    render();
+  }
+
+  function closeGoogleWorkspaceModal() {
+    state.googleWorkspaceModalOpen = false;
+    render();
+  }
+
   function openWorkspaceSubagentModal() {
     state.workspaceSubagentModalOpen = true;
     render();
@@ -108,6 +127,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
 
   return {
     closeAuthModal,
+    closeGoogleWorkspaceModal,
     closePiAuthManageModal,
     closePiModelsModal,
     closeSessionModal,
@@ -115,6 +135,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     closeWorkspaceSkillModal,
     closeWorkspaceModal,
     openAuthModal,
+    openGoogleWorkspaceModal,
     openPiAuthManageModal,
     openPiModelsModal,
     openGenericEnvironmentModal,

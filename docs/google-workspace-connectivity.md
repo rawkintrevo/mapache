@@ -12,7 +12,7 @@ This page documents the workspace-scoped Google account workflow added for issue
 - Running-session access-token broker: `functions/googleMcpTokenBroker.service.js` and the `googleMcpToken` Function export in `functions/index.js`
 - Authenticated API handlers and route registration: `functions/googleWorkspaceApi.service.js`, `functions/apiRouteManifest.js`, `functions/apiRoutes.helpers.js`, and `functions/apiDispatch.helpers.js`
 - Cloud Run environment and MCP injection: `functions/googleWorkspaceProvisioning.service.js` and `functions/cloudRun.service.js`
-- Frontend state, controller, workflow, and inspector: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/workflows/googleWorkspace.js`, and `src/components/inspector/GoogleWorkspacePanel.jsx`
+- Frontend state, controller, workflow, inspector, and connection modal: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/workflows/googleWorkspace.js`, `src/components/inspector/GoogleWorkspacePanel.jsx`, and `src/components/modals/GoogleWorkspaceModal.jsx`
 - Runner status and persistence: `session-runner/lib/googleMcpStatus.service.js` and `session-runner/lib/workspaceArchives.service.js`
 
 The UI panel is included in the [UI component index](./ui-components.md). The browser QA scenario is `e2e/qa/cases/google-workspace-connections.json`; it enables the browser-only OAuth test double and never uses a real Google account.
@@ -26,6 +26,8 @@ users/{uid}/private/googleConnections/entries/{connectionId}
 ```
 
 The record contains non-secret metadata such as the Google subject, email, display name, status, selected scopes, and timestamps. Scope metadata accepts HTTPS Google API scopes plus the exact standard OpenID Connect scope names `openid`, `email`, and `profile`; other non-URL scope values are rejected. The non-secret OAuth client reference accepts the bounded dotted identifier format used by Google client IDs, including the `.apps.googleusercontent.com` suffix. The encrypted refresh token is stored in the same private record and is never returned by the API. The connection ID is deterministic for a user and Google subject, so reconnecting the same account updates the existing record instead of creating duplicates.
+
+The inspector presents saved Google accounts as the complete Google Workspace summary. A checked account is enabled for the selected workspace; its toggle removes that workspace binding. An unplugged account is disabled for the selected workspace; its toggle restores the binding using the account's already-authorized services. Add and edit actions open `GoogleWorkspaceModal`, where the user chooses Workspace services and read-only or read/write access before starting Google authorization. Deleting an account remains a user-global operation with an affected-workspace confirmation. Binding changes affect newly created or restarted sessions because a running session keeps the Google MCP configuration provisioned at startup.
 
 Workspace documents store only the binding:
 

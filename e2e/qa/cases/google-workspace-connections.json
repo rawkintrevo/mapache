@@ -1,7 +1,7 @@
 {
   "id": "google.workspace-connections",
   "title": "Google accounts stay isolated per workspace",
-  "description": "Use the browser-only OAuth test double to bind different Google accounts to two workspaces, verify isolation, disconnect one account, and capture restart guidance.",
+  "description": "Use the browser-only OAuth test double and account editor modal to bind different Google accounts to two workspaces, verify isolation, and disable one account.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/google.workspace-connections",
   "requires": {
@@ -21,16 +21,8 @@
     },
     {"useScript": "scripts/expand-inspector.json"},
     {"assert": "snapshot-text", "expected": "Google Workspace"},
-    {"assert": "snapshot-text", "expected": "Calendar"},
-    {"assert": "snapshot-text", "expected": "Gmail"},
-    {"assert": "snapshot-text", "expected": "Drive"},
-    {"assert": "snapshot-text", "expected": "Docs"},
-    {"assert": "snapshot-text", "expected": "Sheets"},
-    {"assert": "snapshot-text", "expected": "Slides"},
-    {"assert": "snapshot-text", "expected": "Read or write"},
-    {"assert": "snapshot-text", "expected": "Read only"},
+    {"assert": "snapshot-text", "expected": "Add Google account"},
     {"useScript": "scripts/connect-google-qa-account.json"},
-    {"assert": "snapshot-text", "expected": "Restart active session"},
     {"capture": "screenshot", "fileName": "workspace-a-account-a.png"},
     {
       "useScript": "scripts/create-blank-workspace.json",
@@ -47,7 +39,6 @@
     {"useScript": "scripts/disconnect-google-workspace.json"},
     {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-google-b-{{timestamp}}"}},
     {"assert": "snapshot-text", "expected": "google-b@example.test"},
-    {"assert": "snapshot-text", "expected": "Connected to this workspace"},
     {"capture": "screenshot", "fileName": "workspace-b-still-account-b.png"}
   ],
   "cleanup": [
