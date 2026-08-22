@@ -39,16 +39,20 @@ export function AppShell(props) {
 
   return (
     <div className="app">
-      <Topbar state={state} onRefresh={app.refreshAll} onSignOut={app.signOut} />
+      <Topbar
+        state={state}
+        onDeleteWorkspace={workspaces.deleteWorkspace}
+        onOpenWorkspaceModal={modals.openWorkspaceModal}
+        onRefresh={app.refreshAll}
+        onSelectWorkspace={workspaces.selectWorkspace}
+      />
       <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
       <main className={shellClassName}>
         <LeftDrawer
           state={state}
           onDeleteSession={sessions.deleteSession}
-          onDeleteWorkspace={workspaces.deleteWorkspace}
           onOpenSessionModal={modals.openSessionModal}
           onRetryProvisioningSession={sessions.retryProvisioningSession}
-          onOpenWorkspaceModal={modals.openWorkspaceModal}
           onRefresh={app.refreshAll}
           onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}
           onDownloadWorkspaceFile={files.downloadWorkspaceFile}
@@ -56,7 +60,6 @@ export function AppShell(props) {
           onCreateWorkspaceFile={files.createWorkspaceFile}
           onUploadWorkspaceFiles={files.uploadWorkspaceFiles}
           onSelectSession={sessions.selectSession}
-          onSelectWorkspace={workspaces.selectWorkspace}
           onShowProfile={modals.showProfile}
           onShowAdmin={admin.showAdmin}
           onSelectWorkspaceFile={files.selectWorkspaceFile}

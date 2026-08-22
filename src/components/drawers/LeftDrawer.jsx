@@ -4,7 +4,6 @@ import {Download, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-r
 import {DrawerSessionList} from "./DrawerSessionList.jsx";
 import {DrawerSection} from "./DrawerSection.jsx";
 import {UserMenu} from "./UserMenu.jsx";
-import {WorkspaceDrawerList} from "./WorkspaceDrawerList.jsx";
 import {Button} from "../common/Button.jsx";
 import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
@@ -12,9 +11,7 @@ import {hasPendingOperations} from "../../state/pendingOperations.js";
 export function LeftDrawer({
   state,
   onDeleteSession,
-  onDeleteWorkspace,
   onOpenSessionModal,
-  onOpenWorkspaceModal,
   onRefresh,
   onRefreshWorkspaceFiles,
   onRetryProvisioningSession,
@@ -23,7 +20,6 @@ export function LeftDrawer({
   onCreateWorkspaceFile,
   onUploadWorkspaceFiles,
   onSelectSession,
-  onSelectWorkspace,
   onSelectWorkspaceFile,
   onShowAdmin,
   onShowProfile,
@@ -104,33 +100,6 @@ export function LeftDrawer({
           <h2>Navigation</h2>
           {toggleButton}
         </div>
-        <DrawerSection
-          actions={[
-            <Button
-              aria-label="Add Workspace"
-              icon={true}
-              key="add-workspace"
-              size="compact"
-              tooltip="Add Workspace"
-              variant="secondary"
-              onClick={onOpenWorkspaceModal}
-            >
-              <Plus aria-hidden="true" />
-            </Button>,
-          ]}
-          id="left-workspaces"
-          state={state}
-          title="Workspaces"
-          onToggleDrawerSection={onToggleDrawerSection}
-        >
-          <WorkspaceDrawerList
-            busy={busy}
-            selectedWorkspaceId={state.selectedWorkspaceId}
-            workspaces={state.workspaces}
-            onDeleteWorkspace={onDeleteWorkspace}
-            onSelectWorkspace={onSelectWorkspace}
-          />
-        </DrawerSection>
         <DrawerSection
           actions={[
             <div className="files-action-menu" key="file-actions" ref={fileActionsRef}>

@@ -23,12 +23,11 @@ This document serves as an index for significant UI components in the applicatio
 | `FatalError` | `src/components/common/FatalError.jsx` | React configuration/startup error screen. |
 | `LazySurfaceFallback` | `src/components/common/LazySurfaceFallback.jsx` | Lightweight status surface shown while deferred pages or dialogs load. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | React signed-in shell that owns the app wrapper, top bar, grid layout, drawers, workspace panel, and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, user label, refresh, and sign-out controls. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, workspace dropdown, workspace create/delete actions, documentation links, and refresh control. |
 | `GlobalActionIndicator` | `src/components/layout/GlobalActionIndicator.jsx` | Shell-level live status indicator shown while global `state.busy` actions are running. |
-| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspaces, files, sessions, and the pinned user menu. |
+| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspace files, sessions, and the pinned user menu. |
 | `DrawerList` | `src/components/drawers/DrawerList.jsx` | Shared drawer row/list primitives for workspace, session, auth provider, package, extension, and future skill rows. |
 | `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
-| `WorkspaceDrawerList` | `src/components/drawers/WorkspaceDrawerList.jsx` | React workspace list used by the left drawer. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including stop/delete actions. |
 | `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable file tree used by the left drawer for workspace storage files or selected SSH session files. |
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |

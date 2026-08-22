@@ -296,7 +296,8 @@ describe("frontend smoke coverage", () => {
     const {container, handlers} = renderShell({selectedSessionId: session.id});
 
     expect(screen.getByRole("heading", {name: "Navigation"})).toBeInTheDocument();
-    expect(screen.getByRole("heading", {name: "Workspaces"})).toBeInTheDocument();
+    expect(screen.queryByRole("heading", {name: "Workspaces"})).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", {name: "Workspace"})).toHaveValue(workspace.id);
     expect(screen.getByRole("heading", {name: "Files"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Sessions"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Inspector"})).toBeInTheDocument();
@@ -304,6 +305,12 @@ describe("frontend smoke coverage", () => {
     expect(screen.getByRole("heading", {name: "Skills"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Extensions"})).toBeInTheDocument();
     expect(screen.queryByRole("button", {name: `Create session in ${workspace.name}`})).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Create workspace"}));
+    expect(handlers.modals.openWorkspaceModal).toHaveBeenCalledTimes(1);
+
+    await user.selectOptions(screen.getByRole("combobox", {name: "Workspace"}), workspace.id);
+    expect(handlers.workspaces.selectWorkspace).toHaveBeenCalledWith(workspace.id);
+
     await user.click(screen.getByRole("button", {name: "Create session"}));
     expect(handlers.modals.openSessionModal).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Main Anthropic")).not.toBeInTheDocument();
