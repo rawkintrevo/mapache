@@ -87,6 +87,7 @@ Running sessions also persist the immutable Cloud Run image digest. The `refresh
 - Codex runner image changes, including the packaged GitHub CLI, require rebuilding and pushing `codex-basic` and `codex-web`; existing Codex sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
+- Every runner image build validates `python3 --version`, and the runner unit suite keeps the Python 3 install and validation contract aligned across all Dockerfile variants.
 - Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `pi-chrome`, `codex-basic`, `codex-web`, and `codex-chrome`.
 - Chrome image builds run the bounded `check-chrome-runtime.js` and `chrome-smoke.js` checks before publishing, but production canary verification is still required after Functions and Hosting deploy.
 - Chrome desktop supervision changes require rebuilding and publishing both `pi-chrome` and `codex-chrome`; existing Cloud Run services retain their current runner revision until restarted or recreated. The runner now gates dependent process launch on Xvfb readiness and requires CDP plus loopback VNC readiness before reporting a browser runtime as ready. No Functions or Hosting deployment is needed when the browser status/API contract is unchanged.
