@@ -110,15 +110,69 @@ jobs:
           fi
           image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${source_tag}"
           if [ "$VARIANT" = "default" ]; then
-            gcloud builds submit session-runner --project pi-agents-cloud --tag "$image"
-          else
-            gcloud builds submit session-runner \
-              --config "session-runner/cloudbuild.${VARIANT}.yaml" \
+            build_id=$(gcloud builds submit session-runner \
+              --async \
+              --format='value(id)' \
               --project pi-agents-cloud \
-              --substitutions="_IMAGE=$image"
+              --tag "$image")
+          else
+            build_id=$(gcloud builds submit session-runner \
+              --async \
+              --config "session-runner/cloudbuild.${VARIANT}.yaml" \
+              --format='value(id)' \
+              --project pi-agents-cloud \
+              --substitutions="_IMAGE=$image")
           fi
+          if [ -z "$build_id" ]; then
+            echo "::error::Cloud Build submission did not return a build ID"
+            exit 1
+          fi
+
+          build_url=$(gcloud builds describe "$build_id" \
+            --project pi-agents-cloud \
+            --format='value(logUrl)')
+          echo "Cloud Build: $build_url"
+          echo "variant=$VARIANT tag=$image source=$GITHUB_SHA build=$build_id"
+
+          while true; do
+            build_status=$(gcloud builds describe "$build_id" \
+              --project pi-agents-cloud \
+              --format='value(status)')
+            echo "Cloud Build $build_id status: $build_status"
+            case "$build_status" in
+              PENDING|QUEUED|WORKING)
+                sleep 15
+                ;;
+              SUCCESS)
+                break
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED|STATUS_UNKNOWN)
+                failure_detail=$(gcloud builds describe "$build_id" \
+                  --project pi-agents-cloud \
+                  --format='value(failureInfo.detail)')
+                echo "::error::Cloud Build $build_id finished with status $build_status: ${failure_detail:-No failure detail provided}"
+                exit 1
+                ;;
+              *)
+                echo "::error::Cloud Build $build_id returned unexpected status: $build_status"
+                exit 1
+                ;;
+            esac
+          done
+
           digest=$(gcloud artifacts docker images describe "$image" --project pi-agents-cloud --format='value(image_summary.digest)')
-          echo "variant=$VARIANT tag=$image digest=$digest source=$GITHUB_SHA"
+          if [ -z "$digest" ]; then
+            echo "::error::No digest found for successfully built image $image"
+            exit 1
+          fi
+          echo "variant=$VARIANT tag=$image digest=$digest source=$GITHUB_SHA build=$build_url"
+          {
+            echo "### Runner image: $VARIANT"
+            echo "- Cloud Build: $build_url"
+            echo "- Image: \`$image\`"
+            echo "- Digest: \`$digest\`"
+            echo "- Source: \`$GITHUB_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$PUBLISH" = "true" ]; then
             compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${VARIANT}"
             gcloud artifacts docker tags add "$image" "$compatibility" --project pi-agents-cloud
