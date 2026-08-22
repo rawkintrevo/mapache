@@ -240,6 +240,7 @@ export function createInitialState() {
     rightDrawerCollapsed: true,
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
+    sessionEditModalSessionId: null,
     workspaceSkillModalOpen: false,
     workspaceSubagentModalOpen: false,
     authModalOpen: false,

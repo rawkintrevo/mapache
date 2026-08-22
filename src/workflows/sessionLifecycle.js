@@ -5,6 +5,22 @@ export async function resizeSessionState(state, sessionId, payload, dispatch) {
   await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
 }
 
+export async function editSessionState(state, sessionId, {name, resources}, dispatch) {
+  const currentSession = state.sessions.find((session) => session.id === sessionId);
+  if (!currentSession) return;
+
+  if (name !== currentSession.name) {
+    await state.api.renameSession(state.selectedWorkspaceId, sessionId, name);
+  }
+
+  const currentResources = currentSession.resources || {};
+  if (resources.cpu !== currentResources.cpu || resources.memory !== currentResources.memory) {
+    await state.api.resizeSession(state.selectedWorkspaceId, sessionId, resources);
+  }
+
+  await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
+}
+
 export async function restartSessionState(state, sessionId, dispatch) {
   await state.api.restartSession(state.selectedWorkspaceId, sessionId);
   await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);

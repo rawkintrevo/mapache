@@ -7,6 +7,7 @@ import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {PiModelsModal} from "./PiModelsModal.jsx";
 import {SessionModal} from "./SessionModal.jsx";
+import {SessionEditModal} from "./SessionEditModal.jsx";
 import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
 import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
@@ -16,9 +17,19 @@ export function ModalStack(props) {
   const {handlers, state} = props;
   const {files, git, github, google, modals, pi, sessions, workspaces} = handlers;
   const busy = hasPendingOperations(state.pendingOperations);
+  const editingSession = state.sessions.find((session) => session.id === state.sessionEditModalSessionId);
 
   return (
     <>
+      {editingSession ? (
+        <SessionEditModal
+          busy={busy}
+          error={state.error}
+          session={editingSession}
+          onClose={modals.closeSessionEditModal}
+          onSave={sessions.editSession}
+        />
+      ) : null}
       {state.sessionModalOpen ? (
         <SessionModal
           busy={busy}

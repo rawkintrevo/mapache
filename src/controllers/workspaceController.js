@@ -93,6 +93,7 @@ export function createWorkspaceController({
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId});
     state.sessionModalOpen = false;
+    state.sessionEditModalSessionId = null;
     resetWorkspacePanels();
     await runBusy(async () => {
       await loadSessions();

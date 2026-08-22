@@ -53,6 +53,7 @@ import {
 } from "./workflows/githubConnection.js";
 import {
   deleteSessionState,
+  editSessionState,
   resizeSessionState,
   retryProvisioningSessionState,
   restartSessionState,
@@ -151,6 +152,7 @@ const handlers = {
     createSession,
     createSshSessionForward,
     deleteSession,
+    editSession,
     getSessionAccessUrls,
     loadPiModels,
     resizeSession,
@@ -444,6 +446,15 @@ function getSelectedSession() {
 
 async function resizeSession(sessionId, payload) {
   await runBusy(() => resizeSessionState(state, sessionId, payload, dispatch), "Working...", OPERATION_KEYS.SESSION_RESIZE);
+}
+
+async function editSession(sessionId, payload) {
+  await runBusy(
+      () => editSessionState(state, sessionId, payload, dispatch),
+      "Saving session...",
+      OPERATION_KEYS.SESSION_EDIT,
+  );
+  return !state.error;
 }
 
 async function restartSession(sessionId) {

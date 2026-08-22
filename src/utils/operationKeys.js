@@ -8,6 +8,7 @@ export const OPERATION_KEYS = Object.freeze({
   GIT_UNSTAGE: "git.unstage",
   SESSION_CREATE: "session.create",
   SESSION_DELETE: "session.delete",
+  SESSION_EDIT: "session.edit",
   SESSION_RESIZE: "session.resize",
   SESSION_RETRY: "session.retry",
   SESSION_RESTART: "session.restart",

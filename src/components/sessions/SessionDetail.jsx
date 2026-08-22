@@ -4,7 +4,6 @@ import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
-import {SessionResourceFields, SessionResourceSelector} from "./SessionResourceSelector.jsx";
 import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 
 export function SessionDetail({
@@ -20,7 +19,6 @@ export function SessionDetail({
   onOpenPiModels,
   onPullGit,
   onPushGit,
-  onResizeSession,
   onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
@@ -36,7 +34,6 @@ export function SessionDetail({
   const [accessError, setAccessError] = useState("");
   const [shareState, setShareState] = useState({loading: false, error: "", preview: null, copied: false});
   const [publishOpen, setPublishOpen] = useState(false);
-  const [resources, setResources] = useState(() => session.resources || {cpu: "1", memory: "1Gi"});
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
@@ -49,10 +46,6 @@ export function SessionDetail({
   const isRetryableFailure = isRetryableProvisioningFailure(session);
   const imageFreshness = getSessionImageFreshness(session);
   const isStaleImage = imageFreshness.state === "stale";
-
-  useEffect(() => {
-    setResources(session.resources || {cpu: "1", memory: "1Gi"});
-  }, [session.id, session.resources?.cpu, session.resources?.memory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,10 +73,6 @@ export function SessionDetail({
     setShareState({loading: false, error: "", preview: null, copied: false});
     setPublishOpen(false);
   }, [workspaceId, session.id]);
-
-  const handleResize = () => {
-    onResizeSession(session.id, resources);
-  };
 
   const handleSharePreview = async () => {
     if (!workspaceId || !session.id || !onShareSessionPreview) return;
@@ -204,26 +193,7 @@ export function SessionDetail({
         )}
       </div>
       <div className="toolbar">
-        {isSshSession ? (
-          <SessionResourceFields
-            cpu={resources.cpu}
-            cpuName="resizeCpu"
-            memory={resources.memory}
-            memoryName="resizeMemory"
-            onChange={setResources}
-          />
-        ) : (
-          <SessionResourceSelector
-            cpu={resources.cpu}
-            cpuName="resizeCpu"
-            memory={resources.memory}
-            memoryName="resizeMemory"
-            onChange={setResources}
-            sizeName="resizeSize"
-          />
-        )}
         <div className="session-actions">
-          <Button disabled={busy} onClick={handleResize}>Resize</Button>
           {session.harnessId === "pi" || session.terminalKind === "pi" ? (
             <Button disabled={busy || !hasRunnerUrl} variant="secondary" onClick={onOpenPiModels}>
               <SlidersHorizontal aria-hidden="true" />

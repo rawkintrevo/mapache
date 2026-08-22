@@ -61,6 +61,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
   sessions: Object.freeze([
     ["GET", "sessions", namedJsonResult("sessions", ({handlers, route, user}) => handlers.listSessions(user.uid, route.workspaceId))],
     ["POST", "sessions", createdNamedJsonResult("session", ({handlers, req, route, user}) => handlers.createSession(user.uid, route.workspaceId, req.body || {}))],
+    ["PATCH", "session", namedJsonResult("session", ({handlers, req, route, user}) => handlers.renameSession(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "resizeSession", namedJsonResult("session", ({handlers, req, route, user}) => handlers.resizeSession(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "restartSession", namedJsonResult("session", ({handlers, route, user}) => handlers.restartSession(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "stopSession", namedJsonResult("session", ({handlers, route, user}) => handlers.stopSession(user.uid, route.workspaceId, route.sessionId))],

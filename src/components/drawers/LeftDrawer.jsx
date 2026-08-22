@@ -11,6 +11,7 @@ import {hasPendingOperations} from "../../state/pendingOperations.js";
 export function LeftDrawer({
   state,
   onDeleteSession,
+  onEditSession,
   onOpenSessionModal,
   onRefresh,
   onRefreshWorkspaceFiles,
@@ -219,6 +220,7 @@ export function LeftDrawer({
           <DrawerSessionList
             state={state}
             onDeleteSession={onDeleteSession}
+            onEditSession={onEditSession}
             onRetryProvisioningSession={onRetryProvisioningSession}
             onSelectSession={onSelectSession}
             onStopSession={onStopSession}

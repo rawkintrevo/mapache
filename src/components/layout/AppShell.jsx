@@ -32,6 +32,7 @@ export function AppShell(props) {
     state.piAuthManageModalOpen ||
     state.piModelsModalOpen ||
     state.pullRequestForm?.open ||
+    state.sessionEditModalSessionId ||
     state.sessionModalOpen ||
     state.workspaceModalOpen ||
     state.workspaceSkillModalOpen ||
@@ -51,6 +52,7 @@ export function AppShell(props) {
         <LeftDrawer
           state={state}
           onDeleteSession={sessions.deleteSession}
+          onEditSession={modals.openSessionEditModal}
           onOpenSessionModal={modals.openSessionModal}
           onRetryProvisioningSession={sessions.retryProvisioningSession}
           onRefresh={app.refreshAll}
@@ -102,7 +104,6 @@ export function AppShell(props) {
             onOpenPullRequest={git.openPullRequestModal}
             onPullGit={git.pullGit}
             onPushGit={git.pushGit}
-            onResizeSession={sessions.resizeSession}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
             onRestartSession={sessions.restartSession}
             onShareSessionPreview={sessions.shareSessionPreview}

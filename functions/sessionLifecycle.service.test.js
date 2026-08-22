@@ -60,6 +60,17 @@ const lifecycle = createSessionLifecycleService({
   );
 
   calls.length = 0;
+  currentSession = {ownerUid: "user-1", name: "Old name", status: "running"};
+  const renamed = await lifecycle.renameSession("user-1", "workspace-1", "session-1", {name: "  New name  "});
+  assert.strictEqual(renamed.name, "New name");
+  assert.strictEqual(currentSession.name, "New name");
+  assert.deepStrictEqual(calls.map((call) => call.kind), ["update"]);
+  await assert.rejects(
+      lifecycle.renameSession("user-1", "workspace-1", "session-1", {name: "   "}),
+      (error) => error.status === 400 && error.publicMessage === "invalid_session_name",
+  );
+
+  calls.length = 0;
   const resized = await lifecycle.resizeSession("user-1", "workspace-1", "session-1", {});
   assert.strictEqual(resized.id, "session-1");
   assert.strictEqual(currentSession.status, "resizing");

@@ -88,11 +88,13 @@ function createHandlers(overrides = {}) {
     modals: {
       closeAuthModal: vi.fn(),
       closePiAuthManageModal: vi.fn(),
+      closeSessionEditModal: vi.fn(),
       closeSessionModal: vi.fn(),
       closeWorkspaceSkillModal: vi.fn(),
       closeWorkspaceModal: vi.fn(),
       openAuthModal: vi.fn(),
       openPiAuthManageModal: vi.fn(),
+      openSessionEditModal: vi.fn(),
       openSessionModal: vi.fn(),
       openWorkspaceSkillModal: vi.fn(),
       openWorkspaceModal: vi.fn(),
@@ -120,6 +122,7 @@ function createHandlers(overrides = {}) {
     sessions: {
       createSession: vi.fn(),
       deleteSession: vi.fn(),
+      editSession: vi.fn(),
       getSessionAccessUrls: vi.fn().mockResolvedValue({terminalUrl: "https://runner.example/terminal"}),
       resizeSession: vi.fn(),
       restartSession: vi.fn(),
@@ -204,6 +207,7 @@ function createState(overrides = {}) {
     selectedWorkspaceFilePath: "",
     selectedWorkspaceId: workspace.id,
     sessionModalOpen: false,
+    sessionEditModalSessionId: null,
     sessions: [session],
     user: {displayName: "Ada", email: "ada@example.com"},
     workspaceFiles: [{path: "README.md"}],
@@ -313,6 +317,8 @@ describe("frontend smoke coverage", () => {
 
     await user.click(screen.getByRole("button", {name: "Create session"}));
     expect(handlers.modals.openSessionModal).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", {name: `Edit ${session.name}`}));
+    expect(handlers.modals.openSessionEditModal).toHaveBeenCalledWith(session.id);
     expect(screen.queryByText("Main Anthropic")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Add authentication provider"})).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent("super");

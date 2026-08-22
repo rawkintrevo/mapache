@@ -1,7 +1,7 @@
 {
   "id": "session.lifecycle",
-  "title": "Session resize, restart, stop, and delete",
-  "description": "Create a session and exercise lifecycle controls before deleting it.",
+  "title": "Session edit, resize, restart, stop, and delete",
+  "description": "Create a session and exercise edit-modal resizing plus lifecycle controls before deleting it.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/session.lifecycle",
   "requires": {

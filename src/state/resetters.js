@@ -79,6 +79,7 @@ export function resetWorkspaceFiles(state) {
 }
 
 export function resetSignedOutState(state) {
+  state.sessionEditModalSessionId = null;
   state.workspaces = [];
   state.sessions = [];
   state.workspaceFiles = [];

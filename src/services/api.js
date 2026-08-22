@@ -153,6 +153,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions`,
         {method: "POST", body},
     ),
+    renameSession: (workspaceId, sessionId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}`,
+        {method: "PATCH", body: {name}},
+    ),
     resizeSession: (workspaceId, sessionId, body) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/resize`,

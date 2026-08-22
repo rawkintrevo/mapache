@@ -6,10 +6,11 @@
     "memory": "2Gi"
   },
   "actions": [
+    {"type": "click", "selector": ".drawer-list-row.active button[title^='Edit ']"},
     {"type": "click", "text": "Advanced settings"},
-    {"type": "select", "name": "resizeCpu", "value": "{{cpu}}"},
-    {"type": "select", "name": "resizeMemory", "value": "{{memory}}"},
-    {"type": "click", "role": "button", "name": "Resize"},
+    {"type": "select", "name": "editSessionCpu", "value": "{{cpu}}"},
+    {"type": "select", "name": "editSessionMemory", "value": "{{memory}}"},
+    {"type": "click", "role": "button", "name": "Save changes"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/resize", "method": "POST", "expectedStatus": 200, "timeoutMs": 30000}
   ],
   "successSignals": [

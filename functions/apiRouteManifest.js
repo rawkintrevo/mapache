@@ -27,7 +27,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["workspaceCreateDirectory", ["POST"]],
   ["workspaceFileDownloadUrl", ["POST"]],
   ["sessions", ["GET", "POST"]],
-  ["session", ["DELETE"]],
+  ["session", ["PATCH", "DELETE"]],
   ["resizeSession", ["POST"]],
   ["restartSession", ["POST"]],
   ["stopSession", ["POST"]],

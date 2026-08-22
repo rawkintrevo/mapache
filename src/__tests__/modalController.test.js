@@ -59,4 +59,15 @@ describe("createModalController", () => {
       selectedServices: ["gmail", "calendar"],
     });
   });
+
+  test("opens and closes session editing for a known session", () => {
+    const state = {sessionEditModalSessionId: null, sessions: [{id: "session-1"}]};
+    const controller = createModalController({state, render: vi.fn(), loadPiAuth: vi.fn()});
+
+    controller.openSessionEditModal("session-1");
+    expect(state.sessionEditModalSessionId).toBe("session-1");
+
+    controller.closeSessionEditModal();
+    expect(state.sessionEditModalSessionId).toBeNull();
+  });
 });

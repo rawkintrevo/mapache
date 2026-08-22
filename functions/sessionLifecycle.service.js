@@ -35,6 +35,7 @@ function createSessionLifecycleService(dependencies = {}) {
     markSessionStopped: (sessionRef, session, reason) => markSessionStopped(sessionRef, session, reason, dependencies),
     reapIdleSessions: () => reapIdleSessions(dependencies),
     requireSession: (uid, workspaceId, sessionId) => requireSession(uid, workspaceId, sessionId, dependencies),
+    renameSession: (uid, workspaceId, sessionId, payload) => renameSession(uid, workspaceId, sessionId, payload, dependencies),
     resizeSession: (uid, workspaceId, sessionId, payload) => resizeSession(uid, workspaceId, sessionId, payload, dependencies),
     restartSession: (uid, workspaceId, sessionId) => restartSession(uid, workspaceId, sessionId, dependencies),
     stopSession: (uid, workspaceId, sessionId) => stopSession(uid, workspaceId, sessionId, dependencies),
@@ -49,6 +50,17 @@ async function requireSession(uid, workspaceId, sessionId, dependencies = {}) {
   const data = sessionSnap.data();
   if (data.ownerUid && data.ownerUid !== uid) throw httpError(403, "session_forbidden");
   return {sessionRef, sessionSnap};
+}
+
+async function renameSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  const {sessionRef} = await requireSession(uid, workspaceId, sessionId, dependencies);
+  const name = cleanName(payload && payload.name);
+  if (!name) throw httpError(400, "invalid_session_name");
+  await sessionRef.update({
+    name,
+    updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return toClientDoc(await sessionRef.get());
 }
 
 async function resizeSession(uid, workspaceId, sessionId, payload, dependencies = {}) {

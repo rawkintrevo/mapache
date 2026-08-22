@@ -18,6 +18,17 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
+  function openSessionEditModal(sessionId) {
+    if (!state.sessions.some((session) => session.id === sessionId)) return;
+    state.sessionEditModalSessionId = sessionId;
+    render();
+  }
+
+  function closeSessionEditModal() {
+    state.sessionEditModalSessionId = null;
+    render();
+  }
+
   function openWorkspaceModal() {
     state.workspaceModalOpen = true;
     render();
@@ -130,6 +141,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     closeGoogleWorkspaceModal,
     closePiAuthManageModal,
     closePiModelsModal,
+    closeSessionEditModal,
     closeSessionModal,
     closeWorkspaceSubagentModal,
     closeWorkspaceSkillModal,
@@ -139,6 +151,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     openPiAuthManageModal,
     openPiModelsModal,
     openGenericEnvironmentModal,
+    openSessionEditModal,
     closeGenericEnvironmentModal,
     openSessionModal,
     openWorkspaceSubagentModal,

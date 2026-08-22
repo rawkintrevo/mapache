@@ -95,7 +95,7 @@ Run slower checks when a change touches the related subsystem:
 - Backend routing or ownership: route/contract tests and Firebase emulator checks when available.
 - Runner terminal, preview, PTY, workspace sync, or Git behavior: runner integration tests plus the relevant human checklist until automated E2E exists.
 - Frontend workspace/session UI: frontend smoke tests once added, plus Playwright E2E for critical flows.
-- Session sizing: `functions/sessionResources.helpers.test.js`, `src/utils/sessionResources.test.js`, `SessionResourceSelector.test.jsx`, `SessionModal.test.jsx`, `SessionDetail.test.jsx`, and the opt-in `e2e/qa/cases/session-resource-sizing.json` case cover catalog parity, preset/custom inference, estimate formatting, invalid pairs, create payloads, resize payloads, and compact summaries.
+- Session sizing: `functions/sessionResources.helpers.test.js`, `src/utils/sessionResources.test.js`, `SessionResourceSelector.test.jsx`, `SessionModal.test.jsx`, `SessionEditModal.test.jsx`, and the opt-in `e2e/qa/cases/session-resource-sizing.json` case cover catalog parity, preset/custom inference, estimate formatting, invalid pairs, create/edit payloads, resize payloads, and compact summaries.
 - Deployment, service accounts, Cloud Run provisioning, or Firebase rules: staging deploy or scheduled workflow with explicit `--project pi-agents-cloud` flags.
 - N64 runtime behavior: explicit N64 container build/smoke workflow only, never the default root check.
 

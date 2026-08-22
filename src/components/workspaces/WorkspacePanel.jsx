@@ -14,7 +14,6 @@ export function WorkspacePanel({
   onOpenPullRequest,
   onPullGit,
   onPushGit,
-  onResizeSession,
   onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
@@ -46,7 +45,6 @@ export function WorkspacePanel({
           onOpenPullRequest={onOpenPullRequest}
           onPullGit={onPullGit}
           onPushGit={onPushGit}
-          onResizeSession={onResizeSession}
           onRetryProvisioningSession={onRetryProvisioningSession}
           onRestartSession={onRestartSession}
           onShareSessionPreview={onShareSessionPreview}

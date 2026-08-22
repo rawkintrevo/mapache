@@ -188,6 +188,13 @@
   gap: 12px;
 }
 
+.modal-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .checkbox-row,
 .checkbox-label {
   display: flex;

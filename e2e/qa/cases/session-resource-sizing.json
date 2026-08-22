@@ -1,7 +1,7 @@
 {
   "id": "session.resource-sizing",
   "title": "Priced session sizing and advanced resource controls",
-  "description": "Verify Cloud Run size presets, estimate text, Custom inference, invalid-pair prevention, resize, and session summaries.",
+  "description": "Verify Cloud Run size presets, estimate text, Custom inference, invalid-pair prevention, edit-modal resize, and session summaries.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/session-resource-sizing",
   "requires": {

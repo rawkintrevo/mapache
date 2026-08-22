@@ -28,7 +28,7 @@ This document serves as an index for significant UI components in the applicatio
 | `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspace files, sessions, and the pinned user menu. |
 | `DrawerList` | `src/components/drawers/DrawerList.jsx` | Shared drawer row/list primitives for workspace, session, auth provider, package, extension, and future skill rows. |
 | `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
-| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including stop/delete actions. |
+| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including edit, stop, and delete actions. |
 | `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable file tree used by the left drawer for workspace storage files or selected SSH session files. |
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
@@ -47,7 +47,7 @@ This document serves as an index for significant UI components in the applicatio
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, priced preset/custom resize controls, restart controls, SSH port-forward controls, and Git status placement for the selected session. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, restart controls, SSH port-forward controls, and Git status placement for the selected session. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace with preset/custom CPU and memory summaries. |
@@ -62,6 +62,7 @@ This document serves as an index for significant UI components in the applicatio
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | React modal for choosing Google Workspace services and read-only/read-write access before starting add or reconnect OAuth. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
+| `SessionEditModal` | `src/components/modals/SessionEditModal.jsx` | React modal launched from a sidebar session row for renaming and resizing that session with shared preset/advanced resource controls. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React text file editor modal with Edit and rendered Preview tabs for Markdown files. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
 | `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for adding skills and listing all recursively discovered local skills with discovery checkboxes plus writable-root edit/delete actions. |

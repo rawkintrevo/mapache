@@ -90,7 +90,7 @@ function createTestApiHandlers() {
   const stub = async () => ({});
   const operationNames = [
     "userWithUsage", "listAdminUsers", "setAdminUserWhitelist", "syncWorkspaceFiles",
-    "listSessions", "createSession", "resizeSession", "restartSession", "stopSession",
+    "listSessions", "createSession", "renameSession", "resizeSession", "restartSession", "stopSession",
     "deleteSession", "createSessionAccessUrls", "shareSessionPreview", "listSshSessionFiles",
     "readSshSessionFile", "saveSshSessionFile", "listSshSessionForwards", "createSshSessionForward",
     "closeSshSessionForward", "getGitStatusSummary", "pullGit", "stageGit", "unstageGit",
@@ -235,6 +235,20 @@ function createTestApiHandlers() {
     payload: {
       handler: "getGithubConnection",
       args: ["user-1"],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "session", workspaceId: "workspace-1", sessionId: "session-1"},
+    body: {name: "Renamed"},
+  }), {
+    status: 200,
+    payload: {
+      session: {
+        handler: "renameSession",
+        args: ["user-1", "workspace-1", "session-1", {name: "Renamed"}],
+      },
     },
   });
 
