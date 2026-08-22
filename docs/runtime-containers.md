@@ -76,7 +76,7 @@ Installed OS packages currently include:
 - `gh` in Pi and Codex images, so agent sessions can use the GitHub CLI for issue, PR, and repository workflow commands without manual installation
 - `gzip`
 - `openssh-client`
-- `python3`
+- `python3` in every runner variant as the shared Python runtime contract
 - `make`
 - `g++`
 - `ripgrep`
@@ -86,6 +86,8 @@ Installed OS packages currently include:
 `curl` is intentionally installed by default because users expect it in the browser terminal, and installing it manually inside ephemeral sessions is a poor default experience.
 
 `make` and `g++` are present because `node-pty` and terminal-adjacent dependencies may require native build support during image construction.
+
+Every runner Dockerfile runs `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` enumerates every supported variant so a missing install or build-time validation fails the regular runner test suite. The explicit command contract is `python3`; Mapache does not currently guarantee a bare `python` alias because repository workflows and tooling use `python3` directly.
 
 The default image now installs Pi Agents with:
 

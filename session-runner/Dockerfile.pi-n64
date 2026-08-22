@@ -6,6 +6,7 @@ ENV PATH=/opt/libdragon/bin:$PATH
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl fd-find git gzip libpng-dev make g++ openssh-client pkg-config python3 ripgrep tar zlib1g-dev \
   && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+  && python3 --version \
   && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://pi.dev/install.sh | sh
