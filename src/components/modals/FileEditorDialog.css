@@ -1,7 +1,6 @@
 .file-editor-panel {
   width: min(960px, 100%);
   max-height: calc(100vh - 40px);
-  grid-template-rows: auto auto minmax(220px, 1fr) auto;
 }
 
 .file-editor-title {
@@ -17,6 +16,16 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-editor-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-editor-tabs .button {
+  min-width: 88px;
 }
 
 .file-editor-stack {
@@ -71,6 +80,102 @@
   border-radius: 8px;
   color: var(--muted);
   font-weight: 700;
+}
+
+.file-editor-preview {
+  min-height: min(62vh, 620px);
+  overflow: auto;
+  padding: clamp(18px, 3vw, 36px);
+  border: 1px solid #c8d1dc;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  line-height: 1.65;
+}
+
+.file-editor-preview > :first-child {
+  margin-top: 0;
+}
+
+.file-editor-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.file-editor-preview h1,
+.file-editor-preview h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--line);
+}
+
+.file-editor-preview h1 {
+  font-size: 2em;
+}
+
+.file-editor-preview h2 {
+  font-size: 1.5em;
+}
+
+.file-editor-preview h3 {
+  font-size: 1.25em;
+}
+
+.file-editor-preview a {
+  color: var(--accent);
+}
+
+.file-editor-preview img {
+  max-width: 100%;
+}
+
+.file-editor-preview blockquote {
+  margin-inline: 0;
+  padding-inline: 1em;
+  border-left: 4px solid var(--line);
+  color: var(--muted);
+}
+
+.file-editor-preview code {
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: #eef2f6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.file-editor-preview pre {
+  overflow: auto;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--code);
+  color: #f8fafc;
+}
+
+.file-editor-preview pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.file-editor-preview table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.file-editor-preview th,
+.file-editor-preview td {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+}
+
+.file-editor-preview th {
+  background: #f8fafc;
+  text-align: left;
+}
+
+.file-editor-preview input[type="checkbox"] {
+  margin-right: 0.45em;
 }
 
 .file-editor-actions {

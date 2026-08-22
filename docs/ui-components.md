@@ -63,7 +63,7 @@ This document serves as an index for significant UI components in the applicatio
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | React modal for choosing Google Workspace services and read-only/read-write access before starting add or reconnect OAuth. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
 | `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
-| `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React file editor modal. |
+| `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React text file editor modal with Edit and rendered Preview tabs for Markdown files. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
 | `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for adding skills and listing all recursively discovered local skills with discovery checkboxes plus writable-root edit/delete actions. |
 | `WorkspaceSubagentModal` | `src/components/modals/WorkspaceSubagentModal.jsx` | React modal for creating and editing workspace-local subagents from the right inspector Subagents panel. |
