@@ -4,6 +4,7 @@ import {
   createWorkspaceFileState,
   downloadWorkspaceFileState,
   loadWorkspaceFilesState,
+  openPiModelsFileState,
   saveFileEditorState,
   selectWorkspaceFileState,
   toggleWorkspaceFileDirState,
@@ -58,6 +59,10 @@ export function createWorkspaceFilesController({state, render, runBusy, captureS
     await selectWorkspaceFileState({state, path, render});
   }
 
+  async function openPiModelsFile() {
+    await openPiModelsFileState({state, render});
+  }
+
   function closeFileEditor() {
     closeFileEditorState(state);
     render();
@@ -85,6 +90,7 @@ export function createWorkspaceFilesController({state, render, runBusy, captureS
     createWorkspaceFile,
     downloadWorkspaceFile,
     loadWorkspaceFiles,
+    openPiModelsFile,
     refreshWorkspaceFiles,
     resetFileEditor,
     resetWorkspaceFiles,

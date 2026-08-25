@@ -38,6 +38,26 @@ function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPack
     }
   });
 
+  app.get("/models-file", async (req, res) => {
+    if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
+    try {
+      res.json(await piModelScope.readModelsFile());
+    } catch (error) {
+      console.error("pi models file read failed", error);
+      res.status(500).json({error: "pi_models_file_read_failed"});
+    }
+  });
+
+  app.put("/models-file", async (req, res) => {
+    if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
+    try {
+      res.json(await piModelScope.saveModelsFile(req.body && req.body.content));
+    } catch (error) {
+      console.error("pi models file save failed", error);
+      res.status(400).json({error: error.message === "models_file_too_large" ? error.message : "invalid_models_file"});
+    }
+  });
+
   app.get("/pi/packages", async (req, res) => {
     if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
     try {

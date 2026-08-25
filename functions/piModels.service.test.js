@@ -25,6 +25,12 @@ const {createPiModelsService, normalizeScopedModels} = require("./piModels.servi
 
   assert.deepEqual(await service.listPiModels("uid", "workspace", "session"), {models: []});
   assert.equal(calls[0].routePath, "/models");
+  await service.readPiModelsFile("uid", "workspace", "session");
+  assert.equal(calls[1].routePath, "/models-file");
+  await service.savePiModelsFile("uid", "workspace", "session", {content: "{}\n"});
+  assert.equal(calls[2].routePath, "/models-file");
+  assert.equal(calls[2].options.method, "PUT");
+  assert.deepEqual(calls[2].options.body, {content: "{}\n"});
   const saved = await service.savePiModelScope("uid", "workspace", "session", {
     scopedModels: [" openai-codex/gpt-5.5 ", "openai-codex/gpt-5.5"],
   });

@@ -236,6 +236,20 @@ export async function selectWorkspaceFileState({state, path, render}) {
   render();
 }
 
+export async function openPiModelsFileState({state, render}) {
+  const session = (state.sessions || []).find((item) => item.id === state.selectedSessionId);
+  if (!state.selectedWorkspaceId || !session?.id || typeof state.api.getPiModelsFile !== "function") return;
+  state.fileEditor = createFileEditorState({open: true, path: "~/.pi/agent/models.json", name: "models.json", scope: "pi-models", loading: true});
+  render();
+  try {
+    const data = await state.api.getPiModelsFile(state.selectedWorkspaceId, session.id);
+    state.fileEditor = {...state.fileEditor, content: data.content || "", originalContent: data.content || "", loading: false};
+  } catch (error) {
+    state.fileEditor = {...state.fileEditor, loading: false, error: error.message || "Unable to load models.json."};
+  }
+  render();
+}
+
 export function closeFileEditorState(state) {
   resetFileEditorState(state);
 }
@@ -256,7 +270,8 @@ export async function saveFileEditorState({state, content, loadWorkspaceFiles, r
 
   try {
     const sshSession = selectedSshSession(state);
-    const data = sshSession ?
+    const data = state.fileEditor.scope === "pi-models" ?
+      await state.api.savePiModelsFile(state.selectedWorkspaceId, state.selectedSessionId, content) : sshSession ?
       await state.api.saveSshSessionFile(state.selectedWorkspaceId, sshSession.id, state.fileEditor.path, content) :
       await state.api.saveWorkspaceFile(
           state.selectedWorkspaceId,
@@ -270,10 +285,10 @@ export async function saveFileEditorState({state, content, loadWorkspaceFiles, r
       saving: false,
       updatedAt: data.updatedAt || state.fileEditor.updatedAt,
     };
-    if (!sshSession && state.api.syncWorkspaceFiles) {
+    if (state.fileEditor.scope !== "pi-models" && !sshSession && state.api.syncWorkspaceFiles) {
       await state.api.syncWorkspaceFiles(state.selectedWorkspaceId);
     }
-    await loadWorkspaceFiles();
+    if (state.fileEditor.scope !== "pi-models") await loadWorkspaceFiles();
   } catch (error) {
     state.fileEditor = {
       ...state.fileEditor,

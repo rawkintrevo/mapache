@@ -5,8 +5,27 @@ const {httpError} = require("./backendUtils.helpers");
 function createPiModelsService(dependencies = {}) {
   return {
     listPiModels: (uid, workspaceId, sessionId) => listPiModels(uid, workspaceId, sessionId, dependencies),
+    readPiModelsFile: (uid, workspaceId, sessionId) => readPiModelsFile(uid, workspaceId, sessionId, dependencies),
     savePiModelScope: (uid, workspaceId, sessionId, payload) => savePiModelScope(uid, workspaceId, sessionId, payload, dependencies),
+    savePiModelsFile: (uid, workspaceId, sessionId, payload) => savePiModelsFile(uid, workspaceId, sessionId, payload, dependencies),
   };
+}
+
+async function readPiModelsFile(uid, workspaceId, sessionId, dependencies = {}) {
+  const session = await requirePiSession(uid, workspaceId, sessionId, dependencies);
+  return requestRunner(dependencies, session, "/models-file", {
+    notFoundError: "runner_models_file_unsupported", notFoundStatus: 501,
+    failureError: "pi_models_file_read_failed", unavailableError: "pi_models_file_unavailable",
+  });
+}
+
+async function savePiModelsFile(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  const session = await requirePiSession(uid, workspaceId, sessionId, dependencies);
+  return requestRunner(dependencies, session, "/models-file", {
+    method: "PUT", body: {content: String(payload && payload.content || "")},
+    notFoundError: "runner_models_file_unsupported", notFoundStatus: 501,
+    failureError: "pi_models_file_save_failed", unavailableError: "pi_models_file_unavailable", timeoutMs: 30000,
+  });
 }
 
 async function listPiModels(uid, workspaceId, sessionId, dependencies = {}) {

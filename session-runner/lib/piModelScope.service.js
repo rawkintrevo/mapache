@@ -76,7 +76,29 @@ function createPiModelScopeService({admin, config, db}) {
     return {ok: true, scopedModels: normalized};
   }
 
-  return {listModels, persist, restore, save};
+  async function readModelsFile() {
+    const filePath = path.join(config.piAgentDir, "models.json");
+    const content = await fs.promises.readFile(filePath, "utf8").catch((error) => {
+      if (error && error.code === "ENOENT") return "{}\n";
+      throw error;
+    });
+    return {name: "models.json", path: "~/.pi/agent/models.json", content};
+  }
+
+  async function saveModelsFile(content) {
+    const normalized = String(content || "");
+    if (Buffer.byteLength(normalized, "utf8") > 1024 * 1024) throw new Error("models_file_too_large");
+    const parsed = JSON.parse(normalized);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("models_file_must_be_object");
+    const filePath = path.join(config.piAgentDir, "models.json");
+    await fs.promises.mkdir(path.dirname(filePath), {recursive: true});
+    const formatted = `${JSON.stringify(parsed, null, 2)}\n`;
+    await fs.promises.writeFile(filePath, formatted, {mode: 0o600});
+    await fs.promises.chmod(filePath, 0o600).catch(() => {});
+    return {name: "models.json", path: "~/.pi/agent/models.json", content: formatted};
+  }
+
+  return {listModels, persist, readModelsFile, restore, save, saveModelsFile};
 }
 
 function execFileOutput(file, args, options) {

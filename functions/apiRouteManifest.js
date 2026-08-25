@@ -43,6 +43,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["gitOpenPr", ["POST"]],
   ["piPackages", ["GET"]],
   ["piModels", ["GET", "PUT"]],
+  ["piModelsFile", ["GET", "PUT"]],
   ["piPackageInstall", ["POST"]],
   ["piPackageRemove", ["POST"]],
   ["piPackageUpdate", ["POST"]],

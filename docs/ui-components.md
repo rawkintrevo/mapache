@@ -57,7 +57,7 @@ This document serves as an index for significant UI components in the applicatio
 | `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
 | `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | React modal for creating, replacing, and deleting masked generic environment keys. |
-| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file. |
+| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file, with direct editing for the active Pi `models.json`. |
 | `PiModelsModal` | `src/components/modals/PiModelsModal.jsx` | React modal for loading the active Pi runner's authenticated model catalog and saving an ordered session-scoped model selection. |
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | React modal for choosing Google Workspace services and read-only/read-write access before starting add or reconnect OAuth. |
 | `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |

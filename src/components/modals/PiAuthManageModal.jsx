@@ -1,5 +1,5 @@
 import {useMemo, useState} from "react";
-import {Pencil, Plus, Trash2, X} from "lucide-react";
+import {FileJson, Pencil, Plus, Trash2, X} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
 import {sessionAuthHarness} from "../../utils/sessionHarnesses.js";
 import {Button} from "../common/Button.jsx";
@@ -36,7 +36,7 @@ function initialSelection(session, groupedEntries) {
   }, {});
 }
 
-export function PiAuthManageModal({piAuth, session, onAdd, onClose, onDelete, onEdit, onSave}) {
+export function PiAuthManageModal({piAuth, session, onAdd, onClose, onDelete, onEdit, onOpenModelsFile, onSave}) {
   const authHarness = sessionAuthHarness(session);
   const entries = useMemo(() => {
     const allEntries = normalizeEntries(piAuth);
@@ -70,6 +70,10 @@ export function PiAuthManageModal({piAuth, session, onAdd, onClose, onDelete, on
         <Button className="pi-auth-add" disabled={piAuth.loading || piAuth.saving} variant="secondary" onClick={onAdd}>
           <Plus aria-hidden="true" />
           Add authentication provider
+        </Button>
+        <Button className="pi-auth-models-file" disabled={piAuth.saving || !onOpenModelsFile} variant="secondary" onClick={onOpenModelsFile}>
+          <FileJson aria-hidden="true" />
+          Inspect/edit models.json
         </Button>
         {entries.length ? (
           <div className="pi-auth-selection-list">

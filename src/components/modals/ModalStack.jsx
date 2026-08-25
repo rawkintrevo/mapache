@@ -80,6 +80,7 @@ export function ModalStack(props) {
           onClose={modals.closePiAuthManageModal}
           onDelete={pi.deletePiAuthProvider}
           onEdit={modals.openAuthModal}
+          onOpenModelsFile={files.openPiModelsFile}
           onSave={pi.saveSessionPiAuthSelection}
         />
       ) : null}

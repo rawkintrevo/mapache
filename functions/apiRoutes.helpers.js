@@ -112,6 +112,7 @@ function routeRequest(path) {
     ["git-open-pr", "gitOpenPr"],
     ["pi-packages", "piPackages"],
     ["models", "piModels"],
+    ["models-file", "piModelsFile"],
     ["skills", "sessionSkills"],
     ["pi-skills", "sessionSkills"],
     ["subagents", "sessionSubagents"],
