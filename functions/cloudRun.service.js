@@ -20,6 +20,7 @@ const {
   cleanName,
   defaultPreviewStaticRoot,
   httpError,
+  isGoogleAlreadyExists,
   isGoogleNotFound,
   normalizeServiceAccountEmail,
   publicGoogleError,
@@ -87,6 +88,23 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
     let provisioningError = error;
+    if (client && isGoogleAlreadyExists(error)) {
+      try {
+        const service = await waitForCloudRunServiceReady(client, serviceName, dependencies);
+        await setPublicInvoker(client, serviceName);
+        const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
+        await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
+          serviceUrl: service.uri,
+          lastError: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...runnerImageMetadata,
+          ...provisioningCompletionUpdates(claimedSession, operationName),
+        }, {reconciliationReason: "cloud_run_existing_service_reconciled"}));
+        return;
+      } catch (reconciliationError) {
+        provisioningError = reconciliationError;
+      }
+    }
     if (client && isCloudRunOperationTimeout(error)) {
       const service = await reconcileProvisioningTimeout(client, serviceName);
       if (service) {
@@ -246,6 +264,27 @@ function isCloudRunServiceReady(service) {
       service.terminalCondition &&
       service.terminalCondition.state === "CONDITION_SUCCEEDED",
   );
+}
+
+async function waitForCloudRunServiceReady(client, serviceName, options = {}) {
+  const timeoutMs = positiveOperationNumber(
+      options.operationTimeoutMs,
+      DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
+  );
+  const pollIntervalMs = positiveOperationNumber(options.operationPollIntervalMs, 2000);
+  const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+  const sleep = options.sleep || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const service = await getCloudRunService(client, serviceName);
+    if (isCloudRunServiceReady(service)) return service;
+    if (service && service.terminalCondition && service.terminalCondition.state === "CONDITION_FAILED") {
+      throw new Error(cleanName(service.terminalCondition.message || "Existing Cloud Run service failed to become ready."));
+    }
+    if (attempt + 1 < maxAttempts) await sleep(pollIntervalMs);
+  }
+  const error = new Error(`Existing Cloud Run service did not become ready after ${timeoutMs}ms.`);
+  error.code = "cloud_run_existing_service_timeout";
+  throw error;
 }
 
 async function patchSessionService(sessionRef, session, options = {}, dependencies = {}) {

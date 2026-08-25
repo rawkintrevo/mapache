@@ -144,6 +144,16 @@ function isGoogleNotFound(error) {
   );
 }
 
+function isGoogleAlreadyExists(error) {
+  return error && (
+    error.code === 409 ||
+    error.status === 409 ||
+    (error.response && error.response.status === 409) ||
+    (error.response && error.response.data && error.response.data.error &&
+      error.response.data.error.code === 409)
+  );
+}
+
 module.exports = {
   cleanContentType,
   cleanName,
@@ -152,6 +162,7 @@ module.exports = {
   defaultPreviewStaticRoot,
   firebaseStorageBucket,
   httpError,
+  isGoogleAlreadyExists,
   isGoogleNotFound,
   latestTimestampMillis,
   normalizeServiceAccountEmail,

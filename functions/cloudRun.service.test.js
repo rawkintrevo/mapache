@@ -351,6 +351,57 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(reconciledUpdates[0].status, "running");
   assert.strictEqual(reconciledUpdates[0].serviceUrl, "https://session-reconciled.example.run.app");
 
+  let existingServicePolls = 0;
+  const existingUpdates = [];
+  const existingClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        const error = new Error("already exists");
+        error.response = {status: 409, data: {error: {code: 409, status: "ALREADY_EXISTS"}}};
+        throw error;
+      }
+      if (method === "GET" && url.includes("/services/session-existing")) {
+        existingServicePolls += 1;
+        return {data: existingServicePolls === 1 ? {
+          terminalCondition: {state: "CONDITION_PENDING"},
+        } : {
+          uri: "https://session-existing.example.run.app",
+          terminalCondition: {state: "CONDITION_SUCCEEDED"},
+        }};
+      }
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      throw new Error(`Unexpected existing-service reconciliation request: ${method} ${url}`);
+    },
+  };
+  const existingService = createCloudRunService({
+    auth: {getClient: async () => existingClient},
+    operationTimeoutMs: 4000,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await existingService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, {
+    update: async (update) => existingUpdates.push(update),
+  }, {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "existing",
+    serviceId: "session-existing",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+  });
+  assert.strictEqual(existingServicePolls, 2);
+  assert.strictEqual(existingUpdates.length, 1);
+  assert.strictEqual(existingUpdates[0].status, "running");
+  assert.strictEqual(existingUpdates[0].serviceUrl, "https://session-existing.example.run.app");
+
   const timeoutRequests = [];
   const timeoutUpdates = [];
   const timeoutClient = {

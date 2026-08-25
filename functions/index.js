@@ -416,6 +416,13 @@ exports.googleMcpToken = onRequest({
 exports.provisionQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
   timeoutSeconds: 300,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
 }, provisionQueuedSession);
 
 exports.reconcileWorkspaceSyncWriters = onSchedule("every 5 minutes", async () => {
