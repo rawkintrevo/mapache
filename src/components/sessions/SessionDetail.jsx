@@ -137,7 +137,7 @@ export function SessionDetail({
       {isProvisioningFailure ? (
         <div aria-live="polite" className="provisioning-status provisioning-status--failure">
           <strong>Provisioning failed</strong>
-          <span>{isRetryableFailure ? "Retry provisioning to try again." : "This failure cannot be retried automatically."}</span>
+          <span>{isRetryableFailure ? "Retry provisioning to try again." : "Restart the session to try again."}</span>
         </div>
       ) : null}
       {imageFreshness.state !== "unknown" ? (
@@ -226,7 +226,7 @@ export function SessionDetail({
               <RotateCcw aria-hidden="true" />
               Retry provisioning
             </Button>
-          ) : isProvisioningFailure || isProvisioning ? null : (
+          ) : isProvisioning ? null : (
             <Button
               aria-label={isStaleImage ? "Restart session to pick up the latest container image" : "Restart"}
               className={isStaleImage ? "session-restart-button--stale" : ""}

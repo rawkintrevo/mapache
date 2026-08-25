@@ -82,9 +82,17 @@ describe("SessionDetail Chrome workflow", () => {
     expect(onRetryProvisioningSession).toHaveBeenCalledOnce();
   });
 
-  test("does not show retry for non-retryable failures", () => {
-    renderDetail({status: "provision_failed", provisioningRetryable: false, serviceUrl: null});
+  test("shows restart for non-retryable provisioning failures", async () => {
+    const user = userEvent.setup();
+    const onRestartSession = vi.fn();
+    renderDetail(
+        {status: "provision_failed", provisioningRetryable: false, serviceUrl: null},
+        {onRestartSession},
+    );
     expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
+    const restart = screen.getByRole("button", {name: "Restart"});
+    await user.click(restart);
+    expect(onRestartSession).toHaveBeenCalledWith("session-1");
   });
 
   test("disables retry while another operation is pending", () => {
