@@ -62,6 +62,8 @@ jobs:
             'QA_LOGIN_UID=${{ vars.QA_LOGIN_UID }}' \
             'QA_LOGIN_EMAIL=${{ vars.QA_LOGIN_EMAIL }}' \
             'QA_LOGIN_DISPLAY_NAME=${{ vars.QA_LOGIN_DISPLAY_NAME }}' \
+            'GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}' \
+            'GOOGLE_OAUTH_REDIRECT_URI=${{ vars.GOOGLE_OAUTH_REDIRECT_URI }}' \
             > functions/.env.pi-agents-cloud
 
       - name: Deploy Firebase production
