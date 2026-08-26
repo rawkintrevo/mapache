@@ -1,7 +1,18 @@
 "use strict";
 
+const {compactErrorMessage} = require("./utils");
+
+const LIVE_RUNTIME_STATUSES = new Set(["running", "restarting", "resizing"]);
+
 function createActivityService({admin, db, config}) {
   const {workspaceId, sessionId} = config;
+
+  function sessionRef() {
+    return db.collection("workspaces")
+        .doc(workspaceId)
+        .collection("sessions")
+        .doc(sessionId);
+  }
 
   async function appendHistory(stream, data) {
     if (!workspaceId || !sessionId) return;
@@ -22,12 +33,37 @@ function createActivityService({admin, db, config}) {
 
   async function updateSessionActivity(updates) {
     if (!workspaceId || !sessionId) return;
-    await db.collection("workspaces")
-        .doc(workspaceId)
-        .collection("sessions")
-        .doc(sessionId)
+    await sessionRef()
         .update(updates)
         .catch((error) => console.error("session activity write failed", error));
+  }
+
+  async function markRuntimeStartupFailure(error) {
+    if (!workspaceId || !sessionId) return;
+    const runtimeError = compactErrorMessage(error && error.message ? error.message : error);
+    const ref = sessionRef();
+    try {
+      await db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(ref);
+        if (!snap.exists) return;
+        const session = snap.data() || {};
+        const failedAt = admin.firestore.FieldValue.serverTimestamp();
+        const updates = {
+          activeSocketCount: 0,
+          lastError: session.lastError || runtimeError || "runner_startup_failed",
+          runtimeFailedAt: failedAt,
+          runtimeLastError: runtimeError || "runner_startup_failed",
+          runtimeState: "failed",
+          updatedAt: failedAt,
+        };
+        if (LIVE_RUNTIME_STATUSES.has(String(session.status || "").trim())) {
+          updates.status = "update_failed";
+        }
+        transaction.update(ref, updates);
+      });
+    } catch (writeError) {
+      console.error("session runtime failure write failed", writeError);
+    }
   }
 
   async function updateWorkspaceSourceState(updates) {
@@ -60,6 +96,7 @@ function createActivityService({admin, db, config}) {
 
   return {
     appendHistory,
+    markRuntimeStartupFailure,
     updatePiSessionBinding,
     updateSessionActivity,
     updateWorkspaceSourceState,

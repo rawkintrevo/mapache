@@ -140,7 +140,9 @@ Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/heal
 
 The runner stores a bounded raw-output replay buffer so a newly loaded iframe can redraw recent terminal output after reconnecting. The default replay limit is `1000000` characters and can be changed with `TERMINAL_REPLAY_LIMIT`. Automatic reconnects from the same iframe skip replay to avoid duplicating visible terminal content. If the shell process itself exits, the runner closes connected sockets and the next fresh iframe connection starts a new PTY.
 
-This persistence is scoped to the current Cloud Run container instance. A Cloud Run revision replacement, service stop, container crash, or scale-down still ends the PTY process.
+This persistence is scoped to the current Cloud Run container instance. Active session services request one minimum instance, so ordinary traffic scale-down does not end the PTY before the backend idle timeout. A Cloud Run revision replacement, service stop, platform restart, or container crash still ends the current PTY process.
+
+Runner bootstrap is lifecycle-aware. `session-runner/lib/runnerLifecycle.js` catches preparation failures before the server listens and asks `session-runner/lib/activity.js` to record `runtimeState: "failed"`, the compact runtime error, and zero active sockets. When the stored lifecycle was `running`, `restarting`, or `resizing`, that transaction also changes it to `update_failed`; initial provisioning remains `provisioning` so the Functions worker can own the normal `provision_failed` transition. This prevents a Cloud Run service whose revision is configured as ready but whose instances cannot start from remaining displayed as a healthy running session.
 
 The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update `activeSocketCount`, `lastConnectedAt`, `lastDisconnectedAt`, and `lastActivityAt`; terminal input updates `lastActivityAt` with a short debounce to avoid one Firestore write per keystroke.
 
@@ -616,6 +618,8 @@ The scheduled Cloud Function `reapIdleSessions` runs every 5 minutes. It scans r
 
 Idle is defined as no terminal I/O or connection lifecycle activity. A long-running command that continues producing output keeps the session active. If the browser is left open without terminal I/O past the timeout, or is closed/disconnected past the timeout, the session service is deleted.
 
+Cloud Run create, resize, and restart templates keep one instance allocated while the session lifecycle is active. The reaper remains the authority that releases those resources: it performs the final best-effort sync, deletes the service, and marks the session stopped. Do not change the minimum instance count back to zero without adding durable PTY recovery and renewable startup credentials for private GitHub workspaces.
+
 ## Existing Sessions vs New Sessions
 
 Pushing a new `:latest` image affects new pulls, but existing Cloud Run services need a new revision to pick it up. For an existing session service, update the service image to create a fresh revision:
@@ -630,6 +634,8 @@ gcloud run services update SERVICE_NAME \
 New sessions use the image key selected in the modal and resolved by the backend. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
+
+Existing services created before warm active-session allocation keep `minInstanceCount: 0` until they are restarted, resized, or recreated through the updated Functions deployment. Existing revisions also need a rebuilt runner image before bootstrap failures can transition a stale `running` record to `update_failed`.
 
 The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, home materialization env vars, workspace/session env vars, Pi model/skill endpoints, Pi package manager endpoints, Pi package archive targets, preview environment changes, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `HOME_STORAGE_*`, `/models`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
 

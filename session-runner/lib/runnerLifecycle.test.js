@@ -18,7 +18,10 @@ function createLifecycleHarness(events, overrides = {}) {
   });
 
   return createRunnerLifecycleCoordinator({
-    activity: overrides.activity || {updateSessionActivity: async () => events.push("activity.updateSessionActivity")},
+    activity: overrides.activity || {
+      markRuntimeStartupFailure: async () => events.push("activity.markRuntimeStartupFailure"),
+      updateSessionActivity: async () => events.push("activity.updateSessionActivity"),
+    },
     activeHarness: overrides.activeHarness || {
       materializeAuth: async () => events.push("activeHarness.materializeAuth"),
       materializeConfig: async () => events.push("activeHarness.materializeConfig"),
@@ -96,7 +99,11 @@ test("startup failure prevents later lifecycle steps and listen", async () => {
   });
 
   await assert.rejects(() => lifecycle.start(), /prepare failed/);
-  assert.deepEqual(events, ["workspace.ensureWorkspace", "workspace.prepareWorkspaceSource"]);
+  assert.deepEqual(events, [
+    "workspace.ensureWorkspace",
+    "workspace.prepareWorkspaceSource",
+    "activity.markRuntimeStartupFailure",
+  ]);
 });
 
 test("shutdown closes forwards before final profile snapshot and activity update", async () => {

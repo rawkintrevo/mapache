@@ -243,6 +243,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   });
   assert.strictEqual(service.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
+  assert.strictEqual(service.template.scaling.minInstanceCount, 1);
   assert.strictEqual(service.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(service.template.containers[0].resources.limits.cpu, "1");
   assert.strictEqual(envMap(service.template.containers[0].env).WORKSPACE_ID, "workspace-1");
@@ -254,6 +255,8 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     terminalKind: "shell",
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   }, {restart: true});
+  assert.strictEqual(patch.template.scaling.minInstanceCount, 1);
+  assert.strictEqual(patch.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
 

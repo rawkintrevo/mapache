@@ -18,23 +18,30 @@ function createRunnerLifecycleCoordinator({
   workspaceSync,
 }) {
   async function start() {
-    await workspace.ensureWorkspace();
-    logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
-    await workspace.prepareWorkspaceSource();
-    await piModelScope.restore();
-    await chromeProfile.restore();
-    await chromeRuntime.start();
-    await activeHarness.materializeConfig();
-    await activeHarness.materializeAuth();
-    await git.prepareGithubAutomationBranch();
-    await activeHarness.materializeMcp();
-    await activeHarness.materializeSkills();
-    await activeHarness.materializeSubagents();
-    chromeProfileSnapshots.start();
-    startSyncLoop();
-    listen(() => {
-      logger.log(`session runner listening on ${config.port}`);
-    });
+    try {
+      await workspace.ensureWorkspace();
+      logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
+      await workspace.prepareWorkspaceSource();
+      await piModelScope.restore();
+      await chromeProfile.restore();
+      await chromeRuntime.start();
+      await activeHarness.materializeConfig();
+      await activeHarness.materializeAuth();
+      await git.prepareGithubAutomationBranch();
+      await activeHarness.materializeMcp();
+      await activeHarness.materializeSkills();
+      await activeHarness.materializeSubagents();
+      chromeProfileSnapshots.start();
+      startSyncLoop();
+      listen(() => {
+        logger.log(`session runner listening on ${config.port}`);
+      });
+    } catch (error) {
+      await activity.markRuntimeStartupFailure(error).catch((writeError) => {
+        logger.error("session runtime failure write failed", writeError);
+      });
+      throw error;
+    }
   }
 
   async function shutdown() {

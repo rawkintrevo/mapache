@@ -365,7 +365,7 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
     template: {
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
-        minInstanceCount: 0,
+        minInstanceCount: 1,
         maxInstanceCount: 1,
       },
       containers: [{
@@ -389,6 +389,10 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
   return {
     template: {
       serviceAccount: requireRunnerServiceAccount(session),
+      scaling: {
+        minInstanceCount: 1,
+        maxInstanceCount: 1,
+      },
       containers: [{
         image: session.image,
         resources: {limits: resourceLimits(session.resources)},
