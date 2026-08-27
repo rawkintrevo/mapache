@@ -39,6 +39,8 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 
 ## Current Behavior
 
+Stopped-session recreation provisions Cloud Run with the sync-writer role returned by the same restart reservation transaction, rather than the stopped session's stale pre-reservation role. A stale `none` role allows startup restore but suppresses every periodic and shutdown upload, so a later restart would restore an older workspace snapshot.
+
 The frontend calls authenticated JSON routes under `/api/**`. Cloud Functions verifies Firebase ID tokens, applies the optional `appConfig/access` allow list, upserts `users/{uid}`, then serves user-owned workspace and session data. Users whose Firestore profile document has `isAdmin: true` can also call `/api/admin/users` to page through user summaries and `/api/admin/users/{uid}/whitelist` to toggle explicit allowlist entries for other users. The route method manifest is shared by route validation and dispatch lookup, while `createApiHandlers` assembles the production registry in a Firebase-free helper so contract tests can enumerate every dispatcher dependency without starting the Functions runtime.
 
 The exception is the QA custom-token route at `POST /api/qa/custom-token`. It is unauthenticated but gated by the `QA_LOGIN_SECRET` Functions secret and the configured QA UID/email parameters. It mints a Firebase custom token for a controlled QA account so browser automation can reach the signed-in app shell; all subsequent API calls still use normal Firebase ID-token verification and app allowlist checks.

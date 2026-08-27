@@ -44,8 +44,14 @@ const lifecycle = createSessionLifecycleService({
   prepareSessionForProvisioning: async (session) => ({...session, prepared: true}),
   provisionSessionService: async (...args) => calls.push({kind: "provisionService", args}),
   requireWorkspace: async () => workspace,
-  reserveChromeWorkspaceSession: async (...args) => calls.push({kind: "reserveChrome", args}),
-  reserveWorkspaceSyncSession: async (...args) => calls.push({kind: "reserveSync", args}),
+  reserveChromeWorkspaceSession: async (...args) => {
+    calls.push({kind: "reserveChrome", args});
+    return {syncWriterRole: "writer", syncWriterLeaseId: "chrome-lease"};
+  },
+  reserveWorkspaceSyncSession: async (...args) => {
+    calls.push({kind: "reserveSync", args});
+    return {syncWriterRole: "writer", syncWriterLeaseId: "workspace-lease"};
+  },
   releaseWorkspaceSyncWriterLease: async (...args) => calls.push({kind: "releaseSync", args}),
   sessionCollection: () => ({doc: () => sessionRef}),
 });
@@ -84,11 +90,14 @@ const lifecycle = createSessionLifecycleService({
     serviceUrl: null,
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
+    syncWriterRole: "none",
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(currentSession.status, "provisioning");
   assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), true);
   assert.strictEqual(calls.some((call) => call.kind === "provisionService"), true);
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "workspace-lease");
 
   calls.length = 0;
   currentSession = {
@@ -101,10 +110,13 @@ const lifecycle = createSessionLifecycleService({
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+    syncWriterRole: "none",
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(calls.some((call) => call.kind === "reserveChrome"), true);
   assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), false);
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "chrome-lease");
   assert.strictEqual(currentSession.capabilities.chat, true);
 
   calls.length = 0;

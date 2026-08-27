@@ -93,12 +93,13 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
     await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies);
   }
+  let syncWriterUpdates = {};
   if (recreatingSessionService && isChromeSession(session)) {
-    await dependencies.reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
+    syncWriterUpdates = await dependencies.reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
       create: false,
       githubWorkspace: isGithubWorkspace(workspace),
       syncWriterEligible: true,
-    });
+    }) || {};
   }
 
   const restartedAt = dependencies.admin.firestore.Timestamp.now();
@@ -143,6 +144,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   const restartedSession = {
     ...session,
     ...restartUpdate,
+    ...syncWriterUpdates,
     browserAccessTokenSecret,
     restartNonce,
     workspaceId,
@@ -153,10 +155,11 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   };
 
   if (recreatingSessionService && !isChromeSession(session)) {
-    await dependencies.reserveWorkspaceSyncSession(workspaceId, sessionRef, restartedSession, {
+    syncWriterUpdates = await dependencies.reserveWorkspaceSyncSession(workspaceId, sessionRef, restartedSession, {
       create: false,
       syncWriterEligible: true,
-    });
+    }) || {};
+    Object.assign(restartedSession, syncWriterUpdates);
   }
 
   if (recreatingSessionService) {

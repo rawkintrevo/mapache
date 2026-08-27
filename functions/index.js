@@ -550,7 +550,7 @@ async function prepareSessionForProvisioning(session = {}) {
 
 async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, options = {}) {
   const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
@@ -570,6 +570,7 @@ async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, opt
     } else {
       transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
     }
+    return lease.sessionUpdates;
   });
 }
 
@@ -603,7 +604,7 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
 
 async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
   const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     const activeChrome = findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
@@ -640,6 +641,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
     });
     if (options.create !== false) transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
     else transaction.update(sessionRef, lease.sessionUpdates);
+    return lease.sessionUpdates;
   });
 }
 
