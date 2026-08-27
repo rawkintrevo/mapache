@@ -78,6 +78,7 @@ function createConfig() {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
+    resourceMetricsIntervalMs: positiveNumber(process.env.RESOURCE_METRICS_INTERVAL_MS, 2000),
     browserQaActionTimeoutMs: positiveNumber(process.env.BROWSER_QA_ACTION_TIMEOUT_MS, 5000),
     browserQaBaseUrl: normalizeEnvString(process.env.MAPACHE_PREVIEW_URL) || `http://127.0.0.1:${process.env.PORT || 8080}${previewBasePath}/`,
     browserQaCommand: normalizeEnvString(process.env.MAPACHE_BROWSER_QA_COMMAND) || "mapache-preview-qa",

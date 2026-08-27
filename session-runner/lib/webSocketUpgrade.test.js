@@ -12,6 +12,7 @@ test("routes terminal and browser upgrades without path handlers racing", async 
   const terminalWss = new WebSocketServer({noServer: true});
   const browserWss = new WebSocketServer({noServer: true});
   const chatWss = new WebSocketServer({noServer: true});
+  const metricsWss = new WebSocketServer({noServer: true});
   const hasBrowserAccess = (request) => {
     const url = new URL(request.url, "http://localhost");
     return url.searchParams.get("access") === "valid";
@@ -20,29 +21,35 @@ test("routes terminal and browser upgrades without path handlers racing", async 
     terminalWss,
     browserWss,
     chatWss,
+    metricsWss,
     hasBrowserAccess,
     hasChatAccess: hasBrowserAccess,
+    hasMetricsAccess: hasBrowserAccess,
   }));
   terminalWss.on("connection", (socket) => socket.send("terminal-ready"));
   browserWss.on("connection", (socket) => socket.send(Buffer.from("RFB 003.008\n")));
   chatWss.on("connection", (socket) => socket.send("chat-ready"));
+  metricsWss.on("connection", (socket) => socket.send("metrics-ready"));
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => {
     terminalWss.close();
     browserWss.close();
     chatWss.close();
+    metricsWss.close();
     server.close();
   });
   const {port} = server.address();
 
   assert.equal(await firstMessage(`ws://127.0.0.1:${port}/terminal`), "terminal-ready");
   assert.equal(await firstMessage(`ws://127.0.0.1:${port}/chat?access=valid`), "chat-ready");
+  assert.equal(await firstMessage(`ws://127.0.0.1:${port}/metrics?access=valid`), "metrics-ready");
   assert.equal(
       await firstMessage(`ws://127.0.0.1:${port}/browser/vnc?access=valid`, ["binary"]),
       "RFB 003.008\n",
   );
   assert.equal(await rejectedStatus(`ws://127.0.0.1:${port}/browser/vnc`), 404);
+  assert.equal(await rejectedStatus(`ws://127.0.0.1:${port}/metrics`), 404);
 });
 
 function firstMessage(url, protocols) {

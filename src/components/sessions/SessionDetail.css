@@ -18,6 +18,13 @@
   flex-wrap: wrap;
 }
 
+.canvas-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .canvas-tabs .button {
   min-height: 34px;
 }
@@ -201,6 +208,10 @@
 }
 
 @media (max-width: 720px) {
+  .canvas-header {
+    align-items: stretch;
+  }
+
   .preview-url-row {
     align-items: stretch;
     flex-direction: column;

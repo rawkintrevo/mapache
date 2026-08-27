@@ -36,6 +36,19 @@ function renderDetail(overrides = {}, options = {}) {
 }
 
 describe("SessionDetail Chrome workflow", () => {
+  test("places resource meters beside rather than inside the canvas tabs", async () => {
+    vi.stubGlobal("WebSocket", class {
+      addEventListener() {}
+      close() {}
+    });
+    renderDetail();
+
+    const utilization = await screen.findByLabelText("Resource utilization");
+    expect(utilization).toBeInTheDocument();
+    expect(screen.getByRole("tablist")).not.toContainElement(utilization);
+    vi.unstubAllGlobals();
+  });
+
   test("shows the Chrome canvas only for Chrome-capable sessions", async () => {
     const user = userEvent.setup();
     renderDetail();

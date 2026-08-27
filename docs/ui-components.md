@@ -51,6 +51,7 @@ This document serves as an index for significant UI components in the applicatio
 | `PiChatCanvas` | `src/components/sessions/PiChatCanvas.jsx` | Capability-gated Pi Chat canvas with authoritative transcript replay, pending/working states, prompt composer, and Terminal fallback. |
 | `PiChatMessage` | `src/components/sessions/PiChatMessage.jsx` | Accessible user/assistant message bubble; assistant content uses safe GitHub Flavored Markdown without raw HTML. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |
+| `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Live CPU and RAM utilization meters for running Cloud sessions. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace with preset/custom CPU and memory summaries. |
 | `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced Small/Medium/Large selector and Advanced CPU/memory controls used by Cloud session creation and resize. |

@@ -19,6 +19,19 @@ test("workspace sync role defaults to writer for compatibility and accepts reade
   }
 });
 
+test("resource metrics sampling defaults to two seconds and accepts an override", () => {
+  const previous = process.env.RESOURCE_METRICS_INTERVAL_MS;
+  try {
+    delete process.env.RESOURCE_METRICS_INTERVAL_MS;
+    assert.equal(createConfig().resourceMetricsIntervalMs, 2000);
+    process.env.RESOURCE_METRICS_INTERVAL_MS = "5000";
+    assert.equal(createConfig().resourceMetricsIntervalMs, 5000);
+  } finally {
+    if (previous === undefined) delete process.env.RESOURCE_METRICS_INTERVAL_MS;
+    else process.env.RESOURCE_METRICS_INTERVAL_MS = previous;
+  }
+});
+
 test("Chrome runner configuration exposes stable browser contract URLs", () => {
   const names = [
     "RUNNER_CAPABILITIES",

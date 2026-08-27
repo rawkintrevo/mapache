@@ -12,6 +12,7 @@ function createRunnerLifecycleCoordinator({
   listen,
   logger = console,
   piChat,
+  resourceMetrics,
   piModelScope,
   setIntervalFn = setInterval,
   sshSession,
@@ -47,6 +48,7 @@ function createRunnerLifecycleCoordinator({
 
   async function shutdown() {
     piChat?.close?.();
+    resourceMetrics?.close?.();
     sshSession.closeAll();
     await chromeRuntime.stop();
     await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));

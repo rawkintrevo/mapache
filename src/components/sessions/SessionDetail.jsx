@@ -5,8 +5,11 @@ import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
 import {PiChatCanvas} from "./PiChatCanvas.jsx";
+import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 import {derivePiChatSocketUrl} from "../../utils/piChat.js";
+import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
+import {useResourceMetrics} from "./useResourceMetrics.js";
 
 export function SessionDetail({
   busy,
@@ -43,6 +46,7 @@ export function SessionDetail({
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
   const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
+  const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
   const isProvisioning = session.status === "provisioning";
@@ -50,6 +54,11 @@ export function SessionDetail({
   const isRetryableFailure = isRetryableProvisioningFailure(session);
   const imageFreshness = getSessionImageFreshness(session);
   const isStaleImage = imageFreshness.state === "stale";
+  const metrics = useResourceMetrics({
+    enabled: Boolean(session.status === "running" && hasRunnerUrl && !isSshSession && metricsSocketUrl),
+    sessionId: session.id,
+    socketUrl: metricsSocketUrl || "",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -98,8 +107,9 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
-      {hasChat || capabilities.preview || capabilities.chrome ? (
-        <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
+      <div className="canvas-header">
+        {hasChat || capabilities.preview || capabilities.chrome ? (
+          <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
             role="tab"
@@ -140,8 +150,12 @@ export function SessionDetail({
               Chrome
             </Button>
           ) : null}
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+        {metricsSocketUrl && !isSshSession && session.status === "running" ? (
+          <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} />
+        ) : null}
+      </div>
       {isProvisioning ? (
         <div aria-live="polite" className="provisioning-status">
           <strong>{session.provisioningState === "queued" ? "Queued for provisioning" : "Provisioning in progress"}</strong>

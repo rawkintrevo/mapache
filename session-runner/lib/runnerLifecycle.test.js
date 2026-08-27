@@ -46,6 +46,7 @@ function createLifecycleHarness(events, overrides = {}) {
     listen: overrides.listen || (() => events.push("server.listen")),
     logger: overrides.logger || {error: () => {}, log: () => {}},
     piChat: overrides.piChat,
+    resourceMetrics: overrides.resourceMetrics,
     piModelScope: overrides.piModelScope || {
       persist: async () => events.push("piModelScope.persist"),
       restore: async () => events.push("piModelScope.restore"),
@@ -111,12 +112,14 @@ test("shutdown closes forwards before final profile snapshot and activity update
   const events = [];
   const lifecycle = createLifecycleHarness(events, {
     piChat: {close: () => events.push("piChat.close")},
+    resourceMetrics: {close: () => events.push("resourceMetrics.close")},
   });
 
   await lifecycle.shutdown();
 
   assert.deepEqual(events, [
     "piChat.close",
+    "resourceMetrics.close",
     "sshSession.closeAll",
     "chromeRuntime.stop",
     "piModelScope.persist",
