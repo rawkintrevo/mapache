@@ -47,7 +47,7 @@ us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-chrome
 ```
 
-The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, and `pi-n64`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`.
+The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-n64`, `pi-chrome`, and `codex-chrome`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`. The `chat` capability is enabled only for `pi-basic`, `pi-web`, and `pi-chrome`; the other images keep Chat disabled.
 
 Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, `n64`, and `chrome`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
 
@@ -230,6 +230,14 @@ gcloud builds submit session-runner \
   --config session-runner/cloudbuild.pi-basic.yaml
 ```
 
+## Pi Chat Runtime Contract
+
+Pi Chat is a best-effort view of completed Pi turns, not a second agent process or a token-streaming protocol. `pi-basic`, `pi-web`, and `pi-chrome` expose `chat: true`; `pi-n64`, Codex, shell, and SSH runtimes do not. The runner discovers the newest per-session JSONL under `PI_SESSION_DIR`, normalizes only `message` entries with `user` or `assistant` roles, and preserves assistant Markdown text exactly. Tool calls, tool results, thinking entries, terminal control sequences, malformed records, and incomplete final lines are excluded.
+
+The `/chat` WebSocket is routed by the shared `noServer` upgrade dispatcher and uses the same browser-access token as Terminal. An authorized prompt is validated and sent through the existing `node-pty` session as one bracketed paste followed by carriage return; no second Pi process or conversation is started. The transcript service replays at most 200 displayable messages from at most 1 MiB of source, emits complete appended lines once, and sends a reset after truncation, file replacement, or active-branch changes. Chat exposes completed turns after they are persisted, so a working state can remain visible until the next assistant message or Terminal fallback is needed.
+
+The frontend owns only session-local transient Chat state. `usePiChat` reconnects and treats replay as authoritative; `PiChatCanvas` keeps one pending user bubble until the matching later user entry arrives, renders assistant GFM without raw HTML, and keeps `Open Terminal` available for approvals, tools, slash commands, and recovery. Existing services must receive a new revision or be recreated after deploying a runner image with Chat support; publishing a new image tag alone does not update an already-running Cloud Run service.
+
 ## Codex Basic Runtime
 
 `session-runner/Dockerfile.codex-basic` is the terminal-first Codex runner. It installs the standalone Codex CLI and starts the browser terminal in interactive `codex` mode.
@@ -251,7 +259,7 @@ gcloud builds submit session-runner \
 `session-runner/Dockerfile.pi-web` is the web-development runner. It starts from the same Pi-oriented shape as `pi-basic`, then adds Chromium and globally installed Playwright test tooling for browser QA. The image sets the runner capability contract to:
 
 ```json
-{"terminal":true,"preview":true,"previewQa":true,"functions":true}
+{"terminal":true,"preview":true,"previewQa":true,"functions":true,"chat":true}
 ```
 
 The shared runner server still owns the terminal, sync, protected shutdown, Git, skill, and package endpoints. Web behavior is enabled by environment:
@@ -350,7 +358,7 @@ gcloud builds submit session-runner \
 The image sets the runner capability contract to:
 
 ```json
-{"terminal":true,"preview":true,"previewQa":false,"functions":false,"n64":true}
+{"terminal":true,"preview":true,"previewQa":false,"functions":false,"n64":true,"chat":false}
 ```
 
 The shared runner server still owns the terminal, sync, protected shutdown, Git, skill, and package endpoints. N64 behavior is enabled by environment:

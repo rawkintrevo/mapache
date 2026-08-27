@@ -28,7 +28,7 @@ The supported harness ids are:
 - `pi`
 - `codex`
 
-The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome capability flags. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. Each harness entry declares whether it supports:
+The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome/Chat capability flags. The `chat` capability is true only for `pi-basic`, `pi-web`, and `pi-chrome`; it is false for shell, Codex, and `pi-n64` images. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. Each harness entry declares whether it supports:
 
 - auth materialization
 - workspace-local skills
@@ -120,7 +120,7 @@ Chrome images seed the harness-neutral `mapache-chrome` skill at the active Pi o
 
 ## Frontend
 
-The right drawer now resolves the selected session harness through `src/utils/sessionHarnesses.js` instead of inferring behavior from `imageKey` prefixes or `terminalKind` alone. Auth, Skills, Extensions, and Subagents panels all use the same harness metadata for capability gating, labels, storage paths, and restart hints.
+The right drawer now resolves the selected session harness through `src/utils/sessionHarnesses.js` instead of inferring behavior from `imageKey` prefixes or `terminalKind` alone. Auth, Skills, Extensions, and Subagents panels all use the same harness metadata for capability gating, labels, storage paths, and restart hints. `SessionDetail` uses the same catalog capability map to expose Chat only for supported Pi sessions; `src/utils/piChat.js` derives an authenticated `ws(s)://.../chat` URL from the signed terminal URL, so Chat and Terminal share one runner and one PTY.
 
 ## Verification
 
