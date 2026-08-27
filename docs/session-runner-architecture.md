@@ -58,6 +58,8 @@ Workspace subagent CRUD now uses neutral runner routes at `/subagents` and `/sub
 - Browser terminal/preview/capability routes require browser-access tokens.
 - The shared HTTP server has exactly one WebSocket upgrade dispatcher; terminal and browser WebSocket servers stay in `noServer` mode so neither can reject the other's path.
 - `/metrics` is a browser-token-gated, read-only WebSocket separate from the terminal PTY. It reports only the latest container CPU/RAM sample; the browser retains no server-side history.
+- Resource sampling prefers unified cgroup v2 counters and falls back to Cloud Run's scoped cgroup
+  v1 mounts, including separate Service `cpu`/`cpuacct` roots and combined Job roots.
 - Browser QA artifacts and state must stay under `$MAPACHE_QA_DIR`; status routes read that state instead of scraping terminal output.
 - Backend-only runner routes require the separate shutdown token.
 - Tokens must not be persisted into workspace files, archives, or logs.

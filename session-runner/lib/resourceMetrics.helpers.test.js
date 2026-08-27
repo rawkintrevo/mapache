@@ -6,19 +6,24 @@ const {
   calculateCpuPercent,
   calculateMemoryPercent,
   parseCpuLimitCores,
+  parseCpuLimitCoresV1,
+  parseCpuUsageNsec,
   parseCpuUsageUsec,
   parseMemoryBytes,
 } = require("./resourceMetrics.helpers");
 
 test("parses cgroup CPU and memory values", () => {
   assert.equal(parseCpuUsageUsec("usage_usec 120000\nuser_usec 90000"), 120000);
+  assert.equal(parseCpuUsageNsec("120000000"), 120000);
   assert.equal(parseCpuLimitCores("200000 100000"), 2);
+  assert.equal(parseCpuLimitCoresV1("200000", "100000"), 2);
   assert.equal(parseMemoryBytes("4294967296\n"), 4294967296);
 });
 
 test("uses available parallelism for an unlimited CPU cgroup", () => {
   assert.equal(parseCpuLimitCores("max 100000", () => 4), 4);
   assert.equal(parseCpuLimitCores("max 100000", () => 0), null);
+  assert.equal(parseCpuLimitCoresV1("-1", "100000", () => 4), 4);
 });
 
 test("rejects invalid and unlimited memory values", () => {

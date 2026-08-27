@@ -9,6 +9,11 @@ function parseCpuUsageUsec(value) {
   return Number.isFinite(usage) && usage >= 0 ? usage : null;
 }
 
+function parseCpuUsageNsec(value) {
+  const usage = Number(String(value || "").trim());
+  return Number.isFinite(usage) && usage >= 0 ? usage / 1000 : null;
+}
+
 function parseCpuLimitCores(value, availableParallelism = os.availableParallelism) {
   const [quota, period] = String(value || "").trim().split(/\s+/);
   if (quota === "max") {
@@ -19,6 +24,12 @@ function parseCpuLimitCores(value, availableParallelism = os.availableParallelis
   const periodUsec = Number(period);
   if (!Number.isFinite(quotaUsec) || !Number.isFinite(periodUsec) || quotaUsec <= 0 || periodUsec <= 0) return null;
   return quotaUsec / periodUsec;
+}
+
+function parseCpuLimitCoresV1(quotaValue, periodValue, availableParallelism = os.availableParallelism) {
+  const quota = Number(String(quotaValue || "").trim());
+  if (quota === -1) return parseCpuLimitCores("max 1", availableParallelism);
+  return parseCpuLimitCores(`${quota} ${String(periodValue || "").trim()}`, availableParallelism);
 }
 
 function parseMemoryBytes(value) {
@@ -53,6 +64,8 @@ module.exports = {
   calculateMemoryPercent,
   clampPercent,
   parseCpuLimitCores,
+  parseCpuLimitCoresV1,
+  parseCpuUsageNsec,
   parseCpuUsageUsec,
   parseMemoryBytes,
 };

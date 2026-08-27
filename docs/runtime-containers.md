@@ -8,6 +8,10 @@ metadata identity (`mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`). Wo
 the runner's own identity, because credentials stored under `/workspace` are unavailable until
 after the control plane restores that workspace.
 
+Live resource metrics support both unified cgroup v2 files and Cloud Run's cgroup v1 layouts.
+The sampler handles the separately scoped `cpu` and `cpuacct` mounts used by Cloud Run Services,
+the combined `cpu,cpuacct` mount used by Cloud Run Jobs, and the `memory` controller in both.
+
 ## Runner Images
 
 The default runner image is built from `session-runner/Dockerfile` and published as:
