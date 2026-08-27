@@ -70,4 +70,19 @@ describe("createModalController", () => {
     controller.closeSessionEditModal();
     expect(state.sessionEditModalSessionId).toBeNull();
   });
+
+  test("opens and closes workspace editing for the selected workspace", () => {
+    const state = {
+      selectedWorkspaceId: "workspace-1",
+      workspaceEditModalOpen: false,
+      workspaces: [{id: "workspace-1"}],
+    };
+    const controller = createModalController({state, render: vi.fn(), loadPiAuth: vi.fn()});
+
+    controller.openWorkspaceEditModal();
+    expect(state.workspaceEditModalOpen).toBe(true);
+
+    controller.closeWorkspaceEditModal();
+    expect(state.workspaceEditModalOpen).toBe(false);
+  });
 });

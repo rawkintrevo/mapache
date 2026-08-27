@@ -49,6 +49,11 @@ export function createApiClient(getToken) {
       method: "POST",
       body,
     }),
+    renameWorkspace: (workspaceId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}`,
+        {method: "PATCH", body: {name}},
+    ),
     deleteWorkspace: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}`,

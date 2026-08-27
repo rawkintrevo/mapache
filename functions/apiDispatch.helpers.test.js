@@ -121,6 +121,20 @@ function createTestApiHandlers() {
   });
 
   assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "workspace", workspaceId: "workspace-1"},
+    body: {name: "Renamed workspace"},
+  }), {
+    status: 200,
+    payload: {
+      workspace: {
+        handler: "renameWorkspace",
+        args: ["user-1", "workspace-1", {name: "Renamed workspace"}],
+      },
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "sessions", workspaceId: "workspace-1"},
     body: {name: "Session"},

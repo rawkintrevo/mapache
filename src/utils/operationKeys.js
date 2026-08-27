@@ -18,5 +18,6 @@ export const OPERATION_KEYS = Object.freeze({
   WORKSPACE_CREATE: "workspace.create",
   WORKSPACE_DELETE: "workspace.delete",
   WORKSPACE_FILES_REFRESH: "workspace-files.refresh",
+  WORKSPACE_RENAME: "workspace.rename",
   WORKSPACE_SELECT: "workspace.select",
 });

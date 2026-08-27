@@ -89,6 +89,21 @@ export function createWorkspaceController({
     }, "Working...", OPERATION_KEYS.WORKSPACE_DELETE);
   }
 
+  async function renameWorkspace(workspaceId, name) {
+    const nextName = String(name || "").trim();
+    if (!workspaceId || !nextName) return false;
+
+    await runBusy(async () => {
+      try {
+        await state.api.renameWorkspace(workspaceId, nextName);
+        await refreshWorkspaceList();
+      } catch (error) {
+        throw new Error(friendlyWorkspaceError(error));
+      }
+    }, "Saving workspace...", OPERATION_KEYS.WORKSPACE_RENAME);
+    return !state.error;
+  }
+
   async function selectWorkspace(workspaceId) {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId});
@@ -107,6 +122,7 @@ export function createWorkspaceController({
     createWorkspace,
     deleteWorkspace,
     refreshWorkspaceList,
+    renameWorkspace,
     selectWorkspace,
   };
 }

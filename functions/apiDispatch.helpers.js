@@ -46,6 +46,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
   workspaces: Object.freeze([
     ["GET", "workspaces", namedJsonResult("workspaces", ({handlers, user}) => handlers.listWorkspaces(user.uid))],
     ["POST", "workspaces", createdNamedJsonResult("workspace", ({handlers, req, user}) => handlers.createWorkspace(user.uid, req.body || {}))],
+    ["PATCH", "workspace", namedJsonResult("workspace", ({handlers, req, route, user}) => handlers.renameWorkspace(user.uid, route.workspaceId, req.body || {}))],
     ["DELETE", "workspace", jsonResult(({handlers, route, user}) => handlers.deleteWorkspace(user.uid, route.workspaceId))],
     ["GET", "workspaceFiles", jsonResult(({handlers, req, route, user}) => handlers.listWorkspaceFiles(user.uid, route.workspaceId, req.query.path))],
     ["POST", "workspaceSyncFiles", jsonResult(({handlers, route, user}) => handlers.syncWorkspaceFiles(user.uid, route.workspaceId))],

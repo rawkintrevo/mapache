@@ -33,6 +33,7 @@ function createApiHandlers({agentAuthService, environmentKeysService, openAiCode
     deleteWorkspaceSubagent: workspaceAgentAssetsService.deleteWorkspaceSubagent,
     listWorkspaces: workspaceService.listWorkspaces,
     createWorkspace: workspaceService.createWorkspace,
+    renameWorkspace: workspaceService.renameWorkspace,
     deleteWorkspace: workspaceService.deleteWorkspace,
     listWorkspaceFiles: workspaceService.listWorkspaceFiles,
     readWorkspaceFile: workspaceService.readWorkspaceFile,

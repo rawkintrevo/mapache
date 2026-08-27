@@ -241,6 +241,7 @@ export function createInitialState() {
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     sessionEditModalSessionId: null,
+    workspaceEditModalOpen: false,
     workspaceSkillModalOpen: false,
     workspaceSubagentModalOpen: false,
     authModalOpen: false,

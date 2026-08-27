@@ -39,6 +39,17 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
+  function openWorkspaceEditModal() {
+    if (!state.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)) return;
+    state.workspaceEditModalOpen = true;
+    render();
+  }
+
+  function closeWorkspaceEditModal() {
+    state.workspaceEditModalOpen = false;
+    render();
+  }
+
   function openWorkspaceSkillModal() {
     state.workspaceSkillModalOpen = true;
     render();
@@ -146,6 +157,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     closeWorkspaceSubagentModal,
     closeWorkspaceSkillModal,
     closeWorkspaceModal,
+    closeWorkspaceEditModal,
     openAuthModal,
     openGoogleWorkspaceModal,
     openPiAuthManageModal,
@@ -157,6 +169,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     openWorkspaceSubagentModal,
     openWorkspaceSkillModal,
     openWorkspaceModal,
+    openWorkspaceEditModal,
     showProfile,
   };
 }

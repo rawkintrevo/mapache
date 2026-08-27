@@ -18,7 +18,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["genericEnvEntry", ["PUT", "DELETE"]],
   ["openAiCodexDeviceCode", ["POST"]],
   ["workspaces", ["GET", "POST"]],
-  ["workspace", ["DELETE"]],
+  ["workspace", ["PATCH", "DELETE"]],
   ["workspaceMcp", ["GET", "PUT"]],
   ["workspaceFiles", ["GET"]],
   ["workspaceSyncFiles", ["POST"]],

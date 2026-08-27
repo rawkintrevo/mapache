@@ -47,6 +47,7 @@ function createWorkspaceService(dependencies = {}) {
     listWorkspaceFiles,
     listWorkspaces,
     readWorkspaceFile,
+    renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
     saveWorkspaceFile,
     uploadWorkspaceFile,
@@ -58,6 +59,24 @@ async function listWorkspaces(uid) {
       .where("ownerUid", "==", uid)
       .get();
   return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
+}
+
+async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
+  const workspaceSnap = await workspaceRef.get();
+  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+  const workspace = workspaceSnap.data() || {};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+
+  const name = cleanName(payload && payload.name);
+  if (!name) throw httpError(400, "invalid_workspace_name");
+  await workspaceRef.update({
+    name,
+    updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+  });
+  return toClientDoc(await workspaceRef.get());
 }
 
 async function getWorkspaceMcpConfig(uid, workspaceId) {
@@ -676,6 +695,7 @@ module.exports = {
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
   requireWorkspace,
+  renameWorkspace,
   saveWorkspaceMcpConfig,
   storagePrefixToClientDirectory,
   storageFileToClientFile,

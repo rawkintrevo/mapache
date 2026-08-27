@@ -91,12 +91,14 @@ function createHandlers(overrides = {}) {
       closeSessionEditModal: vi.fn(),
       closeSessionModal: vi.fn(),
       closeWorkspaceSkillModal: vi.fn(),
+      closeWorkspaceEditModal: vi.fn(),
       closeWorkspaceModal: vi.fn(),
       openAuthModal: vi.fn(),
       openPiAuthManageModal: vi.fn(),
       openSessionEditModal: vi.fn(),
       openSessionModal: vi.fn(),
       openWorkspaceSkillModal: vi.fn(),
+      openWorkspaceEditModal: vi.fn(),
       openWorkspaceModal: vi.fn(),
       showProfile: vi.fn(),
     },
@@ -132,6 +134,7 @@ function createHandlers(overrides = {}) {
     workspaces: {
       createWorkspace: vi.fn(),
       deleteWorkspace: vi.fn(),
+      renameWorkspace: vi.fn().mockResolvedValue(true),
       selectWorkspace: vi.fn(),
     },
   };
@@ -217,6 +220,7 @@ function createState(overrides = {}) {
     workspaceFilesUploading: false,
     workspaceFilesWorkspaceId: workspace.id,
     workspaceSkillModalOpen: false,
+    workspaceEditModalOpen: false,
     workspaceModalOpen: false,
     workspaces: [workspace],
     ...overrides,
@@ -311,6 +315,9 @@ describe("frontend smoke coverage", () => {
     expect(screen.queryByRole("button", {name: `Create session in ${workspace.name}`})).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Create workspace"}));
     expect(handlers.modals.openWorkspaceModal).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", {name: `Edit workspace ${workspace.name}`}));
+    expect(handlers.modals.openWorkspaceEditModal).toHaveBeenCalledTimes(1);
 
     await user.selectOptions(screen.getByRole("combobox", {name: "Workspace"}), workspace.id);
     expect(handlers.workspaces.selectWorkspace).toHaveBeenCalledWith(workspace.id);
@@ -522,6 +529,26 @@ describe("frontend smoke coverage", () => {
     });
     expect(workspaceHandlers.modals.closeWorkspaceModal).toHaveBeenCalled();
     workspaceView.unmount();
+  });
+
+  test("renames the selected workspace from the edit modal", async () => {
+    const user = userEvent.setup();
+    const handlers = createHandlers();
+    render(
+        <AppShell
+          handlers={handlers}
+          state={createState({workspaceEditModalOpen: true})}
+        />,
+    );
+
+    const dialog = await screen.findByRole("dialog", {name: "Edit workspace"});
+    const nameInput = within(dialog).getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Renamed Workspace");
+    await user.click(within(dialog).getByRole("button", {name: "Save changes"}));
+
+    expect(handlers.workspaces.renameWorkspace).toHaveBeenCalledWith(workspace.id, "Renamed Workspace");
+    expect(handlers.modals.closeWorkspaceEditModal).toHaveBeenCalledTimes(1);
   });
 
   test("create session modal derives ssh sessions from dev machine workspaces", async () => {

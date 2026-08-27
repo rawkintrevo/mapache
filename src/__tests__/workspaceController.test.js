@@ -10,6 +10,7 @@ function createFixture(overrides = {}) {
       getWorkspaces: vi.fn().mockResolvedValue({workspaces: []}),
       createWorkspace: vi.fn().mockResolvedValue({workspace: {id: "workspace-new"}}),
       deleteWorkspace: vi.fn().mockResolvedValue({}),
+      renameWorkspace: vi.fn().mockResolvedValue({workspace: {id: "workspace-1", name: "New Docs"}}),
     },
     ...overrides,
   };
@@ -111,6 +112,24 @@ describe("workspaceController", () => {
     expect(fixture.state.selectedSessionId).toBeNull();
     expect(fixture.resetWorkspacePanels).toHaveBeenCalledWith({includeMcp: false});
     expect(fixture.refreshAll).toHaveBeenCalledTimes(1);
+  });
+
+  test("renames a workspace and refreshes the workspace list", async () => {
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", name: "Docs"}],
+      selectedWorkspaceId: "workspace-1",
+    });
+    fixture.state.api.getWorkspaces.mockResolvedValue({
+      workspaces: [{id: "workspace-1", name: "New Docs"}],
+    });
+    const controller = createWorkspaceController(fixture);
+
+    const saved = await controller.renameWorkspace("workspace-1", "  New Docs  ");
+
+    expect(saved).toBe(true);
+    expect(fixture.state.api.renameWorkspace).toHaveBeenCalledWith("workspace-1", "New Docs");
+    expect(fixture.state.api.getWorkspaces).toHaveBeenCalledTimes(1);
+    expect(fixture.state.workspaces[0].name).toBe("New Docs");
   });
 });
 
