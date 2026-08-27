@@ -34,6 +34,11 @@ function createTerminalSession({admin, config, activity, onTerminalExit}) {
       handleTerminalMessage(ensureTerm(), raw);
       markTerminalActivity();
     },
+    writePrompt(text) {
+      const prompt = formatPrompt(text);
+      ensureTerm().write(prompt);
+      markTerminalActivity();
+    },
   };
 
   function ensureTerm() {
@@ -192,6 +197,10 @@ function handleTerminalMessage(term, raw) {
   } catch (error) {
     term.write(raw.toString());
   }
+}
+
+function formatPrompt(text) {
+  return `\x1b[200~${String(text)}\x1b[201~\r`;
 }
 
 function sendTerminalMessage(socket, message) {
@@ -491,4 +500,5 @@ module.exports = {
   shouldReplayTerminal,
   terminalArgs,
   terminalCommand,
+  formatPrompt,
 };

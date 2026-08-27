@@ -18,6 +18,8 @@ const {createGitService} = require("./lib/git");
 const {createRunnerHarnessRegistry} = require("./lib/harnesses");
 const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
 const {createPiModelScopeService} = require("./lib/piModelScope.service");
+const {createPiChatTranscriptService} = require("./lib/piChat.service");
+const {createPiChatWebSocket} = require("./lib/piChatWebSocket");
 const {createMcpConfigService} = require("./lib/mcpConfig.service");
 const {createGoogleMcpStatusService} = require("./lib/googleMcpStatus.service");
 const {createPreviewService} = require("./lib/preview");
@@ -93,6 +95,13 @@ const terminalSession = createTerminalSession({
     }
   },
 });
+const piChatTranscript = createPiChatTranscriptService({config});
+const piChat = createPiChatWebSocket({
+  config,
+  hasBrowserAccess,
+  terminalSession,
+  transcriptService: piChatTranscript,
+});
 const runnerLifecycle = createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
@@ -103,6 +112,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   config,
   git,
   listen: (onListening) => server.listen(config.port, onListening),
+  piChat,
   piModelScope,
   sshSession,
   workspace,
@@ -167,9 +177,11 @@ browserWss.on("connection", (socket) => {
 });
 
 server.on("upgrade", createWebSocketUpgradeRouter({
+  chatWss: piChat.server,
   terminalWss: wss,
   browserWss,
   hasBrowserAccess,
+  hasChatAccess: (request) => piChat.supported && hasBrowserAccess(request),
 }));
 
 runnerLifecycle.start()

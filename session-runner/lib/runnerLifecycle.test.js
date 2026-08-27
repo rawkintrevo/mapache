@@ -45,6 +45,7 @@ function createLifecycleHarness(events, overrides = {}) {
     git: overrides.git || service("prepareGithubAutomationBranch", "git.prepareGithubAutomationBranch"),
     listen: overrides.listen || (() => events.push("server.listen")),
     logger: overrides.logger || {error: () => {}, log: () => {}},
+    piChat: overrides.piChat,
     piModelScope: overrides.piModelScope || {
       persist: async () => events.push("piModelScope.persist"),
       restore: async () => events.push("piModelScope.restore"),
@@ -108,11 +109,14 @@ test("startup failure prevents later lifecycle steps and listen", async () => {
 
 test("shutdown closes forwards before final profile snapshot and activity update", async () => {
   const events = [];
-  const lifecycle = createLifecycleHarness(events);
+  const lifecycle = createLifecycleHarness(events, {
+    piChat: {close: () => events.push("piChat.close")},
+  });
 
   await lifecycle.shutdown();
 
   assert.deepEqual(events, [
+    "piChat.close",
     "sshSession.closeAll",
     "chromeRuntime.stop",
     "piModelScope.persist",

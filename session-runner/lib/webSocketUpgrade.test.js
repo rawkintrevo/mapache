@@ -11,23 +11,33 @@ test("routes terminal and browser upgrades without path handlers racing", async 
   const server = http.createServer();
   const terminalWss = new WebSocketServer({noServer: true});
   const browserWss = new WebSocketServer({noServer: true});
+  const chatWss = new WebSocketServer({noServer: true});
   const hasBrowserAccess = (request) => {
     const url = new URL(request.url, "http://localhost");
     return url.searchParams.get("access") === "valid";
   };
-  server.on("upgrade", createWebSocketUpgradeRouter({terminalWss, browserWss, hasBrowserAccess}));
+  server.on("upgrade", createWebSocketUpgradeRouter({
+    terminalWss,
+    browserWss,
+    chatWss,
+    hasBrowserAccess,
+    hasChatAccess: hasBrowserAccess,
+  }));
   terminalWss.on("connection", (socket) => socket.send("terminal-ready"));
   browserWss.on("connection", (socket) => socket.send(Buffer.from("RFB 003.008\n")));
+  chatWss.on("connection", (socket) => socket.send("chat-ready"));
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => {
     terminalWss.close();
     browserWss.close();
+    chatWss.close();
     server.close();
   });
   const {port} = server.address();
 
   assert.equal(await firstMessage(`ws://127.0.0.1:${port}/terminal`), "terminal-ready");
+  assert.equal(await firstMessage(`ws://127.0.0.1:${port}/chat?access=valid`), "chat-ready");
   assert.equal(
       await firstMessage(`ws://127.0.0.1:${port}/browser/vnc?access=valid`, ["binary"]),
       "RFB 003.008\n",
