@@ -43,7 +43,7 @@ function parseRunnerCapabilities() {
   }
 }
 
-function createConfig() {
+function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
   const piHomeDir = path.join(homeDir, ".pi");
@@ -179,6 +179,7 @@ function createConfig() {
     terminalReplayLimit: positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000),
     terminalKind: normalizeEnvString(process.env.TERMINAL_KIND) || "pi",
     workspaceDir,
+    workspaceGoogleApplicationCredentials: normalizeEnvString(workspaceGoogleApplicationCredentials),
     workspaceId: process.env.WORKSPACE_ID || "",
     workspaceSourceMode,
     workspaceSyncRole,

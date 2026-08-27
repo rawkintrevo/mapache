@@ -2,6 +2,12 @@
 
 Runtime containers are the Cloud Run services that back browser terminal sessions.
 
+Runner control-plane Storage and Firestore clients always authenticate with the Cloud Run
+metadata identity (`mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`). Workspace-provided
+`GOOGLE_APPLICATION_CREDENTIALS` remains available to terminal processes but must not override
+the runner's own identity, because credentials stored under `/workspace` are unavailable until
+after the control plane restores that workspace.
+
 ## Runner Images
 
 The default runner image is built from `session-runner/Dockerfile` and published as:

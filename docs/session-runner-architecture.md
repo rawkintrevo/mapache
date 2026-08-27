@@ -15,6 +15,7 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 - Startup/shutdown coordination: `session-runner/lib/runnerLifecycle.js`
 - Browser QA orchestration: `session-runner/lib/browserQa.js` and `session-runner/bin/mapache-preview-qa.js`
 - Shared config: `session-runner/lib/config.js`
+- Cloud Storage/Firestore client identity: `session-runner/lib/services.js`
 - Harness metadata and startup hooks: `session-runner/lib/harnesses/`
 - Terminal and PTY: `session-runner/lib/terminal.js`
 - Live resource metrics: `session-runner/lib/resourceMetrics.helpers.js`, `resourceMetrics.service.js`, and `resourceMetricsWebSocket.js`
@@ -60,6 +61,8 @@ Workspace subagent CRUD now uses neutral runner routes at `/subagents` and `/sub
 - Browser QA artifacts and state must stay under `$MAPACHE_QA_DIR`; status routes read that state instead of scraping terminal output.
 - Backend-only runner routes require the separate shutdown token.
 - Tokens must not be persisted into workspace files, archives, or logs.
+- Runner control-plane Google clients use the Cloud Run metadata identity even when the workspace
+  defines `GOOGLE_APPLICATION_CREDENTIALS`; workspace credentials are for child processes only.
 - High-cardinality caches such as `.git`, `node_modules`, `/root/.pi`, and Pi package code use archive-backed sync rather than normal file listing.
 - Skills are small Markdown workspace files and remain normal sync state.
 - Harness-specific workspace files such as `.codex/config.toml`, `.codex/agents/*.toml`, and `.pi/agents/*.md` remain visible workspace state, not hidden archive state.

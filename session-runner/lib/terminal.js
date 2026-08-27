@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
 const {prepareSshMaterial, sshCommand} = require("./sshSession");
@@ -175,7 +176,7 @@ function spawnTerminal(command, config) {
     rows: 32,
     cwd: config.workspaceDir,
     env: {
-      ...process.env,
+      ...createWorkspaceProcessEnvironment(config),
       MAPACHE_RUNNER_URL: `http://127.0.0.1:${config.port}`,
       MAPACHE_PREVIEW_URL: `http://127.0.0.1:${config.port}${config.previewBasePath}/`,
       MAPACHE_QA_DIR: path.join(config.workspaceDir, ".mapache", "qa"),

@@ -1,5 +1,7 @@
 "use strict";
 
+const {isolateRunnerGoogleCredentials} = require("./lib/runnerEnvironment");
+const runnerEnvironment = isolateRunnerGoogleCredentials();
 const path = require("path");
 const http = require("http");
 const express = require("express");
@@ -44,7 +46,7 @@ const {registerGoogleMcpRoutes} = require("./routes/googleMcpRoutes");
 const {registerSshRoutes} = require("./routes/sshRoutes");
 const {registerWorkspaceRoutes} = require("./routes/workspaceRoutes");
 
-const config = createConfig();
+const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
   secret: config.sessionBrowserTokenSecret,
   sessionId: config.sessionId,
