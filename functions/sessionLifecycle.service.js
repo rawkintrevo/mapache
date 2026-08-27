@@ -17,7 +17,11 @@ const {
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
-const {initialProvisioningMetadata} = require("./provisioning.helpers");
+const {
+  initialProvisioningMetadata,
+  isValidCloudRunServiceId,
+  resolveCloudRunServiceId,
+} = require("./provisioning.helpers");
 const {
   accrueSessionUsage,
   isTerminalSessionStatus,
@@ -130,6 +134,9 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
 
   await sessionRef.update(restartUpdate);
 
+  const serviceId = resolveCloudRunServiceId(sessionId, session.serviceId);
+  const serviceName = isValidCloudRunServiceId(session.serviceId) && session.serviceName ?
+    session.serviceName : cloudRunServiceName(session.region || DEFAULT_REGION, serviceId);
   const restartedSession = {
     ...session,
     ...restartUpdate,
@@ -138,8 +145,8 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
     workspaceId,
     workspaceStorageBucket: session.workspaceStorageBucket || workspace.bucket || DEFAULT_BUCKET,
     workspaceStoragePrefix: session.workspaceStoragePrefix || workspace.storagePrefix,
-    serviceId: session.serviceId || `session-${sessionId.toLowerCase()}`,
-    serviceName: session.serviceName || cloudRunServiceName(session.region || DEFAULT_REGION, session.serviceId || `session-${sessionId.toLowerCase()}`),
+    serviceId,
+    serviceName,
   };
 
   if (recreatingSessionService && !isChromeSession(session)) {
