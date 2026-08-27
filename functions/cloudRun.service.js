@@ -27,8 +27,7 @@ const {
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
-const {resolveSessionHarness} = require("./runnerCatalog.helpers");
-const {runnerImageCapabilities} = require("./runnerImages.helpers");
+const {resolveSessionCapabilities, resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
@@ -424,7 +423,7 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 }
 
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
-  const capabilities = session.capabilities || runnerImageCapabilities(session.image);
+  const capabilities = resolveSessionCapabilities(session);
   const harness = resolveSessionHarness(session);
   const terminal = terminalCommandEnv(session);
   const terminalKind = cleanName(harness?.terminalKind || session.terminalKind || "shell") || "shell";

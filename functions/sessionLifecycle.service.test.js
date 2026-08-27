@@ -95,14 +95,17 @@ const lifecycle = createSessionLifecycleService({
     ownerUid: "user-1",
     status: "stopped",
     terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     serviceUrl: null,
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
-    capabilities: {chrome: true},
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(calls.some((call) => call.kind === "reserveChrome"), true);
   assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), false);
+  assert.strictEqual(currentSession.capabilities.chat, true);
 
   calls.length = 0;
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};

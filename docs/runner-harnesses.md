@@ -28,7 +28,7 @@ The supported harness ids are:
 - `pi`
 - `codex`
 
-The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome/Chat capability flags. The `chat` capability is true only for `pi-basic`, `pi-web`, and `pi-chrome`; it is false for shell, Codex, and `pi-n64` images. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. Each harness entry declares whether it supports:
+The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome/Chat capability flags. The `chat` capability is true only for `pi-basic`, `pi-web`, and `pi-chrome`; it is false for shell, Codex, and `pi-n64` images. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. On restart or re-provision, known image capabilities are recalculated from this catalog so older session documents and Cloud Run environment snapshots receive newly added flags; SSH-specific capability flags remain session-owned. Each harness entry declares whether it supports:
 
 - auth materialization
 - workspace-local skills

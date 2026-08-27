@@ -3,6 +3,7 @@
 const assert = require("assert");
 const {
   resolveRunnerImage,
+  resolveSessionCapabilities,
   runnerImageCapabilities,
 } = require("./runnerImages.helpers");
 
@@ -65,6 +66,30 @@ const legacyImage = resolveRunnerImage({
 });
 assert.strictEqual(legacyImage.key, "pi-basic");
 assert.strictEqual(legacyImage.canProvision, true);
+
+const refreshedLegacyPiChrome = resolveSessionCapabilities({
+  imageKey: "pi-chrome",
+  capabilities: {
+    terminal: true,
+    preview: true,
+    previewQa: true,
+    functions: true,
+    n64: false,
+    chrome: true,
+  },
+});
+assert.strictEqual(refreshedLegacyPiChrome.chat, true);
+assert.strictEqual(refreshedLegacyPiChrome.chrome, true);
+
+const sshCapabilities = resolveSessionCapabilities({
+  imageKey: "default",
+  sessionType: "ssh",
+  terminalKind: "ssh",
+  capabilities: {terminal: true, preview: true, chat: true, ssh: true, sshFiles: true},
+});
+assert.strictEqual(sshCapabilities.preview, false);
+assert.strictEqual(sshCapabilities.chat, false);
+assert.strictEqual(sshCapabilities.ssh, true);
 
 assert.strictEqual(code(() => resolveRunnerImage({imageKey: "unknown"})), "invalid_runner_image");
 assert.strictEqual(

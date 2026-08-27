@@ -90,8 +90,31 @@ function resolveSessionHarness(session = {}) {
 }
 
 function runnerImageCapabilities(image) {
-  const runnerImage = RUNNER_IMAGES_BY_IMAGE[cleanRunnerImageValue(image)];
+  const normalizedImage = cleanRunnerImageValue(image);
+  const runnerImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || RUNNER_IMAGES[normalizedImage];
   return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({terminal: true});
+}
+
+function resolveSessionCapabilities(session = {}) {
+  const persistedCapabilities = session.capabilities && typeof session.capabilities === "object" ? session.capabilities : {};
+  const imageValue = session.imageKey || session.image;
+  const normalizedImage = cleanRunnerImageValue(imageValue);
+  const knownImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || RUNNER_IMAGES[normalizedImage];
+
+  if (!knownImage) {
+    return Object.keys(persistedCapabilities).length ? {...persistedCapabilities} : runnerImageCapabilities(imageValue);
+  }
+
+  const capabilities = runnerImageCapabilities(imageValue);
+  const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
+  if (!isSshSession) return capabilities;
+
+  return {
+    ...capabilities,
+    ...persistedCapabilities,
+    preview: false,
+    chat: false,
+  };
 }
 
 function resolveRunnerImage(payload = {}, defaultImage = "") {
@@ -166,6 +189,7 @@ module.exports = {
   listRunnerImages,
   resolveHarness,
   resolveRunnerImage,
+  resolveSessionCapabilities,
   resolveSessionHarness,
   runnerImageCapabilities,
 };

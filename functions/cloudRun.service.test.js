@@ -203,6 +203,19 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(chromeEnv.MAPACHE_BROWSER_STATUS_URL, "http://127.0.0.1:8080/browser/status");
   assert.strictEqual(chromeEnv.MAPACHE_BROWSER_ACTIVITY_URL, "http://127.0.0.1:8080/browser/activity");
 
+  const refreshedLegacyChromeEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+  }));
+  assert.strictEqual(JSON.parse(refreshedLegacyChromeEnv.RUNNER_CAPABILITIES).chat, true);
+
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",
     workspaceId: "workspace-1",

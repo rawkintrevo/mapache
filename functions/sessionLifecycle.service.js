@@ -32,6 +32,7 @@ const {
   isShellSession,
   sessionStatusUpdate,
 } = require("./sessionLifecycle.helpers");
+const {resolveSessionCapabilities} = require("./runnerCatalog.helpers");
 
 function createSessionLifecycleService(dependencies = {}) {
   return {
@@ -103,8 +104,10 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   const restartedAt = dependencies.admin.firestore.Timestamp.now();
   const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
   const restartNonce = Date.now().toString();
+  const capabilities = resolveSessionCapabilities(session);
   const restartUpdate = sessionStatusUpdate(session, recreatingSessionService ? "provisioning" : "restarting", {
     browserAccessTokenSecret,
+    capabilities,
     mcpConfig: mcpConfigForRunner(workspace),
     restartNonce,
     restartedAt,
