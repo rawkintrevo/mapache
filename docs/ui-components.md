@@ -47,7 +47,9 @@ This document serves as an index for significant UI components in the applicatio
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal iframe, capability-gated preview canvas, restart controls, SSH port-forward controls, and Git status placement for the selected session. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal-first selected-session view with capability-gated Chat, Preview, and Chrome canvases, restart controls, SSH port-forward controls, and Git status placement. |
+| `PiChatCanvas` | `src/components/sessions/PiChatCanvas.jsx` | Capability-gated Pi Chat canvas with authoritative transcript replay, pending/working states, prompt composer, and Terminal fallback. |
+| `PiChatMessage` | `src/components/sessions/PiChatMessage.jsx` | Accessible user/assistant message bubble; assistant content uses safe GitHub Flavored Markdown without raw HTML. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |
 | `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace with preset/custom CPU and memory summaries. |

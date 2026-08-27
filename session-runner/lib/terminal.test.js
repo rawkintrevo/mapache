@@ -2,7 +2,11 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {renderTerminalPage} = require("./terminal");
+const {formatPrompt, renderTerminalPage} = require("./terminal");
+
+test("formats Chat prompts as one bracketed paste followed by carriage return", () => {
+  assert.equal(formatPrompt("one\ntwo"), "\x1b[200~one\ntwo\x1b[201~\r");
+});
 
 test("renderTerminalPage includes critical xterm layout and helper-textarea styles", () => {
   const html = renderTerminalPage({accessToken: "token-123"});

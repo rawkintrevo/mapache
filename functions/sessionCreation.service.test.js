@@ -77,6 +77,7 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(blank.sourceType, "blank");
   assert.strictEqual(blank.status, "provisioning");
   assert.strictEqual(blank.provisioningState, "queued");
+  assert.ok(blank.serviceId.length < 50);
   assert.strictEqual(reservations[0].kind, "reserveSync");
 
   const github = await createWithWorkspace({

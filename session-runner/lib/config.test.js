@@ -49,3 +49,16 @@ test("Chrome runner configuration exposes stable browser contract URLs", () => {
     }
   }
 });
+
+test("runner capability parsing defaults Chat off and preserves explicit Chat support", () => {
+  const previous = process.env.RUNNER_CAPABILITIES;
+  try {
+    process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true, chat: true});
+    assert.equal(createConfig().runnerCapabilities.chat, true);
+    process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true});
+    assert.equal(createConfig().runnerCapabilities.chat, false);
+  } finally {
+    if (previous === undefined) delete process.env.RUNNER_CAPABILITIES;
+    else process.env.RUNNER_CAPABILITIES = previous;
+  }
+});

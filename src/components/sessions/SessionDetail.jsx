@@ -4,7 +4,9 @@ import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
+import {PiChatCanvas} from "./PiChatCanvas.jsx";
 import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
+import {derivePiChatSocketUrl} from "../../utils/piChat.js";
 
 export function SessionDetail({
   busy,
@@ -39,6 +41,8 @@ export function SessionDetail({
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
+  const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
+  const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
   const isProvisioning = session.status === "provisioning";
@@ -94,7 +98,7 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
-      {capabilities.preview || capabilities.chrome ? (
+      {hasChat || capabilities.preview || capabilities.chrome ? (
         <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -104,6 +108,16 @@ export function SessionDetail({
           >
             Terminal
           </Button>
+          {hasChat ? (
+            <Button
+              aria-selected={activeCanvas === "chat"}
+              role="tab"
+              variant={activeCanvas === "chat" ? "primary" : "secondary"}
+              onClick={() => setActiveCanvas("chat")}
+            >
+              Chat
+            </Button>
+          ) : null}
           {capabilities.preview ? (
             <Button
               aria-selected={activeCanvas === "preview"}
@@ -147,7 +161,15 @@ export function SessionDetail({
         </div>
       ) : null}
       <div className="canvas-shell">
-        {activeCanvas === "chrome" && capabilities.chrome ? (
+        {activeCanvas === "chat" && capabilities.chat ? (
+          <PiChatCanvas
+            error={accessError || (!chatSocketUrl && accessUrls ? "chat_access_unavailable" : "")}
+            onOpenTerminal={() => setActiveCanvas("terminal")}
+            sessionId={session.id}
+            sessionName={session.name}
+            socketUrl={chatSocketUrl}
+          />
+        ) : activeCanvas === "chrome" && capabilities.chrome ? (
           hasBrowser ? (
             <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
           ) : (

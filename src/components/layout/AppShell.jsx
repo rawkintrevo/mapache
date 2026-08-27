@@ -34,6 +34,7 @@ export function AppShell(props) {
     state.pullRequestForm?.open ||
     state.sessionEditModalSessionId ||
     state.sessionModalOpen ||
+    state.workspaceEditModalOpen ||
     state.workspaceModalOpen ||
     state.workspaceSkillModalOpen ||
     state.workspaceSubagentModalOpen;
@@ -43,6 +44,7 @@ export function AppShell(props) {
       <Topbar
         state={state}
         onDeleteWorkspace={workspaces.deleteWorkspace}
+        onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
         onSelectWorkspace={workspaces.selectWorkspace}

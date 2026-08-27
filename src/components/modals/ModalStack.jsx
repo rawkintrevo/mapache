@@ -11,6 +11,7 @@ import {SessionEditModal} from "./SessionEditModal.jsx";
 import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
 import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
+import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
@@ -51,6 +52,15 @@ export function ModalStack(props) {
             modals.closeWorkspaceModal();
           }}
           onLoadConnectedRepos={github.loadConnectedRepos}
+        />
+      ) : null}
+      {state.workspaceEditModalOpen && props.selectedWorkspace ? (
+        <WorkspaceEditModal
+          busy={busy}
+          error={state.error}
+          workspace={props.selectedWorkspace}
+          onClose={modals.closeWorkspaceEditModal}
+          onSave={workspaces.renameWorkspace}
         />
       ) : null}
       {state.authModalOpen ? (

@@ -1,9 +1,9 @@
 import "./Topbar.css";
-import {Plus, RefreshCw, Trash2} from "lucide-react";
+import {Pencil, Plus, RefreshCw, Trash2} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
-export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceModal, onRefresh, onSelectWorkspace}) {
+export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOpenWorkspaceModal, onRefresh, onSelectWorkspace}) {
   const busy = hasPendingOperations(state.pendingOperations);
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
@@ -42,6 +42,17 @@ export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceModal, onRefres
           onClick={onOpenWorkspaceModal}
         >
           <Plus aria-hidden="true" />
+        </Button>
+        <Button
+          aria-label={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
+          disabled={busy || !selectedWorkspace}
+          icon
+          title={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
+          tooltip={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
+          variant="secondary"
+          onClick={onOpenWorkspaceEditModal}
+        >
+          <Pencil aria-hidden="true" />
         </Button>
         <Button
           aria-label={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}

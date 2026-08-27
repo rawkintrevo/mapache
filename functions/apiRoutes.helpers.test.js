@@ -185,6 +185,7 @@ for (const [routeName, methods] of Object.entries(ROUTE_METHODS)) {
 
 assert.strictEqual(routeAllowsMethod({name: "workspaces"}, "GET"), true);
 assert.strictEqual(routeAllowsMethod({name: "workspaces"}, "PATCH"), false);
+assert.strictEqual(routeAllowsMethod({name: "workspace"}, "PATCH"), true);
 assert.strictEqual(routeAllowsMethod({name: "unknown"}, "GET"), false);
 assert.strictEqual(routeAllowsMethod({name: "unknown"}, "OPTIONS"), true);
 assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "GET"), true);

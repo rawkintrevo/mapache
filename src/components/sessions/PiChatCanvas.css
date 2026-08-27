@@ -1,0 +1,143 @@
+.pi-chat-canvas {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 360px;
+  height: min(62vh, 720px);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--panel);
+}
+
+.pi-chat-canvas__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pi-chat-canvas__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.pi-chat-canvas h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 16px;
+}
+
+.pi-chat-canvas__placeholder {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pi-chat-canvas__transcript {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pi-chat-canvas__status {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 24px 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pi-chat-canvas__status strong {
+  color: var(--text);
+}
+
+.pi-chat-canvas__status p {
+  max-width: 520px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pi-chat-canvas__status code {
+  color: #7dd3fc;
+}
+
+.pi-chat-canvas__working {
+  justify-self: start;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.pi-chat-canvas__composer {
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.pi-chat-canvas__composer label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pi-chat-canvas__composer textarea {
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.pi-chat-canvas__composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.pi-chat-canvas__composer-footer span {
+  min-width: 0;
+}
+
+.pi-chat-canvas__placeholder strong {
+  color: var(--text);
+}
+
+.pi-chat-canvas__placeholder p {
+  max-width: 520px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pi-chat-canvas__placeholder code {
+  color: #7dd3fc;
+}
+
+@media (max-width: 520px) {
+  .pi-chat-canvas__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

@@ -57,6 +57,7 @@ function cloneCapabilities(capabilities) {
     functions: Boolean(capabilities && capabilities.functions),
     n64: Boolean(capabilities && capabilities.n64),
     chrome: Boolean(capabilities && capabilities.chrome),
+    chat: Boolean(capabilities && capabilities.chat),
   };
 }
 

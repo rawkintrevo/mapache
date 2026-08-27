@@ -36,6 +36,7 @@ const {
   initialProvisioningMetadata,
   normalizeProvisioningOperationId,
   provisioningSessionId,
+  resolveCloudRunServiceId,
 } = require("./provisioning.helpers");
 
 function createSessionCreationService(dependencies = {}) {
@@ -86,7 +87,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
       payload.idleTimeoutMinutes,
       DEFAULT_IDLE_TIMEOUT_MINUTES,
   );
-  const serviceId = `session-${sessionRef.id.toLowerCase()}`;
+  const serviceId = resolveCloudRunServiceId(sessionRef.id);
   let runnerImage;
   try {
     runnerImage = dependencies.resolveRunnerImage(sshPayload ? {...payload, imageKey: "default"} : payload, DEFAULT_IMAGE);

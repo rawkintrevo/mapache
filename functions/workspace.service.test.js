@@ -9,6 +9,7 @@ const {
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
+  renameWorkspace,
   storagePrefixToClientDirectory,
   storageFileToClientFile,
 } = require("./workspace.service");
@@ -140,4 +141,41 @@ assert.deepStrictEqual(storagePrefixToClientDirectory("workspaces/u/w/src/compon
 });
 assert.strictEqual(storagePrefixToClientDirectory("workspaces/u/w/.mapache-internal/", "workspaces/u/w/"), null);
 
-console.log("workspace service tests passed");
+async function testRenameWorkspace() {
+  let workspace = {ownerUid: "user-1", name: "Old name"};
+  const workspaceRef = {
+    async get() {
+      return {exists: true, id: "workspace-1", data: () => workspace};
+    },
+    async update(update) {
+      workspace = {...workspace, ...update};
+    },
+  };
+  const dependencies = {
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
+    db: {collection: () => ({doc: () => workspaceRef})},
+  };
+
+  const renamed = await renameWorkspace("user-1", "workspace-1", {name: "  New name  "}, dependencies);
+  assert.deepStrictEqual(renamed, {
+    id: "workspace-1",
+    ownerUid: "user-1",
+    name: "New name",
+    updatedAt: "server-time",
+  });
+  await assert.rejects(
+      renameWorkspace("user-1", "workspace-1", {name: "   "}, dependencies),
+      /invalid_workspace_name/,
+  );
+  await assert.rejects(
+      renameWorkspace("user-2", "workspace-1", {name: "Nope"}, dependencies),
+      /workspace_forbidden/,
+  );
+}
+
+testRenameWorkspace().then(() => {
+  console.log("workspace service tests passed");
+}).catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

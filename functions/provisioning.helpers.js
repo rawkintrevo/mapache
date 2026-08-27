@@ -19,6 +19,19 @@ function provisioningSessionId(operationId) {
   return `operation-${crypto.createHash("sha256").update(operationId).digest("hex").slice(0, 32)}`;
 }
 
+function cloudRunServiceId(sessionId) {
+  return `session-${crypto.createHash("sha256").update(String(sessionId || "")).digest("hex").slice(0, 40)}`;
+}
+
+function isValidCloudRunServiceId(value) {
+  const serviceId = String(value || "");
+  return serviceId.length > 0 && serviceId.length < 50 && /^[a-z][a-z0-9-]*[a-z0-9]$/.test(serviceId);
+}
+
+function resolveCloudRunServiceId(sessionId, existingServiceId) {
+  return isValidCloudRunServiceId(existingServiceId) ? existingServiceId : cloudRunServiceId(sessionId);
+}
+
 function initialProvisioningMetadata(operationId) {
   return {
     provisioningOperationId: operationId,
@@ -47,8 +60,11 @@ function isRetryableProvisioningError(error) {
 }
 
 module.exports = {
+  cloudRunServiceId,
   initialProvisioningMetadata,
   isRetryableProvisioningError,
+  isValidCloudRunServiceId,
   normalizeProvisioningOperationId,
   provisioningSessionId,
+  resolveCloudRunServiceId,
 };
