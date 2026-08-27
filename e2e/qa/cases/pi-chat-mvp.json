@@ -1,0 +1,38 @@
+{
+  "id": "pi-chat.mvp",
+  "title": "Pi Chat canvas and Terminal fallback",
+  "description": "Create a temporary pi-basic session, verify the Terminal-first Chat tab, submit a model-formatting prompt, observe transport and completion states, replay the completed turn without duplication, and keep Terminal available as the fallback.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/pi-chat.mvp",
+  "requires": {
+    "cloudRun": "Creates a billable pi-basic Cloud Run service",
+    "piAuth": "A Pi provider must be configured for the QA user if completion evidence is required",
+    "manualFallback": "If the runner cannot be induced into a controlled Chat error, verify the Open Terminal fallback manually"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-pi-chat-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-chat-{{timestamp}}", "imageKey": "pi-basic", "cpu": "1", "memory": "1Gi"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "snapshot-text", "expected": "Terminal"},
+    {"assert": "snapshot-text", "expected": "Chat"},
+    {"type": "click", "text": "Chat"},
+    {"type": "waitForSnapshotText", "text": "Message Pi", "timeoutMs": 10000},
+    {"assert": "snapshot-text", "expected": "Open Terminal"},
+    {"capture": "screenshot", "fileName": "pi-chat-desktop.png"},
+    {"type": "fill", "label": "Message Pi", "value": "Return a short response with a heading named Markdown smoke, a two-item bullet list, a fenced code block containing console.log('ok'), and a two-column table."},
+    {"type": "submit", "buttonName": "Send"},
+    {"type": "waitForSnapshotText", "text": "Pi is working…", "timeoutMs": 15000},
+    {"type": "waitForSnapshotNotText", "text": "Pi is working…", "timeoutMs": 180000},
+    {"assert": "assistant-message-present", "expected": "Non-empty assistant bubble is visible; inspect heading, list, code, and table semantics when the model follows the prompt, recording formatting variance as inconclusive."},
+    {"type": "click", "text": "Terminal"},
+    {"type": "click", "text": "Chat"},
+    {"assert": "chat-completed-turn-no-duplicates", "expected": "The completed user and assistant turns replay once after switching Terminal to Chat."},
+    {"assert": "snapshot-text", "expected": "Open Terminal"},
+    {"capture": "screenshot", "fileName": "pi-chat-mobile.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}
