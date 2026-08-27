@@ -56,6 +56,43 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
   });
 
+  test("shows Chat only for a capability-backed Pi session and keeps Terminal first", async () => {
+    const user = userEvent.setup();
+    renderDetail({
+      name: "Pi chat",
+      harnessId: "pi",
+      capabilities: {terminal: true, preview: false, chrome: false, chat: true},
+    });
+
+    expect(await screen.findByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", {name: "Chat"})).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", {name: "Chat"}));
+    expect(screen.getByRole("region", {name: "Chat Pi chat"})).toBeInTheDocument();
+    expect(screen.getByText("Chat is ready")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Open Terminal"}));
+    expect(screen.getByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("does not show Chat when capability or signed terminal access is absent", async () => {
+    const {rerender} = renderDetail({name: "Shell", capabilities: {terminal: true, chat: false}});
+    expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
+
+    rerender(
+      <SessionDetail
+        busy={false}
+        gitStatus={null}
+        isGithubWorkspace={false}
+        session={session({name: "Pi without access", harnessId: "pi", capabilities: {terminal: true, chat: true}})}
+        sshForwards={{}}
+        workspaceId="workspace-1"
+        onGetSessionAccessUrls={vi.fn().mockResolvedValue({})}
+        onRestartSession={vi.fn()}
+      />,
+    );
+    await screen.findByText("Terminal access is not ready.");
+    expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
+  });
+
   test("keeps session sizing out of the terminal detail", () => {
     renderDetail({resources: {cpu: "1", memory: "2Gi"}});
     expect(screen.queryByRole("group", {name: "Session size"})).not.toBeInTheDocument();
