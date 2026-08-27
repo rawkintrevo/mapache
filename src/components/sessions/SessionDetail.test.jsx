@@ -68,7 +68,7 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.getByRole("tab", {name: "Chat"})).toBeInTheDocument();
     await user.click(screen.getByRole("tab", {name: "Chat"}));
     expect(screen.getByRole("region", {name: "Chat Pi chat"})).toBeInTheDocument();
-    expect(screen.getByText("Chat is ready")).toBeInTheDocument();
+    expect(screen.getByText("Connecting to Pi…")).toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Open Terminal"}));
     expect(screen.getByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
   });

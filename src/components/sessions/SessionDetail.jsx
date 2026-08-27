@@ -165,6 +165,7 @@ export function SessionDetail({
           <PiChatCanvas
             error={accessError || (!chatSocketUrl && accessUrls ? "chat_access_unavailable" : "")}
             onOpenTerminal={() => setActiveCanvas("terminal")}
+            sessionId={session.id}
             sessionName={session.name}
             socketUrl={chatSocketUrl}
           />
