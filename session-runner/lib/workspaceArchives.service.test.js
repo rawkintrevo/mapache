@@ -248,6 +248,31 @@ test("extracts a Chrome profile with the runtime GNU tar", async (t) => {
   assert.equal(await fs.promises.readFile(path.join(targetDir, "Default", "Preferences"), "utf8"), "profile-ok");
 });
 
+test("extracts a workspace Git archive at the workspace root", async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mapache-git-extract-"));
+  t.after(() => fs.promises.rm(root, {recursive: true, force: true}));
+  const sourceDir = path.join(root, "source");
+  const workspaceDir = path.join(root, "workspace");
+  await fs.promises.mkdir(path.join(sourceDir, ".git"), {recursive: true});
+  await fs.promises.mkdir(workspaceDir, {recursive: true});
+  await fs.promises.writeFile(path.join(sourceDir, ".git", "HEAD"), "ref: refs/heads/main\n");
+  const archive = spawnSync("tar", ["-czf", "-", "-C", sourceDir, "./.git"]);
+  assert.equal(archive.status, 0, archive.stderr.toString());
+
+  const service = createWorkspaceArchiveService({
+    config: baseConfig({workspaceDir}),
+    git: git(true),
+    pathHelpers: {shouldIgnoreInternalWorkspacePath: () => false},
+    storage: fakeStorage({}, []),
+  });
+  const target = service.archiveSyncTargets.find((entry) => entry.mode === "workspaceGit");
+  await fs.promises.mkdir(target.localPath, {recursive: true});
+  await service.extractStorageArchive({createReadStream: () => Readable.from(archive.stdout)}, target);
+
+  assert.equal(await fs.promises.readFile(path.join(workspaceDir, ".git", "HEAD"), "utf8"), "ref: refs/heads/main\n");
+  await assert.rejects(fs.promises.access(path.join(workspaceDir, ".git", ".git", "HEAD")));
+});
+
 function fakeFile(name, updated, options = {}) {
   return {
     name,

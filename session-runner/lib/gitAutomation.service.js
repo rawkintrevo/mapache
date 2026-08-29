@@ -44,8 +44,32 @@ function createGithubAutomationService({
     automationBaseCommit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
     console.log(`preparing GitHub automation branch from ${automationBaseBranch || automationBaseCommit || "HEAD"}`);
 
-    await runGitCommand(["reset", "--hard", "HEAD"]);
-    await runGitCommand([...CLEAN_WORKTREE_ARGS]);
+    const currentBranch = normalizeEnvString(
+        await runGitCommand(["branch", "--show-current"], {captureStdout: true}).catch(() => ""),
+    );
+    if (isCurrentSessionAutomationBranch(currentBranch)) {
+      automationBranch = currentBranch;
+      if (automationBaseBranch) {
+        await withGithubAutomationAuth((env) => runGitCommand(["fetch", "origin", automationBaseBranch, "--prune"], {env}));
+        automationBaseCommit = await runGitCommand(
+            ["merge-base", "HEAD", `origin/${automationBaseBranch}`],
+            {captureStdout: true},
+        ).catch(() => automationBaseCommit);
+      }
+      await configureAutomationCommitIdentity();
+      await publishAutomationReadyState();
+      console.log(`resuming ${automationBranch}`);
+      return automationBranchResult();
+    }
+
+    const restoredStatus = await runGitCommand(
+        ["status", "--porcelain=1", "--untracked-files=all"],
+        {captureStdout: true},
+    );
+    const hasRestoredChanges = Boolean(String(restoredStatus || "").trim());
+    if (hasRestoredChanges) {
+      await runGitCommand(["stash", "push", "--include-untracked", "--message", "Mapache restored workspace state"]);
+    }
 
     if (automationBaseBranch) {
       await withGithubAutomationAuth((env) => runGitCommand(["fetch", "origin", automationBaseBranch, "--prune"], {env}));
@@ -58,7 +82,16 @@ function createGithubAutomationService({
     automationBaseCommit = await runGitCommand(["rev-parse", "HEAD"], {captureStdout: true});
     automationBranch = await uniqueAutomationBranchName();
     await runGitCommand(["checkout", "-b", automationBranch]);
+    if (hasRestoredChanges) {
+      await runGitCommand(["stash", "pop", "--index"]);
+    }
     await configureAutomationCommitIdentity();
+    await publishAutomationReadyState();
+    console.log(`checked out ${automationBranch}`);
+    return automationBranchResult();
+  }
+
+  async function publishAutomationReadyState() {
     await activity.updateSessionActivity({
       githubAutomationBranch: automationBranch,
       githubAutomationBaseBranch: automationBaseBranch || null,
@@ -66,12 +99,20 @@ function createGithubAutomationService({
       githubAutomationStatus: "ready",
       githubAutomationError: null,
     });
-    console.log(`checked out ${automationBranch}`);
+  }
+
+  function automationBranchResult() {
     return {
       branch: automationBranch,
       baseBranch: automationBaseBranch || null,
       baseCommit: automationBaseCommit || null,
     };
+  }
+
+  function isCurrentSessionAutomationBranch(branch) {
+    if (!branch) return false;
+    const base = automationBranchBaseName();
+    return branch === base || new RegExp(`^${escapeRegExp(base)}-[2-9][0-9]*$`).test(branch);
   }
 
   async function finalizeGithubAutomationBranch(exitCode) {
@@ -163,14 +204,18 @@ function createGithubAutomationService({
   }
 
   async function uniqueAutomationBranchName() {
-    const base = `mapache/${normalizeBranchDescription(config.sessionName)}`;
-    const suffix = normalizeBranchDescription(config.sessionId).slice(0, 12);
-    const branch = suffix ? `${base}-${suffix}` : base;
+    const branch = automationBranchBaseName();
     let candidate = branch;
     for (let index = 2; await branchExists(candidate); index += 1) {
       candidate = `${branch}-${index}`;
     }
     return candidate;
+  }
+
+  function automationBranchBaseName() {
+    const base = `mapache/${normalizeBranchDescription(config.sessionName)}`;
+    const suffix = normalizeBranchDescription(config.sessionId).slice(0, 12);
+    return suffix ? `${base}-${suffix}` : base;
   }
 
   async function branchExists(branch) {
@@ -221,6 +266,10 @@ function createGithubAutomationService({
     finalizeGithubAutomationBranch,
     prepareGithubAutomationBranch,
   };
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 module.exports = {createGithubAutomationService};

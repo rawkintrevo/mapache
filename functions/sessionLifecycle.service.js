@@ -16,7 +16,9 @@ const {
   toClientDoc,
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
+const {sessionSourceMetadata} = require("./github.service");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
+const {sessionSyncPolicyMetadata} = require("./sessionCreation.service");
 const {
   initialProvisioningMetadata,
   isValidCloudRunServiceId,
@@ -110,6 +112,8 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
     browserAccessTokenSecret,
     capabilities,
     mcpConfig: mcpConfigForRunner(workspace),
+    ...authoritativeSessionSourceMetadata(workspace),
+    ...sessionSyncPolicyMetadata(workspace),
     restartNonce,
     restartedAt,
     stoppedAt: null,
@@ -299,6 +303,23 @@ function shouldRecreateSessionServiceOnRestart(session) {
 
 function isGithubWorkspace(workspace) {
   return workspace && workspace.source && workspace.source.type === "github";
+}
+
+function authoritativeSessionSourceMetadata(workspace) {
+  return {
+    sourceMode: null,
+    sourceVisibility: null,
+    sourceRepoUrl: null,
+    sourceRepoOwner: null,
+    sourceRepoName: null,
+    sourceRequestedBranch: null,
+    sourceRequestedCommit: null,
+    sourceResolvedBranch: null,
+    sourceResolvedCommit: null,
+    sourceInstallationId: null,
+    sourceRepoId: null,
+    ...sessionSourceMetadata(workspace),
+  };
 }
 
 function isIdleSession(session, now) {

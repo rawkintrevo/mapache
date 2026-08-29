@@ -91,6 +91,11 @@ const lifecycle = createSessionLifecycleService({
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
     syncWriterRole: "none",
+    sourceType: "github",
+    sourceMode: "connected",
+    sourceRepoUrl: "https://github.com/example/stale.git",
+    syncPolicyMode: "github-cache",
+    syncPolicyExclude: [".git/"],
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(currentSession.status, "provisioning");
@@ -98,6 +103,11 @@ const lifecycle = createSessionLifecycleService({
   assert.strictEqual(calls.some((call) => call.kind === "provisionService"), true);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "workspace-lease");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceType, "blank");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceMode, null);
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceRepoUrl, null);
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncPolicyMode, "blank");
+  assert.deepStrictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncPolicyExclude, []);
 
   calls.length = 0;
   currentSession = {

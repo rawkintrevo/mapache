@@ -25,7 +25,7 @@ export function WorkspacePanel({
   onUpdateGitCommitMessage,
   onUpdateSshForwardPort,
 }) {
-  const isGithubWorkspace = selectedWorkspace?.source?.type === "github" || selectedSession?.sourceType === "github";
+  const isGithubWorkspace = resolveIsGithubWorkspace(selectedWorkspace, selectedSession);
   const busy = hasPendingOperations(state.pendingOperations);
 
   if (selectedSession) {
@@ -71,4 +71,10 @@ export function WorkspacePanel({
       />
     </section>
   );
+}
+
+export function resolveIsGithubWorkspace(workspace, session) {
+  const workspaceSourceType = workspace?.source?.type;
+  if (workspaceSourceType) return workspaceSourceType === "github";
+  return session?.sourceType === "github";
 }

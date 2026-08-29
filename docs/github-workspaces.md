@@ -218,6 +218,8 @@ GitHub-backed sessions expose repository actions in the selected-session view, d
 
 For connected GitHub workspaces, Pi sessions also have an automatic branch/PR lifecycle. During runner startup, after repository/cache restore and before Pi starts, the runner uses the GitHub App installation token to fetch the selected base branch, reset the worktree to that remote branch, and create a unique `mapache/<session-name-kebab>-<session-id>` branch. This prevents the agent from working directly on the source branch while still starting from the latest base state. When the Pi terminal exits, the runner stages any remaining changes and commits them, or reuses commits already made on the automation branch. It then pushes the branch and opens a pull request. If the session exits without file changes or commits ahead of the base branch, no commit or PR is created. When Cloud Run rejects one of these protected runner requests before it reaches the container, such as a `429` no-instance response, the backend surfaces `runner_busy_or_unavailable` instead of the generic `runner_request_failed` code so the UI can distinguish runner capacity from Git/auth errors. Shell sessions remain manual so users can inspect or intervene without triggering automatic PR creation.
 
+On restart, an existing automation branch for the same session is resumed without a reset or clean, preserving both commits and uncommitted work. If startup is instead creating a new automation branch, restored tracked and untracked worktree changes are stashed before the base checkout and reapplied afterward. Cleanup must never run against restored cache state before one of those preservation paths has secured it.
+
 ## Runner Reconstruction Flow
 
 The runner should rebuild `/workspace` in phases.
@@ -234,6 +236,8 @@ For GitHub workspaces:
 - If a cached `.git` archive exists in internal storage, restore it to `/workspace/.git`.
 - Otherwise clone the repository and check out the requested commit or branch.
 - For private connected repos, the backend supplies a short-lived installation token to the runner for clone auth only; the runner must not write that token into normal workspace files or persist it in Cloud Storage.
+
+The archive contains workspace-relative `.git` entries, so extraction runs from `/workspace`; extracting from `/workspace/.git` would create `.git/.git` and incorrectly force clone fallback. Restart also treats the workspace document as authoritative for source type and sync policy, replacing stale session snapshots before provisioning. This allows an explicitly blank workspace to remain blank even when an older stopped session still carries GitHub metadata.
 
 The `.git` directory should not be synced object-by-object through normal Cloud Storage file listing. It should be treated like archive-backed runtime state because it has many small files and is vulnerable to partial-sync corruption.
 

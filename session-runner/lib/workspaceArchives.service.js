@@ -316,7 +316,8 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
   }
 
   async function extractStorageArchive(file, target) {
-    const tar = spawn("tar", [...tarExtractArgs(target), "-xzf", "-", "-C", target.localPath], {
+    const extractionPath = target.mode === "workspaceGit" ? config.workspaceDir : target.localPath;
+    const tar = spawn("tar", [...tarExtractArgs(target), "-xzf", "-", "-C", extractionPath], {
       stdio: ["pipe", "ignore", "pipe"],
     });
     const stderr = collectStderr(tar);
