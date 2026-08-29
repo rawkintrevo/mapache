@@ -174,7 +174,8 @@ jobs:
             echo "- Source: \`$GITHUB_SHA\`"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$PUBLISH" = "true" ]; then
-            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${VARIANT}"
+            compatibility_tag=$(node scripts/runner-image-release.mjs --variant="$VARIANT" --compatibility=true)
+            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${compatibility_tag}"
             gcloud artifacts docker tags add "$image" "$compatibility" --project pi-agents-cloud
             echo "published compatibility tag=$compatibility"
           fi

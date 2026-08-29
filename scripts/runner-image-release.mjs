@@ -16,15 +16,22 @@ function pullRequestRunnerTag(variant, pullRequestNumber, sourceSha) {
   return `${variant}-pr-${number}-${normalizeSha(sourceSha).slice(0, 12)}`;
 }
 
+function compatibilityRunnerTag(variant) {
+  const cleanVariant = String(variant || "").trim();
+  if (!cleanVariant) throw new Error("runner image variant is required");
+  return cleanVariant === "default" ? "latest" : cleanVariant;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = new Map(process.argv.slice(2).map((arg) => {
     const [key, ...value] = arg.replace(/^--/, "").split("=");
     return [key, value.join("=")];
   }));
-  const tag = args.get("pr") ?
+  const tag = args.get("compatibility") ?
+    compatibilityRunnerTag(args.get("variant")) : args.get("pr") ?
     pullRequestRunnerTag(args.get("variant"), args.get("pr"), args.get("sha")) :
     immutableRunnerTag(args.get("variant"), args.get("sha"));
   console.log(tag);
 }
 
-export {immutableRunnerTag, normalizeSha, pullRequestRunnerTag};
+export {compatibilityRunnerTag, immutableRunnerTag, normalizeSha, pullRequestRunnerTag};

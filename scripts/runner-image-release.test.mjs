@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {immutableRunnerTag, normalizeSha, pullRequestRunnerTag} from "./runner-image-release.mjs";
+import {
+  compatibilityRunnerTag,
+  immutableRunnerTag,
+  normalizeSha,
+  pullRequestRunnerTag,
+} from "./runner-image-release.mjs";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 
@@ -15,4 +20,9 @@ test("pull request tags are unique but bounded for logs", () => {
 
 test("invalid revisions fail closed", () => {
   assert.throws(() => normalizeSha("not-a-sha"), /40-character commit SHA/);
+});
+
+test("compatibility tags map the default runner to latest", () => {
+  assert.equal(compatibilityRunnerTag("default"), "latest");
+  assert.equal(compatibilityRunnerTag("pi-basic"), "pi-basic");
 });
