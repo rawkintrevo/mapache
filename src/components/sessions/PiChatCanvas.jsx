@@ -7,8 +7,20 @@ import {usePiChat} from "./usePiChat.js";
 
 let clientSequence = 0;
 
-export function PiChatCanvas({error = "", onOpenTerminal, sessionId, sessionName, socketUrl}) {
-  const chat = usePiChat({enabled: Boolean(socketUrl && sessionId), sessionId, socketUrl});
+export function PiChatCanvas({
+  error = "",
+  onAccessRefreshNeeded,
+  onOpenTerminal,
+  sessionId,
+  sessionName,
+  socketUrl,
+}) {
+  const chat = usePiChat({
+    enabled: Boolean(socketUrl && sessionId),
+    onAccessRefreshNeeded,
+    sessionId,
+    socketUrl,
+  });
   const [draft, setDraft] = useState("");
   const [pendingTurns, setPendingTurns] = useState([]);
   const [sending, setSending] = useState(false);
@@ -26,7 +38,7 @@ export function PiChatCanvas({error = "", onOpenTerminal, sessionId, sessionName
     setSending(false);
     setWorking(false);
     assistantIdsSeenRef.current = new Set();
-  }, [sessionId, socketUrl]);
+  }, [sessionId]);
 
   useEffect(() => {
     setPendingTurns((current) => {

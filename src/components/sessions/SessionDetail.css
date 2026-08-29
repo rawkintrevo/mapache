@@ -96,6 +96,15 @@
   border: 0;
 }
 
+.canvas-panel {
+  height: min(62vh, 720px);
+  min-height: 360px;
+}
+
+.canvas-panel[hidden] {
+  display: none;
+}
+
 .browser-canvas {
   display: grid;
   grid-template-rows: auto 1fr;

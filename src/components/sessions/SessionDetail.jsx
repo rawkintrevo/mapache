@@ -10,6 +10,7 @@ import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessio
 import {derivePiChatSocketUrl} from "../../utils/piChat.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {useResourceMetrics} from "./useResourceMetrics.js";
+import {useSessionAccessUrls} from "./useSessionAccessUrls.js";
 
 export function SessionDetail({
   busy,
@@ -35,12 +36,21 @@ export function SessionDetail({
   onUpdateSshForwardPort,
 }) {
   const [activeCanvas, setActiveCanvas] = useState("terminal");
-  const [accessUrls, setAccessUrls] = useState(null);
-  const [accessError, setAccessError] = useState("");
   const [shareState, setShareState] = useState({loading: false, error: "", preview: null, copied: false});
   const [publishOpen, setPublishOpen] = useState(false);
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
+  const {
+    accessUrls,
+    error: accessError,
+    refreshAfterConnectionFailure,
+  } = useSessionAccessUrls({
+    enabled: hasRunnerUrl,
+    workspaceId,
+    sessionId: session.id,
+    serviceUrl: session.serviceUrl || "",
+    loadAccessUrls: onGetSessionAccessUrls,
+  });
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
@@ -61,26 +71,8 @@ export function SessionDetail({
   });
 
   useEffect(() => {
-    let cancelled = false;
-    setAccessUrls(null);
-    setAccessError("");
     setActiveCanvas("terminal");
-    if (!workspaceId || !session.id || !session.serviceUrl || !onGetSessionAccessUrls) return undefined;
-
-    onGetSessionAccessUrls(workspaceId, session.id)
-        .then((urls) => {
-          if (cancelled) return;
-          setAccessUrls(urls);
-        })
-        .catch((error) => {
-          if (cancelled) return;
-          setAccessError(error.message || "session_access_unavailable");
-        });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, session.id, session.serviceUrl, onGetSessionAccessUrls]);
+  }, [workspaceId, session.id]);
 
   useEffect(() => {
     setShareState({loading: false, error: "", preview: null, copied: false});
@@ -175,15 +167,36 @@ export function SessionDetail({
         </div>
       ) : null}
       <div className="canvas-shell">
-        {activeCanvas === "chat" && capabilities.chat ? (
-          <PiChatCanvas
-            error={accessError || (!chatSocketUrl && accessUrls ? "chat_access_unavailable" : "")}
-            onOpenTerminal={() => setActiveCanvas("terminal")}
-            sessionId={session.id}
-            sessionName={session.name}
-            socketUrl={chatSocketUrl}
-          />
-        ) : activeCanvas === "chrome" && capabilities.chrome ? (
+        {hasTerminal ? (
+          <div className="canvas-panel" hidden={activeCanvas !== "terminal"}>
+            <iframe
+              allow="clipboard-read; clipboard-write"
+              src={accessUrls.terminalUrl}
+              title={`Terminal ${session.name}`}
+            />
+          </div>
+        ) : activeCanvas === "terminal" ? (
+          <div className="terminal-placeholder">
+            <p>
+              Terminal access is not ready.
+              <br />
+              <code>{accessError || session.lastError || session.status}</code>
+            </p>
+          </div>
+        ) : null}
+        {hasChat ? (
+          <div className="canvas-panel" hidden={activeCanvas !== "chat"}>
+            <PiChatCanvas
+              error={accessError || (!chatSocketUrl && accessUrls ? "chat_access_unavailable" : "")}
+              onAccessRefreshNeeded={refreshAfterConnectionFailure}
+              onOpenTerminal={() => setActiveCanvas("terminal")}
+              sessionId={session.id}
+              sessionName={session.name}
+              socketUrl={chatSocketUrl}
+            />
+          </div>
+        ) : null}
+        {activeCanvas === "chrome" && capabilities.chrome ? (
           hasBrowser ? (
             <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
           ) : (
@@ -195,7 +208,8 @@ export function SessionDetail({
               </p>
             </div>
           )
-        ) : activeCanvas === "preview" && capabilities.preview ? (
+        ) : null}
+        {activeCanvas === "preview" && capabilities.preview ? (
           hasPreview ? (
             <iframe
               allow="clipboard-read; clipboard-write; screen-wake-lock"
@@ -212,21 +226,7 @@ export function SessionDetail({
               </p>
             </div>
           )
-        ) : hasTerminal ? (
-          <iframe
-            allow="clipboard-read; clipboard-write"
-            src={accessUrls.terminalUrl}
-            title={`Terminal ${session.name}`}
-          />
-        ) : (
-          <div className="terminal-placeholder">
-            <p>
-              Terminal access is not ready.
-              <br />
-              <code>{accessError || session.lastError || session.status}</code>
-            </p>
-          </div>
-        )}
+        ) : null}
       </div>
       <div className="toolbar">
         <div className="session-actions">

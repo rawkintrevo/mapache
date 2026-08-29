@@ -11,13 +11,20 @@ const EMPTY_STATE = {
   acknowledgements: {},
 };
 
-export function usePiChat({enabled = false, sessionId = "", socketUrl = ""} = {}) {
+export function usePiChat({
+  enabled = false,
+  sessionId = "",
+  socketUrl = "",
+  onAccessRefreshNeeded,
+} = {}) {
   const [state, setState] = useState(EMPTY_STATE);
   const socketRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const generationRef = useRef(0);
   const deliberateRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
+  const accessRefreshRef = useRef(onAccessRefreshNeeded);
+  accessRefreshRef.current = onAccessRefreshNeeded;
 
   useEffect(() => {
     const generation = generationRef.current + 1;
@@ -27,6 +34,7 @@ export function usePiChat({enabled = false, sessionId = "", socketUrl = ""} = {}
     clearReconnectTimer();
     closeSocket();
     let invalidMessageCount = 0;
+    let consecutivePreOpenFailures = 0;
 
     if (!enabled || !sessionId || !isSocketUrl(socketUrl)) {
       setState(EMPTY_STATE);
@@ -63,9 +71,12 @@ export function usePiChat({enabled = false, sessionId = "", socketUrl = ""} = {}
         return;
       }
       socketRef.current = socket;
+      let opened = false;
 
       socket.addEventListener("open", () => {
         if (!isCurrent(socket)) return;
+        opened = true;
+        consecutivePreOpenFailures = 0;
         reconnectAttemptRef.current = 0;
         setState((current) => ({...current, connectionState: "connected", error: null}));
       });
@@ -76,6 +87,17 @@ export function usePiChat({enabled = false, sessionId = "", socketUrl = ""} = {}
       socket.addEventListener("close", () => {
         if (!isCurrent(socket)) return;
         socketRef.current = null;
+        if (!opened) {
+          consecutivePreOpenFailures += 1;
+          if (consecutivePreOpenFailures >= 2) {
+            consecutivePreOpenFailures = 0;
+            try {
+              accessRefreshRef.current?.();
+            } catch (error) {
+              // Access renewal is best effort; normal reconnect remains active.
+            }
+          }
+        }
         if (!deliberateRef.current) scheduleReconnect();
       });
       socket.addEventListener("error", () => {

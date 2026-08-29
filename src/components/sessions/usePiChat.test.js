@@ -114,6 +114,21 @@ describe("usePiChat", () => {
     expect(result.current.connectionState).toBe("connected");
   });
 
+  test("requests fresh access after repeated failures before the socket opens", () => {
+    const onAccessRefreshNeeded = vi.fn();
+    renderHook(() => usePiChat({
+      enabled: true,
+      sessionId: "session-1",
+      socketUrl: "ws://runner/chat",
+      onAccessRefreshNeeded,
+    }));
+
+    act(() => sockets[0].disconnect());
+    act(() => vi.advanceTimersByTime(500));
+    act(() => sockets[1].disconnect());
+    expect(onAccessRefreshNeeded).toHaveBeenCalledOnce();
+  });
+
   test("does not reconnect after authentication failure or repeated malformed data", () => {
     const {result} = renderHook(() => usePiChat({enabled: true, sessionId: "session-1", socketUrl: "ws://runner/chat"}));
     const socket = sockets[0];

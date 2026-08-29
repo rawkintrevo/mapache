@@ -111,4 +111,22 @@ describe("PiChatCanvas", () => {
     await user.click(screen.getByRole("button", {name: "Open Terminal"}));
     expect(onOpenTerminal).toHaveBeenCalledOnce();
   });
+
+  test("preserves the draft when renewed access changes only the socket URL", async () => {
+    const user = userEvent.setup();
+    const {rerender} = renderCanvas();
+    const composer = screen.getByRole("textbox", {name: "Message Pi"});
+    await user.type(composer, "keep this through renewal");
+
+    rerender(
+      <PiChatCanvas
+        onOpenTerminal={vi.fn()}
+        sessionId="session-1"
+        sessionName="Pi smoke"
+        socketUrl="ws://runner.example/chat?mapache_access=renewed"
+      />,
+    );
+
+    expect(screen.getByRole("textbox", {name: "Message Pi"})).toHaveValue("keep this through renewal");
+  });
 });

@@ -81,9 +81,50 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.getByRole("tab", {name: "Chat"})).toBeInTheDocument();
     await user.click(screen.getByRole("tab", {name: "Chat"}));
     expect(screen.getByRole("region", {name: "Chat Pi chat"})).toBeInTheDocument();
-    expect(screen.getByText("Connecting to Pi…")).toBeInTheDocument();
+    expect(screen.getByText(/Connecting to Pi|Connection lost/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Open Terminal"}));
     expect(screen.getByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("keeps Terminal and Chat mounted while switching canvases", async () => {
+    const sockets = [];
+    class PersistentWebSocket {
+      constructor(url) {
+        this.url = url;
+        this.readyState = 0;
+        this.listeners = new Map();
+        sockets.push(this);
+      }
+      addEventListener(type, listener) {
+        const listeners = this.listeners.get(type) || new Set();
+        listeners.add(listener);
+        this.listeners.set(type, listeners);
+      }
+      close() {
+        this.readyState = 3;
+      }
+    }
+    vi.stubGlobal("WebSocket", PersistentWebSocket);
+    const user = userEvent.setup();
+    renderDetail({
+      name: "Persistent chat",
+      harnessId: "pi",
+      capabilities: {terminal: true, preview: false, chrome: false, chat: true},
+    });
+
+    const chatTab = await screen.findByRole("tab", {name: "Chat"});
+    const terminalFrame = screen.getByTitle("Terminal Persistent chat");
+    const chatRegion = screen.getByRole("region", {name: "Chat Persistent chat", hidden: true});
+    await user.click(chatTab);
+    await user.type(screen.getByRole("textbox", {name: "Message Pi"}), "keep this draft");
+    await user.click(screen.getByRole("tab", {name: "Terminal"}));
+    expect(screen.getByTitle("Terminal Persistent chat")).toBe(terminalFrame);
+    await user.click(chatTab);
+
+    expect(screen.getByRole("region", {name: "Chat Persistent chat"})).toBe(chatRegion);
+    expect(screen.getByRole("textbox", {name: "Message Pi"})).toHaveValue("keep this draft");
+    expect(sockets.filter((socket) => socket.url.includes("/chat"))).toHaveLength(1);
+    vi.unstubAllGlobals();
   });
 
   test("does not show Chat when capability or signed terminal access is absent", async () => {
