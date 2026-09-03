@@ -17,3 +17,8 @@ and transition checks.
 Stored status strings remain backward compatible. A reconciliation path may pass a
 `reconciliationReason` when repairing an old or externally changed document; normal
 API lifecycle writes must use an allowed transition.
+
+The five-minute idle reaper evaluates running sessions from `lastActivityAt`, falling
+back to `updatedAt` and `createdAt` for legacy records. `lastConnectedAt` and
+`lastDisconnectedAt` are transport diagnostics only: automatic Cloud Run WebSocket
+reconnections must not reset the idle timeout.

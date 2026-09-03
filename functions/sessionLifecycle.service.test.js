@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert");
-const {createSessionLifecycleService} = require("./sessionLifecycle.service");
+const {createSessionLifecycleService, isIdleSession} = require("./sessionLifecycle.service");
 
 const timestamp = {
   toDate: () => new Date("2026-01-01T00:00:00.000Z"),
@@ -55,6 +55,20 @@ const lifecycle = createSessionLifecycleService({
   releaseWorkspaceSyncWriterLease: async (...args) => calls.push({kind: "releaseSync", args}),
   sessionCollection: () => ({doc: () => sessionRef}),
 });
+
+const minute = 60 * 1000;
+const now = Date.parse("2026-01-01T02:00:00.000Z");
+assert.strictEqual(isIdleSession({
+  idleTimeoutMinutes: 60,
+  lastActivityAt: now - 61 * minute,
+  lastConnectedAt: now - minute,
+  lastDisconnectedAt: now - 2 * minute,
+}, now), true);
+assert.strictEqual(isIdleSession({
+  idleTimeoutMinutes: 60,
+  lastActivityAt: now - 59 * minute,
+  lastConnectedAt: now - 61 * minute,
+}, now), false);
 
 (async () => {
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token", resources: {cpu: "1"}};

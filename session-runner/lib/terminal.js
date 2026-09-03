@@ -97,11 +97,11 @@ function createTerminalSession({admin, config, activity, onTerminalExit}) {
   }
 
   function updateSocketActivity(timestampField) {
-    activity.updateSessionActivity({
-      activeSocketCount: sockets.size,
-      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-      [timestampField]: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    activity.updateSessionActivity(socketActivityUpdate(
+        sockets.size,
+        timestampField,
+        admin.firestore.FieldValue.serverTimestamp(),
+    ));
   }
 
   function markTerminalActivity() {
@@ -158,6 +158,13 @@ function createTerminalSession({admin, config, activity, onTerminalExit}) {
       piSessionScanTimer = setTimeout(scanPiSessionBinding, 5000);
     }
   }
+}
+
+function socketActivityUpdate(activeSocketCount, timestampField, timestamp) {
+  return {
+    activeSocketCount,
+    [timestampField]: timestamp,
+  };
 }
 
 function shouldReplayTerminal(request) {
@@ -497,6 +504,7 @@ function renderTerminalPage(options = {}) {
 
 module.exports = {
   createTerminalSession,
+  socketActivityUpdate,
   renderTerminalPage,
   shouldReplayTerminal,
   terminalArgs,

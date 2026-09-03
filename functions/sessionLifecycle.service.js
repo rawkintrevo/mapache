@@ -329,8 +329,6 @@ function isIdleSession(session, now) {
   );
   const idleSince = latestTimestampMillis(
       session.lastActivityAt,
-      session.lastConnectedAt,
-      session.lastDisconnectedAt,
       session.updatedAt,
       session.createdAt,
   );
@@ -338,4 +336,4 @@ function isIdleSession(session, now) {
   return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
 }
 
-module.exports = {createSessionLifecycleService};
+module.exports = {createSessionLifecycleService, isIdleSession};

@@ -57,6 +57,13 @@ us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-chrome
 ```
 
+Chrome desktop bootstrap waits for Xvfb to accept a real X client connection before launching
+x11vnc or Chromium. x11vnc starts first after that readiness gate, so the loopback VNC listener
+is not delayed by Chromium profile startup. The runner still requires the supervised desktop
+processes, loopback VNC, and CDP to be ready before it opens the session HTTP port. Changes to
+this bootstrap path require rebuilt `pi-chrome` and `codex-chrome` revisions; existing Cloud Run
+services retain their bundled startup behavior until restarted or recreated.
+
 The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-n64`, `pi-chrome`, and `codex-chrome`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`. The `chat` capability is enabled only for `pi-basic`, `pi-web`, and `pi-chrome`; the other images keep Chat disabled.
 
 Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, `n64`, and `chrome`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
@@ -156,7 +163,7 @@ This persistence is scoped to the current Cloud Run container instance. Active s
 
 Runner bootstrap is lifecycle-aware. `session-runner/lib/runnerLifecycle.js` catches preparation failures before the server listens and asks `session-runner/lib/activity.js` to record `runtimeState: "failed"`, the compact runtime error, and zero active sockets. When the stored lifecycle was `running`, `restarting`, or `resizing`, that transaction also changes it to `update_failed`; initial provisioning remains `provisioning` so the Functions worker can own the normal `provision_failed` transition. This prevents a Cloud Run service whose revision is configured as ready but whose instances cannot start from remaining displayed as a healthy running session.
 
-The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update `activeSocketCount`, `lastConnectedAt`, `lastDisconnectedAt`, and `lastActivityAt`; terminal input updates `lastActivityAt` with a short debounce to avoid one Firestore write per keystroke.
+The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update only `activeSocketCount`, `lastConnectedAt`, and `lastDisconnectedAt`; transport reconnects do not count as user activity because Cloud Run can recycle long-lived WebSockets. Terminal input and PTY output update `lastActivityAt` with a short debounce. The scheduled idle reaper bases its timeout on `lastActivityAt`, with session update/creation timestamps as legacy fallbacks, and deliberately ignores connection timestamps.
 
 Cloud runner sessions also expose an authenticated read-only `/metrics` WebSocket. `resourceMetrics.service.js` samples Linux cgroup CPU and memory counters every two seconds while a client is subscribed, and `resourceMetricsWebSocket.js` broadcasts the safe `{type: "metrics", ...}` payload without attaching to the PTY or updating session activity. CPU is normalized against the cgroup CPU limit and memory against the cgroup memory limit. If the container does not expose bounded cgroup memory data, the socket reports `resource_metrics_unavailable`; it never falls back to host-wide memory values. The parent frontend displays these metrics only for Cloud sessions, not SSH-backed sessions, whose runner container is only a proxy for the remote machine.
 

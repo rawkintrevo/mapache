@@ -2,10 +2,22 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {formatPrompt, renderTerminalPage} = require("./terminal");
+const {formatPrompt, renderTerminalPage, socketActivityUpdate} = require("./terminal");
 
 test("formats Chat prompts as one bracketed paste followed by carriage return", () => {
   assert.equal(formatPrompt("one\ntwo"), "\x1b[200~one\ntwo\x1b[201~\r");
+});
+
+test("socket bookkeeping does not count reconnects as terminal activity", () => {
+  const timestamp = {seconds: 123};
+  assert.deepEqual(socketActivityUpdate(1, "lastConnectedAt", timestamp), {
+    activeSocketCount: 1,
+    lastConnectedAt: timestamp,
+  });
+  assert.deepEqual(socketActivityUpdate(0, "lastDisconnectedAt", timestamp), {
+    activeSocketCount: 0,
+    lastDisconnectedAt: timestamp,
+  });
 });
 
 test("renderTerminalPage includes critical xterm layout and helper-textarea styles", () => {

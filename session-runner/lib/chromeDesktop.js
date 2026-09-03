@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const {spawn} = require("child_process");
+const {execFile, spawn} = require("child_process");
 
 const PROFILE_LOCKS = ["SingletonLock", "SingletonCookie", "SingletonSocket", "DevToolsActivePort"];
 const PROCESS_NAMES = ["vnc", "chromium", "taskbar", "windowManager", "xvfb"];
@@ -11,8 +11,9 @@ const REQUIRED_PROCESS_NAMES = ["xvfb", "windowManager", "taskbar", "chromium", 
 function createChromeDesktopService(config = {}, deps = {}) {
   const enabled = Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
   const spawnImpl = deps.spawn || spawn;
+  const execFileImpl = deps.execFile || execFile;
   const fsImpl = deps.fs || fs;
-  const displayReadyImpl = deps.displayReady || (() => isDisplayReady(fsImpl, config));
+  const displayReadyImpl = deps.displayReady || (() => isDisplayReady(fsImpl, config, execFileImpl));
   const delayImpl = deps.delay || delay;
   const now = deps.now || (() => Date.now());
   const setTimeoutImpl = deps.setTimeout || setTimeout;
@@ -62,9 +63,6 @@ function createChromeDesktopService(config = {}, deps = {}) {
       if (stopping) throw new Error("Chrome desktop shutdown requested during startup");
       if (state === "failed") throw new Error("X display process supervision failed");
 
-      startProcess("windowManager", "openbox", [], {DISPLAY: config.chromeDisplay});
-      startProcess("taskbar", "tint2", [], {DISPLAY: config.chromeDisplay});
-      startChromium();
       startProcess("vnc", "x11vnc", [
         "-display", config.chromeDisplay,
         "-localhost",
@@ -73,6 +71,9 @@ function createChromeDesktopService(config = {}, deps = {}) {
         "-shared",
         "-nopw",
       ], {DISPLAY: config.chromeDisplay});
+      startProcess("windowManager", "openbox", [], {DISPLAY: config.chromeDisplay});
+      startProcess("taskbar", "tint2", [], {DISPLAY: config.chromeDisplay});
+      startChromium();
       if (state === "failed" || !allRequiredProcessesRunning()) {
         throw new Error("Chrome desktop process supervision failed during startup");
       }
@@ -284,11 +285,17 @@ async function cleanupStaleLocks(fsImpl, config) {
   }
 }
 
-async function isDisplayReady(fsImpl, config) {
+async function isDisplayReady(fsImpl, config, execFileImpl = execFile) {
   const displayNumber = String(config.chromeDisplay || "").match(/^:(\d+)$/);
   if (!displayNumber) throw new Error("Chrome display configuration is invalid");
   const socketPath = `/tmp/.X11-unix/X${displayNumber[1]}`;
   await fsImpl.promises.access(socketPath, fs.constants.F_OK);
+  await new Promise((resolve, reject) => {
+    execFileImpl("xdpyinfo", ["-display", config.chromeDisplay], {
+      timeout: 1000,
+      windowsHide: true,
+    }, (error) => error ? reject(error) : resolve());
+  });
   return true;
 }
 

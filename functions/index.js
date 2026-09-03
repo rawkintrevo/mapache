@@ -335,7 +335,7 @@ const API_HANDLERS = createApiHandlers({
 
 exports.api = onRequest({
   cors: true,
-  timeoutSeconds: 300,
+  timeoutSeconds: 540,
   secrets: [
     GITHUB_APP_ID_SECRET,
     GITHUB_APP_CLIENT_ID_SECRET,
@@ -415,7 +415,7 @@ exports.googleMcpToken = onRequest({
 
 exports.provisionQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
-  timeoutSeconds: 300,
+  timeoutSeconds: 540,
   secrets: [
     GITHUB_APP_ID_SECRET,
     GITHUB_APP_PRIVATE_KEY_SECRET,

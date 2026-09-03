@@ -40,7 +40,7 @@ test("starts the desktop stack in order and binds browser services to loopback",
 
   await service.start();
   assert.deepEqual(calls.slice(0, 5).map((call) => call.command), [
-    "Xvfb", "openbox", "tint2", "chromium", "x11vnc",
+    "Xvfb", "x11vnc", "openbox", "tint2", "chromium",
   ]);
   const chromium = calls.find((call) => call.command === "chromium");
   assert.ok(chromium.args.includes("--remote-debugging-address=127.0.0.1"));
@@ -142,6 +142,37 @@ test("waits for Xvfb display readiness before starting dependent processes", asy
   });
 
   await service.start();
-  assert.deepEqual(calls, ["Xvfb", "openbox", "tint2", "chromium", "x11vnc"]);
+  assert.deepEqual(calls, ["Xvfb", "x11vnc", "openbox", "tint2", "chromium"]);
+  await service.stop();
+});
+
+test("requires Xvfb to accept X clients before starting desktop dependents", async () => {
+  const calls = [];
+  let probes = 0;
+  const service = createChromeDesktopService(config({chromeStartupTimeoutMs: 100}), {
+    spawn: (command) => {
+      calls.push(command);
+      const child = new EventEmitter();
+      child.kill = () => {};
+      return child;
+    },
+    execFile: (command, args, options, callback) => {
+      probes += 1;
+      assert.equal(command, "xdpyinfo");
+      assert.deepEqual(args, ["-display", ":99"]);
+      assert.equal(options.timeout, 1000);
+      callback(probes === 1 ? new Error("display not accepting clients") : null);
+    },
+    fs: {promises: {
+      access: async () => {},
+      mkdir: async () => {},
+      rm: async () => {},
+    }},
+    delay: async () => {},
+  });
+
+  await service.start();
+  assert.equal(probes, 2);
+  assert.deepEqual(calls, ["Xvfb", "x11vnc", "openbox", "tint2", "chromium"]);
   await service.stop();
 });
