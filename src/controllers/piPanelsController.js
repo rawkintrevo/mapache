@@ -45,16 +45,15 @@ import {
 import {
   resetMcpServers as resetMcpServersState,
   resetPiAuth as resetPiAuthState,
-  resetPiPackages as resetPiPackagesState,
   resetWorkspaceSubagents as resetWorkspaceSubagentsState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
 } from "../state/resetters.js";
 import {sessionSkillHarness} from "../utils/sessionSkills.js";
 import {sessionSubagentHarness} from "../utils/sessionHarnesses.js";
 
-export function createPiPanelsController({state, render, captureSessionRequest = () => undefined}) {
+export function createPiPanelsController({state, render, piPackagesStore, captureSessionRequest = () => undefined}) {
   function resetPiPackages() {
-    resetPiPackagesState(state);
+    piPackagesStore.reset();
   }
 
   function resetPiAuth() {
@@ -74,7 +73,7 @@ export function createPiPanelsController({state, render, captureSessionRequest =
   }
 
   async function loadPiPackages(request = captureSessionRequest()) {
-    await loadPiPackagesState({state, resetPiPackages, render, request});
+    await loadPiPackagesState({state, piPackagesStore, request});
   }
 
   async function loadWorkspaceSkills(request = captureSessionRequest()) {
@@ -240,25 +239,23 @@ export function createPiPanelsController({state, render, captureSessionRequest =
   }
 
   function updatePiInstallSource(source) {
-    updatePiInstallSourceState(state, source);
-    render();
+    updatePiInstallSourceState(state, source, piPackagesStore);
   }
 
   function newPiPackage() {
-    updatePiInstallSourceState(state, "");
-    render();
+    updatePiInstallSourceState(state, "", piPackagesStore);
   }
 
   async function installPiPackage(source) {
-    return installPiPackageState({state, source, loadPiPackages, render});
+    return installPiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   async function removePiPackage(source) {
-    await removePiPackageState({state, source, loadPiPackages, render});
+    await removePiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   async function updatePiPackage(source = "") {
-    await updatePiPackageState({state, source, loadPiPackages, render});
+    await updatePiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   return {

@@ -104,6 +104,15 @@ export function createAppStore(initialState = createInitialState(), reducer = ap
       }
       return state;
     },
+    updateSlice(name, updater, type = `app/update/${name}`) {
+      const current = state[name];
+      const next = typeof updater === "function" ? updater(current) : updater;
+      if (next === current) return state;
+      const action = {type, name};
+      Object.assign(state, {[name]: next});
+      for (const listener of listeners) listener(state, action);
+      return state;
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

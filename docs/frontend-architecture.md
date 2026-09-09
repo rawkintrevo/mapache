@@ -22,7 +22,7 @@ Read this before changing frontend startup, workspace/session state, modals, dra
 
 ## Current Behavior
 
-The frontend uses Vite and React. `src/main.js` initializes Firebase/Auth, owns the top-level app state, coordinates selected workspace/session subscriptions, and passes grouped handlers into React. `src/App.jsx` chooses between the public landing page, fatal error surface, and signed-in app shell.
+The frontend uses Vite and React. `src/main.js` initializes Firebase/Auth, owns the top-level app store facade, coordinates selected workspace/session subscriptions, and passes grouped handlers into React. `src/state/appStore.js` provides the reducer and observable store boundary; migrated domains expose focused owners rather than mutating shared state directly. `src/App.jsx` chooses between the public landing page, fatal error surface, and signed-in app shell.
 
 Top-level identity, selection, page, pending-operation, and error transitions go through the reducer-backed store in `src/state/appStore.js`. Named pending operations live in `state.pendingOperations` with reference counts and user-facing messages, so overlapping and nested `runBusy` calls can finish independently. The store keeps a stable state facade while the remaining domain fields are migrated incrementally, so existing workflow modules can continue receiving their state reference. Reducers return immutable next-state objects, and store subscribers are available for future render extraction.
 
@@ -36,7 +36,7 @@ The top bar owns workspace selection through a compact dropdown, with adjacent c
 
 Live GitHub-backed sessions add a Git section below Sessions in the left navigation drawer. It shows the current branch and pull/push actions. `src/components/modals/GitManagerModal.jsx` owns branch listing, local/remote branch switching, branch creation, current commit and ahead/behind metadata, staged/unstaged/untracked file actions, `.gitignore` entries, commits, and pull requests. Git status and branch operations remain selected-session scoped.
 
-Workflow modules under `src/workflows/` own cohesive API/state sequences such as session lifecycle, GitHub connection and repository refresh, Git/PR operations, Pi auth, Pi packages, workspace skills, workspace subagents, and workspace file/editor actions. Controller modules under `src/controllers/` own drawer toggles, modal visibility, file tree/editor handlers, and right-panel handlers so `src/main.js` does not keep growing flat callback lists.
+Workflow modules under `src/workflows/` own cohesive API/state sequences such as session lifecycle, GitHub connection and repository refresh, Git/PR operations, Pi auth, Pi packages, workspace skills, workspace subagents, and workspace file/editor actions. The Pi packages reference migration uses `src/state/piPackagesStore.js` for all slice updates and resets; `src/workflows/piPackages.js` never mutates `state.piPackages` or accepts a render callback. Controller modules under `src/controllers/` own drawer toggles, modal visibility, file tree/editor handlers, and right-panel handlers so `src/main.js` does not keep growing flat callback lists.
 
 Workspace file browsing is lazy. `src/workflows/workspaceFiles.js` loads the root directory first, tracks loaded directories in `state.workspaceFileLoadedDirs`, and fetches a directory's immediate children only when `WorkspaceFileTree` expands that folder. The workflow supports both Cloud Storage-backed workspaces and selected SSH sessions through the same directory-scoped API shape.
 

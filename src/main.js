@@ -14,6 +14,7 @@ import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
 import {APP_ACTIONS, createAppStore} from "./state/appStore.js";
+import {createPiPackagesStore} from "./state/piPackagesStore.js";
 import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
@@ -71,6 +72,7 @@ import {loadSelectedSessionPanelsConcurrently} from "./workflows/selectedSession
 
 const appStore = createAppStore(createInitialState());
 const state = appStore.state;
+const piPackagesStore = createPiPackagesStore(appStore);
 const sessionRequestTracker = createSessionRequestTracker(state);
 
 function dispatch(action) {
@@ -94,6 +96,7 @@ const workspaceFilesController = createWorkspaceFilesController({
 const piPanelsController = createPiPanelsController({
   state,
   render,
+  piPackagesStore,
   captureSessionRequest: () => sessionRequestTracker.capture(),
 });
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
@@ -193,7 +196,7 @@ async function start() {
       });
       if (!user) {
         sessionSubscriptionController.detach();
-        resetSignedOutState(state);
+        resetSignedOutState(state, {piPackagesStore});
         dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
         return;
@@ -224,6 +227,8 @@ function render() {
     user: state.user,
   }));
 }
+
+appStore.subscribe(() => render());
 
 function isAppPath(pathname = window.location.pathname) {
   return pathname === APP_PATH || pathname.startsWith(`${APP_PATH}/`);
