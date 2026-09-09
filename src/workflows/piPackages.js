@@ -22,7 +22,7 @@ export async function installPiPackageState({state, piPackagesStore, source, loa
     update(state, piPackagesStore, {
       error: packageSource ? "Start an active session before installing." : "Enter an npm: or git package source.",
     });
-    return;
+    return false;
   }
 
   update(state, piPackagesStore, {installing: true, error: "", installMessage: "Installing package..."});
@@ -30,8 +30,10 @@ export async function installPiPackageState({state, piPackagesStore, source, loa
     await state.api.installPiPackage(workspaceId, sessionId, packageSource);
     update(state, piPackagesStore, {installing: false, installSource: "", installMessage: "Package installed into this workspace."});
     await loadPiPackages();
+    return true;
   } catch (error) {
     update(state, piPackagesStore, {installing: false, error: friendlyPiInstallError(error), installMessage: ""});
+    return false;
   }
 }
 
