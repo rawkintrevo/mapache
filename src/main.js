@@ -12,7 +12,8 @@ import {
 } from "./services/auth.js";
 import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
-import {createInitialState} from "./state/initialState.js";
+import {createAppStore, APP_ACTIONS} from "./state/appStore.js";
+import {createPiPackagesStore} from "./state/piPackagesStore.js";
 import {friendlyGlobalError, friendlyWorkspaceError} from "./utils/friendlyErrors.js";
 import {
   resetGitStatus as resetGitStatusState,
@@ -52,7 +53,9 @@ import {
   stopSessionState,
 } from "./workflows/sessionLifecycle.js";
 
-const state = createInitialState();
+const appStore = createAppStore();
+const state = appStore.state;
+const piPackagesStore = createPiPackagesStore(appStore);
 
 const rootElement = document.querySelector("#root");
 const reactRoot = createRoot(rootElement);
@@ -64,7 +67,7 @@ const APP_PATH = "/app";
 
 const drawerController = createDrawerController({state, render});
 const workspaceFilesController = createWorkspaceFilesController({state, render, runBusy});
-const piPanelsController = createPiPanelsController({state, render});
+const piPanelsController = createPiPanelsController({state, render, piPackagesStore});
 const modalController = createModalController({
   state,
   render,
@@ -132,12 +135,15 @@ async function start() {
   try {
     const auth = await initializeFirebase();
     watchAuth(auth, async (user) => {
-      state.user = user;
-      state.api = user ? createApiClient(() => user.getIdToken()) : null;
-      state.error = "";
+      dispatch({
+        type: APP_ACTIONS.SET_IDENTITY,
+        user,
+        api: user ? createApiClient(() => user.getIdToken()) : null,
+      });
       if (!user) {
         detachSessionListener();
-        resetSignedOutState(state);
+        resetSignedOutState(state, {piPackagesStore});
+        dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
         return;
       }
@@ -168,6 +174,8 @@ function render() {
   }));
 }
 
+appStore.subscribe(() => render());
+
 function isAppPath(pathname = window.location.pathname) {
   return pathname === APP_PATH || pathname.startsWith(`${APP_PATH}/`);
 }
@@ -182,6 +190,10 @@ function openApp() {
 async function signInAndOpenApp() {
   await signIn();
   openApp();
+}
+
+function dispatch(action) {
+  appStore.dispatch(action);
 }
 
 function resetGitStatus() {

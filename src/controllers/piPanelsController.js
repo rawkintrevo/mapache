@@ -38,16 +38,15 @@ import {
 import {
   resetMcpServers as resetMcpServersState,
   resetPiAuth as resetPiAuthState,
-  resetPiPackages as resetPiPackagesState,
   resetWorkspaceSubagents as resetWorkspaceSubagentsState,
   resetWorkspaceSkills as resetWorkspaceSkillsState,
 } from "../state/resetters.js";
 import {sessionSkillHarness} from "../utils/sessionSkills.js";
 import {sessionSubagentHarness} from "../utils/sessionHarnesses.js";
 
-export function createPiPanelsController({state, render}) {
+export function createPiPanelsController({state, render, piPackagesStore}) {
   function resetPiPackages() {
-    resetPiPackagesState(state);
+    piPackagesStore.reset();
   }
 
   function resetPiAuth() {
@@ -67,7 +66,7 @@ export function createPiPanelsController({state, render}) {
   }
 
   async function loadPiPackages() {
-    await loadPiPackagesState({state, resetPiPackages, render});
+    await loadPiPackagesState({state, piPackagesStore});
   }
 
   async function loadWorkspaceSkills() {
@@ -215,20 +214,19 @@ export function createPiPanelsController({state, render}) {
   }
 
   function updatePiInstallSource(source) {
-    updatePiInstallSourceState(state, source);
-    render();
+    updatePiInstallSourceState(state, source, piPackagesStore);
   }
 
   async function installPiPackage(source) {
-    await installPiPackageState({state, source, loadPiPackages, render});
+    await installPiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   async function removePiPackage(source) {
-    await removePiPackageState({state, source, loadPiPackages, render});
+    await removePiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   async function updatePiPackage(source = "") {
-    await updatePiPackageState({state, source, loadPiPackages, render});
+    await updatePiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   return {

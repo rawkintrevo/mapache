@@ -4,7 +4,6 @@ import {
   createGitStatusState,
   createMcpServersState,
   createPiAuthState,
-  createPiPackagesState,
   createWorkspaceSubagentsState,
   createWorkspaceSkillsState,
   createPullRequestFormState,
@@ -18,10 +17,6 @@ export function resetPullRequestForm(state) {
 export function resetGitStatus(state) {
   state.gitStatus = createGitStatusState();
   resetPullRequestForm(state);
-}
-
-export function resetPiPackages(state) {
-  state.piPackages = createPiPackagesState();
 }
 
 export function resetPiAuth(state) {
@@ -67,7 +62,7 @@ export function resetWorkspaceFiles(state) {
   resetFileEditor(state);
 }
 
-export function resetSignedOutState(state) {
+export function resetSignedOutState(state, {piPackagesStore} = {}) {
   state.workspaces = [];
   state.sessions = [];
   state.workspaceFiles = [];
@@ -86,7 +81,7 @@ export function resetSignedOutState(state) {
   state.selectedSessionId = null;
   state.collapsedDrawerSections = new Set();
   resetGitStatus(state);
-  resetPiPackages(state);
+  piPackagesStore.reset();
   resetWorkspaceSkills(state);
   resetWorkspaceSubagents(state);
   resetMcpServers(state);
