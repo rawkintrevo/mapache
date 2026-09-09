@@ -1,0 +1,13 @@
+{
+  "id": "script.openFileActionsMenu",
+  "title": "Open and dismiss the Files action menu",
+  "actions": [
+    {"type": "click", "role": "button", "name": "File actions"},
+    {"type": "waitForSnapshotText", "text": "Create file", "timeoutMs": 5000},
+    {"type": "click", "role": "heading", "name": "Files"}
+  ],
+  "successSignals": [
+    "The File actions menu contains exactly Upload file, Create file, and Create directory",
+    "Clicking outside the menu closes it"
+  ]
+}

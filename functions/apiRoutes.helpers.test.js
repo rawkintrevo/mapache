@@ -60,6 +60,14 @@ assertRoute("/api/workspaces/workspace-1/file", {
   name: "workspaceFile",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/create-file", {
+  name: "workspaceCreateFile",
+  workspaceId: "workspace-1",
+});
+assertRoute("/api/workspaces/workspace-1/create-directory", {
+  name: "workspaceCreateDirectory",
+  workspaceId: "workspace-1",
+});
 assertRoute("/api/workspaces/workspace-1/file/download-url", {
   name: "workspaceFileDownloadUrl",
   workspaceId: "workspace-1",
@@ -123,6 +131,11 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-packages/install"
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/models", {
+  name: "piModels",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills", {
   name: "sessionSkills",
   workspaceId: "workspace-1",
@@ -133,6 +146,18 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills/delete", {
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagents", {
+  name: "sessionSubagents",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagents/delete", {
+  name: "sessionSubagentDelete",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagent-chains", {name: "unknown"});
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagent-chains/delete", {name: "unknown"});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-skills/delete", {
   name: "sessionSkillDelete",
   workspaceId: "workspace-1",
@@ -143,6 +168,13 @@ assertRoute("/api/github/connection", {name: "githubConnection"});
 assertRoute("/api/github/disconnect", {name: "githubDisconnect"});
 assertRoute("/api/github/callback", {name: "githubCallback"});
 assertRoute("/api/github/repos", {name: "githubRepos"});
+assertRoute("/api/google/callback", {name: "googleCallback"});
+assertRoute("/api/google/services", {name: "googleCatalog"});
+assertRoute("/api/google/connections", {name: "googleConnections"});
+assertRoute("/api/google/connections/google-1", {name: "googleConnection", connectionId: "google-1"});
+assertRoute("/api/workspaces/workspace-1/google", {name: "workspaceGoogle", workspaceId: "workspace-1"});
+assertRoute("/api/workspaces/workspace-1/google/connect", {name: "googleConnectionStart", workspaceId: "workspace-1"});
+assertRoute("/api/workspaces/workspace-1/google/binding", {name: "googleBinding", workspaceId: "workspace-1"});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/nope", {name: "unknown"});
 
 for (const [routeName, methods] of Object.entries(ROUTE_METHODS)) {
@@ -153,10 +185,14 @@ for (const [routeName, methods] of Object.entries(ROUTE_METHODS)) {
 
 assert.strictEqual(routeAllowsMethod({name: "workspaces"}, "GET"), true);
 assert.strictEqual(routeAllowsMethod({name: "workspaces"}, "PATCH"), false);
+assert.strictEqual(routeAllowsMethod({name: "workspace"}, "PATCH"), true);
 assert.strictEqual(routeAllowsMethod({name: "unknown"}, "GET"), false);
 assert.strictEqual(routeAllowsMethod({name: "unknown"}, "OPTIONS"), true);
+assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "GET"), true);
+assert.strictEqual(routeAllowsMethod({name: "publicPreview"}, "POST"), false);
 
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "GET"), false);
+assert.strictEqual(routeRequiresAuth({name: "googleCallback"}, "GET"), false);
 assert.strictEqual(routeRequiresAuth({name: "githubCallback"}, "POST"), true);
 assert.strictEqual(routeRequiresAuth({name: "qaCustomToken"}, "POST"), false);
 assert.strictEqual(routeRequiresAuth({name: "publicPreview"}, "GET"), false);

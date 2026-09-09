@@ -1,5 +1,6 @@
-import {Download, Trash2} from "lucide-react";
-import {DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
+import {Download} from "lucide-react";
+import {DrawerListActionButton} from "../drawers/DrawerList.jsx";
+import {InspectorResourceRow} from "./InspectorResourcePanel.jsx";
 
 export function PackageRow({
   busy,
@@ -27,39 +28,34 @@ export function PackageRow({
     <span className="subtle">Not installed in this workspace.</span>
   );
 
-  const actions = installed ? [
-    <DrawerListActionButton
-      disabled={busy || !onUpdatePiPackage}
-      icon={<Download aria-hidden="true" />}
-      key="update"
-      label={`Update ${source}`}
-      onClick={() => onUpdatePiPackage?.(source)}
-    />,
-    <DrawerListActionButton
-      disabled={busy || !onRemovePiPackage}
-      icon={<Trash2 aria-hidden="true" />}
-      key="remove"
-      label={`Remove ${source}`}
-      tone="danger"
-      onClick={() => onRemovePiPackage?.(source)}
-    />,
-  ] : [
-    <DrawerListActionButton
-      disabled={busy || !onInstallPiPackage}
-      icon={<Download aria-hidden="true" />}
-      key="install"
-      label={`Install ${source}`}
-      onClick={() => onInstallPiPackage?.(source)}
-    />,
-  ];
-
   return (
-    <DrawerListItem
-      actions={actions}
+    <InspectorResourceRow
+      busy={busy}
       className={installed ? "" : "known-package-row"}
       detail={detail}
       meta={meta}
+      resource={packageInfo}
       title={source}
+      edit={installed ? {
+        disabled: !onUpdatePiPackage,
+        icon: <Download aria-hidden="true" />,
+        label: `Update ${source}`,
+        onClick: (item) => onUpdatePiPackage?.(item.source),
+      } : null}
+      extraActions={!installed ? [
+        <DrawerListActionButton
+          disabled={busy || !onInstallPiPackage}
+          icon={<Download aria-hidden="true" />}
+          key="install"
+          label={`Install ${source}`}
+          onClick={() => onInstallPiPackage?.(source)}
+        />,
+      ] : []}
+      onDelete={installed ? {
+        disabled: !onRemovePiPackage,
+        label: `Remove ${source}`,
+        onClick: (item) => onRemovePiPackage?.(item.source),
+      } : null}
     />
   );
 }

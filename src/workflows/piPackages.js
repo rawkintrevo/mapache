@@ -4,6 +4,7 @@ import {
   friendlyPiRemoveError,
   friendlyPiUpdateError,
 } from "../utils/friendlyErrors.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
 function update(state, piPackagesStore, patch) {
   piPackagesStore.update((current) => ({...current, ...patch}));
@@ -73,7 +74,8 @@ export async function updatePiPackageState({state, piPackagesStore, source = "",
   }
 }
 
-export async function loadPiPackagesState({state, piPackagesStore}) {
+export async function loadPiPackagesState({state, piPackagesStore, request}) {
+  if (request && !isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   if (!workspaceId || !sessionId) {
@@ -89,8 +91,10 @@ export async function loadPiPackagesState({state, piPackagesStore}) {
   update(state, piPackagesStore, {loading: true, error: "", unavailable: false});
   try {
     const data = await state.api.getPiPackages(workspaceId, sessionId);
+    if (request && !isCurrentSessionRequest(request)) return;
     update(state, piPackagesStore, {loading: false, error: "", unavailable: false, data: data || {packages: []}});
   } catch (error) {
+    if (request && !isCurrentSessionRequest(request)) return;
     update(state, piPackagesStore, {loading: false, error: friendlyPiPackageError(error), unavailable: true, data: null});
   }
 }

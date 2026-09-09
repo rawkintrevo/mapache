@@ -44,15 +44,44 @@ firebase deploy --only hosting --project pi-agents-cloud
 
 Record the resulting Artifact Registry digests and verify both `pi-chrome` and `codex-chrome` tags before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
 
-Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account.
+Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account and `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events. Restore the Eventarc binding with:
 
-GitHub Actions preview and production workflows install root, `community/`, `functions/`, and `session-runner/` dependencies, run the fast checks, build the app/community output, and deploy to Firebase. Production writes `functions/.env.pi-agents-cloud` before deploy with the expected service account params plus `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and `QA_LOGIN_DISPLAY_NAME` from GitHub production environment variables.
+```bash
+gcloud projects add-iam-policy-binding pi-agents-cloud \
+  --member serviceAccount:mapache-api@pi-agents-cloud.iam.gserviceaccount.com \
+  --role roles/eventarc.eventReceiver \
+  --condition=None
+```
+
+`.github/workflows/runner-images.yml` detects affected standard runner variants from `session-runner/` and the shared catalog. Pull requests build revision-tagged canaries without moving compatibility tags. Main pushes and explicitly authorized manual runs may publish the compatibility tags after the immutable revision tag succeeds. Immutable tags include the complete source commit, so a different commit cannot overwrite a prior revision tag. `pi-n64` is excluded from shared changes unless an N64-specific path or the manual input requests it.
+
+The workflow maps the internal `default` matrix variant to the production `latest` compatibility tag; all other variants publish their variant name directly. Keep this mapping in `scripts/runner-image-release.mjs` so a successful default build cannot leave `latest` pointing at an older runner revision.
+
+Runner-image jobs submit Cloud Builds asynchronously and poll the Cloud Build API for an authoritative terminal status. They do not stream the default Cloud Build log bucket, so the GitHub Actions service identity needs build submission/status permissions but does not need log-object read access. A successful status gates digest lookup and compatibility-tag publication; failure, internal error, timeout, cancellation, expiration, or an unknown status fails the matrix job. Each successful job summary records the Cloud Build URL, immutable image tag, digest, and source revision.
+
+GitHub Actions preview and production workflows install root, `community/`, `functions/`, and `session-runner/` dependencies, run the fast checks, build the app/community output, and deploy to Firebase. Production writes `functions/.env.pi-agents-cloud` before deploy with the expected service account params plus `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, `QA_LOGIN_DISPLAY_NAME`, `GOOGLE_OAUTH_CLIENT_ID`, and `GOOGLE_OAUTH_REDIRECT_URI` from GitHub Actions variables.
 
 Browser QA login uses a Functions secret plus configured QA account params. Configure `QA_LOGIN_SECRET` as a Firebase Functions secret, and set `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and optionally `QA_LOGIN_DISPLAY_NAME` for the deployed function. The QA account must also be present in `appConfig/access` when the app allowlist is enabled. The API service account needs `roles/firebaseauth.admin` so it can create or update the controlled QA Firebase Auth user before minting the custom token.
 
 MCP management changes require both the Functions API revision and affected runner image revisions. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. Pi runner images must be rebuilt when the baked `pi-mcp-adapter` install changes; existing Pi and Codex Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents.
 
+Google Workspace MCP connectivity additionally requires the configured OAuth client ID/redirect URI and the `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_STATE_SECRET`, and `GOOGLE_OAUTH_ENCRYPTION_KEY` Functions secrets. Deploy the Functions API before testing OAuth or provisioning, then rebuild the affected runner image for runner status/archive changes. Existing sessions keep their previous environment until restart or recreation. The storage model, scope catalog, and rollback/revoke procedure are documented in [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
+
+Running-session Google token renewal also deploys the dedicated `googleMcpToken` Function. That Function must retain the OAuth client-secret and encryption-key bindings, while the runner receives only its URL, a safe connection ID, and the existing per-session shutdown credential. Rebuild every affected standard runner image after changing `session-runner/google-workspace-mcp/`; omit `pi-n64` unless N64 behavior is explicitly in scope. Restart or recreate existing sessions after the Functions and image rollout because old Cloud Run revisions do not contain the refresh URL or refreshed MCP wrapper.
+
 Cloud Run create, update, and delete operations use a 240-second polling deadline by default, configurable with `CLOUD_RUN_OPERATION_TIMEOUT_MS`. This leaves headroom under the API Function's 300-second request timeout while allowing slower runner revisions to become healthy. When create polling genuinely times out, Functions reconciles an already-ready service before reporting failure; otherwise it requests service deletion so a healthy but inaccessible runner is not left orphaned. Provisioning failures always record a user-safe `lastError`.
+
+Per-session Cloud Run service IDs are derived from the Firestore session ID as a stable hashed `session-` identifier shorter than Cloud Run's 50-character limit. The resolver preserves an existing valid service ID for updates and repairs legacy or overlong IDs during service recreation, so operation-based session document IDs cannot make provisioning fail at the Cloud Run create request.
+
+Active session service templates set `minInstanceCount: 1` and `maxInstanceCount: 1`. This keeps the terminal/container alive until the one-hour idle reaper or a manual lifecycle action deletes the service; Cloud Run traffic scale-down is not the session shutdown mechanism. Deploy Functions before validating this behavior, and restart, resize, or recreate an older session because an existing Cloud Run template retains its previous scaling values. Runner bootstrap-failure reporting additionally requires rebuilt affected standard runner images; older revisions can still leave Firestore at `running` after a later instance-start failure.
+
+Provisioning is idempotent by operation ID. Session creation persists the operation and attempt metadata before queueing, and the Functions transaction claims each worker attempt before sending a Cloud Run create request. Retries with the same `operationId` converge on the same session and Cloud Run service; completed operations return the existing session. If Cloud Run reports that the fixed per-session service already exists, provisioning polls and adopts it only after it becomes ready instead of recording a false failure. Other failures retain a safe error plus a retryable flag for controlled retry paths. The deployed `provisionQueuedSession` Firestore trigger handles queued records outside the client request, so create-session callers should treat the returned session as in progress and follow its Firestore status changes. That trigger must bind the GitHub App ID/private-key secrets and Google OAuth client/state/encryption secrets because connected GitHub and Google Workspace provisioning resolves credentials outside the API function.
+
+Workspace sync-writer ownership is also controlled by Functions transactions. Session reservation persists one writer lease per workspace and marks additional eligible sessions as readers; stop, delete, worker/Cloud Run provisioning failure, and the `reconcileWorkspaceSyncWriters` scheduled function release or repair the lease. Deploy the scheduled function with the Functions revision so existing workspaces can recover from stale owners.
+
+The runner's compatibility default for a missing `WORKSPACE_SYNC_ROLE` is `writer`, preserving upload behavior for existing services. New reader services receive the role from Functions and skip worktree/archive uploads and deletion reconciliation; they can still restore workspace state at startup and use explicit sync-down.
+
+Running sessions also persist the immutable Cloud Run image digest. The `refreshRunnerImageFreshness` scheduled function compares that digest with the current Artifact Registry digest behind each curated image tag and records `latest`, `stale`, or `unknown` for the frontend. Artifact Registry lookup failures remain unknown and never claim that a session is current.
 
 ## Invariants
 
@@ -64,8 +93,10 @@ Cloud Run create, update, and delete operations use a 240-second polling deadlin
 - Codex runner image changes, including the packaged GitHub CLI, require rebuilding and pushing `codex-basic` and `codex-web`; existing Codex sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
+- Every runner image build validates `python3 --version`, and the runner unit suite keeps the Python 3 install and validation contract aligned across all Dockerfile variants.
 - Runner image tags currently include `latest`, `pi-basic`, `pi-web`, `pi-n64`, `pi-chrome`, `codex-basic`, `codex-web`, and `codex-chrome`.
 - Chrome image builds run the bounded `check-chrome-runtime.js` and `chrome-smoke.js` checks before publishing, but production canary verification is still required after Functions and Hosting deploy.
+- Chrome desktop supervision changes require rebuilding and publishing both `pi-chrome` and `codex-chrome`; existing Cloud Run services retain their current runner revision until restarted or recreated. The runner now gates dependent process launch on Xvfb readiness and requires CDP plus loopback VNC readiness before reporting a browser runtime as ready. No Functions or Hosting deployment is needed when the browser status/API contract is unchanged.
 - The Codex runner Dockerfiles pin Codex CLI `0.140.0` and install the published Linux package tarball directly because that release's `codex-package_SHA256SUMS` file is missing the Linux standalone package entry and breaks the hosted `install.sh` flow.
 - Do not put developer maintenance notes under `community/`.
 
@@ -84,3 +115,4 @@ Cloud Run create, update, and delete operations use a 240-second polling deadlin
 - [Testing](./testing.md)
 - [Runtime containers](./runtime-containers.md)
 - [Backend API architecture](./backend-api-architecture.md)
+- [Frontend/Functions/runner compatibility matrix](./guides/frontend-functions-runner-compatibility.md)

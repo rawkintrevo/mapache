@@ -40,12 +40,6 @@ function createWorkspaceAuthService({admin, config, db}) {
       if (Object.prototype.hasOwnProperty.call(data, "authSelection")) {
         return normalizeAuthSelection(data.authSelection);
       }
-      if (data.piAuthSelection && typeof data.piAuthSelection === "object" && !Array.isArray(data.piAuthSelection)) {
-        return {
-          harness: "pi",
-          providers: normalizeAuthSelection(data.piAuthSelection).providers,
-        };
-      }
       return null;
     } catch (error) {
       console.warn("auth selection read failed", compactErrorMessage(error.message || error));
@@ -66,24 +60,16 @@ function createWorkspaceAuthService({admin, config, db}) {
   }
 
   async function readRemoteAuthData() {
-    const refs = compatibleAuthDocRefs(config.ownerUid, db);
-    const [agentSnap, legacySnap] = await Promise.all([refs.agent.get(), refs.legacy.get()]);
-    return mergeRemoteAuthData(
-        agentSnap.exists ? agentSnap.data() : {},
-        legacySnap.exists ? legacySnap.data() : {},
-    );
+    const snap = await agentAuthDoc(config.ownerUid, db).get();
+    return mergeRemoteAuthData(snap.exists ? snap.data() : {});
   }
 
   async function writeRemoteAuthProviders(providers) {
-    const refs = compatibleAuthDocRefs(config.ownerUid, db);
     const payload = {
       providers: normalizeAuthProviders(providers),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    await Promise.all([
-      refs.agent.set(payload, {merge: true}),
-      refs.legacy.set(payload, {merge: true}),
-    ]);
+    await agentAuthDoc(config.ownerUid, db).set(payload, {merge: true});
   }
 
   function buildMaterializedAuth(data, selection) {
@@ -211,26 +197,11 @@ function agentAuthDoc(uid, db) {
   return db.collection("users").doc(uid).collection("private").doc("agentAuth");
 }
 
-function legacyPiAuthDoc(uid, db) {
-  return db.collection("users").doc(uid).collection("private").doc("piAuth");
-}
-
-function compatibleAuthDocRefs(uid, db) {
-  return {
-    agent: agentAuthDoc(uid, db),
-    legacy: legacyPiAuthDoc(uid, db),
-  };
-}
-
-function mergeRemoteAuthData(agentData = {}, legacyData = {}) {
-  const legacyProviders = normalizeAuthProviders(legacyData.providers);
-  const agentProviders = normalizeAuthProviders(agentData.providers);
-  const providers = {...legacyProviders, ...agentProviders};
-  const legacyEntries = normalizeAuthEntries(legacyData.entries, legacyProviders);
-  const agentEntries = normalizeAuthEntries(agentData.entries, agentProviders);
+function mergeRemoteAuthData(agentData = {}) {
+  const providers = normalizeAuthProviders(agentData.providers);
   return {
     providers,
-    entries: normalizeAuthEntries({...legacyEntries, ...agentEntries}, providers),
+    entries: normalizeAuthEntries(agentData.entries, providers),
   };
 }
 

@@ -3,6 +3,7 @@
 const logger = require("firebase-functions/logger");
 const {
   admin,
+  db,
   auth,
 } = require("./backendContext");
 const {
@@ -19,13 +20,17 @@ const {
   cleanName,
   defaultPreviewStaticRoot,
   httpError,
+  isGoogleAlreadyExists,
   isGoogleNotFound,
   normalizeServiceAccountEmail,
   publicGoogleError,
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
-const {resolveSessionHarness} = require("./runnerCatalog.helpers");
-const {runnerImageCapabilities} = require("./runnerImages.helpers");
+const {normalizeSessionResources} = require("./sessionResources.helpers");
+const {resolveSessionCapabilities, resolveSessionHarness} = require("./runnerCatalog.helpers");
+const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
+const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
+const {isRetryableProvisioningError} = require("./provisioning.helpers");
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -40,57 +45,192 @@ function createCloudRunService(dependencies = {}) {
 
 async function provisionSessionService(workspace, sessionRef, session, dependencies = {}) {
   let client;
+  let claimedSession = session;
+  let operationName = session.provisioningCloudRunOperationName || null;
   const parent = `projects/${await getProjectId()}/locations/${session.region}`;
   const serviceName = `${parent}/services/${session.serviceId}`;
   try {
+    let claim;
+    if (session.provisioningOperationId) {
+      claim = await claimProvisioningAttempt(sessionRef, session, dependencies);
+      if (["completed", "failed", "in_progress", "stale"].includes(claim.action)) return;
+      claimedSession = claim.session;
+      operationName = claim.operationName || operationName;
+    }
+
     client = await (dependencies.auth || auth).getClient();
-    const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${session.serviceId}`;
-    const body = await buildCloudRunService(workspace, session, dependencies);
-    const response = await client.request({url, method: "POST", data: body});
-    await waitForOperation(client, response.data, dependencies);
+    if (claim && claim.action === "poll") {
+      await waitForOperation(client, {name: operationName}, dependencies);
+    } else {
+      const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${claimedSession.serviceId}`;
+      const body = await buildCloudRunService(workspace, claimedSession, dependencies);
+      const response = await client.request({url, method: "POST", data: body});
+      operationName = response.data && response.data.name || null;
+      if (claimedSession.provisioningOperationId) {
+        await sessionRef.update({
+          provisioningCloudRunOperationName: operationName,
+          provisioningState: "running",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      await waitForOperation(client, response.data, dependencies);
+    }
     await setPublicInvoker(client, serviceName);
     const service = await getCloudRunService(client, serviceName);
-    await sessionRef.update({
-      status: "running",
+    const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
+    await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
       serviceUrl: service.uri || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      ...runnerImageMetadata,
+      ...provisioningCompletionUpdates(claimedSession, operationName),
+    }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
     let provisioningError = error;
+    if (client && isGoogleAlreadyExists(error)) {
+      try {
+        const service = await waitForCloudRunServiceReady(client, serviceName, dependencies);
+        await setPublicInvoker(client, serviceName);
+        const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
+        await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
+          serviceUrl: service.uri,
+          lastError: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...runnerImageMetadata,
+          ...provisioningCompletionUpdates(claimedSession, operationName),
+        }, {reconciliationReason: "cloud_run_existing_service_reconciled"}));
+        return;
+      } catch (reconciliationError) {
+        provisioningError = reconciliationError;
+      }
+    }
     if (client && isCloudRunOperationTimeout(error)) {
       const service = await reconcileProvisioningTimeout(client, serviceName);
       if (service) {
         try {
           await setPublicInvoker(client, serviceName);
-          await sessionRef.update({
-            status: "running",
+          const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
+          await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
             serviceUrl: service.uri,
             lastError: null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+            ...runnerImageMetadata,
+            ...provisioningCompletionUpdates(claimedSession, operationName),
+          }, {reconciliationReason: "cloud_run_timeout_reconciled"}));
           return;
         } catch (reconciliationError) {
           provisioningError = reconciliationError;
         }
       }
     }
-    await sessionRef.update({
-      status: "provision_failed",
+    await sessionRef.update(sessionStatusUpdate(claimedSession, "provision_failed", {
       lastError: publicGoogleError(provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      ...provisioningFailureUpdates(claimedSession, operationName, provisioningError),
+    }, {reconciliationReason: "cloud_run_provisioning_failed"}));
     if (typeof dependencies.releaseChromeWorkspaceSession === "function") {
       try {
-        await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "provision_failed");
+        await dependencies.releaseChromeWorkspaceSession(sessionRef, claimedSession, "provision_failed");
       } catch (releaseError) {
         logger.warn("Chrome workspace reservation release failed", {
-          serviceId: session.serviceId,
+          serviceId: claimedSession.serviceId,
+          error: publicGoogleError(releaseError),
+        });
+      }
+    }
+    if (typeof dependencies.releaseWorkspaceSyncWriterLease === "function") {
+      try {
+        await dependencies.releaseWorkspaceSyncWriterLease(sessionRef, claimedSession, "provision_failed");
+      } catch (releaseError) {
+        logger.warn("Workspace sync-writer lease release failed", {
+          serviceId: claimedSession.serviceId,
           error: publicGoogleError(releaseError),
         });
       }
     }
   }
+}
+
+async function claimProvisioningAttempt(sessionRef, session, dependencies = {}) {
+  const firestore = dependencies.db || db;
+
+  const claim = async (transaction) => {
+    const snapshot = transaction ? await transaction.get(sessionRef) : await sessionRef.get();
+    if (!snapshot.exists) return {action: "stale", session};
+
+    const latest = {...session, ...snapshot.data()};
+    if (latest.provisioningOperationId && latest.provisioningOperationId !== session.provisioningOperationId) {
+      return {action: "stale", session: latest};
+    }
+
+    const state = provisioningState(latest);
+    if (state === "completed") return {action: "completed", session: latest};
+    if (state === "failed" && !latest.provisioningRetryable) {
+      return {action: "failed", session: latest};
+    }
+    if (state === "running") {
+      if (latest.provisioningCloudRunOperationName) {
+        return {
+          action: "poll",
+          operationName: latest.provisioningCloudRunOperationName,
+          session: latest,
+        };
+      }
+      return {action: "in_progress", session: latest};
+    }
+
+    const updates = {
+      provisioningAttempt: Number(latest.provisioningAttempt || 0) + 1,
+      provisioningState: "running",
+      provisioningAttemptStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      provisioningAttemptCompletedAt: null,
+      provisioningCloudRunOperationName: null,
+      provisioningRetryable: false,
+      provisioningLastError: null,
+    };
+    if (transaction) transaction.update(sessionRef, updates);
+    else await sessionRef.update(updates);
+    return {
+      action: "start",
+      operationName: null,
+      session: {...latest, ...updates},
+    };
+  };
+
+  if (firestore && typeof firestore.runTransaction === "function") {
+    return firestore.runTransaction((transaction) => claim(transaction));
+  }
+  return claim();
+}
+
+function provisioningState(session = {}) {
+  if (session.provisioningState === "completed") return "completed";
+  if (session.status === "running" && session.serviceUrl) return "completed";
+  if (session.provisioningState === "failed" || session.status === "provision_failed") return "failed";
+  if (session.provisioningState === "running") return "running";
+  return "pending";
+}
+
+function provisioningCompletionUpdates(session, operationName) {
+  if (!session.provisioningOperationId) return {};
+  return {
+    provisioningState: "completed",
+    provisioningCloudRunOperationName: operationName || session.provisioningCloudRunOperationName || null,
+    provisioningAttemptCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    provisioningRetryable: false,
+    provisioningLastError: null,
+  };
+}
+
+function provisioningFailureUpdates(session, operationName, error) {
+  if (!session.provisioningOperationId) return {};
+  return {
+    provisioningState: "failed",
+    provisioningCloudRunOperationName: operationName || session.provisioningCloudRunOperationName || null,
+    provisioningAttemptCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    provisioningRetryable: isRetryableProvisioningError(error),
+    provisioningLastError: publicGoogleError(error),
+  };
 }
 
 async function reconcileProvisioningTimeout(client, serviceName) {
@@ -125,13 +265,33 @@ function isCloudRunServiceReady(service) {
   );
 }
 
+async function waitForCloudRunServiceReady(client, serviceName, options = {}) {
+  const timeoutMs = positiveOperationNumber(
+      options.operationTimeoutMs,
+      DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
+  );
+  const pollIntervalMs = positiveOperationNumber(options.operationPollIntervalMs, 2000);
+  const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+  const sleep = options.sleep || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const service = await getCloudRunService(client, serviceName);
+    if (isCloudRunServiceReady(service)) return service;
+    if (service && service.terminalCondition && service.terminalCondition.state === "CONDITION_FAILED") {
+      throw new Error(cleanName(service.terminalCondition.message || "Existing Cloud Run service failed to become ready."));
+    }
+    if (attempt + 1 < maxAttempts) await sleep(pollIntervalMs);
+  }
+  const error = new Error(`Existing Cloud Run service did not become ready after ${timeoutMs}ms.`);
+  error.code = "cloud_run_existing_service_timeout";
+  throw error;
+}
+
 async function patchSessionService(sessionRef, session, options = {}, dependencies = {}) {
   if (!session.serviceName) {
-    await sessionRef.update({
-      status: "needs_service",
+    await sessionRef.update(sessionStatusUpdate(session, "needs_service", {
       lastError: "This session has no Cloud Run serviceName yet.",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "missing_cloud_run_service"}));
     return;
   }
 
@@ -149,18 +309,18 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     });
     await waitForOperation(client, response.data);
     const service = await getCloudRunService(client, session.serviceName);
-    await sessionRef.update({
-      status: "running",
+    const runnerImageMetadata = await deployedRunnerImageMetadata(client, session.serviceName, session, service, dependencies);
+    await sessionRef.update(sessionStatusUpdate(session, "running", {
       serviceUrl: service.uri || session.serviceUrl || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+      ...runnerImageMetadata,
+    }, {reconciliationReason: "cloud_run_ready"}));
   } catch (error) {
-    await sessionRef.update({
-      status: "update_failed",
+    await sessionRef.update(sessionStatusUpdate(session, "update_failed", {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_update_failed"}));
   }
 }
 
@@ -184,11 +344,10 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       return true;
     }
 
-    await sessionRef.update({
-      status: "stop_failed",
+    await sessionRef.update(sessionStatusUpdate(session, "stop_failed", {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, {reconciliationReason: "cloud_run_stop_failed"}));
     return false;
   }
 }
@@ -205,7 +364,7 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
     template: {
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
-        minInstanceCount: 0,
+        minInstanceCount: 1,
         maxInstanceCount: 1,
       },
       containers: [{
@@ -229,6 +388,10 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
   return {
     template: {
       serviceAccount: requireRunnerServiceAccount(session),
+      scaling: {
+        minInstanceCount: 1,
+        maxInstanceCount: 1,
+      },
       containers: [{
         image: session.image,
         resources: {limits: resourceLimits(session.resources)},
@@ -260,18 +423,25 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 }
 
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
-  const capabilities = session.capabilities || runnerImageCapabilities(session.image);
+  const capabilities = resolveSessionCapabilities(session);
   const harness = resolveSessionHarness(session);
   const terminal = terminalCommandEnv(session);
   const terminalKind = cleanName(harness?.terminalKind || session.terminalKind || "shell") || "shell";
   const homeDir = cleanHomeDir(session.homeDir || "/root");
   const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
   const codexHome = session.codexHomeDir || codexHomeDir(session.runnerSessionId || session.id || "");
+  const environmentEntryIds = sessionEnvironmentEntryIds(session);
+  const genericEnvironment = typeof dependencies.buildGenericEnvironmentEnv === "function" ?
+    await dependencies.buildGenericEnvironmentEnv(session, environmentEntryIds) : {};
+  const googleMcpRuntime = typeof dependencies.resolveGoogleMcpRuntime === "function" ?
+    await dependencies.resolveGoogleMcpRuntime(session) : {mcpConfig: session.mcpConfig, env: {}};
   const env = [
     ...envMapToCloudRunEnv({
       ...(session.workspaceEnv || {}),
       ...(session.sessionEnv || {}),
+      ...genericEnvironment,
     }),
+    ...trustedRuntimeEnv(googleMcpRuntime.env),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
     {name: "HOME", value: homeDir},
     {name: "MAPACHE_HOME_DIR", value: homeDir},
@@ -300,9 +470,10 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
+    {name: "WORKSPACE_SYNC_ROLE", value: cleanName(session.syncWriterRole || "writer") || "writer"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_POLICY_EXCLUDE", value: stringifySyncPolicyExclude(session.syncPolicyExclude)},
-    {name: "MCP_CONFIG", value: stringifyMcpConfig(session.mcpConfig)},
+    {name: "MCP_CONFIG", value: stringifyMcpConfig(googleMcpRuntime.mcpConfig || session.mcpConfig)},
     {name: "RUNNER_CAPABILITIES", value: JSON.stringify(capabilities)},
     options.restartNonce ? {name: "RESTART_NONCE", value: options.restartNonce} : null,
   ];
@@ -375,6 +546,21 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   }
 
   return env.filter(Boolean);
+}
+
+function trustedRuntimeEnv(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value).map(([name, item]) => ({
+    name,
+    value: item == null ? "" : String(item),
+  }));
+}
+
+function sessionEnvironmentEntryIds(session = {}) {
+  const selected = Array.isArray(session.environmentEntryIds) ?
+    session.environmentEntryIds :
+    (Array.isArray(session.genericEnvironmentEntryIds) ? session.genericEnvironmentEntryIds : []);
+  return [...new Set(selected.map((id) => String(id || "").trim()).filter(Boolean))];
 }
 
 function terminalCommandEnv(session) {
@@ -534,15 +720,55 @@ async function getCloudRunService(client, serviceName) {
   return response.data || {};
 }
 
+async function deployedRunnerImageMetadata(client, serviceName, session, service, dependencies = {}) {
+  try {
+    const revisionName = service.latestReadyRevision ||
+      service.latestReadyRevisionName ||
+      service.latestCreatedRevision ||
+      service.latestCreatedRevisionName;
+    if (!revisionName) return {};
+    const fullRevisionName = revisionName.startsWith("projects/") ?
+      revisionName : `${serviceName.slice(0, serviceName.lastIndexOf("/services/"))}/revisions/${revisionName}`;
+    const response = await client.request({
+      url: `https://run.googleapis.com/v2/${fullRevisionName}`,
+      method: "GET",
+    });
+    const revision = response.data || {};
+    const digest = revision.imageDigest ||
+      revision.containers?.[0]?.imageDigest ||
+      revision.template?.containers?.[0]?.imageDigest ||
+      "";
+    if (!digest) return {};
+    let currentDigest = null;
+    if (typeof dependencies.getCurrentRunnerImageDigest === "function") {
+      currentDigest = await dependencies.getCurrentRunnerImageDigest(session);
+    }
+    return {
+      runnerImageDigest: digest,
+      runnerImageCurrentDigest: currentDigest || null,
+      runnerImageFreshness: getSessionImageFreshness({
+        ...session,
+        status: "running",
+        runnerImageDigest: digest,
+      }, currentDigest),
+    };
+  } catch (error) {
+    logger.warn("runner image deployment metadata lookup failed", {
+      serviceId: session.serviceId,
+      error: error.message || String(error),
+    });
+    return {};
+  }
+}
+
 async function getProjectId() {
   return process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || await auth.getProjectId();
 }
 
 function normalizeResources(payload) {
-  return {
-    cpu: cleanName(payload.cpu || DEFAULT_CPU),
-    memory: cleanName(payload.memory || DEFAULT_MEMORY),
-  };
+  return normalizeSessionResources(payload, {
+    defaultResources: {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY},
+  });
 }
 
 function resourceLimits(resources) {
@@ -566,6 +792,7 @@ module.exports = {
   requireRunnerServiceAccount,
   resourceLimits,
   runnerServiceAccountValue,
+  sessionEnvironmentEntryIds,
   sessionRunnerEnv,
   stringifyMcpConfig,
   stringifySyncPolicyExclude,

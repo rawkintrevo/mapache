@@ -1,0 +1,24 @@
+{
+  "id": "session.resource-metrics",
+  "title": "Running session shows live CPU and RAM metrics",
+  "description": "Create a standard Cloud session, wait for runner access, and verify the parent session header renders CPU and RAM utilization meters.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/session.resource-metrics",
+  "requires": {
+    "cloudRun": "Creates a billable Cloud Run service"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-resource-metrics-ws-{{timestamp}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-resource-metrics-{{timestamp}}", "imageKey": "pi-basic", "cpu": "1", "memory": "2Gi"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "snapshot-any-text", "expectedAny": ["CPU", "RAM"]},
+    {"assert": "snapshot-text", "expected": "CPU utilization"},
+    {"assert": "snapshot-text", "expected": "RAM utilization"},
+    {"capture": "screenshot", "fileName": "resource-metrics.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

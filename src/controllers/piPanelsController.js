@@ -3,6 +3,11 @@ import {
   loadPiAuthState,
   savePiAuthProviderState,
   saveSessionPiAuthSelectionState,
+  saveGenericEnvironmentKeyState,
+  deleteGenericEnvironmentKeyState,
+  editGenericEnvironmentKeyState,
+  updateGenericEnvironmentSelectionState,
+  updateGenericEnvironmentFormState,
   startOpenAiCodexDeviceLoginState,
   updatePiAuthFormState,
 } from "../workflows/piAuth.js";
@@ -31,7 +36,9 @@ import {
 } from "../workflows/subagents.js";
 import {
   deleteMcpServerState,
+  editMcpServerFormState,
   loadMcpServersState,
+  resetMcpServerFormState,
   saveMcpServerState,
   updateMcpServerFormState,
 } from "../workflows/mcpServers.js";
@@ -44,7 +51,7 @@ import {
 import {sessionSkillHarness} from "../utils/sessionSkills.js";
 import {sessionSubagentHarness} from "../utils/sessionHarnesses.js";
 
-export function createPiPanelsController({state, render, piPackagesStore}) {
+export function createPiPanelsController({state, render, piPackagesStore, captureSessionRequest = () => undefined}) {
   function resetPiPackages() {
     piPackagesStore.reset();
   }
@@ -65,20 +72,20 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
     resetMcpServersState(state);
   }
 
-  async function loadPiPackages() {
-    await loadPiPackagesState({state, piPackagesStore});
+  async function loadPiPackages(request = captureSessionRequest()) {
+    await loadPiPackagesState({state, piPackagesStore, request});
   }
 
-  async function loadWorkspaceSkills() {
-    await loadWorkspaceSkillsState({state, render});
+  async function loadWorkspaceSkills(request = captureSessionRequest()) {
+    await loadWorkspaceSkillsState({state, render, request});
   }
 
   async function loadPiAuth(options = {}) {
     await loadPiAuthState({state, render, options});
   }
 
-  async function loadWorkspaceSubagents() {
-    await loadWorkspaceSubagentsState({state, render});
+  async function loadWorkspaceSubagents(request = captureSessionRequest()) {
+    await loadWorkspaceSubagentsState({state, render, request});
   }
 
   async function loadMcpServers() {
@@ -97,6 +104,14 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
     await loadPiAuth({showMessage: true});
   }
 
+  function updateGenericEnvironmentForm(patch) { updateGenericEnvironmentFormState(state, patch); render(); }
+  function editGenericEnvironmentKey(entry) { editGenericEnvironmentKeyState(state, entry); render(); }
+  async function saveGenericEnvironmentKey() { await saveGenericEnvironmentKeyState({state, render}); }
+  async function deleteGenericEnvironmentKey(id) { await deleteGenericEnvironmentKeyState({state, entryId: id, render}); }
+  async function updateGenericEnvironmentSelection(id, selected) {
+    await updateGenericEnvironmentSelectionState({state, entryId: id, selected, render});
+  }
+
   async function refreshWorkspaceSubagents() {
     await loadWorkspaceSubagents();
   }
@@ -110,8 +125,18 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
     render();
   }
 
+  function newMcpServer() {
+    resetMcpServerFormState(state);
+    render();
+  }
+
+  function editMcpServer(entry) {
+    editMcpServerFormState(state, entry);
+    render();
+  }
+
   async function saveMcpServer() {
-    await saveMcpServerState({state, loadMcpServers, render});
+    return saveMcpServerState({state, loadMcpServers, render});
   }
 
   async function deleteMcpServer(name) {
@@ -138,7 +163,7 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
   }
 
   async function saveWorkspaceSkill() {
-    await saveWorkspaceSkillState({state, loadWorkspaceSkills, render});
+    return saveWorkspaceSkillState({state, loadWorkspaceSkills, render});
   }
 
   async function deleteWorkspaceSkill(name) {
@@ -217,8 +242,12 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
     updatePiInstallSourceState(state, source, piPackagesStore);
   }
 
+  function newPiPackage() {
+    updatePiInstallSourceState(state, "", piPackagesStore);
+  }
+
   async function installPiPackage(source) {
-    await installPiPackageState({state, piPackagesStore, source, loadPiPackages});
+    return installPiPackageState({state, piPackagesStore, source, loadPiPackages});
   }
 
   async function removePiPackage(source) {
@@ -241,6 +270,7 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
     editWorkspaceSkill,
     installPiPackage,
     deleteMcpServer,
+    editMcpServer,
     loadMcpServers,
     loadPiAuth,
     loadPiPackages,
@@ -248,7 +278,14 @@ export function createPiPanelsController({state, render, piPackagesStore}) {
     loadWorkspaceSubagents,
     loadWorkspaceSkills,
     refreshPiAuth,
+    updateGenericEnvironmentForm,
+    updateGenericEnvironmentSelection,
+    editGenericEnvironmentKey,
+    saveGenericEnvironmentKey,
+    deleteGenericEnvironmentKey,
     refreshMcpServers,
+    newMcpServer,
+    newPiPackage,
     refreshPiPackages,
     refreshPiSkills: refreshWorkspaceSkills,
     refreshWorkspaceSubagents,

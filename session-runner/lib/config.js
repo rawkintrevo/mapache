@@ -19,13 +19,18 @@ function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
 }
 
+function normalizeWorkspaceSyncRole(value) {
+  const role = normalizeEnvString(value).toLowerCase();
+  return role === "reader" || role === "none" ? role : "writer";
+}
+
 function normalizePreviewBasePath(value) {
   const clean = `/${String(value || "/preview").replace(/^\/+|\/+$/g, "")}`;
   return clean === "/" ? "/preview" : clean;
 }
 
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false};
+  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false, chat: false};
   try {
     const parsed = JSON.parse(process.env.RUNNER_CAPABILITIES || "{}");
     return Object.fromEntries(Object.keys(fallback).map((key) => [
@@ -38,7 +43,7 @@ function parseRunnerCapabilities() {
   }
 }
 
-function createConfig() {
+function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
   const piHomeDir = path.join(homeDir, ".pi");
@@ -59,6 +64,7 @@ function createConfig() {
   const codexConfigPath = path.resolve(process.env.CODEX_CONFIG_PATH || path.join(workspaceDir, ".codex", "config.toml"));
   const harnessId = normalizeEnvString(process.env.HARNESS_ID) || normalizeEnvString(process.env.TERMINAL_KIND) || "shell";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
+  const workspaceSyncRole = normalizeWorkspaceSyncRole(process.env.WORKSPACE_SYNC_ROLE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
   const runnerCapabilities = parseRunnerCapabilities();
@@ -72,6 +78,7 @@ function createConfig() {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
+    resourceMetricsIntervalMs: positiveNumber(process.env.RESOURCE_METRICS_INTERVAL_MS, 2000),
     browserQaActionTimeoutMs: positiveNumber(process.env.BROWSER_QA_ACTION_TIMEOUT_MS, 5000),
     browserQaBaseUrl: normalizeEnvString(process.env.MAPACHE_PREVIEW_URL) || `http://127.0.0.1:${process.env.PORT || 8080}${previewBasePath}/`,
     browserQaCommand: normalizeEnvString(process.env.MAPACHE_BROWSER_QA_COMMAND) || "mapache-preview-qa",
@@ -91,6 +98,8 @@ function createConfig() {
     chromeCdpPort: chromeEnabled ? positiveNumber(process.env.CHROME_CDP_PORT, 9222) : 0,
     chromeDisplay: chromeEnabled ? normalizeEnvString(process.env.CHROME_DISPLAY) || ":99" : "",
     chromeEnabled,
+    chromeDesktopRestartBackoffMs: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_BACKOFF_MS, 250) : 0,
+    chromeDesktopRestartMaxAttempts: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_MAX_ATTEMPTS, 3) : 0,
     chromeNoVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_NOVNC_PORT, 6080) : 0,
     chromeProfileDir: chromeEnabled ? path.resolve(process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
     chromeStartupTimeoutMs: chromeEnabled ? positiveNumber(process.env.CHROME_STARTUP_TIMEOUT_MS, 30000) : 0,
@@ -115,6 +124,10 @@ function createConfig() {
     githubRepoName: normalizeEnvString(process.env.GITHUB_REPO_NAME),
     githubRequestedBranch: normalizeEnvString(process.env.GITHUB_REQUESTED_BRANCH),
     githubRequestedCommit: normalizeEnvString(process.env.GITHUB_REQUESTED_COMMIT),
+    googleMcpAccountEmail: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_EMAIL),
+    googleMcpAccountName: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_NAME),
+    googleMcpConnectionStatus: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_STATUS),
+    googleMcpEnabledServices: normalizeEnvString(process.env.GOOGLE_MCP_ENABLED_SERVICES),
     harnessId,
     homeArchiveName,
     homeDir,
@@ -166,8 +179,10 @@ function createConfig() {
     terminalReplayLimit: positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000),
     terminalKind: normalizeEnvString(process.env.TERMINAL_KIND) || "pi",
     workspaceDir,
+    workspaceGoogleApplicationCredentials: normalizeEnvString(workspaceGoogleApplicationCredentials),
     workspaceId: process.env.WORKSPACE_ID || "",
     workspaceSourceMode,
+    workspaceSyncRole,
     workspaceSyncPolicyExclude,
     workspaceSyncPolicyMode,
   };
@@ -177,5 +192,6 @@ module.exports = {
   createConfig,
   normalizePreviewBasePath,
   normalizeWorkspaceSourceMode,
+  normalizeWorkspaceSyncRole,
   parseRunnerCapabilities,
 };

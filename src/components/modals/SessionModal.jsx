@@ -1,19 +1,16 @@
 import {Plus, X} from "lucide-react";
+import {useState} from "react";
 import {sessionImages} from "../../config/sessionImages.js";
 import {parseEnvText} from "../../utils/envText.js";
+import {getDefaultSessionResources} from "../../utils/sessionResources.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
+import {SessionResourceFields, SessionResourceSelector} from "../sessions/SessionResourceSelector.jsx";
 
-const cpuOptions = ["1", "2", "4"];
-const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
-
-function formatMemory(value) {
-  return value.replace("Gi", " GiB");
-}
-
-export function SessionModal({busy, error = "", selectedWorkspace = null, onClose, onCreateSession}) {
+export function SessionModal({busy, error = "", selectedWorkspace = null, environmentEntries = [], onClose, onCreateSession}) {
   const workspaceSsh = selectedWorkspace?.source?.type === "ssh";
   const sessionType = workspaceSsh ? "ssh" : "cloud";
+  const [resources, setResources] = useState(() => workspaceSsh ? {cpu: "1", memory: "1Gi"} : getDefaultSessionResources());
   return (
     <ModalBackdrop onClose={onClose}>
       <section aria-labelledby="session-modal-title" aria-modal="true" className="modal-panel" role="dialog">
@@ -29,6 +26,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
           onSubmit={(event) => {
             event.preventDefault();
             const formData = new FormData(event.currentTarget);
+            const environmentEntryIds = formData.getAll("environmentEntryId");
             const base = {
               name: String(formData.get("name") || "").trim() || "Terminal session",
               sessionType,
@@ -36,6 +34,7 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
               memory: formData.get("memory"),
               env: parseEnvText(formData.get("env")),
             };
+            if (environmentEntryIds.length) base.environmentEntryIds = environmentEntryIds;
             onCreateSession(sessionType === "ssh" ? {
               ...base,
             } : {
@@ -59,12 +58,24 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, onClos
               </p>
             </div>
           ) : null}
-          <label><span>CPU</span><select name="cpu" defaultValue="1">{cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label><span>Memory</span><select name="memory" defaultValue="1Gi">{memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}</select></label>
+          {sessionType === "cloud" ? (
+            <SessionResourceSelector
+              cpu={resources.cpu}
+              memory={resources.memory}
+              onChange={setResources}
+            />
+          ) : (
+            <SessionResourceFields
+              cpu={resources.cpu}
+              memory={resources.memory}
+              onChange={setResources}
+            />
+          )}
           <label>
             <span>Session env</span>
             <textarea name="env" placeholder={"FOO=session-value\nAPI_BASE=http://localhost:3000"} rows={4} />
           </label>
+          {environmentEntries.length ? <fieldset><legend>Saved generic environment keys</legend>{environmentEntries.map((entry) => <label className="checkbox-label" key={entry.id}><input name="environmentEntryId" type="checkbox" value={entry.id} /><span>{entry.label || entry.name} ({entry.name})</span></label>)}<p className="subtle">Secrets are injected when this runner is provisioned.</p></fieldset> : null}
           <Button disabled={busy} type="submit">
             <Plus aria-hidden="true" />
             Create session

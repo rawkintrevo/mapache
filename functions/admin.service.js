@@ -13,6 +13,7 @@ const {
   httpError,
   toClientDoc,
 } = require("./backendUtils.helpers");
+const {calculateEstimatedUsageCostUsd} = require("./sessionResources.helpers");
 const {getUserSessionUsage} = require("./userUsage.service");
 
 const APP_ACCESS_CONFIG_REF = db.collection("appConfig").doc("access");
@@ -108,9 +109,7 @@ function normalizePageSize(value) {
 }
 
 function estimatedUsageCostUsd(usage) {
-  const cpuSeconds = Number(usage && usage.cpuSeconds || 0);
-  const memoryGbSeconds = Number(usage && usage.memoryGbSeconds || 0);
-  return Number(((cpuSeconds * 0.000018) + (memoryGbSeconds * 0.000002)).toFixed(6));
+  return calculateEstimatedUsageCostUsd(usage);
 }
 
 module.exports = {

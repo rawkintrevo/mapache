@@ -4,11 +4,12 @@
   "actions": [
     {"type": "click", "role": "button", "name": "Create session"},
     {"type": "waitForSnapshotText", "text": "New session", "timeoutMs": 5000},
+    {"type": "waitForSnapshotText", "text": "Small", "timeoutMs": 5000},
     {"type": "waitForSnapshotNotText", "text": "Session type", "timeoutMs": 1000},
     {"type": "waitForSnapshotNotText", "text": "SSH target", "timeoutMs": 1000}
   ],
   "successSignals": [
-    "New session modal opens with image, CPU, memory, and env fields",
+    "New session modal opens with Small, Medium, Large, estimate, and Advanced settings controls",
     "Session type choices are absent because the selected workspace determines the session target"
   ]
 }

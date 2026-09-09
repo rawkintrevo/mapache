@@ -12,7 +12,7 @@ const {
   normalizeGitHubCliCredential,
 } = require("./workspaceAuth.service");
 
-test("mergeRemoteAuthData preserves legacy auth while preferring agentAuth providers", () => {
+test("mergeRemoteAuthData normalizes canonical agent auth", () => {
   assert.deepStrictEqual(mergeRemoteAuthData({
     providers: {openai: {type: "api_key", key: "new"}},
     entries: {
@@ -24,33 +24,9 @@ test("mergeRemoteAuthData preserves legacy auth while preferring agentAuth provi
         createdAt: "2026-06-23T00:00:00.000Z",
       },
     },
-  }, {
-    providers: {
-      openai: {type: "api_key", key: "old"},
-      anthropic: {type: "api_key", key: "legacy"},
-    },
-    entries: {
-      "entry-old": {
-        id: "entry-old",
-        providerKey: "openai",
-        label: "old",
-        credential: {type: "api_key", key: "old"},
-        createdAt: "2026-06-22T00:00:00.000Z",
-      },
-    },
   }), {
-    providers: {
-      openai: {type: "api_key", key: "new"},
-      anthropic: {type: "api_key", key: "legacy"},
-    },
+    providers: {openai: {type: "api_key", key: "new"}},
     entries: {
-      "entry-old": {
-        id: "entry-old",
-        providerKey: "openai",
-        label: "old",
-        credential: {type: "api_key", key: "old"},
-        createdAt: "2026-06-22T00:00:00.000Z",
-      },
       "entry-new": {
         id: "entry-new",
         providerKey: "openai",
@@ -58,18 +34,11 @@ test("mergeRemoteAuthData preserves legacy auth while preferring agentAuth provi
         credential: {type: "api_key", key: "new"},
         createdAt: "2026-06-23T00:00:00.000Z",
       },
-      "legacy-anthropic": {
-        id: "legacy-anthropic",
-        providerKey: "anthropic",
-        label: "anthropic",
-        credential: {type: "api_key", key: "legacy"},
-        createdAt: "",
-      },
     },
   });
 });
 
-test("readSessionAuthSelection falls back to legacy piAuthSelection", async () => {
+test("readSessionAuthSelection reads canonical authSelection", async () => {
   const service = createWorkspaceAuthService({
     admin: {
       firestore: {
@@ -102,7 +71,7 @@ test("readSessionAuthSelection falls back to legacy piAuthSelection", async () =
                       get: async () => ({
                         exists: true,
                         data: () => ({
-                          piAuthSelection: {openai: "entry-1"},
+                          authSelection: {harness: "pi", providers: {openai: "entry-1"}},
                         }),
                       }),
                     };
@@ -121,6 +90,24 @@ test("readSessionAuthSelection falls back to legacy piAuthSelection", async () =
     harness: "pi",
     providers: {openai: "entry-1"},
   });
+});
+
+test("readSessionAuthSelection ignores removed legacy piAuthSelection", async () => {
+  const service = createWorkspaceAuthService({
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-timestamp"}}},
+    config: {ownerUid: "user-1", harnessId: "pi", workspaceId: "workspace-1", sessionId: "session-1", workspaceDir: "/workspace", piAgentDir: "/root/.pi/agent"},
+    db: {
+      collection: () => ({
+        doc: () => ({
+          collection: () => ({
+            doc: () => ({get: async () => ({exists: true, data: () => ({piAuthSelection: {openai: "entry-1"}})})}),
+          }),
+        }),
+      }),
+    },
+  });
+
+  assert.strictEqual(await service.readSessionAuthSelection(), null);
 });
 
 test("buildCodexAuthFile matches current Codex api key auth mode", () => {

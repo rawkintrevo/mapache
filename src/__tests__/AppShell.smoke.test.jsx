@@ -56,6 +56,8 @@ function createHandlers(overrides = {}) {
     },
     files: {
       closeFileEditor: vi.fn(),
+      createWorkspaceDirectory: vi.fn(),
+      createWorkspaceFile: vi.fn(),
       downloadWorkspaceFile: vi.fn(),
       refreshWorkspaceFiles: vi.fn(),
       saveFileEditor: vi.fn(),
@@ -86,13 +88,17 @@ function createHandlers(overrides = {}) {
     modals: {
       closeAuthModal: vi.fn(),
       closePiAuthManageModal: vi.fn(),
+      closeSessionEditModal: vi.fn(),
       closeSessionModal: vi.fn(),
       closeWorkspaceSkillModal: vi.fn(),
+      closeWorkspaceEditModal: vi.fn(),
       closeWorkspaceModal: vi.fn(),
       openAuthModal: vi.fn(),
       openPiAuthManageModal: vi.fn(),
+      openSessionEditModal: vi.fn(),
       openSessionModal: vi.fn(),
       openWorkspaceSkillModal: vi.fn(),
+      openWorkspaceEditModal: vi.fn(),
       openWorkspaceModal: vi.fn(),
       showProfile: vi.fn(),
     },
@@ -118,6 +124,7 @@ function createHandlers(overrides = {}) {
     sessions: {
       createSession: vi.fn(),
       deleteSession: vi.fn(),
+      editSession: vi.fn(),
       getSessionAccessUrls: vi.fn().mockResolvedValue({terminalUrl: "https://runner.example/terminal"}),
       resizeSession: vi.fn(),
       restartSession: vi.fn(),
@@ -127,6 +134,7 @@ function createHandlers(overrides = {}) {
     workspaces: {
       createWorkspace: vi.fn(),
       deleteWorkspace: vi.fn(),
+      renameWorkspace: vi.fn().mockResolvedValue(true),
       selectWorkspace: vi.fn(),
     },
   };
@@ -152,8 +160,7 @@ function createState(overrides = {}) {
     },
     api: {},
     authModalOpen: false,
-    busy: false,
-    busyMessage: "",
+    pendingOperations: {},
     collapsedDrawerSections: new Set(),
     drawerCollapsed: false,
     error: "",
@@ -203,6 +210,7 @@ function createState(overrides = {}) {
     selectedWorkspaceFilePath: "",
     selectedWorkspaceId: workspace.id,
     sessionModalOpen: false,
+    sessionEditModalSessionId: null,
     sessions: [session],
     user: {displayName: "Ada", email: "ada@example.com"},
     workspaceFiles: [{path: "README.md"}],
@@ -212,6 +220,7 @@ function createState(overrides = {}) {
     workspaceFilesUploading: false,
     workspaceFilesWorkspaceId: workspace.id,
     workspaceSkillModalOpen: false,
+    workspaceEditModalOpen: false,
     workspaceModalOpen: false,
     workspaces: [workspace],
     ...overrides,
@@ -225,6 +234,28 @@ function renderShell(stateOverrides = {}, handlerOverrides = {}) {
 }
 
 describe("frontend smoke coverage", () => {
+  test("opens the accessible Files action menu and closes it with Escape", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell();
+    const trigger = screen.getByRole("button", {name: "File actions"});
+
+    await user.click(trigger);
+    expect(screen.getByRole("menu", {name: "File actions"})).toBeInTheDocument();
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Upload file",
+      "Create file",
+      "Create directory",
+    ]);
+
+    await user.click(screen.getByRole("menuitem", {name: "Create file"}));
+    expect(handlers.files.createWorkspaceFile).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu", {name: "File actions"})).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu", {name: "File actions"})).not.toBeInTheDocument();
+  });
+
   test("routes public and signed-in users through the expected app surfaces", async () => {
     const user = userEvent.setup();
     const onSignIn = vi.fn();
@@ -240,7 +271,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    await user.click(screen.getAllByRole("button", {name: "Sign up with Google"})[0]);
+    await user.click((await screen.findAllByRole("button", {name: "Sign up with Google"}))[0]);
     expect(onSignIn).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -252,7 +283,7 @@ describe("frontend smoke coverage", () => {
           user={{displayName: "Ada"}}
         />,
     );
-    await user.click(screen.getAllByRole("button", {name: "Open app"})[0]);
+    await user.click((await screen.findAllByRole("button", {name: "Open app"}))[0]);
     expect(onOpenApp).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -273,7 +304,8 @@ describe("frontend smoke coverage", () => {
     const {container, handlers} = renderShell({selectedSessionId: session.id});
 
     expect(screen.getByRole("heading", {name: "Navigation"})).toBeInTheDocument();
-    expect(screen.getByRole("heading", {name: "Workspaces"})).toBeInTheDocument();
+    expect(screen.queryByRole("heading", {name: "Workspaces"})).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", {name: "Workspace"})).toHaveValue(workspace.id);
     expect(screen.getByRole("heading", {name: "Files"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Sessions"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Inspector"})).toBeInTheDocument();
@@ -281,24 +313,31 @@ describe("frontend smoke coverage", () => {
     expect(screen.getByRole("heading", {name: "Skills"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Extensions"})).toBeInTheDocument();
     expect(screen.queryByRole("button", {name: `Create session in ${workspace.name}`})).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Create workspace"}));
+    expect(handlers.modals.openWorkspaceModal).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", {name: `Edit workspace ${workspace.name}`}));
+    expect(handlers.modals.openWorkspaceEditModal).toHaveBeenCalledTimes(1);
+
+    await user.selectOptions(screen.getByRole("combobox", {name: "Workspace"}), workspace.id);
+    expect(handlers.workspaces.selectWorkspace).toHaveBeenCalledWith(workspace.id);
+
     await user.click(screen.getByRole("button", {name: "Create session"}));
     expect(handlers.modals.openSessionModal).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Main Anthropic")).toBeInTheDocument();
-    expect(screen.getByText("API key")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: `Edit ${session.name}`}));
+    expect(handlers.modals.openSessionEditModal).toHaveBeenCalledWith(session.id);
+    expect(screen.queryByText("Main Anthropic")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Add authentication provider"})).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent("super");
     expect(container).not.toHaveTextContent("tkey");
     expect(screen.queryByText(/User-scoped Pi auth/)).not.toBeInTheDocument();
-    expect(screen.getByText("preview-qa")).toBeInTheDocument();
+    expect(screen.queryByText("preview-qa")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Skill name")).not.toBeInTheDocument();
     expect(screen.getByText("npm:@team/workspace-package")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", {name: "New skill"}));
+    await user.click(screen.getByRole("button", {name: "Manage skills"}));
     expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(1);
     expect(handlers.modals.openWorkspaceSkillModal).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole("button", {name: "Edit preview-qa"}));
-    expect(handlers.pi.editPiSkill).toHaveBeenCalledWith(expect.objectContaining({name: "preview-qa"}));
-    expect(handlers.modals.openWorkspaceSkillModal).toHaveBeenCalledTimes(2);
 
     const sessionRows = screen.getAllByRole("button", {name: /Pi smoke/i});
     await user.click(sessionRows[0]);
@@ -306,10 +345,14 @@ describe("frontend smoke coverage", () => {
   });
 
   test("renders a selected running session without live runner access", async () => {
+    const user = userEvent.setup();
     const {handlers} = renderShell({selectedSessionId: session.id});
 
     expect(screen.getByText("Terminal access is not ready.")).toBeInTheDocument();
     expect(screen.getAllByRole("button", {name: "Manage Pi Auth"})[0]).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: "Restart"}));
+    expect(handlers.sessions.restartSession).toHaveBeenCalledWith(session.id);
 
     await waitFor(() => {
       expect(handlers.sessions.getSessionAccessUrls).toHaveBeenCalledWith(workspace.id, session.id);
@@ -332,7 +375,11 @@ describe("frontend smoke coverage", () => {
   });
 
   test("shows an accessible global action indicator while busy", () => {
-    renderShell({busy: true, busyMessage: "Refreshing workspace..."});
+    renderShell({
+      pendingOperations: {
+        "app.refresh": {count: 1, message: "Refreshing workspace...", order: 1},
+      },
+    });
 
     expect(screen.getByRole("status")).toHaveTextContent("Refreshing workspace...");
     expect(screen.getByRole("button", {name: "Refresh app state"})).toBeDisabled();
@@ -362,7 +409,7 @@ describe("frontend smoke coverage", () => {
       }),
     });
 
-    expect(screen.getByRole("heading", {name: "GitHub"})).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: "GitHub"})).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
     expect(screen.getByText("@octocat")).toBeInTheDocument();
 
@@ -430,8 +477,8 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    expect(screen.getByRole("heading", {name: "Admin"})).toBeInTheDocument();
-    expect(screen.getByText("Grace")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: "Admin"})).toBeInTheDocument();
+    expect(await screen.findByText("Grace")).toBeInTheDocument();
     expect(screen.getByText("$0.025")).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox"));
     expect(handlers.admin.setAdminUserWhitelisted).toHaveBeenCalledWith("uid-1", false);
@@ -441,7 +488,7 @@ describe("frontend smoke coverage", () => {
     const user = userEvent.setup();
     const {handlers: sessionHandlers, unmount} = renderShell({sessionModalOpen: true});
 
-    const sessionDialog = screen.getByRole("dialog", {name: "New session"});
+    const sessionDialog = await screen.findByRole("dialog", {name: "New session"});
     expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
     expect(within(sessionDialog).getByLabelText("Container image")).toBeInTheDocument();
     await user.type(within(sessionDialog).getByLabelText("Name"), "Agent Shell");
@@ -451,7 +498,7 @@ describe("frontend smoke coverage", () => {
       cpu: "1",
       env: {},
       imageKey: "default",
-      memory: "1Gi",
+      memory: "2Gi",
       name: "Agent Shell",
       sessionType: "cloud",
     });
@@ -465,7 +512,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const workspaceDialog = screen.getByRole("dialog", {name: "Create Workspace"});
+    const workspaceDialog = await screen.findByRole("dialog", {name: "Create Workspace"});
     await user.type(within(workspaceDialog).getByLabelText("Workspace Name"), "Smoke Workspace");
     await user.click(within(workspaceDialog).getByRole("button", {name: "Create Workspace"}));
 
@@ -482,6 +529,26 @@ describe("frontend smoke coverage", () => {
     });
     expect(workspaceHandlers.modals.closeWorkspaceModal).toHaveBeenCalled();
     workspaceView.unmount();
+  });
+
+  test("renames the selected workspace from the edit modal", async () => {
+    const user = userEvent.setup();
+    const handlers = createHandlers();
+    render(
+        <AppShell
+          handlers={handlers}
+          state={createState({workspaceEditModalOpen: true})}
+        />,
+    );
+
+    const dialog = await screen.findByRole("dialog", {name: "Edit workspace"});
+    const nameInput = within(dialog).getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Renamed Workspace");
+    await user.click(within(dialog).getByRole("button", {name: "Save changes"}));
+
+    expect(handlers.workspaces.renameWorkspace).toHaveBeenCalledWith(workspace.id, "Renamed Workspace");
+    expect(handlers.modals.closeWorkspaceEditModal).toHaveBeenCalledTimes(1);
   });
 
   test("create session modal derives ssh sessions from dev machine workspaces", async () => {
@@ -501,7 +568,7 @@ describe("frontend smoke coverage", () => {
       workspaces: [sshWorkspace],
     });
 
-    const sessionDialog = screen.getByRole("dialog", {name: "New session"});
+    const sessionDialog = await screen.findByRole("dialog", {name: "New session"});
     expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
     expect(within(sessionDialog).queryByLabelText("Container image")).not.toBeInTheDocument();
     expect(within(sessionDialog).getByText("This session will connect to developer@dev.example.com.")).toBeInTheDocument();
@@ -528,7 +595,7 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const dialog = screen.getByRole("dialog", {name: "Create Workspace"});
+    const dialog = await screen.findByRole("dialog", {name: "Create Workspace"});
     await user.type(within(dialog).getByLabelText("Workspace Name"), "Dev Box");
     await user.click(within(dialog).getByLabelText("Dev machine"));
     await user.type(within(dialog).getByLabelText("Host"), "dev.example.com");
@@ -551,10 +618,10 @@ describe("frontend smoke coverage", () => {
     }));
   });
 
-  test("submits and closes the workspace skill modal", async () => {
+  test("creates a skill from the management modal", async () => {
     const user = userEvent.setup();
     const handlers = createHandlers();
-    handlers.pi.savePiSkill.mockResolvedValue();
+    handlers.pi.savePiSkill.mockResolvedValue(true);
     render(
         <AppShell
           handlers={handlers}
@@ -573,14 +640,45 @@ describe("frontend smoke coverage", () => {
         />,
     );
 
-    const dialog = screen.getByRole("dialog", {name: "New skill"});
+    const dialog = await screen.findByRole("dialog", {name: "Manage skills"});
+    await user.click(within(dialog).getByRole("button", {name: "Add skill"}));
     expect(within(dialog).getByLabelText("Skill name")).toHaveValue("modal-skill");
     await user.click(within(dialog).getByRole("button", {name: "Create skill"}));
     expect(handlers.pi.savePiSkill).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(within(dialog).getByRole("button", {name: "Add skill"})).toBeInTheDocument());
 
     await user.click(within(dialog).getByRole("button", {name: "Close"}));
-    expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(1);
-    expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(2);
+    expect(handlers.pi.cancelPiSkillEdit).toHaveBeenCalledTimes(2);
+    expect(handlers.modals.closeWorkspaceSkillModal).toHaveBeenCalledTimes(1);
+  });
+
+  test("manages discovered skills in the workspace skill modal", async () => {
+    const user = userEvent.setup();
+    const handlers = createHandlers();
+    const editableSkill = {
+      content: "---\nname: local-skill\ndescription: Local skill\n---\n\nUse it.",
+      description: "Local skill",
+      discovered: true,
+      editable: true,
+      name: "local-skill",
+      path: ".pi/skills/local-skill/SKILL.md",
+    };
+    render(
+        <AppShell
+          handlers={handlers}
+          state={createState({
+            selectedSessionId: session.id,
+            workspaceSkillModalOpen: true,
+            workspaceSkills: createWorkspaceSkillsState({data: {skills: [editableSkill]}}),
+          })}
+        />,
+    );
+
+    const dialog = await screen.findByRole("dialog", {name: "Manage skills"});
+    expect(within(dialog).getByLabelText("local-skill is discovered")).toBeChecked();
+    await user.click(within(dialog).getByRole("button", {name: "Delete local-skill"}));
+    expect(handlers.pi.deletePiSkill).toHaveBeenCalledWith("local-skill");
+    await user.click(within(dialog).getByRole("button", {name: "Edit local-skill"}));
+    expect(handlers.pi.editPiSkill).toHaveBeenCalledWith(editableSkill);
   });
 });

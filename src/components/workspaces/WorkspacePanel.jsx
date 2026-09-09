@@ -1,6 +1,7 @@
 import {SessionDetail} from "../sessions/SessionDetail.jsx";
 import {SessionList} from "../sessions/SessionList.jsx";
 import {WorkspaceHeader} from "./WorkspaceHeader.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function WorkspacePanel({
   selectedSession,
@@ -9,10 +10,11 @@ export function WorkspacePanel({
   onGetSessionAccessUrls,
   onCommitGit,
   onOpenPiAuthManage,
+  onOpenPiModels,
   onOpenPullRequest,
   onPullGit,
   onPushGit,
-  onResizeSession,
+  onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
   onCloseSshSessionForward,
@@ -23,13 +25,14 @@ export function WorkspacePanel({
   onUpdateGitCommitMessage,
   onUpdateSshForwardPort,
 }) {
-  const isGithubWorkspace = selectedWorkspace?.source?.type === "github" || selectedSession?.sourceType === "github";
+  const isGithubWorkspace = resolveIsGithubWorkspace(selectedWorkspace, selectedSession);
+  const busy = hasPendingOperations(state.pendingOperations);
 
   if (selectedSession) {
     return (
       <section className="workspace">
         <SessionDetail
-          busy={state.busy}
+          busy={busy}
           gitStatus={state.gitStatus}
           isGithubWorkspace={isGithubWorkspace}
           session={selectedSession}
@@ -38,10 +41,11 @@ export function WorkspacePanel({
           onCommitGit={onCommitGit}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
           onOpenPiAuthManage={onOpenPiAuthManage}
+          onOpenPiModels={onOpenPiModels}
           onOpenPullRequest={onOpenPullRequest}
           onPullGit={onPullGit}
           onPushGit={onPushGit}
-          onResizeSession={onResizeSession}
+          onRetryProvisioningSession={onRetryProvisioningSession}
           onRestartSession={onRestartSession}
           onShareSessionPreview={onShareSessionPreview}
           onCloseSshSessionForward={onCloseSshSessionForward}
@@ -67,4 +71,10 @@ export function WorkspacePanel({
       />
     </section>
   );
+}
+
+export function resolveIsGithubWorkspace(workspace, session) {
+  const workspaceSourceType = workspace?.source?.type;
+  if (workspaceSourceType) return workspaceSourceType === "github";
+  return session?.sourceType === "github";
 }

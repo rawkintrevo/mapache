@@ -5,8 +5,10 @@ import {
 } from "../services/workspaceStorage.js";
 import {resetFileEditor as resetFileEditorState} from "../state/resetters.js";
 import {friendlyFilesError} from "../utils/friendlyErrors.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
-export async function loadWorkspaceFilesState(state, path = "") {
+export async function loadWorkspaceFilesState(state, path = "", request) {
+  if (!isCurrentSessionRequest(request)) return;
   const cleanPath = cleanDirectoryPath(path);
   state.workspaceFilesError = "";
   state.workspaceFilesWorkspaceId = workspaceFileScopeId(state);
@@ -17,6 +19,7 @@ export async function loadWorkspaceFilesState(state, path = "") {
     const data = sshSession ?
       await state.api.getSshSessionFiles(state.selectedWorkspaceId, sshSession.id, cleanPath) :
       await state.api.getWorkspaceFiles(state.selectedWorkspaceId, cleanPath);
+    if (!isCurrentSessionRequest(request)) return;
     if (!cleanPath) {
       state.workspaceFileLoadedDirs = new Set();
       state.expandedFilePaths = new Set();
@@ -25,6 +28,7 @@ export async function loadWorkspaceFilesState(state, path = "") {
     state.workspaceFileLoadedDirs.add(cleanPath);
     state.workspaceFilesTruncated = Boolean(data.truncated);
   } catch (error) {
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceFilesError = friendlyFilesError(error);
   }
 }
@@ -76,6 +80,72 @@ export async function uploadWorkspaceFilesState({state, files, loadWorkspaceFile
   render();
 }
 
+export async function createWorkspaceFileState({state, path, loadWorkspaceFiles, render}) {
+  await createWorkspaceEntryState({
+    state,
+    path,
+    loadWorkspaceFiles,
+    render,
+    kind: "file",
+  });
+  if (state.workspaceFilesError || !state.selectedWorkspaceId) return;
+  await selectWorkspaceFileState({state, path: fullWorkspaceEntryPath(state, path), render});
+}
+
+export async function createWorkspaceDirectoryState({state, path, loadWorkspaceFiles, render}) {
+  await createWorkspaceEntryState({
+    state,
+    path,
+    loadWorkspaceFiles,
+    render,
+    kind: "directory",
+  });
+}
+
+async function createWorkspaceEntryState({state, path, loadWorkspaceFiles, render, kind}) {
+  if (!state.selectedWorkspaceId) return;
+  if (selectedSshSession(state)) {
+    state.workspaceFilesError = "SSH file creation is not available yet. Open or edit files from the SSH file tree.";
+    state.workspaceFilesUploadMessage = "";
+    render();
+    return;
+  }
+
+  let fullPath;
+  try {
+    fullPath = fullWorkspaceEntryPath(state, path);
+  } catch (error) {
+    state.workspaceFilesError = friendlyFilesError(error);
+    state.workspaceFilesUploadMessage = "";
+    render();
+    return;
+  }
+
+  state.workspaceFilesUploading = true;
+  state.workspaceFilesUploadMessage = `Creating ${kind} ${fullPath}...`;
+  state.workspaceFilesError = "";
+  render();
+
+  try {
+    const createEntry = kind === "directory" ? state.api.createWorkspaceDirectory : state.api.createWorkspaceFile;
+    if (typeof createEntry !== "function") throw new Error("not_found");
+    await createEntry(state.selectedWorkspaceId, fullPath);
+    if (state.api.syncWorkspaceFiles) {
+      state.workspaceFilesUploadMessage = "Syncing changes to active sessions...";
+      render();
+      await state.api.syncWorkspaceFiles(state.selectedWorkspaceId);
+    }
+    state.workspaceFilesUploadMessage = `Created ${kind} ${fullPath}.`;
+    await refreshWorkspaceFileTree({state, loadWorkspaceFiles});
+  } catch (error) {
+    state.workspaceFilesError = friendlyFilesError(error);
+    state.workspaceFilesUploadMessage = "";
+  } finally {
+    state.workspaceFilesUploading = false;
+  }
+  render();
+}
+
 export async function downloadWorkspaceFileState({state, render}) {
   const path = state.selectedWorkspaceFilePath;
   if (!state.selectedWorkspaceId || !path) return;
@@ -113,6 +183,7 @@ export async function downloadWorkspaceFileState({state, render}) {
 
 export async function toggleWorkspaceFileDirState({state, path, loadWorkspaceFiles, render}) {
   const cleanPath = cleanDirectoryPath(path);
+  state.workspaceFileActiveDirectory = cleanPath;
   const next = new Set(state.expandedFilePaths);
   if (next.has(cleanPath)) {
     next.delete(cleanPath);
@@ -130,6 +201,7 @@ export async function toggleWorkspaceFileDirState({state, path, loadWorkspaceFil
 
 export async function selectWorkspaceFileState({state, path, render}) {
   const workspaceId = state.selectedWorkspaceId;
+  state.workspaceFileActiveDirectory = parentDirectoryPath(path);
   state.selectedWorkspaceFilePath = path;
   state.fileEditor = createFileEditorState({
     open: true,
@@ -164,6 +236,20 @@ export async function selectWorkspaceFileState({state, path, render}) {
   render();
 }
 
+export async function openPiModelsFileState({state, render}) {
+  const session = (state.sessions || []).find((item) => item.id === state.selectedSessionId);
+  if (!state.selectedWorkspaceId || !session?.id || typeof state.api.getPiModelsFile !== "function") return;
+  state.fileEditor = createFileEditorState({open: true, path: "~/.pi/agent/models.json", name: "models.json", scope: "pi-models", loading: true});
+  render();
+  try {
+    const data = await state.api.getPiModelsFile(state.selectedWorkspaceId, session.id);
+    state.fileEditor = {...state.fileEditor, content: data.content || "", originalContent: data.content || "", loading: false};
+  } catch (error) {
+    state.fileEditor = {...state.fileEditor, loading: false, error: error.message || "Unable to load models.json."};
+  }
+  render();
+}
+
 export function closeFileEditorState(state) {
   resetFileEditorState(state);
 }
@@ -184,7 +270,8 @@ export async function saveFileEditorState({state, content, loadWorkspaceFiles, r
 
   try {
     const sshSession = selectedSshSession(state);
-    const data = sshSession ?
+    const data = state.fileEditor.scope === "pi-models" ?
+      await state.api.savePiModelsFile(state.selectedWorkspaceId, state.selectedSessionId, content) : sshSession ?
       await state.api.saveSshSessionFile(state.selectedWorkspaceId, sshSession.id, state.fileEditor.path, content) :
       await state.api.saveWorkspaceFile(
           state.selectedWorkspaceId,
@@ -198,10 +285,10 @@ export async function saveFileEditorState({state, content, loadWorkspaceFiles, r
       saving: false,
       updatedAt: data.updatedAt || state.fileEditor.updatedAt,
     };
-    if (!sshSession && state.api.syncWorkspaceFiles) {
+    if (state.fileEditor.scope !== "pi-models" && !sshSession && state.api.syncWorkspaceFiles) {
       await state.api.syncWorkspaceFiles(state.selectedWorkspaceId);
     }
-    await loadWorkspaceFiles();
+    if (state.fileEditor.scope !== "pi-models") await loadWorkspaceFiles();
   } catch (error) {
     state.fileEditor = {
       ...state.fileEditor,
@@ -230,6 +317,28 @@ function workspaceFileScopeId(state) {
 
 function cleanDirectoryPath(path) {
   return String(path || "").replace(/^\/+|\/+$/g, "");
+}
+
+function fullWorkspaceEntryPath(state, path) {
+  const name = cleanDirectoryPath(path);
+  if (!name || name === "." || name === ".." || name.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error("empty_file_name");
+  }
+  const activeDirectory = cleanDirectoryPath(state.workspaceFileActiveDirectory);
+  return activeDirectory ? `${activeDirectory}/${name}` : name;
+}
+
+function parentDirectoryPath(path) {
+  const parts = cleanDirectoryPath(path).split("/").filter(Boolean);
+  return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+}
+
+async function refreshWorkspaceFileTree({state, loadWorkspaceFiles}) {
+  const activeDirectory = cleanDirectoryPath(state.workspaceFileActiveDirectory);
+  await loadWorkspaceFiles();
+  if (!activeDirectory) return;
+  state.expandedFilePaths = new Set([...state.expandedFilePaths, activeDirectory]);
+  await loadWorkspaceFiles(activeDirectory);
 }
 
 function mergeWorkspaceFileListing(state, directoryPath, files) {

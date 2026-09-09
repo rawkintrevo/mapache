@@ -1,25 +1,26 @@
 import "./Drawers.css";
-import {useRef} from "react";
+import {useEffect, useRef, useState} from "react";
 import {Download, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw} from "lucide-react";
 import {DrawerSessionList} from "./DrawerSessionList.jsx";
 import {DrawerSection} from "./DrawerSection.jsx";
 import {UserMenu} from "./UserMenu.jsx";
-import {WorkspaceDrawerList} from "./WorkspaceDrawerList.jsx";
 import {Button} from "../common/Button.jsx";
 import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function LeftDrawer({
   state,
   onDeleteSession,
-  onDeleteWorkspace,
+  onEditSession,
   onOpenSessionModal,
-  onOpenWorkspaceModal,
   onRefresh,
   onRefreshWorkspaceFiles,
+  onRetryProvisioningSession,
   onDownloadWorkspaceFile,
+  onCreateWorkspaceDirectory,
+  onCreateWorkspaceFile,
   onUploadWorkspaceFiles,
   onSelectSession,
-  onSelectWorkspace,
   onSelectWorkspaceFile,
   onShowAdmin,
   onShowProfile,
@@ -30,6 +31,50 @@ export function LeftDrawer({
   onToggleWorkspaceFileDir,
 }) {
   const fileInputRef = useRef(null);
+  const fileActionsRef = useRef(null);
+  const [fileActionsOpen, setFileActionsOpen] = useState(false);
+  const selectedSession = (state.sessions || []).find((session) => session.id === state.selectedSessionId);
+  const busy = hasPendingOperations(state.pendingOperations);
+  const fileScopeIsSsh = Boolean(
+      selectedSession &&
+      (selectedSession.sessionType === "ssh" || selectedSession.terminalKind === "ssh") &&
+      selectedSession.serviceUrl,
+  );
+
+  useEffect(() => {
+    if (!fileActionsOpen) return undefined;
+
+    function closeOnOutsidePointer(event) {
+      if (!fileActionsRef.current?.contains(event.target)) setFileActionsOpen(false);
+    }
+
+    function closeOnEscape(event) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setFileActionsOpen(false);
+      fileActionsRef.current?.querySelector(".files-action-trigger")?.focus();
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    fileActionsRef.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [fileActionsOpen]);
+
+  function chooseFileAction(action) {
+    setFileActionsOpen(false);
+    if (action === "upload") {
+      fileInputRef.current?.click();
+    } else if (action === "create-file") {
+      onCreateWorkspaceFile?.();
+    } else {
+      onCreateWorkspaceDirectory?.();
+    }
+  }
+
   const toggleButton = (
     <Button
       aria-expanded={String(!state.drawerCollapsed)}
@@ -58,49 +103,53 @@ export function LeftDrawer({
         </div>
         <DrawerSection
           actions={[
-            <Button
-              aria-label="Add Workspace"
-              icon={true}
-              key="add-workspace"
-              size="compact"
-              tooltip="Add Workspace"
-              variant="secondary"
-              onClick={onOpenWorkspaceModal}
-            >
-              <Plus aria-hidden="true" />
-            </Button>,
-          ]}
-          id="left-workspaces"
-          state={state}
-          title="Workspaces"
-          onToggleDrawerSection={onToggleDrawerSection}
-        >
-          <WorkspaceDrawerList
-            busy={state.busy}
-            selectedWorkspaceId={state.selectedWorkspaceId}
-            workspaces={state.workspaces}
-            onDeleteWorkspace={onDeleteWorkspace}
-            onSelectWorkspace={onSelectWorkspace}
-          />
-        </DrawerSection>
-        <DrawerSection
-          actions={[
-            <Button
-              aria-label="Upload file"
-              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
-              icon={true}
-              key="upload-file"
-              size="compact"
-              title="Upload file"
-              tooltip="Upload file"
-              variant="secondary"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Plus aria-hidden="true" />
-            </Button>,
+            <div className="files-action-menu" key="file-actions" ref={fileActionsRef}>
+              <Button
+                aria-controls="files-action-menu"
+                aria-expanded={fileActionsOpen}
+                aria-haspopup="menu"
+                aria-label="File actions"
+                className="files-action-trigger"
+                disabled={busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
+                icon={true}
+                size="compact"
+                title="File actions"
+                tooltip="File actions"
+                variant="secondary"
+                onClick={() => setFileActionsOpen((open) => !open)}
+              >
+                <Plus aria-hidden="true" />
+              </Button>
+              {fileActionsOpen ? (
+                <div aria-label="File actions" className="files-action-popover" id="files-action-menu" role="menu">
+                  <Button
+                    role="menuitem"
+                    onClick={() => chooseFileAction("upload")}
+                  >
+                    Upload file
+                  </Button>
+                  <Button
+                    disabled={fileScopeIsSsh}
+                    role="menuitem"
+                    title={fileScopeIsSsh ? "File creation is not available for SSH sessions." : undefined}
+                    onClick={() => chooseFileAction("create-file")}
+                  >
+                    Create file
+                  </Button>
+                  <Button
+                    disabled={fileScopeIsSsh}
+                    role="menuitem"
+                    title={fileScopeIsSsh ? "Directory creation is not available for SSH sessions." : undefined}
+                    onClick={() => chooseFileAction("create-directory")}
+                  >
+                    Create directory
+                  </Button>
+                </div>
+              ) : null}
+            </div>,
             <Button
               aria-label="Download selected file"
-              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceFilePath}
+              disabled={busy || state.workspaceFilesUploading || !state.selectedWorkspaceFilePath}
               icon={true}
               key="download-file"
               size="compact"
@@ -113,7 +162,7 @@ export function LeftDrawer({
             </Button>,
             <Button
               aria-label="Refresh files"
-              disabled={state.busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
+              disabled={busy || state.workspaceFilesUploading || !state.selectedWorkspaceId}
               icon={true}
               key="refresh-files"
               size="compact"
@@ -151,7 +200,7 @@ export function LeftDrawer({
           actions={[
             <Button
               aria-label="Create session"
-              disabled={state.busy || !state.selectedWorkspaceId}
+              disabled={busy || !state.selectedWorkspaceId}
               icon={true}
               key="create-session"
               size="compact"
@@ -171,6 +220,8 @@ export function LeftDrawer({
           <DrawerSessionList
             state={state}
             onDeleteSession={onDeleteSession}
+            onEditSession={onEditSession}
+            onRetryProvisioningSession={onRetryProvisioningSession}
             onSelectSession={onSelectSession}
             onStopSession={onStopSession}
           />

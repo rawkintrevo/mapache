@@ -17,34 +17,7 @@ function createWorkspaceSkillService({config, syncUp}) {
 
   async function listWorkspaceSkills() {
     const skillsPath = harness.skillsPath;
-    const skills = [];
-    const entries = await safeReadDir(skillsPath);
-
-    for (const entry of entries) {
-      const entryPath = path.join(skillsPath, entry.name);
-      if (harness.legacyFileSupport && entry.isFile() && entry.name.endsWith(".md")) {
-        const content = await readSkillMarkdown(entryPath);
-        skills.push(skillSummaryFromMarkdown(content, {
-          path: `${harness.relativeSkillsPath}/${entry.name}`,
-          kind: "file",
-          editable: true,
-          fallbackName: entry.name.replace(/\.md$/i, ""),
-        }));
-        continue;
-      }
-      if (entry.isDirectory()) {
-        const skillPath = path.join(entryPath, "SKILL.md");
-        if (await pathExists(skillPath)) {
-          const content = await readSkillMarkdown(skillPath);
-          skills.push(skillSummaryFromMarkdown(content, {
-            path: `${harness.relativeSkillsPath}/${entry.name}/SKILL.md`,
-            kind: "directory",
-            editable: true,
-            fallbackName: entry.name,
-          }));
-        }
-      }
-    }
+    const skills = await discoverWorkspaceSkills(harness);
 
     return {
       ok: true,
@@ -137,9 +110,113 @@ function workspaceSkillHarness(config = {}) {
     label: harness.label,
     relativeSkillsPath: harness.skills.relativePath,
     skillsPath: harness.skills.absolutePath(config),
+    discoveryRoots: skillDiscoveryRoots(harness.id, config),
     legacyFileSupport: Boolean(harness.skills.legacyFileSupport),
     restartHint: harness.skills.restartHint,
   };
+}
+
+function skillDiscoveryRoots(harnessId, config = {}) {
+  const workspaceDir = path.resolve(config.workspaceDir || "/workspace");
+  const homeDir = path.resolve(config.homeDir || "/root");
+  const commonProjectRoot = path.join(workspaceDir, ".agents", "skills");
+  const commonUserRoot = path.join(homeDir, ".agents", "skills");
+  if (harnessId === "pi") {
+    return uniqueRoots([
+      {absolutePath: path.join(workspaceDir, ".pi", "skills"), displayPath: ".pi/skills", editable: true, legacyFileSupport: true, scope: "workspace"},
+      {absolutePath: commonProjectRoot, displayPath: ".agents/skills", editable: false, scope: "workspace"},
+      {absolutePath: path.join(config.piAgentDir || path.join(homeDir, ".pi", "agent"), "skills"), displayPath: "~/.pi/agent/skills", editable: false, scope: "user"},
+      {absolutePath: commonUserRoot, displayPath: "~/.agents/skills", editable: false, scope: "user"},
+    ]);
+  }
+  return uniqueRoots([
+    {absolutePath: commonProjectRoot, displayPath: ".agents/skills", editable: true, scope: "workspace"},
+    {absolutePath: path.join(config.codexHomeDir || path.join(homeDir, ".codex"), "skills"), displayPath: "$CODEX_HOME/skills", editable: false, scope: "user"},
+    {absolutePath: commonUserRoot, displayPath: "~/.agents/skills", editable: false, scope: "user"},
+  ]);
+}
+
+function uniqueRoots(roots) {
+  const seen = new Set();
+  return roots.filter((root) => {
+    const resolved = path.resolve(root.absolutePath);
+    if (seen.has(resolved)) return false;
+    seen.add(resolved);
+    root.absolutePath = resolved;
+    return true;
+  });
+}
+
+async function discoverWorkspaceSkills(harness) {
+  const skills = [];
+  const seenFiles = new Set();
+  const seenNames = new Set();
+  for (const root of harness.discoveryRoots) {
+    const files = await findSkillFiles(root.absolutePath, {legacyFileSupport: root.legacyFileSupport});
+    for (const file of files) {
+      let canonicalPath = file.absolutePath;
+      try {
+        canonicalPath = await fs.promises.realpath(file.absolutePath);
+      } catch (_error) {}
+      if (seenFiles.has(canonicalPath)) continue;
+      const content = await readSkillMarkdown(file.absolutePath);
+      const fallbackName = file.legacy ? path.basename(file.absolutePath, ".md") : path.basename(path.dirname(file.absolutePath));
+      const summary = skillSummaryFromMarkdown(content, {
+        path: `${root.displayPath}/${file.relativePath.split(path.sep).join("/")}`,
+        kind: file.legacy ? "file" : "directory",
+        editable: root.editable,
+        fallbackName,
+      });
+      if (seenNames.has(summary.name)) continue;
+      seenFiles.add(canonicalPath);
+      seenNames.add(summary.name);
+      skills.push({...summary, discovered: true, scope: root.scope, sourceRoot: root.displayPath});
+    }
+  }
+  return skills;
+}
+
+async function findSkillFiles(rootPath, {legacyFileSupport = false} = {}) {
+  const files = [];
+  const visitedDirectories = new Set();
+  async function visit(directory, depth) {
+    if (depth > 12) return;
+    let canonicalDirectory = directory;
+    try {
+      canonicalDirectory = await fs.promises.realpath(directory);
+    } catch (_error) {}
+    if (visitedDirectories.has(canonicalDirectory)) return;
+    visitedDirectories.add(canonicalDirectory);
+    const entries = await safeReadDir(directory);
+    const nativeSkill = entries.find((entry) => entry.name === "SKILL.md");
+    if (nativeSkill) {
+      const nativeSkillPath = path.join(directory, nativeSkill.name);
+      let nativeSkillStat = null;
+      try {
+        nativeSkillStat = await fs.promises.stat(nativeSkillPath);
+      } catch (_error) {}
+      if (nativeSkillStat?.isFile()) {
+        files.push({absolutePath: nativeSkillPath, relativePath: path.relative(rootPath, nativeSkillPath), legacy: false});
+        return;
+      }
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(directory, entry.name);
+      let entryStat = null;
+      try {
+        entryStat = entry.isSymbolicLink() ? await fs.promises.stat(entryPath) : entry;
+      } catch (_error) {
+        continue;
+      }
+      if (legacyFileSupport && depth === 0 && entryStat.isFile() && entry.name.endsWith(".md")) {
+        files.push({absolutePath: entryPath, relativePath: entry.name, legacy: true});
+      } else if (entryStat.isDirectory() && entry.name !== "node_modules") {
+        await visit(entryPath, depth + 1);
+      }
+    }
+  }
+  await visit(rootPath, 0);
+  return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
 async function readSkillMarkdown(skillPath) {
@@ -154,6 +231,9 @@ async function readSkillMarkdown(skillPath) {
 
 module.exports = {
   createWorkspaceSkillService,
+  discoverWorkspaceSkills,
+  findSkillFiles,
   readSkillMarkdown,
+  skillDiscoveryRoots,
   workspaceSkillHarness,
 };

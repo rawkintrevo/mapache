@@ -8,6 +8,8 @@
     "env": "QA_MCP=enabled"
   },
   "actions": [
+    {"type": "click", "role": "button", "name": "New MCP server"},
+    {"type": "waitForSnapshotText", "text": "New MCP server", "timeoutMs": 5000},
     {"type": "fill", "label": "Server name", "value": "{{serverName}}"},
     {"type": "select", "name": "transport", "value": "stdio"},
     {"type": "fill", "label": "Command", "value": "{{command}}"},

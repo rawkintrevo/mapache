@@ -45,17 +45,8 @@ jobs:
       - name: Install session runner dependencies
         run: npm ci --prefix session-runner
 
-      - name: Test functions
-        run: npm --prefix functions test
-
-      - name: Check session runner syntax
-        run: npm --prefix session-runner run lint
-
-      - name: Test frontend smoke coverage
-        run: npm run test:frontend
-
-      - name: Build app
-        run: npm run build
+      - name: Run canonical verification
+        run: npm run check
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -71,6 +62,8 @@ jobs:
             'QA_LOGIN_UID=${{ vars.QA_LOGIN_UID }}' \
             'QA_LOGIN_EMAIL=${{ vars.QA_LOGIN_EMAIL }}' \
             'QA_LOGIN_DISPLAY_NAME=${{ vars.QA_LOGIN_DISPLAY_NAME }}' \
+            'GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}' \
+            'GOOGLE_OAUTH_REDIRECT_URI=${{ vars.GOOGLE_OAUTH_REDIRECT_URI }}' \
             > functions/.env.pi-agents-cloud
 
       - name: Deploy Firebase production

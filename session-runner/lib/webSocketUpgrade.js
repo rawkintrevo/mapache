@@ -1,6 +1,14 @@
 "use strict";
 
-function createWebSocketUpgradeRouter({terminalWss, browserWss, hasBrowserAccess} = {}) {
+function createWebSocketUpgradeRouter({
+  terminalWss,
+  browserWss,
+  chatWss,
+  metricsWss,
+  hasBrowserAccess,
+  hasChatAccess,
+  hasMetricsAccess,
+} = {}) {
   if (!terminalWss || !browserWss) {
     throw new Error("WebSocket upgrade routing requires terminal and browser servers.");
   }
@@ -17,6 +25,22 @@ function createWebSocketUpgradeRouter({terminalWss, browserWss, hasBrowserAccess
         return;
       }
       handleUpgrade(browserWss, request, socket, head);
+      return;
+    }
+    if (pathname === "/chat") {
+      if (!chatWss || typeof hasChatAccess !== "function" || !hasChatAccess(request)) {
+        rejectUpgrade(socket);
+        return;
+      }
+      handleUpgrade(chatWss, request, socket, head);
+      return;
+    }
+    if (pathname === "/metrics") {
+      if (!metricsWss || typeof hasMetricsAccess !== "function" || !hasMetricsAccess(request)) {
+        rejectUpgrade(socket);
+        return;
+      }
+      handleUpgrade(metricsWss, request, socket, head);
       return;
     }
     socket.destroy();

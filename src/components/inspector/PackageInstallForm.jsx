@@ -1,17 +1,10 @@
 import {Download} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 
-export function PackageInstallForm({status, onInstallPiPackage, onUpdatePiInstallSource}) {
+export function PackageInstallForm({embedded = false, status, onInstallPiPackage, onUpdatePiInstallSource}) {
   const source = status.installSource || "";
-
-  return (
-    <form
-      className="package-install-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onInstallPiPackage?.(source);
-      }}
-    >
+  const fields = (
+    <>
       <input
         autoComplete="off"
         disabled={status.loading || status.installing}
@@ -27,6 +20,18 @@ export function PackageInstallForm({status, onInstallPiPackage, onUpdatePiInstal
         <Download aria-hidden="true" />
         {status.installing ? "Installing..." : "Install"}
       </Button>
+    </>
+  );
+
+  return embedded ? <div className="package-install-form">{fields}</div> : (
+    <form
+      className="package-install-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onInstallPiPackage?.(source);
+      }}
+    >
+      {fields}
     </form>
   );
 }

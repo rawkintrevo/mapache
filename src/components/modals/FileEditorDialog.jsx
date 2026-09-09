@@ -1,6 +1,8 @@
 import "./FileEditorDialog.css";
 import {Save, X} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {formatDate} from "../../utils/formatDate.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
@@ -8,10 +10,16 @@ import {ModalBackdrop} from "./ModalBackdrop.jsx";
 export function FileEditorDialog({editor, onClose, onSave, onUpdateContent}) {
   const highlightRef = useRef(null);
   const [content, setContent] = useState(editor.content || "");
+  const [activeTab, setActiveTab] = useState("edit");
+  const isMarkdown = /\.(md|markdown)$/i.test(editor.path || editor.name || "");
 
   useEffect(() => {
     setContent(editor.content || "");
-  }, [editor.path, editor.content, editor.loading]);
+  }, [editor.path, editor.loading]);
+
+  useEffect(() => {
+    setActiveTab("edit");
+  }, [editor.path]);
 
   return (
     <ModalBackdrop onClose={onClose}>
@@ -26,10 +34,58 @@ export function FileEditorDialog({editor, onClose, onSave, onUpdateContent}) {
           </Button>
         </div>
         {editor.error ? <div className="error">{editor.error}</div> : null}
+        {isMarkdown && !editor.loading ? (
+          <div aria-label="Markdown file view" className="file-editor-tabs" role="tablist">
+            <Button
+              aria-controls="file-editor-edit-panel"
+              aria-selected={activeTab === "edit"}
+              id="file-editor-edit-tab"
+              role="tab"
+              size="small"
+              variant={activeTab === "edit" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("edit")}
+            >
+              Edit
+            </Button>
+            <Button
+              aria-controls="file-editor-preview-panel"
+              aria-selected={activeTab === "preview"}
+              id="file-editor-preview-tab"
+              role="tab"
+              size="small"
+              variant={activeTab === "preview" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("preview")}
+            >
+              Preview
+            </Button>
+          </div>
+        ) : null}
         {editor.loading ? (
           <div className="file-editor-status">Loading file...</div>
+        ) : isMarkdown && activeTab === "preview" ? (
+          <div
+            aria-labelledby="file-editor-preview-tab"
+            className="file-editor-preview"
+            id="file-editor-preview-panel"
+            role="tabpanel"
+            tabIndex={0}
+          >
+            <Markdown
+              components={{
+                a: ({children, ...props}) => <a {...props} rel="noreferrer" target="_blank">{children}</a>,
+              }}
+              remarkPlugins={[remarkGfm]}
+            >
+              {content}
+            </Markdown>
+          </div>
         ) : (
-          <div className="file-editor-stack">
+          <div
+            aria-labelledby={isMarkdown ? "file-editor-edit-tab" : undefined}
+            className="file-editor-stack"
+            id={isMarkdown ? "file-editor-edit-panel" : undefined}
+            role={isMarkdown ? "tabpanel" : undefined}
+          >
             <pre aria-hidden="true" className="file-editor-highlight" ref={highlightRef}>{content}</pre>
             <textarea
               autoCapitalize="off"

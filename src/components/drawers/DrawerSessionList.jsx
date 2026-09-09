@@ -1,8 +1,11 @@
-import {Square, Trash2} from "lucide-react";
+import {Pencil, RotateCcw, Square, Trash2} from "lucide-react";
 import {SessionStatusSummary} from "../sessions/SessionStatusSummary.jsx";
+import {getSessionResourceSummary, isRetryableProvisioningFailure} from "../sessions/sessionPresentation.js";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
-export function DrawerSessionList({state, onDeleteSession, onSelectSession, onStopSession}) {
+export function DrawerSessionList({state, onDeleteSession, onEditSession, onRetryProvisioningSession, onSelectSession, onStopSession}) {
+  const busy = hasPendingOperations(state.pendingOperations);
   if (!state.selectedWorkspaceId) {
     return <p className="empty">Select a workspace to view sessions.</p>;
   }
@@ -15,10 +18,38 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
     <DrawerList>
       {state.sessions.map((session) => {
         const actions = [];
+        actions.push(
+          <DrawerListActionButton
+            disabled={busy}
+            icon={<Pencil aria-hidden="true" />}
+            key="edit"
+            label={`Edit ${session.name}`}
+            title={`Edit ${session.name}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onEditSession?.(session.id);
+            }}
+          />,
+        );
+        if (isRetryableProvisioningFailure(session)) {
+          actions.push(
+            <DrawerListActionButton
+              disabled={busy}
+              icon={<RotateCcw aria-hidden="true" />}
+              key="retry-provisioning"
+              label={`Retry provisioning for ${session.name}`}
+              title={`Retry provisioning for ${session.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRetryProvisioningSession?.(session.id);
+              }}
+            />,
+          );
+        }
         if (session.status === "running") {
           actions.push(
             <DrawerListActionButton
-              disabled={state.busy}
+              disabled={busy}
               icon={<Square aria-hidden="true" />}
               key="stop"
               label={`Stop ${session.name}`}
@@ -32,7 +63,7 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
         }
         actions.push(
           <DrawerListActionButton
-            disabled={state.busy}
+            disabled={busy}
             icon={<Trash2 aria-hidden="true" />}
             key="delete"
             label={`Delete ${session.name}`}
@@ -50,7 +81,7 @@ export function DrawerSessionList({state, onDeleteSession, onSelectSession, onSt
             actions={actions}
             active={session.id === state.selectedSessionId}
             key={session.id}
-            meta={`${session.resources.cpu} CPU / ${session.resources.memory}`}
+            meta={getSessionResourceSummary(session)}
             title={session.name}
             titleAccessory={<SessionStatusSummary session={session} />}
             onSelect={() => onSelectSession(session.id)}

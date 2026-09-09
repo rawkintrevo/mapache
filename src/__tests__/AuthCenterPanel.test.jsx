@@ -1,5 +1,4 @@
 import {render, screen} from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {AuthCenterPanel} from "../components/inspector/AuthCenterPanel.jsx";
 
@@ -17,10 +16,10 @@ function renderPanel(overrides = {}) {
       },
       providers: {},
     },
-    selectedSession: null,
+    selectedSession: {id: "session-1", imageKey: "pi-basic", terminalKind: "pi"},
     state: {collapsedSections: {}},
-    onDeletePiAuthProvider: vi.fn(),
-    onOpenAuthModal: vi.fn(),
+    onOpenPiAuthManage: vi.fn(),
+    onOpenGenericEnvironment: vi.fn(),
     onRefreshPiAuth: vi.fn(),
     onToggleDrawerSection: vi.fn(),
     ...overrides,
@@ -30,15 +29,10 @@ function renderPanel(overrides = {}) {
 }
 
 describe("AuthCenterPanel", () => {
-  test("deletes an auth entry by its entry id", async () => {
-    const props = renderPanel();
-    await userEvent.click(screen.getByRole("button", {name: "Delete My Pi login"}));
-    expect(props.onDeletePiAuthProvider).toHaveBeenCalledWith("entry-oauth");
-  });
-
-  test("restarts login for an OAuth entry's provider", async () => {
-    const props = renderPanel();
-    await userEvent.click(screen.getByRole("button", {name: "Log in again for My Pi login"}));
-    expect(props.onOpenAuthModal).toHaveBeenCalledWith("openai-codex");
+  test("keeps provider actions and configured entries out of the inspector", () => {
+    renderPanel();
+    expect(screen.getByRole("button", {name: "Manage Pi Auth"})).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Add authentication provider"})).not.toBeInTheDocument();
+    expect(screen.queryByText("My Pi login")).not.toBeInTheDocument();
   });
 });

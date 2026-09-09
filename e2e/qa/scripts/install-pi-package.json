@@ -6,6 +6,8 @@
   },
   "actions": [
     {"useScript": "scripts/expand-inspector.json"},
+    {"type": "click", "role": "button", "name": "New extension"},
+    {"type": "waitForSnapshotText", "text": "New extension", "timeoutMs": 5000},
     {"type": "fill", "placeholder": "npm:@scope/package or git:https://...", "value": "{{source}}"},
     {"type": "click", "role": "button", "name": "Install"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/pi-packages/install", "method": "POST", "expectedStatus": 200, "timeoutMs": 120000}

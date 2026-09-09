@@ -1,15 +1,16 @@
 import {resetPullRequestForm as resetPullRequestFormState} from "../state/resetters.js";
 import {friendlyGitStatusError} from "../utils/friendlyErrors.js";
 import {canOpenPullRequestForSession} from "../utils/gitStatus.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
-export async function loadGitStatusState({state, getSelectedSession, resetGitStatus, render}) {
+export async function loadGitStatusState({state, getSelectedSession, resetGitStatus, render, request}) {
+  if (!isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   if (!workspaceId || !sessionId) {
     resetGitStatus();
     return;
   }
-
   state.gitStatus = {
     loading: true,
     error: "",
@@ -23,6 +24,7 @@ export async function loadGitStatusState({state, getSelectedSession, resetGitSta
 
   try {
     const data = await state.api.getGitStatus(workspaceId, sessionId);
+    if (!isCurrentSessionRequest(request)) return;
     if (data && data.ok && data.git === false) {
       state.gitStatus = {
         loading: false,
@@ -46,6 +48,7 @@ export async function loadGitStatusState({state, getSelectedSession, resetGitSta
       canOpenPr: canOpenPullRequestForSession(getSelectedSession(), data, state.gitStatus.canOpenPr),
     };
   } catch (error) {
+    if (!isCurrentSessionRequest(request)) return;
     state.gitStatus = {
       loading: false,
       error: friendlyGitStatusError(error),

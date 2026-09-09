@@ -15,10 +15,10 @@ function session(overrides = {}) {
   };
 }
 
-function renderDetail(overrides = {}) {
+function renderDetail(overrides = {}, options = {}) {
   return render(
       <SessionDetail
-        busy={false}
+        busy={options.busy || false}
         gitStatus={null}
         isGithubWorkspace={false}
         session={session(overrides)}
@@ -29,12 +29,26 @@ function renderDetail(overrides = {}) {
           browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
         })}
         onResizeSession={vi.fn()}
-        onRestartSession={vi.fn()}
+        onRetryProvisioningSession={options.onRetryProvisioningSession}
+        onRestartSession={options.onRestartSession || vi.fn()}
       />,
   );
 }
 
 describe("SessionDetail Chrome workflow", () => {
+  test("places resource meters beside rather than inside the canvas tabs", async () => {
+    vi.stubGlobal("WebSocket", class {
+      addEventListener() {}
+      close() {}
+    });
+    renderDetail();
+
+    const utilization = await screen.findByLabelText("Resource utilization");
+    expect(utilization).toBeInTheDocument();
+    expect(screen.getByRole("tablist")).not.toContainElement(utilization);
+    vi.unstubAllGlobals();
+  });
+
   test("shows the Chrome canvas only for Chrome-capable sessions", async () => {
     const user = userEvent.setup();
     renderDetail();
@@ -53,5 +67,98 @@ describe("SessionDetail Chrome workflow", () => {
     });
 
     expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
+  });
+
+  test("shows Chat only for a capability-backed Pi session and keeps Terminal first", async () => {
+    const user = userEvent.setup();
+    renderDetail({
+      name: "Pi chat",
+      harnessId: "pi",
+      capabilities: {terminal: true, preview: false, chrome: false, chat: true},
+    });
+
+    expect(await screen.findByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", {name: "Chat"})).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", {name: "Chat"}));
+    expect(screen.getByRole("region", {name: "Chat Pi chat"})).toBeInTheDocument();
+    expect(screen.getByText("Connecting to Pi…")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Open Terminal"}));
+    expect(screen.getByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("does not show Chat when capability or signed terminal access is absent", async () => {
+    const {rerender} = renderDetail({name: "Shell", capabilities: {terminal: true, chat: false}});
+    expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
+
+    rerender(
+      <SessionDetail
+        busy={false}
+        gitStatus={null}
+        isGithubWorkspace={false}
+        session={session({name: "Pi without access", harnessId: "pi", capabilities: {terminal: true, chat: true}})}
+        sshForwards={{}}
+        workspaceId="workspace-1"
+        onGetSessionAccessUrls={vi.fn().mockResolvedValue({})}
+        onRestartSession={vi.fn()}
+      />,
+    );
+    await screen.findByText("Terminal access is not ready.");
+    expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
+  });
+
+  test("keeps session sizing out of the terminal detail", () => {
+    renderDetail({resources: {cpu: "1", memory: "2Gi"}});
+    expect(screen.queryByRole("group", {name: "Session size"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Resize"})).not.toBeInTheDocument();
+  });
+
+  test("shows queued provisioning progress and hides restart until a runner exists", () => {
+    renderDetail({status: "provisioning", provisioningState: "queued", serviceUrl: null});
+
+    expect(screen.getByText("Queued for provisioning")).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Restart"})).not.toBeInTheDocument();
+  });
+
+  test("shows one retry action for retryable failures", async () => {
+    const user = userEvent.setup();
+    const onRetryProvisioningSession = vi.fn();
+    renderDetail(
+        {status: "provision_failed", provisioningRetryable: true, serviceUrl: null},
+        {busy: false, onRetryProvisioningSession},
+    );
+
+    const retry = screen.getByRole("button", {name: "Retry provisioning"});
+    await user.click(retry);
+    expect(onRetryProvisioningSession).toHaveBeenCalledOnce();
+  });
+
+  test("shows restart for non-retryable provisioning failures", async () => {
+    const user = userEvent.setup();
+    const onRestartSession = vi.fn();
+    renderDetail(
+        {status: "provision_failed", provisioningRetryable: false, serviceUrl: null},
+        {onRestartSession},
+    );
+    expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
+    const restart = screen.getByRole("button", {name: "Restart"});
+    await user.click(restart);
+    expect(onRestartSession).toHaveBeenCalledWith("session-1");
+  });
+
+  test("disables retry while another operation is pending", () => {
+    renderDetail(
+        {status: "provision_failed", provisioningRetryable: true, serviceUrl: null},
+        {busy: true, onRetryProvisioningSession: vi.fn()},
+    );
+    expect(screen.getByRole("button", {name: "Retry provisioning"})).toBeDisabled();
+  });
+
+  test("emphasizes restart when the running image is stale", () => {
+    renderDetail({runnerImageFreshness: "stale"});
+    const restart = screen.getByRole("button", {name: "Restart session to pick up the latest container image"});
+    expect(restart).toHaveClass("session-restart-button--stale");
+    expect(restart).toHaveAttribute("title", "Restart to pick up the latest container image");
+    expect(screen.getByText("Stale image")).toBeInTheDocument();
+    expect(screen.getByText(/older runner image/)).toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@ import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
+import {GoogleWorkspacePanel} from "./GoogleWorkspacePanel.jsx";
 import {McpServersPanel} from "./McpServersPanel.jsx";
 import {SkillsPanel} from "./SkillsPanel.jsx";
 import {SubagentsPanel} from "./SubagentsPanel.jsx";
@@ -13,18 +14,23 @@ export function RightDrawer({
   state,
   onInstallPiPackage,
   onCancelPiSkillEdit,
-  onDeletePiAuthProvider,
   onDeletePiSkill,
   onDeleteWorkspaceSubagent,
   onDeleteMcpServer,
+  onEditMcpServer,
+  onDeleteGoogleConnection,
+  onEditGoogleConnection,
   onEditPiSkill,
   onEditWorkspaceSubagent,
-  onOpenAuthModal,
   onOpenPiAuthManage,
+  onOpenGenericEnvironment,
   onOpenWorkspaceSkillModal,
   onOpenWorkspaceSubagentModal,
+  onNewMcpServer,
+  onNewPiPackage,
   onRefreshPiAuth,
   onRefreshMcpServers,
+  onRefreshGoogleWorkspace,
   onRefreshPiPackages,
   onRefreshPiSkills,
   onRefreshWorkspaceSubagents,
@@ -35,6 +41,8 @@ export function RightDrawer({
   onUpdateMcpServerForm,
   onUpdatePiPackage,
   onSaveMcpServer,
+  onBindGoogleConnection,
+  onUnbindGoogleConnection,
   onCancelWorkspaceSubagentEdit,
 }) {
   const toggleButton = (
@@ -66,9 +74,8 @@ export function RightDrawer({
         piAuth={state.piAuth}
         selectedSession={selectedSession}
         state={state}
-        onDeletePiAuthProvider={onDeletePiAuthProvider}
-        onOpenAuthModal={onOpenAuthModal}
         onOpenPiAuthManage={onOpenPiAuthManage}
+        onOpenGenericEnvironment={onOpenGenericEnvironment}
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}
       />
@@ -98,16 +105,29 @@ export function RightDrawer({
         mcpServers={state.mcpServers}
         state={state}
         onDeleteMcpServer={onDeleteMcpServer}
+        onEditMcpServer={onEditMcpServer}
+        onNewMcpServer={onNewMcpServer}
         onRefreshMcpServers={onRefreshMcpServers}
         onSaveMcpServer={onSaveMcpServer}
         onToggleDrawerSection={onToggleDrawerSection}
         onUpdateMcpServerForm={onUpdateMcpServerForm}
+      />
+      <GoogleWorkspacePanel
+        googleWorkspace={state.googleWorkspace}
+        state={state}
+        onBindConnection={onBindGoogleConnection}
+        onDeleteConnection={onDeleteGoogleConnection}
+        onEditConnection={onEditGoogleConnection}
+        onRefresh={onRefreshGoogleWorkspace}
+        onToggleDrawerSection={onToggleDrawerSection}
+        onUnbindConnection={onUnbindGoogleConnection}
       />
       <ExtensionsPanel
         piPackages={state.piPackages}
         selectedSession={selectedSession}
         state={state}
         onInstallPiPackage={onInstallPiPackage}
+        onNewPiPackage={onNewPiPackage}
         onRefreshPiPackages={onRefreshPiPackages}
         onRemovePiPackage={onRemovePiPackage}
         onToggleDrawerSection={onToggleDrawerSection}

@@ -7,6 +7,7 @@
   "steps": [
     {"useCase": "cases/login.json"},
     {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-files-{{timestamp}}"}},
+    {"useScript": "scripts/open-file-actions-menu.json"},
     {
       "useScript": "scripts/create-workspace-file-api.json",
       "parameters": {

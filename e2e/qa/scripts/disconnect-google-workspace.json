@@ -1,0 +1,11 @@
+{
+  "id": "script.disconnectGoogleWorkspace",
+  "title": "Disconnect Google from the selected workspace",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Disable google-"},
+    {"type": "waitForSnapshotText", "text": "Ready", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The selected workspace changes the saved account from checked to unplugged"
+  ]
+}

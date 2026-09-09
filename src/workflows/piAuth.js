@@ -12,6 +12,7 @@ export async function loadPiAuthState({state, render, options = {}}) {
 
   try {
     const data = await state.api.getPiAuth();
+    const environment = await state.api.getGenericEnvironmentKeys();
     state.piAuth = {
       ...state.piAuth,
       loading: false,
@@ -19,6 +20,7 @@ export async function loadPiAuthState({state, render, options = {}}) {
       message: options.showMessage ? "Authentication providers refreshed." : "",
       providers: data.providers || {},
       entries: data.entries || {},
+      environmentEntries: environment.entries || [],
     };
   } catch (error) {
     state.piAuth = {
@@ -29,6 +31,107 @@ export async function loadPiAuthState({state, render, options = {}}) {
     };
   }
   render();
+}
+
+export function updateGenericEnvironmentFormState(state, patch) {
+  state.piAuth = {...state.piAuth, environmentForm: {...state.piAuth.environmentForm, ...patch}, error: "", message: ""};
+}
+
+export async function saveGenericEnvironmentKeyState({state, render}) {
+  const form = state.piAuth.environmentForm || {};
+  if (!String(form.name || "").trim() || !String(form.value || "")) {
+    state.piAuth = {...state.piAuth, error: "Enter a variable name and secret value."}; render(); return;
+  }
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving environment key..."}; render();
+  try {
+    const data = form.id ? await state.api.updateGenericEnvironmentKey(form.id, form) : await state.api.createGenericEnvironmentKey(form);
+    await loadPiAuthState({state, render});
+    const selectedForSession = await selectGenericEnvironmentEntryForActiveSession(state, data.id);
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      message: selectedForSession ?
+        "Environment key saved and selected for this session. Restart the runner to apply changes." :
+        "Environment key saved. Select it for a session, then restart that runner to apply changes.",
+      environmentForm: {id: "", name: "", label: "", value: ""},
+      lastEnvironmentEntry: data,
+    };
+  } catch (error) { state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error), message: ""}; }
+  render();
+}
+
+export async function updateGenericEnvironmentSelectionState({state, entryId, selected, render}) {
+  const session = activeSession(state);
+  if (!session || !entryId) return;
+  const currentIds = selectedEnvironmentEntryIds(session);
+  const environmentEntryIds = selected ?
+    [...new Set([...currentIds, entryId])] :
+    currentIds.filter((id) => id !== entryId);
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Saving environment selection..."};
+  render();
+  try {
+    await saveEnvironmentSelection(state, session, environmentEntryIds);
+    state.piAuth = {
+      ...state.piAuth,
+      saving: false,
+      message: "Environment selection saved. Restart the runner to apply changes.",
+    };
+  } catch (error) {
+    state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error), message: ""};
+  }
+  render();
+}
+
+async function selectGenericEnvironmentEntryForActiveSession(state, entryId) {
+  const session = activeSession(state);
+  if (!session || !entryId) return false;
+  const currentIds = selectedEnvironmentEntryIds(session);
+  if (currentIds.includes(entryId)) return true;
+  await saveEnvironmentSelection(state, session, [...currentIds, entryId]);
+  return true;
+}
+
+async function saveEnvironmentSelection(state, session, environmentEntryIds) {
+  const providers = session.authSelection?.providers || {};
+  const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, {
+    providers,
+    environmentEntryIds,
+  });
+  state.sessions = state.sessions.map((item) => item.id === session.id ? {
+    ...item,
+    authSelection: data.selection || {harness: session.harnessId || "", providers},
+    environmentEntryIds,
+  } : item);
+}
+
+function activeSession(state) {
+  return state.sessions?.find((session) => session.id === state.selectedSessionId) || null;
+}
+
+function selectedEnvironmentEntryIds(session) {
+  return Array.isArray(session?.environmentEntryIds) ?
+    session.environmentEntryIds :
+    (Array.isArray(session?.genericEnvironmentEntryIds) ? session.genericEnvironmentEntryIds : []);
+}
+
+export function editGenericEnvironmentKeyState(state, entry) {
+  state.piAuth = {...state.piAuth, environmentForm: {...entry, value: ""}, error: "", message: ""};
+}
+
+export async function deleteGenericEnvironmentKeyState({state, entryId, render}) {
+  state.piAuth = {...state.piAuth, saving: true, error: "", message: "Deleting environment key..."}; render();
+  try {
+    await state.api.deleteGenericEnvironmentKey(entryId);
+    const session = activeSession(state);
+    const currentIds = selectedEnvironmentEntryIds(session);
+    if (session && currentIds.includes(entryId)) {
+      await saveEnvironmentSelection(state, session, currentIds.filter((id) => id !== entryId));
+    }
+    await loadPiAuthState({state, render});
+    state.piAuth = {...state.piAuth, saving: false, message: "Environment key deleted."};
+    render();
+  }
+  catch (error) { state.piAuth = {...state.piAuth, saving: false, error: friendlyPiAuthError(error)}; render(); }
 }
 
 export function updatePiAuthFormState(state, patch) {
@@ -120,7 +223,12 @@ async function pollOpenAiCodexLoginState({state, render}) {
     const current = state.piAuth.openAiCodexDevice;
     if (current?.deviceAuthId !== device.deviceAuthId) return;
     try {
-      const data = await state.api.completeOpenAiCodexDeviceLogin(device.deviceAuthId, device.userCode);
+      const data = await state.api.completeOpenAiCodexDeviceLogin(
+          device.deviceAuthId,
+          device.userCode,
+          state.piAuth.editEntryId || "",
+          state.piAuth.entryLabel || "",
+      );
       if (data.status === "pending") {
         state.piAuth = {
           ...state.piAuth,
@@ -137,6 +245,8 @@ async function pollOpenAiCodexLoginState({state, render}) {
         message: "OpenAI Codex subscription login saved. New sessions can materialize it into the selected harness auth file.",
         providers: data.providers || state.piAuth.providers || {},
         entries: data.entries || state.piAuth.entries || {},
+        editEntryId: "",
+        entryLabel: "",
         openAiCodexDevice: {...device, status: "complete"},
       };
       render();
@@ -190,7 +300,12 @@ export async function savePiAuthProviderState({state, render}) {
   render();
 
   try {
-    const data = await state.api.savePiAuthProvider(provider, apiKey, state.piAuth.entryLabel || "");
+    const data = await state.api.savePiAuthProvider(
+        provider,
+        apiKey,
+        state.piAuth.entryLabel || "",
+        state.piAuth.editEntryId || "",
+    );
     state.piAuth = {
       ...state.piAuth,
       saving: false,
@@ -200,6 +315,7 @@ export async function savePiAuthProviderState({state, render}) {
       entries: data.entries || state.piAuth.entries || {},
       apiKey: "",
       entryLabel: "",
+      editEntryId: "",
       openAiCodexDevice: null,
     };
   } catch (error) {
@@ -219,7 +335,11 @@ export async function saveSessionPiAuthSelectionState({state, session, selection
   render();
   try {
     const data = await state.api.saveSessionPiAuthSelection(session.workspaceId, session.id, selection);
-    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, authSelection: data.selection || selection} : item);
+    state.sessions = state.sessions.map((item) => item.id === session.id ? {
+      ...item,
+      authSelection: data.selection || selection,
+      ...(Array.isArray(selection.environmentEntryIds) ? {environmentEntryIds: selection.environmentEntryIds} : {}),
+    } : item);
     state.piAuth = {
       ...state.piAuth,
       saving: false,

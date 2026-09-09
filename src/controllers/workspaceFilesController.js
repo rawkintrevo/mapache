@@ -1,7 +1,10 @@
 import {
   closeFileEditorState,
+  createWorkspaceDirectoryState,
+  createWorkspaceFileState,
   downloadWorkspaceFileState,
   loadWorkspaceFilesState,
+  openPiModelsFileState,
   saveFileEditorState,
   selectWorkspaceFileState,
   toggleWorkspaceFileDirState,
@@ -12,18 +15,35 @@ import {
   resetFileEditor as resetFileEditorState,
   resetWorkspaceFiles as resetWorkspaceFilesState,
 } from "../state/resetters.js";
+import {OPERATION_KEYS} from "../utils/operationKeys.js";
 
-export function createWorkspaceFilesController({state, render, runBusy}) {
-  async function loadWorkspaceFiles(path = "") {
-    await loadWorkspaceFilesState(state, path);
+export function createWorkspaceFilesController({state, render, runBusy, captureSessionRequest = () => undefined}) {
+  async function loadWorkspaceFiles(path = "", request = captureSessionRequest()) {
+    await loadWorkspaceFilesState(state, path, request);
   }
 
   async function refreshWorkspaceFiles() {
-    await runBusy(loadWorkspaceFiles);
+    await runBusy(loadWorkspaceFiles, "Working...", OPERATION_KEYS.WORKSPACE_FILES_REFRESH);
   }
 
   async function uploadWorkspaceFiles(files) {
     await uploadWorkspaceFilesState({state, files, loadWorkspaceFiles, render});
+  }
+
+  async function createWorkspaceFile(path) {
+    if (path === undefined) {
+      path = window.prompt("Create file: enter a name or path.", "");
+      if (path === null) return;
+    }
+    await createWorkspaceFileState({state, path, loadWorkspaceFiles, render});
+  }
+
+  async function createWorkspaceDirectory(path) {
+    if (path === undefined) {
+      path = window.prompt("Create directory: enter a name or path.", "");
+      if (path === null) return;
+    }
+    await createWorkspaceDirectoryState({state, path, loadWorkspaceFiles, render});
   }
 
   async function downloadWorkspaceFile() {
@@ -37,6 +57,10 @@ export function createWorkspaceFilesController({state, render, runBusy}) {
 
   async function selectWorkspaceFile(path) {
     await selectWorkspaceFileState({state, path, render});
+  }
+
+  async function openPiModelsFile() {
+    await openPiModelsFileState({state, render});
   }
 
   function closeFileEditor() {
@@ -62,8 +86,11 @@ export function createWorkspaceFilesController({state, render, runBusy}) {
 
   return {
     closeFileEditor,
+    createWorkspaceDirectory,
+    createWorkspaceFile,
     downloadWorkspaceFile,
     loadWorkspaceFiles,
+    openPiModelsFile,
     refreshWorkspaceFiles,
     resetFileEditor,
     resetWorkspaceFiles,

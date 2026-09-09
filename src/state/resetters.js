@@ -2,8 +2,10 @@ import {
   createAdminState,
   createFileEditorState,
   createGitStatusState,
+  createGoogleWorkspaceState,
   createMcpServersState,
   createPiAuthState,
+  createPiModelsState,
   createWorkspaceSubagentsState,
   createWorkspaceSkillsState,
   createPullRequestFormState,
@@ -17,6 +19,10 @@ export function resetPullRequestForm(state) {
 export function resetGitStatus(state) {
   state.gitStatus = createGitStatusState();
   resetPullRequestForm(state);
+}
+
+export function resetPiModels(state) {
+  state.piModels = createPiModelsState();
 }
 
 export function resetPiAuth(state) {
@@ -49,6 +55,10 @@ export function resetSshForwards(state) {
   state.sshForwards = createSshForwardsState();
 }
 
+export function resetGoogleWorkspace(state) {
+  state.googleWorkspace = createGoogleWorkspaceState();
+}
+
 export function resetWorkspaceFiles(state) {
   state.workspaceFiles = [];
   state.workspaceFilesError = "";
@@ -57,12 +67,14 @@ export function resetWorkspaceFiles(state) {
   state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
   state.workspaceFilesWorkspaceId = state.selectedWorkspaceId;
+  state.workspaceFileActiveDirectory = "";
   state.expandedFilePaths = new Set();
   state.selectedWorkspaceFilePath = "";
   resetFileEditor(state);
 }
 
 export function resetSignedOutState(state, {piPackagesStore} = {}) {
+  state.sessionEditModalSessionId = null;
   state.workspaces = [];
   state.sessions = [];
   state.workspaceFiles = [];
@@ -72,19 +84,19 @@ export function resetSignedOutState(state, {piPackagesStore} = {}) {
   state.workspaceFilesUploadMessage = "";
   state.workspaceFilesTruncated = false;
   state.workspaceFilesWorkspaceId = null;
+  state.workspaceFileActiveDirectory = "";
   state.expandedFilePaths = new Set();
   state.selectedWorkspaceFilePath = "";
   resetFileEditor(state);
-  state.profile = null;
   resetAdmin(state);
-  state.selectedWorkspaceId = null;
-  state.selectedSessionId = null;
   state.collapsedDrawerSections = new Set();
   resetGitStatus(state);
   piPackagesStore.reset();
+  resetPiModels(state);
   resetWorkspaceSkills(state);
   resetWorkspaceSubagents(state);
   resetMcpServers(state);
   resetPiAuth(state);
   resetSshForwards(state);
+  resetGoogleWorkspace(state);
 }

@@ -4,6 +4,7 @@ import {
   friendlyWorkspaceSkillSaveError,
 } from "../utils/friendlyErrors.js";
 import {sessionSkillHarness, sessionSupportsWorkspaceSkills} from "../utils/sessionSkills.js";
+import {isCurrentSessionRequest} from "../utils/sessionRequest.js";
 
 function stripFrontmatter(content) {
   return String(content || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
@@ -59,7 +60,8 @@ export function cancelWorkspaceSkillEditState(state) {
   };
 }
 
-export async function loadWorkspaceSkillsState({state, render}) {
+export async function loadWorkspaceSkillsState({state, render, request}) {
+  if (!isCurrentSessionRequest(request)) return;
   const workspaceId = state.selectedWorkspaceId;
   const sessionId = state.selectedSessionId;
   const session = selectedSession(state);
@@ -98,6 +100,7 @@ export async function loadWorkspaceSkillsState({state, render}) {
 
   try {
     const data = await state.api.getWorkspaceSkills(workspaceId, sessionId);
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceSkills = {
       ...state.workspaceSkills,
       loading: false,
@@ -106,6 +109,7 @@ export async function loadWorkspaceSkillsState({state, render}) {
       data: data || {skills: [], harness: harness?.id || ""},
     };
   } catch (error) {
+    if (!isCurrentSessionRequest(request)) return;
     state.workspaceSkills = {
       ...state.workspaceSkills,
       loading: false,
@@ -131,17 +135,17 @@ export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, rende
   if (!workspaceId || !sessionId) {
     state.workspaceSkills = {...state.workspaceSkills, error: "Start an active session before saving a skill."};
     render();
-    return;
+    return false;
   }
   if (!sessionSupportsWorkspaceSkills(session)) {
     state.workspaceSkills = {...state.workspaceSkills, error: "Workspace skill management is available for Pi and Codex sessions only."};
     render();
-    return;
+    return false;
   }
   if (!payload.name || !payload.description || !payload.content) {
     state.workspaceSkills = {...state.workspaceSkills, error: "Enter a skill name, description, and Markdown instructions."};
     render();
-    return;
+    return false;
   }
 
   state.workspaceSkills = {
@@ -166,6 +170,7 @@ export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, rende
       },
     };
     await loadWorkspaceSkills();
+    return true;
   } catch (error) {
     state.workspaceSkills = {
       ...state.workspaceSkills,
@@ -174,6 +179,7 @@ export async function saveWorkspaceSkillState({state, loadWorkspaceSkills, rende
       message: "",
     };
     render();
+    return false;
   }
 }
 

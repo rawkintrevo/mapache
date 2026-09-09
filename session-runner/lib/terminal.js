@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
 const {prepareSshMaterial, sshCommand} = require("./sshSession");
@@ -32,6 +33,11 @@ function createTerminalSession({admin, config, activity, onTerminalExit}) {
     },
     handleMessage(raw) {
       handleTerminalMessage(ensureTerm(), raw);
+      markTerminalActivity();
+    },
+    writePrompt(text) {
+      const prompt = formatPrompt(text);
+      ensureTerm().write(prompt);
       markTerminalActivity();
     },
   };
@@ -170,7 +176,7 @@ function spawnTerminal(command, config) {
     rows: 32,
     cwd: config.workspaceDir,
     env: {
-      ...process.env,
+      ...createWorkspaceProcessEnvironment(config),
       MAPACHE_RUNNER_URL: `http://127.0.0.1:${config.port}`,
       MAPACHE_PREVIEW_URL: `http://127.0.0.1:${config.port}${config.previewBasePath}/`,
       MAPACHE_QA_DIR: path.join(config.workspaceDir, ".mapache", "qa"),
@@ -192,6 +198,10 @@ function handleTerminalMessage(term, raw) {
   } catch (error) {
     term.write(raw.toString());
   }
+}
+
+function formatPrompt(text) {
+  return `\x1b[200~${String(text)}\x1b[201~\r`;
 }
 
 function sendTerminalMessage(socket, message) {
@@ -491,4 +501,5 @@ module.exports = {
   shouldReplayTerminal,
   terminalArgs,
   terminalCommand,
+  formatPrompt,
 };

@@ -28,7 +28,7 @@ The supported harness ids are:
 - `pi`
 - `codex`
 
-The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome capability flags. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. Each harness entry declares whether it supports:
+The shared catalog in `functions/runnerCatalog.json` is the source of truth for frontend session pickers and Functions-side image resolution. Each image entry names a `harnessId`, stable `imageKey`, image URI, and preview/function/N64/Chrome/Chat capability flags. The `chat` capability is true only for `pi-basic`, `pi-web`, and `pi-chrome`; it is false for shell, Codex, and `pi-n64` images. `pi-chrome` and `codex-chrome` retain the `pi` and `codex` harness ids while adding the `chrome` capability. On restart or re-provision, known image capabilities are recalculated from this catalog so older session documents and Cloud Run environment snapshots receive newly added flags; SSH-specific capability flags remain session-owned. Each harness entry declares whether it supports:
 
 - auth materialization
 - workspace-local skills
@@ -40,7 +40,7 @@ The runner cannot import `functions/runnerCatalog.json` directly because the Doc
 
 ## Auth
 
-Saved user credentials now live in `users/{uid}/private/agentAuth`. During rollout, Functions and runners also read the legacy `users/{uid}/private/piAuth` document and mirror writes there so existing saved Pi credentials remain available until the compatibility path is intentionally removed.
+Saved user credentials live in `users/{uid}/private/agentAuth`. Functions and runners read and write this canonical document directly; the native provider map inside it retains the harness file shape needed for Pi and Codex materialization.
 
 Session-specific selection now lives on the session document as:
 
@@ -49,7 +49,7 @@ authSelection
 authSelectionUpdatedAt
 ```
 
-`authSelection` stores both the target harness and the chosen entry ids per provider. During rollout, backend writes also mirror the provider map into legacy `piAuthSelection`, and runners still read that legacy field for older Pi sessions that have not been resaved yet. The web app and Functions expose neutral auth routes:
+`authSelection` stores both the target harness and the chosen entry ids per provider. Runners read this canonical field when materializing selected credentials. The web app and Functions expose neutral auth routes:
 
 ```text
 GET  /api/auth
@@ -73,6 +73,8 @@ Harness metadata also drives workspace-local file locations:
 - Codex skills: `.agents/skills/{name}/SKILL.md`
 - Pi subagents: `.pi/agents/{name}.md`
 - Codex subagents: `.codex/agents/{name}.toml`
+
+Those first two paths are the writable roots used by the web manager. Inspector listing is broader and recursive so it matches local harness discovery: Pi also reads workspace and user `.agents/skills` plus `~/.pi/agent/skills`, while Codex also reads `$CODEX_HOME/skills` and user `~/.agents/skills`. Alternate-root and user-local rows are visible as discovered but remain read-only in the workspace manager.
 
 Neutral runner routes now cover both supported harnesses:
 
@@ -112,11 +114,13 @@ Runner startup now resolves the active harness once, then executes harness hooks
 
 This keeps feature gating out of route handlers and UI inference code where possible. Runner-side Pi skill and subagent helpers are also instantiated lazily so shell and SSH harnesses do not fail startup just because those unsupported helper constructors exist in the same image.
 
+For Pi, startup also restores the current session's `piScopedModels` into `$PI_CODING_AGENT_DIR/settings.json` after the workspace home archive is available and before the harness starts. Periodic and shutdown sync copy a saved `enabledModels` list back to that session field. Sessions without that canonical field, including sessions created before this behavior existed, clear any model scope inherited through the shared home archive and initialize an empty scope. This keeps `/scoped-models` restart-durable without hiding authenticated providers because another session saved a different filter. The authenticated `/models-file` runner route reads and validates writes to `$PI_CODING_AGENT_DIR/models.json` for the Authentication Center editor. Deploy all curated Pi image tags after changing this route; existing sessions need a new Cloud Run revision before the endpoint is available.
+
 Chrome images seed the harness-neutral `mapache-chrome` skill at the active Pi or Codex workspace skill path when it is missing. The skill tells the agent to run `mapache-chrome-status`, attach to the existing loopback CDP endpoint through the pinned `chrome-devtools-mcp@1.6.0` server, and never launch a second browser or read the profile directory. The reserved `chrome-devtools` MCP entry deterministically replaces a workspace entry with the same name so the image-owned server always attaches to the user-visible browser.
 
 ## Frontend
 
-The right drawer now resolves the selected session harness through `src/utils/sessionHarnesses.js` instead of inferring behavior from `imageKey` prefixes or `terminalKind` alone. Auth, Skills, Extensions, and Subagents panels all use the same harness metadata for capability gating, labels, storage paths, and restart hints.
+The right drawer now resolves the selected session harness through `src/utils/sessionHarnesses.js` instead of inferring behavior from `imageKey` prefixes or `terminalKind` alone. Auth, Skills, Extensions, and Subagents panels all use the same harness metadata for capability gating, labels, storage paths, and restart hints. `SessionDetail` uses the same catalog capability map to expose Chat only for supported Pi sessions; `src/utils/piChat.js` derives an authenticated `ws(s)://.../chat` URL from the signed terminal URL, so Chat and Terminal share one runner and one PTY.
 
 ## Verification
 

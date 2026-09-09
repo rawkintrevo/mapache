@@ -1,5 +1,7 @@
+import {createGoogleWorkspaceQaMock} from "./googleWorkspaceQaMock.js";
+
 export function createApiClient(getToken) {
-  return {
+  const api = {
     getMe: () => request(getToken, "/api/me"),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
@@ -13,10 +15,10 @@ export function createApiClient(getToken) {
         {method: "POST", body: {whitelisted}},
     ),
     getPiAuth: () => request(getToken, "/api/auth"),
-    savePiAuthProvider: (provider, key, label = "") => request(
+    savePiAuthProvider: (provider, key, label = "", entryId = "") => request(
         getToken,
         `/api/auth/providers/${encodeURIComponent(provider)}`,
-        {method: "PUT", body: {key, label}},
+        {method: "PUT", body: {key, label, entryId}},
     ),
     deletePiAuthProvider: (provider) => request(
         getToken,
@@ -28,21 +30,30 @@ export function createApiClient(getToken) {
         `/api/auth/entries/${encodeURIComponent(entryId)}`,
         {method: "DELETE"},
     ),
+    getGenericEnvironmentKeys: () => request(getToken, "/api/auth/environment"),
+    createGenericEnvironmentKey: (body) => request(getToken, "/api/auth/environment", {method: "POST", body}),
+    updateGenericEnvironmentKey: (entryId, body) => request(getToken, `/api/auth/environment/${encodeURIComponent(entryId)}`, {method: "PUT", body}),
+    deleteGenericEnvironmentKey: (entryId) => request(getToken, `/api/auth/environment/${encodeURIComponent(entryId)}`, {method: "DELETE"}),
     startOpenAiCodexDeviceLogin: () => request(
         getToken,
         "/api/auth/providers/openai-codex/device-code/start",
         {method: "POST", body: {}},
     ),
-    completeOpenAiCodexDeviceLogin: (deviceAuthId, userCode) => request(
+    completeOpenAiCodexDeviceLogin: (deviceAuthId, userCode, entryId = "", label = "") => request(
         getToken,
         "/api/auth/providers/openai-codex/device-code/complete",
-        {method: "POST", body: {deviceAuthId, userCode}},
+        {method: "POST", body: {deviceAuthId, userCode, entryId, label}},
     ),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
     createWorkspace: (body) => request(getToken, "/api/workspaces", {
       method: "POST",
       body,
     }),
+    renameWorkspace: (workspaceId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}`,
+        {method: "PATCH", body: {name}},
+    ),
     deleteWorkspace: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}`,
@@ -93,10 +104,50 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/mcp`,
         {method: "PUT", body},
     ),
+    getGoogleWorkspaceServices: () => request(getToken, "/api/google/services"),
+    getGoogleConnections: () => request(getToken, "/api/google/connections"),
+    getGoogleConnection: (connectionId) => request(
+        getToken,
+        `/api/google/connections/${encodeURIComponent(connectionId)}`,
+    ),
+    deleteGoogleConnection: (connectionId) => request(
+        getToken,
+        `/api/google/connections/${encodeURIComponent(connectionId)}`,
+        {method: "DELETE"},
+    ),
+    getWorkspaceGoogleConnection: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google`,
+    ),
+    startGoogleConnection: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google/connect`,
+        {method: "POST", body},
+    ),
+    bindGoogleConnection: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google/binding`,
+        {method: "POST", body},
+    ),
+    unbindGoogleConnection: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/google/binding`,
+        {method: "DELETE"},
+    ),
     uploadWorkspaceFile: (workspaceId, file) => uploadFile(
         getToken,
         `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(file.name)}`,
         file,
+    ),
+    createWorkspaceFile: (workspaceId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/create-file`,
+        {method: "POST", body: {path}},
+    ),
+    createWorkspaceDirectory: (workspaceId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/create-directory`,
+        {method: "POST", body: {path}},
     ),
     getSessions: (workspaceId) => request(
         getToken,
@@ -106,6 +157,11 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/sessions`,
         {method: "POST", body},
+    ),
+    renameSession: (workspaceId, sessionId, name) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}`,
+        {method: "PATCH", body: {name}},
     ),
     resizeSession: (workspaceId, sessionId, body) => request(
         getToken,
@@ -151,11 +207,15 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-ports/${encodeURIComponent(port)}`,
         {method: "DELETE"},
     ),
-    saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/auth-selection`,
-        {method: "POST", body: {selection}},
-    ),
+    saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => {
+      const body = {selection: selection.providers || selection};
+      if (Array.isArray(selection.environmentEntryIds)) body.environmentEntryIds = selection.environmentEntryIds;
+      return request(
+          getToken,
+          `/api/workspaces/${workspaceId}/sessions/${sessionId}/auth-selection`,
+          {method: "POST", body},
+      );
+    },
     getGitStatus: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,
@@ -193,6 +253,24 @@ export function createApiClient(getToken) {
     getPiPackages: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/pi-packages`,
+    ),
+    getPiModels: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/models`,
+    ),
+    getPiModelsFile: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/models-file`,
+    ),
+    savePiModelsFile: (workspaceId, sessionId, content) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/models-file`,
+        {method: "PUT", body: {content}},
+    ),
+    savePiModelScope: (workspaceId, sessionId, scopedModels) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/models`,
+        {method: "PUT", body: {scopedModels}},
     ),
     installPiPackage: (workspaceId, sessionId, source) => request(
         getToken,
@@ -263,6 +341,7 @@ export function createApiClient(getToken) {
         `/api/github/connect?returnTo=${encodeURIComponent(window.location.href)}`,
     ),
   };
+  return {...api, ...createGoogleWorkspaceQaMock()};
 }
 
 async function uploadFile(getToken, path, file) {

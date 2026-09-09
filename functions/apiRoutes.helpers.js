@@ -1,6 +1,7 @@
 "use strict";
 
 const OPENAI_CODEX_PROVIDER = "openai-codex";
+const {ROUTE_METHODS} = require("./apiRouteManifest");
 
 function routeRequest(path) {
   const parts = String(path || "").replace(/^\/api\/?/, "/").split("/").filter(Boolean);
@@ -32,6 +33,10 @@ function routeRequest(path) {
   }
   if (parts.length === 3 && parts[0] === "auth" && parts[1] === "entries") {
     return {name: "piAuthEntry", entryId: parts[2]};
+  }
+  if (parts.length === 2 && parts[0] === "auth" && parts[1] === "environment") return {name: "genericEnv"};
+  if (parts.length === 3 && parts[0] === "auth" && parts[1] === "environment") {
+    return {name: "genericEnvEntry", entryId: parts[2]};
   }
   if (
     parts.length === 5 &&
@@ -74,6 +79,12 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "file") {
     return {name: "workspaceFile", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "create-file") {
+    return {name: "workspaceCreateFile", workspaceId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "create-directory") {
+    return {name: "workspaceCreateDirectory", workspaceId: parts[1]};
+  }
   if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "file" && parts[3] === "download-url") {
     return {name: "workspaceFileDownloadUrl", workspaceId: parts[1]};
   }
@@ -100,10 +111,11 @@ function routeRequest(path) {
     ["git-push", "gitPush"],
     ["git-open-pr", "gitOpenPr"],
     ["pi-packages", "piPackages"],
+    ["models", "piModels"],
+    ["models-file", "piModelsFile"],
     ["skills", "sessionSkills"],
     ["pi-skills", "sessionSkills"],
     ["subagents", "sessionSubagents"],
-    ["subagent-chains", "sessionSubagentChains"],
     ["ssh-files", "sshSessionFiles"],
     ["ssh-file", "sshSessionFile"],
     ["ssh-ports", "sshSessionForwards"],
@@ -148,11 +160,11 @@ function routeRequest(path) {
     parts.length === 6 &&
     parts[0] === "workspaces" &&
     parts[2] === "sessions" &&
-    (parts[4] === "subagents" || parts[4] === "subagent-chains") &&
+    parts[4] === "subagents" &&
     parts[5] === "delete"
   ) {
     return {
-      name: parts[4] === "subagents" ? "sessionSubagentDelete" : "sessionSubagentChainDelete",
+      name: "sessionSubagentDelete",
       workspaceId: parts[1],
       sessionId: parts[3],
     };
@@ -172,60 +184,29 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "repos") {
     return {name: "githubRepos"};
   }
+  if (parts.length === 2 && parts[0] === "google" && parts[1] === "callback") {
+    return {name: "googleCallback"};
+  }
+  if (parts.length === 2 && parts[0] === "google" && parts[1] === "services") {
+    return {name: "googleCatalog"};
+  }
+  if (parts.length === 2 && parts[0] === "google" && parts[1] === "connections") {
+    return {name: "googleConnections"};
+  }
+  if (parts.length === 3 && parts[0] === "google" && parts[1] === "connections") {
+    return {name: "googleConnection", connectionId: parts[2]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "google") {
+    return {name: "workspaceGoogle", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "google" && parts[3] === "connect") {
+    return {name: "googleConnectionStart", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "google" && parts[3] === "binding") {
+    return {name: "googleBinding", workspaceId: parts[1]};
+  }
   return {name: "unknown"};
 }
-
-const ROUTE_METHODS = Object.freeze({
-  githubCallback: ["GET"],
-  me: ["GET"],
-  adminUsers: ["GET"],
-  adminUserWhitelist: ["POST"],
-  qaCustomToken: ["POST"],
-  piAuth: ["GET"],
-  piAuthProvider: ["PUT", "DELETE"],
-  piAuthEntry: ["DELETE"],
-  openAiCodexDeviceCode: ["POST"],
-  workspaces: ["GET", "POST"],
-  workspace: ["DELETE"],
-  workspaceMcp: ["GET", "PUT"],
-  workspaceFiles: ["GET"],
-  workspaceSyncFiles: ["POST"],
-  workspaceFile: ["GET", "PUT", "POST"],
-  workspaceFileDownloadUrl: ["POST"],
-  sessions: ["GET", "POST"],
-  session: ["DELETE"],
-  resizeSession: ["POST"],
-  restartSession: ["POST"],
-  stopSession: ["POST"],
-  sessionAccess: ["POST"],
-  sessionSharePreview: ["POST"],
-  sessionPiAuthSelection: ["POST"],
-  gitStatus: ["GET"],
-  gitPull: ["POST"],
-  gitStage: ["POST"],
-  gitUnstage: ["POST"],
-  gitCommit: ["POST"],
-  gitPush: ["POST"],
-  gitOpenPr: ["POST"],
-  piPackages: ["GET"],
-  piPackageInstall: ["POST"],
-  piPackageRemove: ["POST"],
-  piPackageUpdate: ["POST"],
-  sessionSkills: ["GET", "POST"],
-  sessionSkillDelete: ["POST"],
-  sessionSubagents: ["GET", "POST"],
-  sessionSubagentDelete: ["POST"],
-  sessionSubagentChains: ["GET", "POST"],
-  sessionSubagentChainDelete: ["POST"],
-  sshSessionFiles: ["GET"],
-  sshSessionFile: ["GET", "PUT"],
-  sshSessionForwards: ["GET", "POST"],
-  sshSessionForward: ["DELETE"],
-  githubRepos: ["GET"],
-  githubConnect: ["GET"],
-  githubConnection: ["GET"],
-  githubDisconnect: ["POST"],
-});
 
 function routeAllowsMethod(route, method) {
   if (String(method || "").toUpperCase() === "OPTIONS") return true;
@@ -238,7 +219,8 @@ function routeRequiresAuth(route, method) {
   if (normalizedMethod === "OPTIONS") return false;
   if (normalizedMethod === "POST" && route && route.name === "qaCustomToken") return false;
   if (normalizedMethod === "GET" && route && route.name === "publicPreview") return false;
-  return !(normalizedMethod === "GET" && route && route.name === "githubCallback");
+  return !(normalizedMethod === "GET" && route &&
+    (route.name === "githubCallback" || route.name === "googleCallback"));
 }
 
 module.exports = {

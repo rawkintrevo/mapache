@@ -1,7 +1,7 @@
 "use strict";
 
-const crypto = require("crypto");
 const {onRequest} = require("firebase-functions/v2/https");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const {
@@ -11,157 +11,327 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
-  DEFAULT_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_FUNCTION_REGION,
   DEFAULT_IMAGE,
-  DEFAULT_REGION,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
   GITHUB_APP_PRIVATE_KEY_SECRET,
+  GOOGLE_OAUTH_CLIENT_ID,
+  GOOGLE_OAUTH_CLIENT_SECRET,
+  GOOGLE_OAUTH_ENCRYPTION_KEY,
+  GOOGLE_OAUTH_REDIRECT_URI,
+  GOOGLE_OAUTH_STATE_SECRET,
   QA_LOGIN_SECRET,
   SESSION_BROWSER_ACCESS_TTL_MS,
 } = require("./backendConfig");
 const {
   cleanName,
-  cloudRunServiceName,
   httpError,
-  latestTimestampMillis,
-  positiveNumber,
   toClientDoc,
-  userPath,
 } = require("./backendUtils.helpers");
 const {resolveHarness} = require("./runnerCatalog.helpers");
 const {resolveRunnerImage} = require("./runnerImages.helpers");
 const {routeRequest: apiRouteRequest} = require("./apiRoutes.helpers");
 const {dispatchApiRoute} = require("./apiDispatch.helpers");
+const {createApiHandlers} = require("./apiHandlers.helpers");
 const {
   listAdminUsers,
   setAdminUserWhitelist,
 } = require("./admin.service");
 const {requireUser} = require("./auth.service");
 const {
-  accrueSessionUsage,
-  isTerminalSessionStatus,
-  sessionUsageRecord,
   userWithUsage,
 } = require("./userUsage.service");
 const {
   createWorkspaceService,
-  normalizeWorkspaceFilePath,
   requireWorkspace,
 } = require("./workspace.service");
 const {
-  codexHomeDir,
-  codexHomeStoragePrefix,
   createCloudRunService,
-  homeStoragePrefix,
-  normalizeResources,
-  piSessionDir,
-  piSessionStoragePrefix,
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
-const {normalizeEnvMap} = require("./env.helpers");
+const {
+  SESSION_RESOURCE_ERROR_CODE,
+  normalizeSessionResources,
+} = require("./sessionResources.helpers");
 const {
   findActiveChromeSession,
   isChromeSession,
 } = require("./chromeReservation.helpers");
-const {mcpConfigForRunner} = require("./mcpConfig.helpers");
-const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
-const {
-  cleanGithubNumericId,
-  createGithubService,
-  sessionSourceMetadata,
-} = require("./github.service");
-const {createPiService} = require("./pi.service");
+const {createGithubService} = require("./github.service");
+const {createGoogleWorkspaceConnectionsService} = require("./googleWorkspaceConnections.service");
+const {createGoogleWorkspaceOAuthService, callbackPage} = require("./googleWorkspaceOAuth.service");
+const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.service");
+const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
+const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
+const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
+const {createGitSessionService} = require("./gitSession.service");
+const {createAgentAuthService} = require("./agentAuth.service");
+const {createEnvironmentKeysService} = require("./environmentKeys.service");
+const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
+const {createPiModelsService} = require("./piModels.service");
+const {createPiPackagesService} = require("./piPackages.service");
+const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
+const {createSessionCreationService} = require("./sessionCreation.service");
+const {createSessionLifecycleService} = require("./sessionLifecycle.service");
+const {createSshSessionService} = require("./sshSession.service");
+const {createWorkspaceAgentAssetsService} = require("./workspaceAgentAssets.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
 } = require("./runnerProxy.helpers");
-const {normalizeSshSessionPayload} = require("./sshSession.helpers");
+const {createProvisioningWorker} = require("./provisioning.worker");
+const {
+  createRunnerImageFreshnessService,
+  getSessionImageFreshness,
+} = require("./runnerImageFreshness.service");
+const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
+const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
+const {
+  isActiveGithubWorkspaceSession,
+  isShellSession,
+} = require("./sessionLifecycle.helpers");
 
 const githubService = createGithubService();
-const piService = createPiService({
+const lifecycleDependencies = {admin, db, requireWorkspace, sessionCollection};
+const sessionLifecycleService = createSessionLifecycleService(lifecycleDependencies);
+const {
+  deleteSession,
+  markSessionStopped,
+  reapIdleSessions,
+  renameSession,
+  requireSession,
+  resizeSession,
+  restartSession,
+  stopSession,
+} = sessionLifecycleService;
+const agentAuthService = createAgentAuthService({
+  admin,
+  db,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
+const openAiCodexAuthService = createOpenAiCodexAuthService({agentAuthService});
+const piPackagesService = createPiPackagesService({
+  admin,
+  db,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
+const piModelsService = createPiModelsService({
+  admin,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
+const workspaceAgentAssetsService = createWorkspaceAgentAssetsService({
   requireSession,
   requireWorkspace,
   requestRunnerJson,
 });
+const environmentKeysService = createEnvironmentKeysService({admin, db});
 const qaAuthService = createQaAuthService();
+const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
+const googleWorkspaceOAuthStateService = createGoogleOAuthStateService({
+  db,
+  secret: secretValue(GOOGLE_OAUTH_STATE_SECRET),
+});
+const googleWorkspaceOAuthService = createGoogleWorkspaceOAuthService({
+  clientId: paramValue(GOOGLE_OAUTH_CLIENT_ID),
+  clientSecret: secretValue(GOOGLE_OAUTH_CLIENT_SECRET),
+  encryptionKey: secretValue(GOOGLE_OAUTH_ENCRYPTION_KEY),
+  redirectUri: paramValue(GOOGLE_OAUTH_REDIRECT_URI),
+  connectionsService: googleWorkspaceConnectionsService,
+  requireWorkspace,
+  stateService: googleWorkspaceOAuthStateService,
+});
+const googleWorkspaceProvisioningService = createGoogleWorkspaceProvisioningService({
+  connectionsService: googleWorkspaceConnectionsService,
+  oauthService: googleWorkspaceOAuthService,
+  tokenRefreshUrl: googleMcpTokenRefreshUrl(),
+});
+const googleMcpTokenBrokerService = createGoogleMcpTokenBrokerService({
+  connectionsService: googleWorkspaceConnectionsService,
+  oauthService: googleWorkspaceOAuthService,
+  sessionCollection,
+});
+const previewService = createPreviewService({
+  admin,
+  browserAccessTtlMs: SESSION_BROWSER_ACCESS_TTL_MS,
+  db,
+  defaultBucket: DEFAULT_BUCKET,
+  requestRunnerJson,
+  requireSession,
+  storage,
+});
+const {
+  createSessionAccessUrls,
+  servePublicPreview,
+  shareSessionPreview,
+} = previewService;
+const sshSessionService = createSshSessionService({requestRunnerJson, requireSession});
+const {
+  closeSshSessionForward,
+  createSshSessionForward,
+  listSshSessionFiles,
+  listSshSessionForwards,
+  readSshSessionFile,
+  saveSshSessionFile,
+} = sshSessionService;
+const gitSessionService = createGitSessionService({
+  githubService,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
+const {
+  commitGit,
+  getGitStatusSummary,
+  openPullRequest,
+  pullGit,
+  pushGit,
+  stageGit,
+  unstageGit,
+} = gitSessionService;
+const sessionCreationService = createSessionCreationService({
+  admin,
+  db,
+  normalizeRequestedSessionResources,
+  releaseChromeWorkspaceSession,
+  reserveChromeWorkspaceSession,
+  reserveGithubWorkspaceSession,
+  reserveWorkspaceSyncSession,
+  resolveHarness,
+  resolveRunnerImage,
+  requireWorkspace,
+  runnerServiceAccountValue,
+  sessionCollection,
+});
+const {createSession} = sessionCreationService;
+const runnerImageFreshnessService = createRunnerImageFreshnessService();
+const {getCurrentRunnerImageDigest} = runnerImageFreshnessService;
+const getCurrentRunnerImageDigestForSession = (session) =>
+  getCurrentRunnerImageDigest(currentRunnerImageReference(session));
+const syncWriterLeaseService = createSyncWriterLeaseService({db});
+const {
+  reconcileWorkspaceSyncWriterLease,
+  releaseWorkspaceSyncWriterLease,
+} = syncWriterLeaseService;
 const cloudRunService = createCloudRunService({
   buildGithubAuthEnv: githubService.buildGithubAuthEnv,
+  buildGenericEnvironmentEnv: (session, entryIds) =>
+    environmentKeysService.resolveGenericEnvironment(session.ownerUid, entryIds),
   markSessionStopped,
   releaseChromeWorkspaceSession,
+  getCurrentRunnerImageDigest: getCurrentRunnerImageDigestForSession,
+  resolveGoogleMcpRuntime: (session) => googleWorkspaceProvisioningService.resolveGoogleMcpRuntime(
+      session.ownerUid,
+      session.workspaceId,
+      session.mcpConfig,
+  ),
+  releaseWorkspaceSyncWriterLease,
 });
 const {
   deleteSessionService,
   patchSessionService,
   provisionSessionService,
 } = cloudRunService;
+Object.assign(lifecycleDependencies, {
+  deleteSessionService,
+  patchSessionService,
+  prepareSessionForProvisioning,
+  provisionSessionService,
+  releaseChromeWorkspaceSession,
+  releaseWorkspaceSyncWriterLease,
+  reserveChromeWorkspaceSession,
+  reserveWorkspaceSyncSession,
+});
+const {provisionQueuedSession} = createProvisioningWorker({
+  db,
+  prepareProvisioningSession: prepareSessionForProvisioning,
+  provisionSessionService,
+  requireWorkspace,
+  releaseChromeWorkspaceSession,
+  releaseWorkspaceSyncWriterLease,
+});
 
 const workspaceService = createWorkspaceService({
   deleteSessionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
 });
+const googleWorkspaceApiService = createGoogleWorkspaceApiService({
+  connectionsService: googleWorkspaceConnectionsService,
+  db,
+  oauthService: googleWorkspaceOAuthService,
+  requireWorkspace,
+});
 
-const API_HANDLERS = {
-  userWithUsage,
-  listAdminUsers,
-  setAdminUserWhitelist,
-  getPiAuth: piService.getPiAuth,
-  savePiAuthProvider: piService.savePiAuthProvider,
-  deletePiAuthProvider: piService.deletePiAuthProvider,
-  deletePiAuthEntry: piService.deletePiAuthEntry,
-  startOpenAiCodexDeviceCode: piService.startOpenAiCodexDeviceCode,
-  completeOpenAiCodexDeviceCode: piService.completeOpenAiCodexDeviceCode,
-  listWorkspaces: workspaceService.listWorkspaces,
-  createWorkspace: workspaceService.createWorkspace,
-  deleteWorkspace: workspaceService.deleteWorkspace,
-  listWorkspaceFiles: workspaceService.listWorkspaceFiles,
-  readWorkspaceFile: workspaceService.readWorkspaceFile,
-  saveWorkspaceFile: workspaceService.saveWorkspaceFile,
-  uploadWorkspaceFile: workspaceService.uploadWorkspaceFile,
-  syncWorkspaceFiles,
-  createWorkspaceFileDownloadUrl: workspaceService.createWorkspaceFileDownloadUrl,
-  getWorkspaceMcpConfig: workspaceService.getWorkspaceMcpConfig,
-  saveWorkspaceMcpConfig: workspaceService.saveWorkspaceMcpConfig,
-  listSessions,
-  createSession,
-  resizeSession,
-  restartSession,
-  stopSession,
-  deleteSession,
-  createSessionAccessUrls,
-  shareSessionPreview,
-  listSshSessionFiles,
-  readSshSessionFile,
-  saveSshSessionFile,
-  listSshSessionForwards,
-  createSshSessionForward,
-  closeSshSessionForward,
-  saveSessionPiAuthSelection: piService.saveSessionPiAuthSelection,
-  getGitStatusSummary,
-  pullGit,
-  stageGit,
-  unstageGit,
-  commitGit,
-  pushGit,
-  openPullRequest,
-  listPiPackages: piService.listPiPackages,
-  installPiPackage: piService.installPiPackage,
-  removePiPackage: piService.removePiPackage,
-  updatePiPackage: piService.updatePiPackage,
-  listWorkspaceSkills: piService.listWorkspaceSkills,
-  saveWorkspaceSkill: piService.saveWorkspaceSkill,
-  deleteWorkspaceSkill: piService.deleteWorkspaceSkill,
-  listPiSkills: piService.listPiSkills,
-  savePiSkill: piService.savePiSkill,
-  deletePiSkill: piService.deletePiSkill,
-  listConnectedRepos: githubService.listConnectedRepos,
-  createGithubConnectUrl: githubService.createGithubConnectUrl,
-  getGithubConnection: githubService.getGithubConnection,
-  disconnectGithub: githubService.disconnectGithub,
-};
+function paramValue(param) {
+  try {
+    return param.value();
+  } catch (error) {
+    return "";
+  }
+}
+
+function secretValue(secret) {
+  try {
+    return secret.value();
+  } catch (error) {
+    return "";
+  }
+}
+
+function googleMcpTokenRefreshUrl() {
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
+  return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/googleMcpToken`;
+}
+
+const API_HANDLERS = createApiHandlers({
+  agentAuthService,
+  environmentKeysService,
+  openAiCodexAuthService,
+  piModelsService,
+  piPackagesService,
+  workspaceAgentAssetsService,
+  workspaceService,
+  githubService,
+  googleWorkspaceService: googleWorkspaceApiService,
+  operations: {
+    userWithUsage,
+    listAdminUsers,
+    setAdminUserWhitelist,
+    syncWorkspaceFiles,
+    listSessions,
+    createSession,
+    renameSession,
+    resizeSession,
+    restartSession,
+    stopSession,
+    deleteSession,
+    createSessionAccessUrls,
+    shareSessionPreview,
+    listSshSessionFiles,
+    readSshSessionFile,
+    saveSshSessionFile,
+    listSshSessionForwards,
+    createSshSessionForward,
+    closeSshSessionForward,
+    getGitStatusSummary,
+    pullGit,
+    stageGit,
+    unstageGit,
+    commitGit,
+    pushGit,
+    openPullRequest,
+  },
+});
 
 exports.api = onRequest({
   cors: true,
@@ -171,6 +341,9 @@ exports.api = onRequest({
     GITHUB_APP_CLIENT_ID_SECRET,
     GITHUB_APP_CLIENT_SECRET_SECRET,
     GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
     QA_LOGIN_SECRET,
   ],
 }, async (req, res) => {
@@ -184,6 +357,17 @@ exports.api = onRequest({
 
     if (req.method === "GET" && route.name === "githubCallback") {
       await githubService.handleGithubCallback(req, res);
+      return;
+    }
+
+    if (req.method === "GET" && route.name === "googleCallback") {
+      try {
+        const result = await googleWorkspaceApiService.completeGoogleConnection(req.query || {});
+        res.status(result.status || 200).type("html").send(result.html);
+      } catch (error) {
+        logger.warn("Google OAuth callback failed", {error: error.publicMessage || error.message});
+        res.status(error.status || 400).type("html").send(callbackPage(false, "Google connection could not be completed."));
+      }
       return;
     }
 
@@ -207,40 +391,111 @@ exports.api = onRequest({
   }
 });
 
-exports.reapIdleSessions = onSchedule("every 5 minutes", async () => {
+exports.googleMcpToken = onRequest({
+  cors: false,
+  timeoutSeconds: 30,
+  secrets: [
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const result = await googleMcpTokenBrokerService.refreshAccessToken(req);
+    res.status(200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    logger.warn("Google MCP access-token refresh failed", {
+      status,
+      error: error.publicMessage || "internal_error",
+    });
+    res.status(status).json({error: error.publicMessage || "internal_error"});
+  }
+});
+
+exports.provisionQueuedSession = onDocumentWritten({
+  document: "workspaces/{workspaceId}/sessions/{sessionId}",
+  timeoutSeconds: 300,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, provisionQueuedSession);
+
+exports.reconcileWorkspaceSyncWriters = onSchedule("every 5 minutes", async () => {
+  const workspaceSnap = await db.collection("workspaces").get();
+  const results = await Promise.allSettled(workspaceSnap.docs.map((workspaceDoc) =>
+    reconcileWorkspaceSyncWriterLease(workspaceDoc.id),
+  ));
+  const failed = results.filter((result) => result.status === "rejected");
+  failed.forEach((result) => logger.error("workspace sync-writer reconciliation failed", result.reason));
+  logger.info("workspace sync-writer reconciliation complete", {
+    checked: workspaceSnap.size,
+    failed: failed.length,
+  });
+});
+
+exports.refreshRunnerImageFreshness = onSchedule("every 5 minutes", async () => {
   const snap = await db.collectionGroup("sessions")
       .where("status", "==", "running")
       .get();
-  const now = Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
-    const session = doc.data();
-    if (!isIdleSession(session, now)) return false;
-    logger.info("stopping idle session", {
-      workspaceId: session.workspaceId,
-      sessionId: doc.id,
-      serviceId: session.serviceId,
-    });
+    const session = {id: doc.id, ...doc.data()};
+    const currentDigest = await getCurrentRunnerImageDigestForSession(session);
+    const freshness = getSessionImageFreshness(session, currentDigest);
+    const currentValue = currentDigest || null;
+    if (session.runnerImageCurrentDigest === currentValue && session.runnerImageFreshness === freshness) return false;
     await doc.ref.update({
-      status: "stopping",
-      stopReason: "idle_timeout",
+      runnerImageCurrentDigest: currentValue,
+      runnerImageFreshness: freshness,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
     return true;
   }));
-
-  const stopped = results.filter((result) => result.status === "fulfilled" && result.value).length;
+  const updated = results.filter((result) => result.status === "fulfilled" && result.value).length;
   const failed = results.filter((result) => result.status === "rejected");
-  failed.forEach((result) => logger.error("idle session stop failed", result.reason));
-  logger.info("idle session reap complete", {checked: snap.size, stopped, failed: failed.length});
+  failed.forEach((result) => logger.error("runner image freshness refresh failed", result.reason));
+  logger.info("runner image freshness refresh complete", {
+    checked: snap.size,
+    updated,
+    failed: failed.length,
+  });
 });
+
+exports.reapIdleSessions = onSchedule("every 5 minutes", reapIdleSessions);
 
 async function listSessions(uid, workspaceId) {
   await requireWorkspace(uid, workspaceId);
   const snap = await sessionCollection(workspaceId)
       .orderBy("updatedAt", "desc")
       .get();
-  return snap.docs.map(toClientDoc);
+  return Promise.all(snap.docs.map(async (doc) => {
+    const session = toClientDoc(doc);
+    const currentDigest = await getCurrentRunnerImageDigestForSession(session);
+    return {
+      ...session,
+      runnerImageCurrentDigest: currentDigest || session.runnerImageCurrentDigest || null,
+      runnerImageFreshness: getSessionImageFreshness(session, currentDigest),
+    };
+  }));
+}
+
+function currentRunnerImageReference(session = {}) {
+  try {
+    if (session.imageKey) {
+      const resolved = resolveRunnerImage({imageKey: session.imageKey}, DEFAULT_IMAGE);
+      if (resolved.image) return resolved.image;
+    }
+  } catch (error) {
+    logger.warn("current runner image catalog lookup failed", {
+      imageKey: session.imageKey,
+      error: error.message || String(error),
+    });
+  }
+  return session.image || "";
 }
 
 async function syncWorkspaceFiles(uid, workspaceId) {
@@ -275,415 +530,81 @@ async function syncWorkspaceFiles(uid, workspaceId) {
   };
 }
 
-async function createSession(uid, workspaceId, payload) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
-  const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
-  const sshPayload = sessionType === "ssh" ?
-    await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) :
-    null;
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const sessionRef = sessionCollection(workspaceId).doc();
-  const region = cleanName(payload.region || DEFAULT_REGION);
-  const resources = normalizeResources(payload);
-  const idleTimeoutMinutes = positiveNumber(
-      payload.idleTimeoutMinutes,
-      DEFAULT_IDLE_TIMEOUT_MINUTES,
-  );
-  const serviceId = `session-${sessionRef.id.toLowerCase()}`;
-  let runnerImage;
-  try {
-    runnerImage = resolveRunnerImage(sshPayload ? {...payload, imageKey: "default"} : payload, DEFAULT_IMAGE);
-  } catch (error) {
-    if (error && error.code === "invalid_runner_image") {
-      throw httpError(400, "invalid_runner_image", error);
-    }
-    throw error;
-  }
-  const harnessId = sshPayload ? "ssh" : (runnerImage.harnessId || "shell");
-  const harness = resolveHarness(harnessId);
-  const session = {
-    ownerUid: uid,
-    userPath: userPath(uid),
-    workspaceId,
-    runnerSessionId: sessionRef.id,
-    workspaceStoragePrefix: workspace.storagePrefix,
-    piSessionDir: piSessionDir(sessionRef.id),
-    piSessionStorageBucket: workspace.bucket || DEFAULT_BUCKET,
-    piSessionStoragePrefix: piSessionStoragePrefix(workspace.storagePrefix, sessionRef.id),
-    piSessionJsonlPath: null,
-    piSessionJsonlRelativePath: null,
-    codexHomeDir: harnessId === "codex" ? codexHomeDir(sessionRef.id) : "",
-    codexHomeStorageBucket: harnessId === "codex" ? (workspace.bucket || DEFAULT_BUCKET) : "",
-    codexHomeStoragePrefix: harnessId === "codex" ? codexHomeStoragePrefix(workspace.storagePrefix, sessionRef.id) : "",
-    terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
-    name: cleanName(payload.name || "Terminal session"),
-    status: runnerImage.canProvision ? "provisioning" : "needs_image",
-    region,
-    image: runnerImage.image,
-    imageKey: runnerImage.key,
-    harnessId,
-    sessionType: sshPayload ? "ssh" : "cloud",
-    terminalKind: harness?.terminalKind || runnerImage.terminalKind || "shell",
-    capabilities: sshPayload ? {...runnerImage.capabilities, preview: false, ssh: true, sshFiles: true, sshForwarding: true} : runnerImage.capabilities,
-    serviceAccount: runnerServiceAccountValue() || null,
-    serviceId,
-    serviceName: cloudRunServiceName(region, serviceId),
-    serviceUrl: null,
-    workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
-    mcpConfig: mcpConfigForRunner(workspace),
-    ...sessionSourceMetadata(workspace),
-    ...sessionSyncPolicyMetadata(workspace),
-    ...sessionHomePolicyMetadata(workspace),
-    ...sessionEnvMetadata(workspace, payload),
-    ...(sshPayload ? {
-      sshTarget: sshPayload.public,
-      sessionEnv: {
-        ...(sessionEnvMetadata(workspace, payload).sessionEnv || {}),
-        SSH_TARGET_HOST: sshPayload.public.host,
-        SSH_TARGET_PORT: String(sshPayload.public.port),
-        SSH_TARGET_USERNAME: sshPayload.public.username,
-        SSH_INITIAL_DIRECTORY: sshPayload.public.initialDirectory,
-        SSH_AUTH_MODE: sshPayload.public.auth.type === "openssh-user-certificate" ? "certificate" : "private-key",
-        SSH_STRICT_HOST_KEY_CHECKING: sshPayload.public.auth.strictHostKeyChecking ? "true" : "false",
-      },
-    } : {}),
-    resources,
-    activeSocketCount: 0,
-    idleTimeoutMinutes,
-    lastActivityAt: now,
-    lastConnectedAt: null,
-    lastDisconnectedAt: null,
-    usageAccruedAt: now,
-    usageAccruedCpuSeconds: 0,
-    usageAccruedMemoryGbSeconds: 0,
-    usageAccruedRuntimeSeconds: 0,
-    autoStoppedAt: null,
-    stopReason: null,
-    shutdownToken: crypto.randomBytes(24).toString("hex"),
-    browserAccessTokenSecret: crypto.randomBytes(32).toString("hex"),
-    createdAt: now,
-    updatedAt: now,
-    restartedAt: null,
-    lastError: runnerImage.canProvision ? null : "Set SESSION_RUNNER_IMAGE before provisioning Cloud Run sessions.",
-  };
-
-  if (isChromeSession(session)) {
-    await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
-      githubWorkspace: isGithubWorkspace(workspace),
-    });
-  } else if (isGithubWorkspace(workspace)) {
-    await reserveGithubWorkspaceSession(workspaceId, sessionRef, session);
-  } else {
-    await sessionRef.set(session);
-  }
-
-  if (runnerImage.canProvision) {
-    await provisionSessionService(workspace, sessionRef, sshPayload ? {
-      ...session,
-      sessionEnv: {
-        ...(session.sessionEnv || {}),
-        SSH_AUTH_MODE: sshPayload.secrets.authMode || "private-key",
-        SSH_PRIVATE_KEY: sshPayload.secrets.privateKey,
-        SSH_CERTIFICATE: sshPayload.secrets.certificate,
-        SSH_KNOWN_HOSTS: sshPayload.secrets.knownHosts,
-      },
-    } : session);
-  } else if (isChromeSession(session)) {
-    await releaseChromeWorkspaceSession(sessionRef, session, "needs_image");
-  }
-
-  return toClientDoc(await sessionRef.get());
-}
-
-async function normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload) {
-  if (payload && payload.sshTarget) return normalizeSshSessionPayload(payload);
-  if (!workspaceSshSource) return normalizeSshSessionPayload(payload);
-  const privateSnap = await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).get();
+async function prepareSessionForProvisioning(session = {}) {
+  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") return session;
+  const secretDocId = session.sshProvisioningSecretDocId || `sshWorkspace_${session.workspaceId}`;
+  const privateSnap = await db.collection("users").doc(session.ownerUid).collection("private").doc(secretDocId).get();
   if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
   const secrets = privateSnap.data() || {};
-  return normalizeSshSessionPayload({
-    sshTarget: {
-      ...(workspaceSshSource.target || {}),
-      privateKey: secrets.privateKey,
-      certificate: secrets.certificate,
-      knownHosts: secrets.knownHosts,
-      authMode: secrets.authMode || workspaceSshSource.target?.auth?.type,
-      strictHostKeyChecking: workspaceSshSource.target?.auth?.strictHostKeyChecking,
-    },
-  });
-}
-
-async function createSessionAccessUrls(uid, workspaceId, sessionId) {
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.browserAccessTokenSecret) {
-    throw httpError(409, "session_requires_restart_for_browser_access");
-  }
-
-  const expiresAtMs = Date.now() + SESSION_BROWSER_ACCESS_TTL_MS;
-  const token = signSessionBrowserAccessToken(session, expiresAtMs);
-  const baseUrl = session.serviceUrl.replace(/\/+$/, "");
-  const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
-  const previewUrl = appendQuery(`${baseUrl}/preview/`, "mapache_access", token);
-  const sshForwardBaseUrl = appendQuery(`${baseUrl}/ssh/forward`, "mapache_access", token);
-  const browserUrl = session.capabilities && session.capabilities.chrome ?
-    appendQuery(`${baseUrl}/browser/`, "mapache_access", token) : null;
-  const browserStatusUrl = session.capabilities && session.capabilities.chrome ?
-    appendQuery(`${baseUrl}/browser/status`, "mapache_access", token) : null;
   return {
-    ok: true,
-    expiresAt: new Date(expiresAtMs).toISOString(),
-    terminalUrl,
-    previewUrl,
-    sshForwardBaseUrl,
-    browserUrl,
-    browserStatusUrl,
-  };
-}
-
-async function listSshSessionFiles(uid, workspaceId, sessionId, directoryPath = "") {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/files?path=${encodeURIComponent(String(directoryPath || ""))}`, {
-    unavailableError: "runner_ssh_files_unavailable",
-  });
-}
-
-async function readSshSessionFile(uid, workspaceId, sessionId, filePath) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/file?path=${encodeURIComponent(String(filePath || ""))}`, {
-    unavailableError: "runner_ssh_file_unavailable",
-  });
-}
-
-async function saveSshSessionFile(uid, workspaceId, sessionId, filePath, payload) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/file?path=${encodeURIComponent(String(filePath || ""))}`, {
-    method: "PUT",
-    body: {content: String(payload && payload.content || "")},
-    unavailableError: "runner_ssh_file_save_unavailable",
-  });
-}
-
-async function listSshSessionForwards(uid, workspaceId, sessionId) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, "/ssh/ports", {
-    unavailableError: "runner_ssh_ports_unavailable",
-  });
-}
-
-async function createSshSessionForward(uid, workspaceId, sessionId, payload) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, "/ssh/ports", {
-    method: "POST",
-    body: {port: payload && payload.port},
-    unavailableError: "runner_ssh_port_unavailable",
-  });
-}
-
-async function closeSshSessionForward(uid, workspaceId, sessionId, port) {
-  const session = await requireRunningSshSession(uid, workspaceId, sessionId);
-  return requestRunnerJson(session, `/ssh/ports/${encodeURIComponent(String(port || ""))}`, {
-    method: "DELETE",
-    unavailableError: "runner_ssh_port_close_unavailable",
-  });
-}
-
-async function requireRunningSshSession(uid, workspaceId, sessionId) {
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") {
-    throw httpError(400, "ssh_session_required");
-  }
-  if (!session.serviceUrl || !session.shutdownToken) throw httpError(409, "session_not_running");
-  return session;
-}
-
-async function shareSessionPreview(uid, workspaceId, sessionId, req) {
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_preview_share_unavailable");
-  if (!(session.capabilities && session.capabilities.preview)) {
-    throw httpError(400, "session_preview_not_supported");
-  }
-
-  const token = crypto.randomBytes(18).toString("base64url");
-  const bucketName = session.workspaceStorageBucket || DEFAULT_BUCKET;
-  const storagePrefix = [
-    "public-previews",
-    cleanPreviewPathSegment(uid),
-    cleanPreviewPathSegment(workspaceId),
-    cleanPreviewPathSegment(sessionId),
-    token,
-  ].join("/");
-  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-  const shareResult = await requestRunnerJson(session, "/preview/share", {
-    method: "POST",
-    body: {
-      bucketName,
-      storagePrefix,
+    ...session,
+    sessionEnv: {
+      ...(session.sessionEnv || {}),
+      SSH_AUTH_MODE: secrets.authMode || session.sessionEnv?.SSH_AUTH_MODE || "private-key",
+      SSH_PRIVATE_KEY: secrets.privateKey || "",
+      SSH_CERTIFICATE: secrets.certificate || "",
+      SSH_KNOWN_HOSTS: secrets.knownHosts || "",
     },
-    timeoutMs: 120000,
-    unavailableError: "runner_preview_share_unavailable",
+  };
+}
+
+async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, options = {}) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
+  return db.runTransaction(async (transaction) => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
+    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    const lease = resolveSyncWriterLease(
+        workspaceSnap.data(),
+        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
+        session,
+        sessionRef.id,
+        {
+          eligible: options.syncWriterEligible,
+          now: admin.firestore.FieldValue.serverTimestamp(),
+        },
+    );
+    if (Object.keys(lease.workspaceUpdates).length) transaction.update(workspaceRef, lease.workspaceUpdates);
+    if (options.create === false) {
+      transaction.update(sessionRef, lease.sessionUpdates);
+    } else {
+      transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
+    }
+    return lease.sessionUpdates;
   });
-
-  const previewDoc = {
-    bucketName,
-    contentType: "static",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    expiresAt,
-    fileCount: shareResult.fileCount || 0,
-    indexPath: "index.html",
-    ownerUid: uid,
-    sessionId,
-    sizeBytes: shareResult.sizeBytes || 0,
-    storagePrefix,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    workspaceId,
-  };
-  await db.collection("publicPreviews").doc(token).set(previewDoc);
-
-  const publicUrl = new URL(`/api/public-previews/${token}/`, requestOrigin(req)).toString();
-  return {
-    ok: true,
-    publicUrl,
-    expiresAt: expiresAt.toDate().toISOString(),
-    fileCount: previewDoc.fileCount,
-    sizeBytes: previewDoc.sizeBytes,
-  };
 }
 
-async function servePublicPreview(route, req, res) {
-  const token = cleanName(route.token || "");
-  if (!/^[A-Za-z0-9_-]{16,80}$/.test(token)) {
-    res.status(404).send("preview not found");
-    return;
-  }
-
-  const snap = await db.collection("publicPreviews").doc(token).get();
-  if (!snap.exists) {
-    res.status(404).send("preview not found");
-    return;
-  }
-  const preview = snap.data();
-  if (preview.expiresAt && preview.expiresAt.toMillis && preview.expiresAt.toMillis() <= Date.now()) {
-    res.status(410).send("preview expired");
-    return;
-  }
-
-  const requestedPath = publicPreviewPath(route.path || "index.html");
-  if (!requestedPath) {
-    res.status(400).send("invalid preview path");
-    return;
-  }
-
-  const bucket = storage.bucket(preview.bucketName || DEFAULT_BUCKET);
-  let filePath = `${preview.storagePrefix}/${requestedPath}`;
-  let file = bucket.file(filePath);
-  let exists = (await file.exists())[0];
-  if (!exists && shouldServePublicPreviewIndexFallback(req, requestedPath)) {
-    filePath = `${preview.storagePrefix}/${preview.indexPath || "index.html"}`;
-    file = bucket.file(filePath);
-    exists = (await file.exists())[0];
-  }
-  if (!exists) {
-    res.status(404).send("preview file not found");
-    return;
-  }
-
-  res.setHeader("Cache-Control", "public, max-age=60");
-  res.setHeader("Content-Type", publicPreviewContentType(filePath));
-  file.createReadStream()
-      .on("error", (error) => {
-        logger.error("public preview stream failed", error);
-        if (!res.headersSent) res.status(500).send("preview read failed");
-      })
-      .pipe(res);
-}
-
-function signSessionBrowserAccessToken(session, expiresAtMs) {
-  const payload = Buffer.from(JSON.stringify({
-    exp: Math.floor(expiresAtMs / 1000),
-    sid: session.runnerSessionId || session.id || "",
-  })).toString("base64url");
-  const signature = crypto
-      .createHmac("sha256", session.browserAccessTokenSecret)
-      .update(payload)
-      .digest("base64url");
-  return `${payload}.${signature}`;
-}
-
-function appendQuery(url, key, value) {
-  const parsed = new URL(url);
-  parsed.searchParams.set(key, value);
-  return parsed.toString();
-}
-
-function requestOrigin(req) {
-  const protocol = String(req.get("x-forwarded-proto") || req.protocol || "https").split(",")[0].trim() || "https";
-  const host = req.get("x-forwarded-host") || req.get("host") || "localhost";
-  return `${protocol}://${host}`;
-}
-
-function cleanPreviewPathSegment(value) {
-  return cleanName(value).replace(/[^A-Za-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "unknown";
-}
-
-function publicPreviewPath(value) {
-  const clean = String(value || "index.html").replace(/\\/g, "/").replace(/^\/+/, "");
-  const normalized = require("path").posix.normalize(clean);
-  if (!normalized || normalized === ".") return "index.html";
-  if (normalized === ".." || normalized.startsWith("../")) return "";
-  return normalized;
-}
-
-function shouldServePublicPreviewIndexFallback(req, requestedPath) {
-  if (!require("path").posix.extname(requestedPath)) return true;
-  return String(req.get("accept") || "").includes("text/html");
-}
-
-function publicPreviewContentType(filePath) {
-  const extension = require("path").posix.extname(filePath).toLowerCase();
-  const types = {
-    ".css": "text/css; charset=utf-8",
-    ".gif": "image/gif",
-    ".html": "text/html; charset=utf-8",
-    ".ico": "image/x-icon",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".js": "text/javascript; charset=utf-8",
-    ".json": "application/json; charset=utf-8",
-    ".map": "application/json; charset=utf-8",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".txt": "text/plain; charset=utf-8",
-    ".webp": "image/webp",
-    ".woff": "font/woff",
-    ".woff2": "font/woff2",
-  };
-  return types[extension] || "application/octet-stream";
-}
-
-async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session) {
+async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
+  const workspaceRef = db.collection("workspaces").doc(workspaceId);
   await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(sessionCollection(workspaceId));
-    const activeSession = snap.docs.find((doc) => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
+    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    const activeSession = sessionsSnap.docs.find((doc) => {
       const active = doc.data();
       return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
     }
-    transaction.set(sessionRef, session);
+    const lease = resolveSyncWriterLease(
+        workspaceSnap.data(),
+        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
+        session,
+        sessionRef.id,
+        {
+          eligible: options.syncWriterEligible,
+          now: admin.firestore.FieldValue.serverTimestamp(),
+        },
+    );
+    if (Object.keys(lease.workspaceUpdates).length) transaction.update(workspaceRef, lease.workspaceUpdates);
+    transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
   });
 }
 
 async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
   const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     const activeChrome = findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
@@ -701,13 +622,26 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       }
     }
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    const lease = resolveSyncWriterLease(
+        workspaceSnap.data(),
+        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
+        session,
+        sessionRef.id,
+        {
+          eligible: options.syncWriterEligible,
+          now: admin.firestore.FieldValue.serverTimestamp(),
+        },
+    );
     transaction.update(workspaceRef, {
       activeChromeSessionId: sessionRef.id,
       activeChromeSessionState: session.status || "provisioning",
       activeChromeSessionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...lease.workspaceUpdates,
     });
-    if (options.create !== false) transaction.set(sessionRef, session);
+    if (options.create !== false) transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
+    else transaction.update(sessionRef, lease.sessionUpdates);
+    return lease.sessionUpdates;
   });
 }
 
@@ -725,275 +659,19 @@ async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, sess
   });
 }
 
-function isGithubWorkspace(workspace) {
-  return workspace && workspace.source && workspace.source.type === "github";
-}
-
-function isActiveGithubWorkspaceSession(session) {
-  return !isTerminalSessionStatus(session && session.status);
-}
-
-function isShellSession(session) {
-  return cleanName(session && session.terminalKind) === "shell";
-}
-
-function shouldRecreateSessionServiceOnRestart(session) {
-  if (isTerminalSessionStatus(session && session.status)) return true;
-  if (cleanName(session && session.status) !== "update_failed") return false;
-  if (!session.serviceUrl) return true;
-
-  const lastError = String(session.lastError || "").toLowerCase();
-  return lastError.includes("\"code\":404") ||
-    lastError.includes("does not exist") ||
-    lastError.includes("not found");
-}
-
-async function resizeSession(uid, workspaceId, sessionId, payload) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const resources = normalizeResources(payload);
-  const resizedAt = admin.firestore.Timestamp.now();
-  await sessionRef.update({
-    ...accrueSessionUsage(sessionSnap.data(), resizedAt),
-    resources,
-    status: "resizing",
-    updatedAt: resizedAt,
-  });
-  await patchSessionService(sessionRef, {...sessionSnap.data(), resources});
-  return toClientDoc(await sessionRef.get());
-}
-
-async function restartSession(uid, workspaceId, sessionId) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
-  const session = sessionSnap.data();
-  if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
-
-  const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
-  if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
-    await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session);
-  }
-  if (recreatingSessionService && isChromeSession(session)) {
-    await reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
-      create: false,
-      githubWorkspace: isGithubWorkspace(workspace),
-    });
-  }
-
-  const restartedAt = admin.firestore.Timestamp.now();
-  const browserAccessTokenSecret = session.browserAccessTokenSecret || crypto.randomBytes(32).toString("hex");
-  const restartNonce = Date.now().toString();
-  const mcpConfig = mcpConfigForRunner(workspace);
-  const restartUpdate = {
-    status: recreatingSessionService ? "provisioning" : "restarting",
-    browserAccessTokenSecret,
-    mcpConfig,
-    restartNonce,
-    restartedAt,
-    stoppedAt: null,
-    autoStoppedAt: null,
-    stopReason: null,
-    serviceUrl: null,
-    lastError: null,
-    updatedAt: restartedAt,
-  };
-
-  if (recreatingSessionService) {
-    Object.assign(restartUpdate, {
-      ...accrueSessionUsage(session, restartedAt),
-      usageAccountedAt: null,
-      activeSocketCount: 0,
-    });
-  }
-
-  await sessionRef.update(restartUpdate);
-
-  const restartedSession = {
-    ...session,
-    ...restartUpdate,
-    browserAccessTokenSecret,
-    restartNonce,
-    workspaceId,
-    workspaceStorageBucket: session.workspaceStorageBucket || workspace.bucket || DEFAULT_BUCKET,
-    workspaceStoragePrefix: session.workspaceStoragePrefix || workspace.storagePrefix,
-    serviceId: session.serviceId || `session-${sessionId.toLowerCase()}`,
-    serviceName: session.serviceName || cloudRunServiceName(session.region || DEFAULT_REGION, session.serviceId || `session-${sessionId.toLowerCase()}`),
-  };
-
-  if (recreatingSessionService) {
-    await provisionSessionService(workspace, sessionRef, restartedSession);
-  } else {
-    await patchSessionService(sessionRef, restartedSession, {restart: true});
-  }
-
-  return toClientDoc(await sessionRef.get());
-}
-
-async function stopSession(uid, workspaceId, sessionId) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  await sessionRef.update({
-    status: "stopping",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "manual"});
-  return toClientDoc(await sessionRef.get());
-}
-
-async function deleteSession(uid, workspaceId, sessionId) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  await sessionRef.update({
-    status: "deleting",
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  const serviceDeleted = await deleteSessionService(sessionRef, sessionSnap.data(), {reason: "deleted"});
-  if (!serviceDeleted) {
-    throw httpError(502, "session_delete_failed");
-  }
-  await sessionRef.delete();
-  return {ok: true};
-}
-
-
-async function getGitStatusSummary(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-
-  if (!session.serviceUrl) {
-    throw httpError(409, "session_not_running");
-  }
-  if (!session.shutdownToken) {
-    throw httpError(503, "runner_git_status_unavailable");
-  }
-
-  return requestRunnerGitStatus(session);
-}
-
-async function pullGit(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-
-  if (!session.serviceUrl) {
-    throw httpError(409, "session_not_running");
-  }
-  if (!session.shutdownToken) {
-    throw httpError(503, "runner_git_pull_unavailable");
-  }
-
-  return requestRunnerGitPull(session);
-}
-
-async function stageGit(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_stage_unavailable");
-  return requestRunnerGitStage(session, {paths: normalizeGitActionPayloadPaths(payload)});
-}
-
-async function unstageGit(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_unstage_unavailable");
-  return requestRunnerGitUnstage(session, {paths: normalizeGitActionPayloadPaths(payload)});
-}
-
-async function commitGit(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_commit_unavailable");
-  return requestRunnerGitCommit(session, {message: normalizeGitCommitMessage(payload)});
-}
-
-async function pushGit(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
-  if (!session.shutdownToken) throw httpError(503, "runner_git_push_unavailable");
-  if (cleanName(session.sourceType) === "github" && cleanName(session.sourceMode) === "connected") {
-    const installationId = cleanGithubNumericId(session.sourceInstallationId);
-    if (!installationId) {
-      throw httpError(503, "github_push_auth_unavailable");
+function normalizeRequestedSessionResources(payload, options = {}) {
+  try {
+    return normalizeSessionResources(payload, options);
+  } catch (error) {
+    if (error && error.code === SESSION_RESOURCE_ERROR_CODE) {
+      throw httpError(400, SESSION_RESOURCE_ERROR_CODE, error);
     }
-    const tokenResponse = await githubService.createGithubInstallationToken(installationId);
-    return requestRunnerGitPush(session, {
-      pushToken: tokenResponse.token,
-      pushUsername: "x-access-token",
-    });
+    throw error;
   }
-  return requestRunnerGitPush(session);
-}
-
-async function openPullRequest(uid, workspaceId, sessionId, payload) {
-  await requireWorkspace(uid, workspaceId);
-  const {sessionSnap} = await requireSession(uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
-  return githubService.openPullRequestForSession(session, payload, requestRunnerGitOpenPr);
-}
-
-async function requireSession(uid, workspaceId, sessionId) {
-  await requireWorkspace(uid, workspaceId);
-  const sessionRef = sessionCollection(workspaceId).doc(sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw httpError(404, "session_not_found");
-  const data = sessionSnap.data();
-  if (data.ownerUid && data.ownerUid !== uid) throw httpError(403, "session_forbidden");
-  return {sessionRef, sessionSnap};
 }
 
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
-}
-
-async function markSessionStopped(sessionRef, session, reason) {
-  const stoppedAt = admin.firestore.Timestamp.now();
-  const usageRecord = sessionUsageRecord(sessionRef, session, stoppedAt);
-  const stopped = {
-    status: "stopped",
-    activeSocketCount: 0,
-    serviceUrl: null,
-    stoppedAt,
-    lastError: null,
-    updatedAt: stoppedAt,
-  };
-  if (reason) stopped.stopReason = reason;
-  if (reason === "idle_timeout") {
-    stopped.autoStoppedAt = stoppedAt;
-  }
-  if (isChromeSession(session)) {
-    await db.runTransaction(async (transaction) => {
-      const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
-      const workspaceSnap = await transaction.get(workspaceRef);
-      if (usageRecord) transaction.set(usageRecord.ref, usageRecord.data, {merge: true});
-      transaction.update(sessionRef, stopped);
-      if (workspaceSnap.exists && workspaceSnap.data().activeChromeSessionId === sessionRef.id) {
-        transaction.update(workspaceRef, {
-          activeChromeSessionId: admin.firestore.FieldValue.delete(),
-          activeChromeSessionState: "released",
-          activeChromeSessionReleasedAt: stoppedAt,
-          updatedAt: stoppedAt,
-        });
-      }
-    });
-    return;
-  }
-  if (usageRecord) {
-    stopped.usageAccountedAt = stoppedAt;
-    const batch = db.batch();
-    batch.set(usageRecord.ref, usageRecord.data, {merge: true});
-    batch.update(sessionRef, stopped);
-    await batch.commit();
-    return;
-  }
-  await sessionRef.update(stopped);
 }
 
 async function releaseChromeWorkspaceSession(sessionRef, session, reason) {
@@ -1008,101 +686,6 @@ async function releaseChromeWorkspaceSession(sessionRef, session, reason) {
       activeChromeSessionReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-  });
-}
-
-function sessionSyncPolicyMetadata(workspace) {
-  const syncPolicy = workspace && workspace.syncPolicy ? workspace.syncPolicy : {mode: "blank", exclude: []};
-  return {
-    syncPolicyMode: cleanName(syncPolicy.mode || "blank") || "blank",
-    syncPolicyExclude: Array.isArray(syncPolicy.exclude) ?
-      syncPolicy.exclude
-          .map((value) => canonicalizeInternalStoragePath(cleanName(value)))
-          .filter(Boolean) :
-      [],
-  };
-}
-
-function sessionHomePolicyMetadata(workspace) {
-  const policy = workspace && workspace.homePolicy ? workspace.homePolicy : {};
-  const mode = cleanName(policy.mode || "persistent").toLowerCase() === "ephemeral" ? "ephemeral" : "persistent";
-  const path = cleanName(policy.path || "/root") || "/root";
-  return {
-    homeMode: mode,
-    homeDir: path,
-    homeStorageBucket: cleanName(policy.bucket || workspace.bucket || DEFAULT_BUCKET),
-    homeStoragePrefix: mode === "persistent" ?
-      canonicalizeInternalStoragePath(cleanName(policy.storagePrefix || homeStoragePrefix(workspace.storagePrefix))) :
-      "",
-    homeArchiveName: cleanName(policy.archiveName || "home.tar.gz") || "home.tar.gz",
-  };
-}
-
-function sessionEnvMetadata(workspace, payload) {
-  return {
-    workspaceEnv: normalizeEnvMap(workspace && workspace.env, {
-      errorCode: "invalid_workspace_env",
-      invalidNameErrorCode: "invalid_workspace_env_name",
-      reservedNameErrorCode: "reserved_workspace_env_name",
-    }),
-    sessionEnv: normalizeEnvMap(payload && payload.env, {
-      errorCode: "invalid_session_env",
-      invalidNameErrorCode: "invalid_session_env_name",
-      reservedNameErrorCode: "reserved_session_env_name",
-    }),
-  };
-}
-
-async function requestRunnerGitStatus(session) {
-  return requestRunnerJson(session, "/git/status", {
-    unavailableError: "runner_git_status_unavailable",
-  });
-}
-
-async function requestRunnerGitPull(session) {
-  return requestRunnerJson(session, "/git/pull", {
-    method: "POST",
-    unavailableError: "runner_git_pull_unavailable",
-  });
-}
-
-async function requestRunnerGitStage(session, body) {
-  return requestRunnerJson(session, "/git/stage", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_stage_unavailable",
-  });
-}
-
-async function requestRunnerGitUnstage(session, body) {
-  return requestRunnerJson(session, "/git/unstage", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_unstage_unavailable",
-  });
-}
-
-async function requestRunnerGitCommit(session, body) {
-  return requestRunnerJson(session, "/git/commit", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_commit_unavailable",
-  });
-}
-
-async function requestRunnerGitPush(session, body) {
-  return requestRunnerJson(session, "/git/push", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_push_unavailable",
-  });
-}
-
-async function requestRunnerGitOpenPr(session, body) {
-  return requestRunnerJson(session, "/git/open-pr", {
-    method: "POST",
-    body,
-    unavailableError: "runner_git_open_pr_unavailable",
   });
 }
 
@@ -1150,36 +733,4 @@ async function requestRunnerJson(session, routePath, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
-}
-
-function isIdleSession(session, now) {
-  const idleTimeoutMinutes = Math.min(
-      positiveNumber(session.idleTimeoutMinutes, DEFAULT_IDLE_TIMEOUT_MINUTES),
-      DEFAULT_IDLE_TIMEOUT_MINUTES,
-  );
-  const idleSince = latestTimestampMillis(
-      session.lastActivityAt,
-      session.lastConnectedAt,
-      session.lastDisconnectedAt,
-      session.updatedAt,
-      session.createdAt,
-  );
-  if (!idleSince) return false;
-  return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
-}
-
-function normalizeGitActionPayloadPaths(payload) {
-  const paths = payload && Array.isArray(payload.paths) ? payload.paths : null;
-  if (!paths || !paths.length) {
-    throw httpError(400, "invalid_git_paths");
-  }
-  return paths.map((value) => normalizeWorkspaceFilePath(value));
-}
-
-function normalizeGitCommitMessage(payload) {
-  const message = cleanName(payload && payload.message ? payload.message : "").trim();
-  if (!message) {
-    throw httpError(400, "missing_commit_message");
-  }
-  return message;
 }

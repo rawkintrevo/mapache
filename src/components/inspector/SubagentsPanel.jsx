@@ -1,8 +1,8 @@
-import {Edit3, Plus, RefreshCw, Save, Trash2, X} from "lucide-react";
+import {Edit3, Save, X} from "lucide-react";
 import {Button} from "../common/Button.jsx";
-import {DrawerList, DrawerListActionButton, DrawerListItem} from "../drawers/DrawerList.jsx";
-import {DrawerSection} from "../drawers/DrawerSection.jsx";
+import {DrawerList} from "../drawers/DrawerList.jsx";
 import {sessionSubagentHarness, sessionSupportsSubagents} from "../../utils/sessionHarnesses.js";
+import {InspectorResourcePanel, InspectorResourceRow} from "./InspectorResourcePanel.jsx";
 
 function SubagentRow({busy, subagent, onDeleteWorkspaceSubagent, onEditWorkspaceSubagent}) {
   const detail = (
@@ -13,27 +13,22 @@ function SubagentRow({busy, subagent, onDeleteWorkspaceSubagent, onEditWorkspace
   );
 
   return (
-    <DrawerListItem
-      actions={[
-        <DrawerListActionButton
-          disabled={busy || !onEditWorkspaceSubagent}
-          icon={<Edit3 aria-hidden="true" />}
-          key="edit"
-          label={`Edit ${subagent.name}`}
-          onClick={() => onEditWorkspaceSubagent?.(subagent)}
-        />,
-        <DrawerListActionButton
-          disabled={busy || !onDeleteWorkspaceSubagent}
-          icon={<Trash2 aria-hidden="true" />}
-          key="delete"
-          label={`Delete ${subagent.name}`}
-          tone="danger"
-          onClick={() => onDeleteWorkspaceSubagent?.(subagent.name)}
-        />,
-      ]}
+    <InspectorResourceRow
+      busy={busy}
       detail={detail}
       meta={subagent.schema || "subagent"}
+      resource={subagent}
       title={subagent.name || "unnamed subagent"}
+      edit={{
+        disabled: !onEditWorkspaceSubagent,
+        icon: <Edit3 aria-hidden="true" />,
+        onClick: onEditWorkspaceSubagent,
+      }}
+      onDelete={{
+        disabled: !onDeleteWorkspaceSubagent,
+        label: `Delete ${subagent.name}`,
+        onClick: (item) => onDeleteWorkspaceSubagent?.(item.name),
+      }}
     />
   );
 }
@@ -113,9 +108,6 @@ function SubagentsBody({selectedSession, status, subagents, onDeleteWorkspaceSub
   if (status.loading) {
     return <p className="empty">Loading workspace subagents...</p>;
   }
-  if (status.error) {
-    return <p className="empty">{status.error}</p>;
-  }
   if (!subagents.length) {
     return <p className="empty">No workspace subagents yet. Subagents created here are written to {harness?.examplePath || "/workspace/<subagent-path>"}.</p>;
   }
@@ -151,48 +143,27 @@ export function SubagentsPanel({
   const canManageSubagents = selectedSession && sessionSupportsSubagents(selectedSession);
 
   return (
-    <DrawerSection
-      actions={[
-        <Button
-          aria-label="New subagent"
-          disabled={status.loading || status.saving || !canManageSubagents || !onOpenWorkspaceSubagentModal}
-          icon={true}
-          key="new-subagent"
-          size="compact"
-          tooltip="New subagent"
-          variant="secondary"
-          onClick={() => {
-            onCancelWorkspaceSubagentEdit?.();
-            onOpenWorkspaceSubagentModal?.();
-          }}
-        >
-          <Plus aria-hidden="true" />
-        </Button>,
-        <Button
-          aria-label="Refresh"
-          disabled={status.loading || status.saving || !onRefreshWorkspaceSubagents}
-          icon={true}
-          key="refresh-subagents"
-          size="compact"
-          tooltip="Refresh"
-          variant="secondary"
-          onClick={onRefreshWorkspaceSubagents}
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>,
-      ]}
+    <InspectorResourcePanel
       className="skills-panel"
+      create={{
+        disabled: !canManageSubagents || !onOpenWorkspaceSubagentModal,
+        label: "New subagent",
+        onClick: () => {
+          onCancelWorkspaceSubagentEdit?.();
+          onOpenWorkspaceSubagentModal?.();
+        },
+      }}
       id="right-subagents"
+      description={harness ?
+        `${harness.label} discovers project subagents under ${harness.relativePath}; ${harness.restartHint.charAt(0).toLowerCase()}${harness.restartHint.slice(1)}` :
+        "Project subagents for the active Pi or Codex harness."}
+      refresh={{onClick: onRefreshWorkspaceSubagents}}
       state={state}
+      status={status}
       title="Subagents"
+      singularLabel="subagent"
       onToggleDrawerSection={onToggleDrawerSection}
     >
-      <p className="subtle">
-        {harness ?
-          `${harness.label} discovers project subagents under ${harness.relativePath}; ${harness.restartHint.charAt(0).toLowerCase()}${harness.restartHint.slice(1)}` :
-          "Project subagents for the active Pi or Codex harness."}
-      </p>
-      {status.message ? <p className="subtle">{status.message}</p> : null}
       <SubagentsBody
         selectedSession={selectedSession}
         status={status}
@@ -203,6 +174,6 @@ export function SubagentsPanel({
           onOpenWorkspaceSubagentModal?.();
         }}
       />
-    </DrawerSection>
+    </InspectorResourcePanel>
   );
 }

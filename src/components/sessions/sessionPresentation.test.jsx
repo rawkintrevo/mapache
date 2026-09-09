@@ -1,8 +1,9 @@
 import {render, screen, within} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {DrawerSessionList} from "../drawers/DrawerSessionList.jsx";
 import {SessionList} from "./SessionList.jsx";
-import {getSessionRunnerTags, getSessionStatusTone} from "./sessionPresentation.js";
+import {getSessionImageFreshness, getSessionResourceSummary, getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 
 const baseSession = {
   id: "session-1",
@@ -22,6 +23,25 @@ describe("session presentation helpers", () => {
     expect(getSessionStatusTone("stop_failed")).toBe("danger");
     expect(getSessionStatusTone("stopped")).toBe("neutral");
     expect(getSessionStatusTone("future_status")).toBe("unknown");
+    expect(getSessionStatusLabel({status: "provisioning", provisioningState: "queued"})).toBe("queued");
+    expect(getSessionStatusTone("queued")).toBe("warning");
+    expect(isRetryableProvisioningFailure({status: "provision_failed", provisioningRetryable: true})).toBe(true);
+    expect(isRetryableProvisioningFailure({status: "provision_failed", provisioningRetryable: false})).toBe(false);
+    expect(getSessionImageFreshness({status: "running", runnerImageFreshness: "latest"})).toMatchObject({
+      state: "latest",
+      label: "Latest image",
+      tone: "success",
+    });
+    expect(getSessionImageFreshness({status: "running", runnerImageFreshness: "stale"})).toMatchObject({
+      state: "stale",
+      label: "Stale image",
+      tone: "warning",
+    });
+    expect(getSessionImageFreshness({status: "stopped", runnerImageFreshness: "latest"})).toMatchObject({
+      state: "unknown",
+      label: "Unknown",
+      tone: "neutral",
+    });
   });
 
   test("derives runner tags from normalized keys and legacy image values", () => {
@@ -32,6 +52,12 @@ describe("session presentation helpers", () => {
           image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
         }),
     ).toEqual(["pi", "n64"]);
+  });
+
+  test("summarizes preset, custom, and missing resources safely", () => {
+    expect(getSessionResourceSummary({...baseSession, resources: {cpu: "1", memory: "2Gi"}})).toBe("Small · 1 vCPU / 2 GiB");
+    expect(getSessionResourceSummary({...baseSession, resources: {cpu: "1", memory: "1Gi"}})).toBe("Custom · 1 vCPU / 1 GiB");
+    expect(getSessionResourceSummary({...baseSession, resources: null})).toBe("Custom · — vCPU / —");
   });
 });
 
@@ -73,5 +99,28 @@ describe("session row rendering", () => {
     const row = screen.getByRole("button", {name: /^Pi smoke/i});
     expect(within(row).getByLabelText("Session status: running")).toBeInTheDocument();
     expect(within(row).getByText("default")).toBeInTheDocument();
+  });
+
+  test("shows retry action only for retryable provisioning failures", async () => {
+    const onRetryProvisioningSession = vi.fn();
+    const user = userEvent.setup();
+    render(
+        <DrawerSessionList
+          state={{
+            pendingOperations: {},
+            selectedSessionId: "",
+            selectedWorkspaceId: "workspace-1",
+            sessions: [{...baseSession, status: "provision_failed", provisioningRetryable: true}],
+          }}
+          onDeleteSession={vi.fn()}
+          onRetryProvisioningSession={onRetryProvisioningSession}
+          onSelectSession={vi.fn()}
+          onStopSession={vi.fn()}
+        />,
+    );
+
+    await user.click(screen.getByRole("button", {name: "Retry provisioning for Pi smoke"}));
+    expect(onRetryProvisioningSession).toHaveBeenCalledOnce();
+    expect(onRetryProvisioningSession).toHaveBeenCalledWith("session-1");
   });
 });

@@ -39,6 +39,17 @@ export function createPiPackagesState(overrides = {}) {
   };
 }
 
+export function createPiModelsState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    error: "",
+    models: [],
+    scopedModels: [],
+    ...overrides,
+  };
+}
+
 export function createWorkspaceSkillsState(overrides = {}) {
   return {
     loading: false,
@@ -104,7 +115,10 @@ export function createPiAuthState(overrides = {}) {
     message: "",
     providers: {},
     entries: {},
+    environmentEntries: [],
+    environmentForm: {id: "", name: "", label: "", value: ""},
     selectedProvider: "anthropic",
+    editEntryId: "",
     apiKey: "",
     entryLabel: "",
     openAiCodexDevice: null,
@@ -143,6 +157,23 @@ export function createGithubConnectionState(overrides = {}) {
     message: "",
     data: null,
     attempted: false,
+    ...overrides,
+  };
+}
+
+export function createGoogleWorkspaceState(overrides = {}) {
+  return {
+    loading: false,
+    connecting: false,
+    saving: false,
+    deleting: false,
+    error: "",
+    message: "",
+    data: null,
+    attempted: false,
+    accessLevel: "read",
+    editingConnectionId: "",
+    selectedServices: [],
     ...overrides,
   };
 }
@@ -187,6 +218,7 @@ export function createInitialState() {
     workspaceFilesUploadMessage: "",
     workspaceFilesTruncated: false,
     workspaceFilesWorkspaceId: null,
+    workspaceFileActiveDirectory: "",
     expandedFilePaths: new Set(),
     selectedWorkspaceFilePath: "",
     fileEditor: createFileEditorState(),
@@ -195,6 +227,7 @@ export function createInitialState() {
     activePage: "workspace",
     gitStatus: createGitStatusState(),
     piPackages: createPiPackagesState(),
+    piModels: createPiModelsState(),
     workspaceSkills: createWorkspaceSkillsState(),
     workspaceSubagents: createWorkspaceSubagentsState(),
     mcpServers: createMcpServersState(),
@@ -202,16 +235,23 @@ export function createInitialState() {
     pullRequestForm: createPullRequestFormState(),
     repoPicker: createRepoPickerState(),
     githubConnection: createGithubConnectionState(),
+    googleWorkspace: createGoogleWorkspaceState(),
     drawerCollapsed: false,
     rightDrawerCollapsed: true,
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
+    sessionEditModalSessionId: null,
+    workspaceEditModalOpen: false,
     workspaceSkillModalOpen: false,
     workspaceSubagentModalOpen: false,
     authModalOpen: false,
+    authReturnToManage: false,
     piAuthManageModalOpen: false,
-    busy: false,
-    busyMessage: "",
+    piModelsModalOpen: false,
+    genericEnvironmentModalOpen: false,
+    googleWorkspaceModalOpen: false,
+    pendingOperations: {},
+    operationSequence: 0,
     error: "",
   };
 }

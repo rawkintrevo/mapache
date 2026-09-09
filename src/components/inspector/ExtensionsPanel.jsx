@@ -1,10 +1,12 @@
-import {Download, RefreshCw} from "lucide-react";
+import {useState} from "react";
+import {Download} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {DrawerList} from "../drawers/DrawerList.jsx";
-import {DrawerSection} from "../drawers/DrawerSection.jsx";
 import {sessionHarness, sessionSupportsPackages} from "../../utils/sessionHarnesses.js";
 import {PackageInstallForm} from "./PackageInstallForm.jsx";
 import {PackageRow} from "./PackageRow.jsx";
+import {InspectorEditorModal} from "./InspectorEditorModal.jsx";
+import {InspectorResourcePanel} from "./InspectorResourcePanel.jsx";
 
 function PackageList({knownPackages, packages, status, userPackages, onInstallPiPackage, onRemovePiPackage, onUpdatePiPackage}) {
   return (
@@ -67,9 +69,6 @@ function ExtensionsBody(props) {
   if (status.loading) {
     return <p className="empty">Loading workspace extensions...</p>;
   }
-  if (status.error) {
-    return <p className="empty">{status.error}</p>;
-  }
   if (!packages.length && !knownPackages.length && !userPackages.length) {
     return <p className="empty">No workspace-local extensions are configured for this harness.</p>;
   }
@@ -81,6 +80,7 @@ export function ExtensionsPanel({
   selectedSession,
   state,
   onInstallPiPackage,
+  onNewPiPackage,
   onRefreshPiPackages,
   onRemovePiPackage,
   onToggleDrawerSection,
@@ -92,53 +92,54 @@ export function ExtensionsPanel({
   const packages = status.data && Array.isArray(status.data.packages) ? status.data.packages : [];
   const knownPackages = status.data && Array.isArray(status.data.knownPackages) ? status.data.knownPackages : [];
   const userPackages = status.data && Array.isArray(status.data.userPackages) ? status.data.userPackages : [];
+  const [editorOpen, setEditorOpen] = useState(false);
+  const openNew = () => {
+    onNewPiPackage?.();
+    setEditorOpen(true);
+  };
+  const closeEditor = () => {
+    setEditorOpen(false);
+    onNewPiPackage?.();
+  };
+  const submitEditor = async () => {
+    const installed = await onInstallPiPackage?.(status.installSource || "");
+    if (installed) setEditorOpen(false);
+  };
 
   return (
-    <DrawerSection
-      actions={[
-        <div className="git-status-actions" key="package-actions">
-          <Button
-            aria-label="Update all"
-            disabled={status.loading || status.installing || !onUpdatePiPackage || !packages.length}
-            icon={true}
-            size="compact"
-            tooltip="Update all"
-            variant="secondary"
-            onClick={() => onUpdatePiPackage?.()}
-          >
-            <Download aria-hidden="true" />
-          </Button>
-          <Button
-            aria-label="Refresh"
-            disabled={status.loading || status.installing || !onRefreshPiPackages}
-            icon={true}
-            size="compact"
-            tooltip="Refresh"
-            variant="secondary"
-            onClick={onRefreshPiPackages}
-          >
-            <RefreshCw aria-hidden="true" />
-          </Button>
-        </div>,
-      ]}
+    <InspectorResourcePanel
       className="extensions-panel"
+      create={{
+        disabled: !sessionSupportsPackages(selectedSession) || !onNewPiPackage,
+        label: "New extension",
+        onClick: openNew,
+      }}
+      description={sessionSupportsPackages(selectedSession) ?
+        `Workspace-local ${harness?.label || "harness"} packages. This view reflects terminal-side changes after refresh.` :
+        "Workspace-local package management is unavailable for this harness."}
+      extraActions={[
+        <Button
+          aria-label="Update all"
+          disabled={status.loading || status.installing || !onUpdatePiPackage || !packages.length}
+          icon={true}
+          key="update-all"
+          size="compact"
+          title="Update all"
+          tooltip="Update all"
+          variant="secondary"
+          onClick={() => onUpdatePiPackage?.()}
+        >
+          <Download aria-hidden="true" />
+        </Button>,
+      ]}
       id="right-extensions"
+      refresh={{onClick: onRefreshPiPackages}}
       state={state}
+      status={status}
       title="Extensions"
+      singularLabel="extension"
       onToggleDrawerSection={onToggleDrawerSection}
     >
-      <p className="subtle">
-        {sessionSupportsPackages(selectedSession) ?
-          `Workspace-local ${harness?.label || "harness"} packages. This view reflects terminal-side changes after refresh.` :
-          "Workspace-local package management is unavailable for this harness."}
-      </p>
-      {selectedSession && sessionSupportsPackages(selectedSession) ? (
-        <PackageInstallForm
-          status={status}
-          onInstallPiPackage={onInstallPiPackage}
-          onUpdatePiInstallSource={onUpdatePiInstallSource}
-        />
-      ) : null}
       {status.installMessage ? <p className="subtle">{status.installMessage}</p> : null}
       <ExtensionsBody
         knownPackages={knownPackages}
@@ -150,6 +151,25 @@ export function ExtensionsPanel({
         onRemovePiPackage={onRemovePiPackage}
         onUpdatePiPackage={onUpdatePiPackage}
       />
-    </DrawerSection>
+      {editorOpen ? (
+        <InspectorEditorModal
+          description="Install a package into the selected workspace and harness."
+          error={status.error}
+          message={status.installMessage}
+          onClose={closeEditor}
+          onSubmit={submitEditor}
+          saving={status.installing}
+          submitLabel="Install"
+          title="New extension"
+        >
+          <PackageInstallForm
+            embedded={true}
+            status={status}
+            onInstallPiPackage={onInstallPiPackage}
+            onUpdatePiInstallSource={onUpdatePiInstallSource}
+          />
+        </InspectorEditorModal>
+      ) : null}
+    </InspectorResourcePanel>
   );
 }

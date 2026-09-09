@@ -49,3 +49,29 @@ test("closes both bridge sides when the VNC socket fails", () => {
   assert.equal(tcp.destroyed, true);
   assert.equal(closed, 1);
 });
+
+test("allows a fresh noVNC connection after the supervised VNC socket is replaced", () => {
+  const sockets = [];
+  const bridge = createVncBridge({
+    net: {connect: () => {
+      const socket = new EventEmitter();
+      socket.destroyed = false;
+      socket.destroy = () => { socket.destroyed = true; };
+      sockets.push(socket);
+      return socket;
+    }},
+  });
+  const first = new EventEmitter();
+  first.readyState = 1;
+  first.close = () => {};
+  bridge.attach(first);
+  sockets[0].emit("error", new Error("x11vnc restarted"));
+
+  const second = new EventEmitter();
+  second.readyState = 1;
+  second.close = () => {};
+  bridge.attach(second);
+  assert.equal(sockets.length, 2);
+  assert.equal(sockets[0].destroyed, true);
+  assert.equal(sockets[1].destroyed, false);
+});

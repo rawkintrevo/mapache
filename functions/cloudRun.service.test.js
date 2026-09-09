@@ -14,6 +14,7 @@ const {
   requireRunnerServiceAccount,
   resourceLimits,
   runnerServiceAccountValue,
+  sessionEnvironmentEntryIds,
   sessionRunnerEnv,
   stringifySyncPolicyExclude,
   terminalCommandEnv,
@@ -68,6 +69,9 @@ assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.p
 assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/pi-session");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
+assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [" env-1 ", "env-1", ""]}), ["env-1"]);
+assert.deepStrictEqual(sessionEnvironmentEntryIds({genericEnvironmentEntryIds: ["legacy-env"]}), ["legacy-env"]);
+assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [], genericEnvironmentEntryIds: ["legacy-env"]}), []);
 
 assert.deepStrictEqual(terminalCommandEnv({terminalKind: "shell"}), {
   command: "bash",
@@ -116,6 +120,37 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(shellEnv.HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/home");
   assert.strictEqual(shellEnv.FOO, "workspace");
   assert.strictEqual(shellEnv.SHARED, "session");
+  const selectedEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    terminalKind: "shell",
+    environmentEntryIds: ["env-1"],
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }, {}, {buildGenericEnvironmentEnv: async (session, entryIds) => {
+    assert.strictEqual(session.ownerUid, "uid-1");
+    assert.deepStrictEqual(entryIds, ["env-1"]);
+    return {SERVICE_TOKEN: "secret-value"};
+  }}));
+  assert.strictEqual(selectedEnv.SERVICE_TOKEN, "secret-value");
+  assert.strictEqual(selectedEnv.environmentEntries, undefined);
+  const googleRuntimeEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }, {}, {
+    resolveGoogleMcpRuntime: async () => ({
+      mcpConfig: {mcpServers: {}},
+      env: {
+        GOOGLE_MCP_ACCESS_TOKEN: "short-lived-token",
+        GOOGLE_MCP_CONNECTION_ID: "connection-1",
+      },
+    }),
+  }));
+  assert.strictEqual(googleRuntimeEnv.GOOGLE_MCP_ACCESS_TOKEN, "short-lived-token");
+  assert.strictEqual(googleRuntimeEnv.GOOGLE_MCP_CONNECTION_ID, "connection-1");
   assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
   assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"-l\"]");
   assert.deepStrictEqual(JSON.parse(shellEnv.MCP_CONFIG), {
@@ -168,6 +203,19 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(chromeEnv.MAPACHE_BROWSER_STATUS_URL, "http://127.0.0.1:8080/browser/status");
   assert.strictEqual(chromeEnv.MAPACHE_BROWSER_ACTIVITY_URL, "http://127.0.0.1:8080/browser/activity");
 
+  const refreshedLegacyChromeEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-1",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+  }));
+  assert.strictEqual(JSON.parse(refreshedLegacyChromeEnv.RUNNER_CAPABILITIES).chat, true);
+
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",
     workspaceId: "workspace-1",
@@ -208,6 +256,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   });
   assert.strictEqual(service.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
+  assert.strictEqual(service.template.scaling.minInstanceCount, 1);
   assert.strictEqual(service.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(service.template.containers[0].resources.limits.cpu, "1");
   assert.strictEqual(envMap(service.template.containers[0].env).WORKSPACE_ID, "workspace-1");
@@ -219,6 +268,8 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     terminalKind: "shell",
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
   }, {restart: true});
+  assert.strictEqual(patch.template.scaling.minInstanceCount, 1);
+  assert.strictEqual(patch.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
 
@@ -316,6 +367,57 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(reconciledUpdates[0].status, "running");
   assert.strictEqual(reconciledUpdates[0].serviceUrl, "https://session-reconciled.example.run.app");
 
+  let existingServicePolls = 0;
+  const existingUpdates = [];
+  const existingClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        const error = new Error("already exists");
+        error.response = {status: 409, data: {error: {code: 409, status: "ALREADY_EXISTS"}}};
+        throw error;
+      }
+      if (method === "GET" && url.includes("/services/session-existing")) {
+        existingServicePolls += 1;
+        return {data: existingServicePolls === 1 ? {
+          terminalCondition: {state: "CONDITION_PENDING"},
+        } : {
+          uri: "https://session-existing.example.run.app",
+          terminalCondition: {state: "CONDITION_SUCCEEDED"},
+        }};
+      }
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      throw new Error(`Unexpected existing-service reconciliation request: ${method} ${url}`);
+    },
+  };
+  const existingService = createCloudRunService({
+    auth: {getClient: async () => existingClient},
+    operationTimeoutMs: 4000,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await existingService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, {
+    update: async (update) => existingUpdates.push(update),
+  }, {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "existing",
+    serviceId: "session-existing",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+  });
+  assert.strictEqual(existingServicePolls, 2);
+  assert.strictEqual(existingUpdates.length, 1);
+  assert.strictEqual(existingUpdates[0].status, "running");
+  assert.strictEqual(existingUpdates[0].serviceUrl, "https://session-existing.example.run.app");
+
   const timeoutRequests = [];
   const timeoutUpdates = [];
   const timeoutClient = {
@@ -365,6 +467,72 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(timeoutUpdates.length, 1);
   assert.strictEqual(timeoutUpdates[0].status, "provision_failed");
   assert.match(timeoutUpdates[0].lastError, /timed out after 4000ms/);
+
+  const idempotentSession = {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "idempotent",
+    serviceId: "session-idempotent",
+    region: "us-central1",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "shell",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    capabilities: {terminal: true, preview: false},
+    status: "provisioning",
+    provisioningOperationId: "operation-idempotent",
+    provisioningState: "pending",
+    provisioningAttempt: 0,
+    provisioningRetryable: false,
+  };
+  let idempotentDoc = {...idempotentSession};
+  let idempotentPostCount = 0;
+  const idempotentRef = {
+    get: async () => ({exists: true, data: () => idempotentDoc}),
+    update: async (updates) => Object.assign(idempotentDoc, updates),
+  };
+  const idempotentDb = {
+    runTransaction: async (callback) => callback({
+      get: async () => ({exists: true, data: () => idempotentDoc}),
+      update: (ref, updates) => Object.assign(idempotentDoc, updates),
+    }),
+  };
+  const idempotentClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        idempotentPostCount += 1;
+        return {data: {name: "operations/idempotent-create"}};
+      }
+      if (method === "GET" && url.endsWith("operations/idempotent-create")) {
+        return {data: {done: true}};
+      }
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      if (method === "GET" && url.includes("/services/session-idempotent")) {
+        return {data: {uri: "https://session-idempotent.example.run.app"}};
+      }
+      throw new Error(`Unexpected idempotent provisioning request: ${method} ${url}`);
+    },
+  };
+  const idempotentService = createCloudRunService({
+    auth: {getClient: async () => idempotentClient},
+    db: idempotentDb,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await idempotentService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, idempotentRef, idempotentSession);
+  await idempotentService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, idempotentRef, idempotentSession);
+  assert.strictEqual(idempotentPostCount, 1);
+  assert.strictEqual(idempotentDoc.provisioningAttempt, 1);
+  assert.strictEqual(idempotentDoc.provisioningState, "completed");
+  assert.strictEqual(idempotentDoc.provisioningCloudRunOperationName, "operations/idempotent-create");
 
   if (originalProject === undefined) delete process.env.GCLOUD_PROJECT;
   else process.env.GCLOUD_PROJECT = originalProject;

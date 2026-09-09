@@ -1,16 +1,15 @@
 import "./SessionDetail.css";
-import {Copy, ExternalLink, Mail, RotateCcw, Share2, UploadCloud} from "lucide-react";
-import {useEffect, useRef, useState} from "react";
+import {Copy, ExternalLink, Mail, RotateCcw, Share2, SlidersHorizontal, UploadCloud} from "lucide-react";
+import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {GitStatusPanel} from "./GitStatusPanel.jsx";
-
-const cpuOptions = ["1", "2", "4"];
-const memoryOptions = ["1Gi", "2Gi", "4Gi", "8Gi"];
-
-function formatMemory(value) {
-  return value.replace("Gi", " GiB");
-}
+import {PiChatCanvas} from "./PiChatCanvas.jsx";
+import {ResourceUtilization} from "./ResourceUtilization.jsx";
+import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
+import {derivePiChatSocketUrl} from "../../utils/piChat.js";
+import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
+import {useResourceMetrics} from "./useResourceMetrics.js";
 
 export function SessionDetail({
   busy,
@@ -22,9 +21,10 @@ export function SessionDetail({
   onCommitGit,
   onGetSessionAccessUrls,
   onOpenPullRequest,
+  onOpenPiModels,
   onPullGit,
   onPushGit,
-  onResizeSession,
+  onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
   onCloseSshSessionForward,
@@ -34,7 +34,6 @@ export function SessionDetail({
   onUpdateGitCommitMessage,
   onUpdateSshForwardPort,
 }) {
-  const formRef = useRef(null);
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [accessUrls, setAccessUrls] = useState(null);
   const [accessError, setAccessError] = useState("");
@@ -45,8 +44,21 @@ export function SessionDetail({
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
+  const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
+  const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
+  const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
   const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
+  const isProvisioning = session.status === "provisioning";
+  const isProvisioningFailure = session.status === "provision_failed";
+  const isRetryableFailure = isRetryableProvisioningFailure(session);
+  const imageFreshness = getSessionImageFreshness(session);
+  const isStaleImage = imageFreshness.state === "stale";
+  const metrics = useResourceMetrics({
+    enabled: Boolean(session.status === "running" && hasRunnerUrl && !isSshSession && metricsSocketUrl),
+    sessionId: session.id,
+    socketUrl: metricsSocketUrl || "",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -75,16 +87,6 @@ export function SessionDetail({
     setPublishOpen(false);
   }, [workspaceId, session.id]);
 
-  const handleResize = () => {
-    const form = formRef.current;
-    if (!form) return;
-    const formData = new FormData(form);
-    onResizeSession(session.id, {
-      cpu: formData.get("resizeCpu"),
-      memory: formData.get("resizeMemory"),
-    });
-  };
-
   const handleSharePreview = async () => {
     if (!workspaceId || !session.id || !onShareSessionPreview) return;
     setShareState((current) => ({...current, loading: true, error: "", copied: false}));
@@ -105,8 +107,9 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
-      {capabilities.preview || capabilities.chrome ? (
-        <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
+      <div className="canvas-header">
+        {hasChat || capabilities.preview || capabilities.chrome ? (
+          <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
             role="tab"
@@ -115,6 +118,16 @@ export function SessionDetail({
           >
             Terminal
           </Button>
+          {hasChat ? (
+            <Button
+              aria-selected={activeCanvas === "chat"}
+              role="tab"
+              variant={activeCanvas === "chat" ? "primary" : "secondary"}
+              onClick={() => setActiveCanvas("chat")}
+            >
+              Chat
+            </Button>
+          ) : null}
           {capabilities.preview ? (
             <Button
               aria-selected={activeCanvas === "preview"}
@@ -137,10 +150,40 @@ export function SessionDetail({
               Chrome
             </Button>
           ) : null}
+          </div>
+        ) : null}
+        {metricsSocketUrl && !isSshSession && session.status === "running" ? (
+          <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} />
+        ) : null}
+      </div>
+      {isProvisioning ? (
+        <div aria-live="polite" className="provisioning-status">
+          <strong>{session.provisioningState === "queued" ? "Queued for provisioning" : "Provisioning in progress"}</strong>
+          <span>The session will become available when its runner is ready.</span>
+        </div>
+      ) : null}
+      {isProvisioningFailure ? (
+        <div aria-live="polite" className="provisioning-status provisioning-status--failure">
+          <strong>Provisioning failed</strong>
+          <span>{isRetryableFailure ? "Retry provisioning to try again." : "Restart the session to try again."}</span>
+        </div>
+      ) : null}
+      {imageFreshness.state !== "unknown" ? (
+        <div className={`image-freshness-status image-freshness-status--${imageFreshness.tone}`} role="status">
+          <strong>{imageFreshness.label}</strong>
+          <span>{imageFreshness.message}</span>
         </div>
       ) : null}
       <div className="canvas-shell">
-        {activeCanvas === "chrome" && capabilities.chrome ? (
+        {activeCanvas === "chat" && capabilities.chat ? (
+          <PiChatCanvas
+            error={accessError || (!chatSocketUrl && accessUrls ? "chat_access_unavailable" : "")}
+            onOpenTerminal={() => setActiveCanvas("terminal")}
+            sessionId={session.id}
+            sessionName={session.name}
+            socketUrl={chatSocketUrl}
+          />
+        ) : activeCanvas === "chrome" && capabilities.chrome ? (
           hasBrowser ? (
             <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
           ) : (
@@ -185,21 +228,14 @@ export function SessionDetail({
           </div>
         )}
       </div>
-      <form className="toolbar" ref={formRef}>
-        <label>
-          <span>CPU</span>
-          <select defaultValue={session.resources.cpu} name="resizeCpu">
-            {cpuOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Memory</span>
-          <select defaultValue={session.resources.memory} name="resizeMemory">
-            {memoryOptions.map((value) => <option key={value} value={value}>{formatMemory(value)}</option>)}
-          </select>
-        </label>
+      <div className="toolbar">
         <div className="session-actions">
-          <Button disabled={busy} onClick={handleResize}>Resize</Button>
+          {session.harnessId === "pi" || session.terminalKind === "pi" ? (
+            <Button disabled={busy || !hasRunnerUrl} variant="secondary" onClick={onOpenPiModels}>
+              <SlidersHorizontal aria-hidden="true" />
+              Models
+            </Button>
+          ) : null}
           {capabilities.preview ? (
             <>
               <Button
@@ -216,13 +252,32 @@ export function SessionDetail({
               </Button>
             </>
           ) : null}
-          <Button disabled={busy} variant="secondary" onClick={() => onRestartSession(session.id)}>
-            <RotateCcw aria-hidden="true" />
-            Restart
-          </Button>
+          {isRetryableFailure ? (
+            <Button
+              disabled={busy}
+              title="Retry provisioning"
+              variant="secondary"
+              onClick={() => onRetryProvisioningSession?.(session.id)}
+            >
+              <RotateCcw aria-hidden="true" />
+              Retry provisioning
+            </Button>
+          ) : isProvisioning ? null : (
+            <Button
+              aria-label={isStaleImage ? "Restart session to pick up the latest container image" : "Restart"}
+              className={isStaleImage ? "session-restart-button--stale" : ""}
+              disabled={busy}
+              title={isStaleImage ? "Restart to pick up the latest container image" : "Restart"}
+              variant="secondary"
+              onClick={() => onRestartSession(session.id)}
+            >
+              <RotateCcw aria-hidden="true" />
+              Restart
+            </Button>
+          )}
 
         </div>
-      </form>
+      </div>
       {capabilities.preview ? (
         <div className="preview-share-panel" aria-live="polite">
           {shareState.error ? (

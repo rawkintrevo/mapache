@@ -9,6 +9,7 @@ const {
   defaultPreviewStaticRoot,
   firebaseStorageBucket,
   httpError,
+  isGoogleAlreadyExists,
   isGoogleNotFound,
   latestTimestampMillis,
   normalizeServiceAccountEmail,
@@ -97,6 +98,9 @@ else process.env.GCLOUD_PROJECT = originalProject;
 assert.strictEqual(publicGoogleError({message: "failed"}), "failed");
 assert.strictEqual(publicGoogleError({response: {data: {error: {message: "denied"}}}}), "{\"error\":{\"message\":\"denied\"}}");
 assert.strictEqual(publicGoogleError(null), "Cloud Run request failed.");
+assert.strictEqual(isGoogleAlreadyExists({code: 409}), true);
+assert.strictEqual(isGoogleAlreadyExists({response: {data: {error: {code: 409}}}}), true);
+assert.strictEqual(Boolean(isGoogleAlreadyExists({code: 403})), false);
 assert.strictEqual(isGoogleNotFound({code: 404}), true);
 assert.strictEqual(isGoogleNotFound({response: {data: {error: {code: 404}}}}), true);
 assert.strictEqual(Boolean(isGoogleNotFound({code: 403})), false);

@@ -1,86 +1,55 @@
 "use strict";
 
 const path = require("path");
+const sharedCatalog = require("./generatedCatalog.json");
 
-const PI_AUTH_PROVIDER_KEYS = Object.freeze([
-  "anthropic",
-  "ant-ling",
-  "azure-openai-responses",
-  "openai",
-  "deepseek",
-  "nvidia",
-  "google",
-  "mistral",
-  "groq",
-  "cerebras",
-  "cloudflare-ai-gateway",
-  "cloudflare-workers-ai",
-  "xai",
-  "openrouter",
-  "vercel-ai-gateway",
-  "zai",
-  "zai-coding-cn",
-  "opencode",
-  "opencode-go",
-  "huggingface",
-  "fireworks",
-  "together",
-  "kimi-coding",
-  "minimax",
-  "minimax-cn",
-  "xiaomi",
-  "xiaomi-token-plan-cn",
-  "xiaomi-token-plan-ams",
-  "xiaomi-token-plan-sgp",
-  "openai-codex",
-  "github-cli",
-]);
+const PI_AUTH_PROVIDER_KEYS = Object.freeze(sharedCatalog.harnesses.pi.auth.providerKeys || []);
+
+function sharedCapability(harnessId, capability, overrides = {}) {
+  return {...(sharedCatalog.harnesses[harnessId]?.[capability] || {}), ...overrides};
+}
 
 const HARNESSES = Object.freeze({
   shell: Object.freeze({
     id: "shell",
     label: "Shell",
     terminalKind: "shell",
-    auth: {supported: false},
-    skills: {supported: false},
-    mcp: {supported: false, sharedPath: ".mcp.json"},
-    subagents: {supported: false},
-    packages: {supported: false},
+    auth: sharedCapability("shell", "auth"),
+    skills: sharedCapability("shell", "skills"),
+    mcp: sharedCapability("shell", "mcp"),
+    subagents: sharedCapability("shell", "subagents"),
+    packages: sharedCapability("shell", "packages"),
   }),
   ssh: Object.freeze({
     id: "ssh",
     label: "SSH",
     terminalKind: "ssh",
-    auth: {supported: false},
-    skills: {supported: false},
-    mcp: {supported: false, sharedPath: ".mcp.json"},
-    subagents: {supported: false},
-    packages: {supported: false},
+    auth: sharedCapability("ssh", "auth"),
+    skills: sharedCapability("ssh", "skills"),
+    mcp: sharedCapability("ssh", "mcp"),
+    subagents: sharedCapability("ssh", "subagents"),
+    packages: sharedCapability("ssh", "packages"),
   }),
   pi: Object.freeze({
     id: "pi",
     label: "Pi",
     terminalKind: "pi",
-    auth: {
-      supported: true,
+    auth: sharedCapability("pi", "auth", {
       storagePath: (config) => path.join(config.piAgentDir, "auth.json"),
       selectionField: "authSelection",
       providerKeys: PI_AUTH_PROVIDER_KEYS,
-    },
-    skills: {
-      supported: true,
+    }),
+    skills: sharedCapability("pi", "skills", {
       relativePath: ".pi/skills",
       absolutePath: (config) => path.join(config.workspaceDir, ".pi", "skills"),
       legacyFileSupport: true,
       restartHint: "Restart Pi in the terminal if a running agent needs to rescan skills.",
-    },
-    mcp: {
-      supported: true,
+    }),
+    mcp: sharedCapability("pi", "mcp", {
       sharedPath: ".mcp.json",
       harnessSpecificPath: ".pi/mcp.json",
-    },
-    subagents: {
-      supported: true,
+    }),
+    subagents: sharedCapability("pi", "subagents", {
       relativePath: ".pi/agents",
       absolutePath: (config) => path.join(config.workspaceDir, ".pi", "agents"),
       fileExtension: ".md",
@@ -88,41 +57,37 @@ const HARNESSES = Object.freeze({
       restartHint: "Restart Pi in the terminal if a running agent should reload subagents.",
       chainsRelativePath: ".pi/chains",
       settingsRelativePath: ".pi/settings.json",
-    },
-    packages: {supported: true},
+    }),
+    packages: sharedCapability("pi", "packages"),
   }),
   codex: Object.freeze({
     id: "codex",
     label: "Codex",
     terminalKind: "codex",
-    auth: {
-      supported: true,
+    auth: sharedCapability("codex", "auth", {
       storagePath: (config) => path.join(config.codexHomeDir, "auth.json"),
       selectionField: "authSelection",
       providerKeys: ["openai", "openai-codex", "github-cli"],
-    },
-    skills: {
-      supported: true,
+    }),
+    skills: sharedCapability("codex", "skills", {
       relativePath: ".agents/skills",
       absolutePath: (config) => path.join(config.workspaceDir, ".agents", "skills"),
       legacyFileSupport: false,
       restartHint: "Restart Codex in the terminal if a running agent needs to rescan skills.",
-    },
-    mcp: {
-      supported: true,
+    }),
+    mcp: sharedCapability("codex", "mcp", {
       sharedPath: ".mcp.json",
       harnessSpecificPath: ".codex/config.toml",
-    },
-    subagents: {
-      supported: true,
+    }),
+    subagents: sharedCapability("codex", "subagents", {
       relativePath: ".codex/agents",
       absolutePath: (config) => path.join(config.workspaceDir, ".codex", "agents"),
       fileExtension: ".toml",
       schema: "codex-agent-toml",
       restartHint: "Restart Codex in the terminal if a running agent should reload subagents.",
       configPath: ".codex/config.toml",
-    },
-    packages: {supported: false},
+    }),
+    packages: sharedCapability("codex", "packages"),
   }),
 });
 

@@ -14,6 +14,7 @@ function config(overrides = {}) {
     chromeProfileDir: "/tmp/mapache-chrome-profile",
     chromeViewport: {width: 1440, height: 1000},
     chromeVncPort: 5900,
+    chromeStartupTimeoutMs: 1000,
     ...overrides,
   };
 }
@@ -34,6 +35,7 @@ test("starts the desktop stack in order and binds browser services to loopback",
       mkdir: async () => {},
       rm: async () => {},
     }},
+    displayReady: async () => true,
   });
 
   await service.start();
@@ -64,6 +66,7 @@ test("restarts one isolated Chromium crash and then reports later failures", asy
       return child;
     },
     fs: {promises: {mkdir: async () => {}, rm: async () => {}}},
+    displayReady: async () => true,
   });
 
   await service.start();
@@ -75,5 +78,70 @@ test("restarts one isolated Chromium crash and then reports later failures", asy
 
   children.filter((entry) => entry.command === "chromium")[1].child.emit("exit", 1, null);
   assert.equal(service.status().state, "failed");
+  await service.stop();
+});
+
+test("restarts desktop dependencies with bounded retries", async () => {
+  const children = [];
+  const service = createChromeDesktopService(config({
+    chromeDesktopRestartMaxAttempts: 2,
+    chromeDesktopRestartBackoffMs: 1,
+  }), {
+    spawn: (command) => {
+      const child = new EventEmitter();
+      child.pid = children.length + 1;
+      child.kill = () => {};
+      children.push({command, child});
+      return child;
+    },
+    fs: {promises: {mkdir: async () => {}, rm: async () => {}}},
+    displayReady: async () => true,
+  });
+
+  await service.start();
+  for (const name of ["windowManager", "taskbar", "vnc"]) {
+    const original = children.find((entry) => entry.command === ({
+      windowManager: "openbox",
+      taskbar: "tint2",
+      vnc: "x11vnc",
+    })[name]);
+    original.child.emit("exit", 1, null);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(children.filter((entry) => entry.command === original.command).length, 2);
+    assert.equal(service.status().state, "running");
+  }
+
+  const restartedVnc = children.filter((entry) => entry.command === "x11vnc")[1].child;
+  restartedVnc.emit("exit", 1, null);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const secondRestartedVnc = children.filter((entry) => entry.command === "x11vnc")[2].child;
+  secondRestartedVnc.emit("exit", 1, null);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(children.filter((entry) => entry.command === "x11vnc").length, 3);
+  assert.equal(service.status().state, "failed");
+  assert.equal(service.status().processRestartAttempts.vnc, 2);
+  assert.equal(service.status().processErrors.vnc, "vnc failed; inspect the runner browser status and container logs");
+  await service.stop();
+});
+
+test("waits for Xvfb display readiness before starting dependent processes", async () => {
+  const calls = [];
+  let displayReady = false;
+  const service = createChromeDesktopService(config({chromeStartupTimeoutMs: 100}), {
+    spawn: (command) => {
+      calls.push(command);
+      const child = new EventEmitter();
+      child.kill = () => {};
+      return child;
+    },
+    fs: {promises: {mkdir: async () => {}, rm: async () => {}}},
+    displayReady: async () => displayReady,
+    delay: async () => {
+      displayReady = true;
+    },
+  });
+
+  await service.start();
+  assert.deepEqual(calls, ["Xvfb", "openbox", "tint2", "chromium", "x11vnc"]);
   await service.stop();
 });

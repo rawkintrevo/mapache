@@ -1,6 +1,7 @@
 import {LogOut, RefreshCw, ShieldCheck, User} from "lucide-react";
 import {useState} from "react";
 import {Button} from "../common/Button.jsx";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 function userLabel(state) {
   return (state.profile && (state.profile.displayName || state.profile.email)) ||
@@ -32,6 +33,7 @@ export function UserMenu({state, onRefresh, onShowAdmin, onShowProfile, onSignOu
   const label = userLabel(state);
   const email = userEmail(state);
   const photo = userPhoto(state);
+  const busy = hasPendingOperations(state.pendingOperations);
 
   return (
     <div className="drawer-user-menu">
@@ -78,19 +80,19 @@ export function UserMenu({state, onRefresh, onShowAdmin, onShowProfile, onSignOu
             <li>
               <button
                 className="drawer-user-list-item"
-                disabled={state.busy}
+                disabled={busy}
                 role="menuitem"
                 type="button"
                 onClick={onRefresh}
               >
                 <RefreshCw aria-hidden="true" />
-                {state.busy ? "Working..." : "Refresh"}
+                {busy ? "Working..." : "Refresh"}
               </button>
             </li>
             <li>
               <button
                 className="drawer-user-list-item"
-                disabled={state.busy}
+                disabled={busy}
                 role="menuitem"
                 type="button"
                 onClick={onSignOut}

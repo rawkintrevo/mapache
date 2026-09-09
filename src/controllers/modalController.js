@@ -1,6 +1,8 @@
-export function createModalController({state, render, loadPiAuth}) {
+import {APP_ACTIONS} from "../state/appStore.js";
+
+export function createModalController({state, dispatch = () => {}, render, loadPiAuth, loadPiModels}) {
   function showProfile() {
-    state.activePage = "profile";
+    dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
     render();
   }
@@ -16,6 +18,17 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
+  function openSessionEditModal(sessionId) {
+    if (!state.sessions.some((session) => session.id === sessionId)) return;
+    state.sessionEditModalSessionId = sessionId;
+    render();
+  }
+
+  function closeSessionEditModal() {
+    state.sessionEditModalSessionId = null;
+    render();
+  }
+
   function openWorkspaceModal() {
     state.workspaceModalOpen = true;
     render();
@@ -23,6 +36,17 @@ export function createModalController({state, render, loadPiAuth}) {
 
   function closeWorkspaceModal() {
     state.workspaceModalOpen = false;
+    render();
+  }
+
+  function openWorkspaceEditModal() {
+    if (!state.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)) return;
+    state.workspaceEditModalOpen = true;
+    render();
+  }
+
+  function closeWorkspaceEditModal() {
+    state.workspaceEditModalOpen = false;
     render();
   }
 
@@ -36,6 +60,25 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
+  function openGoogleWorkspaceModal(connection = null) {
+    const enabledServices = Array.isArray(connection?.enabledServices) ? connection.enabledServices : [];
+    state.googleWorkspace = {
+      ...state.googleWorkspace,
+      accessLevel: "read",
+      editingConnectionId: connection?.connectionId || "",
+      error: "",
+      message: "",
+      selectedServices: enabledServices,
+    };
+    state.googleWorkspaceModalOpen = true;
+    render();
+  }
+
+  function closeGoogleWorkspaceModal() {
+    state.googleWorkspaceModalOpen = false;
+    render();
+  }
+
   function openWorkspaceSubagentModal() {
     state.workspaceSubagentModalOpen = true;
     render();
@@ -46,23 +89,29 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
-  function openAuthModal(provider = "") {
-    const selectedProvider = typeof provider === "string" ? provider.trim() : "";
-    if (selectedProvider) {
-      state.piAuth = {
-        ...state.piAuth,
-        selectedProvider,
-        openAiCodexDevice: null,
-        error: "",
-        message: "",
-      };
-    }
+  function openAuthModal(providerOrEntry = "") {
+    const entry = providerOrEntry?.providerKey ? providerOrEntry : null;
+    const selectedProvider = entry?.providerKey || (typeof providerOrEntry === "string" ? providerOrEntry.trim() : "");
+    state.authReturnToManage = Boolean(state.piAuthManageModalOpen);
+    state.piAuthManageModalOpen = false;
+    state.piAuth = {
+      ...state.piAuth,
+      selectedProvider: selectedProvider || state.piAuth.selectedProvider,
+      editEntryId: entry?.id || "",
+      entryLabel: entry?.label || "",
+      apiKey: "",
+      openAiCodexDevice: null,
+      error: "",
+      message: "",
+    };
     state.authModalOpen = true;
     render();
   }
 
   function closeAuthModal() {
     state.authModalOpen = false;
+    if (state.authReturnToManage) state.piAuthManageModalOpen = true;
+    state.authReturnToManage = false;
     render();
   }
 
@@ -72,24 +121,55 @@ export function createModalController({state, render, loadPiAuth}) {
     render();
   }
 
+  function openGenericEnvironmentModal() {
+    state.genericEnvironmentModalOpen = true;
+    render();
+  }
+
+  function closeGenericEnvironmentModal() {
+    state.genericEnvironmentModalOpen = false;
+    render();
+  }
+
   function closePiAuthManageModal() {
     state.piAuthManageModalOpen = false;
     render();
   }
 
+  function openPiModelsModal() {
+    state.piModelsModalOpen = true;
+    void loadPiModels();
+    render();
+  }
+
+  function closePiModelsModal() {
+    state.piModelsModalOpen = false;
+    render();
+  }
+
   return {
     closeAuthModal,
+    closeGoogleWorkspaceModal,
     closePiAuthManageModal,
+    closePiModelsModal,
+    closeSessionEditModal,
     closeSessionModal,
     closeWorkspaceSubagentModal,
     closeWorkspaceSkillModal,
     closeWorkspaceModal,
+    closeWorkspaceEditModal,
     openAuthModal,
+    openGoogleWorkspaceModal,
     openPiAuthManageModal,
+    openPiModelsModal,
+    openGenericEnvironmentModal,
+    openSessionEditModal,
+    closeGenericEnvironmentModal,
     openSessionModal,
     openWorkspaceSubagentModal,
     openWorkspaceSkillModal,
     openWorkspaceModal,
+    openWorkspaceEditModal,
     showProfile,
   };
 }

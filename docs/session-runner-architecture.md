@@ -10,30 +10,38 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 
 ## Canonical Owner
 
-- Entrypoint/router: `session-runner/server.js`
+- Entrypoint/composition root: `session-runner/server.js`
+- HTTP route registrars: `session-runner/routes/browserPreviewRoutes.js`, `sshRoutes.js`, `workspaceRoutes.js`, `agentRoutes.js`, and `gitRoutes.js`
+- Startup/shutdown coordination: `session-runner/lib/runnerLifecycle.js`
 - Browser QA orchestration: `session-runner/lib/browserQa.js` and `session-runner/bin/mapache-preview-qa.js`
 - Shared config: `session-runner/lib/config.js`
+- Cloud Storage/Firestore client identity: `session-runner/lib/services.js`
 - Harness metadata and startup hooks: `session-runner/lib/harnesses/`
 - Terminal and PTY: `session-runner/lib/terminal.js`
-- Preview gateway: `session-runner/lib/preview.js`
+- Live resource metrics: `session-runner/lib/resourceMetrics.helpers.js`, `resourceMetrics.service.js`, and `resourceMetricsWebSocket.js`
+- Pi Chat transcript and WebSocket bridge: `session-runner/lib/piChatTranscript.js`, `piChat.service.js`, and `piChatWebSocket.js`
+- Preview gateway facade: `session-runner/lib/preview.js`
+- Preview modes and shared contracts: `session-runner/lib/previewStatic.js`, `previewProxy.js`, `previewN64.js`, and `previewHelpers.js`
+- Preview logging and shared-preview export: `session-runner/lib/previewLog.service.js` and `previewShare.service.js`
 - Workspace restore/sync: `session-runner/lib/workspace.js`
 - Workspace archives: `session-runner/lib/workspaceArchives.service.js`
 - Chrome desktop/profile/access: `session-runner/lib/chromeDesktop.js`, `chromeRuntime.js`, `chromeProfile.service.js`, `chromeProfileSnapshot.service.js`, `browserAccess.js`, and `vncBridge.js`
 - Chrome harness integration: `session-runner/lib/mcpConfig.service.js`, `browserQa.js`, `workspaceSkillCatalog.js`, `seeded-skills/mapache-chrome/`, and `bin/mapache-chrome-status.js`
 - GitHub workspace reconstruction: `session-runner/lib/workspaceGithub.service.js`
-- Harness-backed auth materialization: `session-runner/lib/workspaceAuth.service.js`, `session-runner/lib/workspacePiAuth.service.js`
-- Git endpoints: `session-runner/lib/git.js` and `git*.service.js`
-- Pi/package/workspace-skill/subagent endpoints: `session-runner/lib/pi.js`, `piPackage.service.js`, `workspaceSkill.service.js`, `piSkill.service.js`, `workspaceSubagent.service.js`
+- Harness-backed auth materialization: `session-runner/lib/workspaceAuth.service.js`
+- Git facade and manual endpoints: `session-runner/lib/git.js` and `git*.service.js`
+- GitHub automation lifecycle: `session-runner/lib/gitAutomation.service.js`
+- Pi/package/workspace-skill/subagent endpoints: `session-runner/lib/pi.js`, `piPackage.service.js`, `workspaceSkill.service.js`, `workspaceSubagent.service.js`
 - Harness-neutral seeded skill catalog and profiles: `session-runner/lib/workspaceSkillCatalog.js` and `session-runner/seeded-skills/`
 - Codex workspace guidance and native skill materialization: `session-runner/lib/codex.js`, `session-runner/lib/codexSeededWorkspace.service.js`, and `session-runner/seeded-codex/AGENTS.md`
 
 ## Current Behavior
 
-`server.js` bootstraps Express, configures route gates, restores workspace state, starts the terminal process, and wires terminal/preview/Git/Pi/Chrome routes. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve. Harness resolution now happens once at startup through `createRunnerHarnessRegistry()`, which provides ordered hooks for config, auth, MCP, seeded skills, and future harness-specific initialization.
+`server.js` bootstraps Express, constructs the shared services and HTTP/WebSocket servers, delegates route registration to focused modules, and wires the shared upgrade dispatcher. `runnerLifecycle.js` owns the ordered workspace restore, Chrome startup, harness materialization, Git automation setup, snapshot startup, sync-loop startup, and server listen sequence. It also owns shutdown ordering so SSH forwards close before the final profile/archive snapshot and activity update. Startup rejects before the listen step when any preparation step fails. The preview facade owns config parsing and mode selection; status aggregation, mode dispatch, preview logs, and shared-preview export are delegated to focused services, while static-file serving, localhost proxying, and N64 shell/ROM rendering live in their respective mode modules. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve. Harness resolution now happens once at startup through `createRunnerHarnessRegistry()`, which provides ordered hooks for config, auth, MCP, seeded skills, and future harness-specific initialization. Route registrars receive their service dependencies explicitly; they do not create a second server or own startup lifecycle.
 
 The protected `POST /workspace/sync-down` route lets Functions ask a running cloud session to pull workspace files from Cloud Storage into the live workspace directory after browser-side file writes. This keeps the file browser and terminal pointed at the same workspace without waiting for a later runner restart. File listing is intentionally lazy: Cloud Storage-backed listings are directory-scoped through the Functions API, and SSH-backed listings flow through `/ssh/files?path=...` so the runner inspects only the requested remote directory.
 
-The terminal uses `node-pty` and WebSocket replay. `webSocketUpgrade.js` is the single HTTP upgrade dispatcher: both terminal and browser WebSocket servers use `noServer` mode, then the dispatcher routes `/terminal` and authenticated `/browser/vnc` requests explicitly. Do not attach a path-scoped `WebSocketServer` directly to the shared HTTP server; its automatic upgrade listener rejects other valid WebSocket paths before their handlers run. The terminal iframe HTML in `terminal.js` also inlines the critical xterm layout rules that visually hide the helper textarea and anchor the viewport/screen, then reapplies visual-only helper-textarea styles after render. Do not force the helper textarea offscreen, zero-size it, or clear its value from wrapper code; xterm's mobile soft-keyboard and composition handling depends on owning that internal state. Preview routes support static, proxy, and N64 ROM modes depending on runner capabilities and workspace preview config. Web-capable images also expose a runner-owned browser QA contract: `browserQa.js` reports dependency health into `/capabilities`, `/preview/status`, and `/preview/qa/status`, while the image-local `mapache-preview-qa` command launches Chromium through Playwright, writes structured reports under `$MAPACHE_QA_DIR`, and updates a shared `last-run.json` state file that status routes can surface. GitHub workspaces restore `.git` through archives or clone fallback, then restore worktree/cache state. Pi package and skill endpoints operate on the same `/workspace/.pi` files that Pi uses in the terminal.
+The terminal uses `node-pty` and WebSocket replay. `webSocketUpgrade.js` is the single HTTP upgrade dispatcher: terminal, browser, Chat, and resource-metrics WebSocket servers use `noServer` mode, then the dispatcher routes `/terminal`, authenticated `/browser/vnc`, authenticated `/chat`, and authenticated `/metrics` requests explicitly. Do not attach a path-scoped `WebSocketServer` directly to the shared HTTP server; its automatic upgrade listener rejects other valid WebSocket paths before their handlers run. The terminal iframe HTML in `terminal.js` also inlines the critical xterm layout rules that visually hide the helper textarea and anchor the viewport/screen, then reapplies visual-only helper-textarea styles after render. Do not force the helper textarea offscreen, zero-size it, or clear its value from wrapper code; xterm's mobile soft-keyboard and composition handling depends on owning that internal state. Pi Chat is a best-effort completed-turn surface: `piChat.service.js` discovers the newest session JSONL, replays at most 200 displayable messages and 1 MiB of source, tails complete appended lines, resets on truncation/replacement/branch changes, and never publishes tools, thinking, malformed entries, or partial lines. `piChatWebSocket.js` subscribes each authenticated client to that service and calls `terminal.writePrompt()` on the existing PTY; it does not create a second Pi process. Resource metrics are sampled only while `/metrics` clients are connected. The sampler reads container cgroup CPU and memory counters, sends a safe JSON sample about every two seconds, and never writes Firestore activity or terminal state. Preview routes support static, proxy, and N64 ROM modes depending on runner capabilities and workspace preview config. Web-capable images also expose a runner-owned browser QA contract: `browserQa.js` reports dependency health into `/capabilities`, `/preview/status`, and `/preview/qa/status`, while the image-local `mapache-preview-qa` command launches Chromium through Playwright, writes structured reports under `$MAPACHE_QA_DIR`, and updates a shared `last-run.json` state file that status routes can surface. GitHub workspaces restore `.git` through archives or clone fallback, then restore worktree/cache state. Pi package and skill endpoints operate on the same `/workspace/.pi` files that Pi uses in the terminal.
 
 Pi and Codex runners select the same harness-neutral `github`, `web`, `n64`, and `mapache-chrome` skill profiles from workspace source mode and runner capabilities. Pi materializes selected catalog entries under `.pi/skills/**`; Codex materializes the same source files under `.agents/skills/**`. Both paths preserve existing user-edited files. Codex also copies missing user-created Pi skills from `.pi/skills/**` into `.agents/skills/**` with Codex-compatible frontmatter.
 
@@ -49,9 +57,14 @@ Workspace subagent CRUD now uses neutral runner routes at `/subagents` and `/sub
 
 - Browser terminal/preview/capability routes require browser-access tokens.
 - The shared HTTP server has exactly one WebSocket upgrade dispatcher; terminal and browser WebSocket servers stay in `noServer` mode so neither can reject the other's path.
+- `/metrics` is a browser-token-gated, read-only WebSocket separate from the terminal PTY. It reports only the latest container CPU/RAM sample; the browser retains no server-side history.
+- Resource sampling prefers unified cgroup v2 counters and falls back to Cloud Run's scoped cgroup
+  v1 mounts, including separate Service `cpu`/`cpuacct` roots and combined Job roots.
 - Browser QA artifacts and state must stay under `$MAPACHE_QA_DIR`; status routes read that state instead of scraping terminal output.
 - Backend-only runner routes require the separate shutdown token.
 - Tokens must not be persisted into workspace files, archives, or logs.
+- Runner control-plane Google clients use the Cloud Run metadata identity even when the workspace
+  defines `GOOGLE_APPLICATION_CREDENTIALS`; workspace credentials are for child processes only.
 - High-cardinality caches such as `.git`, `node_modules`, `/root/.pi`, and Pi package code use archive-backed sync rather than normal file listing.
 - Skills are small Markdown workspace files and remain normal sync state.
 - Harness-specific workspace files such as `.codex/config.toml`, `.codex/agents/*.toml`, and `.pi/agents/*.md` remain visible workspace state, not hidden archive state.
@@ -73,3 +86,4 @@ Workspace subagent CRUD now uses neutral runner routes at `/subagents` and `/sub
 - [GitHub workspaces](./github-workspaces.md)
 - [Pi skills manager](./pi-skills-manager.md)
 - [Pi extension manager](./pi-extension-manager.md)
+- [Frontend/Functions/runner compatibility matrix](./guides/frontend-functions-runner-compatibility.md)

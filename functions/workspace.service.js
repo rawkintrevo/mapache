@@ -39,12 +39,15 @@ const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 function createWorkspaceService(dependencies = {}) {
   return {
     createWorkspace: (uid, payload) => createWorkspace(uid, payload, dependencies),
+    createWorkspaceDirectory,
+    createWorkspaceFile,
     createWorkspaceFileDownloadUrl,
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
     listWorkspaceFiles,
     listWorkspaces,
     readWorkspaceFile,
+    renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
     saveWorkspaceFile,
     uploadWorkspaceFile,
@@ -56,6 +59,24 @@ async function listWorkspaces(uid) {
       .where("ownerUid", "==", uid)
       .get();
   return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
+}
+
+async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
+  const workspaceSnap = await workspaceRef.get();
+  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+  const workspace = workspaceSnap.data() || {};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+
+  const name = cleanName(payload && payload.name);
+  if (!name) throw httpError(400, "invalid_workspace_name");
+  await workspaceRef.update({
+    name,
+    updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+  });
+  return toClientDoc(await workspaceRef.get());
 }
 
 async function getWorkspaceMcpConfig(uid, workspaceId) {
@@ -156,6 +177,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
       invalidNameErrorCode: "invalid_workspace_env_name",
       reservedNameErrorCode: "reserved_workspace_env_name",
     }),
+    environmentEntryIds: Array.isArray(payload.environmentEntryIds) ? [...new Set(payload.environmentEntryIds.map((id) => String(id || "").trim()).filter(Boolean))] : [],
     mcpConfig: normalizeMcpConfigPayload(payload.mcpConfig || {}),
     storagePrefix,
     createdAt: now,
@@ -469,6 +491,46 @@ async function uploadWorkspaceFile(uid, workspaceId, path, req) {
   };
 }
 
+async function createWorkspaceFile(uid, workspaceId, payload = {}) {
+  const {bucket, file, prefix, relativePath} = await workspaceEntryStorageFile(
+      uid,
+      workspaceId,
+      payload.path,
+  );
+  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
+  await file.save("", {
+    contentType: contentTypeForPath(relativePath),
+    resumable: false,
+  });
+
+  const [metadata] = await file.getMetadata();
+  return {
+    file: storageFileToClientFile(file, `${prefix}/`),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
+async function createWorkspaceDirectory(uid, workspaceId, payload = {}) {
+  const {bucket, prefix, relativePath} = await workspaceEntryStorageFile(
+      uid,
+      workspaceId,
+      payload.path,
+  );
+  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
+  const markerRelativePath = `${relativePath}/${DIRECTORY_MARKER_FILES[0]}`;
+  const markerFile = bucket.file(`${prefix}/${markerRelativePath}`);
+  await markerFile.save("", {
+    contentType: "application/x-mapache-directory",
+    resumable: false,
+  });
+
+  const [metadata] = await markerFile.getMetadata();
+  return {
+    file: storageFileToClientFile(markerFile, `${prefix}/`),
+    updatedAt: metadata.updated || metadata.timeCreated || "",
+  };
+}
+
 async function createWorkspaceFileDownloadUrl(uid, workspaceId, path) {
   const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
   const [exists] = await file.exists();
@@ -536,9 +598,34 @@ async function workspaceStorageFile(uid, workspaceId, path) {
   const relativePath = normalizeWorkspaceFilePath(path);
   if (!bucketName || !prefix) throw httpError(400, "workspace_storage_not_configured");
   return {
+    bucket: admin.storage().bucket(bucketName),
     file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
+    prefix,
     relativePath,
   };
+}
+
+async function workspaceEntryStorageFile(uid, workspaceId, path) {
+  if (!String(path || "").trim()) throw httpError(400, "empty_file_name");
+  return workspaceStorageFile(uid, workspaceId, path);
+}
+
+async function assertWorkspacePathAvailable(bucket, prefix, relativePath) {
+  const pathParts = relativePath.split("/");
+  for (let index = 1; index < pathParts.length; index += 1) {
+    const [parentFileExists] = await bucket.file(`${prefix}/${pathParts.slice(0, index).join("/")}`).exists();
+    if (parentFileExists) throw httpError(409, "workspace_path_conflict");
+  }
+
+  const [targetExists] = await bucket.file(`${prefix}/${relativePath}`).exists();
+  if (targetExists) throw httpError(409, "workspace_path_conflict");
+
+  const [children] = await bucket.getFiles({
+    autoPaginate: false,
+    maxResults: 1,
+    prefix: `${prefix}/${relativePath}/`,
+  });
+  if (children.length) throw httpError(409, "workspace_path_conflict");
 }
 
 function normalizeWorkspaceFilePath(value) {
@@ -593,6 +680,8 @@ function workspaceDirectoryPathFromMarker(relativePath) {
 
 module.exports = {
   createWorkspaceService,
+  createWorkspaceDirectory,
+  createWorkspaceFile,
   deleteWorkspaceStorageIfUnshared,
   isHiddenWorkspaceFilePath,
   listWorkspaceFiles,
@@ -606,6 +695,7 @@ module.exports = {
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
   requireWorkspace,
+  renameWorkspace,
   saveWorkspaceMcpConfig,
   storagePrefixToClientDirectory,
   storageFileToClientFile,

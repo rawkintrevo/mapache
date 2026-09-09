@@ -2,6 +2,8 @@ import "./ProfilePage.css";
 import {ExternalLink, GitBranch, LogOut, RefreshCw, Unplug} from "lucide-react";
 import {useState} from "react";
 import {Button} from "../common/Button.jsx";
+import {calculateEstimatedUsageCost} from "../../utils/sessionResources.js";
+import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 function profileValue(value, fallback = "—") {
   return value ? String(value) : fallback;
@@ -43,9 +45,7 @@ function formatPoints(value) {
 }
 
 function estimatedUsageCost(usage) {
-  const cpuSeconds = Number(usage?.cpuSeconds || 0);
-  const memoryGbSeconds = Number(usage?.memoryGbSeconds || 0);
-  return (cpuSeconds * 0.000018) + (memoryGbSeconds * 0.000002);
+  return calculateEstimatedUsageCost(usage);
 }
 
 function estimatedRewardsPoints(usage) {
@@ -109,7 +109,8 @@ export function ProfilePage({
   const githubConnected = Boolean(githubData.connected);
   const githubAccount = githubAccountLabel(githubData);
   const githubRepoCount = Array.isArray(state.repoPicker?.repos) ? state.repoPicker.repos.length : 0;
-  const githubBusy = state.busy || githubConnection.loading || githubConnection.refreshing || githubConnection.disconnecting;
+  const busy = hasPendingOperations(state.pendingOperations);
+  const githubBusy = busy || githubConnection.loading || githubConnection.refreshing || githubConnection.disconnecting;
   const githubPrimaryLabel = githubConnected ? "Restart OAuth" : "Connect GitHub";
 
   return (
@@ -228,11 +229,11 @@ export function ProfilePage({
           </p>
         </section>
         <div className="profile-actions">
-          <Button disabled={state.busy} variant="secondary" onClick={onRefresh}>
+          <Button disabled={busy} variant="secondary" onClick={onRefresh}>
             <RefreshCw aria-hidden="true" />
-            {state.busy ? "Working..." : "Refresh profile"}
+            {busy ? "Working..." : "Refresh profile"}
           </Button>
-          <Button disabled={state.busy} variant="secondary" onClick={onSignOut}>
+          <Button disabled={busy} variant="secondary" onClick={onSignOut}>
             <LogOut aria-hidden="true" />
             Sign out
           </Button>

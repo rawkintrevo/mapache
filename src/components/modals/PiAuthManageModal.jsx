@@ -1,5 +1,5 @@
 import {useMemo, useState} from "react";
-import {X} from "lucide-react";
+import {FileJson, Pencil, Plus, Trash2, X} from "lucide-react";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
 import {sessionAuthHarness} from "../../utils/sessionHarnesses.js";
 import {Button} from "../common/Button.jsx";
@@ -28,7 +28,6 @@ function groupEntries(entries) {
 function initialSelection(session, groupedEntries) {
   const selection = session?.authSelection?.providers && typeof session.authSelection.providers === "object" ?
     session.authSelection.providers :
-    session?.piAuthSelection && typeof session.piAuthSelection === "object" ? session.piAuthSelection :
       null;
   if (selection) return {...selection};
   return Object.entries(groupedEntries).reduce((acc, [providerKey, entries]) => {
@@ -37,7 +36,7 @@ function initialSelection(session, groupedEntries) {
   }, {});
 }
 
-export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
+export function PiAuthManageModal({piAuth, session, onAdd, onClose, onDelete, onEdit, onOpenModelsFile, onSave}) {
   const authHarness = sessionAuthHarness(session);
   const entries = useMemo(() => {
     const allEntries = normalizeEntries(piAuth);
@@ -46,12 +45,11 @@ export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
   }, [authHarness, piAuth]);
   const groupedEntries = useMemo(() => groupEntries(entries), [entries]);
   const [selection, setSelection] = useState(() => initialSelection(session, groupedEntries));
-
-  function updateProvider(providerKey, entryId) {
+  function updateProvider(providerKey, entryId, checked) {
     setSelection((current) => {
       const next = {...current};
-      if (entryId) next[providerKey] = entryId;
-      else delete next[providerKey];
+      if (checked) next[providerKey] = entryId;
+      else if (next[providerKey] === entryId) delete next[providerKey];
       return next;
     });
   }
@@ -69,21 +67,32 @@ export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
           {authHarness?.manageDescription || "Choose which saved credentials should be written into this session auth file."}{" "}
           {authHarness?.reloadHint || ""}
         </p>
+        <Button className="pi-auth-add" disabled={piAuth.loading || piAuth.saving} variant="secondary" onClick={onAdd}>
+          <Plus aria-hidden="true" />
+          Add authentication provider
+        </Button>
+        <Button className="pi-auth-models-file" disabled={piAuth.saving || !onOpenModelsFile} variant="secondary" onClick={onOpenModelsFile}>
+          <FileJson aria-hidden="true" />
+          Inspect/edit models.json
+        </Button>
         {entries.length ? (
           <div className="pi-auth-selection-list">
-            {Object.entries(groupedEntries).map(([providerKey, providerEntries]) => (
-              <label className="pi-auth-selection-row" key={providerKey}>
-                <span>{piAuthProviderLabel(providerKey)}</span>
-                <select
-                  value={selection[providerKey] || ""}
-                  onChange={(event) => updateProvider(providerKey, event.target.value)}
-                >
-                  <option value="">Do not include</option>
-                  {providerEntries.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.label || entry.id}</option>
-                  ))}
-                </select>
-              </label>
+            {entries.map((entry) => (
+              <div className="pi-auth-selection-row" key={entry.id}>
+                <label className="checkbox-label">
+                  <input
+                    checked={selection[entry.providerKey] === entry.id}
+                    disabled={piAuth.saving}
+                    type="checkbox"
+                    onChange={(event) => updateProvider(entry.providerKey, entry.id, event.target.checked)}
+                  />
+                  <span><strong>{entry.label || piAuthProviderLabel(entry.providerKey)}</strong><small>{piAuthProviderLabel(entry.providerKey)}</small></span>
+                </label>
+                <div className="pi-auth-selection-row__actions">
+                  <Button aria-label={`Edit ${entry.label || piAuthProviderLabel(entry.providerKey)}`} disabled={piAuth.saving} icon={true} tooltip="Edit" variant="secondary" onClick={() => onEdit(entry)}><Pencil aria-hidden="true" /></Button>
+                  <Button aria-label={`Delete ${entry.label || piAuthProviderLabel(entry.providerKey)}`} disabled={piAuth.saving} icon={true} tooltip="Delete" variant="secondary" onClick={() => onDelete(entry.id)}><Trash2 aria-hidden="true" /></Button>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
@@ -91,7 +100,7 @@ export function PiAuthManageModal({piAuth, session, onClose, onSave}) {
         )}
         {piAuth.error ? <p className="empty">{piAuth.error}</p> : null}
         <div className="modal-actions">
-          <Button disabled={piAuth.saving || !entries.length} onClick={() => onSave({harness: authHarness?.id || "", providers: selection})}>Save</Button>
+          <Button disabled={piAuth.saving} onClick={() => onSave({harness: authHarness?.id || "", providers: selection})}>Save</Button>
           <Button disabled={piAuth.saving} type="button" variant="secondary" onClick={onClose}>Cancel</Button>
         </div>
       </section>

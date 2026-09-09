@@ -10,6 +10,7 @@ export function WorkspaceModal({
   onCreateWorkspace,
   onLoadConnectedRepos,
   repoPicker,
+  environmentEntries = [],
 }) {
   const [sourceType, setSourceType] = useState("blank");
   const [manualRepoUrl, setManualRepoUrl] = useState("");
@@ -73,13 +74,16 @@ export function WorkspaceModal({
               repoUrl,
               requestedBranch: branch,
             };
-            onCreateWorkspace({
+            const environmentEntryIds = formData.getAll("environmentEntryId");
+            const workspacePayload = {
               name: formData.get("name"),
               source,
               repoUrl,
               branch,
               env: parseEnvText(formData.get("env")),
-            });
+            };
+            if (environmentEntryIds.length) workspacePayload.environmentEntryIds = environmentEntryIds;
+            onCreateWorkspace(workspacePayload);
             onClose();
           }}
         >
@@ -229,6 +233,7 @@ export function WorkspaceModal({
             <span>Workspace env</span>
             <textarea name="env" placeholder={"FOO=workspace-value\nNODE_ENV=development"} rows={4} />
           </label>
+          {environmentEntries.length ? <fieldset><legend>Saved generic environment keys</legend>{environmentEntries.map((entry) => <label className="checkbox-label" key={entry.id}><input name="environmentEntryId" type="checkbox" value={entry.id} /><span>{entry.label || entry.name} ({entry.name})</span></label>)}</fieldset> : null}
           <Button type="submit">
             <Plus aria-hidden="true" />
             Create Workspace

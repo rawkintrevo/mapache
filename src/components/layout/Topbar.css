@@ -16,6 +16,32 @@
   min-width: 0;
 }
 
+.topbar-workspace-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+.topbar-workspace-select {
+  width: min(100%, 320px);
+  min-width: 160px;
+  height: 36px;
+  padding: 0 36px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--color-text-main);
+  font-weight: 600;
+}
+
+.topbar-workspace-select:focus-visible {
+  outline: 3px solid rgba(20, 125, 100, 0.28);
+  outline-offset: 2px;
+}
+
 .mark {
   display: grid;
   place-items: center;
@@ -69,5 +95,15 @@ h1 {
     flex-direction: row;
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .topbar-workspace-controls {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .topbar-workspace-select {
+    flex: 1;
+    width: auto;
   }
 }
