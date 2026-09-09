@@ -108,7 +108,6 @@ export function AppShell(props) {
             onOpenPiModels={modals.openPiModelsModal}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
             onRestartSession={sessions.restartSession}
-            onShareSessionPreview={sessions.shareSessionPreview}
             onCloseSshSessionForward={sessions.closeSshSessionForward}
             onCreateSshSessionForward={sessions.createSshSessionForward}
             onSelectSession={sessions.selectSession}

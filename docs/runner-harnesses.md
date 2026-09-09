@@ -35,6 +35,7 @@ The shared catalog in `functions/runnerCatalog.json` is the source of truth for 
 - MCP materialization
 - workspace subagents
 - workspace-local packages
+- managed workspace Goals
 
 The runner cannot import `functions/runnerCatalog.json` directly because the Docker build context is only `session-runner/`. Runner-local harness metadata therefore lives in `session-runner/lib/harnesses/metadata.js` and must stay behaviorally aligned with the shared catalog.
 
@@ -90,6 +91,13 @@ POST /subagent-chains
 POST /subagent-chains/delete
 POST /auth/materialize
 ```
+
+Pi basic, web, and Chrome images advertise a `goals` capability. Their protected
+runner Goals routes are separate from Chat and use
+`session-runner/lib/goalsProtocol.js`. Managed lifecycle actions run through the
+headless `goalsRpc.service.js` process, which relays Pi RPC `select`, `confirm`,
+`input`, and `editor` requests to the Web UI; the existing PTY remains the
+ordinary terminal path and is blocked while the managed process is active.
 
 Legacy `/pi/skills*` and `/pi/auth/materialize` aliases remain available. Subagent chain listing exists for both harnesses, but write/delete is intentionally unsupported in V1 and returns a runner error.
 

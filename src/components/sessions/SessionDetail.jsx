@@ -1,33 +1,36 @@
 import "./SessionDetail.css";
-import {Copy, ExternalLink, Mail, RotateCcw, Share2, SlidersHorizontal, UploadCloud} from "lucide-react";
+import {ExternalLink, RotateCcw, SlidersHorizontal, Target} from "lucide-react";
 import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
+import {WorkspaceGoalsPanel} from "../goals/WorkspaceGoalsPanel.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiChatCanvas} from "./PiChatCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 import {derivePiChatSocketUrl} from "../../utils/piChat.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
+import {deriveShellUrl} from "../../utils/shell.js";
 import {useResourceMetrics} from "./useResourceMetrics.js";
 import {useSessionAccessUrls} from "./useSessionAccessUrls.js";
 
 export function SessionDetail({
   busy,
+  api,
   session,
   sshForwards,
   workspaceId,
+  workspaceSessions,
   onGetSessionAccessUrls,
   onOpenPiModels,
   onRetryProvisioningSession,
   onRestartSession,
-  onShareSessionPreview,
   onCloseSshSessionForward,
   onCreateSshSessionForward,
   onUpdateSshForwardPort,
 }) {
   const [activeCanvas, setActiveCanvas] = useState("terminal");
-  const [shareState, setShareState] = useState({loading: false, error: "", preview: null, copied: false});
-  const [publishOpen, setPublishOpen] = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
+  const [showShell, setShowShell] = useState(false);
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const {
@@ -46,7 +49,10 @@ export function SessionDetail({
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
   const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
+  const isPiSession = session.harnessId === "pi" || session.terminalKind === "pi";
   const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
+  const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
+  const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
@@ -64,27 +70,9 @@ export function SessionDetail({
   }, [workspaceId, session.id]);
 
   useEffect(() => {
-    setShareState({loading: false, error: "", preview: null, copied: false});
-    setPublishOpen(false);
+    setShowGoals(false);
+    setShowShell(false);
   }, [workspaceId, session.id]);
-
-  const handleSharePreview = async () => {
-    if (!workspaceId || !session.id || !onShareSessionPreview) return;
-    setShareState((current) => ({...current, loading: true, error: "", copied: false}));
-    try {
-      const preview = await onShareSessionPreview(workspaceId, session.id);
-      setShareState({loading: false, error: "", preview, copied: false});
-    } catch (error) {
-      setShareState({loading: false, error: error.message || "preview_share_failed", preview: null, copied: false});
-    }
-  };
-
-  const handleCopyPreviewUrl = async () => {
-    const url = shareState.preview?.publicUrl;
-    if (!url) return;
-    await navigator.clipboard.writeText(url);
-    setShareState((current) => ({...current, copied: true}));
-  };
 
   return (
     <div className="session-detail">
@@ -219,28 +207,32 @@ export function SessionDetail({
       </div>
       <div className="toolbar">
         <div className="session-actions">
-          {session.harnessId === "pi" || session.terminalKind === "pi" ? (
+          {isPiSession ? (
             <Button disabled={busy || !hasRunnerUrl} variant="secondary" onClick={onOpenPiModels}>
               <SlidersHorizontal aria-hidden="true" />
               Models
             </Button>
           ) : null}
-          {capabilities.preview ? (
-            <>
-              <Button
-                disabled={busy || !hasRunnerUrl || shareState.loading}
-                variant="secondary"
-                onClick={handleSharePreview}
-              >
-                <Share2 aria-hidden="true" />
-                {shareState.loading ? "Sharing..." : "Share Preview"}
-              </Button>
-              <Button variant="secondary" onClick={() => setPublishOpen((open) => !open)}>
-                <UploadCloud aria-hidden="true" />
-                Publish
-              </Button>
-            </>
+          {isPiSession ? (
+            <Button
+              aria-expanded={showGoals}
+              aria-controls="session-goals-panel"
+              variant={showGoals ? "primary" : "secondary"}
+              onClick={() => setShowGoals((current) => !current)}
+            >
+              <Target aria-hidden="true" />
+              Goal
+            </Button>
           ) : null}
+          <Button
+            aria-expanded={showShell}
+            aria-controls="session-shell-panel"
+            disabled={!hasShell}
+            variant={showShell ? "primary" : "secondary"}
+            onClick={() => setShowShell((current) => !current)}
+          >
+            Shell
+          </Button>
           {isRetryableFailure ? (
             <Button
               disabled={busy}
@@ -267,42 +259,23 @@ export function SessionDetail({
 
         </div>
       </div>
-      {capabilities.preview ? (
-        <div className="preview-share-panel" aria-live="polite">
-          {shareState.error ? (
-            <p className="preview-share-error">{friendlyPreviewShareError(shareState.error)}</p>
-          ) : null}
-          {shareState.preview?.publicUrl ? (
-            <div className="preview-url-row">
-              <div>
-                <span>Public preview</span>
-                <a href={shareState.preview.publicUrl} rel="noreferrer" target="_blank">
-                  {shareState.preview.publicUrl}
-                </a>
-              </div>
-              <Button aria-label="Copy public preview URL" variant="secondary" onClick={handleCopyPreviewUrl}>
-                <Copy aria-hidden="true" />
-                {shareState.copied ? "Copied" : "Copy"}
-              </Button>
-              <Button
-                aria-label="Open public preview"
-                variant="secondary"
-                onClick={() => window.open(shareState.preview.publicUrl, "_blank", "noopener,noreferrer")}
-              >
-                <ExternalLink aria-hidden="true" />
-                Open
-              </Button>
-            </div>
-          ) : null}
-          {publishOpen ? (
-            <div className="publish-panel">
-              <p>Automated publishing is not available yet.</p>
-              <a href="mailto:trevor@ata.systems">
-                <Mail aria-hidden="true" />
-                Contact trevor@ata.systems for help publishing your website.
-              </a>
-            </div>
-          ) : null}
+      {showShell && shellUrl ? (
+        <div className="shell-panel" id="session-shell-panel">
+          <iframe
+            allow="clipboard-read; clipboard-write"
+            src={shellUrl}
+            title={`Shell ${session.name}`}
+          />
+        </div>
+      ) : null}
+      {showGoals ? (
+        <div id="session-goals-panel">
+          <WorkspaceGoalsPanel
+            api={api}
+            initialSessionId={session.id}
+            sessions={workspaceSessions}
+            workspaceId={workspaceId}
+          />
         </div>
       ) : null}
       {isSshSession ? (
@@ -362,15 +335,4 @@ function sshForwardUrl(baseUrl, port) {
   const url = new URL(baseUrl);
   url.pathname = `${url.pathname.replace(/\/+$/, "")}/${encodeURIComponent(port)}/`;
   return url.toString();
-}
-
-function friendlyPreviewShareError(message) {
-  if (message === "preview_static_build_not_ready") return "Build the static website into /workspace/build before sharing.";
-  if (message === "preview_share_requires_static_build") return "Share Preview only supports static build output.";
-  if (message === "session_not_running") return "Start the session before sharing a preview.";
-  if (message === "runner_preview_share_unavailable") return "Preview sharing is temporarily unavailable.";
-  if (message === "session_preview_not_supported") return "This session does not support website previews.";
-  if (message === "preview_static_build_too_large") return "The static build is too large to share as a preview.";
-  if (message === "preview_static_build_too_many_files") return "The static build has too many files to share as a preview.";
-  return message || "Preview sharing failed.";
 }

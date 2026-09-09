@@ -34,6 +34,7 @@ const {
   renderTerminalPage,
   shouldReplayTerminal,
 } = require("./lib/terminal");
+const {createShellSession} = require("./lib/shell");
 const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
@@ -45,6 +46,10 @@ const {registerGitRoutes} = require("./routes/gitRoutes");
 const {registerGoogleMcpRoutes} = require("./routes/googleMcpRoutes");
 const {registerSshRoutes} = require("./routes/sshRoutes");
 const {registerWorkspaceRoutes} = require("./routes/workspaceRoutes");
+const {registerGoalsRoutes} = require("./routes/goalsRoutes");
+const {createGoalsBridgeService} = require("./lib/goalsProtocol");
+const {createGoalsRpcService} = require("./lib/goalsRpc.service");
+const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
@@ -55,6 +60,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({noServer: true});
 const browserWss = new WebSocketServer({noServer: true});
+const shellWss = new WebSocketServer({noServer: true});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
 const chromeRuntime = createChromeRuntime(config, {
@@ -83,10 +89,12 @@ const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
+let goalsRpc = null;
 const terminalSession = createTerminalSession({
   admin,
   config,
   activity,
+  canStartProcess: () => !goalsRpc?.isActive?.(),
   onTerminalExit: async ({command, exitCode}) => {
     const executable = path.basename(String(command && command.file || ""));
     if (executable === "pi") {
@@ -99,6 +107,15 @@ const terminalSession = createTerminalSession({
     }
   },
 });
+const shellSession = createShellSession({admin, config, activity});
+goalsRpc = createGoalsRpcService({config, terminalSession});
+const goalsBridge = createGoalsBridgeService({config, terminalSession, rpcService: goalsRpc});
+const goalsPackageBootstrap = createGoalsPackageBootstrap({config, version: process.env.PI_GOAL_X_VERSION || undefined});
+const goalsPackage = {
+  ensureInstalledDeclaration: goalsPackageBootstrap.ensureInstalledDeclaration,
+  setBridgeAvailability: (value) => goalsBridge.setPackageAvailable(value),
+  stop: () => goalsBridge.stop(),
+};
 const piChatTranscript = createPiChatTranscriptService({config});
 const piChat = createPiChatWebSocket({
   config,
@@ -120,6 +137,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   chromeRuntime,
   config,
   git,
+  goalsPackage,
   listen: (onListening) => server.listen(config.port, onListening),
   piChat,
   resourceMetrics: resourceMetricsSocket,
@@ -160,6 +178,7 @@ registerWorkspaceRoutes({
   shutdown: runnerLifecycle.shutdown,
   workspaceSync,
 });
+registerGoalsRoutes({app, goalsBridge, hasRunnerAccess});
 registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace});
 registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAccess});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
@@ -170,7 +189,12 @@ wss.on("connection", (socket, request) => {
     return;
   }
 
-  terminalSession.attach(socket, shouldReplayTerminal(request));
+  try {
+    terminalSession.attach(socket, shouldReplayTerminal(request));
+  } catch (error) {
+    socket.close(1013, error?.code === "goal_rpc_process_active" ? "goal_running_in_web_ui" : "terminal_unavailable");
+    return;
+  }
 
   socket.on("message", (raw) => {
     terminalSession.handleMessage(raw);
@@ -189,12 +213,29 @@ browserWss.on("connection", (socket) => {
 server.on("upgrade", createWebSocketUpgradeRouter({
   chatWss: piChat.server,
   metricsWss: resourceMetricsSocket.server,
+  shellWss,
   terminalWss: wss,
   browserWss,
   hasBrowserAccess,
   hasChatAccess: (request) => piChat.supported && hasBrowserAccess(request),
   hasMetricsAccess: hasBrowserAccess,
+  hasShellAccess: hasBrowserAccess,
 }));
+
+shellWss.on("connection", (socket, request) => {
+  if (!hasBrowserAccess(request)) {
+    socket.close(1008, "unauthorized");
+    return;
+  }
+  try {
+    shellSession.attach(socket, shouldReplayTerminal(request));
+  } catch {
+    socket.close(1013, "shell_unavailable");
+    return;
+  }
+  socket.on("message", (raw) => shellSession.handleMessage(raw));
+  socket.on("close", () => shellSession.detach(socket));
+});
 
 runnerLifecycle.start()
     .catch((error) => {

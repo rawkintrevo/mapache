@@ -111,6 +111,10 @@
         "supported": true,
         "relativePath": ".pi/settings.json",
         "restartHint": "Refresh after Pi CLI changes to reload workspace-local packages."
+      },
+      "goals": {
+        "supported": true,
+        "restartHint": "Start or resume managed goals from the workspace Goals panel."
       }
     },
     "codex": {
@@ -182,7 +186,8 @@
         "previewQa": false,
         "functions": false,
         "n64": false,
-        "chat": true
+        "chat": true,
+        "goals": true
       }
     },
     {
@@ -212,7 +217,8 @@
         "previewQa": true,
         "functions": true,
         "n64": false,
-        "chat": true
+        "chat": true,
+        "goals": true
       }
     },
     {
@@ -243,7 +249,8 @@
         "functions": true,
         "n64": false,
         "chrome": true,
-        "chat": true
+        "chat": true,
+        "goals": true
       }
     },
     {

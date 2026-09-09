@@ -28,6 +28,7 @@ assert.deepStrictEqual(webImage.capabilities, {
   n64: false,
   chrome: false,
   chat: true,
+  goals: true,
 });
 assert.strictEqual(webImage.canProvision, true);
 

@@ -9,6 +9,7 @@ function normalizeCapabilities(capabilities = {}) {
     n64: Boolean(capabilities.n64),
     chrome: Boolean(capabilities.chrome),
     chat: Boolean(capabilities.chat),
+    goals: Boolean(capabilities.goals),
   };
 }
 

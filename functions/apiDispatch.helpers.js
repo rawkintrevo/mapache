@@ -59,6 +59,17 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["GET", "workspaceMcp", jsonResult(({handlers, route, user}) => handlers.getWorkspaceMcpConfig(user.uid, route.workspaceId))],
     ["PUT", "workspaceMcp", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceMcpConfig(user.uid, route.workspaceId, req.body || {}))],
   ]),
+  goals: Object.freeze([
+    ["GET", "workspaceGoals", jsonResult(({handlers, req, route, user}) => handlers.listGoals(user.uid, route.workspaceId, req.query || {}))],
+    ["POST", "workspaceGoals", createdJsonResult(({handlers, req, route, user}) => handlers.createGoal(user.uid, route.workspaceId, req.body || {}))],
+    ["GET", "workspaceGoal", jsonResult(({handlers, route, user}) => handlers.getGoal(user.uid, route.workspaceId, route.goalId))],
+    ["GET", "workspaceGoalRuntime", jsonResult(({handlers, route, user}) => handlers.getGoalRuntime(user.uid, route.workspaceId, route.goalId))],
+    ["PATCH", "workspaceGoal", jsonResult(({handlers, req, route, user}) => handlers.updateGoal(user.uid, route.workspaceId, route.goalId, req.body || {}))],
+    ["POST", "workspaceGoalAction", jsonResult(({handlers, req, route, user}) => handlers.actionGoal(user.uid, route.workspaceId, route.goalId, req.body || {}))],
+    ["POST", "workspaceGoalQuestionAnswer", jsonResult(({handlers, req, route, user}) => handlers.answerGoalQuestion(user.uid, route.workspaceId, route.goalId, route.questionId, req.body || {}))],
+    ["GET", "workspaceGoalEvents", jsonResult(({handlers, req, route, user}) => handlers.listGoalEvents(user.uid, route.workspaceId, route.goalId, req.query || {}))],
+    ["GET", "workspaceGoalOperation", jsonResult(({handlers, route, user}) => handlers.getGoalOperation(user.uid, route.workspaceId, route.operationId))],
+  ]),
   sessions: Object.freeze([
     ["GET", "sessions", namedJsonResult("sessions", ({handlers, route, user}) => handlers.listSessions(user.uid, route.workspaceId))],
     ["POST", "sessions", createdNamedJsonResult("session", ({handlers, req, route, user}) => handlers.createSession(user.uid, route.workspaceId, req.body || {}))],

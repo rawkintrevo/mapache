@@ -31,6 +31,7 @@ Read this before changing authenticated API routes, workspace/session lifecycle 
 - OpenAI Codex device-code/OAuth flow and token normalization: `functions/openAiCodexAuth.service.js`
 - Pi package proxies, source parsing, and observed catalog: `functions/piPackages.service.js`
 - Workspace skills and workspace subagents: `functions/workspaceAgentAssets.service.js`
+- Workspace Goals records and actions: `functions/goals.helpers.js`, `functions/goals.service.js`
 - Runner harness catalog: `functions/runnerCatalog.helpers.js`, `functions/runnerImages.helpers.js`
 - Session resource catalog and validation: `functions/sessionResourceCatalog.json`, `functions/sessionResources.helpers.js`
 - Usage rollups: `functions/userUsage.service.js`
@@ -74,6 +75,8 @@ Pi model scope uses `GET/PUT /api/workspaces/{workspaceId}/sessions/{sessionId}/
 Workspace skills now use neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/skills` and `/skills/delete`. `functions/workspaceAgentAssets.service.js` owns validation and compatibility because Pi and Codex share the same name/description/content rules and the same rollout path. The service gates skill and subagent management to Pi and Codex sessions, prefers neutral runner endpoints, and falls back to legacy `/pi/skills*` routes when an older runner revision is still serving an existing session.
 
 Workspace subagents use parallel neutral session routes at `/api/workspaces/{workspaceId}/sessions/{sessionId}/subagents` and `/subagents/delete`. The backend gates subagent CRUD to Pi and Codex sessions, validates the shared name/description/instructions rules, and proxies to runner-managed native files. The runner may expose `/subagent-chains` for future internal work, but the Functions API does not advertise or dispatch chain routes in V1.
+
+Workspace Goals use authenticated routes under `/api/workspaces/{workspaceId}/goals`. Drafts are stored in a workspace-owned `goals` subcollection and can be listed without a runner. Typed actions are validated for ownership, revisions, Pi harness support, and the workspace execution control document before delivery to the protected runner `/goals/commands` endpoint. `goalOperations` records make browser retries observable by operation ID, including retries after the goal revision has advanced. The runtime route proxies bounded pending RPC UI requests from the assigned Pi session, and the answer route sends the matching response back through the runner. Durable checkpoint uploads, lease renewal, and runner event ingestion remain follow-up work.
 
 Website sessions with preview capability can create a public share preview through `POST /api/workspaces/{workspaceId}/sessions/{sessionId}/share-preview`. The API verifies workspace/session ownership, requires a running preview-capable session, generates an unguessable token, asks the runner to upload only the configured static preview root, and stores metadata in `publicPreviews/{token}`. Public reads use unauthenticated `GET /api/public-previews/{token}/...`, which serves objects from the recorded Cloud Storage prefix with SPA fallback to `index.html`. These public routes do not expose source files, session runner URLs, browser-access tokens, shutdown tokens, environment variables, or workspace storage prefixes.
 

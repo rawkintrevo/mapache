@@ -45,6 +45,50 @@ export function createApiClient(getToken) {
         {method: "POST", body: {deviceAuthId, userCode, entryId, label}},
     ),
     getWorkspaces: () => request(getToken, "/api/workspaces"),
+    listGoals: (workspaceId, query = {}) => {
+      const params = new URLSearchParams();
+      if (query.pageSize) params.set("pageSize", String(query.pageSize));
+      if (query.startAfter) params.set("startAfter", String(query.startAfter));
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      return request(getToken, `/api/workspaces/${encodeURIComponent(workspaceId)}/goals${suffix}`);
+    },
+    createGoal: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goals`,
+        {method: "POST", body},
+    ),
+    getGoal: (workspaceId, goalId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goals/${encodeURIComponent(goalId)}`,
+    ),
+    getGoalRuntime: (workspaceId, goalId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goals/${encodeURIComponent(goalId)}/runtime`,
+    ),
+    updateGoal: (workspaceId, goalId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goals/${encodeURIComponent(goalId)}`,
+        {method: "PATCH", body},
+    ),
+    actionGoal: (workspaceId, goalId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goals/${encodeURIComponent(goalId)}/actions`,
+        {method: "POST", body},
+    ),
+    answerGoalQuestion: (workspaceId, goalId, questionId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goals/${encodeURIComponent(goalId)}/questions/${encodeURIComponent(questionId)}/answer`,
+        {method: "POST", body},
+    ),
+    listGoalEvents: (workspaceId, goalId, query = {}) => {
+      const params = new URLSearchParams(query);
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      return request(getToken, `/api/workspaces/${encodeURIComponent(workspaceId)}/goals/${encodeURIComponent(goalId)}/events${suffix}`);
+    },
+    getGoalOperation: (workspaceId, operationId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/goal-operations/${encodeURIComponent(operationId)}`,
+    ),
     createWorkspace: (body) => request(getToken, "/api/workspaces", {
       method: "POST",
       body,

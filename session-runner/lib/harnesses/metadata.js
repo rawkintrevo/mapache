@@ -19,6 +19,7 @@ const HARNESSES = Object.freeze({
     mcp: sharedCapability("shell", "mcp"),
     subagents: sharedCapability("shell", "subagents"),
     packages: sharedCapability("shell", "packages"),
+    goals: sharedCapability("shell", "goals"),
   }),
   ssh: Object.freeze({
     id: "ssh",
@@ -29,6 +30,7 @@ const HARNESSES = Object.freeze({
     mcp: sharedCapability("ssh", "mcp"),
     subagents: sharedCapability("ssh", "subagents"),
     packages: sharedCapability("ssh", "packages"),
+    goals: sharedCapability("ssh", "goals"),
   }),
   pi: Object.freeze({
     id: "pi",
@@ -59,6 +61,7 @@ const HARNESSES = Object.freeze({
       settingsRelativePath: ".pi/settings.json",
     }),
     packages: sharedCapability("pi", "packages"),
+    goals: sharedCapability("pi", "goals", {restartHint: "Start or resume managed goals from the workspace Goals panel."}),
   }),
   codex: Object.freeze({
     id: "codex",

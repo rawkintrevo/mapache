@@ -16,14 +16,17 @@ function session(overrides = {}) {
 }
 
 function renderDetail(overrides = {}, options = {}) {
+  const currentSession = session(overrides);
   return render(
       <SessionDetail
+        api={options.api}
         busy={options.busy || false}
         gitStatus={null}
         isGithubWorkspace={false}
-        session={session(overrides)}
+        session={currentSession}
         sshForwards={{}}
         workspaceId="workspace-1"
+        workspaceSessions={options.workspaceSessions || [currentSession]}
         onGetSessionAccessUrls={vi.fn().mockResolvedValue({
           terminalUrl: "https://runner.example/?mapache_access=terminal-token",
           browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
@@ -201,5 +204,39 @@ describe("SessionDetail Chrome workflow", () => {
     expect(restart).toHaveAttribute("title", "Restart to pick up the latest container image");
     expect(screen.getByText("Stale image")).toBeInTheDocument();
     expect(screen.getByText(/older runner image/)).toBeInTheDocument();
+  });
+
+  test("opens the Goal controls below the session canvas and removes preview publishing actions", async () => {
+    const user = userEvent.setup();
+    const api = {listGoals: vi.fn().mockResolvedValue({goals: []})};
+    renderDetail({
+      harnessId: "pi",
+      capabilities: {terminal: true, preview: true, chrome: false},
+    }, {api});
+
+    expect(screen.queryByRole("button", {name: "Share Preview"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Publish"})).not.toBeInTheDocument();
+
+    const goalButton = screen.getByRole("button", {name: "Goal"});
+    expect(goalButton).toHaveAttribute("aria-expanded", "false");
+    await user.click(goalButton);
+
+    expect(goalButton).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByRole("heading", {name: "Goals"})).toBeInTheDocument();
+    expect(api.listGoals).toHaveBeenCalledWith("workspace-1");
+  });
+
+  test("opens a separate shell tied to the selected runner", async () => {
+    const user = userEvent.setup();
+    renderDetail({name: "Shell session"});
+
+    const shellButton = await screen.findByRole("button", {name: "Shell"});
+    expect(shellButton).toBeEnabled();
+    await user.click(shellButton);
+
+    expect(await screen.findByTitle("Shell Shell session")).toHaveAttribute(
+        "src",
+        "https://runner.example/shell?mapache_access=terminal-token",
+    );
   });
 });

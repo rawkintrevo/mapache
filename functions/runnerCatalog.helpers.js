@@ -46,11 +46,12 @@ function freezeHarness(harness) {
     mcp: Object.freeze(harness.mcp || {supported: false}),
     subagents: Object.freeze(harness.subagents || {supported: false}),
     packages: Object.freeze(harness.packages || {supported: false}),
+    goals: Object.freeze(harness.goals || {supported: false}),
   });
 }
 
 function cloneCapabilities(capabilities) {
-  return {
+  const result = {
     terminal: Boolean(capabilities && capabilities.terminal),
     preview: Boolean(capabilities && capabilities.preview),
     previewQa: Boolean(capabilities && capabilities.previewQa),
@@ -59,6 +60,8 @@ function cloneCapabilities(capabilities) {
     chrome: Boolean(capabilities && capabilities.chrome),
     chat: Boolean(capabilities && capabilities.chat),
   };
+  if (capabilities && Object.prototype.hasOwnProperty.call(capabilities, "goals")) result.goals = Boolean(capabilities.goals);
+  return result;
 }
 
 function listRunnerImages() {

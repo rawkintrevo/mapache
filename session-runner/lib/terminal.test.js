@@ -35,3 +35,8 @@ test("renderTerminalPage includes critical xterm layout and helper-textarea styl
   assert.match(html, /term\.onRender\(\(\) => \{\s*applyHelperTextareaStyles\(\);/);
   assert.match(html, /mapache_access/);
 });
+
+test("renderTerminalPage can target the independent shell WebSocket", () => {
+  const html = renderTerminalPage({accessToken: "token-123", socketPath: "/shell"});
+  assert.ok(html.includes('location.host + "/shell"'));
+});

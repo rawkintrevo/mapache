@@ -7,7 +7,7 @@ const pty = require("node-pty");
 const {WebSocket} = require("ws");
 const {prepareSshMaterial, sshCommand} = require("./sshSession");
 
-function createTerminalSession({admin, config, activity, onTerminalExit}) {
+function createTerminalSession({admin, config, activity, onTerminalExit, canStartProcess}) {
   const sockets = new Set();
   let term = null;
   let outputBuffer = "";
@@ -18,6 +18,9 @@ function createTerminalSession({admin, config, activity, onTerminalExit}) {
   let publishedPiJsonlPath = "";
 
   return {
+    isRunning() {
+      return Boolean(term);
+    },
     attach(socket, replayOutput) {
       const activeTerm = ensureTerm();
       sockets.add(socket);
@@ -44,6 +47,11 @@ function createTerminalSession({admin, config, activity, onTerminalExit}) {
 
   function ensureTerm() {
     if (term) return term;
+    if (typeof canStartProcess === "function" && !canStartProcess()) {
+      const error = new Error("goal_rpc_process_active");
+      error.code = "goal_rpc_process_active";
+      throw error;
+    }
 
     outputBuffer = "";
 
@@ -325,6 +333,7 @@ function terminalArgs() {
 
 function renderTerminalPage(options = {}) {
   const accessToken = String(options.accessToken || "");
+  const socketPath = String(options.socketPath || "/terminal");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -470,7 +479,7 @@ function renderTerminalPage(options = {}) {
         const replay = replayOnConnect ? "1" : "0";
         const accessToken = ${JSON.stringify(accessToken)};
         const tokenParam = accessToken ? "&mapache_access=" + encodeURIComponent(accessToken) : "";
-        socket = new WebSocket(protocol + location.host + "/terminal?replay=" + replay + tokenParam);
+        socket = new WebSocket(protocol + location.host + ${JSON.stringify(socketPath)} + "?replay=" + replay + tokenParam);
         replayOnConnect = false;
 
         socket.addEventListener("open", () => {

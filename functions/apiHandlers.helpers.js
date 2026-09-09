@@ -1,6 +1,17 @@
 "use strict";
 
-function createApiHandlers({agentAuthService, environmentKeysService, openAiCodexAuthService, piModelsService, piPackagesService, workspaceAgentAssetsService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({agentAuthService, environmentKeysService, goalsService, openAiCodexAuthService, piModelsService, piPackagesService, workspaceAgentAssetsService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+  const goals = goalsService || {
+    listGoals: async () => ({}),
+    createGoal: async () => ({}),
+    getGoal: async () => ({}),
+    getGoalRuntime: async () => ({}),
+    updateGoal: async () => ({}),
+    actionGoal: async () => ({}),
+    answerGoalQuestion: async () => ({}),
+    listGoalEvents: async () => ({}),
+    getGoalOperation: async () => ({}),
+  };
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -22,6 +33,15 @@ function createApiHandlers({agentAuthService, environmentKeysService, openAiCode
     installPiPackage: piPackagesService.installPiPackage,
     removePiPackage: piPackagesService.removePiPackage,
     updatePiPackage: piPackagesService.updatePiPackage,
+    listGoals: goals.listGoals,
+    createGoal: goals.createGoal,
+    getGoal: goals.getGoal,
+    getGoalRuntime: goals.getGoalRuntime,
+    updateGoal: goals.updateGoal,
+    actionGoal: goals.actionGoal,
+    answerGoalQuestion: goals.answerGoalQuestion,
+    listGoalEvents: goals.listGoalEvents,
+    getGoalOperation: goals.getGoalOperation,
     listWorkspaceSkills: workspaceAgentAssetsService.listWorkspaceSkills,
     saveWorkspaceSkill: workspaceAgentAssetsService.saveWorkspaceSkill,
     deleteWorkspaceSkill: workspaceAgentAssetsService.deleteWorkspaceSkill,

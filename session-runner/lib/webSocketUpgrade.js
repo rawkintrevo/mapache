@@ -5,9 +5,11 @@ function createWebSocketUpgradeRouter({
   browserWss,
   chatWss,
   metricsWss,
+  shellWss,
   hasBrowserAccess,
   hasChatAccess,
   hasMetricsAccess,
+  hasShellAccess,
 } = {}) {
   if (!terminalWss || !browserWss) {
     throw new Error("WebSocket upgrade routing requires terminal and browser servers.");
@@ -41,6 +43,14 @@ function createWebSocketUpgradeRouter({
         return;
       }
       handleUpgrade(metricsWss, request, socket, head);
+      return;
+    }
+    if (pathname === "/shell") {
+      if (!shellWss || typeof hasShellAccess !== "function" || !hasShellAccess(request)) {
+        rejectUpgrade(socket);
+        return;
+      }
+      handleUpgrade(shellWss, request, socket, head);
       return;
     }
     socket.destroy();

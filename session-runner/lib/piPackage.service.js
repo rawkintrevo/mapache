@@ -10,7 +10,22 @@ const {
   normalizePiPackageSettingsEntry,
 } = require("./piValidation.helpers");
 
-function createPiPackageService({config, syncUp}) {
+function createPiPackageService({config, syncUp, runPiCommand: injectedRunPiCommand}) {
+  async function runPiCommand(args) {
+    const child = spawn("pi", args, {
+      cwd: config.workspaceDir,
+      stdio: ["ignore", "ignore", "pipe"],
+      env: process.env,
+    });
+    const stderr = collectStderr(child);
+    try {
+      await waitForChild(child, stderr, `pi ${args[0]}`);
+    } catch (error) {
+      throw new Error(compactErrorMessage(error.message || error) || "pi_command_failed");
+    }
+  }
+  const executePiCommand = injectedRunPiCommand || runPiCommand;
+
   async function listWorkspacePiPackages() {
     const settingsPath = path.join(config.workspaceDir, ".pi", "settings.json");
     const userSettingsPath = path.join(config.piAgentDir, "settings.json");
@@ -41,7 +56,7 @@ function createPiPackageService({config, syncUp}) {
 
   async function installWorkspacePiPackage(body) {
     const source = normalizePiMutationPackageSource(body.source);
-    await runPiCommand(["install", "-l", source]);
+    await executePiCommand(["install", "-l", source]);
     await syncUp({includeArchives: true});
     return {
       ok: true,
@@ -53,7 +68,7 @@ function createPiPackageService({config, syncUp}) {
 
   async function removeWorkspacePiPackage(body) {
     const source = normalizePiMutationPackageSource(body.source);
-    await runPiCommand(["remove", "-l", source]);
+    await executePiCommand(["remove", "--approve", "-l", source]);
     await syncUp({includeArchives: true});
     return {
       ok: true,
@@ -66,7 +81,7 @@ function createPiPackageService({config, syncUp}) {
   async function updateWorkspacePiPackages(body) {
     const source = body.source ? normalizePiMutationPackageSource(body.source) : "";
     const args = source ? ["update", "--extension", source] : ["update", "--extensions"];
-    await runPiCommand(args);
+    await executePiCommand(args);
     await syncUp({includeArchives: true});
     return {
       ok: true,
@@ -74,20 +89,6 @@ function createPiPackageService({config, syncUp}) {
       source: source || null,
       packages: (await listWorkspacePiPackages()).packages,
     };
-  }
-
-  async function runPiCommand(args) {
-    const child = spawn("pi", args, {
-      cwd: config.workspaceDir,
-      stdio: ["ignore", "ignore", "pipe"],
-      env: process.env,
-    });
-    const stderr = collectStderr(child);
-    try {
-      await waitForChild(child, stderr, `pi ${args[0]}`);
-    } catch (error) {
-      throw new Error(compactErrorMessage(error.message || error) || "pi_command_failed");
-    }
   }
 
   async function resolveInstalledPiPackagePath(source, scope = "workspace") {

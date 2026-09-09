@@ -12,7 +12,7 @@ Locations:
 
 - `functions/*.helpers.test.js` for backend helper modules.
 - Frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
-- Future runner helper tests should live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub.
+- Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. The Goals protocol and baked-package bootstrap follow this pattern.
 
 Default commands:
 
@@ -53,6 +53,7 @@ Candidate flows:
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi-to-Codex handoff.
 - Skills and Extensions drawer smoke paths against a controlled runner fixture.
+- Workspace Goals draft creation, Pi capability gating, lifecycle command delivery, and operation recovery against a controlled runner fixture. Guided questions remain an opt-in case until the structured extension adapter is implemented.
 
 Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome`.
 

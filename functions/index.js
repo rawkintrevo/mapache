@@ -72,6 +72,7 @@ const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
 const {createPiModelsService} = require("./piModels.service");
 const {createPiPackagesService} = require("./piPackages.service");
+const {createGoalsService} = require("./goals.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
@@ -116,6 +117,13 @@ const agentAuthService = createAgentAuthService({
 });
 const openAiCodexAuthService = createOpenAiCodexAuthService({agentAuthService});
 const piPackagesService = createPiPackagesService({
+  admin,
+  db,
+  requestRunnerJson,
+  requireSession,
+  requireWorkspace,
+});
+const goalsService = createGoalsService({
   admin,
   db,
   requestRunnerJson,
@@ -300,6 +308,7 @@ function googleMcpTokenRefreshUrl() {
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
   environmentKeysService,
+  goalsService,
   openAiCodexAuthService,
   piModelsService,
   piPackagesService,

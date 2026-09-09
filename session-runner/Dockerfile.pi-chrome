@@ -9,6 +9,7 @@ RUN apt-get update \
 RUN curl -fsSL https://pi.dev/install.sh | sh
 
 RUN pi install npm:pi-mcp-adapter
+RUN pi install npm:pi-goal-x@0.31.2
 RUN npm install -g chrome-devtools-mcp@1.6.0
 
 WORKDIR /app
@@ -22,6 +23,7 @@ COPY routes ./routes
 COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
+RUN node /app/lib/patchPiGoalX.js
 
 RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
@@ -37,6 +39,9 @@ ENV WORKSPACE_DIR=/workspace
 ENV PI_CODING_AGENT_DIR=/root/.pi/agent
 ENV TERMINAL_COMMAND=pi
 ENV TERMINAL_ARGS='["-c"]'
+ENV GOAL_BRIDGE_ENABLED=true
+ENV GOAL_RPC_ENABLED=true
+ENV PI_GOAL_X_VERSION=0.31.2
 ENV PREVIEW_ENABLED=true
 ENV PREVIEW_BASE_PATH=/preview
 ENV PREVIEW_STATIC_ROOT=/workspace/build
@@ -56,7 +61,7 @@ ENV CHROME_CDP_PORT=9222
 ENV CHROME_VNC_HOST=127.0.0.1
 ENV CHROME_VNC_PORT=5900
 ENV CHROME_NOVNC_PORT=6080
-ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true,"chrome":true}
+ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true,"chrome":true,"goals":true}
 
 EXPOSE 8080
 CMD ["npm", "start"]

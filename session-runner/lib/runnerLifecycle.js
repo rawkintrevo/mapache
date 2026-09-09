@@ -9,6 +9,7 @@ function createRunnerLifecycleCoordinator({
   chromeRuntime,
   config,
   git,
+  goalsPackage,
   listen,
   logger = console,
   piChat,
@@ -24,6 +25,11 @@ function createRunnerLifecycleCoordinator({
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      const goalsPackageResult = await goalsPackage?.ensureInstalledDeclaration?.();
+      goalsPackage?.setBridgeAvailability?.(goalsPackageResult?.enabled !== false);
+      if (goalsPackageResult?.reason === "managed_package_missing") {
+        (logger.warn || logger.log || console.warn)("managed pi-goal-x package is missing from the image; goal controls remain disabled");
+      }
       await piModelScope.restore();
       await chromeProfile.restore();
       await chromeRuntime.start();
@@ -48,6 +54,11 @@ function createRunnerLifecycleCoordinator({
 
   async function shutdown() {
     piChat?.close?.();
+    try {
+      await goalsPackage?.stop?.();
+    } catch (error) {
+      logger.error("goal RPC shutdown failed", error);
+    }
     resourceMetrics?.close?.();
     sshSession.closeAll();
     await chromeRuntime.stop();

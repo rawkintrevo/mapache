@@ -85,6 +85,26 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "create-directory") {
     return {name: "workspaceCreateDirectory", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "goals") {
+    return {name: "workspaceGoals", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "goals") {
+    return {name: "workspaceGoal", workspaceId: parts[1], goalId: parts[3]};
+  }
+  if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "goals") {
+    const goalRoute = {
+      actions: "workspaceGoalAction",
+      events: "workspaceGoalEvents",
+      runtime: "workspaceGoalRuntime",
+    };
+    if (goalRoute[parts[4]]) return {name: goalRoute[parts[4]], workspaceId: parts[1], goalId: parts[3]};
+  }
+  if (parts.length === 7 && parts[0] === "workspaces" && parts[2] === "goals" && parts[4] === "questions" && parts[6] === "answer") {
+    return {name: "workspaceGoalQuestionAnswer", workspaceId: parts[1], goalId: parts[3], questionId: parts[5]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "goal-operations") {
+    return {name: "workspaceGoalOperation", workspaceId: parts[1], operationId: parts[3]};
+  }
   if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "file" && parts[3] === "download-url") {
     return {name: "workspaceFileDownloadUrl", workspaceId: parts[1]};
   }

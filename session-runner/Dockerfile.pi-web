@@ -9,6 +9,7 @@ RUN apt-get update \
 RUN curl -fsSL https://pi.dev/install.sh | sh
 
 RUN pi install npm:pi-mcp-adapter
+RUN pi install npm:pi-goal-x@0.31.2
 
 WORKDIR /app
 COPY package*.json ./
@@ -20,6 +21,7 @@ COPY lib ./lib
 COPY routes ./routes
 COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
+RUN node /app/lib/patchPiGoalX.js
 
 RUN chmod +x /app/bin/mapache-preview-qa.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa
@@ -31,6 +33,9 @@ ENV WORKSPACE_DIR=/workspace
 ENV PI_CODING_AGENT_DIR=/root/.pi/agent
 ENV TERMINAL_COMMAND=pi
 ENV TERMINAL_ARGS='["-c"]'
+ENV GOAL_BRIDGE_ENABLED=true
+ENV GOAL_RPC_ENABLED=true
+ENV PI_GOAL_X_VERSION=0.31.2
 ENV PREVIEW_ENABLED=true
 ENV PREVIEW_BASE_PATH=/preview
 ENV PREVIEW_STATIC_ROOT=/workspace/build
@@ -43,7 +48,7 @@ ENV MAPACHE_BROWSER_QA_COMMAND=/usr/local/bin/mapache-preview-qa
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV NODE_PATH=/usr/local/lib/node_modules
-ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true}
+ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true,"goals":true}
 
 EXPOSE 8080
 CMD ["npm", "start"]

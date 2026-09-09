@@ -9,6 +9,7 @@ RUN apt-get update \
 RUN curl -fsSL https://pi.dev/install.sh | sh
 
 RUN pi install npm:pi-mcp-adapter
+RUN pi install npm:pi-goal-x@0.31.2
 
 WORKDIR /app
 COPY package*.json ./
@@ -18,6 +19,7 @@ COPY lib ./lib
 COPY routes ./routes
 COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
+RUN node /app/lib/patchPiGoalX.js
 
 RUN mkdir -p /workspace /root/.pi
 ENV PORT=8080
@@ -26,6 +28,9 @@ ENV WORKSPACE_DIR=/workspace
 ENV PI_CODING_AGENT_DIR=/root/.pi/agent
 ENV TERMINAL_COMMAND=pi
 ENV TERMINAL_ARGS='["-c"]'
+ENV GOAL_BRIDGE_ENABLED=true
+ENV GOAL_RPC_ENABLED=true
+ENV PI_GOAL_X_VERSION=0.31.2
 
 EXPOSE 8080
 CMD ["npm", "start"]

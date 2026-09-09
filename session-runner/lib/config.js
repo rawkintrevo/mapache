@@ -30,7 +30,7 @@ function normalizePreviewBasePath(value) {
 }
 
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false, chat: false};
+  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false, chat: false, goals: false};
   try {
     const parsed = JSON.parse(process.env.RUNNER_CAPABILITIES || "{}");
     return Object.fromEntries(Object.keys(fallback).map((key) => [

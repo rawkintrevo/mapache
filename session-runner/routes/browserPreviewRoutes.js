@@ -17,6 +17,13 @@ function registerBrowserRoutes({
     res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken}));
   });
 
+  app.get("/shell", requireBrowserAccess, (req, res) => {
+    res.type("html").send(renderTerminalPage({
+      accessToken: req.mapacheAccessToken,
+      socketPath: "/shell",
+    }));
+  });
+
   app.get("/healthz", requireBrowserAccess, (req, res) => {
     res.json({
       ok: true,
