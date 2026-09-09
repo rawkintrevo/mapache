@@ -334,7 +334,7 @@ The panel should not become a general shell command runner. Inputs should be pac
 
 ## Sync and Archive Rules
 
-The package manager should reuse the runner's existing archive-backed sync pattern.
+The package manager should reuse the runner's existing archive-backed sync pattern. The persistent home archive excludes npm's mutable `~/.npm` cache so an install or update cannot race the home tar upload; workspace-local package state remains in the dedicated `/workspace/.pi/npm` and `/workspace/.pi/git` archives.
 
 Normal file sync:
 

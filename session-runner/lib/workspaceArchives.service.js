@@ -183,6 +183,10 @@ function homeArchiveExcludePatterns(config) {
   const excludes = [
     ".config/gh/hosts.yml",
     "./.config/gh/hosts.yml",
+    ".npm",
+    ".npm/*",
+    "./.npm",
+    "./.npm/*",
   ];
   if (!relative || relative.startsWith("../") || relative === ".." || path.isAbsolute(relative) ||
       !oauthRelative || oauthRelative.startsWith("../") || oauthRelative === ".." || path.isAbsolute(oauthRelative)) {
