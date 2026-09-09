@@ -178,6 +178,15 @@ export function friendlyGitStatusError(error) {
   const message = error.message || "Could not load Git status.";
   if (message === "runner_busy_or_unavailable") return "The session runner is busy or unavailable right now. Try again in a few seconds.";
   if (message === "runner_git_status_unavailable") return "Git status is temporarily unavailable.";
+  if (message === "runner_git_branches_unavailable") return "Git branches are temporarily unavailable.";
+  if (message === "runner_git_checkout_unavailable") return "Git branch switching is temporarily unavailable.";
+  if (message === "runner_git_branch_unavailable") return "Git branch creation is temporarily unavailable.";
+  if (message === "runner_git_ignore_unavailable") return "Git ignore is temporarily unavailable.";
+  if (message === "git_branch_not_found") return "That branch is not available from the repository remote.";
+  if (message === "git_branch_name_conflict") return "A local or remote branch with that name already exists.";
+  if (message === "invalid_git_branch") return "Enter a valid Git branch name.";
+  if (message === "missing_git_branch") return "Choose a Git branch.";
+  if (message === "git_checkout_failed") return "Git could not switch branches. Commit or stash conflicting changes and try again.";
   if (message === "runner_git_push_unavailable") return "Git push is temporarily unavailable.";
   if (message === "runner_git_open_pr_unavailable") return "Pull request creation is temporarily unavailable.";
   if (message === "github_auth_not_configured") return "GitHub auth is not configured for push.";

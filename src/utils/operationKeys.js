@@ -6,6 +6,8 @@ export const OPERATION_KEYS = Object.freeze({
   GIT_PULL_REQUEST: "git.pull-request",
   GIT_STAGE: "git.stage",
   GIT_UNSTAGE: "git.unstage",
+  GIT_BRANCH: "git.branch",
+  GIT_IGNORE: "git.ignore",
   SESSION_CREATE: "session.create",
   SESSION_DELETE: "session.delete",
   SESSION_EDIT: "session.edit",

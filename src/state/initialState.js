@@ -22,6 +22,11 @@ export function createGitStatusState(overrides = {}) {
     actionMessage: "",
     commitMessage: "",
     canOpenPr: false,
+    manageOpen: false,
+    branches: [],
+    branchesLoading: false,
+    branchActionMessage: "",
+    branchName: "",
     ...overrides,
   };
 }

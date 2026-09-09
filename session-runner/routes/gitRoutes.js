@@ -26,6 +26,22 @@ function registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAcce
     });
   });
 
+  app.post("/git/branches", async (req, res) => {
+    await handleGitAction(req, res, "git branch listing failed", "git_branches_failed", () => git.listGitBranches(req.body || {}), config, git, hasRunnerAccess);
+  });
+
+  app.post("/git/checkout", async (req, res) => {
+    await handleGitAction(req, res, "git branch checkout failed", "git_checkout_failed", () => git.checkoutGitBranch(req.body || {}), config, git, hasRunnerAccess);
+  });
+
+  app.post("/git/branch", async (req, res) => {
+    await handleGitAction(req, res, "git branch creation failed", "git_branch_failed", () => git.createGitBranch(req.body || {}), config, git, hasRunnerAccess);
+  });
+
+  app.post("/git/ignore", async (req, res) => {
+    await handleGitAction(req, res, "git ignore failed", "git_ignore_failed", () => git.ignoreGitPath(req.body || {}), config, git, hasRunnerAccess);
+  });
+
   app.post("/git/stage", async (req, res) => {
     await handleGitAction(req, res, "git stage failed", "git_stage_failed", () => git.stageGitPaths(req.body || {}), config, git, hasRunnerAccess);
   });

@@ -12,6 +12,7 @@ function createAutomationHarness({commitCount, status}) {
   const commands = [];
   const activityUpdates = [];
   const pullRequests = [];
+  let currentBranch = "main";
   const config = {
     githubAutomationToken: "automation-token",
     githubRepoName: "mapache",
@@ -24,7 +25,8 @@ function createAutomationHarness({commitCount, status}) {
   };
   const runGitCommand = async (args) => {
     commands.push(args);
-    if (args[0] === "branch" && args[1] === "--show-current") return "main";
+    if (args[0] === "branch" && args[1] === "--show-current") return currentBranch;
+    if (args[0] === "checkout" && args[1] === "-b") currentBranch = args[2];
     if (args[0] === "ls-remote") return args[3] === "main" ? "main\tbase-commit" : "";
     if (args[0] === "rev-parse") return "base-commit";
     if (args[0] === "status") return status;
@@ -46,7 +48,7 @@ function createAutomationHarness({commitCount, status}) {
     runGitCommand,
     withGithubAutomationAuth: (task) => task({GITHUB_AUTOMATION_TOKEN: "automation-token"}),
   });
-  return {activityUpdates, commands, config, pullRequests, service};
+  return {activityUpdates, commands, config, pullRequests, service, setCurrentBranch: (branch) => { currentBranch = branch; }};
 }
 
 test("automation commits changed files before opening a pull request", async () => {
@@ -122,6 +124,16 @@ test("automation resumes the current session branch without resetting restored s
   assert.equal(commands.some((args) => args[0] === "clean"), false);
   assert.equal(commands.some((args) => args[0] === "stash"), false);
   assert.equal(activityUpdates.at(-1).githubAutomationStatus, "ready");
+});
+
+test("automation skips finalization after switching away from its session branch", async () => {
+  const harness = createAutomationHarness({commitCount: 1, status: " M src/app.js"});
+  await harness.service.prepareGithubAutomationBranch();
+  harness.setCurrentBranch("other-branch");
+  const result = await harness.service.finalizeGithubAutomationBranch(0);
+  assert.equal(result.reason, "branch_changed");
+  assert.equal(harness.pullRequests.length, 0);
+  assert.equal(harness.commands.some((args) => args[0] === "commit"), false);
 });
 
 test("automation cleanup reapplies restored tracked and untracked files after branching", async (t) => {

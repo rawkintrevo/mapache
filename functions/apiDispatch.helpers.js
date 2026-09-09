@@ -76,6 +76,10 @@ const ROUTE_DISPATCHERS = Object.freeze({
   ]),
   git: Object.freeze([
     ["GET", "gitStatus", jsonResult(({handlers, route, user}) => handlers.getGitStatusSummary(user.uid, route.workspaceId, route.sessionId))],
+    ["POST", "gitBranches", jsonResult(({handlers, route, user}) => handlers.listGitBranches(user.uid, route.workspaceId, route.sessionId))],
+    ["POST", "gitCheckout", jsonResult(({handlers, req, route, user}) => handlers.checkoutGitBranch(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+    ["POST", "gitBranch", jsonResult(({handlers, req, route, user}) => handlers.createGitBranch(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
+    ["POST", "gitIgnore", jsonResult(({handlers, req, route, user}) => handlers.ignoreGitPath(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "gitPull", jsonResult(({handlers, route, user}) => handlers.pullGit(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "gitStage", jsonResult(({handlers, req, route, user}) => handlers.stageGit(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "gitUnstage", jsonResult(({handlers, req, route, user}) => handlers.unstageGit(user.uid, route.workspaceId, route.sessionId, req.body || {}))],

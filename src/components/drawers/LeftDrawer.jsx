@@ -7,6 +7,7 @@ import {UserMenu} from "./UserMenu.jsx";
 import {Button} from "../common/Button.jsx";
 import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
+import {GitDrawerSection} from "./GitDrawerSection.jsx";
 
 export function LeftDrawer({
   state,
@@ -17,6 +18,9 @@ export function LeftDrawer({
   onRefreshWorkspaceFiles,
   onRetryProvisioningSession,
   onDownloadWorkspaceFile,
+  onOpenGitManager,
+  onPullGit,
+  onPushGit,
   onCreateWorkspaceDirectory,
   onCreateWorkspaceFile,
   onUploadWorkspaceFiles,
@@ -226,6 +230,14 @@ export function LeftDrawer({
             onStopSession={onStopSession}
           />
         </DrawerSection>
+        <GitDrawerSection
+          busy={busy}
+          state={state}
+          onOpenGitManager={onOpenGitManager}
+          onPullGit={onPullGit}
+          onPushGit={onPushGit}
+          onToggleDrawerSection={onToggleDrawerSection}
+        />
       </div>
       <UserMenu
         state={state}

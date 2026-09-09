@@ -8,24 +8,16 @@ export function WorkspacePanel({
   selectedWorkspace,
   state,
   onGetSessionAccessUrls,
-  onCommitGit,
   onOpenPiAuthManage,
   onOpenPiModels,
-  onOpenPullRequest,
-  onPullGit,
-  onPushGit,
   onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
   onCloseSshSessionForward,
   onCreateSshSessionForward,
   onSelectSession,
-  onStageGitPath,
-  onUnstageGitPath,
-  onUpdateGitCommitMessage,
   onUpdateSshForwardPort,
 }) {
-  const isGithubWorkspace = resolveIsGithubWorkspace(selectedWorkspace, selectedSession);
   const busy = hasPendingOperations(state.pendingOperations);
 
   if (selectedSession) {
@@ -33,26 +25,17 @@ export function WorkspacePanel({
       <section className="workspace">
         <SessionDetail
           busy={busy}
-          gitStatus={state.gitStatus}
-          isGithubWorkspace={isGithubWorkspace}
           session={selectedSession}
           sshForwards={state.sshForwards}
           workspaceId={state.selectedWorkspaceId}
-          onCommitGit={onCommitGit}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
           onOpenPiAuthManage={onOpenPiAuthManage}
           onOpenPiModels={onOpenPiModels}
-          onOpenPullRequest={onOpenPullRequest}
-          onPullGit={onPullGit}
-          onPushGit={onPushGit}
           onRetryProvisioningSession={onRetryProvisioningSession}
           onRestartSession={onRestartSession}
           onShareSessionPreview={onShareSessionPreview}
           onCloseSshSessionForward={onCloseSshSessionForward}
           onCreateSshSessionForward={onCreateSshSessionForward}
-          onStageGitPath={onStageGitPath}
-          onUnstageGitPath={onUnstageGitPath}
-          onUpdateGitCommitMessage={onUpdateGitCommitMessage}
           onUpdateSshForwardPort={onUpdateSshForwardPort}
         />
       </section>

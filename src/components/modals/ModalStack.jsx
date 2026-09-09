@@ -12,6 +12,7 @@ import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
 import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
+import {GitManagerModal} from "./GitManagerModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
@@ -143,6 +144,23 @@ export function ModalStack(props) {
           onClose={git.closePullRequestModal}
           onSubmit={git.submitPullRequest}
           onUpdate={git.updatePullRequestForm}
+        />
+      ) : null}
+      {state.gitStatus?.manageOpen ? (
+        <GitManagerModal
+          busy={busy}
+          gitStatus={state.gitStatus}
+          session={props.selectedSession}
+          onCheckoutBranch={git.checkoutGitBranch}
+          onClose={git.closeGitManagerModal}
+          onCommitGit={git.commitGit}
+          onCreateBranch={git.createGitBranch}
+          onIgnoreGitPath={git.ignoreGitPath}
+          onOpenPullRequest={git.openPullRequestModal}
+          onRefreshBranches={git.loadGitBranches}
+          onStageGitPath={git.stageGitPath}
+          onUnstageGitPath={git.unstageGitPath}
+          onUpdateGitCommitMessage={git.updateGitCommitMessage}
         />
       ) : null}
     </>

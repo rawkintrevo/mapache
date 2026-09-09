@@ -220,6 +220,26 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-status`,
     ),
+    getGitBranches: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-branches`,
+        {method: "POST", body: {}},
+    ),
+    checkoutGitBranch: (workspaceId, sessionId, branch) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-checkout`,
+        {method: "POST", body: {branch}},
+    ),
+    createGitBranch: (workspaceId, sessionId, branch) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-branch`,
+        {method: "POST", body: {branch}},
+    ),
+    ignoreGitPath: (workspaceId, sessionId, path) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-ignore`,
+        {method: "POST", body: {path}},
+    ),
     pullGit: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/git-pull`,

@@ -26,6 +26,7 @@ This document serves as an index for significant UI components in the applicatio
 | `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, workspace dropdown, workspace create/delete actions, documentation links, and refresh control. |
 | `GlobalActionIndicator` | `src/components/layout/GlobalActionIndicator.jsx` | Shell-level live status indicator shown while global `state.busy` actions are running. |
 | `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspace files, sessions, and the pinned user menu. |
+| `GitDrawerSection` | `src/components/drawers/GitDrawerSection.jsx` | GitHub-session navigation section with current branch, pull/push actions, and Git manager entry point. |
 | `DrawerList` | `src/components/drawers/DrawerList.jsx` | Shared drawer row/list primitives for workspace, session, auth provider, package, extension, and future skill rows. |
 | `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including edit, stop, and delete actions. |
@@ -52,7 +53,7 @@ This document serves as an index for significant UI components in the applicatio
 | `PiChatMessage` | `src/components/sessions/PiChatMessage.jsx` | Accessible user/assistant message bubble; assistant content uses safe GitHub Flavored Markdown without raw HTML. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |
 | `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Live CPU and RAM utilization meters for running Cloud sessions. |
-| `GitStatusPanel` | `src/components/sessions/GitStatusPanel.jsx` | React GitHub-session panel under the terminal for Git status, pull, stage/unstage, commit, push, and pull request actions. |
+| `GitManagerModal` | `src/components/modals/GitManagerModal.jsx` | GitHub-session modal for branch selection/creation, commit metadata, staged/unstaged/untracked file actions, ignore entries, commits, and pull requests. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace with preset/custom CPU and memory summaries. |
 | `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced Small/Medium/Large selector and Advanced CPU/memory controls used by Cloud session creation and resize. |
 | `SessionStatusSummary` | `src/components/sessions/SessionStatusSummary.jsx` | Shared session-row accessory that renders the accessible status light tooltip and hyphen-split runner tags for both session list variants. |

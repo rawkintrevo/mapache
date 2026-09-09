@@ -93,7 +93,7 @@ function createTestApiHandlers() {
     "listSessions", "createSession", "renameSession", "resizeSession", "restartSession", "stopSession",
     "deleteSession", "createSessionAccessUrls", "shareSessionPreview", "listSshSessionFiles",
     "readSshSessionFile", "saveSshSessionFile", "listSshSessionForwards", "createSshSessionForward",
-    "closeSshSessionForward", "getGitStatusSummary", "pullGit", "stageGit", "unstageGit",
+    "closeSshSessionForward", "getGitStatusSummary", "listGitBranches", "checkoutGitBranch", "createGitBranch", "ignoreGitPath", "pullGit", "stageGit", "unstageGit",
     "commitGit", "pushGit", "openPullRequest",
   ];
   const operations = Object.fromEntries(operationNames.map((name) => [name, stub]));

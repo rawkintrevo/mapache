@@ -123,6 +123,19 @@ function createGithubAutomationService({
       return {ok: true, skipped: true, reason: "github_automation_already_finalized", pullRequest: automationPullRequest};
     }
 
+    const currentBranch = normalizeEnvString(
+        await runGitCommand(["branch", "--show-current"], {captureStdout: true}).catch(() => ""),
+    );
+    if (currentBranch !== automationBranch) {
+      await activity.updateSessionActivity({
+        githubAutomationStatus: "skipped_branch_changed",
+        githubAutomationFinishedAt: new Date().toISOString(),
+        githubAutomationError: `Pi exited on ${currentBranch || "detached HEAD"}; expected ${automationBranch}.`,
+      });
+      console.log(`github automation skipped because current branch is ${currentBranch || "detached HEAD"}`);
+      return {ok: true, skipped: true, reason: "branch_changed", currentBranch, automationBranch};
+    }
+
     await activity.updateSessionActivity({
       githubAutomationStatus: "finalizing",
       githubAutomationFinishedAt: null,

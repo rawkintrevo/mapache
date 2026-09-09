@@ -10,6 +10,14 @@ function createGitSessionService(dependencies = {}) {
       commitGit(uid, workspaceId, sessionId, payload, dependencies),
     getGitStatusSummary: (uid, workspaceId, sessionId) =>
       getGitStatusSummary(uid, workspaceId, sessionId, dependencies),
+    listGitBranches: (uid, workspaceId, sessionId) =>
+      listGitBranches(uid, workspaceId, sessionId, dependencies),
+    checkoutGitBranch: (uid, workspaceId, sessionId, payload) =>
+      checkoutGitBranch(uid, workspaceId, sessionId, payload, dependencies),
+    createGitBranch: (uid, workspaceId, sessionId, payload) =>
+      createGitBranch(uid, workspaceId, sessionId, payload, dependencies),
+    ignoreGitPath: (uid, workspaceId, sessionId, payload) =>
+      ignoreGitPath(uid, workspaceId, sessionId, payload, dependencies),
     openPullRequest: (uid, workspaceId, sessionId, payload) =>
       openPullRequest(uid, workspaceId, sessionId, payload, dependencies),
     pullGit: (uid, workspaceId, sessionId) => pullGit(uid, workspaceId, sessionId, dependencies),
@@ -27,6 +35,51 @@ async function getGitStatusSummary(uid, workspaceId, sessionId, dependencies = {
   });
   return dependencies.requestRunnerJson(session, "/git/status", {
     unavailableError: "runner_git_status_unavailable",
+  });
+}
+
+async function listGitBranches(uid, workspaceId, sessionId, dependencies = {}) {
+  const session = await requireGitSession(uid, workspaceId, sessionId, dependencies, {
+    unavailableError: "runner_git_branches_unavailable",
+  });
+  const auth = await connectedGithubPushAuth(session, dependencies);
+  return dependencies.requestRunnerJson(session, "/git/branches", {
+    method: "POST",
+    body: auth,
+    unavailableError: "runner_git_branches_unavailable",
+  });
+}
+
+async function checkoutGitBranch(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  const session = await requireGitSession(uid, workspaceId, sessionId, dependencies, {
+    unavailableError: "runner_git_checkout_unavailable",
+  });
+  return dependencies.requestRunnerJson(session, "/git/checkout", {
+    method: "POST",
+    body: {branch: payload && payload.branch},
+    unavailableError: "runner_git_checkout_unavailable",
+  });
+}
+
+async function createGitBranch(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  const session = await requireGitSession(uid, workspaceId, sessionId, dependencies, {
+    unavailableError: "runner_git_branch_unavailable",
+  });
+  return dependencies.requestRunnerJson(session, "/git/branch", {
+    method: "POST",
+    body: {branch: payload && payload.branch},
+    unavailableError: "runner_git_branch_unavailable",
+  });
+}
+
+async function ignoreGitPath(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  const session = await requireGitSession(uid, workspaceId, sessionId, dependencies, {
+    unavailableError: "runner_git_ignore_unavailable",
+  });
+  return dependencies.requestRunnerJson(session, "/git/ignore", {
+    method: "POST",
+    body: {path: payload && payload.path},
+    unavailableError: "runner_git_ignore_unavailable",
   });
 }
 
@@ -78,17 +131,17 @@ async function pushGit(uid, workspaceId, sessionId, dependencies = {}) {
     unavailableError: "runner_git_push_unavailable",
   });
   if (cleanName(session.sourceType) === "github" && cleanName(session.sourceMode) === "connected") {
-    const installationId = cleanGithubNumericId(session.sourceInstallationId);
-    if (!installationId) {
-      throw httpError(503, "github_push_auth_unavailable");
-    }
-    const tokenResponse = await dependencies.githubService.createGithubInstallationToken(installationId);
-    return requestRunnerGitPush(session, {
-      pushToken: tokenResponse.token,
-      pushUsername: "x-access-token",
-    }, dependencies);
+    return requestRunnerGitPush(session, await connectedGithubPushAuth(session, dependencies), dependencies);
   }
   return requestRunnerGitPush(session, undefined, dependencies);
+}
+
+async function connectedGithubPushAuth(session, dependencies) {
+  if (cleanName(session.sourceType) !== "github" || cleanName(session.sourceMode) !== "connected") return {};
+  const installationId = cleanGithubNumericId(session.sourceInstallationId);
+  if (!installationId) throw httpError(503, "github_push_auth_unavailable");
+  const tokenResponse = await dependencies.githubService.createGithubInstallationToken(installationId);
+  return {pushToken: tokenResponse.token, pushUsername: "x-access-token"};
 }
 
 async function openPullRequest(uid, workspaceId, sessionId, payload, dependencies = {}) {
@@ -145,6 +198,10 @@ function normalizeGitCommitMessage(payload) {
 
 module.exports = {
   createGitSessionService,
+  listGitBranches,
+  checkoutGitBranch,
+  createGitBranch,
+  ignoreGitPath,
   normalizeGitActionPayloadPaths,
   normalizeGitCommitMessage,
 };

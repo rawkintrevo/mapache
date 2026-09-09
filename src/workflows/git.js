@@ -11,53 +11,38 @@ export async function loadGitStatusState({state, getSelectedSession, resetGitSta
     resetGitStatus();
     return;
   }
-  state.gitStatus = {
-    loading: true,
-    error: "",
-    unavailable: false,
-    data: null,
-    actionMessage: state.gitStatus.actionMessage || "",
-    commitMessage: state.gitStatus.commitMessage || "",
-    canOpenPr: state.gitStatus.canOpenPr || false,
-  };
+  state.gitStatus = {...state.gitStatus, loading: true, error: "", unavailable: false, data: null};
   render();
 
   try {
     const data = await state.api.getGitStatus(workspaceId, sessionId);
     if (!isCurrentSessionRequest(request)) return;
     if (data && data.ok && data.git === false) {
-      state.gitStatus = {
-        loading: false,
-        error: "",
-        unavailable: true,
-        data,
-        actionMessage: state.gitStatus.actionMessage || "",
-        commitMessage: state.gitStatus.commitMessage || "",
-        canOpenPr: false,
-      };
+      state.gitStatus = {...state.gitStatus, loading: false, error: "", unavailable: true, data, canOpenPr: false};
       render();
       return;
     }
-    state.gitStatus = {
-      loading: false,
-      error: "",
-      unavailable: false,
-      data: data || null,
-      actionMessage: state.gitStatus.actionMessage || "",
-      commitMessage: state.gitStatus.commitMessage || "",
-      canOpenPr: canOpenPullRequestForSession(getSelectedSession(), data, state.gitStatus.canOpenPr),
-    };
+    state.gitStatus = {...state.gitStatus, loading: false, error: "", unavailable: false, data: data || null, canOpenPr: canOpenPullRequestForSession(getSelectedSession(), data, state.gitStatus.canOpenPr)};
   } catch (error) {
     if (!isCurrentSessionRequest(request)) return;
-    state.gitStatus = {
-      loading: false,
-      error: friendlyGitStatusError(error),
-      unavailable: true,
-      data: null,
-      actionMessage: state.gitStatus.actionMessage || "",
-      commitMessage: state.gitStatus.commitMessage || "",
-      canOpenPr: false,
-    };
+    state.gitStatus = {...state.gitStatus, loading: false, error: friendlyGitStatusError(error), unavailable: true, data: null, canOpenPr: false};
+  }
+  render();
+}
+
+export async function loadGitBranchesState({state, render, request}) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId) return;
+  state.gitStatus = {...state.gitStatus, branchesLoading: true, error: ""};
+  render();
+  try {
+    const data = await state.api.getGitBranches(workspaceId, sessionId);
+    if (request && !request.isCurrent()) return;
+    state.gitStatus = {...state.gitStatus, branchesLoading: false, branches: data?.branches || [], error: ""};
+  } catch (error) {
+    if (request && !request.isCurrent()) return;
+    state.gitStatus = {...state.gitStatus, branchesLoading: false, error: friendlyGitStatusError(error)};
   }
   render();
 }
@@ -70,15 +55,13 @@ export async function pullGitState({state, loadGitStatus, render}) {
   state.gitStatus = {...state.gitStatus, actionMessage: "Pulling latest changes...", error: ""};
   render();
   const result = await state.api.pullGit(workspaceId, sessionId);
-  state.gitStatus = {
-    loading: false,
+  state.gitStatus = {...state.gitStatus, loading: false,
     error: result && result.pull && result.pull.ok === false ? (result.pull.message || "Git pull reported an issue.") : "",
     unavailable: Boolean(result && result.git === false),
     data: result || null,
     actionMessage: result && result.pull && result.pull.ok === false ?
       "Pull completed with Git conflicts or merge issues." :
-      "Pull completed.",
-  };
+      "Pull completed."};
   await loadGitStatus();
 }
 
@@ -90,15 +73,7 @@ export async function runGitFileActionState({state, path, action, actionMessage,
   state.gitStatus = {...state.gitStatus, actionMessage, error: ""};
   render();
   const result = await requestAction(workspaceId, sessionId);
-  state.gitStatus = {
-    loading: false,
-    error: "",
-    unavailable: Boolean(result && result.git === false),
-    data: result || null,
-    actionMessage: `${action === "stage" ? "Staged" : "Unstaged"} ${path}.`,
-    commitMessage: state.gitStatus.commitMessage || "",
-    canOpenPr: state.gitStatus.canOpenPr || false,
-  };
+  state.gitStatus = {...state.gitStatus, loading: false, error: "", unavailable: Boolean(result && result.git === false), data: result || null, actionMessage: `${action === "stage" ? "Staged" : "Unstaged"} ${path}.`};
   await loadGitStatus();
 }
 
@@ -115,15 +90,7 @@ export async function commitGitState({state, loadGitStatus, render}) {
   state.gitStatus = {...state.gitStatus, actionMessage: "Creating commit...", error: ""};
   render();
   const result = await state.api.commitGit(workspaceId, sessionId, message);
-  state.gitStatus = {
-    loading: false,
-    error: "",
-    unavailable: Boolean(result && result.git === false),
-    data: result || null,
-    actionMessage: result && result.committedHead ? `Committed ${result.committedHead.slice(0, 7)}.` : "Commit created.",
-    commitMessage: "",
-    canOpenPr: state.gitStatus.canOpenPr || false,
-  };
+  state.gitStatus = {...state.gitStatus, loading: false, error: "", unavailable: Boolean(result && result.git === false), data: result || null, actionMessage: result && result.committedHead ? `Committed ${result.committedHead.slice(0, 7)}.` : "Commit created.", commitMessage: ""};
   await loadGitStatus();
 }
 
@@ -136,20 +103,70 @@ export async function pushGitState({state, loadGitStatus, render}) {
   render();
   try {
     const result = await state.api.pushGit(workspaceId, sessionId);
-    state.gitStatus = {
-      loading: false,
-      error: result && result.push && result.push.ok === false ? (result.push.message || "Git push reported an issue.") : "",
-      unavailable: Boolean(result && result.git === false),
-      data: result || null,
-      actionMessage: result && result.push && result.push.ok === false ? "Push completed with Git errors." : "Push completed.",
-      commitMessage: state.gitStatus.commitMessage || "",
-      canOpenPr: result && result.push && result.push.ok === false ? state.gitStatus.canOpenPr : true,
-    };
+    state.gitStatus = {...state.gitStatus, loading: false, error: result && result.push && result.push.ok === false ? (result.push.message || "Git push reported an issue.") : "", unavailable: Boolean(result && result.git === false), data: result || null, actionMessage: result && result.push && result.push.ok === false ? "Push completed with Git errors." : "Push completed.", canOpenPr: result && result.push && result.push.ok === false ? state.gitStatus.canOpenPr : true};
     await loadGitStatus();
   } catch (error) {
     state.gitStatus = {...state.gitStatus, error: friendlyGitStatusError(error), actionMessage: ""};
     render();
   }
+}
+
+export async function checkoutGitBranchState({state, branch, loadGitStatus, loadGitBranches, render}) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId || !branch) return;
+  state.gitStatus = {...state.gitStatus, branchActionMessage: `Switching to ${branch}...`, error: ""};
+  render();
+  try {
+    await state.api.checkoutGitBranch(workspaceId, sessionId, branch);
+    state.gitStatus = {...state.gitStatus, branchActionMessage: `Switched to ${branch}.`, error: ""};
+    await loadGitStatus();
+    await loadGitBranches();
+  } catch (error) {
+    state.gitStatus = {...state.gitStatus, branchActionMessage: "", error: friendlyGitStatusError(error)};
+    render();
+  }
+}
+
+export async function createGitBranchState({state, branch, loadGitStatus, loadGitBranches, render}) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId || !branch) return;
+  state.gitStatus = {...state.gitStatus, branchActionMessage: `Creating ${branch}...`, error: ""};
+  render();
+  try {
+    await state.api.createGitBranch(workspaceId, sessionId, branch);
+    state.gitStatus = {...state.gitStatus, branchName: "", branchActionMessage: `Created and switched to ${branch}.`, error: ""};
+    await loadGitStatus();
+    await loadGitBranches();
+  } catch (error) {
+    state.gitStatus = {...state.gitStatus, branchActionMessage: "", error: friendlyGitStatusError(error)};
+    render();
+  }
+}
+
+export async function ignoreGitPathState({state, path, loadGitStatus, render}) {
+  const workspaceId = state.selectedWorkspaceId;
+  const sessionId = state.selectedSessionId;
+  if (!workspaceId || !sessionId || !path) return;
+  state.gitStatus = {...state.gitStatus, actionMessage: `Ignoring ${path}...`, error: ""};
+  render();
+  try {
+    await state.api.ignoreGitPath(workspaceId, sessionId, path);
+    state.gitStatus = {...state.gitStatus, actionMessage: `Added ${path} to .gitignore.`, error: ""};
+    await loadGitStatus();
+  } catch (error) {
+    state.gitStatus = {...state.gitStatus, actionMessage: "", error: friendlyGitStatusError(error)};
+    render();
+  }
+}
+
+export function openGitManagerModalState(state) {
+  state.gitStatus = {...state.gitStatus, manageOpen: true, error: ""};
+}
+
+export function closeGitManagerModalState(state) {
+  state.gitStatus = {...state.gitStatus, manageOpen: false, branchName: ""};
 }
 
 export function openPullRequestModalState(state) {
@@ -183,15 +200,7 @@ export async function submitPullRequestState({state, loadGitStatus, render, open
       branchDescription: state.pullRequestForm.branchDescription,
       draft: state.pullRequestForm.draft,
     });
-    state.gitStatus = {
-      loading: false,
-      error: "",
-      unavailable: Boolean(result && result.git === false),
-      data: result || null,
-      actionMessage: result && result.pullRequest && result.pullRequest.number ? `Opened PR #${result.pullRequest.number}.` : "Opened pull request.",
-      commitMessage: state.gitStatus.commitMessage || "",
-      canOpenPr: true,
-    };
+    state.gitStatus = {...state.gitStatus, loading: false, error: "", unavailable: Boolean(result && result.git === false), data: result || null, actionMessage: result && result.pullRequest && result.pullRequest.number ? `Opened PR #${result.pullRequest.number}.` : "Opened pull request.", canOpenPr: true};
     const pullRequestUrl = result && result.pullRequest ? result.pullRequest.url : "";
     resetPullRequestFormState(state);
     await loadGitStatus();

@@ -28,6 +28,7 @@ export function AppShell(props) {
   const hasOpenModal = state.authModalOpen ||
     state.fileEditor?.open ||
     state.genericEnvironmentModalOpen ||
+    state.gitStatus?.manageOpen ||
     state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
     state.piModelsModalOpen ||
@@ -60,6 +61,9 @@ export function AppShell(props) {
           onRefresh={app.refreshAll}
           onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}
           onDownloadWorkspaceFile={files.downloadWorkspaceFile}
+          onOpenGitManager={git.openGitManagerModal}
+          onPullGit={git.pullGit}
+          onPushGit={git.pushGit}
           onCreateWorkspaceDirectory={files.createWorkspaceDirectory}
           onCreateWorkspaceFile={files.createWorkspaceFile}
           onUploadWorkspaceFiles={files.uploadWorkspaceFiles}
@@ -99,22 +103,15 @@ export function AppShell(props) {
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
-            onCommitGit={git.commitGit}
             onGetSessionAccessUrls={sessions.getSessionAccessUrls}
             onOpenPiAuthManage={modals.openPiAuthManageModal}
             onOpenPiModels={modals.openPiModelsModal}
-            onOpenPullRequest={git.openPullRequestModal}
-            onPullGit={git.pullGit}
-            onPushGit={git.pushGit}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
             onRestartSession={sessions.restartSession}
             onShareSessionPreview={sessions.shareSessionPreview}
             onCloseSshSessionForward={sessions.closeSshSessionForward}
             onCreateSshSessionForward={sessions.createSshSessionForward}
             onSelectSession={sessions.selectSession}
-            onStageGitPath={git.stageGitPath}
-            onUnstageGitPath={git.unstageGitPath}
-            onUpdateGitCommitMessage={git.updateGitCommitMessage}
             onUpdateSshForwardPort={sessions.updateSshForwardPort}
           />
         )}

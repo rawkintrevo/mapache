@@ -34,8 +34,14 @@ import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
 import {
   closePullRequestModalState,
+  closeGitManagerModalState,
   commitGitState,
+  createGitBranchState,
+  checkoutGitBranchState,
+  ignoreGitPathState,
+  loadGitBranchesState,
   loadGitStatusState,
+  openGitManagerModalState,
   openPullRequestModalState,
   pullGitState,
   pushGitState,
@@ -127,8 +133,14 @@ const handlers = {
   files: workspaceFilesController,
   git: {
     closePullRequestModal,
+    closeGitManagerModal,
     commitGit,
+    createGitBranch,
+    checkoutGitBranch,
+    ignoreGitPath,
+    loadGitBranches,
     openPullRequestModal,
+    openGitManagerModal,
     pullGit,
     pushGit,
     stageGitPath,
@@ -381,6 +393,10 @@ async function loadGitStatus(request = sessionRequestTracker.capture()) {
   await loadGitStatusState({state, getSelectedSession, resetGitStatus, render, request});
 }
 
+async function loadGitBranches(request = sessionRequestTracker.capture()) {
+  await loadGitBranchesState({state, render, request});
+}
+
 async function pullGit() {
   await runBusy(() => pullGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PULL);
 }
@@ -429,6 +445,29 @@ function openPullRequestModal() {
 function closePullRequestModal() {
   closePullRequestModalState(state);
   render();
+}
+
+async function openGitManagerModal() {
+  openGitManagerModalState(state);
+  render();
+  await loadGitBranches();
+}
+
+function closeGitManagerModal() {
+  closeGitManagerModalState(state);
+  render();
+}
+
+async function checkoutGitBranch(branch) {
+  await runBusy(() => checkoutGitBranchState({state, branch, loadGitStatus, loadGitBranches, render}), "Working...", OPERATION_KEYS.GIT_BRANCH);
+}
+
+async function createGitBranch(branch) {
+  await runBusy(() => createGitBranchState({state, branch, loadGitStatus, loadGitBranches, render}), "Working...", OPERATION_KEYS.GIT_BRANCH);
+}
+
+async function ignoreGitPath(path) {
+  await runBusy(() => ignoreGitPathState({state, path, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_IGNORE);
 }
 
 function updatePullRequestForm(patch) {

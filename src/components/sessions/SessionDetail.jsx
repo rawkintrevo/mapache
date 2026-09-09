@@ -3,7 +3,6 @@ import {Copy, ExternalLink, Mail, RotateCcw, Share2, SlidersHorizontal, UploadCl
 import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
-import {GitStatusPanel} from "./GitStatusPanel.jsx";
 import {PiChatCanvas} from "./PiChatCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
@@ -14,25 +13,16 @@ import {useSessionAccessUrls} from "./useSessionAccessUrls.js";
 
 export function SessionDetail({
   busy,
-  gitStatus,
-  isGithubWorkspace,
   session,
   sshForwards,
   workspaceId,
-  onCommitGit,
   onGetSessionAccessUrls,
-  onOpenPullRequest,
   onOpenPiModels,
-  onPullGit,
-  onPushGit,
   onRetryProvisioningSession,
   onRestartSession,
   onShareSessionPreview,
   onCloseSshSessionForward,
   onCreateSshSessionForward,
-  onStageGitPath,
-  onUnstageGitPath,
-  onUpdateGitCommitMessage,
   onUpdateSshForwardPort,
 }) {
   const [activeCanvas, setActiveCanvas] = useState("terminal");
@@ -57,7 +47,6 @@ export function SessionDetail({
   const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
   const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
   const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
-  const showGitStatus = Boolean(hasRunnerUrl && isGithubWorkspace);
   const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
@@ -363,20 +352,6 @@ export function SessionDetail({
             </div>
           ) : null}
         </div>
-      ) : null}
-      {showGitStatus ? (
-        <GitStatusPanel
-          busy={busy}
-          gitStatus={gitStatus}
-          session={session}
-          onCommitGit={onCommitGit}
-          onOpenPullRequest={onOpenPullRequest}
-          onPullGit={onPullGit}
-          onPushGit={onPushGit}
-          onStageGitPath={onStageGitPath}
-          onUnstageGitPath={onUnstageGitPath}
-          onUpdateGitCommitMessage={onUpdateGitCommitMessage}
-        />
       ) : null}
     </div>
   );

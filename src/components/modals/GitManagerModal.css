@@ -1,0 +1,8 @@
+.git-manager-panel { width: min(860px, 100%); }
+.git-manager-branch-controls, .git-manager-new-branch { display: flex; align-items: end; gap: 10px; }
+.git-manager-branch-controls label, .git-manager-new-branch label { flex: 1; }
+.git-manager-files { display: grid; gap: 16px; }
+.git-manager-group { display: grid; gap: 8px; }
+.git-manager-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.git-manager-group-heading h3 { margin: 0; font-size: 14px; }
+@media (max-width: 620px) { .git-manager-branch-controls, .git-manager-new-branch { align-items: stretch; flex-direction: column; } }

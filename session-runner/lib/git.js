@@ -11,6 +11,7 @@ const {createGithubAutomationService} = require("./gitAutomation.service");
 const {parseGitPorcelainStatus} = require("./gitStatus.helpers");
 const {
   normalizeGitActionPaths,
+  normalizeGitBranchName,
   normalizeGitCommitMessage,
   normalizeGitPullRequestPayload,
   normalizeGitPushAuthPayload,
@@ -157,6 +158,70 @@ function createGitService({config, activity}) {
       },
       files: parsed.files,
     };
+  }
+
+  async function listGitBranches(auth = {}) {
+    const fetchBranches = (env) => runGitCommand(["fetch", "origin", "--prune"], {env});
+    const pushAuth = normalizeGitPushAuthPayload(auth);
+    if (pushAuth.pushToken) {
+      await withGitPushPayloadAuth(pushAuth, fetchBranches);
+    } else {
+      await fetchBranches().catch(() => {});
+    }
+    const localOutput = await runGitCommand(["for-each-ref", "--format=%(refname:short)", "refs/heads"], {captureStdout: true});
+    const remoteOutput = await runGitCommand(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"], {captureStdout: true});
+    const localNames = String(localOutput || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+    const remoteNames = String(remoteOutput || "").split(/\r?\n/)
+        .map((value) => value.trim().replace(/^origin\//, ""))
+        .filter((value) => value && value !== "HEAD");
+    const names = new Set([...localNames, ...remoteNames]);
+    return {
+      ok: true,
+      git: true,
+      branches: [...names].sort((a, b) => a.localeCompare(b)).map((name) => ({
+        name,
+        local: localNames.includes(name),
+        remote: remoteNames.includes(name),
+      })),
+    };
+  }
+
+  async function checkoutGitBranch(payload) {
+    const branch = normalizeGitBranchName(payload && payload.branch, {required: true});
+    const localRef = await runGitCommand(["show-ref", "--verify", `refs/heads/${branch}`], {captureStdout: true}).catch(() => "");
+    if (localRef) {
+      await runGitCommand(["checkout", branch]);
+    } else {
+      const remoteRef = await runGitCommand(["show-ref", "--verify", `refs/remotes/origin/${branch}`], {captureStdout: true}).catch(() => "");
+      if (!remoteRef) throw new Error("git_branch_not_found");
+      await runGitCommand(["checkout", "--track", "-b", branch, `origin/${branch}`]);
+    }
+    return {...(await getGitStatusSummary()), action: "checkout", branch};
+  }
+
+  async function createGitBranch(payload) {
+    const branch = normalizeGitBranchName(payload && payload.branch, {required: true});
+    const localRef = await runGitCommand(["show-ref", "--verify", `refs/heads/${branch}`], {captureStdout: true}).catch(() => "");
+    const remoteRef = await runGitCommand(["show-ref", "--verify", `refs/remotes/origin/${branch}`], {captureStdout: true}).catch(() => "");
+    if (localRef || remoteRef) throw new Error("git_branch_name_conflict");
+    await runGitCommand(["checkout", "-b", branch]);
+    return {...(await getGitStatusSummary()), action: "create_branch", branch};
+  }
+
+  async function ignoreGitPath(payload) {
+    const paths = normalizeGitActionPaths([payload && payload.path]);
+    const pathValue = paths[0];
+    const fs = require("fs");
+    const ignorePath = require("path").join(config.workspaceDir, ".gitignore");
+    const existing = await fs.promises.readFile(ignorePath, "utf8").catch(() => "");
+    const escaped = pathValue.replace(/[\\*?[\]#!]/g, (character) => `\\${character}`);
+    const pattern = `/${escaped}`;
+    const lines = existing.split(/\r?\n/);
+    if (!lines.some((line) => line.trim() === pattern)) {
+      const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+      await fs.promises.writeFile(ignorePath, `${existing}${prefix}${pattern}\n`, "utf8");
+    }
+    return {...(await getGitStatusSummary()), action: "ignore", path: pathValue};
   }
 
   async function stageGitPaths(payload) {
@@ -323,6 +388,10 @@ function createGitService({config, activity}) {
     commitGitChanges,
     finalizeGithubAutomationBranch: automation.finalizeGithubAutomationBranch,
     getGitStatusSummary,
+    listGitBranches,
+    checkoutGitBranch,
+    createGitBranch,
+    ignoreGitPath,
     isBlankWorkspace,
     isGithubWorkspace,
     prepareGithubAutomationBranch: automation.prepareGithubAutomationBranch,
