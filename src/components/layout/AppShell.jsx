@@ -57,6 +57,7 @@ export function AppShell(props) {
           onDeleteSession={sessions.deleteSession}
           onEditSession={modals.openSessionEditModal}
           onOpenSessionModal={modals.openSessionModal}
+          onRestartSession={sessions.restartSession}
           onRetryProvisioningSession={sessions.retryProvisioningSession}
           onRefresh={app.refreshAll}
           onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}

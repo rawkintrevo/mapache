@@ -16,6 +16,7 @@ export function LeftDrawer({
   onOpenSessionModal,
   onRefresh,
   onRefreshWorkspaceFiles,
+  onRestartSession,
   onRetryProvisioningSession,
   onDownloadWorkspaceFile,
   onOpenGitManager,
@@ -225,6 +226,7 @@ export function LeftDrawer({
             state={state}
             onDeleteSession={onDeleteSession}
             onEditSession={onEditSession}
+            onRestartSession={onRestartSession}
             onRetryProvisioningSession={onRetryProvisioningSession}
             onSelectSession={onSelectSession}
             onStopSession={onStopSession}

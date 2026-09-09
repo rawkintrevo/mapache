@@ -123,4 +123,45 @@ describe("session row rendering", () => {
     expect(onRetryProvisioningSession).toHaveBeenCalledOnce();
     expect(onRetryProvisioningSession).toHaveBeenCalledWith("session-1");
   });
+
+  test("pauses running sessions and resumes stopped sessions from the drawer", async () => {
+    const onRestartSession = vi.fn();
+    const onStopSession = vi.fn();
+    const user = userEvent.setup();
+    const {rerender} = render(
+        <DrawerSessionList
+          state={{
+            pendingOperations: {},
+            selectedSessionId: "",
+            selectedWorkspaceId: "workspace-1",
+            sessions: [baseSession],
+          }}
+          onDeleteSession={vi.fn()}
+          onRestartSession={onRestartSession}
+          onSelectSession={vi.fn()}
+          onStopSession={onStopSession}
+        />,
+    );
+
+    await user.click(screen.getByRole("button", {name: "Pause Pi smoke"}));
+    expect(onStopSession).toHaveBeenCalledWith("session-1");
+
+    rerender(
+        <DrawerSessionList
+          state={{
+            pendingOperations: {},
+            selectedSessionId: "",
+            selectedWorkspaceId: "workspace-1",
+            sessions: [{...baseSession, status: "stopped"}],
+          }}
+          onDeleteSession={vi.fn()}
+          onRestartSession={onRestartSession}
+          onSelectSession={vi.fn()}
+          onStopSession={onStopSession}
+        />,
+    );
+
+    await user.click(screen.getByRole("button", {name: "Resume Pi smoke"}));
+    expect(onRestartSession).toHaveBeenCalledWith("session-1");
+  });
 });

@@ -1,10 +1,10 @@
-import {Pencil, RotateCcw, Square, Trash2} from "lucide-react";
+import {Pause, Pencil, Play, RotateCcw, Trash2} from "lucide-react";
 import {SessionStatusSummary} from "../sessions/SessionStatusSummary.jsx";
 import {getSessionResourceSummary, isRetryableProvisioningFailure} from "../sessions/sessionPresentation.js";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
-export function DrawerSessionList({state, onDeleteSession, onEditSession, onRetryProvisioningSession, onSelectSession, onStopSession}) {
+export function DrawerSessionList({state, onDeleteSession, onEditSession, onRestartSession, onRetryProvisioningSession, onSelectSession, onStopSession}) {
   const busy = hasPendingOperations(state.pendingOperations);
   if (!state.selectedWorkspaceId) {
     return <p className="empty">Select a workspace to view sessions.</p>;
@@ -50,13 +50,27 @@ export function DrawerSessionList({state, onDeleteSession, onEditSession, onRetr
           actions.push(
             <DrawerListActionButton
               disabled={busy}
-              icon={<Square aria-hidden="true" />}
-              key="stop"
-              label={`Stop ${session.name}`}
-              title={`Stop ${session.name}`}
+              icon={<Pause aria-hidden="true" />}
+              key="pause"
+              label={`Pause ${session.name}`}
+              title={`Pause ${session.name}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onStopSession(session.id);
+              }}
+            />,
+          );
+        } else if (session.status === "stopped") {
+          actions.push(
+            <DrawerListActionButton
+              disabled={busy}
+              icon={<Play aria-hidden="true" />}
+              key="resume"
+              label={`Resume ${session.name}`}
+              title={`Resume ${session.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRestartSession?.(session.id);
               }}
             />,
           );
