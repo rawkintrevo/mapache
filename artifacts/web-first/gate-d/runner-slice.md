@@ -50,6 +50,12 @@ gcloud builds submit session-runner \
   --project pi-agents-cloud
 ```
 
-The resulting Artifact Registry digest and Cloud Run revision are recorded in
-the handoff after the image build completes. No Functions or Hosting deploy is
-required for this runner-only change.
+Build result:
+
+- Cloud Build: `9acb3664-273b-4d35-8e30-1a81c4925b8d` (`SUCCESS`)
+- Artifact Registry image: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome`
+- Digest: `sha256:8ec371f21bd7136d316909e990279b773100752290d7f912c9a5981d3268924f`
+- Cloud Run revision: none; this runner-only change publishes the image for
+  newly provisioned/restarted pi-chrome sessions.
+
+No Functions or Hosting deploy is required for this runner-only change.
