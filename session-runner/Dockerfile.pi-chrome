@@ -6,9 +6,11 @@ RUN apt-get update \
   && python3 --version \
   && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://pi.dev/install.sh | sh
+ARG PI_VERSION=0.84.1
+ARG PI_MCP_ADAPTER_VERSION=2.32.1
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION}
 
-RUN pi install npm:pi-mcp-adapter
+RUN pi install npm:pi-mcp-adapter@${PI_MCP_ADAPTER_VERSION}
 RUN pi install npm:pi-goal-x@0.31.2
 RUN npm install -g chrome-devtools-mcp@1.6.0
 
@@ -42,6 +44,7 @@ ENV TERMINAL_ARGS='["-c"]'
 ENV GOAL_BRIDGE_ENABLED=true
 ENV GOAL_RPC_ENABLED=true
 ENV PI_GOAL_X_VERSION=0.31.2
+ENV MAPACHE_PI_WEB_FIRST_ADAPTER_REVISION=gate-a-0.1.0
 ENV PREVIEW_ENABLED=true
 ENV PREVIEW_BASE_PATH=/preview
 ENV PREVIEW_STATIC_ROOT=/workspace/build

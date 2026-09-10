@@ -70,6 +70,17 @@ gates pass. A runner restart still requires an explicit Resume action, and the
 dashboard reports the last server-saved goal projection rather than claiming
 that an in-progress model turn is durable.
 
+## Web-first Gate A boundary
+
+The disposable `pi-chrome` Gate A fixture is a feasibility probe, not a second
+production Goals transport. It proves that a private IPC adapter can address
+the same TUI Pi process and deliver an ordinary user message while preserving
+the PTY owner across reconnects. Gate A is not passed: the public TUI extension
+API does not provide command expansion, external answers for native dialogs,
+reload/session replacement, or a supported delegation path for those controls.
+The candidate therefore stays disabled, and the existing headless RPC process
+plus explicit terminal handoff remains the supported Goals mode.
+
 ## Ownership and safety rules
 
 - Functions is authoritative for workspace ownership, revision validation,

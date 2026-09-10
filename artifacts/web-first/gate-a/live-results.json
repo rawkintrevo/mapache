@@ -1,0 +1,120 @@
+{
+  "identity": {
+    "protocol": "mapache-pi-web-first/1",
+    "runtime": "pi-tui-extension",
+    "sessionGeneration": 1,
+    "piSession": "01a08bf0-59ba-7169-80b7-d9cf34ea3f10",
+    "adapter": "gate-a-0.1.0",
+    "package": {
+      "name": "pi-goal-x",
+      "version": "0.31.2"
+    },
+    "pid": 385896
+  },
+  "identityAfterReconnect": {
+    "protocol": "mapache-pi-web-first/1",
+    "runtime": "pi-tui-extension",
+    "sessionGeneration": 1,
+    "piSession": "01a08bf0-59ba-7169-80b7-d9cf34ea3f10",
+    "adapter": "gate-a-0.1.0",
+    "package": {
+      "name": "pi-goal-x",
+      "version": "0.31.2"
+    },
+    "pid": 385896
+  },
+  "results": [
+    {
+      "id": "A06",
+      "status": "pass",
+      "evidence": {
+        "pid": 385896,
+        "piSession": "01a08bf0-59ba-7169-80b7-d9cf34ea3f10",
+        "reconnectPiSession": "01a08bf0-59ba-7169-80b7-d9cf34ea3f10"
+      }
+    },
+    {
+      "id": "A07",
+      "status": "pass",
+      "evidence": {
+        "socket": "private unix socket",
+        "stdout": "control JSON is not sent to PTY stdout"
+      }
+    },
+    {
+      "id": "A08",
+      "status": "pass",
+      "evidence": {
+        "disconnect": "adapter rejects requests after disconnect; no PTY fallback"
+      }
+    },
+    {
+      "id": "A09",
+      "status": "partial",
+      "evidence": {
+        "transport": "tui-extension",
+        "rootRequestId": "mapache-web-first-1",
+        "limitation": "the fixture has no model credential and therefore records dispatch/input only"
+      }
+    },
+    {
+      "id": "A10",
+      "status": "fail",
+      "evidence": {
+        "operation": "extension_command",
+        "error": "web_first_adapter_command_expansion_unsupported"
+      }
+    },
+    {
+      "id": "A11",
+      "status": "fail",
+      "evidence": {
+        "operation": "dialog_answer",
+        "error": "web_first_adapter_tui_dialog_response_unsupported"
+      }
+    },
+    {
+      "id": "A12",
+      "status": "partial",
+      "evidence": {
+        "causalRoot": "extension-originated root IDs are attached only to matching lifecycle events; terminal-originated events remain unowned"
+      }
+    },
+    {
+      "id": "A13",
+      "status": "partial",
+      "evidence": {
+        "cancel": "public ctx.abort is available for the active root; pending native UI and child-continuation proof requires a managed adapter"
+      }
+    },
+    {
+      "id": "A14",
+      "status": "fail",
+      "evidence": [
+        {
+          "operation": "reload",
+          "error": "web_first_adapter_reload_requires_command_context"
+        },
+        {
+          "operation": "replace_session",
+          "error": "web_first_adapter_session_replacement_requires_command_context"
+        }
+      ]
+    },
+    {
+      "id": "A15",
+      "status": "fail",
+      "evidence": {
+        "unsupported": "native TUI widgets have no supported browser delegation path"
+      }
+    },
+    {
+      "id": "A16",
+      "status": "partial",
+      "evidence": {
+        "policy": "adapter accepts only its own extension-originated root and does not attribute interactive terminal events"
+      }
+    }
+  ],
+  "cleanup": "completed"
+}

@@ -34,3 +34,12 @@ for (const dockerfile of ["Dockerfile.pi-basic", "Dockerfile.pi-web", "Dockerfil
     assert.match(source, /ENV PI_GOAL_X_VERSION=0\.31\.2/);
   });
 }
+
+test("Dockerfile.pi-chrome pins the Gate A Pi and adapter revisions", () => {
+  const source = fs.readFileSync(path.join(runnerRoot, "Dockerfile.pi-chrome"), "utf8");
+  assert.match(source, /ARG PI_VERSION=0\.84\.1/);
+  assert.match(source, /@earendil-works\/pi-coding-agent@\$\{PI_VERSION\}/);
+  assert.match(source, /pi-mcp-adapter@\$\{PI_MCP_ADAPTER_VERSION\}/);
+  assert.match(source, /ARG PI_MCP_ADAPTER_VERSION=2\.32\.1/);
+  assert.match(source, /ENV MAPACHE_PI_WEB_FIRST_ADAPTER_REVISION=gate-a-0\.1\.0/);
+});

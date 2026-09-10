@@ -44,6 +44,13 @@ firebase deploy --only hosting --project pi-agents-cloud
 
 Record the resulting Artifact Registry digests and verify both `pi-chrome` and `codex-chrome` tags before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
 
+For the web-first feasibility plan, build and publish only `pi-chrome` with
+`cloudbuild.pi-chrome.yaml`. The Gate A candidate is image-contained but stays
+disabled in production while the public Pi TUI API lacks the required command,
+dialog, reload, and session-replacement controls. Record the resulting digest
+in the Gate A environment report; existing sessions need restart or recreation
+to receive the image contents.
+
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account and `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events. Restore the Eventarc binding with:
 
 ```bash
