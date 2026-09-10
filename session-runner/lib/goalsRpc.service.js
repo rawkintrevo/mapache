@@ -34,10 +34,14 @@ function createGoalsRpcService({
   let activeGoalId = "";
   let status = "stopped";
   let packageAvailable = true;
+  let switching = false;
+  let commandInFlight = false;
+  let lastError = "";
+  let lastMessage = "";
 
   return {
     supported: enabled,
-    isActive: () => Boolean(child && !child.killed),
+    isActive: () => switching || Boolean(child),
     capabilities() {
       return {
         transport: "pi-rpc",
@@ -53,6 +57,9 @@ function createGoalsRpcService({
         processInstance: processInstance || null,
         active: Boolean(child && !child.killed),
         status,
+        goalId: activeGoalId,
+        lastError,
+        lastMessage,
         pendingUiRequests: [...pendingUi.values()].map(safeUiRequest),
       };
     },
@@ -60,27 +67,49 @@ function createGoalsRpcService({
       const command = normalizeGoalsEnvelope(payload);
       if (!enabled || !packageAvailable) throw goalError("goal_bridge_unavailable");
       if (command.type === "answer") return answerUiRequest(command);
-      if (terminalSession?.isRunning?.()) throw goalError("goal_terminal_process_active");
-      const process = await ensureProcess();
-      activeGoalId = command.goalId;
+      const previous = operations.get(command.operationId);
+      if (previous) return previous;
+      if (commandInFlight) throw goalError("goal_command_in_progress");
+      if (child && activeGoalId && activeGoalId !== command.goalId) throw goalError("goal_execution_busy");
+      // Validate before stopping a user's terminal.
       const prompt = promptForCommand(command, {guided: true});
       if (!prompt) throw goalError("goal_action_unsupported");
-      const response = await send(process, {type: "prompt", message: prompt});
-      if (!response?.success) throw goalError("goal_command_failed");
-      const result = {
-        ok: true,
-        accepted: true,
-        operationId: command.operationId,
-        goalId: command.goalId,
-        action: command.action,
-        structuredDialogs: true,
-        transport: "pi-rpc",
-      };
-      rememberOperation(command.operationId, {status: "accepted", ...result});
-      if (["archive", "cancel"].includes(command.action)) {
-        await stop();
+      commandInFlight = true;
+      lastError = "";
+      try {
+        if (terminalSession?.isRunning?.()) {
+          if (command.payload.takeOverTerminal !== true || !["start", "resume"].includes(command.action) || !terminalSession.releaseForGoal) {
+            throw goalError("goal_terminal_process_active");
+          }
+          switching = true;
+          await terminalSession.releaseForGoal();
+        }
+        const process = await ensureProcess();
+        switching = false;
+        activeGoalId = command.goalId;
+        const response = await send(process, {type: "prompt", message: prompt}, {acceptUi: ["start", "resume"].includes(command.action)});
+        if (!response?.success) {
+          lastError = String(response?.error || "goal_command_failed").slice(0, 4000);
+          throw goalError("goal_command_failed");
+        }
+        const result = {
+          ok: true,
+          accepted: true,
+          operationId: command.operationId,
+          goalId: command.goalId,
+          action: command.action,
+          structuredDialogs: true,
+          transport: "pi-rpc",
+        };
+        rememberOperation(command.operationId, {status: "accepted", ...result});
+        if (["archive", "cancel"].includes(command.action)) {
+          await stop();
+        }
+        return result;
+      } finally {
+        switching = false;
+        commandInFlight = false;
       }
-      return result;
     },
     operation(operationId) {
       return operations.get(String(operationId || "").trim()) || null;
@@ -96,7 +125,8 @@ function createGoalsRpcService({
   };
 
   async function ensureProcess() {
-    if (child && !child.killed) return child;
+    if (status === "stopping") throw goalError("goal_command_in_progress");
+    if (child) return child;
     const sessionArgs = [];
     if (config.piSessionDir) sessionArgs.push("--session-dir", config.piSessionDir);
     sessionArgs.push("--mode", "rpc", "-c");
@@ -118,10 +148,10 @@ function createGoalsRpcService({
     status = "starting";
     next.stdout?.on("data", (chunk) => parseStdout(chunk));
     next.stderr?.on("data", (chunk) => events.emit("stderr", String(chunk)));
-    next.once?.("exit", (code, signal) => handleExit(code, signal));
+    next.once?.("exit", (code, signal) => handleExit(next, code, signal));
     next.once?.("error", (error) => {
-      events.emit("error", error);
-      handleExit(null, null, error);
+      lastError = "Pi could not start. Restart this session and try again.";
+      handleExit(next, null, null, error);
     });
     return next;
   }
@@ -152,12 +182,23 @@ function createGoalsRpcService({
       const pending = pendingResponses.get(String(message.id));
       if (pending) {
         pendingResponses.delete(String(message.id));
-        clearTimeout(pending.timer);
+        timers.clearTimeout(pending.timer);
+        if (!message.success) {
+          lastError = String(message.error || "Goal command failed.").slice(0, 4000);
+          status = "error";
+        }
         pending.resolve(message);
       }
       return;
     }
     if (message.type === "extension_ui_request") {
+      if (message.method === "notify") {
+        lastMessage = String(message.message || "").slice(0, 4000);
+        if (message.notifyType === "error") {
+          lastError = lastMessage;
+          status = "error";
+        }
+      }
       if (!["select", "confirm", "input", "editor"].includes(message.method)) {
         events.emit("event", safeUiRequest(message));
         return;
@@ -168,12 +209,31 @@ function createGoalsRpcService({
         return;
       }
       pendingUi.set(request.id, request);
+      // Extension commands may await a dialog before emitting their prompt
+      // response. Receipt of the dialog proves delivery and lets Functions
+      // assign the goal so the browser can fetch and answer that dialog.
+      for (const pending of pendingResponses.values()) {
+        if (!pending.acceptUi) continue;
+        timers.clearTimeout(pending.timer);
+        pending.resolve({success: true, waitingForInput: true});
+        pending.acceptUi = false;
+      }
       status = "waiting_for_input";
       events.emit("ui_request", request);
       return;
     }
     if (message.type === "agent_start") status = "running";
-    if (message.type === "agent_end") status = "ready";
+    if (message.type === "message_end" && message.message?.role === "assistant") {
+      const reply = message.message;
+      if (reply.stopReason === "error" || reply.errorMessage) {
+        lastError = String(reply.errorMessage || "Pi could not complete this turn. Check the session model and authentication.").slice(0, 4000);
+        status = "error";
+      } else {
+        const text = (reply.content || []).filter((part) => part.type === "text").map((part) => part.text).join("\n");
+        if (text) lastMessage = text.slice(-4000);
+      }
+    }
+    if (message.type === "agent_end" && !lastError) status = pendingUi.size ? "waiting_for_input" : "ready";
     events.emit("event", boundedRpcEvent(message));
   }
 
@@ -182,7 +242,7 @@ function createGoalsRpcService({
     child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
-  function send(process, command) {
+  function send(process, command, {acceptUi = false} = {}) {
     const id = `mapache-goal-${processInstance}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     return new Promise((resolve, reject) => {
       const timer = timers.setTimeout(() => {
@@ -190,11 +250,11 @@ function createGoalsRpcService({
         reject(goalError("goal_command_timeout"));
       }, RPC_TIMEOUT_MS);
       timer.unref?.();
-      pendingResponses.set(id, {resolve, reject, timer});
+      pendingResponses.set(id, {resolve, reject, timer, acceptUi});
       try {
         writeRpc({...command, id});
       } catch (error) {
-        clearTimeout(timer);
+        timers.clearTimeout(timer);
         pendingResponses.delete(id);
         reject(error);
       }
@@ -219,31 +279,26 @@ function createGoalsRpcService({
   async function stop() {
     const current = child;
     if (!current) return;
-    child = null;
-    status = "stopped";
-    for (const pending of pendingResponses.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(goalError("goal_bridge_unavailable"));
-    }
-    pendingResponses.clear();
-    pendingUi.clear();
-    try {
-      current.kill("SIGTERM");
-    } catch {}
-    await new Promise((resolve) => {
-      if (current.exitCode !== null || current.signalCode) return resolve();
-      const timer = timers.setTimeout(resolve, 1000);
-      timer.unref?.();
-      current.once?.("exit", resolve);
+    status = "stopping";
+    await new Promise((resolve, reject) => {
+      const timer = timers.setTimeout(() => reject(goalError("goal_process_stop_timeout")), 5000);
+      current.once("exit", () => { timers.clearTimeout(timer); resolve(); });
+      try { current.kill("SIGTERM"); } catch (error) {
+        timers.clearTimeout(timer);
+        reject(error);
+      }
     });
   }
 
-  function handleExit(code, signal, error) {
-    if (child && child.exitCode === null && !child.killed && !error) return;
+  function handleExit(process, code, signal, error) {
+    if (child !== process) return;
+    const intentional = status === "stopping";
     child = null;
-    status = "interrupted";
+    activeGoalId = "";
+    status = intentional ? "stopped" : "interrupted";
+    if (!intentional) lastError = "Pi stopped. Restart the session, then resume the goal.";
     for (const pending of pendingResponses.values()) {
-      clearTimeout(pending.timer);
+      timers.clearTimeout(pending.timer);
       pending.reject(goalError("goal_bridge_unavailable"));
     }
     pendingResponses.clear();

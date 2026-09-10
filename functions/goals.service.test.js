@@ -73,33 +73,37 @@ function createDb() {
     })}}),
     requestRunnerJson: async (_session, route, options) => {
       runnerCalls.push({route, options});
-      if (route === "/goals/snapshot") return {ok: true, pendingUiRequests: [{id: "question-1", method: "confirm"}]};
+      if (route === "/goals/snapshot") return {ok: true, goals: [], runtime: {status: "waiting_for_input", pendingUiRequests: [{id: "question-1", method: "confirm"}]}};
       return {accepted: true, goalId: "engine-goal-1"};
     },
   });
   const started = await executableService.actionGoal("uid", "workspace-1", goal.id, {
-    action: "start", expectedRevision: 0, operationId: "start-1", sessionId: "session-1",
+    action: "start", expectedRevision: 0, operationId: "start-1", sessionId: "session-1", takeOverTerminal: true,
   });
   assert.equal(started.goal.lifecycle, "open");
   assert.equal(runnerCalls.length, 1);
   assert.equal(runnerCalls[0].route, "/goals/commands");
+  assert.equal(runnerCalls[0].options.body.payload.takeOverTerminal, true);
   const retried = await executableService.actionGoal("uid", "workspace-1", goal.id, {
-    action: "start", expectedRevision: 0, operationId: "start-1", sessionId: "session-1",
+    action: "start", expectedRevision: 0, operationId: "start-1", sessionId: "session-1", takeOverTerminal: true,
   });
   assert.equal(retried.operationId, "start-1");
   assert.equal(runnerCalls.length, 1, "retries return the stored operation result");
   const runtime = await executableService.getGoalRuntime("uid", "workspace-1", goal.id);
   assert.equal(runtime.ok, true);
-  assert.equal(runtime.pendingUiRequests[0].id, "question-1");
+  assert.equal(runtime.runtime.pendingUiRequests[0].id, "question-1");
+
+  const answered = await executableService.answerGoalQuestion("uid", "workspace-1", goal.id, "question-1", {requestId: "question-1", answer: "Yes", expectedRevision: 1});
+  assert.equal(answered.goal.revision, 2);
 
   const archived = await executableService.actionGoal("uid", "workspace-1", goal.id, {
-    action: "archive", expectedRevision: 1, operationId: "archive-1", sessionId: "session-1",
+    action: "archive", expectedRevision: 2, operationId: "archive-1", sessionId: "session-1",
   });
   assert.equal(archived.goal.lifecycle, "archived");
   await assert.rejects(executableService.actionGoal("uid", "workspace-1", goal.id, {
-    action: "start", expectedRevision: 2, operationId: "start-archived", sessionId: "session-1",
+    action: "start", expectedRevision: 3, operationId: "start-archived", sessionId: "session-1",
   }), (error) => error.publicMessage === "invalid_goal_transition");
-  assert.equal(runnerCalls.filter((call) => call.route === "/goals/commands").length, 2, "invalid transitions must not reach the runner");
+  assert.equal(runnerCalls.filter((call) => call.route === "/goals/commands").length, 3, "invalid transitions must not reach the runner");
   const events = await executableService.listGoalEvents("uid", "workspace-1", goal.id);
   assert.ok(events.events.some((event) => event.type === "goal_action_applied"));
   console.log("goals service tests passed");

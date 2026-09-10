@@ -54,6 +54,10 @@ function normalizeGoalAction(payload = {}) {
   const action = String(payload.action || "").trim().toLowerCase();
   if (!GOAL_ACTIONS.has(action)) throw httpError(400, "invalid_goal_action");
   const result = {action};
+  if (payload.takeOverTerminal !== undefined) {
+    if (typeof payload.takeOverTerminal !== "boolean" || !["start", "resume"].includes(action)) throw httpError(400, "invalid_goal_action");
+    result.takeOverTerminal = payload.takeOverTerminal;
+  }
   if (payload.expectedRevision !== undefined) result.expectedRevision = normalizeGoalRevision(payload.expectedRevision);
   if (payload.operationId !== undefined) result.operationId = normalizeOperationId(payload.operationId);
   if (payload.sessionId !== undefined) {

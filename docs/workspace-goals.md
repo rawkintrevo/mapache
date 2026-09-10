@@ -35,6 +35,25 @@ for managed goals and relays bounded `select`, `confirm`, `input`, and `editor`
 requests to the dashboard. The existing terminal PTY remains available for
 ordinary terminal work, but it cannot be opened while the managed RPC process
 is active because both processes would otherwise write the same Pi session.
+When Start/Resume finds an open terminal, the dashboard keeps the error visible
+and offers an explicit **Stop Terminal/Chat and start/resume goal** action.
+This sends `takeOverTerminal: true` through Functions, blocks new terminal
+attachments, and waits for the Pi PTY to exit before starting RPC. Handoff does
+not invoke the terminal completion hook (which can finalize a Git branch).
+It sends SIGTERM first, escalates to SIGKILL after five seconds if interactive
+extension cleanup stalls, and fails after ten seconds without a confirmed exit.
+Saved history and files remain; in-flight terminal work is interrupted only
+when the user selects that action. A failed or timed-out handoff never starts
+a second writer.
+
+Runtime snapshots contain the RPC state under `runtime`, including pending
+questions, the latest bounded message, and errors. The dashboard reads that
+nested state and updates its goal revision from each successful answer response
+before sending another answer. An extension command that asks a dialog before
+its final prompt response is acknowledged as delivered when that dialog arrives,
+allowing Functions to assign the goal and the browser to answer it. Late model
+failures stay visible in runtime state; command acceptance alone does not prove
+that the model completed a turn.
 
 ## Deliberate release boundary
 
@@ -43,7 +62,7 @@ but it is still a controlled release. The image build applies a small
 RPC-specific compatibility patch to pi-goal-x's task confirmation dialog;
 future pi-goal-x upgrades must be checked against that patch. Durable Cloud
 Storage checkpoints, runner event ingestion, lease renewal and epoch fencing,
-writer handoff, stale-process reconciliation, detailed task/evidence/audit
+cross-session writer handoff, stale-process reconciliation, detailed task/evidence/audit
 panels, and full recovery QA remain follow-up work.
 
 Do not enable a general release until the plan's recovery and fault-injection
@@ -82,16 +101,16 @@ Functions code was deployed with:
 firebase deploy --only functions:api --project pi-agents-cloud
 ```
 
-The API deployment completed successfully as revision `api-00183-wab` on
+The API deployment completed successfully as revision `api-00185-vir` on
 September 9, 2026. The existing Pi image tags are rebuilt in place for each
 release and pushed to Artifact Registry; no separate Goals container is used.
 The release digests are:
 
-- `:pi-basic` — `sha256:372d8c4dd3d8bb13b6c4ab571f48d74ce75acaff74e3075ce86dffae33f397e9`
-- `:pi-web` — `sha256:21c70857addba738dea33b466774aaa08cb2c26782e04b55191466bfc5256501`
-- `:pi-chrome` — `sha256:97e86b285cdba12964a501c075296379a3d0c767b83144de2287c701f707f684`
+- `:pi-basic` — `sha256:c657bfc57cef0563f39cf345a321707227b570313b961ecd80f765e517f73d43`
+- `:pi-web` — `sha256:939445be9a5e57ec86c6468a3c2b099923447b268a847e30e989d45558af9582`
+- `:pi-chrome` — `sha256:4c12dcdfb3ce65bc61b12df175bc8b939291c0f955a6ca6c0ec6b96e1b9e39f3`
 
-Firebase Hosting release `e4a67873dca2a629` is live at
+Firebase Hosting release `e5ffb4a1f605450b` is live at
 `https://pi-agents-cloud.web.app`. The public API smoke check returns HTTP 401
 without an auth token, confirming that the new routes remain authenticated.
 
@@ -100,3 +119,23 @@ acquire the new image contents until they are restarted or recreated.
 
 See [the implementation plan](./plans/pi-workspace-goals.md) for the staged
 prototype, persistence, lifecycle, browser, testing, and rollback requirements.
+
+## September 9 Start-flow repair
+
+Production Start requests were rejected with `goal_terminal_process_active`,
+and the error was cleared by the UI's automatic refresh. Goal card buttons also
+inherited white text on their transparent background. The repair retains action
+errors, provides the explicit terminal handoff, uses shared button variants and
+theme colors, handles nested runtime dialogs, and refreshes the revision after
+answers. Browser regression instructions are in
+`e2e/qa/cases/workspace-goals-start.json`; results belong under
+`artifacts/qa/goals.start/`. Existing sessions need Restart after the repaired
+Pi images are published.
+
+The hosted Chrome regression passed on September 9: title contrast was 16.29:1
+before hover, the initial terminal conflict stayed visible, the explicit
+handoff returned HTTP 200, and two consecutive native Pi question answers
+returned HTTP 200. The run reported no browser console errors and deleted its
+isolated QA session and workspace. The repository aggregate check passed;
+after adding the stalled-shutdown fallback, all 257 runner tests and runner
+syntax checks passed again.

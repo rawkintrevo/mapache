@@ -53,7 +53,7 @@ Candidate flows:
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi-to-Codex handoff.
 - Skills and Extensions drawer smoke paths against a controlled runner fixture.
-- Workspace Goals draft creation, Pi capability gating, lifecycle command delivery, and operation recovery against a controlled runner fixture. Guided questions remain an opt-in case until the structured extension adapter is implemented.
+- Workspace Goals draft creation, Pi capability gating, lifecycle command delivery, and operation recovery against a controlled runner fixture. The opt-in `e2e/qa/cases/workspace-goals-start.json` case covers the selected-session Start path, readable goal titles, explicit terminal handoff, and two consecutive answers through the native RPC adapter.
 
 Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome`.
 

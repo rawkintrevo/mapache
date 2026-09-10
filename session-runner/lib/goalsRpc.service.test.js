@@ -87,3 +87,59 @@ test("rejects a managed goal command while the terminal Pi process is active", a
     payload: {objective: "Ship it"},
   }), /goal_terminal_process_active/);
 });
+
+test("hands off the terminal only after explicit consent and waits for its exit", async () => {
+  const child = fakePiProcess();
+  let release;
+  let spawned = false;
+  const rpc = createGoalsRpcService({
+    config: {harnessId: "pi"}, env: {GOAL_RPC_ENABLED: "true"},
+    terminalSession: {isRunning: () => true, releaseForGoal: () => new Promise((resolve) => { release = resolve; })},
+    spawn: () => { spawned = true; return child; },
+  });
+  const command = {type: "command", operationId: "handoff", goalId: "goal-1", action: "start", payload: {objective: "Ship it", takeOverTerminal: true}};
+  const started = rpc.command(command);
+  assert.equal(rpc.isActive(), true, "terminal reconnects must be blocked during handoff");
+  assert.equal(spawned, false);
+  await assert.rejects(rpc.command({...command, operationId: "duplicate"}), /goal_command_in_progress/);
+  release();
+  assert.equal((await started).accepted, true);
+  assert.equal(spawned, true);
+  await rpc.stop();
+  assert.equal(rpc.isActive(), false);
+  assert.equal((await rpc.snapshot()).status, "stopped");
+});
+
+test("a dialog before the prompt response acknowledges delivery without a timeout deadlock", async () => {
+  const child = fakePiProcess();
+  let promptId;
+  child.stdin = new Writable({write(chunk, _encoding, callback) {
+    const message = JSON.parse(String(chunk));
+    if (message.type === "prompt") {
+      promptId = message.id;
+      child.stdout.write(JSON.stringify({type: "extension_ui_request", id: "early-dialog", method: "select", title: "Existing draft", options: ["Resume"]}) + "\n");
+    } else {
+      child.stdout.write(JSON.stringify({type: "response", id: promptId, success: true}) + "\n");
+    }
+    callback();
+  }});
+  const rpc = createGoalsRpcService({config: {harnessId: "pi"}, env: {GOAL_RPC_ENABLED: "true"}, spawn: () => child});
+  const result = await rpc.command({type: "command", operationId: "early", goalId: "goal-1", action: "start", payload: {objective: "Ship it"}});
+  assert.equal(result.accepted, true);
+  assert.equal((await rpc.snapshot()).pendingUiRequests[0].id, "early-dialog");
+  await rpc.command({type: "answer", operationId: "answer", goalId: "goal-1", questionId: "early-dialog", requestId: "early-dialog", answer: "Resume"});
+  assert.equal((await rpc.snapshot()).pendingUiRequests.length, 0);
+  await rpc.stop();
+});
+
+test("model failures remain visible after agent_end", async () => {
+  const child = fakePiProcess();
+  const rpc = createGoalsRpcService({config: {harnessId: "pi"}, env: {GOAL_RPC_ENABLED: "true"}, spawn: () => child});
+  await rpc.command({type: "command", operationId: "error", goalId: "goal-1", action: "start", payload: {objective: "Ship it"}});
+  child.stdout.write(JSON.stringify({type: "message_end", message: {role: "assistant", stopReason: "error", errorMessage: "No API key for selected model"}}) + "\n");
+  child.stdout.write('{"type":"agent_end"}\n');
+  const snapshot = await rpc.snapshot();
+  assert.equal(snapshot.status, "error");
+  assert.match(snapshot.lastError, /No API key/);
+  await rpc.stop();
+});

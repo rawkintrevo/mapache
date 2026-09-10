@@ -1,5 +1,7 @@
 import {useEffect, useMemo, useState} from "react";
 import "./WorkspaceGoalsPanel.css";
+import {Button} from "../common/Button.jsx";
+import {sessionHarness} from "../../utils/sessionHarnesses.js";
 
 const EMPTY_FORM = {title: "", objective: "", mode: "regular", auditEnabled: true};
 
@@ -17,20 +19,21 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
   const [answeringRequestId, setAnsweringRequestId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [terminalHandoff, setTerminalHandoff] = useState(null);
 
   const compatibleSessions = useMemo(() => sessions.filter((session) => {
-    const harness = String(session.harnessId || session.terminalKind || "").toLowerCase();
-    return harness === "pi" && session.serviceUrl && session.shutdownToken &&
+    return sessionHarness(session)?.id === "pi" && session.serviceUrl &&
       ["running", "restarting", "resizing"].includes(String(session.status || "").toLowerCase());
   }), [sessions]);
 
   const selectedGoal = goals.find((goal) => goal.id === selectedGoalId) || goals[0] || null;
-  const selectedRuntime = selectedGoal ? runtimeByGoal[selectedGoal.id] : null;
+  const runtimeResponse = selectedGoal ? runtimeByGoal[selectedGoal.id] : null;
+  const selectedRuntime = runtimeResponse?.runtime || runtimeResponse;
   const defaultSessionId = compatibleSessions.some((session) => session.id === initialSessionId) ?
     initialSessionId : compatibleSessions[0]?.id || "";
 
   function sessionIdForGoal(goal) {
-    return sessionSelections[goal.id] ?? goal.assignedSessionId ?? defaultSessionId;
+    return sessionSelections[goal.id] ?? (goal.assignedSessionId || defaultSessionId);
   }
 
   useEffect(() => {
@@ -77,10 +80,10 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
     };
   }, [api, workspaceId, selectedGoal?.id, selectedGoal?.assignedSessionId]);
 
-  async function refresh() {
+  async function refresh({preserveError = false} = {}) {
     if (!api || !workspaceId) return;
     setLoading(true);
-    setError("");
+    if (!preserveError) setError("");
     try {
       const result = await api.listGoals(workspaceId);
       const nextGoals = Array.isArray(result?.goals) ? result.goals : [];
@@ -122,11 +125,11 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
   async function runAction(goal, action, extra = {}) {
     if (!goal || busyGoalId) return;
     let sessionId = extra.sessionId;
-    if (action === "start" && !sessionId) sessionId = compatibleSessions[0]?.id;
-    if (action === "start" && !sessionId) {
+    if (["start", "resume"].includes(action) && !sessionId) {
       setError("Start a running Pi session first, then select it here.");
       return;
     }
+    setTerminalHandoff(null);
     setBusyGoalId(goal.id);
     setError("");
     setMessage("");
@@ -146,7 +149,14 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
       setMessage(action === "start" ? "Goal accepted by the Pi runner." : `Goal ${action} accepted.`);
     } catch (cause) {
       setError(friendlyGoalError(cause));
-      await refresh();
+      if (cause?.message === "goal_terminal_process_active") {
+        if (extra.takeOverTerminal) {
+          setError("This session needs the updated Goal controls. Restart the session to load the latest Pi image, then try again.");
+        } else {
+          setTerminalHandoff({goalId: goal.id, action, sessionId});
+        }
+      }
+      await refresh({preserveError: true});
     } finally {
       setBusyGoalId("");
     }
@@ -157,11 +167,13 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
     setAnsweringRequestId(request.id);
     setError("");
     try {
-      await api.answerGoalQuestion(workspaceId, goal.id, request.id, {
+      const result = await api.answerGoalQuestion(workspaceId, goal.id, request.id, {
         requestId: request.id,
         answer,
         expectedRevision: goal.revision || 0,
       });
+      const updatedGoal = result?.goal || (typeof api.getGoal === "function" ? await api.getGoal(workspaceId, goal.id) : null);
+      if (updatedGoal) setGoals((current) => current.map((item) => item.id === goal.id ? updatedGoal : item));
       setAnswerDrafts((current) => ({...current, [request.id]: ""}));
       const runtime = await api.getGoalRuntime(workspaceId, goal.id).catch(() => null);
       if (runtime) setRuntimeByGoal((current) => ({...current, [goal.id]: runtime}));
@@ -182,12 +194,12 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
           <p className="subtle">Save objectives for this workspace and resume them from a Pi session.</p>
         </div>
         <div className="workspace-goals__header-actions">
-          <button className="button secondary compact" type="button" onClick={refresh} disabled={loading}>
+          <Button variant="secondary" type="button" onClick={() => refresh()} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh"}
-          </button>
-          <button className="button primary compact" type="button" onClick={() => setShowForm((current) => !current)}>
+          </Button>
+          <Button type="button" onClick={() => setShowForm((current) => !current)}>
             {showForm ? "Close" : "New goal"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -200,7 +212,7 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
           <label>Objective<textarea required value={form.objective} maxLength={4000} rows={4} placeholder="Describe the outcome this workspace should achieve." onChange={(event) => setForm({...form, objective: event.target.value})} /></label>
           <label>Goal style<select value={form.mode} onChange={(event) => setForm({...form, mode: event.target.value})}><option value="regular">Regular: Pi chooses the plan</option><option value="sisyphus">Sisyphus: follow an ordered plan</option></select></label>
           <label className="workspace-goals__checkbox"><input type="checkbox" checked={form.auditEnabled} onChange={(event) => setForm({...form, auditEnabled: event.target.checked})} /> Use independent completion audit</label>
-          <button className="button primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save goal"}</button>
+          <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save goal"}</Button>
         </form>
       ) : null}
 
@@ -208,7 +220,7 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
       <div className="workspace-goals__list">
         {goals.map((goal) => (
           <article className={`workspace-goal-card ${selectedGoal?.id === goal.id ? "selected" : ""}`} key={goal.id}>
-            <button className="workspace-goal-card__select" type="button" onClick={() => setSelectedGoalId(goal.id)}>
+            <button className="workspace-goal-card__select" type="button" onClick={() => { setSelectedGoalId(goal.id); setTerminalHandoff(null); }}>
               <span className="workspace-goal-card__title">{goal.title}</span>
               <span className="pill">{goal.lifecycle || "draft"}</span>
               <span className="subtle">{goal.mode || "regular"} · revision {goal.revision || 0}</span>
@@ -221,11 +233,26 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
                   <span>{goal.assignedSessionId ? `Session ${goal.assignedSessionId}` : "No session assigned"}</span>
                   {goal.checkpoint?.savedAt ? <span>Saved {formatDate(goal.checkpoint.savedAt)}</span> : null}
                 </div>
+                {selectedRuntime ? (
+                  <div className="workspace-goals__runtime" aria-live="polite">
+                    <p><strong>{runtimeStatusLabel(selectedRuntime.status)}</strong></p>
+                    {selectedRuntime.lastError ? <p className="error" role="alert">{selectedRuntime.lastError}</p> : null}
+                    {selectedRuntime.lastMessage ? <p>{selectedRuntime.lastMessage}</p> : null}
+                  </div>
+                ) : null}
+                {terminalHandoff?.goalId === goal.id ? (
+                  <div className="workspace-goals__handoff">
+                    <p>Switching to Goal control stops Pi in Terminal/Chat and interrupts any work there. Saved conversation history and workspace files are kept.</p>
+                    <Button disabled={Boolean(busyGoalId)} onClick={() => runAction(goal, terminalHandoff.action, {sessionId: terminalHandoff.sessionId, takeOverTerminal: true})}>
+                      Stop Terminal/Chat and {terminalHandoff.action === "start" ? "start" : "resume"} goal
+                    </Button>
+                  </div>
+                ) : null}
                 {selectedRuntime?.pendingUiRequests?.length ? (
                   <div className="workspace-goals__dialogs" aria-label="Pi needs your input">
                     <strong>Pi needs your input</strong>
                     {selectedRuntime.pendingUiRequests.map((request) => {
-                      const draft = answerDrafts[request.id] || "";
+                      const draft = answerDrafts[request.id] ?? request.prefill ?? "";
                       const options = Array.isArray(request.options) ? request.options : [];
                       return (
                         <div className="workspace-goals__dialog" key={request.id}>
@@ -245,9 +272,9 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
                           ) : (
                             <textarea aria-label={request.title || "Answer"} rows={4} placeholder={request.placeholder || "Type your answer"} value={draft} onChange={(event) => setAnswerDrafts((current) => ({...current, [request.id]: event.target.value}))} />
                           )}
-                          <button className="button primary compact" type="button" onClick={() => answerUiRequest(goal, request, draft)} disabled={!draft.trim() || answeringRequestId === request.id}>
+                          <Button type="button" onClick={() => answerUiRequest(goal, request, draft)} disabled={!draft.trim() || answeringRequestId === request.id}>
                             {answeringRequestId === request.id ? "Sending..." : "Send answer"}
-                          </button>
+                          </Button>
                         </div>
                       );
                     })}
@@ -260,11 +287,11 @@ export function WorkspaceGoalsPanel({api, initialSessionId = "", sessions = [], 
                         <option value="">{compatibleSessions.length ? "Choose Pi session" : "No running Pi session"}</option>
                         {compatibleSessions.map((session) => <option key={session.id} value={session.id}>{session.name || session.id}</option>)}
                       </select>
-                      <button className="button primary compact" type="button" onClick={() => runAction(goal, goal.lifecycle === "draft" ? "start" : "resume", {sessionId: sessionIdForGoal(goal)})} disabled={Boolean(busyGoalId) || !compatibleSessions.length}>{busyGoalId === goal.id ? "Working..." : goal.lifecycle === "draft" ? "Start" : "Resume"}</button>
+                      <Button type="button" onClick={() => runAction(goal, goal.lifecycle === "draft" ? "start" : "resume", {sessionId: sessionIdForGoal(goal)})} disabled={Boolean(busyGoalId) || !compatibleSessions.some((session) => session.id === sessionIdForGoal(goal))}>{busyGoalId === goal.id ? "Working..." : goal.lifecycle === "draft" ? "Start" : "Resume"}</Button>
                     </>
                   ) : null}
-                  {goal.lifecycle === "open" ? <button className="button secondary compact" type="button" onClick={() => runAction(goal, "pause")} disabled={Boolean(busyGoalId)}>Pause</button> : null}
-                  {goal.lifecycle !== "archived" && goal.lifecycle !== "completed" ? <button className="button danger compact" type="button" onClick={() => runAction(goal, "archive")} disabled={Boolean(busyGoalId)}>Archive</button> : null}
+                  {goal.lifecycle === "open" ? <Button variant="secondary" type="button" onClick={() => runAction(goal, "pause")} disabled={Boolean(busyGoalId)}>Pause</Button> : null}
+                  {goal.lifecycle !== "archived" && goal.lifecycle !== "completed" ? <Button variant="danger" type="button" onClick={() => runAction(goal, "archive")} disabled={Boolean(busyGoalId)}>Archive</Button> : null}
                 </div>
               </div>
             ) : null}
@@ -284,7 +311,12 @@ function friendlyGoalError(error) {
     goal_structured_dialogs_unavailable: "This Pi runner can run lifecycle commands, but guided goal questions are not available yet.",
     goal_revision_conflict: "This goal changed in another tab. Refresh and try again.",
     goal_execution_busy: "Another goal is already running in this workspace.",
-    goal_terminal_process_active: "Close the Pi terminal before running this goal from the Web UI.",
+    goal_terminal_process_active: "Pi is open in Terminal/Chat. Switch this session to Goal control to continue.",
+    goal_terminal_stop_timeout: "Pi did not stop in time. Finish its terminal work, then try again.",
+    goal_command_failed: "Pi could not accept the goal command. Check the session model and authentication, then try again.",
+    goal_command_timeout: "Pi did not respond in time. Refresh the goal status before retrying.",
+    goal_command_in_progress: "Pi is still handling the previous goal command. Wait for it to finish.",
+    goal_writer_conflict: "This session is read-only for workspace sync. Choose the workspace's writer session.",
     no_active_session: "The selected Pi session is not running.",
   };
   return messages[code] || code.replaceAll("_", " ");
@@ -293,4 +325,8 @@ function friendlyGoalError(error) {
 function formatDate(value) {
   const date = value?.toDate ? value.toDate() : new Date(value);
   return Number.isNaN(date.getTime()) ? "recently" : date.toLocaleString();
+}
+
+function runtimeStatusLabel(status) {
+  return ({starting: "Starting Pi…", running: "Pi is working", waiting_for_input: "Waiting for your answer", ready: "Pi finished its turn", error: "Pi needs attention", interrupted: "Pi stopped", stopped: "Pi is stopped"})[status] || "Checking Pi status…";
 }

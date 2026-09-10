@@ -88,3 +88,39 @@ describe("WorkspaceGoalsPanel", () => {
     ));
   });
 });
+
+test("keeps Start errors visible after refresh and requests consent before stopping Terminal", async () => {
+  const user = userEvent.setup();
+  const api = {
+    listGoals: vi.fn().mockResolvedValue({goals: [goal({assignedSessionId: null})]}),
+    actionGoal: vi.fn().mockRejectedValueOnce(new Error("goal_terminal_process_active")).mockResolvedValueOnce({goal: goal({lifecycle: "open", assignedSessionId: "pi-session-1"})}),
+  };
+  render(<WorkspaceGoalsPanel api={api} sessions={sessions.map(({shutdownToken, ...session}) => session)} workspaceId="workspace-1" initialSessionId="pi-session-1" />);
+  await screen.findByText("Ship the feature");
+  expect(screen.getByRole("combobox", {name: "Pi session for goal"})).toHaveValue("pi-session-1");
+  await user.click(screen.getByRole("button", {name: "Start"}));
+  await waitFor(() => expect(api.listGoals).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("alert")).toHaveTextContent("Pi is open in Terminal/Chat");
+  expect(api.actionGoal).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", {name: "Stop Terminal/Chat and start goal"}));
+  await waitFor(() => expect(api.actionGoal).toHaveBeenLastCalledWith("workspace-1", "goal-1", expect.objectContaining({sessionId: "pi-session-1", takeOverTerminal: true})));
+  expect(await screen.findByRole("button", {name: "Pause"})).toBeInTheDocument();
+});
+
+test("reads real nested runtime dialogs and uses the new revision for the second answer", async () => {
+  const user = userEvent.setup();
+  const running = goal({lifecycle: "open", assignedSessionId: "pi-session-1", revision: 2});
+  const questions = ["Choose format", "Choose filename"];
+  let revision = 2;
+  const api = {
+    listGoals: vi.fn().mockResolvedValue({goals: [running]}),
+    getGoalRuntime: vi.fn().mockImplementation(async () => ({ok: true, goals: [], runtime: {status: "waiting_for_input", pendingUiRequests: revision < 4 ? [{id: `q-${revision}`, method: "input", title: questions[revision - 2]}] : []}})),
+    answerGoalQuestion: vi.fn().mockImplementation(async () => ({ok: true, goal: {...running, revision: ++revision}})),
+  };
+  render(<WorkspaceGoalsPanel api={api} sessions={sessions} workspaceId="workspace-1" />);
+  await user.type(await screen.findByRole("textbox", {name: "Choose format"}), "CSV");
+  await user.click(screen.getByRole("button", {name: "Send answer"}));
+  await user.type(await screen.findByRole("textbox", {name: "Choose filename"}), "export.csv");
+  await user.click(screen.getByRole("button", {name: "Send answer"}));
+  await waitFor(() => expect(api.answerGoalQuestion).toHaveBeenLastCalledWith("workspace-1", "goal-1", "q-3", expect.objectContaining({expectedRevision: 3, answer: "export.csv"})));
+});

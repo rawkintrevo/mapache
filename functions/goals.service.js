@@ -230,7 +230,7 @@ async function answerGoalQuestion(uid, workspaceId, goalId, questionId, payload,
   });
   const admin = dependencies.admin || defaultAdmin;
   await ref.update({revision: Number(data.revision || 0) + 1, updatedAt: admin.firestore.FieldValue.serverTimestamp()});
-  return {ok: true, questionId: cleanQuestionId, runner: result};
+  return {ok: true, questionId: cleanQuestionId, runner: result, goal: normalizeGoalClientDoc(await ref.get())};
 }
 
 async function listGoalEvents(uid, workspaceId, goalId, query = {}, dependencies = {}) {
@@ -274,6 +274,7 @@ async function deliverGoalAction(dependencies, context) {
         mode: action.mode || goal.mode,
         auditEnabled: action.auditEnabled ?? goal.auditEnabled,
         settings: action.settings,
+        takeOverTerminal: action.takeOverTerminal === true,
       },
     };
     return requestRunner(dependencies, session, "/goals/commands", {

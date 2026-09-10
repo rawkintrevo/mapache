@@ -51,6 +51,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 
 ## Initial Case Catalog
 
+- `cases/workspace-goals-start.json`: Start from an open Pi terminal, explicitly hand off, and answer consecutive native goal questions.
 - `cases/login.json`: QA custom-token login and signed-in shell.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-drawers.json`: Left drawer, drawer sections, inspector, refresh.
