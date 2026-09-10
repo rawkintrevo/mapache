@@ -24,6 +24,8 @@ function createWebFirstAgentGateway({
   controlManager,
   ledger,
   operationStore,
+  mutationBarrier,
+  executionAuthority,
   runtimeId: configuredRuntimeId,
   WebSocketServerClass = WebSocketServer,
   now = () => Date.now(),
@@ -31,7 +33,7 @@ function createWebFirstAgentGateway({
 } = {}) {
   const supported = Boolean(config.webFirstEnabled);
   const runtimeId = configuredRuntimeId || `runtime-${crypto.randomUUID()}`;
-  const executionEpoch = Math.max(1, now());
+  let executionEpoch = Math.max(1, now());
   const manager = controlManager || createControlManager({
     runtimeId,
     executionEpoch,
@@ -56,6 +58,8 @@ function createWebFirstAgentGateway({
   let adapterAvailable = false;
   let initialized = false;
   let heartbeatTimer = null;
+  let checkpointService = null;
+  let fenced = false;
 
   const unsubscribeAdapter = [];
   if (adapter?.on) {
@@ -111,6 +115,17 @@ function createWebFirstAgentGateway({
     submitLegacyPrompt,
     controlManager: manager,
     operationLedger,
+    setExecutionEpoch(nextEpoch) {
+      if (initialized || !Number.isSafeInteger(nextEpoch) || nextEpoch < 1) return false;
+      executionEpoch = nextEpoch;
+      manager.setExecutionEpoch?.(nextEpoch);
+      operationLedger.setExecutionEpoch?.(nextEpoch);
+      return true;
+    },
+    setCheckpointService(service) {
+      checkpointService = service || null;
+    },
+    fence,
   };
 
   async function initialize() {
@@ -141,6 +156,8 @@ function createWebFirstAgentGateway({
       reload: false,
       sessionReplacement: false,
       control: manager.snapshot(),
+      executionAuthority: executionAuthority?.snapshot?.() || null,
+      checkpoint: checkpointService?.status?.() || null,
     };
   }
 
@@ -251,11 +268,15 @@ function createWebFirstAgentGateway({
       expectedControlEpoch: envelope.controlEpoch,
     });
 
+    if (envelope.type === "prompt") assertMutation("agent_prompt");
+
     if (envelope.type === "prompt") return dispatchPrompt(state, envelope);
     return dispatchControl(state, envelope);
   }
 
   async function dispatchPrompt(state, envelope) {
+    assertMutation("agent_prompt");
+    mutationBarrier?.assertQuiescent?.("agent_prompt");
     const runId = envelope.runId || `run-${envelope.commandId}`;
     const admission = await operationLedger.admit(envelope, {runId});
     if (admission.duplicate) return {ok: true, duplicate: true, operation: admission.record};
@@ -315,6 +336,10 @@ function createWebFirstAgentGateway({
   }
 
   async function dispatchControl(state, envelope) {
+    // A failed checkpoint blocks new roots and ordinary controls, but stop must
+    // remain available so an operator can quiesce the live adapter before
+    // recovering or retrying durability.
+    assertMutation(`agent_${envelope.type}`, {allowBlocked: envelope.type === "stop"});
     const admission = await operationLedger.admit(envelope);
     if (admission.duplicate) return {ok: true, duplicate: true, operation: admission.record};
     await operationLedger.consumeDispatchPermit(envelope.commandId, {
@@ -349,6 +374,7 @@ function createWebFirstAgentGateway({
   }
 
   async function dispatchHandoff(state, envelope) {
+    assertMutation("agent_handoff");
     const admission = await operationLedger.admit(envelope);
     if (admission.duplicate) return {ok: true, duplicate: true, operation: admission.record};
     await operationLedger.consumeDispatchPermit(envelope.commandId, {runtimeId, executionEpoch, sessionGeneration, controlEpoch: envelope.controlEpoch});
@@ -377,6 +403,7 @@ function createWebFirstAgentGateway({
   }
 
   async function dispatchHandoffComplete(state, envelope) {
+    assertMutation("agent_handoff_complete");
     const admission = await operationLedger.admit(envelope);
     if (admission.duplicate) return {ok: true, duplicate: true, operation: admission.record};
     await operationLedger.consumeDispatchPermit(envelope.commandId, {runtimeId, executionEpoch, sessionGeneration, controlEpoch: envelope.controlEpoch});
@@ -438,7 +465,44 @@ function createWebFirstAgentGateway({
       const runId = manager.snapshot().activeRun?.runId;
       if (runId) manager.releaseRun(runId);
     }
+    if (safe.event === "agent_settled" && safe.rootRequestId && checkpointService) {
+      try {
+        const checkpoint = await checkpointService.create({reason: "agent_settled", allowActiveRun: true});
+        const runId = manager.snapshot().activeRun?.runId;
+        if (runId) manager.releaseRun(runId);
+        await operationLedger.releaseRoot(runId, {commandId: safe.rootRequestId});
+        publish("checkpoint_committed", {
+          checkpointId: checkpoint.checkpointId,
+          commandId: safe.rootRequestId,
+          durability: "checkpoint_committed",
+        });
+      } catch (error) {
+        publish("checkpoint_failed", {
+          commandId: safe.rootRequestId,
+          code: error.code || "checkpoint_failed",
+          recovery: "inspection_and_stop_available",
+        });
+      }
+    }
     publish("adapter_event", safe);
+  }
+
+  function assertMutation(label, {allowBlocked = false} = {}) {
+    if (fenced) throw agentError("execution_authority_lost");
+    executionAuthority?.assertAuthority?.();
+    if (!allowBlocked) mutationBarrier?.assertOpen?.(label);
+  }
+
+  function fence(reason = "execution_authority_lost") {
+    if (fenced) return;
+    fenced = true;
+    manager.revoke(reason);
+    const activeRoot = operationLedger.snapshot().activeRoot;
+    if (activeRoot) {
+      void operationLedger.setOutcome(activeRoot.commandId, "unknown", "interrupted");
+    }
+    adapter?.disconnect?.();
+    publish("execution_fenced", {reason: String(reason).slice(0, 128)});
   }
 
   function publish(type, data) {
@@ -473,6 +537,8 @@ function createWebFirstAgentGateway({
       control: manager.snapshot(),
       operations: operationLedger.snapshot().operations,
       events: eventLog.slice(-64).map((item) => ({...item})),
+      executionAuthority: executionAuthority?.snapshot?.() || null,
+      checkpoint: checkpointService?.status?.() || null,
     };
   }
 

@@ -8,7 +8,20 @@ const pty = require("node-pty");
 const {WebSocket} = require("ws");
 const {prepareSshMaterial, sshCommand} = require("./sshSession");
 
-function createTerminalSession({admin, config, activity, onTerminalExit, canStartProcess, controlManager, webFirstEnabled = false, spawnProcess = spawnTerminal, timers = globalThis}) {
+function createTerminalSession({
+  admin,
+  config,
+  activity,
+  onTerminalExit,
+  canStartProcess,
+  controlManager,
+  mutationBarrier,
+  executionAuthority,
+  processSupervisor,
+  webFirstEnabled = false,
+  spawnProcess = spawnTerminal,
+  timers = globalThis,
+}) {
   const sockets = new Set();
   let term = null;
   let outputBuffer = "";
@@ -19,6 +32,8 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
   let publishedPiJsonlPath = "";
   let releasingForGoal = false;
   let goalHandoffTerm = null;
+  let fencedTerm = null;
+  let fenced = false;
   const socketContexts = new Map();
 
   return {
@@ -104,6 +119,7 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
     },
     writePrompt(text) {
       if (webFirstEnabled && controlManager) {
+        assertMutation("terminal_prompt");
         const error = new Error("web_first_agent_required");
         error.code = "web_first_agent_required";
         throw error;
@@ -111,6 +127,17 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
       const prompt = formatPrompt(text);
       ensureTerm().write(prompt);
       markTerminalActivity();
+    },
+    fence(reason = "execution_authority_lost") {
+      fenced = true;
+      const current = term;
+      if (!current) return {fenced: true, reason};
+      fencedTerm = current;
+      closeSockets();
+      try { current.kill("SIGTERM"); } catch (error) {
+        activity.appendHistory("system", `terminal fence failed: ${String(error.message || error).slice(0, 256)}`);
+      }
+      return {fenced: true, reason, pid: current.pid || null};
     },
   };
 
@@ -170,6 +197,7 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
         return;
       }
       if (message.type === "resize") {
+        assertMutation("terminal_resize");
         controlManager.assertCanWrite({
           clientId: context.clientId,
           resumptionSecret: context.resumptionSecret,
@@ -180,6 +208,7 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
         return;
       }
       if (message.type === "data") {
+        assertMutation("terminal_input");
         controlManager.acquire({
           clientId: context.clientId,
           resumptionSecret: context.resumptionSecret,
@@ -202,6 +231,12 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
   }
 
   function ensureTerm() {
+    if (webFirstEnabled && executionAuthority) executionAuthority.assertAuthority();
+    if (webFirstEnabled && fenced) {
+      const error = new Error("execution_authority_lost");
+      error.code = "execution_authority_lost";
+      throw error;
+    }
     if (releasingForGoal) {
       const error = new Error("goal_rpc_process_active");
       error.code = "goal_rpc_process_active";
@@ -219,6 +254,7 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
     const command = terminalCommand(config);
     term = spawnProcess(command, config);
     const spawnedTerm = term;
+    const unregisterProcess = processSupervisor?.register?.(term, {id: "pi-terminal", label: "pi-terminal"});
 
     activity.appendHistory("system", `opened ${command.display}`);
     schedulePiSessionBindingScan(command);
@@ -236,6 +272,11 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
       closeSockets();
       term = null;
       clearPiSessionBindingScan();
+      unregisterProcess?.();
+      if (fencedTerm === spawnedTerm) {
+        fencedTerm = null;
+        return;
+      }
       // A mode switch is not session completion: do not commit/push the
       // workspace or finalize its automation branch during the handoff.
       if (goalHandoffTerm === spawnedTerm) {
@@ -251,6 +292,13 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
     });
 
     return term;
+  }
+
+  function assertMutation(label) {
+    if (!webFirstEnabled) return true;
+    executionAuthority?.assertAuthority?.();
+    mutationBarrier?.assertOpen?.(label);
+    return true;
   }
 
   function appendToBuffer(data) {

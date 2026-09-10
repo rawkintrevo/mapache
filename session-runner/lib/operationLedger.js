@@ -33,6 +33,7 @@ function createOperationLedger({
     recordEvidence,
     setDurability,
     setOutcome,
+    setExecutionEpoch,
     releaseRoot,
     event,
     events: () => events.map((item) => ({...item})),
@@ -59,6 +60,12 @@ function createOperationLedger({
       if (item && Number.isSafeInteger(item.sequence)) events.push({...item});
     }
     initialized = true;
+  }
+
+  function setExecutionEpoch(nextEpoch) {
+    if (initialized || !Number.isSafeInteger(nextEpoch) || nextEpoch < 1) return false;
+    executionEpoch = nextEpoch;
+    return true;
   }
 
   async function admit(envelope, context = {}) {

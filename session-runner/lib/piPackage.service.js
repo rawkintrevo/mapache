@@ -10,7 +10,7 @@ const {
   normalizePiPackageSettingsEntry,
 } = require("./piValidation.helpers");
 
-function createPiPackageService({config, syncUp, runPiCommand: injectedRunPiCommand}) {
+function createPiPackageService({config, syncUp, runPiCommand: injectedRunPiCommand, mutationBarrier, executionAuthority, beforeMutation, afterMutation}) {
   async function runPiCommand(args) {
     const child = spawn("pi", args, {
       cwd: config.workspaceDir,
@@ -55,40 +55,49 @@ function createPiPackageService({config, syncUp, runPiCommand: injectedRunPiComm
   }
 
   async function installWorkspacePiPackage(body) {
-    const source = normalizePiMutationPackageSource(body.source);
-    await executePiCommand(["install", "-l", source]);
-    await syncUp({includeArchives: true});
-    return {
-      ok: true,
-      action: "install",
-      source,
-      packages: (await listWorkspacePiPackages()).packages,
-    };
+    return withMutation("pi_package_install", async () => {
+      const source = normalizePiMutationPackageSource(body.source);
+      await executePiCommand(["install", "-l", source]);
+      await syncUp({includeArchives: true});
+      return {ok: true, action: "install", source, packages: (await listWorkspacePiPackages()).packages};
+    });
   }
 
   async function removeWorkspacePiPackage(body) {
-    const source = normalizePiMutationPackageSource(body.source);
-    await executePiCommand(["remove", "--approve", "-l", source]);
-    await syncUp({includeArchives: true});
-    return {
-      ok: true,
-      action: "remove",
-      source,
-      packages: (await listWorkspacePiPackages()).packages,
-    };
+    return withMutation("pi_package_remove", async () => {
+      const source = normalizePiMutationPackageSource(body.source);
+      await executePiCommand(["remove", "--approve", "-l", source]);
+      await syncUp({includeArchives: true});
+      return {ok: true, action: "remove", source, packages: (await listWorkspacePiPackages()).packages};
+    });
   }
 
   async function updateWorkspacePiPackages(body) {
-    const source = body.source ? normalizePiMutationPackageSource(body.source) : "";
-    const args = source ? ["update", "--extension", source] : ["update", "--extensions"];
-    await executePiCommand(args);
-    await syncUp({includeArchives: true});
-    return {
-      ok: true,
-      action: "update",
-      source: source || null,
-      packages: (await listWorkspacePiPackages()).packages,
-    };
+    return withMutation("pi_package_update", async () => {
+      const source = body.source ? normalizePiMutationPackageSource(body.source) : "";
+      const args = source ? ["update", "--extension", source] : ["update", "--extensions"];
+      await executePiCommand(args);
+      await syncUp({includeArchives: true});
+      return {ok: true, action: "update", source: source || null, packages: (await listWorkspacePiPackages()).packages};
+    });
+  }
+
+  async function withMutation(label, operation) {
+    await beforeMutation?.(label);
+    executionAuthority?.assertAuthority?.();
+    let result;
+    if (!mutationBarrier) {
+      result = await operation();
+    } else {
+      const token = mutationBarrier.enter(label);
+      try {
+        result = await operation();
+      } finally {
+        mutationBarrier.leave(token);
+      }
+    }
+    await afterMutation?.(label);
+    return result;
   }
 
   async function resolveInstalledPiPackagePath(source, scope = "workspace") {

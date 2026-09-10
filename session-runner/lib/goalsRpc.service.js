@@ -21,9 +21,11 @@ function createGoalsRpcService({
   spawn = defaultSpawn,
   env = process.env,
   timers = globalThis,
+  processSupervisor,
 } = {}) {
   const enabled = String(env.GOAL_RPC_ENABLED || "").toLowerCase() === "true" &&
-    String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi";
+    String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi" &&
+    !config.webFirstEnabled;
   const events = new EventEmitter();
   const pendingResponses = new Map();
   const pendingUi = new Map();
@@ -143,6 +145,7 @@ function createGoalsRpcService({
       stdio: ["pipe", "pipe", "pipe"],
     });
     child = next;
+    processSupervisor?.register?.(next, {id: "goals-rpc", label: "managed-goals"});
     processInstance += 1;
     stdoutBuffer = "";
     status = "starting";

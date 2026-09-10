@@ -18,7 +18,7 @@ const {
 } = require("./gitValidation.helpers");
 const {compactErrorMessage} = require("./utils");
 
-function createGitService({config, activity}) {
+function createGitService({config, activity, mutationBarrier, executionAuthority, beforeMutation, afterMutation}) {
   const runGitCommand = createGitCommandRunner({config});
   const {
     withGitCloneAuth,
@@ -399,6 +399,7 @@ function createGitService({config, activity}) {
     publishGithubResolvedMetadata,
     pullGitAction,
     pushGitChanges,
+    runMutation: withMutation,
     recordGithubCloneFailure,
     recordGithubSyncFailure,
     resolveGitHead,
@@ -406,6 +407,20 @@ function createGitService({config, activity}) {
     stageGitPaths,
     unstageGitPaths,
   };
+
+  async function withMutation(label, operation) {
+    if (!config.webFirstEnabled) return operation();
+    await beforeMutation?.(label);
+    executionAuthority?.assertAuthority?.();
+    let result;
+    if (!mutationBarrier) result = await operation();
+    else {
+      const token = mutationBarrier.enter(label || "git_mutation");
+      try { result = await operation(); } finally { mutationBarrier.leave(token); }
+    }
+    await afterMutation?.(label);
+    return result;
+  }
 }
 
 function classifyGithubCloneFailure(message) {

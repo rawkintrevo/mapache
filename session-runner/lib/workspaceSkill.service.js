@@ -12,7 +12,7 @@ const {
   skillSummaryFromMarkdown,
 } = require("./piValidation.helpers");
 
-function createWorkspaceSkillService({config, syncUp}) {
+function createWorkspaceSkillService({config, syncUp, mutationBarrier, executionAuthority, beforeMutation, afterMutation}) {
   const harness = workspaceSkillHarness(config);
 
   async function listWorkspaceSkills() {
@@ -33,62 +33,61 @@ function createWorkspaceSkillService({config, syncUp}) {
   }
 
   async function saveWorkspaceSkill(body) {
-    const name = normalizePiSkillName(body.name);
-    const description = normalizePiSkillDescription(body.description);
-    const instructions = normalizePiSkillContent(body.content || body.instructions || "");
-    const skillsPath = harness.skillsPath;
-    const skillDir = path.join(skillsPath, name);
-    const skillPath = path.join(skillDir, "SKILL.md");
-    await fs.promises.mkdir(skillDir, {recursive: true});
-    const markdown = buildPiSkillMarkdown({name, description, content: instructions});
-    await fs.promises.writeFile(skillPath, markdown, "utf8");
-    await syncUp({includeArchives: false});
-    return {
-      ok: true,
-      action: "save",
-      harness: harness.id,
-      harnessLabel: harness.label,
-      requiresRestart: true,
-      restartHint: harness.restartHint,
-      skillsRelativePath: harness.relativeSkillsPath,
-      skill: skillSummaryFromMarkdown(markdown, {
-        path: `${harness.relativeSkillsPath}/${name}/SKILL.md`,
-        kind: "directory",
-        editable: true,
-        fallbackName: name,
-      }),
-      skills: (await listWorkspaceSkills()).skills,
-    };
+    return withMutation("workspace_skill_save", async () => {
+      const name = normalizePiSkillName(body.name);
+      const description = normalizePiSkillDescription(body.description);
+      const instructions = normalizePiSkillContent(body.content || body.instructions || "");
+      const skillsPath = harness.skillsPath;
+      const skillDir = path.join(skillsPath, name);
+      const skillPath = path.join(skillDir, "SKILL.md");
+      await fs.promises.mkdir(skillDir, {recursive: true});
+      const markdown = buildPiSkillMarkdown({name, description, content: instructions});
+      await fs.promises.writeFile(skillPath, markdown, "utf8");
+      await syncUp({includeArchives: false});
+      return {
+        ok: true, action: "save", harness: harness.id, harnessLabel: harness.label, requiresRestart: true,
+        restartHint: harness.restartHint, skillsRelativePath: harness.relativeSkillsPath,
+        skill: skillSummaryFromMarkdown(markdown, {path: `${harness.relativeSkillsPath}/${name}/SKILL.md`, kind: "directory", editable: true, fallbackName: name}),
+        skills: (await listWorkspaceSkills()).skills,
+      };
+    });
   }
 
   async function deleteWorkspaceSkill(body) {
-    const name = normalizePiSkillName(body.name);
-    const skillsPath = harness.skillsPath;
-    const skillDir = path.join(skillsPath, name);
-    const skillPath = path.join(skillDir, "SKILL.md");
-    if (!await pathExists(skillPath)) {
-      const rootMdPath = path.join(skillsPath, `${name}.md`);
-      if (!harness.legacyFileSupport || !await pathExists(rootMdPath)) {
-        const error = new Error("skill_not_found");
-        error.code = "skill_not_found";
-        throw error;
-      }
-      await fs.promises.unlink(rootMdPath);
-    } else {
-      await fs.promises.rm(skillDir, {recursive: true, force: true});
+    return withMutation("workspace_skill_delete", async () => {
+      const name = normalizePiSkillName(body.name);
+      const skillsPath = harness.skillsPath;
+      const skillDir = path.join(skillsPath, name);
+      const skillPath = path.join(skillDir, "SKILL.md");
+      if (!await pathExists(skillPath)) {
+        const rootMdPath = path.join(skillsPath, `${name}.md`);
+        if (!harness.legacyFileSupport || !await pathExists(rootMdPath)) throw skillError("skill_not_found");
+        await fs.promises.unlink(rootMdPath);
+      } else await fs.promises.rm(skillDir, {recursive: true, force: true});
+      await syncUp({includeArchives: false});
+      return {ok: true, action: "delete", harness: harness.id, harnessLabel: harness.label, requiresRestart: true,
+        restartHint: harness.restartHint, skillsRelativePath: harness.relativeSkillsPath, name,
+        skills: (await listWorkspaceSkills()).skills};
+    });
+  }
+
+  async function withMutation(label, operation) {
+    await beforeMutation?.(label);
+    executionAuthority?.assertAuthority?.();
+    let result;
+    if (!mutationBarrier) result = await operation();
+    else {
+      const token = mutationBarrier.enter(label);
+      try { result = await operation(); } finally { mutationBarrier.leave(token); }
     }
-    await syncUp({includeArchives: false});
-    return {
-      ok: true,
-      action: "delete",
-      harness: harness.id,
-      harnessLabel: harness.label,
-      requiresRestart: true,
-      restartHint: harness.restartHint,
-      skillsRelativePath: harness.relativeSkillsPath,
-      name,
-      skills: (await listWorkspaceSkills()).skills,
-    };
+    await afterMutation?.(label);
+    return result;
+  }
+
+  function skillError(code) {
+    const error = new Error(code);
+    error.code = code;
+    return error;
   }
 
   return {

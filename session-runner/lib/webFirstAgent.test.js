@@ -8,6 +8,7 @@ const WebSocket = require("ws");
 const {WebSocketServer} = WebSocket;
 const {createWebFirstAgentGateway} = require("./webFirstAgent");
 const {createWebSocketUpgradeRouter} = require("./webSocketUpgrade");
+const {createMutationBarrier} = require("./mutationBarrier");
 
 function adapterStub() {
   const events = new EventEmitter();
@@ -168,6 +169,61 @@ test("rejects malformed commands and keeps unsupported Gate A operations explici
       payload: {},
     }));
     assert.equal((await nextType(socket, "error")).code, "unknown_command_type");
+  } finally {
+    socket?.close();
+    gateway.close();
+    terminalWss.close();
+    browserWss.close();
+    await new Promise((resolve) => httpServer.close(resolve));
+  }
+});
+
+test("keeps stop available after checkpoint failure blocks new mutations", async () => {
+  const adapter = adapterStub();
+  const barrier = createMutationBarrier();
+  const gateway = createWebFirstAgentGateway({
+    adapter,
+    mutationBarrier: barrier,
+    config: {webFirstEnabled: true},
+    terminalSession: {ensureForAgent: async () => {}},
+  });
+  gateway.setCheckpointService({
+    async create() {
+      barrier.block("checkpoint_upload_failed");
+      const error = new Error("checkpoint_upload_failed");
+      error.code = "checkpoint_upload_failed";
+      throw error;
+    },
+  });
+  await gateway.initialize();
+  const httpServer = http.createServer();
+  const terminalWss = new WebSocketServer({noServer: true});
+  const browserWss = new WebSocketServer({noServer: true});
+  httpServer.on("upgrade", createWebSocketUpgradeRouter({agentWss: gateway.server, terminalWss, browserWss, hasAgentAccess: () => true, hasBrowserAccess: () => true}));
+  const port = await listen(httpServer);
+  let socket;
+  try {
+    socket = await openSocket(port);
+    await nextType(socket, "status");
+    socket.send(JSON.stringify({type: "hello", clientId: "tab-1"}));
+    const hello = await nextType(socket, "hello");
+    const base = {
+      protocolVersion: 1,
+      runtimeId: hello.runtimeId,
+      executionEpoch: hello.executionEpoch,
+      sessionGeneration: hello.sessionGeneration,
+      controlEpoch: hello.snapshot.control.controlEpoch,
+    };
+    socket.send(JSON.stringify({...base, type: "control_acquire", commandId: "control-1", payload: {surface: "web"}}));
+    const acquired = await nextType(socket, "result");
+    socket.send(JSON.stringify({...base, controlEpoch: acquired.control.controlEpoch, type: "prompt", commandId: "command-1", payload: {message: "hello"}}));
+    await nextType(socket, "result");
+    adapter.emitEvent({event: "agent_settled", rootRequestId: "command-1", sessionGeneration: 1, piSession: "pi-session-1"});
+    await nextType(socket, "checkpoint_failed");
+    socket.send(JSON.stringify({...base, controlEpoch: acquired.control.controlEpoch, type: "stop", commandId: "stop-1", payload: {runId: "run-command-1"}}));
+    const stopped = await nextType(socket, "result");
+    assert.equal(stopped.accepted, true);
+    assert.equal(adapter.requests.at(-1).operation, "cancel");
   } finally {
     socket?.close();
     gateway.close();

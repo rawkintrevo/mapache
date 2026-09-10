@@ -50,8 +50,13 @@ disabled in production while the public Pi TUI API lacks the required command,
 dialog, reload, and session-replacement controls. Gate B's control/protocol
 slice is also packaged with `MAPACHE_WEB_FIRST_ENABLED=false`; enabling it is a
 fixture/canary action only after the Gate A/C release criteria pass. Record the
-resulting digest in the Gate A/B environment report; existing sessions need
-restart or recreation to receive the image contents.
+resulting digest in the Gate A/B/C environment report; existing sessions need
+restart or recreation to receive the image contents. Gate C adds the runner
+authority, mutation barrier, controlled-child stop, immutable checkpoint, and
+staging-restore code, but it does not authorize production enablement: the
+platform has not yet proven predecessor fencing, external writer routing, or
+backend-only recovery-pointer enforcement. No Functions or Hosting deploy is
+needed for this runner-only slice.
 
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account and `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events. Restore the Eventarc binding with:
 

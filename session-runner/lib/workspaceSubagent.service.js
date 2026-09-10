@@ -5,7 +5,7 @@ const path = require("path");
 const {resolveHarnessMetadata} = require("./harnesses/metadata");
 const {pathExists, safeReadDir} = require("./utils");
 
-function createWorkspaceSubagentService({config, syncUp}) {
+function createWorkspaceSubagentService({config, syncUp, mutationBarrier, executionAuthority, beforeMutation, afterMutation}) {
   const harness = workspaceSubagentHarness(config);
 
   async function listWorkspaceSubagents() {
@@ -35,58 +35,54 @@ function createWorkspaceSubagentService({config, syncUp}) {
   }
 
   async function saveWorkspaceSubagent(body) {
-    const normalized = normalizeWorkspaceSubagentPayload(body);
-    const targetPath = path.join(harness.subagentsPath, `${normalized.name}${harness.fileExtension}`);
-    await fs.promises.mkdir(path.dirname(targetPath), {recursive: true});
-    const content = harness.schema === "codex-agent-toml" ?
-      buildCodexSubagentToml(normalized) :
-      buildPiSubagentMarkdown(normalized);
-    await fs.promises.writeFile(targetPath, content, "utf8");
-    await syncUp({includeArchives: false});
-    const listed = await listWorkspaceSubagents();
-    return {
-      ok: true,
-      action: "save",
-      harness: harness.id,
-      harnessLabel: harness.label,
-      schema: harness.schema,
-      requiresRestart: true,
-      restartHint: harness.restartHint,
-      subagentsRelativePath: harness.relativePath,
-      chainsRelativePath: harness.chainsRelativePath,
-      settingsRelativePath: harness.settingsRelativePath,
-      configPath: harness.configPath,
-      subagent: listed.subagents.find((item) => item.name === normalized.name) || null,
-      subagents: listed.subagents,
-    };
+    return withMutation("workspace_subagent_save", async () => {
+      const normalized = normalizeWorkspaceSubagentPayload(body);
+      const targetPath = path.join(harness.subagentsPath, `${normalized.name}${harness.fileExtension}`);
+      await fs.promises.mkdir(path.dirname(targetPath), {recursive: true});
+      const content = harness.schema === "codex-agent-toml" ? buildCodexSubagentToml(normalized) : buildPiSubagentMarkdown(normalized);
+      await fs.promises.writeFile(targetPath, content, "utf8");
+      await syncUp({includeArchives: false});
+      const listed = await listWorkspaceSubagents();
+      return {ok: true, action: "save", harness: harness.id, harnessLabel: harness.label, schema: harness.schema,
+        requiresRestart: true, restartHint: harness.restartHint, subagentsRelativePath: harness.relativePath,
+        chainsRelativePath: harness.chainsRelativePath, settingsRelativePath: harness.settingsRelativePath,
+        configPath: harness.configPath, subagent: listed.subagents.find((item) => item.name === normalized.name) || null,
+        subagents: listed.subagents};
+    });
   }
 
   async function deleteWorkspaceSubagent(body) {
-    const name = normalizeWorkspaceSubagentName(body.name);
-    const targetPath = path.join(harness.subagentsPath, `${name}${harness.fileExtension}`);
-    if (!await pathExists(targetPath)) {
-      const error = new Error("subagent_not_found");
-      error.code = "subagent_not_found";
-      throw error;
+    return withMutation("workspace_subagent_delete", async () => {
+      const name = normalizeWorkspaceSubagentName(body.name);
+      const targetPath = path.join(harness.subagentsPath, `${name}${harness.fileExtension}`);
+      if (!await pathExists(targetPath)) throw subagentError("subagent_not_found");
+      await fs.promises.unlink(targetPath);
+      await syncUp({includeArchives: false});
+      const listed = await listWorkspaceSubagents();
+      return {ok: true, action: "delete", harness: harness.id, harnessLabel: harness.label, schema: harness.schema,
+        requiresRestart: true, restartHint: harness.restartHint, subagentsRelativePath: harness.relativePath,
+        chainsRelativePath: harness.chainsRelativePath, settingsRelativePath: harness.settingsRelativePath,
+        configPath: harness.configPath, name, subagents: listed.subagents};
+    });
+  }
+
+  async function withMutation(label, operation) {
+    await beforeMutation?.(label);
+    executionAuthority?.assertAuthority?.();
+    let result;
+    if (!mutationBarrier) result = await operation();
+    else {
+      const token = mutationBarrier.enter(label);
+      try { result = await operation(); } finally { mutationBarrier.leave(token); }
     }
-    await fs.promises.unlink(targetPath);
-    await syncUp({includeArchives: false});
-    const listed = await listWorkspaceSubagents();
-    return {
-      ok: true,
-      action: "delete",
-      harness: harness.id,
-      harnessLabel: harness.label,
-      schema: harness.schema,
-      requiresRestart: true,
-      restartHint: harness.restartHint,
-      subagentsRelativePath: harness.relativePath,
-      chainsRelativePath: harness.chainsRelativePath,
-      settingsRelativePath: harness.settingsRelativePath,
-      configPath: harness.configPath,
-      name,
-      subagents: listed.subagents,
-    };
+    await afterMutation?.(label);
+    return result;
+  }
+
+  function subagentError(code) {
+    const error = new Error(code);
+    error.code = code;
+    return error;
   }
 
   async function listWorkspaceSubagentChains() {

@@ -8,6 +8,7 @@ function createRunnerLifecycleCoordinator({
   chromeProfileSnapshots,
   chromeRuntime,
   config,
+  executionAuthority,
   git,
   goalsPackage,
   listen,
@@ -20,12 +21,24 @@ function createRunnerLifecycleCoordinator({
   workspace,
   workspaceSync,
   webFirst,
+  checkpoint,
 }) {
   async function start() {
     try {
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      const authority = await executionAuthority?.start?.();
+      webFirst?.setExecutionEpoch?.(authority?.executionEpoch);
+      if (config.webFirstEnabled && !executionAuthority?.canMutate?.()) {
+        logger.warn("web-first runner is read-only until execution authority is acquired");
+        await chromeRuntime.start();
+        await webFirst?.initialize?.();
+        listen(() => {
+          logger.log(`session runner listening on ${config.port} (recovery required)`);
+        });
+        return;
+      }
       const goalsPackageResult = await goalsPackage?.ensureInstalledDeclaration?.();
       goalsPackage?.setBridgeAvailability?.(goalsPackageResult?.enabled !== false);
       if (goalsPackageResult?.reason === "managed_package_missing") {
@@ -40,6 +53,11 @@ function createRunnerLifecycleCoordinator({
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
       await activeHarness.materializeSubagents();
+      if (config.webFirstEnabled && executionAuthority?.canMutate?.()) {
+        await checkpoint?.ensureInitial?.().catch((error) => {
+          logger.error("initial web-first checkpoint failed", error);
+        });
+      }
       await webFirst?.initialize?.();
       chromeProfileSnapshots.start();
       startSyncLoop();
@@ -55,6 +73,14 @@ function createRunnerLifecycleCoordinator({
   }
 
   async function shutdown() {
+    if (config.webFirstEnabled && executionAuthority?.canMutate?.()) {
+      try {
+        const current = await webFirst?.snapshot?.();
+        if (!current?.control?.activeRun) await checkpoint?.create?.({reason: "shutdown"});
+      } catch (error) {
+        logger.error("final web-first checkpoint failed", error);
+      }
+    }
     piChat?.close?.();
     await webFirst?.close?.();
     try {
@@ -69,9 +95,10 @@ function createRunnerLifecycleCoordinator({
     if (chromeProfileSnapshots.enabled()) {
       await chromeProfileSnapshots.stop();
       await chromeProfileSnapshots.finalize();
-    } else {
+    } else if (!config.webFirstEnabled) {
       await workspaceSync.syncUp({includeArchives: true});
     }
+    await executionAuthority?.release?.("runner_shutdown");
     await activity.updateSessionActivity({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -85,6 +112,12 @@ function createRunnerLifecycleCoordinator({
       if (syncUpRunning) return;
       syncUpRunning = true;
       const now = Date.now();
+      if (config.webFirstEnabled) {
+        checkpoint?.create?.({reason: "periodic"})
+            .catch((error) => logger.error("periodic checkpoint failed", error))
+            .finally(() => { syncUpRunning = false; });
+        return;
+      }
       const includeArchives = !chromeProfileSnapshots.enabled() &&
         now - lastArchiveSync >= config.archiveSyncIntervalMs;
       const sync = Promise.all([

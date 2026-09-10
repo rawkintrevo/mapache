@@ -33,6 +33,7 @@ function createControlManager({
     releaseControl,
     revoke,
     snapshot,
+    setExecutionEpoch,
     setSessionGeneration,
     reserveRun,
     tick,
@@ -220,6 +221,11 @@ function createControlManager({
   function setSessionGeneration(nextGeneration) {
     if (!Number.isSafeInteger(nextGeneration) || nextGeneration < 1) throw controlError("session_generation_invalid");
     sessionGeneration = nextGeneration;
+  }
+
+  function setExecutionEpoch(nextEpoch) {
+    if (!Number.isSafeInteger(nextEpoch) || nextEpoch < 1) throw controlError("execution_epoch_invalid");
+    executionEpoch = nextEpoch;
   }
 
   function expireIfNeeded() {

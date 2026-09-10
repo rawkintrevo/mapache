@@ -41,8 +41,12 @@ const {createWorkspaceService} = require("./lib/workspace");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 const {createControlManager} = require("./lib/controlManager");
+const {createExecutionAuthority} = require("./lib/executionAuthority");
+const {createMutationBarrier} = require("./lib/mutationBarrier");
+const {createProcessSupervisor} = require("./lib/processSupervisor");
 const {createPiWebFirstAdapter} = require("./lib/piWebFirstAdapter");
 const {createWebFirstAgentGateway} = require("./lib/webFirstAgent");
+const {createWorkspaceCheckpointService} = require("./lib/workspaceCheckpoint.service");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
@@ -73,6 +77,61 @@ const webFirstControlManager = config.webFirstEnabled ? createControlManager({
   heartbeatMs: config.webFirstHeartbeatMs,
   leaseMs: config.webFirstLeaseMs,
 }) : null;
+const mutationBarrier = createMutationBarrier({timeoutMs: config.checkpointBarrierTimeoutMs || undefined});
+const processSupervisor = createProcessSupervisor();
+let webFirstAgent = null;
+let terminalSession = null;
+let shellSession = null;
+let workspaceSync = null;
+let goalsPackage = null;
+let workspaceCheckpoint = null;
+const beforeIndependentMutation = async (label) => {
+  if (!config.webFirstEnabled) return;
+  const excludedFromWorkspaceRecovery = ["auth_materialize", "pi_model_scope_save", "pi_models_file_save"].includes(label);
+  if (excludedFromWorkspaceRecovery) {
+    executionAuthority.assertAuthority();
+    return;
+  }
+  await workspaceCheckpoint?.assertMutationAllowed?.({requireSession: true});
+};
+const afterIndependentMutation = async (label) => {
+  if (!config.webFirstEnabled) return;
+  await workspaceCheckpoint?.create?.({reason: label || "independent_mutation"});
+};
+const executionAuthority = createExecutionAuthority({
+  admin,
+  config,
+  db,
+  runtimeId: webFirstRuntimeId || undefined,
+  leaseMs: config.webFirstLeaseMs || undefined,
+  renewIntervalMs: config.webFirstRenewIntervalMs || undefined,
+  onLost: async (info) => {
+    mutationBarrier.fence(info.reason);
+    workspaceSync?.fence?.(info.reason);
+    webFirstAgent?.fence?.(info.reason);
+    terminalSession?.fence?.(info.reason);
+    shellSession?.fence?.(info.reason);
+    processSupervisor.fence();
+    await processSupervisor.stopAll(info.reason).catch((error) => {
+      console.error("controlled process termination unresolved", error);
+    });
+    try {
+      await goalsPackage?.stop?.();
+    } catch (error) {
+      console.error("managed goal stop after execution fence failed", error);
+    }
+    try {
+      await chromeRuntime?.stop?.();
+    } catch (error) {
+      console.error("Chrome runtime stop after execution fence failed", error);
+    }
+    await activity.updateSessionActivity({
+      runtimeState: "fenced",
+      runtimeLastError: String(info.reason || "execution_authority_lost").slice(0, 512),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
+  },
+});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
 const chromeRuntime = createChromeRuntime(config, {
@@ -80,37 +139,48 @@ const chromeRuntime = createChromeRuntime(config, {
 });
 const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
 const codex = createCodexService({config});
-const git = createGitService({config, activity});
+const git = createGitService({config, activity, mutationBarrier, executionAuthority, beforeMutation: beforeIndependentMutation, afterMutation: afterIndependentMutation});
 const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
-const workspaceSync = createWorkspaceSyncCoordinator({
+workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
   syncUp: workspace.syncUp,
+  syncChromeProfileUp: workspace.syncChromeProfileUp,
   syncWriterRole: config.workspaceSyncRole,
+  mutationBarrier,
+  executionAuthority,
+  webFirstEnabled: config.webFirstEnabled,
 });
 const chromeProfile = createChromeProfileService({config, archives: workspace});
 const chromeProfileSnapshots = createChromeProfileSnapshotService({
   config,
   profile: chromeProfile,
-  snapshot: () => workspaceSync.syncUp({includeArchives: true}),
+  snapshot: () => workspaceSync.syncChromeProfileUp(),
 });
-const pi = createPiService({config, syncUp: workspaceSync.syncUp});
-const piModelScope = createPiModelScopeService({admin, config, db});
+const pi = createPiService({config, syncUp: workspaceSync.syncUp, mutationBarrier, executionAuthority, beforeMutation: beforeIndependentMutation, afterMutation: afterIndependentMutation});
+const piModelScope = createPiModelScopeService({admin, config, db, mutationBarrier, executionAuthority});
 const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
 let goalsRpc = null;
-const terminalSession = createTerminalSession({
+terminalSession = createTerminalSession({
   admin,
   config,
   activity,
-  canStartProcess: () => !goalsRpc?.isActive?.(),
+  canStartProcess: () => !goalsRpc?.isActive?.() && executionAuthority.canMutate(),
   controlManager: webFirstControlManager,
+  mutationBarrier,
+  executionAuthority,
+  processSupervisor,
   webFirstEnabled: config.webFirstEnabled,
   onTerminalExit: async ({command, exitCode}) => {
     const executable = path.basename(String(command && command.file || ""));
+    if (config.webFirstEnabled) {
+      await workspaceCheckpoint?.create?.({reason: "terminal_exit"});
+      return;
+    }
     if (executable === "pi") {
       await git.finalizeGithubAutomationBranch(exitCode);
       await workspaceSync.syncUp({includeArchives: true});
@@ -125,24 +195,29 @@ const webFirstAdapter = config.webFirstEnabled ? createPiWebFirstAdapter({
   socketPath: config.webFirstAdapterSocket,
   timeoutMs: config.webFirstAdapterTimeoutMs,
 }) : null;
-const webFirstAgent = config.webFirstEnabled ? createWebFirstAgentGateway({
+webFirstAgent = config.webFirstEnabled ? createWebFirstAgentGateway({
   adapter: webFirstAdapter,
   config,
   controlManager: webFirstControlManager,
   runtimeId: webFirstRuntimeId,
   terminalSession,
+  mutationBarrier,
+  executionAuthority,
 }) : null;
-const shellSession = createShellSession({
+shellSession = createShellSession({
   admin,
   config,
   activity,
   controlManager: webFirstControlManager,
+  mutationBarrier,
+  executionAuthority,
+  processSupervisor,
   webFirstEnabled: config.webFirstEnabled,
 });
-goalsRpc = createGoalsRpcService({config, terminalSession});
-const goalsBridge = createGoalsBridgeService({config, terminalSession, rpcService: goalsRpc});
+goalsRpc = createGoalsRpcService({config: {...config, webFirstEnabled: config.webFirstEnabled}, terminalSession, processSupervisor});
+const goalsBridge = createGoalsBridgeService({config: {...config, webFirstEnabled: config.webFirstEnabled}, terminalSession, rpcService: goalsRpc});
 const goalsPackageBootstrap = createGoalsPackageBootstrap({config, version: process.env.PI_GOAL_X_VERSION || undefined});
-const goalsPackage = {
+goalsPackage = {
   ensureInstalledDeclaration: goalsPackageBootstrap.ensureInstalledDeclaration,
   setBridgeAvailability: (value) => goalsBridge.setPackageAvailable(value),
   stop: () => goalsBridge.stop(),
@@ -156,6 +231,24 @@ const piChat = createPiChatWebSocket({
   webFirstEnabled: config.webFirstEnabled,
   webFirstGateway: webFirstAgent,
 });
+workspaceCheckpoint = config.webFirstEnabled ? createWorkspaceCheckpointService({
+  admin,
+  config,
+  db,
+  storage,
+  authority: executionAuthority,
+  barrier: mutationBarrier,
+  ledger: webFirstAgent.operationLedger,
+  adapter: webFirstAdapter,
+  goals: goalsBridge,
+  isQuiescent: async () => {
+    const snapshot = await webFirstAgent.snapshot();
+    return !snapshot.control?.activeRun;
+  },
+  barrierTimeoutMs: config.checkpointBarrierTimeoutMs,
+  orphanGraceMs: config.checkpointOrphanGraceMs,
+}) : null;
+webFirstAgent?.setCheckpointService?.(workspaceCheckpoint);
 const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
   hasBrowserAccess,
@@ -169,6 +262,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   chromeProfileSnapshots,
   chromeRuntime,
   config,
+  executionAuthority,
   git,
   goalsPackage,
   listen: (onListening) => server.listen(config.port, onListening),
@@ -178,6 +272,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   sshSession,
   workspace,
   workspaceSync,
+  checkpoint: workspaceCheckpoint,
   webFirst: webFirstAgent,
 });
 
@@ -212,9 +307,13 @@ registerWorkspaceRoutes({
   hasRunnerAccess,
   shutdown: runnerLifecycle.shutdown,
   workspaceSync,
+  executionAuthority,
+  checkpoint: workspaceCheckpoint,
+  beforeMutation: beforeIndependentMutation,
+  afterMutation: afterIndependentMutation,
 });
 registerGoalsRoutes({app, goalsBridge, hasRunnerAccess});
-registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace});
+registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace, beforeMutation: beforeIndependentMutation});
 registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAccess});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 

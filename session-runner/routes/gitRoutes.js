@@ -22,42 +22,45 @@ function registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAcce
 
   app.post("/git/pull", async (req, res) => {
     await handleGitAction(req, res, "git pull failed", "git_pull_failed", () => git.pullGitAction(), config, git, hasRunnerAccess, {
+      label: "git_pull",
       statusCode: 500,
     });
   });
 
   app.post("/git/branches", async (req, res) => {
-    await handleGitAction(req, res, "git branch listing failed", "git_branches_failed", () => git.listGitBranches(req.body || {}), config, git, hasRunnerAccess);
+    await handleGitAction(req, res, "git branch listing failed", "git_branches_failed", () => git.listGitBranches(req.body || {}), config, git, hasRunnerAccess, {mutating: false});
   });
 
   app.post("/git/checkout", async (req, res) => {
-    await handleGitAction(req, res, "git branch checkout failed", "git_checkout_failed", () => git.checkoutGitBranch(req.body || {}), config, git, hasRunnerAccess);
+    await handleGitAction(req, res, "git branch checkout failed", "git_checkout_failed", () => git.checkoutGitBranch(req.body || {}), config, git, hasRunnerAccess, {label: "git_checkout"});
   });
 
   app.post("/git/branch", async (req, res) => {
-    await handleGitAction(req, res, "git branch creation failed", "git_branch_failed", () => git.createGitBranch(req.body || {}), config, git, hasRunnerAccess);
+    await handleGitAction(req, res, "git branch creation failed", "git_branch_failed", () => git.createGitBranch(req.body || {}), config, git, hasRunnerAccess, {label: "git_branch"});
   });
 
   app.post("/git/ignore", async (req, res) => {
-    await handleGitAction(req, res, "git ignore failed", "git_ignore_failed", () => git.ignoreGitPath(req.body || {}), config, git, hasRunnerAccess);
+    await handleGitAction(req, res, "git ignore failed", "git_ignore_failed", () => git.ignoreGitPath(req.body || {}), config, git, hasRunnerAccess, {label: "git_ignore"});
   });
 
   app.post("/git/stage", async (req, res) => {
-    await handleGitAction(req, res, "git stage failed", "git_stage_failed", () => git.stageGitPaths(req.body || {}), config, git, hasRunnerAccess);
+    await handleGitAction(req, res, "git stage failed", "git_stage_failed", () => git.stageGitPaths(req.body || {}), config, git, hasRunnerAccess, {label: "git_stage"});
   });
 
   app.post("/git/unstage", async (req, res) => {
-    await handleGitAction(req, res, "git unstage failed", "git_unstage_failed", () => git.unstageGitPaths(req.body || {}), config, git, hasRunnerAccess);
+    await handleGitAction(req, res, "git unstage failed", "git_unstage_failed", () => git.unstageGitPaths(req.body || {}), config, git, hasRunnerAccess, {label: "git_unstage"});
   });
 
   app.post("/git/commit", async (req, res) => {
     await handleGitAction(req, res, "git commit failed", "git_commit_failed", () => git.commitGitChanges(req.body || {}), config, git, hasRunnerAccess, {
+      label: "git_commit",
       compactError: true,
     });
   });
 
   app.post("/git/push", async (req, res) => {
     await handleGitAction(req, res, "git push failed", "git_push_failed", () => git.pushGitChanges(req.body || {}), config, git, hasRunnerAccess, {
+      label: "git_push",
       compactError: true,
     });
   });
@@ -72,7 +75,7 @@ function registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAcce
         config,
         git,
         hasRunnerAccess,
-        {compactError: true},
+        {compactError: true, label: "git_open_pr"},
     );
   });
 }
@@ -88,7 +91,9 @@ async function handleGitAction(req, res, logMessage, fallbackCode, action, confi
   }
 
   try {
-    res.json(await action());
+    const run = options.mutating !== false && typeof git.runMutation === "function" ?
+      () => git.runMutation(options.label || "git_action", action) : action;
+    res.json(await run());
   } catch (error) {
     console.error(logMessage, error);
     const responseCode = options.compactError ? compactErrorMessage(error.message || error) || fallbackCode : fallbackCode;

@@ -183,6 +183,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     extractStorageArchive: archives.extractStorageArchive,
     syncArchivesDown: archives.syncArchivesDown,
     syncArchivesUp: archives.syncArchivesUp,
+    syncChromeProfileUp: archives.syncChromeProfileUp,
     syncDown,
     syncUp,
     synchronizeAuth: auth.synchronizeAuth,

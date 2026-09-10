@@ -12,11 +12,21 @@ const {prepareSshMaterial, sshCommand} = require("./sshSession");
  * terminal has a separate PTY, so opening this shell never writes into or
  * interrupts the agent process.
  */
-function createShellSession({admin, config, activity, controlManager, webFirstEnabled = false} = {}) {
+function createShellSession({
+  admin,
+  config,
+  activity,
+  controlManager,
+  mutationBarrier,
+  executionAuthority,
+  processSupervisor,
+  webFirstEnabled = false,
+} = {}) {
   const sockets = new Set();
   const socketContexts = new Map();
   let term = null;
   let outputBuffer = "";
+  let fenced = false;
 
   return {
     controlManager,
@@ -52,6 +62,17 @@ function createShellSession({admin, config, activity, controlManager, webFirstEn
       }
       handleMessage(activeTermOrThrow(), raw);
       markActivity();
+    },
+    fence(reason = "execution_authority_lost") {
+      fenced = true;
+      const current = term;
+      if (current) {
+        closeSockets();
+        try { current.kill("SIGTERM"); } catch (error) {
+          activity?.appendHistory?.("shell", `shell fence failed: ${String(error.message || error).slice(0, 256)}`);
+        }
+      }
+      return {fenced: true, reason, pid: current?.pid || null};
     },
   };
 
@@ -108,6 +129,7 @@ function createShellSession({admin, config, activity, controlManager, webFirstEn
       }
       if (!["data", "resize"].includes(message.type)) throw shellControlError("invalid_shell_message");
       if (message.type === "data") {
+        assertMutation("shell_input");
         sendMessage(socket, {type: "control_status", ...controlManager.acquire({
           clientId: context.clientId,
           resumptionSecret: context.resumptionSecret,
@@ -115,6 +137,7 @@ function createShellSession({admin, config, activity, controlManager, webFirstEn
           surface: "shell",
         })});
       }
+      if (message.type === "resize") assertMutation("shell_resize");
       controlManager.assertCanWrite({
         clientId: context.clientId,
         resumptionSecret: context.resumptionSecret,
@@ -134,10 +157,13 @@ function createShellSession({admin, config, activity, controlManager, webFirstEn
   }
 
   function ensureTerm() {
+    if (webFirstEnabled && executionAuthority) executionAuthority.assertAuthority();
+    if (webFirstEnabled && fenced) throw shellControlError("execution_authority_lost");
     if (term) return term;
     outputBuffer = "";
     const command = shellCommand(config);
     term = spawnShell(command, config);
+    const unregisterProcess = processSupervisor?.register?.(term, {id: "shell-terminal", label: "shell-terminal"});
     activity?.appendHistory?.("shell", `opened ${command.display}`);
 
     term.onData((data) => {
@@ -147,6 +173,7 @@ function createShellSession({admin, config, activity, controlManager, webFirstEn
       markActivity();
     });
     term.onExit(({exitCode}) => {
+      unregisterProcess?.();
       activity?.appendHistory?.("shell", `closed with exit code ${exitCode}`);
       broadcast({type: "exit", exitCode});
       closeSockets();
@@ -173,6 +200,13 @@ function createShellSession({admin, config, activity, controlManager, webFirstEn
     activity?.updateSessionActivity?.({
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+  }
+
+  function assertMutation(label) {
+    if (!webFirstEnabled) return true;
+    executionAuthority?.assertAuthority?.();
+    mutationBarrier?.assertOpen?.(label);
+    return true;
   }
 }
 

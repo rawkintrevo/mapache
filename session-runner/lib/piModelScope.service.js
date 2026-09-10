@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const {execFile} = require("child_process");
 
-function createPiModelScopeService({admin, config, db}) {
+function createPiModelScopeService({admin, config, db, mutationBarrier, executionAuthority}) {
   const settingsPath = path.join(config.piAgentDir, "settings.json");
   let lastPersistedScope = null;
 
@@ -68,12 +68,14 @@ function createPiModelScopeService({admin, config, db}) {
   }
 
   async function save(scopedModels) {
-    if (!enabled()) return {models: [], scopedModels: []};
-    const normalized = normalizeScopedModels(scopedModels);
-    const settings = await readSettings(settingsPath);
-    await writeScopedModels(settingsPath, settings, normalized);
-    await persist();
-    return {ok: true, scopedModels: normalized};
+    return withMutation("pi_model_scope_save", async () => {
+      if (!enabled()) return {models: [], scopedModels: []};
+      const normalized = normalizeScopedModels(scopedModels);
+      const settings = await readSettings(settingsPath);
+      await writeScopedModels(settingsPath, settings, normalized);
+      await persist();
+      return {ok: true, scopedModels: normalized};
+    });
   }
 
   async function readModelsFile() {
@@ -86,16 +88,26 @@ function createPiModelScopeService({admin, config, db}) {
   }
 
   async function saveModelsFile(content) {
-    const normalized = String(content || "");
-    if (Buffer.byteLength(normalized, "utf8") > 1024 * 1024) throw new Error("models_file_too_large");
-    const parsed = JSON.parse(normalized);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("models_file_must_be_object");
-    const filePath = path.join(config.piAgentDir, "models.json");
-    await fs.promises.mkdir(path.dirname(filePath), {recursive: true});
-    const formatted = `${JSON.stringify(parsed, null, 2)}\n`;
-    await fs.promises.writeFile(filePath, formatted, {mode: 0o600});
-    await fs.promises.chmod(filePath, 0o600).catch(() => {});
-    return {name: "models.json", path: "~/.pi/agent/models.json", content: formatted};
+    return withMutation("pi_models_file_save", async () => {
+      const normalized = String(content || "");
+      if (Buffer.byteLength(normalized, "utf8") > 1024 * 1024) throw new Error("models_file_too_large");
+      const parsed = JSON.parse(normalized);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("models_file_must_be_object");
+      const filePath = path.join(config.piAgentDir, "models.json");
+      await fs.promises.mkdir(path.dirname(filePath), {recursive: true});
+      const formatted = `${JSON.stringify(parsed, null, 2)}\n`;
+      await fs.promises.writeFile(filePath, formatted, {mode: 0o600});
+      await fs.promises.chmod(filePath, 0o600).catch(() => {});
+      return {name: "models.json", path: "~/.pi/agent/models.json", content: formatted};
+    });
+  }
+
+  async function withMutation(label, operation) {
+    if (!config.webFirstEnabled) return operation();
+    executionAuthority?.assertAuthority?.();
+    if (!mutationBarrier) return operation();
+    const token = mutationBarrier.enter(label);
+    try { return await operation(); } finally { mutationBarrier.leave(token); }
   }
 
   return {listModels, persist, readModelsFile, restore, save, saveModelsFile};

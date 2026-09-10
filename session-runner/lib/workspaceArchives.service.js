@@ -248,25 +248,34 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
   }
 
   async function syncArchivesUp() {
-    await Promise.all(archiveSyncTargets.map(async (target) => {
-      try {
-        if (!await pathExists(target.localPath)) return;
-        const file = archiveFile(target);
-        if (!file) return;
-        if (target.mode === "workspaceNodeModules") {
-          await uploadWorkspaceNodeModulesArchive(file, target);
-          return;
-        }
-        if (target.mode === "workspaceGit") {
-          await uploadWorkspaceGitArchive(file, target);
-          return;
-        }
-        await uploadDirectoryArchive(file, target);
-      } catch (error) {
-        console.error(`archive upload failed for ${target.name}`, error);
-        throw error;
+    await Promise.all(archiveSyncTargets.map((target) => syncArchiveTargetUp(target)));
+  }
+
+  async function syncChromeProfileUp() {
+    const target = archiveSyncTargets.find((entry) => entry.mode === "chromeProfile");
+    if (!target) return {skipped: true, reason: "chrome_profile_archive_unavailable"};
+    await syncArchiveTargetUp(target);
+    return {ok: true, target: target.name};
+  }
+
+  async function syncArchiveTargetUp(target) {
+    try {
+      if (!await pathExists(target.localPath)) return;
+      const file = archiveFile(target);
+      if (!file) return;
+      if (target.mode === "workspaceNodeModules") {
+        await uploadWorkspaceNodeModulesArchive(file, target);
+        return;
       }
-    }));
+      if (target.mode === "workspaceGit") {
+        await uploadWorkspaceGitArchive(file, target);
+        return;
+      }
+      await uploadDirectoryArchive(file, target);
+    } catch (error) {
+      console.error(`archive upload failed for ${target.name}`, error);
+      throw error;
+    }
   }
 
   async function findArchiveFile(target) {
@@ -438,6 +447,7 @@ function createWorkspaceArchiveService({config, git, pathHelpers, storage}) {
     extractStorageArchive,
     findArchiveFile,
     syncArchivesDown,
+    syncChromeProfileUp,
     syncArchivesUp,
   };
 }

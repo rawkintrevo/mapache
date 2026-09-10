@@ -7,14 +7,14 @@ const {createWorkspaceSkillService} = require("./workspaceSkill.service");
 const {createWorkspaceSubagentService} = require("./workspaceSubagent.service");
 const {defaultWorkspaceSkills} = require("./workspaceSkillCatalog");
 
-function createPiService({config, syncUp}) {
+function createPiService({config, syncUp, mutationBarrier, executionAuthority, beforeMutation, afterMutation}) {
   let packageOperationLock = null;
   let skillOperationLock = null;
   let subagentOperationLock = null;
   let skillService = null;
   let subagentService = null;
   const harness = resolveHarnessMetadata(config);
-  const packageService = createPiPackageService({config, syncUp});
+  const packageService = createPiPackageService({config, syncUp, mutationBarrier, executionAuthority, beforeMutation, afterMutation});
   const seededSkillService = createPiSeededSkillService({config, defaultRuntimeSkills});
 
   function requireSkillService(errorCode) {
@@ -23,7 +23,7 @@ function createPiService({config, syncUp}) {
       error.code = errorCode;
       throw error;
     }
-    if (!skillService) skillService = createWorkspaceSkillService({config, syncUp});
+    if (!skillService) skillService = createWorkspaceSkillService({config, syncUp, mutationBarrier, executionAuthority, beforeMutation, afterMutation});
     return skillService;
   }
 
@@ -33,7 +33,7 @@ function createPiService({config, syncUp}) {
       error.code = errorCode;
       throw error;
     }
-    if (!subagentService) subagentService = createWorkspaceSubagentService({config, syncUp});
+    if (!subagentService) subagentService = createWorkspaceSubagentService({config, syncUp, mutationBarrier, executionAuthority, beforeMutation, afterMutation});
     return subagentService;
   }
 

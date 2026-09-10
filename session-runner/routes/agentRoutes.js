@@ -1,6 +1,6 @@
 "use strict";
 
-function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace}) {
+function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace, beforeMutation}) {
   async function handleAuthMaterialize(req, res) {
     if (!hasRunnerAccess(req)) {
       res.status(404).json({error: "not_found"});
@@ -8,6 +8,7 @@ function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPack
     }
 
     try {
+      await beforeMutation?.("auth_materialize");
       res.json(await workspace.materializeAuthNow(req.body && req.body.selection));
     } catch (error) {
       console.error("auth materialize failed", error);
@@ -31,6 +32,7 @@ function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPack
   app.put("/models", async (req, res) => {
     if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
     try {
+      await beforeMutation?.("pi_model_scope_save");
       res.json(await piModelScope.save(req.body && req.body.scopedModels));
     } catch (error) {
       console.error("pi model scope save failed", error);
@@ -51,6 +53,7 @@ function registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPack
   app.put("/models-file", async (req, res) => {
     if (!hasRunnerAccess(req)) return res.status(404).json({error: "not_found"});
     try {
+      await beforeMutation?.("pi_models_file_save");
       res.json(await piModelScope.saveModelsFile(req.body && req.body.content));
     } catch (error) {
       console.error("pi models file save failed", error);
