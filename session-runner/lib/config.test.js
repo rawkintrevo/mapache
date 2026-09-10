@@ -75,3 +75,28 @@ test("runner capability parsing defaults Chat off and preserves explicit Chat su
     else process.env.RUNNER_CAPABILITIES = previous;
   }
 });
+
+test("web-first control is opt-in and restricted to the pi Chrome harness", () => {
+  const names = ["MAPACHE_WEB_FIRST_ENABLED", "HARNESS_ID", "TERMINAL_KIND", "TERMINAL_COMMAND", "RUNNER_CAPABILITIES"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, {
+      MAPACHE_WEB_FIRST_ENABLED: "true",
+      HARNESS_ID: "pi",
+      TERMINAL_KIND: "pi",
+      TERMINAL_COMMAND: "pi",
+      RUNNER_CAPABILITIES: JSON.stringify({terminal: true, chrome: true}),
+    });
+    assert.equal(createConfig().webFirstEnabled, true);
+    process.env.HARNESS_ID = "codex";
+    assert.equal(createConfig().webFirstEnabled, false);
+    process.env.HARNESS_ID = "pi";
+    process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true, chrome: false});
+    assert.equal(createConfig().webFirstEnabled, false);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

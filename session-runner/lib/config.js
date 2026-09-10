@@ -69,6 +69,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
   const runnerCapabilities = parseRunnerCapabilities();
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
+  const runnerHarness = normalizeEnvString(process.env.HARNESS_ID || process.env.TERMINAL_KIND ||
+    (normalizeEnvString(process.env.TERMINAL_COMMAND) === "pi" ? "pi" : "")).toLowerCase();
+  const webFirstEnabled = envFlag(process.env.MAPACHE_WEB_FIRST_ENABLED) && runnerHarness === "pi" && chromeEnabled;
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
@@ -94,6 +97,13 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     browserStatusUrl: chromeEnabled ?
       normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/status` : "",
     browserStatusCommand: chromeEnabled ? normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_COMMAND) || "mapache-chrome-status" : "",
+    webFirstAdapterSocket: webFirstEnabled ? normalizeEnvString(process.env.MAPACHE_PI_WEB_FIRST_SOCKET) || "/tmp/mapache-pi-web-first.sock" : "",
+    webFirstAdapterTimeoutMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_ADAPTER_TIMEOUT_MS, 5000) : 0,
+    webFirstAllowedOrigins: parseOriginList(process.env.MAPACHE_WEB_FIRST_ALLOWED_ORIGINS),
+    webFirstEnabled,
+    webFirstHeartbeatMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_HEARTBEAT_MS, 10_000) : 0,
+    webFirstLeaseMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_LEASE_MS, 30_000) : 0,
+    webFirstOperationLedgerPath: webFirstEnabled ? path.join(piSessionDir, ".mapache-operation-ledger.json") : "",
     chromeCdpHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_CDP_HOST) || "127.0.0.1" : "",
     chromeCdpPort: chromeEnabled ? positiveNumber(process.env.CHROME_CDP_PORT, 9222) : 0,
     chromeDisplay: chromeEnabled ? normalizeEnvString(process.env.CHROME_DISPLAY) || ":99" : "",
@@ -188,10 +198,22 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   };
 }
 
+function parseOriginList(value) {
+  return [...new Set(String(value || "").split(",").map((item) => item.trim()).filter((item) => {
+    try {
+      const origin = new URL(item).origin;
+      return origin !== "null";
+    } catch {
+      return false;
+    }
+  }).map((item) => new URL(item).origin))];
+}
+
 module.exports = {
   createConfig,
   normalizePreviewBasePath,
   normalizeWorkspaceSourceMode,
   normalizeWorkspaceSyncRole,
+  parseOriginList,
   parseRunnerCapabilities,
 };

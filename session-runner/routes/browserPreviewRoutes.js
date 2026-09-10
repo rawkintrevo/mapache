@@ -12,15 +12,17 @@ function registerBrowserRoutes({
   requireBrowserAccess,
   requireBrowserOrRunnerAccess,
   renderTerminalPage,
+  webFirstEnabled = false,
 }) {
   app.get("/", requireBrowserAccess, (req, res) => {
-    res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken}));
+    res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken, webFirstEnabled}));
   });
 
   app.get("/shell", requireBrowserAccess, (req, res) => {
     res.type("html").send(renderTerminalPage({
       accessToken: req.mapacheAccessToken,
       socketPath: "/shell",
+      webFirstEnabled,
     }));
   });
 

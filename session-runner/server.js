@@ -2,6 +2,7 @@
 
 const {isolateRunnerGoogleCredentials} = require("./lib/runnerEnvironment");
 const runnerEnvironment = isolateRunnerGoogleCredentials();
+const crypto = require("node:crypto");
 const path = require("path");
 const http = require("http");
 const express = require("express");
@@ -39,6 +40,9 @@ const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
+const {createControlManager} = require("./lib/controlManager");
+const {createPiWebFirstAdapter} = require("./lib/piWebFirstAdapter");
+const {createWebFirstAgentGateway} = require("./lib/webFirstAgent");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
@@ -61,6 +65,14 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({noServer: true});
 const browserWss = new WebSocketServer({noServer: true});
 const shellWss = new WebSocketServer({noServer: true});
+const webFirstRuntimeId = config.webFirstEnabled ? `runtime-${crypto.randomUUID()}` : null;
+const webFirstControlManager = config.webFirstEnabled ? createControlManager({
+  runtimeId: webFirstRuntimeId,
+  executionEpoch: Date.now(),
+  sessionGeneration: 1,
+  heartbeatMs: config.webFirstHeartbeatMs,
+  leaseMs: config.webFirstLeaseMs,
+}) : null;
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
 const chromeRuntime = createChromeRuntime(config, {
@@ -95,6 +107,8 @@ const terminalSession = createTerminalSession({
   config,
   activity,
   canStartProcess: () => !goalsRpc?.isActive?.(),
+  controlManager: webFirstControlManager,
+  webFirstEnabled: config.webFirstEnabled,
   onTerminalExit: async ({command, exitCode}) => {
     const executable = path.basename(String(command && command.file || ""));
     if (executable === "pi") {
@@ -107,7 +121,24 @@ const terminalSession = createTerminalSession({
     }
   },
 });
-const shellSession = createShellSession({admin, config, activity});
+const webFirstAdapter = config.webFirstEnabled ? createPiWebFirstAdapter({
+  socketPath: config.webFirstAdapterSocket,
+  timeoutMs: config.webFirstAdapterTimeoutMs,
+}) : null;
+const webFirstAgent = config.webFirstEnabled ? createWebFirstAgentGateway({
+  adapter: webFirstAdapter,
+  config,
+  controlManager: webFirstControlManager,
+  runtimeId: webFirstRuntimeId,
+  terminalSession,
+}) : null;
+const shellSession = createShellSession({
+  admin,
+  config,
+  activity,
+  controlManager: webFirstControlManager,
+  webFirstEnabled: config.webFirstEnabled,
+});
 goalsRpc = createGoalsRpcService({config, terminalSession});
 const goalsBridge = createGoalsBridgeService({config, terminalSession, rpcService: goalsRpc});
 const goalsPackageBootstrap = createGoalsPackageBootstrap({config, version: process.env.PI_GOAL_X_VERSION || undefined});
@@ -122,6 +153,8 @@ const piChat = createPiChatWebSocket({
   hasBrowserAccess,
   terminalSession,
   transcriptService: piChatTranscript,
+  webFirstEnabled: config.webFirstEnabled,
+  webFirstGateway: webFirstAgent,
 });
 const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
@@ -145,6 +178,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   sshSession,
   workspace,
   workspaceSync,
+  webFirst: webFirstAgent,
 });
 
 app.use(express.json());
@@ -169,6 +203,7 @@ registerBrowserRoutes({
   requireBrowserAccess,
   requireBrowserOrRunnerAccess,
   renderTerminalPage,
+  webFirstEnabled: config.webFirstEnabled,
 });
 registerSshRoutes({app, hasRunnerAccess, requireBrowserAccess, sshSession});
 registerPreviewRoutes({app, browserQa, config, hasRunnerAccess, preview, requireBrowserAccess, storage});
@@ -197,7 +232,7 @@ wss.on("connection", (socket, request) => {
   }
 
   socket.on("message", (raw) => {
-    terminalSession.handleMessage(raw);
+    terminalSession.handleMessage(raw, socket);
   });
 
   socket.on("close", () => {
@@ -211,12 +246,14 @@ browserWss.on("connection", (socket) => {
 });
 
 server.on("upgrade", createWebSocketUpgradeRouter({
+  agentWss: webFirstAgent?.server,
   chatWss: piChat.server,
   metricsWss: resourceMetricsSocket.server,
   shellWss,
   terminalWss: wss,
   browserWss,
   hasBrowserAccess,
+  hasAgentAccess,
   hasChatAccess: (request) => piChat.supported && hasBrowserAccess(request),
   hasMetricsAccess: hasBrowserAccess,
   hasShellAccess: hasBrowserAccess,
@@ -233,7 +270,7 @@ shellWss.on("connection", (socket, request) => {
     socket.close(1013, "shell_unavailable");
     return;
   }
-  socket.on("message", (raw) => shellSession.handleMessage(raw));
+  socket.on("message", (raw) => shellSession.handleMessage(raw, socket));
   socket.on("close", () => shellSession.detach(socket));
 });
 
@@ -245,6 +282,21 @@ runnerLifecycle.start()
 
 function hasRunnerAccess(req) {
   return Boolean(config.shutdownToken) && req.get("x-shutdown-token") === config.shutdownToken;
+}
+
+function hasAgentAccess(req) {
+  if (!webFirstAgent?.supported || !hasBrowserAccess(req)) return false;
+  const origin = String(req.headers?.origin || "").trim();
+  if (!origin) return true;
+  try {
+    const parsed = new URL(origin);
+    const configured = config.webFirstAllowedOrigins || [];
+    if (configured.length) return configured.includes(parsed.origin);
+    const host = String(req.headers?.host || "").trim();
+    return host && [`http://${host}`, `https://${host}`].includes(parsed.origin);
+  } catch {
+    return false;
+  }
 }
 
 function requireBrowserAccess(req, res, next) {

@@ -10,6 +10,8 @@ function createPiChatWebSocket({
   hasBrowserAccess,
   terminalSession,
   transcriptService,
+  webFirstEnabled = false,
+  webFirstGateway,
   WebSocketServerClass = WebSocketServer,
 } = {}) {
   if (!terminalSession || typeof terminalSession.writePrompt !== "function") {
@@ -30,12 +32,14 @@ function createPiChatWebSocket({
     }
 
     sockets.add(socket);
+    const legacyConnection = webFirstEnabled && webFirstGateway?.openLegacyConnection?.();
     const unsubscribe = transcriptService.subscribe((event) => sendTranscriptEvent(socket, event));
     socket.on("message", (raw) => {
       void handleClientMessage(socket, raw);
     });
     socket.once("close", () => {
       sockets.delete(socket);
+      if (legacyConnection) webFirstGateway.closeLegacyConnection(legacyConnection.connectionId);
       unsubscribe();
     });
     socket.on("error", () => {});
@@ -60,9 +64,17 @@ function createPiChatWebSocket({
     }
 
     try {
-      terminalSession.writePrompt(message.text);
+      if (webFirstEnabled && webFirstGateway) {
+        await webFirstGateway.submitLegacyPrompt({
+          connectionId: legacyConnection?.connectionId,
+          clientId: message.clientId,
+          text: message.text,
+        });
+      } else {
+        terminalSession.writePrompt(message.text);
+      }
     } catch (error) {
-      sendError(socket, "prompt_failed");
+      sendError(socket, error?.code || "prompt_failed");
       return;
     }
     send(socket, {type: "prompt_ack", clientId: message.clientId});

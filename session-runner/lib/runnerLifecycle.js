@@ -19,6 +19,7 @@ function createRunnerLifecycleCoordinator({
   sshSession,
   workspace,
   workspaceSync,
+  webFirst,
 }) {
   async function start() {
     try {
@@ -39,6 +40,7 @@ function createRunnerLifecycleCoordinator({
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
       await activeHarness.materializeSubagents();
+      await webFirst?.initialize?.();
       chromeProfileSnapshots.start();
       startSyncLoop();
       listen(() => {
@@ -54,6 +56,7 @@ function createRunnerLifecycleCoordinator({
 
   async function shutdown() {
     piChat?.close?.();
+    await webFirst?.close?.();
     try {
       await goalsPackage?.stop?.();
     } catch (error) {
