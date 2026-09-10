@@ -34,6 +34,7 @@ function createTerminalSession({
   let goalHandoffTerm = null;
   let fencedTerm = null;
   let fenced = false;
+  const exitReasons = new WeakMap();
   const socketContexts = new Map();
 
   return {
@@ -49,6 +50,7 @@ function createTerminalSession({
       if (!current) return;
       releasingForGoal = true;
       goalHandoffTerm = current;
+      exitReasons.set(current, "mode_switch");
       try {
         await new Promise((resolve, reject) => {
           const cleanup = () => {
@@ -82,6 +84,32 @@ function createTerminalSession({
       } finally {
         releasingForGoal = false;
       }
+    },
+    async shutdown(reason = "shutdown") {
+      const current = term;
+      if (!current) return;
+      exitReasons.set(current, String(reason || "shutdown"));
+      closeSockets();
+      await new Promise((resolve) => {
+        let settled = false;
+        let forceStop;
+        let timeout;
+        let subscription;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          timers.clearTimeout(forceStop);
+          timers.clearTimeout(timeout);
+          subscription?.dispose?.();
+          resolve();
+        };
+        forceStop = timers.setTimeout(() => {
+          try { current.kill("SIGKILL"); } catch { finish(); }
+        }, 5000);
+        timeout = timers.setTimeout(finish, 10000);
+        subscription = current.onExit(finish);
+        try { current.kill("SIGTERM"); } catch { finish(); }
+      });
     },
     attach(socket, replayOutput) {
       const activeTerm = ensureTerm();
@@ -133,6 +161,7 @@ function createTerminalSession({
       const current = term;
       if (!current) return {fenced: true, reason};
       fencedTerm = current;
+      exitReasons.set(current, "authority_lost");
       closeSockets();
       try { current.kill("SIGTERM"); } catch (error) {
         activity.appendHistory("system", `terminal fence failed: ${String(error.message || error).slice(0, 256)}`);
@@ -267,6 +296,7 @@ function createTerminalSession({
     });
 
     term.onExit(({exitCode: code}) => {
+      const exitReason = exitReasons.get(spawnedTerm) || "completed";
       activity.appendHistory("system", `closed with exit code ${code}`);
       broadcast({type: "exit", exitCode: code});
       closeSockets();
@@ -283,7 +313,7 @@ function createTerminalSession({
         goalHandoffTerm = null;
         return;
       }
-      Promise.resolve(onTerminalExit ? onTerminalExit({command, exitCode: code}) : null)
+      Promise.resolve(onTerminalExit ? onTerminalExit({command, exitCode: code, reason: exitReason}) : null)
           .catch((error) => {
             const message = error && error.message ? error.message : error;
             console.error("terminal exit hook failed", message);

@@ -5,6 +5,13 @@ const ADAPTER_PROTOCOL = "mapache-pi-web-first/1";
 const ADAPTER_REVISION = process.env.MAPACHE_PI_WEB_FIRST_ADAPTER_REVISION || "gate-a-0.1.0";
 const MAX_LINE_BYTES = 256 * 1024;
 const MAX_EVENT_TEXT = 16_000;
+const ADAPTER_CAPABILITIES = Object.freeze({
+  ordinaryPrompt: true,
+  extensionCommands: false,
+  structuredDialogs: false,
+  reload: false,
+  sessionReplacement: false,
+});
 
 /**
  * Image-owned Gate A candidate bridge.
@@ -200,6 +207,7 @@ export default function piWebFirstAdapter(pi) {
         name: "pi-goal-x",
         version: String(process.env.PI_GOAL_X_VERSION || "unknown"),
       },
+      capabilities: ADAPTER_CAPABILITIES,
     };
   }
 

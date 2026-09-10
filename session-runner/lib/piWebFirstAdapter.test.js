@@ -31,8 +31,12 @@ test("validates the Gate A identity handshake", () => {
   assert.equal(result.ok, true);
   assert.equal(result.identity.piSession, "pi-session-fixture");
   assert.equal(result.identity.package.version, "0.31.2");
+  assert.equal(result.identity.capabilities.ordinaryPrompt, true);
+  assert.equal(result.identity.capabilities.structuredDialogs, false);
   assert.equal(validateHandshake(validHandshake({adapter: "other"}), DEFAULT_ADAPTER_REVISION).code, "web_first_adapter_revision_mismatch");
   assert.equal(validateHandshake(validHandshake({sessionGeneration: 0}), DEFAULT_ADAPTER_REVISION).code, "web_first_adapter_invalid_generation");
+  assert.equal(validateHandshake(validHandshake(), DEFAULT_ADAPTER_REVISION, {packageVersion: "0.30.0"}).code, "web_first_adapter_package_version_mismatch");
+  assert.equal(validateHandshake(validHandshake({incompatibleExtensions: ["user-background-extension"]}), DEFAULT_ADAPTER_REVISION).code, "web_first_adapter_incompatible_extension");
 });
 
 test("uses private IPC and fails closed after disconnect", async () => {

@@ -5,6 +5,13 @@ const {EventEmitter} = require("node:events");
 
 const ADAPTER_PROTOCOL = "mapache-pi-web-first/1";
 const DEFAULT_ADAPTER_REVISION = "gate-a-0.1.0";
+const DEFAULT_ADAPTER_CAPABILITIES = Object.freeze({
+  ordinaryPrompt: true,
+  extensionCommands: false,
+  structuredDialogs: false,
+  reload: false,
+  sessionReplacement: false,
+});
 const MAX_LINE_BYTES = 256 * 1024;
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -19,6 +26,8 @@ function createPiWebFirstAdapter({
   socketPath,
   connect = net.createConnection,
   adapterRevision = process.env.MAPACHE_PI_WEB_FIRST_ADAPTER_REVISION || DEFAULT_ADAPTER_REVISION,
+  expectedPackageName = "pi-goal-x",
+  expectedPackageVersion = process.env.PI_GOAL_X_VERSION || "",
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   const events = new EventEmitter();
@@ -131,15 +140,22 @@ function createPiWebFirstAdapter({
   function handleMessage(message) {
     if (!message || typeof message !== "object" || Array.isArray(message)) return;
     if (message.type === "handshake") {
-      const result = validateHandshake(message, adapterRevision);
+      const result = validateHandshake(message, adapterRevision, {
+        packageName: expectedPackageName,
+        packageVersion: expectedPackageVersion,
+      });
       const handshake = pending.get("__handshake__");
       if (!result.ok) {
         if (handshake) {
           clearTimeout(handshake.timer);
           pending.delete("__handshake__");
-          handshake.reject(adapterError(result.code));
+          const error = adapterError(result.code);
+          error.details = result.details;
+          handshake.reject(error);
         }
-        handleDisconnect(adapterError(result.code));
+        const error = adapterError(result.code);
+        error.details = result.details;
+        handleDisconnect(error);
         return;
       }
       identity = result.identity;
@@ -188,7 +204,7 @@ function createPiWebFirstAdapter({
   }
 }
 
-function validateHandshake(message, expectedAdapterRevision) {
+function validateHandshake(message, expectedAdapterRevision, expectedPackage = {}) {
   if (message.protocol !== ADAPTER_PROTOCOL) return {ok: false, code: "web_first_adapter_protocol_mismatch"};
   if (message.runtime !== "pi-tui-extension") return {ok: false, code: "web_first_adapter_runtime_mismatch"};
   if (!Number.isSafeInteger(message.sessionGeneration) || message.sessionGeneration < 1) {
@@ -202,6 +218,24 @@ function validateHandshake(message, expectedAdapterRevision) {
   }
   const packageVersion = message.package && typeof message.package === "object" ? message.package.version : "";
   if (!nonEmpty(packageVersion)) return {ok: false, code: "web_first_adapter_package_version_missing"};
+  if (expectedPackage.packageName && String(message.package.name || "") !== String(expectedPackage.packageName)) {
+    return {ok: false, code: "web_first_adapter_package_mismatch"};
+  }
+  if (expectedPackage.packageVersion && String(packageVersion) !== String(expectedPackage.packageVersion)) {
+    return {ok: false, code: "web_first_adapter_package_version_mismatch"};
+  }
+  const incompatibleExtensions = Array.isArray(message.incompatibleExtensions) ?
+    message.incompatibleExtensions.slice(0, 16).map((item) => String(item).slice(0, 128)) : [];
+  if (incompatibleExtensions.length || message.compatibility?.status === "incompatible") {
+    return {
+      ok: false,
+      code: "web_first_adapter_incompatible_extension",
+      details: {
+        extensions: incompatibleExtensions,
+        reason: String(message.compatibility?.reason || "incompatible_user_extension").slice(0, 256),
+      },
+    };
+  }
   return {
     ok: true,
     identity: {
@@ -211,6 +245,7 @@ function validateHandshake(message, expectedAdapterRevision) {
       piSession: String(message.piSession),
       adapter: String(message.adapter),
       package: {name: String(message.package.name || ""), version: String(packageVersion)},
+      capabilities: normalizeCapabilities(message.capabilities),
       pid: Number.isSafeInteger(message.pid) ? message.pid : null,
     },
   };
@@ -225,6 +260,13 @@ function nonEmpty(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function normalizeCapabilities(value) {
+  return Object.fromEntries(Object.keys(DEFAULT_ADAPTER_CAPABILITIES).map((key) => [
+    key,
+    Boolean(value && typeof value === "object" && value[key] !== undefined ? value[key] : DEFAULT_ADAPTER_CAPABILITIES[key]),
+  ]));
+}
+
 function adapterError(code) {
   const error = new Error(code);
   error.code = code;
@@ -233,6 +275,7 @@ function adapterError(code) {
 
 module.exports = {
   ADAPTER_PROTOCOL,
+  DEFAULT_ADAPTER_CAPABILITIES,
   DEFAULT_ADAPTER_REVISION,
   MAX_LINE_BYTES,
   createPiWebFirstAdapter,

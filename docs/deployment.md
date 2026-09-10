@@ -57,6 +57,11 @@ staging-restore code, but it does not authorize production enablement: the
 platform has not yet proven predecessor fencing, external writer routing, or
 backend-only recovery-pointer enforcement. No Functions or Hosting deploy is
 needed for this runner-only slice.
+The pi-chrome image also pins `MAPACHE_RUNNER_INTEGRATION_MODE=legacy`.
+An opt-in disposable canary must override both that mode to `web-first` and
+`MAPACHE_WEB_FIRST_ENABLED=true`; otherwise the legacy Goals RPC owner remains
+the only managed owner. The runner reports adapter capability/compatibility
+state and rejects a second interactive owner during composition.
 
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account and `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events. Restore the Eventarc binding with:
 

@@ -48,6 +48,7 @@ const {createPiWebFirstAdapter} = require("./lib/piWebFirstAdapter");
 const {createWebFirstAgentGateway} = require("./lib/webFirstAgent");
 const {createWorkspaceCheckpointService} = require("./lib/workspaceCheckpoint.service");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
+const {assertSingleInteractiveOwner} = require("./lib/integrationMode");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
 const {registerGitRoutes} = require("./routes/gitRoutes");
@@ -175,8 +176,9 @@ terminalSession = createTerminalSession({
   executionAuthority,
   processSupervisor,
   webFirstEnabled: config.webFirstEnabled,
-  onTerminalExit: async ({command, exitCode}) => {
+  onTerminalExit: async ({command, exitCode, reason = "completed"}) => {
     const executable = path.basename(String(command && command.file || ""));
+    if (reason !== "completed") return;
     if (config.webFirstEnabled) {
       await workspaceCheckpoint?.create?.({reason: "terminal_exit"});
       return;
@@ -192,6 +194,7 @@ terminalSession = createTerminalSession({
   },
 });
 const webFirstAdapter = config.webFirstEnabled ? createPiWebFirstAdapter({
+  expectedPackageVersion: config.goalPackageVersion,
   socketPath: config.webFirstAdapterSocket,
   timeoutMs: config.webFirstAdapterTimeoutMs,
 }) : null;
@@ -215,6 +218,11 @@ shellSession = createShellSession({
   webFirstEnabled: config.webFirstEnabled,
 });
 goalsRpc = createGoalsRpcService({config: {...config, webFirstEnabled: config.webFirstEnabled}, terminalSession, processSupervisor});
+assertSingleInteractiveOwner({
+  integrationMode: config.integrationMode,
+  goalsRpcActive: goalsRpc.supported,
+  sharedAgentActive: Boolean(webFirstAgent?.supported),
+});
 const goalsBridge = createGoalsBridgeService({config: {...config, webFirstEnabled: config.webFirstEnabled}, terminalSession, rpcService: goalsRpc});
 const goalsPackageBootstrap = createGoalsPackageBootstrap({config, version: process.env.PI_GOAL_X_VERSION || undefined});
 goalsPackage = {
@@ -270,6 +278,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   resourceMetrics: resourceMetricsSocket,
   piModelScope,
   sshSession,
+  terminalSession,
   workspace,
   workspaceSync,
   checkpoint: workspaceCheckpoint,

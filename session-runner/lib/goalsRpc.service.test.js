@@ -143,3 +143,12 @@ test("model failures remain visible after agent_end", async () => {
   assert.match(snapshot.lastError, /No API key/);
   await rpc.stop();
 });
+
+test("web-first mode never enables the legacy RPC owner", () => {
+  const rpc = createGoalsRpcService({
+    config: {harnessId: "pi", integrationMode: "web-first"},
+    env: {GOAL_RPC_ENABLED: "true"},
+  });
+  assert.equal(rpc.supported, false);
+  assert.equal(rpc.capabilities().enabled, false);
+});

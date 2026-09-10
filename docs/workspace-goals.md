@@ -55,6 +55,14 @@ allowing Functions to assign the goal and the browser to answer it. Late model
 failures stay visible in runtime state; command acceptance alone does not prove
 that the model completed a turn.
 
+The runner now reports its explicit integration mode and owner boundary in the
+Goals capabilities response. `pi-chrome` ships in `legacy` mode, where the
+headless Pi RPC owner is the supported Goals transport. The shared web-first
+owner is opt-in only and does not start the legacy Goals RPC process alongside
+it. Adapter/package incompatibilities are surfaced as compatibility failures;
+unsupported web-first capabilities remain disabled rather than falling back to
+PTY prompt injection.
+
 ## Deliberate release boundary
 
 This slice covers the normal guided dialog transport and the initial dashboard,

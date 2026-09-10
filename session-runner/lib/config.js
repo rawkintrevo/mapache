@@ -14,6 +14,7 @@ const {
   INTERNAL_STORAGE_DIR,
   LEGACY_INTERNAL_STORAGE_DIR,
 } = require("./runtimePaths");
+const {resolveIntegrationMode} = require("./integrationMode");
 
 function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
@@ -71,7 +72,13 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
   const runnerHarness = normalizeEnvString(process.env.HARNESS_ID || process.env.TERMINAL_KIND ||
     (normalizeEnvString(process.env.TERMINAL_COMMAND) === "pi" ? "pi" : "")).toLowerCase();
-  const webFirstEnabled = envFlag(process.env.MAPACHE_WEB_FIRST_ENABLED) && runnerHarness === "pi" && chromeEnabled;
+  const integration = resolveIntegrationMode({
+    requestedMode: process.env.MAPACHE_RUNNER_INTEGRATION_MODE,
+    webFirstFlag: envFlag(process.env.MAPACHE_WEB_FIRST_ENABLED),
+    harnessId: runnerHarness,
+    chromeEnabled,
+  });
+  const webFirstEnabled = integration.mode === "web-first";
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
@@ -141,7 +148,11 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     googleMcpAccountName: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_NAME),
     googleMcpConnectionStatus: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_STATUS),
     googleMcpEnabledServices: normalizeEnvString(process.env.GOOGLE_MCP_ENABLED_SERVICES),
+    goalPackageVersion: normalizeEnvString(process.env.PI_GOAL_X_VERSION),
     harnessId,
+    integrationMode: integration.mode,
+    integrationModeReason: integration.reason,
+    integrationModeRequested: integration.requested,
     homeArchiveName,
     homeDir,
     homeStorageBucketName,

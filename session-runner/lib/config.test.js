@@ -77,7 +77,7 @@ test("runner capability parsing defaults Chat off and preserves explicit Chat su
 });
 
 test("web-first control is opt-in and restricted to the pi Chrome harness", () => {
-  const names = ["MAPACHE_WEB_FIRST_ENABLED", "HARNESS_ID", "TERMINAL_KIND", "TERMINAL_COMMAND", "RUNNER_CAPABILITIES"];
+  const names = ["MAPACHE_RUNNER_INTEGRATION_MODE", "MAPACHE_WEB_FIRST_ENABLED", "HARNESS_ID", "TERMINAL_KIND", "TERMINAL_COMMAND", "RUNNER_CAPABILITIES"];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
     Object.assign(process.env, {
@@ -87,12 +87,34 @@ test("web-first control is opt-in and restricted to the pi Chrome harness", () =
       TERMINAL_COMMAND: "pi",
       RUNNER_CAPABILITIES: JSON.stringify({terminal: true, chrome: true}),
     });
+    assert.equal(createConfig().integrationMode, "web-first");
     assert.equal(createConfig().webFirstEnabled, true);
     process.env.HARNESS_ID = "codex";
     assert.equal(createConfig().webFirstEnabled, false);
     process.env.HARNESS_ID = "pi";
     process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true, chrome: false});
     assert.equal(createConfig().webFirstEnabled, false);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("an explicit legacy mode keeps the shared web-first owner disabled", () => {
+  const names = ["MAPACHE_RUNNER_INTEGRATION_MODE", "MAPACHE_WEB_FIRST_ENABLED", "HARNESS_ID", "RUNNER_CAPABILITIES"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, {
+      MAPACHE_RUNNER_INTEGRATION_MODE: "legacy",
+      MAPACHE_WEB_FIRST_ENABLED: "true",
+      HARNESS_ID: "pi",
+      RUNNER_CAPABILITIES: JSON.stringify({terminal: true, chrome: true}),
+    });
+    const config = createConfig();
+    assert.equal(config.integrationMode, "legacy");
+    assert.equal(config.webFirstEnabled, false);
   } finally {
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];

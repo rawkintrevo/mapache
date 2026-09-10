@@ -42,6 +42,7 @@ test("Dockerfile.pi-chrome pins the Gate A Pi and adapter revisions", () => {
   assert.match(source, /pi-mcp-adapter@\$\{PI_MCP_ADAPTER_VERSION\}/);
   assert.match(source, /ARG PI_MCP_ADAPTER_VERSION=2\.32\.1/);
   assert.match(source, /ENV MAPACHE_PI_WEB_FIRST_ADAPTER_REVISION=gate-a-0\.1\.0/);
+  assert.match(source, /ENV MAPACHE_RUNNER_INTEGRATION_MODE=legacy/);
   assert.match(source, /ENV MAPACHE_WEB_FIRST_ENABLED=false/);
   assert.match(source, /ENV MAPACHE_PI_WEB_FIRST_SOCKET=\/tmp\/mapache-pi-web-first\.sock/);
 });

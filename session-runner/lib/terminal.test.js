@@ -91,3 +91,27 @@ test("pi-chrome terminal input is gated at the receiving boundary", () => {
   onData?.("output");
   onExit?.({exitCode: 0});
 });
+
+test("terminal completion hooks receive an explicit completion reason", async () => {
+  const process = {
+    onData() {},
+    onExit(listener) {
+      this.exitListener = listener;
+      return {dispose: () => {}};
+    },
+    kill() {},
+  };
+  const exits = [];
+  const session = createTerminalSession({
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
+    activity: {appendHistory() {}, updateSessionActivity() {}, updatePiSessionBinding() {}},
+    config: {workspaceDir: "/workspace", port: 8080, previewBasePath: "/preview", terminalReplayLimit: 1000, activityWriteDebounceMs: 1000},
+    onTerminalExit: (info) => exits.push(info),
+    spawnProcess: () => process,
+  });
+  session.attach({readyState: 1, send() {}, close() {}}, false);
+  process.exitListener({exitCode: 0});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(exits[0].reason, "completed");
+  assert.equal(exits[0].exitCode, 0);
+});

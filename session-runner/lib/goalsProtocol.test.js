@@ -86,3 +86,17 @@ test("bridge sends a typed start command through the existing terminal session",
     else process.env.GOAL_BRIDGE_ENABLED = previous;
   }
 });
+
+test("web-first mode reports the shared-owner boundary instead of starting a second Goals owner", () => {
+  const bridge = createGoalsBridgeService({
+    config: {harnessId: "pi", integrationMode: "web-first"},
+    env: {GOAL_BRIDGE_ENABLED: "true", PI_GOAL_X_VERSION: "0.31.2"},
+    terminalSession: {writePrompt: () => { throw new Error("PTY prompt injection is not allowed"); }},
+    rpcService: {supported: false, capabilities: () => ({enabled: false})},
+  });
+  const capabilities = bridge.capabilities();
+  assert.equal(capabilities.enabled, false);
+  assert.equal(capabilities.integrationMode, "web-first");
+  assert.equal(capabilities.transport, "agent-websocket");
+  assert.equal(capabilities.reason, "shared_agent_owner_not_released");
+});

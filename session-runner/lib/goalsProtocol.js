@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const {LEGACY_INTEGRATION_MODE} = require("./integrationMode");
 
 const GOALS_PROTOCOL_VERSION = 1;
 const MAX_COMMAND_BYTES = 64 * 1024;
@@ -39,10 +40,11 @@ function boundedObject(value) {
   return value;
 }
 
-function createGoalsBridgeService({config = {}, terminalSession, fsModule = fs, rpcService} = {}) {
-  const enabled = String(process.env.GOAL_BRIDGE_ENABLED || "").toLowerCase() === "true" &&
+function createGoalsBridgeService({config = {}, terminalSession, fsModule = fs, rpcService, env = process.env} = {}) {
+  const integrationMode = config.integrationMode || (config.webFirstEnabled ? "web-first" : LEGACY_INTEGRATION_MODE);
+  const enabled = String(env.GOAL_BRIDGE_ENABLED || "").toLowerCase() === "true" &&
     String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi" &&
-    !config.webFirstEnabled;
+    integrationMode === LEGACY_INTEGRATION_MODE;
   const goalsDirectory = path.join(config.workspaceDir || "/workspace", ".pi", "goals");
   const operations = new Map();
   let packageAvailable = true;
@@ -52,12 +54,13 @@ function createGoalsBridgeService({config = {}, terminalSession, fsModule = fs, 
       return {
         ok: true,
         protocolVersion: GOALS_PROTOCOL_VERSION,
+        integrationMode,
         enabled: enabled && packageAvailable,
-        extension: process.env.PI_GOAL_X_VERSION || "",
+        extension: env.PI_GOAL_X_VERSION || "",
         actions: enabled && packageAvailable ? [...SUPPORTED_ACTIONS] : [],
         structuredDialogs: Boolean(enabled && packageAvailable && rpcService?.supported),
-        transport: rpcService?.supported ? "pi-rpc" : "terminal",
-        reason: !enabled ? "goal_bridge_disabled" : !packageAvailable ? "managed_package_missing" : rpcService?.supported ? "pi_rpc_adapter" : "terminal_mode_adapter",
+        transport: integrationMode === "web-first" ? "agent-websocket" : rpcService?.supported ? "pi-rpc" : "terminal",
+        reason: !packageAvailable ? "managed_package_missing" : integrationMode === "web-first" ? "shared_agent_owner_not_released" : !enabled ? "goal_bridge_disabled" : rpcService?.supported ? "pi_rpc_adapter" : "terminal_mode_adapter",
         rpc: rpcService?.capabilities?.() || null,
       };
     },

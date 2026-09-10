@@ -4,6 +4,7 @@ const {EventEmitter} = require("node:events");
 const {spawn: defaultSpawn} = require("node:child_process");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const {normalizeGoalsEnvelope, promptForCommand, GOALS_PROTOCOL_VERSION} = require("./goalsProtocol");
+const {LEGACY_INTEGRATION_MODE} = require("./integrationMode");
 
 const MAX_RPC_LINE_BYTES = 256 * 1024;
 const MAX_PENDING_UI = 32;
@@ -25,7 +26,7 @@ function createGoalsRpcService({
 } = {}) {
   const enabled = String(env.GOAL_RPC_ENABLED || "").toLowerCase() === "true" &&
     String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi" &&
-    !config.webFirstEnabled;
+    (config.integrationMode || (config.webFirstEnabled ? "web-first" : LEGACY_INTEGRATION_MODE)) === LEGACY_INTEGRATION_MODE;
   const events = new EventEmitter();
   const pendingResponses = new Map();
   const pendingUi = new Map();
@@ -40,6 +41,7 @@ function createGoalsRpcService({
   let commandInFlight = false;
   let lastError = "";
   let lastMessage = "";
+  const integrationMode = config.integrationMode || (config.webFirstEnabled ? "web-first" : LEGACY_INTEGRATION_MODE);
 
   return {
     supported: enabled,
@@ -47,6 +49,8 @@ function createGoalsRpcService({
     capabilities() {
       return {
         transport: "pi-rpc",
+        integrationMode,
+        enabled,
         structuredDialogs: enabled && packageAvailable,
         active: Boolean(child && !child.killed),
         status,

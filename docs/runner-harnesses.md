@@ -99,6 +99,15 @@ headless `goalsRpc.service.js` process, which relays Pi RPC `select`, `confirm`,
 `input`, and `editor` requests to the Web UI; the existing PTY remains the
 ordinary terminal path and is blocked while the managed process is active.
 
+Runner integration ownership is explicit through
+`MAPACHE_RUNNER_INTEGRATION_MODE`. Missing metadata resolves to `legacy`, which
+preserves terminal-first behavior for existing sessions. The shared web-first
+owner can resolve only for `pi-chrome`; it is enabled only when the mode is
+explicitly `web-first`. The server rejects any composition that would start
+both the legacy Goals RPC owner and the shared interactive owner. `pi-chrome`
+is shipped with the mode explicitly set to `legacy` and web-first disabled
+while Gate A/C release criteria remain open.
+
 Legacy `/pi/skills*` and `/pi/auth/materialize` aliases remain available. Subagent chain listing exists for both harnesses, but write/delete is intentionally unsupported in V1 and returns a runner error.
 
 Both Pi and Codex runners still write shared workspace MCP config to `/workspace/.mcp.json`. Codex additionally writes harness-specific config to `/workspace/.codex/config.toml`, not `$CODEX_HOME/config.toml`.
@@ -125,6 +134,14 @@ This keeps feature gating out of route handlers and UI inference code where poss
 For Pi, startup also restores the current session's `piScopedModels` into `$PI_CODING_AGENT_DIR/settings.json` after the workspace home archive is available and before the harness starts. Periodic and shutdown sync copy a saved `enabledModels` list back to that session field. Sessions without that canonical field, including sessions created before this behavior existed, clear any model scope inherited through the shared home archive and initialize an empty scope. This keeps `/scoped-models` restart-durable without hiding authenticated providers because another session saved a different filter. The authenticated `/models-file` runner route reads and validates writes to `$PI_CODING_AGENT_DIR/models.json` for the Authentication Center editor. Deploy all curated Pi image tags after changing this route; existing sessions need a new Cloud Run revision before the endpoint is available.
 
 Chrome images seed the harness-neutral `mapache-chrome` skill at the active Pi or Codex workspace skill path when it is missing. The skill tells the agent to run `mapache-chrome-status`, attach to the existing loopback CDP endpoint through the pinned `chrome-devtools-mcp@1.6.0` server, and never launch a second browser or read the profile directory. The reserved `chrome-devtools` MCP entry deterministically replaces a workspace entry with the same name so the image-owned server always attaches to the user-visible browser.
+
+The opt-in web-first adapter handshake includes the tested capability set and
+the pinned `pi-goal-x` package version. A missing bridge, revision/package
+mismatch, or explicitly reported incompatible user extension fails closed and
+is surfaced as compatibility state; it does not silently remove workspace
+packages. The current Gate A candidate advertises ordinary prompts only;
+extension command expansion, structured dialogs, reload, and session
+replacement remain false.
 
 ## Frontend
 

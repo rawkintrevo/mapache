@@ -56,6 +56,7 @@ function createWebFirstAgentGateway({
   let sessionGeneration = 1;
   let adapterIdentity = null;
   let adapterAvailable = false;
+  let adapterCompatibility = {status: "not_connected", reason: "adapter_not_connected"};
   let initialized = false;
   let heartbeatTimer = null;
   let checkpointService = null;
@@ -73,11 +74,13 @@ function createWebFirstAgentGateway({
       }
       adapterIdentity = identity ? {...identity} : null;
       adapterAvailable = true;
+      adapterCompatibility = {status: "supported", reason: "handshake_valid"};
       publish("adapter_handshake", safeAdapterIdentity(identity));
     }));
     unsubscribeAdapter.push(adapter.on("disconnect", () => {
       adapterAvailable = false;
       adapterIdentity = null;
+      adapterCompatibility = {status: "unavailable", reason: "web_first_adapter_disconnected"};
       const activeRoot = operationLedger.snapshot().activeRoot;
       if (activeRoot) {
         void operationLedger.setOutcome(activeRoot.commandId, "unknown", "outcome_unknown");
@@ -143,6 +146,7 @@ function createWebFirstAgentGateway({
     return {
       ok: true,
       enabled: supported,
+      integrationMode: config.integrationMode || (supported ? "web-first" : "legacy"),
       protocolVersion: WEB_FIRST_PROTOCOL_VERSION,
       runtimeId,
       executionEpoch,
@@ -150,11 +154,8 @@ function createWebFirstAgentGateway({
       transport: "agent-websocket",
       adapter: safeAdapterIdentity(adapterIdentity),
       adapterAvailable,
-      ordinaryPrompt: Boolean(adapter),
-      extensionCommands: false,
-      structuredDialogs: false,
-      reload: false,
-      sessionReplacement: false,
+      compatibility: {...adapterCompatibility},
+      ...adapterCapabilities(adapterIdentity, adapterAvailable),
       control: manager.snapshot(),
       executionAuthority: executionAuthority?.snapshot?.() || null,
       checkpoint: checkpointService?.status?.() || null,
@@ -428,7 +429,16 @@ function createWebFirstAgentGateway({
     if (!adapter || typeof adapter.connect !== "function") throw agentError("web_first_adapter_unavailable");
     if (!adapterAvailable) {
       await terminalSession?.ensureForAgent?.();
-      adapterIdentity = await adapter.connect({timeoutMs: config.webFirstAdapterTimeoutMs});
+      try {
+        adapterIdentity = await adapter.connect({timeoutMs: config.webFirstAdapterTimeoutMs});
+      } catch (error) {
+        adapterCompatibility = {
+          status: "incompatible",
+          reason: String(error?.code || "web_first_adapter_unavailable").slice(0, 128),
+          ...(error?.details ? {details: boundedObject(error.details)} : {}),
+        };
+        throw error;
+      }
       sessionGeneration = Number(adapterIdentity?.sessionGeneration || sessionGeneration);
       manager.setSessionGeneration?.(sessionGeneration);
       adapterAvailable = true;
@@ -529,6 +539,7 @@ function createWebFirstAgentGateway({
   async function snapshot() {
     return {
       protocolVersion: WEB_FIRST_PROTOCOL_VERSION,
+      integrationMode: config.integrationMode || (supported ? "web-first" : "legacy"),
       runtimeId,
       executionEpoch,
       sessionGeneration,
@@ -539,6 +550,7 @@ function createWebFirstAgentGateway({
       events: eventLog.slice(-64).map((item) => ({...item})),
       executionAuthority: executionAuthority?.snapshot?.() || null,
       checkpoint: checkpointService?.status?.() || null,
+      compatibility: {...adapterCompatibility},
     };
   }
 
@@ -630,6 +642,19 @@ function safeAdapterIdentity(identity) {
       name: String(identity.package.name || "").slice(0, 128),
       version: String(identity.package.version || "").slice(0, 64),
     } : null,
+    capabilities: adapterCapabilities(identity, true),
+  };
+}
+
+function adapterCapabilities(identity, available) {
+  const capabilities = identity?.capabilities && typeof identity.capabilities === "object" ? identity.capabilities : {};
+  const hasCapabilityBlock = identity?.capabilities && typeof identity.capabilities === "object";
+  return {
+    ordinaryPrompt: Boolean(available && (hasCapabilityBlock ? capabilities.ordinaryPrompt : true)),
+    extensionCommands: Boolean(available && capabilities.extensionCommands),
+    structuredDialogs: Boolean(available && capabilities.structuredDialogs),
+    reload: Boolean(available && capabilities.reload),
+    sessionReplacement: Boolean(available && capabilities.sessionReplacement),
   };
 }
 
