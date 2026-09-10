@@ -119,7 +119,7 @@ The release digests are:
 
 - `:pi-basic` — `sha256:c657bfc57cef0563f39cf345a321707227b570313b961ecd80f765e517f73d43`
 - `:pi-web` — `sha256:939445be9a5e57ec86c6468a3c2b099923447b268a847e30e989d45558af9582`
-- `:pi-chrome` — `sha256:4c12dcdfb3ce65bc61b12df175bc8b939291c0f955a6ca6c0ec6b96e1b9e39f3`
+- `:pi-chrome` — `sha256:be3517fcd42ef2996250bf1169eaa2ac72b1b47c4fdf54b5328d991c16efe79e`
 
 Firebase Hosting release `e5ffb4a1f605450b` is live at
 `https://pi-agents-cloud.web.app`. The public API smoke check returns HTTP 401

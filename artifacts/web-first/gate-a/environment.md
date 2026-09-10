@@ -10,7 +10,8 @@
 - Adapter revision: `gate-a-0.1.0`.
 - Current pre-Gate-A `pi-chrome` image digest from the active Goals docs:
   `sha256:4c12dcdfb3ce65bc61b12df175bc8b939291c0f955a6ca6c0ec6b96e1b9e39f3`.
-  The rebuilt digest is recorded after the requested Cloud Build deployment.
+- Deployed `pi-chrome` digest from Cloud Build `4e1f311c-4ce6-4cc7-a278-532625f06c06`:
+  `sha256:be3517fcd42ef2996250bf1169eaa2ac72b1b47c4fdf54b5328d991c16efe79e`.
 
 ## Reproduction
 
