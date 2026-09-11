@@ -5,6 +5,7 @@ const {admin} = require("./backendContext");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {publicGoogleError} = require("./backendUtils.helpers");
+const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
 
 function createProvisioningWorker(dependencies = {}) {
   const requireWorkspace = dependencies.requireWorkspace;
@@ -88,6 +89,7 @@ async function markProvisioningWorkerFailure(sessionRef, session, error, depende
   const publicError = publicGoogleError(error);
   const updateFailure = (currentSession, writer) => {
     const updates = {
+      ...runtimeSessionStateUpdate(currentSession, "failed"),
       lastError: publicError,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };

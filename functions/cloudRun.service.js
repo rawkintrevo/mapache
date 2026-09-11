@@ -32,6 +32,7 @@ const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {agentRuntimeEnvironment} = require("./agentRuntime.helpers");
+const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -80,12 +81,14 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     const service = await getCloudRunService(client, serviceName);
     const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
+      ...runtimeSessionStateUpdate(claimedSession, "running"),
       serviceUrl: service.uri || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...runnerImageMetadata,
       ...provisioningCompletionUpdates(claimedSession, operationName),
     }, {reconciliationReason: "cloud_run_ready"}));
+    await markChromeWorkspaceSessionRunning(sessionRef, claimedSession, dependencies);
   } catch (error) {
     let provisioningError = error;
     if (client && isGoogleAlreadyExists(error)) {
@@ -94,12 +97,14 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
         await setPublicInvoker(client, serviceName);
         const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
         await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
+          ...runtimeSessionStateUpdate(claimedSession, "running"),
           serviceUrl: service.uri,
           lastError: null,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           ...runnerImageMetadata,
           ...provisioningCompletionUpdates(claimedSession, operationName),
         }, {reconciliationReason: "cloud_run_existing_service_reconciled"}));
+        await markChromeWorkspaceSessionRunning(sessionRef, claimedSession, dependencies);
         return;
       } catch (reconciliationError) {
         provisioningError = reconciliationError;
@@ -112,12 +117,14 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
           await setPublicInvoker(client, serviceName);
           const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
           await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
+            ...runtimeSessionStateUpdate(claimedSession, "running"),
             serviceUrl: service.uri,
             lastError: null,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             ...runnerImageMetadata,
             ...provisioningCompletionUpdates(claimedSession, operationName),
           }, {reconciliationReason: "cloud_run_timeout_reconciled"}));
+          await markChromeWorkspaceSessionRunning(sessionRef, claimedSession, dependencies);
           return;
         } catch (reconciliationError) {
           provisioningError = reconciliationError;
@@ -125,6 +132,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       }
     }
     await sessionRef.update(sessionStatusUpdate(claimedSession, "provision_failed", {
+      ...runtimeSessionStateUpdate(claimedSession, "failed"),
       lastError: publicGoogleError(provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...provisioningFailureUpdates(claimedSession, operationName, provisioningError),
@@ -312,17 +320,24 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const service = await getCloudRunService(client, session.serviceName);
     const runnerImageMetadata = await deployedRunnerImageMetadata(client, session.serviceName, session, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(session, "running", {
+      ...runtimeSessionStateUpdate(session, "running"),
       serviceUrl: service.uri || session.serviceUrl || null,
       lastError: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...runnerImageMetadata,
     }, {reconciliationReason: "cloud_run_ready"}));
+    await markChromeWorkspaceSessionRunning(sessionRef, session, dependencies);
   } catch (error) {
     await sessionRef.update(sessionStatusUpdate(session, "update_failed", {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {reconciliationReason: "cloud_run_update_failed"}));
   }
+}
+
+async function markChromeWorkspaceSessionRunning(sessionRef, session, dependencies = {}) {
+  if (typeof dependencies.markChromeWorkspaceSessionRunning !== "function") return;
+  await dependencies.markChromeWorkspaceSessionRunning(sessionRef, session);
 }
 
 async function deleteSessionService(sessionRef, session, options = {}, dependencies = {}) {

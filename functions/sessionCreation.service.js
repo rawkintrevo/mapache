@@ -188,6 +188,8 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   if (isChromeSession(session)) {
     await dependencies.reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
       githubWorkspace: isGithubWorkspace(workspace),
+      newRuntime: markedAgentWorkspace,
+      runtimeOperationId: provisioningOperationId,
       syncWriterEligible,
     });
   } else if (isGithubWorkspace(workspace)) {

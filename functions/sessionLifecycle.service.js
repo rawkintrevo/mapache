@@ -35,6 +35,11 @@ const {
   sessionStatusUpdate,
 } = require("./sessionLifecycle.helpers");
 const {resolveSessionCapabilities} = require("./runnerCatalog.helpers");
+const {
+  isMarkedRuntimeSession,
+  runtimeSessionStateUpdate,
+  runtimeStateUpdate,
+} = require("./runtimeReservation.helpers");
 
 function createSessionLifecycleService(dependencies = {}) {
   return {
@@ -96,10 +101,13 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
     await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies);
   }
   let syncWriterUpdates = {};
+  const restartOperationId = recreatingSessionService ? crypto.randomUUID() : "";
   if (recreatingSessionService && isChromeSession(session)) {
     syncWriterUpdates = await dependencies.reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
       create: false,
       githubWorkspace: isGithubWorkspace(workspace),
+      newRuntime: isMarkedRuntimeSession(session),
+      runtimeOperationId: restartOperationId,
       syncWriterEligible: true,
     }) || {};
   }
@@ -125,7 +133,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   });
 
   if (recreatingSessionService) {
-    Object.assign(restartUpdate, initialProvisioningMetadata(crypto.randomUUID()));
+    Object.assign(restartUpdate, initialProvisioningMetadata(restartOperationId));
   }
 
   if (!Array.isArray(session.environmentEntryIds) && Array.isArray(session.genericEnvironmentEntryIds)) {
@@ -181,19 +189,29 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
 
 async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
-  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "stopping", {
+  const session = sessionSnap.data();
+  await sessionRef.update(sessionStatusUpdate(session, "stopping", {
+    ...runtimeSessionStateUpdate(session, "stopping"),
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   }));
-  await dependencies.deleteSessionService(sessionRef, sessionSnap.data(), {reason: "manual"});
+  if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
+    await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
+  }
+  await dependencies.deleteSessionService(sessionRef, session, {reason: "manual"});
   return toClientDoc(await sessionRef.get());
 }
 
 async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
-  await sessionRef.update(sessionStatusUpdate(sessionSnap.data(), "deleting", {
+  const session = sessionSnap.data();
+  await sessionRef.update(sessionStatusUpdate(session, "deleting", {
+    ...runtimeSessionStateUpdate(session, "stopping"),
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   }));
-  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, sessionSnap.data(), {reason: "deleted"});
+  if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
+    await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
+  }
+  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason: "deleted"});
   if (!serviceDeleted) {
     throw httpError(502, "session_delete_failed");
   }
@@ -215,6 +233,7 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
   const stoppedAt = dependencies.admin.firestore.Timestamp.now();
   const usageRecord = sessionUsageRecord(sessionRef, session, stoppedAt);
   const stopped = sessionStatusUpdate(session, "stopped", {
+    ...runtimeSessionStateUpdate(session, "stopped"),
     activeSocketCount: 0,
     serviceUrl: null,
     stoppedAt,
@@ -235,6 +254,7 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
           activeChromeSessionState: "released",
           activeChromeSessionReleasedAt: stoppedAt,
           updatedAt: stoppedAt,
+          ...runtimeStateUpdate(workspaceSnap.data(), {...session, id: sessionRef.id}, "stopped", stoppedAt, {release: true}),
         });
       }
     });

@@ -55,10 +55,6 @@ const {
   SESSION_RESOURCE_ERROR_CODE,
   normalizeSessionResources,
 } = require("./sessionResources.helpers");
-const {
-  findActiveChromeSession,
-  isChromeSession,
-} = require("./chromeReservation.helpers");
 const {createGithubService} = require("./github.service");
 const {createGoogleWorkspaceConnectionsService} = require("./googleWorkspaceConnections.service");
 const {createGoogleWorkspaceOAuthService, callbackPage} = require("./googleWorkspaceOAuth.service");
@@ -90,13 +86,28 @@ const {
 } = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
+const {createWorkspaceSessionReservationService} = require("./workspaceSessionReservation.service");
 const {
   isActiveGithubWorkspaceSession,
   isShellSession,
 } = require("./sessionLifecycle.helpers");
 
+const workspaceSessionReservationService = createWorkspaceSessionReservationService({admin, db});
+const {
+  markChromeWorkspaceSessionRunning,
+  markChromeWorkspaceSessionStopping,
+  releaseChromeWorkspaceSession,
+  reserveChromeWorkspaceSession,
+} = workspaceSessionReservationService;
+
 const githubService = createGithubService();
-const lifecycleDependencies = {admin, db, requireWorkspace, sessionCollection};
+const lifecycleDependencies = {
+  admin,
+  db,
+  markChromeWorkspaceSessionStopping,
+  requireWorkspace,
+  sessionCollection,
+};
 const sessionLifecycleService = createSessionLifecycleService(lifecycleDependencies);
 const {
   deleteSession,
@@ -245,6 +256,7 @@ const cloudRunService = createCloudRunService({
       session.workspaceId,
       session.mcpConfig,
   ),
+  markChromeWorkspaceSessionRunning,
   releaseWorkspaceSyncWriterLease,
 });
 const {
@@ -259,6 +271,7 @@ Object.assign(lifecycleDependencies, {
   provisionSessionService,
   releaseChromeWorkspaceSession,
   releaseWorkspaceSyncWriterLease,
+  markChromeWorkspaceSessionStopping,
   reserveChromeWorkspaceSession,
   reserveWorkspaceSyncSession,
 });
@@ -619,49 +632,6 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
   });
 }
 
-async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
-  const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  return db.runTransaction(async (transaction) => {
-    const workspaceSnap = await transaction.get(workspaceRef);
-    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
-    const activeChrome = findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
-    if (activeChrome) {
-      throw httpError(409, "This workspace already has an active Chrome session. Stop it before creating another one.");
-    }
-    if (options.githubWorkspace) {
-      const activeGithub = sessionsSnap.docs.find((doc) => {
-        if (doc.id === sessionRef.id) return false;
-        const active = doc.data();
-        return isActiveGithubWorkspaceSession(active) && !isShellSession(active);
-      });
-      if (activeGithub) {
-        throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
-      }
-    }
-    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-    const lease = resolveSyncWriterLease(
-        workspaceSnap.data(),
-        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
-        session,
-        sessionRef.id,
-        {
-          eligible: options.syncWriterEligible,
-          now: admin.firestore.FieldValue.serverTimestamp(),
-        },
-    );
-    transaction.update(workspaceRef, {
-      activeChromeSessionId: sessionRef.id,
-      activeChromeSessionState: session.status || "provisioning",
-      activeChromeSessionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...lease.workspaceUpdates,
-    });
-    if (options.create !== false) transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
-    else transaction.update(sessionRef, lease.sessionUpdates);
-    return lease.sessionUpdates;
-  });
-}
-
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session) {
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(sessionCollection(workspaceId));
@@ -689,21 +659,6 @@ function normalizeRequestedSessionResources(payload, options = {}) {
 
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
-}
-
-async function releaseChromeWorkspaceSession(sessionRef, session, reason) {
-  if (!isChromeSession(session) || !session.workspaceId) return;
-  const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
-  await db.runTransaction(async (transaction) => {
-    const workspaceSnap = await transaction.get(workspaceRef);
-    if (!workspaceSnap.exists || workspaceSnap.data().activeChromeSessionId !== sessionRef.id) return;
-    transaction.update(workspaceRef, {
-      activeChromeSessionId: admin.firestore.FieldValue.delete(),
-      activeChromeSessionState: reason ? `released:${cleanName(reason)}` : "released",
-      activeChromeSessionReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  });
 }
 
 async function requestRunnerWorkspaceSyncDown(session) {
