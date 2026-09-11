@@ -124,9 +124,15 @@ test("managed startup launches pi-web-ui after materialization and stops it firs
       isCurrentWriter: () => true,
       release: async (reason) => events.push(`workspaceAuthority.release:${reason}`),
     },
+    workspace: {
+      ensureWorkspace: async () => events.push("workspace.ensureWorkspace"),
+      prepareWorkspaceSource: async () => events.push("workspace.prepareWorkspaceSource"),
+      restoreCheckpoint: async () => events.push("workspace.restoreCheckpoint"),
+    },
   });
 
   await lifecycle.start();
+  assert.equal(events.indexOf("workspace.restoreCheckpoint") < events.indexOf("workspaceAuthority.acquire"), true);
   assert.equal(events.indexOf("workspaceAuthority.acquire") < events.indexOf("activeHarness.materializeConfig"), true);
   assert.equal(events.indexOf("piWebUi.start") > events.indexOf("activeHarness.materializeSubagents"), true);
   assert.equal(events.indexOf("piWebUi.start") < events.indexOf("chromeProfileSnapshots.start"), true);

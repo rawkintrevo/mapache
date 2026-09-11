@@ -54,6 +54,7 @@ const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
+const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 
 const config = createConfig(runnerEnvironment);
@@ -93,10 +94,12 @@ const workspaceAuthority = createWorkspaceAuthority({
   onLost: () => piWebUi?.stop?.(),
 });
 const checkpointPublisher = createAgentCheckpointService({admin, config, db, storage});
+const checkpointRestore = createAgentCheckpointRestoreService({config, db, storage});
 const workspace = createWorkspaceService({
   admin,
   checkpointIdentity: () => ({bootInstanceId: workspaceAuthority.status().bootInstanceId}),
   checkpointPublisher,
+  checkpointRestore,
   config,
   db,
   git,

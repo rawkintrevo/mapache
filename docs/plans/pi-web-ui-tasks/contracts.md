@@ -97,6 +97,12 @@ Restore to staging, validate, then atomically install before runtime admission.
 Never overwrite good local state with a corrupt/partial restore. Restore display
 state without restoring active queues, wizard runs, Goal review loops, or automatic
 `continueRecent` execution. Explicit opening of old history must not send a prompt.
+The restore reader may consume a previously published generation/boot identity,
+but the pointer, manifest, object namespace, workspace, and session identities
+must agree; the current boot must not reinterpret a mixed-generation manifest as
+its own. A missing pointer means image/default state for a new runtime, while a
+corrupt or unavailable published pointer is a visible startup failure rather than
+an empty fallback.
 
 ## Lifecycle adapter
 

@@ -9,7 +9,7 @@ const {createWorkspaceAuthService} = require("./workspaceAuth.service");
 const {generationMatchOptions, isStorageGenerationConflict} = require("./workspaceSyncGeneration.helpers");
 const {normalizeRelativeWorkspacePath} = require("./utils");
 
-function createWorkspaceService({admin, checkpointPublisher, checkpointIdentity, config, db, git, storage}) {
+function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
   const archives = createWorkspaceArchiveService({config, git, pathHelpers, storage});
   const auth = createWorkspaceAuthService({admin, config, db});
@@ -45,6 +45,9 @@ function createWorkspaceService({admin, checkpointPublisher, checkpointIdentity,
 
   async function syncWorktreeDown() {
     if (!config.bucketName || !config.prefix) return;
+    // Marked runtimes use the immutable workspace-file manifest. The legacy
+    // flat prefix must not repopulate state when a checkpoint is absent.
+    if (config.agentRuntimeEnabled) return;
     const [files] = await storage.bucket(config.bucketName).getFiles({prefix: config.prefix});
     await Promise.all(files.map(async (file) => {
       if (file.name.endsWith("/")) return;
@@ -59,6 +62,16 @@ function createWorkspaceService({admin, checkpointPublisher, checkpointIdentity,
       await fs.promises.mkdir(path.dirname(localPath), {recursive: true});
       await file.download({destination: localPath});
     }));
+  }
+
+  async function restoreCheckpoint() {
+    if (!config.agentRuntimeEnabled || !checkpointRestore?.restoreCheckpoint) {
+      return {ok: true, skipped: true};
+    }
+    const result = await checkpointRestore.restoreCheckpoint({
+      shouldIgnore: pathHelpers.shouldIgnoreWorkspacePath,
+    });
+    return result;
   }
 
   async function syncUp(options = {}) {
@@ -207,6 +220,7 @@ function createWorkspaceService({admin, checkpointPublisher, checkpointIdentity,
     findArchiveFile: archives.findArchiveFile,
     materializeAuthNow: auth.materializeAuthNow,
     prepareWorkspaceSource,
+    restoreCheckpoint,
     secretFileInventory: auth.secretFileInventory,
     extractStorageArchive: archives.extractStorageArchive,
     syncArchivesDown: archives.syncArchivesDown,

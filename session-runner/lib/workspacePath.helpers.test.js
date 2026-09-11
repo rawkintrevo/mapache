@@ -24,6 +24,7 @@ test("filters archive-backed and policy-excluded workspace paths", () => {
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath("packages/site/node_modules/pkg/index.js"), true);
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".mapache-internal/archives/root.tar.gz"), true);
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".mapahce-internal/archives/root.tar.gz"), true);
+  assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".git/HEAD"), true);
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".pi/npm/cache/pkg"), true);
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".pi/git/repo"), true);
   assert.equal(pathHelpers.shouldIgnoreWorkspacePath("build/app.js"), true);
@@ -38,6 +39,7 @@ test("selects managed workspace objects that can be reconciled", () => {
   assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapahce-directory"), false);
   assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapache-internal/archives/workspace-git.tar.gz"), false);
   assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.mapahce-internal/archives/workspace-git.tar.gz"), false);
+  assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/.git/HEAD"), false);
   assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/node_modules/pkg/index.js"), false);
   assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/build/app.js"), false);
   assert.equal(pathHelpers.shouldManageWorkspaceRemotePath("users/u/workspaces/w/"), false);

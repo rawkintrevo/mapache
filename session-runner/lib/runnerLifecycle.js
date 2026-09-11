@@ -34,6 +34,7 @@ function createRunnerLifecycleCoordinator({
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      await workspace.restoreCheckpoint?.();
       await authority.acquire();
       const goalsPackageResult = await goalsPackage?.ensureInstalledDeclaration?.();
       goalsPackage?.setBridgeAvailability?.(goalsPackageResult?.enabled !== false);

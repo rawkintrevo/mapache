@@ -99,8 +99,10 @@ script URL is `/agent/sw.js`, leaving any Mapache parent-scope worker alone.
 
 The server-owned workspace marker `agentUiVersion: "pi-web-ui-v1"` is passed to
 the runner as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`. A marked `pi-chrome`
-runner completes workspace restore and harness materialization before starting
-exactly one supervised child from `/opt/mapache/pi-web-ui/dist/server/index.js`.
+runner restores the published checkpoint after source/archive preparation and
+before writer admission, credential materialization, and harness startup. It
+then starts exactly one supervised child from
+`/opt/mapache/pi-web-ui/dist/server/index.js`.
 The child is fixed to loopback `127.0.0.1:8787`, runs with `/workspace` as its
 fixed upstream cwd, uses `/var/lib/mapache/agent/pi` for non-secret Pi
 configuration, `/var/lib/mapache/agent/sessions` as the explicit flat
@@ -125,7 +127,10 @@ writer admission. Shutdown sends a cooperative group signal and applies the
 existing bounded stop/force-stop policy before final runner persistence, then
 releases the boot ID only through the controlled lifecycle.
 
-Managed agent persistence capture lives in `session-runner/lib/agentSnapshot.service.js`.
+Managed agent persistence capture and restore live in
+`session-runner/lib/agentSnapshot.service.js`,
+`session-runner/lib/agentCheckpoint.service.js`, and
+`session-runner/lib/agentCheckpointRestore.service.js`.
 It stages the fixed `/var/lib/mapache/agent/sessions`, `/pi`, and `/ui` roots
 under a private local directory, then writes a manifest with version, workspace /
 session / generation / boot identity, capture time, relative paths, byte lengths,
@@ -146,7 +151,15 @@ runtime use the same publication boundary: each sync creates a versioned file
 manifest with content hashes and tombstones, and the committed manifest—not a
 delayed mutable upload or delete—is the authoritative file view. Unmarked
 workspaces retain the legacy flat writer. Protected `/healthz` exposes only the
-safe `lastCheckpointAt` timestamp and normalized `checkpointError` code.
+safe `lastCheckpointAt` timestamp and normalized `checkpointError` code. On the
+next marked boot, `agentCheckpointRestore.service.js` reads only the published
+pointer, validates the manifest identity, checksum, path, and JSON/JSONL content
+in staging, and atomically installs the workspace and fixed agent roots with
+rollback. Missing pointers leave a new runtime at image/default state; corrupt,
+partial, unsafe, or mixed-generation data fails startup without replacing the
+last local state. Marked workspace sync skips the legacy flat prefix and keeps
+`.git` under its archive owner. Opening restored history is a storage/UI action
+and does not submit a model request until the user explicitly prompts or resumes.
 
 On the marked path, the legacy Pi PTY/TUI, Mapache Chat bridge, Goals RPC, and
 Pi Goals package declaration bootstrap are not started, preventing a second
@@ -257,7 +270,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
-- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization and secret-file inventory live in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
+- `workspace.js` composes workspace restore and sync behavior. Published checkpoint restore lives in `agentCheckpointRestore.service.js`; path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization and secret-file inventory live in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
 - `git.js` composes runner Git behavior. Manual status/stage/commit/pull/push/PR preparation stays in the facade, while automatic Pi branch/commit/push/PR lifecycle lives in `gitAutomation.service.js`. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it. Preview log/SSE collection and static share export similarly live in `previewLog.service.js` and `previewShare.service.js`, leaving `preview.js` as the mode/config facade.
 - `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`; workspace skill CRUD and recursive native/shared/user-root discovery live in `workspaceSkill.service.js`; workspace subagent CRUD lives in `workspaceSubagent.service.js`; seeded skill file creation lives in `piSeededSkills.service.js`; the managed `pi-goal-x` declaration reconciliation lives in `goalsPackageBootstrap.js`; and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `harnesses/index.js` and `harnesses/metadata.js` resolve the active runner harness and define which auth, MCP, skill, package, and subagent hooks are supported at startup.
