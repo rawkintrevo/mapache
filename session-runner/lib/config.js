@@ -91,6 +91,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     agentAccessAudience: "agent",
     agentRuntimeEnabled,
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
+    workspaceAuthorityRenewalIntervalMs: positiveNumber(process.env.MAPACHE_WORKSPACE_AUTHORITY_RENEWAL_INTERVAL_MS, 5000),
     agentStateRoot,
     agentUiVersion,
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,

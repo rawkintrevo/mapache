@@ -19,13 +19,22 @@ function createRunnerLifecycleCoordinator({
   setIntervalFn = setInterval,
   sshSession,
   workspace,
+  workspaceAuthority,
   workspaceSync,
 }) {
+  const authority = workspaceAuthority || {
+    acquire: async () => {},
+    assertCurrentWriter: async () => true,
+    isCurrentWriter: () => true,
+    release: async () => false,
+  };
+
   async function start() {
     try {
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
+      await authority.acquire();
       const goalsPackageResult = await goalsPackage?.ensureInstalledDeclaration?.();
       goalsPackage?.setBridgeAvailability?.(goalsPackageResult?.enabled !== false);
       if (goalsPackageResult?.reason === "managed_package_missing") {
@@ -47,6 +56,9 @@ function createRunnerLifecycleCoordinator({
         logger.log(`session runner listening on ${config.port}`);
       });
     } catch (error) {
+      await authority.release("startup_failed").catch((releaseError) => {
+        logger.error("workspace runtime authority release failed after startup error", releaseError);
+      });
       await activity.markRuntimeStartupFailure(error).catch((writeError) => {
         logger.error("session runtime failure write failed", writeError);
       });
@@ -55,27 +67,39 @@ function createRunnerLifecycleCoordinator({
   }
 
   async function shutdown() {
-    if (config.agentRuntimeEnabled) await piWebUi?.stop?.();
-    piChat?.close?.();
     try {
-      await goalsPackage?.stop?.();
-    } catch (error) {
-      logger.error("goal RPC shutdown failed", error);
+      if (config.agentRuntimeEnabled) await piWebUi?.stop?.();
+      piChat?.close?.();
+      try {
+        await goalsPackage?.stop?.();
+      } catch (error) {
+        logger.error("goal RPC shutdown failed", error);
+      }
+      resourceMetrics?.close?.();
+      sshSession.closeAll();
+      await chromeRuntime.stop();
+      await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
+      if (chromeProfileSnapshots.enabled()) {
+        await chromeProfileSnapshots.stop();
+        if (authority.isCurrentWriter()) {
+          await chromeProfileSnapshots.finalize();
+        } else {
+          logger.warn?.("final Chrome profile snapshot skipped after writer authority loss");
+        }
+      } else if (authority.isCurrentWriter()) {
+        await workspaceSync.syncUp({includeArchives: true});
+      } else {
+        logger.warn?.("final workspace sync skipped after writer authority loss");
+      }
+      await activity.updateSessionActivity({
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+        shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } finally {
+      await authority.release("shutdown").catch((error) => {
+        logger.error("workspace runtime authority release failed during shutdown", error);
+      });
     }
-    resourceMetrics?.close?.();
-    sshSession.closeAll();
-    await chromeRuntime.stop();
-    await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
-    if (chromeProfileSnapshots.enabled()) {
-      await chromeProfileSnapshots.stop();
-      await chromeProfileSnapshots.finalize();
-    } else {
-      await workspaceSync.syncUp({includeArchives: true});
-    }
-    await activity.updateSessionActivity({
-      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-      shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
   }
 
   function startSyncLoop() {

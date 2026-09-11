@@ -59,10 +59,12 @@ test("proxies the pi-web-ui hello/snapshot exchange and preserves existing socke
   const terminalWss = new WebSocketServer({noServer: true});
   const browserWss = new WebSocketServer({noServer: true});
   const metricsWss = new WebSocketServer({noServer: true});
+  let writerAdmitted = true;
   const gateway = createAgentWebSocketGateway({
     accessVerifier: verifier,
     clientWss,
     getUpstreamHeaders: () => ({"x-pi-token": "private-upstream-token"}),
+    isCurrentWriter: () => writerAdmitted,
     upstreamPort: upstreamServer.address().port,
   });
   const hasExistingAccess = (request) => new URL(request.url, "http://localhost").searchParams.get("access") === "valid";
@@ -132,6 +134,9 @@ test("proxies the pi-web-ui hello/snapshot exchange and preserves existing socke
     assert.equal(upstreamActivity[0].headers.cookie, undefined);
     assert.equal(upstreamActivity[0].headers.origin, undefined);
     assert.equal(upstreamActivity[0].headers.authorization, undefined);
+    writerAdmitted = false;
+    agent.socket.send(JSON.stringify({type: "stale-work"}));
+    assert.equal((await onceClose(agent.socket)).code, 1011);
   } finally {
     agent.socket.close();
     await onceClose(agent.socket);

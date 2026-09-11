@@ -45,6 +45,7 @@ function createAgentGateway({
   secureCookie = true,
   upstreamHost = DEFAULT_UPSTREAM_HOST,
   upstreamPort = DEFAULT_UPSTREAM_PORT,
+  assertCurrentWriter,
 } = {}) {
   const prefix = normalizePublicPrefix(publicPrefix);
   const limitBytes = positiveNumber(requestLimitBytes, DEFAULT_REQUEST_LIMIT_BYTES);
@@ -84,17 +85,27 @@ function createAgentGateway({
       return;
     }
 
-    let upstreamHeaders;
-    try {
-      upstreamHeaders = getUpstreamHeaders() || {};
-    } catch (error) {
-      upstreamHeaders = {};
-    }
-    if (typeof upstreamHeaders["x-pi-token"] !== "string" || !upstreamHeaders["x-pi-token"]) {
-      writeError(res, 503, "agent_unavailable");
+    const admit = () => {
+      let upstreamHeaders;
+      try {
+        upstreamHeaders = getUpstreamHeaders() || {};
+      } catch (error) {
+        upstreamHeaders = {};
+      }
+      if (typeof upstreamHeaders["x-pi-token"] !== "string" || !upstreamHeaders["x-pi-token"]) {
+        writeError(res, 503, "agent_unavailable");
+        return;
+      }
+      forward(req, res, request, upstreamHeaders);
+    };
+    if (isStateChanging(req.method) && typeof assertCurrentWriter === "function") {
+      Promise.resolve()
+          .then(() => assertCurrentWriter())
+          .then(admit)
+          .catch(() => writeError(res, 503, "writer_authority_lost"));
       return;
     }
-    forward(req, res, request, upstreamHeaders);
+    admit();
   }
 
   function forward(req, res, request, upstreamHeaders) {

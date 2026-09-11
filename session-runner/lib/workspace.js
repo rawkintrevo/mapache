@@ -62,6 +62,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
   }
 
   async function syncUp(options = {}) {
+    await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
     if (!config.bucketName || !config.prefix) return {conflicts: []};
     const {directories, files} = await walkWorkspace(config.workspaceDir);
@@ -85,9 +86,11 @@ function createWorkspaceService({admin, config, db, git, storage}) {
       return syncFileUpPreservingNewerRemote(localPath, remotePath);
     }));
 
+    await options.assertCurrentWriter?.();
     const reconcileConflicts = await reconcileManagedRemoteWorktree(desiredRemotePaths);
 
     if (options.includeArchives) {
+      await options.assertCurrentWriter?.();
       await archives.syncArchivesUp();
     }
     return {

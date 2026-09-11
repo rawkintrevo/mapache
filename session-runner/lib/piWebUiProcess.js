@@ -23,6 +23,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   const enabled = config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1";
   const fsImpl = deps.fs || fs;
   const spawnImpl = deps.spawn || defaultSpawn;
+  const processKillImpl = deps.processKill || process.kill.bind(process);
   const fetchImpl = deps.fetch || global.fetch;
   const randomBytesImpl = deps.randomBytes || randomBytes;
   const environment = deps.env || process.env;
@@ -105,6 +106,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     try {
       next = spawnImpl(process.execPath, [entry], {
         cwd: config.workspaceDir,
+        detached: true,
         env: childEnvironment(privateToken),
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -208,17 +210,29 @@ function createPiWebUiProcess(config = {}, deps = {}) {
 
   async function terminateChild(current, timeoutMs) {
     try {
-      current.kill?.("SIGTERM");
+      signalChild(current, "SIGTERM");
     } catch (cause) {
       throw publicError("pi_web_ui_stop_failed", cause);
     }
     if (await waitForExit(current, timeoutMs)) return;
     try {
-      current.kill?.("SIGKILL");
+      signalChild(current, "SIGKILL");
     } catch (cause) {
       throw publicError("pi_web_ui_stop_failed", cause);
     }
     if (!await waitForExit(current, timeoutMs)) throw publicError("pi_web_ui_stop_timeout");
+  }
+
+  function signalChild(current, signal) {
+    if (current?.pid && typeof processKillImpl === "function") {
+      try {
+        processKillImpl(-Math.abs(current.pid), signal);
+        return;
+      } catch (error) {
+        if (error?.code !== "ESRCH") throw error;
+      }
+    }
+    current?.kill?.(signal);
   }
 
   function handleChildExit(current, code, signal, cause) {

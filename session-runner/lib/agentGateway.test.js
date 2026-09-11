@@ -40,7 +40,7 @@ function request(port, pathname, {method = "GET", headers = {}, body} = {}) {
   });
 }
 
-async function createRuntime({requestLimitBytes = 10 * 1024 * 1024} = {}) {
+async function createRuntime({requestLimitBytes = 10 * 1024 * 1024, assertCurrentWriter} = {}) {
   const secret = "agent-gateway-secret";
   const now = 1_700_000_000_000;
   const token = signedToken(secret, {
@@ -105,6 +105,7 @@ async function createRuntime({requestLimitBytes = 10 * 1024 * 1024} = {}) {
     accessVerifier: verifier,
     getUpstreamHeaders: () => ({"x-pi-token": "private-upstream-token"}),
     requestLimitBytes,
+    assertCurrentWriter,
     secureCookie: true,
     upstreamHost: "127.0.0.1",
     upstreamPort: upstream.address().port,
@@ -123,6 +124,31 @@ async function createRuntime({requestLimitBytes = 10 * 1024 * 1024} = {}) {
     upstreamRequests,
   };
 }
+
+test("rejects state-changing requests after writer authority is lost", async () => {
+  let admitted = true;
+  const runtime = await createRuntime({
+    assertCurrentWriter: async () => {
+      if (!admitted) throw new Error("workspace_writer_authority_lost");
+    },
+  });
+  try {
+    admitted = false;
+    const tokenCookie = `mapache_access=${encodeURIComponent(runtime.token)}`;
+    const response = await request(runtime.port, "/agent/plugins-api/test/hook", {
+      headers: {
+        cookie: tokenCookie,
+        origin: `http://127.0.0.1:${runtime.port}`,
+      },
+      method: "POST",
+      body: "stale-work",
+    });
+    assert.equal(response.status, 503);
+    assert.equal(runtime.upstreamRequests.length, 0);
+  } finally {
+    await runtime.close();
+  }
+});
 
 test("maps the public prefix and removes auth query parameters", () => {
   assert.equal(mapPublicPath("/agent/"), "/");

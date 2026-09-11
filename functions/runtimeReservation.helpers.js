@@ -84,15 +84,59 @@ function runtimeStateUpdate(workspace = {}, session = {}, state, now, options = 
   if (!sessionId || reservedSessionId !== sessionId || !sessionGeneration || sessionGeneration !== workspaceGeneration) {
     return {};
   }
+  const workspaceBootInstanceId = String(workspace.agentRuntimeBootInstanceId || "").trim();
+  const sessionBootInstanceId = String(session.agentRuntimeBootInstanceId || "").trim();
+  if (options.release && workspaceBootInstanceId && workspaceBootInstanceId !== sessionBootInstanceId) return {};
   return {
     agentRuntimeSessionId: options.release ? null : sessionId,
     agentRuntimeState: String(state || "").trim().toLowerCase(),
     agentRuntimeUpdatedAt: now || null,
+    ...(options.release && workspaceBootInstanceId ? {
+      agentRuntimeAuthorityState: "released",
+      agentRuntimeBootHeartbeatAt: now || null,
+      agentRuntimeBootInstanceId: null,
+    } : {}),
   };
 }
 
 function runtimeSessionStateUpdate(session = {}, state) {
   return isMarkedRuntimeSession(session) ? {agentRuntimeState: String(state || "").trim().toLowerCase()} : {};
+}
+
+function runtimeAuthorityReleaseUpdates(workspace = {}, session = {}, now) {
+  if (!isMarkedRuntimeWorkspace(workspace) || !isMarkedRuntimeSession(session)) {
+    return {sessionUpdates: {}, workspaceUpdates: {}};
+  }
+  const bootInstanceId = String(session.agentRuntimeBootInstanceId || "").trim();
+  const sessionId = String(session.id || "").trim();
+  const generation = positiveRuntimeGeneration(session.agentRuntimeGeneration);
+  if (!bootInstanceId || !sessionId ||
+    String(workspace.agentRuntimeSessionId || "").trim() !== sessionId ||
+    String(workspace.agentRuntimeBootInstanceId || "").trim() !== bootInstanceId ||
+    positiveRuntimeGeneration(workspace.agentRuntimeGeneration) !== generation) {
+    return {sessionUpdates: {}, workspaceUpdates: {}};
+  }
+  return {
+    sessionUpdates: {
+      agentRuntimeAuthorityState: "released",
+      agentRuntimeBootHeartbeatAt: now || null,
+      agentRuntimeBootInstanceId: null,
+    },
+    workspaceUpdates: {
+      agentRuntimeAuthorityState: "released",
+      agentRuntimeBootHeartbeatAt: now || null,
+      agentRuntimeBootInstanceId: null,
+    },
+  };
+}
+
+function runtimeAuthoritySessionReleaseUpdates(session = {}, now) {
+  if (!isMarkedRuntimeSession(session) || !String(session.agentRuntimeBootInstanceId || "").trim()) return {};
+  return {
+    agentRuntimeAuthorityState: "released",
+    agentRuntimeBootHeartbeatAt: now || null,
+    agentRuntimeBootInstanceId: null,
+  };
 }
 
 module.exports = {
@@ -104,6 +148,8 @@ module.exports = {
   nextRuntimeGeneration,
   positiveRuntimeGeneration,
   resolveRuntimeReservation,
+  runtimeAuthorityReleaseUpdates,
+  runtimeAuthoritySessionReleaseUpdates,
   runtimeSessionStateUpdate,
   runtimeStateUpdate,
 };

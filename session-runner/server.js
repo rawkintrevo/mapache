@@ -53,6 +53,7 @@ const {createGoalsRpcService} = require("./lib/goalsRpc.service");
 const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
+const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
@@ -84,10 +85,18 @@ const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
 const workspace = createWorkspaceService({admin, config, db, git, storage});
+let piWebUi = null;
+const workspaceAuthority = createWorkspaceAuthority({
+  admin,
+  config,
+  db,
+  onLost: () => piWebUi?.stop?.(),
+});
 const workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
   syncUp: workspace.syncUp,
   syncWriterRole: config.workspaceSyncRole,
+  writerAuthority: workspaceAuthority,
 });
 const chromeProfile = createChromeProfileService({config, archives: workspace});
 const chromeProfileSnapshots = createChromeProfileSnapshotService({
@@ -135,13 +144,14 @@ const piChat = createPiChatWebSocket({
   terminalSession,
   transcriptService: piChatTranscript,
 });
-const piWebUi = createPiWebUiProcess(config, {
+piWebUi = createPiWebUiProcess(config, {
   onExit: ({error}) => activity.markRuntimeStartupFailure(error),
 });
 const agentGateway = createAgentGateway({
   accessVerifier: agentAccess,
   enabled: config.agentRuntimeEnabled,
   getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
+  assertCurrentWriter: workspaceAuthority.assertCurrentWriter,
   upstreamHost: config.piWebUiHost,
   upstreamPort: config.piWebUiPort,
 });
@@ -152,6 +162,7 @@ const agentWebSocket = createAgentWebSocketGateway({
   getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
   upstreamHost: config.piWebUiHost,
   upstreamPort: config.piWebUiPort,
+  isCurrentWriter: workspaceAuthority.isCurrentWriter,
 });
 const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
@@ -175,6 +186,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   piModelScope,
   sshSession,
   workspace,
+  workspaceAuthority,
   workspaceSync,
 });
 

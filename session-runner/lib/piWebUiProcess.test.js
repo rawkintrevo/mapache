@@ -83,6 +83,7 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(spawnCalls.length, 1);
     assert.equal(spawnCalls[0].args[0], path.join(config.piWebUiRoot, "dist", "server", "index.js"));
     assert.equal(spawnCalls[0].options.cwd, config.workspaceDir);
+    assert.equal(spawnCalls[0].options.detached, true);
     assert.equal(spawnCalls[0].options.env.PI_WEB_HOST, "127.0.0.1");
     assert.equal(spawnCalls[0].options.env.PI_WEB_PORT, "8787");
     assert.equal(spawnCalls[0].options.env.PI_WEB_MANAGED, "1");
@@ -97,6 +98,28 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(process.status().state, "stopped");
     assert.equal(child.killed, true);
     assert.equal(spawnCalls.length, 1);
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("stops the managed process group so tool descendants cannot outlive the runner", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild(4343);
+  const signals = [];
+  try {
+    const managed = createPiWebUiProcess(config, {
+      fetch: healthyFetch(),
+      processKill: (pid, signal) => {
+        signals.push({pid, signal});
+        child.kill(signal);
+      },
+      spawn: () => child,
+    });
+    await managed.start();
+    await managed.stop();
+    assert.deepEqual(signals, [{pid: -4343, signal: "SIGTERM"}]);
+    assert.equal(child.killed, true);
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }

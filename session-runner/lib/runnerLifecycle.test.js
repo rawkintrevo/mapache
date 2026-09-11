@@ -61,6 +61,7 @@ function createLifecycleHarness(events, overrides = {}) {
       ensureWorkspace: async () => events.push("workspace.ensureWorkspace"),
       prepareWorkspaceSource: async () => events.push("workspace.prepareWorkspaceSource"),
     },
+    workspaceAuthority: overrides.workspaceAuthority,
     workspaceSync: overrides.workspaceSync || {syncUp: async () => events.push("workspaceSync.syncUp")},
   });
 }
@@ -118,13 +119,20 @@ test("managed startup launches pi-web-ui after materialization and stops it firs
       stop: async () => events.push("piWebUi.stop"),
     },
     piChat: {close: () => events.push("piChat.close")},
+    workspaceAuthority: {
+      acquire: async () => events.push("workspaceAuthority.acquire"),
+      isCurrentWriter: () => true,
+      release: async (reason) => events.push(`workspaceAuthority.release:${reason}`),
+    },
   });
 
   await lifecycle.start();
+  assert.equal(events.indexOf("workspaceAuthority.acquire") < events.indexOf("activeHarness.materializeConfig"), true);
   assert.equal(events.indexOf("piWebUi.start") > events.indexOf("activeHarness.materializeSubagents"), true);
   assert.equal(events.indexOf("piWebUi.start") < events.indexOf("chromeProfileSnapshots.start"), true);
   await lifecycle.shutdown();
   assert.equal(events.indexOf("piWebUi.stop") < events.indexOf("piChat.close"), true);
+  assert.equal(events.at(-1), "workspaceAuthority.release:shutdown");
 });
 
 test("shutdown closes forwards before final profile snapshot and activity update", async () => {

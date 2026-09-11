@@ -23,6 +23,7 @@ function createAgentWebSocketGateway({
   queueLimitBytes = DEFAULT_QUEUE_LIMIT_BYTES,
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
+  isCurrentWriter,
 } = {}) {
   if (!clientWss || typeof clientWss.handleUpgrade !== "function") {
     throw new Error("Agent WebSocket gateway requires a noServer WebSocketServer.");
@@ -52,6 +53,10 @@ function createAgentWebSocketGateway({
     }
     if (!originAllowed(request)) {
       rejectUpgrade(socket, 403);
+      return;
+    }
+    if (!safeWriterStatus()) {
+      rejectUpgrade(socket, 503);
       return;
     }
 
@@ -93,6 +98,10 @@ function createAgentWebSocketGateway({
     const toClient = createQueue(null, () => client, () => closePair(1011, "agent_proxy_error"));
 
     client.on("message", (data, isBinary) => {
+      if (!safeWriterStatus()) {
+        closePair(1011, "writer_authority_lost");
+        return;
+      }
       toUpstream.push(data, isBinary);
     });
     client.once("error", () => closePair(1011, "agent_proxy_error"));
@@ -133,6 +142,10 @@ function createAgentWebSocketGateway({
       toUpstream.flush();
     });
     upstream.on("message", (data, isBinary) => {
+      if (!safeWriterStatus()) {
+        closePair(1011, "writer_authority_lost");
+        return;
+      }
       toClient.push(data, isBinary);
     });
     upstream.once("error", () => closePair(1013, "agent_unavailable"));
@@ -149,6 +162,15 @@ function createAgentWebSocketGateway({
       if (expiryTimer === null) return;
       clearTimeoutImpl(expiryTimer);
       expiryTimer = null;
+    }
+
+  }
+
+  function safeWriterStatus() {
+    try {
+      return typeof isCurrentWriter !== "function" || isCurrentWriter();
+    } catch (error) {
+      return false;
     }
   }
 

@@ -114,8 +114,16 @@ transcripts, including their SDK-preserved IDs and branches. The runner creates
 a private per-boot token, uses it only for the local `/api/health` check, and
 never includes it in status or logs. Startup is bounded by local health; a
 startup failure or unexpected child exit is reported through runner activity
-with no automatic respawn. Shutdown sends a cooperative signal and applies the
-existing bounded stop/force-stop policy before final runner persistence.
+with no automatic respawn. Before materialization, the runner acquires a unique
+boot instance ID for the reserved runtime generation in the workspace/session
+coordination documents. Duplicate boots and stale generations remain fenced;
+the runner renews that admission with bounded Firestore transactions and checks
+it before state-changing agent requests and workspace publication. A lost or
+indeterminate coordination read rejects new work and signals the detached
+managed child process group, so physical container liveness is not treated as
+writer admission. Shutdown sends a cooperative group signal and applies the
+existing bounded stop/force-stop policy before final runner persistence, then
+releases the boot ID only through the controlled lifecycle.
 
 On the marked path, the legacy Pi PTY/TUI, Mapache Chat bridge, Goals RPC, and
 Pi Goals package declaration bootstrap are not started, preventing a second

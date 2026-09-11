@@ -90,3 +90,28 @@ test("reader sessions skip uploads but keep an explicit status result", async ()
   assert.deepEqual(events, ["downloaded"]);
   assert.deepEqual(logs, ["workspace sync up skipped: sync-writer role is reader"]);
 });
+
+test("rejects a delayed upload callback after writer authority is revoked", async () => {
+  let admitted = true;
+  let uploadStarted = false;
+  const coordinator = createWorkspaceSyncCoordinator({
+    syncUp: async () => {
+      uploadStarted = true;
+      admitted = false;
+      return {conflicts: []};
+    },
+    syncDown: async () => {},
+    writerAuthority: {
+      assertCurrentWriter: async () => {
+        if (!admitted) {
+          const error = new Error("workspace_writer_authority_lost");
+          error.code = "workspace_writer_authority_lost";
+          throw error;
+        }
+      },
+    },
+  });
+
+  await assert.rejects(() => coordinator.syncUp(), (error) => error.code === "workspace_writer_authority_lost");
+  assert.equal(uploadStarted, true);
+});

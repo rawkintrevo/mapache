@@ -7,6 +7,7 @@ const {isActiveGithubWorkspaceSession, isShellSession} = require("./sessionLifec
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {
   resolveRuntimeReservation,
+  runtimeAuthoritySessionReleaseUpdates,
   runtimeStateUpdate,
 } = require("./runtimeReservation.helpers");
 
@@ -124,6 +125,8 @@ async function releaseChromeWorkspaceSession(sessionRef, session, reason, depend
       updatedAt: now,
       ...runtimeStateUpdate(workspaceSnap.data(), {...session, id: sessionRef.id}, reasonState, now, {release: true}),
     });
+    const sessionRuntimeUpdates = runtimeAuthoritySessionReleaseUpdates(session, now);
+    if (Object.keys(sessionRuntimeUpdates).length) transaction.update(sessionRef, sessionRuntimeUpdates);
   });
 }
 

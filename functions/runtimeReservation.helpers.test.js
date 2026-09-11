@@ -6,6 +6,8 @@ const {
   isMarkedRuntimeWorkspace,
   nextRuntimeGeneration,
   resolveRuntimeReservation,
+  runtimeAuthorityReleaseUpdates,
+  runtimeAuthoritySessionReleaseUpdates,
   runtimeSessionStateUpdate,
   runtimeStateUpdate,
 } = require("./runtimeReservation.helpers");
@@ -65,6 +67,35 @@ assert.deepStrictEqual(runtimeStateUpdate(
   agentRuntimeSessionId: session.id,
   agentRuntimeState: "running",
   agentRuntimeUpdatedAt: "SERVER_TIMESTAMP",
+});
+assert.deepStrictEqual(runtimeAuthorityReleaseUpdates(
+    {
+      ...workspace,
+      agentRuntimeSessionId: session.id,
+      agentRuntimeGeneration: session.agentRuntimeGeneration,
+      agentRuntimeBootInstanceId: "boot-a",
+    },
+    {...session, agentRuntimeBootInstanceId: "boot-a"},
+    "SERVER_TIMESTAMP",
+), {
+  sessionUpdates: {
+    agentRuntimeAuthorityState: "released",
+    agentRuntimeBootHeartbeatAt: "SERVER_TIMESTAMP",
+    agentRuntimeBootInstanceId: null,
+  },
+  workspaceUpdates: {
+    agentRuntimeAuthorityState: "released",
+    agentRuntimeBootHeartbeatAt: "SERVER_TIMESTAMP",
+    agentRuntimeBootInstanceId: null,
+  },
+});
+assert.deepStrictEqual(runtimeAuthoritySessionReleaseUpdates(
+    {...session, agentRuntimeBootInstanceId: "boot-a"},
+    "SERVER_TIMESTAMP",
+), {
+  agentRuntimeAuthorityState: "released",
+  agentRuntimeBootHeartbeatAt: "SERVER_TIMESTAMP",
+  agentRuntimeBootInstanceId: null,
 });
 assert.deepStrictEqual(runtimeStateUpdate(
     {...workspace, agentRuntimeSessionId: session.id},

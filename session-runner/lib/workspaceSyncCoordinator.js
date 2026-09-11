@@ -1,6 +1,12 @@
 "use strict";
 
-function createWorkspaceSyncCoordinator({syncUp: performSyncUp, syncDown: performSyncDown, syncWriterRole = "writer", logger = console}) {
+function createWorkspaceSyncCoordinator({
+  syncUp: performSyncUp,
+  syncDown: performSyncDown,
+  syncWriterRole = "writer",
+  writerAuthority,
+  logger = console,
+}) {
   let active = null;
   let pendingUp = null;
   let pendingDown = null;
@@ -41,9 +47,21 @@ function createWorkspaceSyncCoordinator({syncUp: performSyncUp, syncDown: perfor
     else pendingDown = null;
     active = request;
     try {
+      if (request.kind === "up") {
+        const admission = requestWriterAdmission();
+        if (admission) await admission;
+      }
       const result = request.kind === "up" ?
-        await performSyncUp({includeArchives: request.includeArchives}) :
+        await performSyncUp({
+          assertCurrentWriter: typeof writerAuthority?.assertCurrentWriter === "function" ?
+            writerAuthority.assertCurrentWriter : undefined,
+          includeArchives: request.includeArchives,
+        }) :
         await performSyncDown();
+      if (request.kind === "up") {
+        const admission = requestWriterAdmission();
+        if (admission) await admission;
+      }
       request.resolve(result);
     } catch (error) {
       request.reject(error);
@@ -76,7 +94,19 @@ function createWorkspaceSyncCoordinator({syncUp: performSyncUp, syncDown: perfor
     return enqueue("up", options);
   }
 
+  function assertCurrentWriter() {
+    return requestWriterAdmission() || Promise.resolve(true);
+  }
+
+  function requestWriterAdmission() {
+    if (syncWriterRole !== "writer" || typeof writerAuthority?.assertCurrentWriter !== "function") {
+      return null;
+    }
+    return writerAuthority.assertCurrentWriter();
+  }
+
   return {
+    assertCurrentWriter,
     flush,
     syncDown: () => enqueue("down"),
     syncUp,
