@@ -28,7 +28,8 @@ within its task file while keeping the root task unchecked.
 
 ## Ordered checklist
 
-- [ ] 1. **[Inventory the deployment and identify the HubSpot source](docs/plans/pi-web-ui-tasks/01-inventory-and-protect-source.md)** - easy
+- [x] 1. **[Inventory the deployment and identify the HubSpot source](docs/plans/pi-web-ui-tasks/01-inventory-and-protect-source.md)** - easy
+  - Completed: 2026-09-11 — identified exactly one HubSpot source mapping (`rFNToErGqhiRT5Twt8vx` / `Q2ApeoyTMGQ7q26MNbhn`), recorded production Functions/Hosting/Cloud Run/image state, verified the seven source-session JSONL files (2,485 valid records), and created ignored recovery targets. No deployment, runner stop, or data copy performed. Evidence: `artifacts/qa/pi-web-ui/task-1/README.md`; restricted inventory: `artifacts/migrations/pi-web-ui/hubspot/2026-09-11-inventory.md`. Task 2 must reconcile the stored runner digest/runtime failure before cutover.
 - [ ] 2. **[Add the pinned upstream build and patch manifest](docs/plans/pi-web-ui-tasks/02-pin-upstream-build.md)** - medium
 - [ ] 3. **[Configure the managed app for the agent subpath](docs/plans/pi-web-ui-tasks/03-managed-embedded-build.md)** - medium
 - [ ] 4. **[Launch pi-web-ui as a supervised runner child](docs/plans/pi-web-ui-tasks/04-launch-upstream-process.md)** - medium
