@@ -4,6 +4,11 @@ const crypto = require("crypto");
 const path = require("path");
 const logger = require("firebase-functions/logger");
 const {cleanName, httpError} = require("./backendUtils.helpers");
+const {
+  AGENT_AUDIENCE,
+  explicitRuntimeGeneration,
+  isCompatibleAgentSession,
+} = require("./agentRuntime.helpers");
 
 function createPreviewService(dependencies = {}) {
   return {
@@ -16,7 +21,7 @@ function createPreviewService(dependencies = {}) {
 }
 
 async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies = {}) {
-  const {sessionSnap} = await dependencies.requireSession(uid, workspaceId, sessionId);
+  const {sessionSnap, workspace} = await dependencies.requireSession(uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   if (!session.serviceUrl) throw httpError(409, "session_not_running");
   if (!session.browserAccessTokenSecret) {
@@ -33,6 +38,8 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
     appendQuery(`${baseUrl}/browser/`, "mapache_access", token) : null;
   const browserStatusUrl = session.capabilities && session.capabilities.chrome ?
     appendQuery(`${baseUrl}/browser/status`, "mapache_access", token) : null;
+  const agentUrl = isCompatibleAgentSession(workspace, session) ?
+    appendQuery(`${baseUrl}/agent/`, "mapache_access", signSessionAgentAccessToken(session, expiresAtMs)) : null;
   return {
     ok: true,
     expiresAt: new Date(expiresAtMs).toISOString(),
@@ -41,6 +48,7 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
     sshForwardBaseUrl,
     browserUrl,
     browserStatusUrl,
+    ...(agentUrl ? {agentUrl} : {}),
   };
 }
 
@@ -160,6 +168,22 @@ function signSessionBrowserAccessToken(session, expiresAtMs) {
   return `${payload}.${signature}`;
 }
 
+function signSessionAgentAccessToken(session, expiresAtMs) {
+  const generation = explicitRuntimeGeneration(session.agentRuntimeGeneration);
+  if (!generation) return "";
+  const payload = Buffer.from(JSON.stringify({
+    aud: AGENT_AUDIENCE,
+    exp: Math.floor(expiresAtMs / 1000),
+    gen: generation,
+    sid: session.runnerSessionId || session.id || "",
+  })).toString("base64url");
+  const signature = crypto
+      .createHmac("sha256", session.browserAccessTokenSecret)
+      .update(payload)
+      .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
 function appendQuery(url, key, value) {
   const parsed = new URL(url);
   parsed.searchParams.set(key, value);
@@ -216,5 +240,6 @@ module.exports = {
   createPreviewService,
   publicPreviewContentType,
   publicPreviewPath,
+  signSessionAgentAccessToken,
   shouldServePublicPreviewIndexFallback,
 };

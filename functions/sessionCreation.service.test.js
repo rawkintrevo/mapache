@@ -2,6 +2,7 @@
 
 const assert = require("assert");
 const {createSessionCreationService} = require("./sessionCreation.service");
+const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 const serverTimestamp = () => "SERVER_TIMESTAMP";
 const admin = {firestore: {FieldValue: {serverTimestamp}}};
@@ -31,8 +32,9 @@ const dependencies = {
     storedSession = {...args[2], syncWriterRole: "writer"};
   },
   resolveHarness: (harnessId) => ({terminalKind: harnessId === "codex" ? "codex" : harnessId === "ssh" ? "ssh" : "shell"}),
-  resolveRunnerImage: (payload) => payload.imageKey === "chrome" ? {
-    key: "chrome",
+  resolveRunnerImage: (payload) => ["chrome", "pi-chrome"].includes(payload.imageKey) ? {
+    key: payload.imageKey,
+    imageKey: payload.imageKey,
     image: "gcr.io/example/chrome",
     harnessId: "pi",
     terminalKind: "pi",
@@ -102,6 +104,28 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(chrome.capabilities.chrome, true);
   assert.strictEqual(reservations[0].kind, "reserveChrome");
   assert.strictEqual(reservations[0].args[3].syncWriterEligible, true);
+
+  const marked = await createWithWorkspace({
+    ownerUid: "user-1",
+    agentUiVersion: AGENT_UI_VERSION,
+    bucket: "bucket",
+    storagePrefix: "workspaces/user-1/marked",
+    source: {type: "blank"},
+    mcpConfig: {},
+  }, {operationId: "marked-1", imageKey: "default", agentUiVersion: "browser-chosen-version"});
+  assert.strictEqual(marked.agentUiVersion, AGENT_UI_VERSION);
+  assert.strictEqual(marked.imageKey, "pi-chrome");
+  assert.strictEqual(marked.harnessId, "pi");
+  assert.strictEqual(marked.capabilities.chrome, true);
+  await assert.rejects(
+      createWithWorkspace({
+        ownerUid: "user-1",
+        agentUiVersion: AGENT_UI_VERSION,
+        source: {type: "blank"},
+        mcpConfig: {},
+      }, {operationId: "marked-ssh-1", type: "ssh"}),
+      (error) => error.status === 400 && error.publicMessage === "agent_workspace_requires_pi_chrome",
+  );
 
   const ssh = await createWithWorkspace({
     ownerUid: "user-1",

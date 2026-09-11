@@ -31,6 +31,7 @@ const {resolveSessionCapabilities, resolveSessionHarness} = require("./runnerCat
 const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
+const {agentRuntimeEnvironment} = require("./agentRuntime.helpers");
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -469,6 +470,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "TERMINAL_KIND", value: terminalKind},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
+    ...agentRuntimeEnvironment(session),
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_ROLE", value: cleanName(session.syncWriterRole || "writer") || "writer"},
     {name: "WORKSPACE_SYNC_POLICY_MODE", value: cleanName(session.syncPolicyMode || "blank") || "blank"},

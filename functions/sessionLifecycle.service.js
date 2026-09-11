@@ -50,13 +50,13 @@ function createSessionLifecycleService(dependencies = {}) {
 }
 
 async function requireSession(uid, workspaceId, sessionId, dependencies = {}) {
-  await dependencies.requireWorkspace(uid, workspaceId);
+  const workspace = await dependencies.requireWorkspace(uid, workspaceId);
   const sessionRef = dependencies.sessionCollection(workspaceId).doc(sessionId);
   const sessionSnap = await sessionRef.get();
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   const data = sessionSnap.data();
   if (data.ownerUid && data.ownerUid !== uid) throw httpError(403, "session_forbidden");
-  return {sessionRef, sessionSnap};
+  return {sessionRef, sessionSnap, workspace};
 }
 
 async function renameSession(uid, workspaceId, sessionId, payload, dependencies = {}) {

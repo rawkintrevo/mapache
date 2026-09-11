@@ -158,6 +158,21 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     mcpServers: {demo: {command: "node", args: ["server.js"]}},
   });
   assert.strictEqual(shellEnv.RUNNER_CAPABILITIES, "{\"terminal\":true,\"preview\":false,\"previewQa\":false,\"functions\":false,\"n64\":false}");
+  assert.strictEqual(shellEnv.MAPACHE_AGENT_UI_VERSION, "");
+  assert.strictEqual(shellEnv.MAPACHE_AGENT_RUNTIME_GENERATION, "");
+
+  const markedAgentEnv = envMap(await sessionRunnerEnv({
+    agentRuntimeGeneration: "7",
+    agentUiVersion: "pi-web-ui-v1",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+    harnessId: "pi",
+    imageKey: "pi-chrome",
+    runnerSessionId: "agent-session",
+    serviceUrl: "https://runner.example",
+    terminalKind: "pi",
+  }));
+  assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_UI_VERSION, "pi-web-ui-v1");
+  assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_RUNTIME_GENERATION, "7");
 
   const previewEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",

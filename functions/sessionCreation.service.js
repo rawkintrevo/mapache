@@ -33,6 +33,11 @@ const {normalizeEnvMap} = require("./env.helpers");
 const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
 const {
+  AGENT_IMAGE_KEY,
+  isMarkedAgentWorkspace,
+  markedAgentSessionMetadata,
+} = require("./agentRuntime.helpers");
+const {
   initialProvisioningMetadata,
   normalizeProvisioningOperationId,
   provisioningSessionId,
@@ -72,6 +77,10 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
 
   const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
   const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
+  const markedAgentWorkspace = isMarkedAgentWorkspace(workspace);
+  if (markedAgentWorkspace && sessionType === "ssh") {
+    throw httpError(400, "agent_workspace_requires_pi_chrome");
+  }
   const sshPayload = sessionType === "ssh" ?
     await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload, dependencies) :
     null;
@@ -90,7 +99,9 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const serviceId = resolveCloudRunServiceId(sessionRef.id);
   let runnerImage;
   try {
-    runnerImage = dependencies.resolveRunnerImage(sshPayload ? {...payload, imageKey: "default"} : payload, DEFAULT_IMAGE);
+    const runnerPayload = sshPayload ? {...payload, imageKey: "default"} :
+      markedAgentWorkspace ? {...payload, imageKey: AGENT_IMAGE_KEY} : payload;
+    runnerImage = dependencies.resolveRunnerImage(runnerPayload, DEFAULT_IMAGE);
   } catch (error) {
     if (error && error.code === "invalid_runner_image") {
       throw httpError(400, "invalid_runner_image", error);
@@ -135,6 +146,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...sessionSourceMetadata(workspace),
     ...sessionSyncPolicyMetadata(workspace),
     ...sessionHomePolicyMetadata(workspace),
+    ...markedAgentSessionMetadata(workspace),
     ...envMetadata,
     environmentEntryIds: [...new Set([
       ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
