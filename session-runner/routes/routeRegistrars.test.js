@@ -108,6 +108,50 @@ test("browser routes retain browser middleware and terminal response contract", 
   assert.equal(shellResponse.body, `<html data-token="signed-token"></html>`);
 });
 
+test("health route exposes checkpoint status without runner error details", async () => {
+  const app = createFakeApp();
+  registerBrowserRoutes({
+    activity: {updateSessionActivity: async () => {}},
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
+    app,
+    browserVncWebSocketPath: () => "/browser/vnc",
+    checkpointPublisher: {status: async () => ({
+      lastCheckpointAt: "2026-09-11T12:00:00.000Z",
+      checkpointError: "checkpoint_upload_failed",
+      internal: "must-not-be-exposed",
+    })},
+    chromeRuntime: {status: () => ({enabled: false})},
+    config: {
+      chromeEnabled: false,
+      previewEnabled: false,
+      runnerCapabilities: {terminal: true},
+      workspaceId: "workspace-1",
+      sessionId: "session-1",
+      bucketName: "bucket",
+      prefix: "prefix",
+    },
+    expressStatic: () => () => {},
+    preview: {capabilityStatus: () => ({enabled: false})},
+    requireBrowserAccess: (req, res, next) => next(),
+    requireBrowserOrRunnerAccess: (req, res, next) => next(),
+    renderTerminalPage: () => "",
+  });
+  const route = app.routes.find(({method, path}) => method === "GET" && path === "/healthz");
+  const response = createResponse();
+  const request = {};
+  route.handlers[0](request, response, () => {});
+  await route.handlers[1](request, response);
+  assert.deepEqual(response.body, {
+    ok: true,
+    workspaceId: "workspace-1",
+    sessionId: "session-1",
+    bucketName: "bucket",
+    prefix: "prefix",
+    lastCheckpointAt: "2026-09-11T12:00:00.000Z",
+    checkpointError: "checkpoint_upload_failed",
+  });
+});
+
 test("workspace routes keep runner-only sync-down protection and response code", async () => {
   const app = createFakeApp();
   registerWorkspaceRoutes({

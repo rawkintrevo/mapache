@@ -75,7 +75,15 @@ directories.
 Upload to immutable unique objects first, then transactionally publish a pointer
 only while generation/instance still owns the workspace. Readers use only the
 published manifest. A partial upload never replaces the last good checkpoint.
-Do not resume the old flat sync writer for the same new-runtime state paths.
+Agent captures use `{storagePrefix}/{generation}/{bootInstanceId}/{captureId}/`
+with a manifest object written after its content objects. Marked-runtime
+workspace sync uses the sibling `workspace-files/{generation}/{bootInstanceId}/`
+namespace and publishes a file manifest containing content hashes and
+tombstones. The Firestore fields `agentRuntimeCheckpoint` and
+`agentRuntimeWorkspaceFiles` are updated only in authority-checked transactions;
+`agentRuntimeLastCheckpointAt` and the normalized
+`agentRuntimeCheckpointError` provide safe status. Do not resume the old flat
+sync writer for the same new-runtime state paths.
 Existing file sync must participate in the same writer-authority checks; Task 14
 defines the manifest and Task 15 must test stale file writes as well as stale agent
 snapshot publication.

@@ -9,7 +9,7 @@ const {createWorkspaceAuthService} = require("./workspaceAuth.service");
 const {generationMatchOptions, isStorageGenerationConflict} = require("./workspaceSyncGeneration.helpers");
 const {normalizeRelativeWorkspacePath} = require("./utils");
 
-function createWorkspaceService({admin, config, db, git, storage}) {
+function createWorkspaceService({admin, checkpointPublisher, checkpointIdentity, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
   const archives = createWorkspaceArchiveService({config, git, pathHelpers, storage});
   const auth = createWorkspaceAuthService({admin, config, db});
@@ -65,6 +65,30 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
     if (!config.bucketName || !config.prefix) return {conflicts: []};
+    if (config.agentRuntimeEnabled && checkpointPublisher?.publishWorkspaceFiles) {
+      const identity = {
+        ...(typeof checkpointIdentity === "function" ? checkpointIdentity() : {}),
+        generation: config.agentRuntimeGeneration,
+        sessionId: config.sessionId,
+        workspaceId: config.workspaceId,
+      };
+      try {
+        const publication = await checkpointPublisher.publishWorkspaceFiles({
+          ...identity,
+          assertCurrentWriter: options.assertCurrentWriter,
+          shouldIgnore: pathHelpers.shouldIgnoreWorkspacePath,
+          sourceRoot: config.workspaceDir,
+        });
+        return {conflicts: [], ...publication};
+      } catch (error) {
+        try {
+          await checkpointPublisher.recordCheckpointError?.(error.code || "checkpoint_workspace_publish_failed", identity);
+        } catch (_statusError) {
+          // Preserve the publication failure; status persistence is best effort.
+        }
+        throw error;
+      }
+    }
     const {directories, files} = await walkWorkspace(config.workspaceDir);
     const desiredRemotePaths = new Set();
 

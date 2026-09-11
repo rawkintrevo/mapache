@@ -4,6 +4,7 @@ function registerBrowserRoutes({
   app,
   admin,
   browserVncWebSocketPath,
+  checkpointPublisher,
   chromeRuntime,
   config,
   activity,
@@ -24,13 +25,16 @@ function registerBrowserRoutes({
     }));
   });
 
-  app.get("/healthz", requireBrowserAccess, (req, res) => {
+  app.get("/healthz", requireBrowserAccess, async (req, res) => {
+    const checkpoint = await checkpointPublisher?.status?.() || {};
     res.json({
       ok: true,
       workspaceId: config.workspaceId,
       sessionId: config.sessionId,
       bucketName: config.bucketName,
       prefix: config.prefix,
+      lastCheckpointAt: checkpoint.lastCheckpointAt || null,
+      checkpointError: checkpoint.checkpointError || null,
     });
   });
 

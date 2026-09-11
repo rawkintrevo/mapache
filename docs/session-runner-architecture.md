@@ -29,7 +29,7 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 - Chrome harness integration: `session-runner/lib/mcpConfig.service.js`, `browserQa.js`, `workspaceSkillCatalog.js`, `seeded-skills/mapache-chrome/`, and `bin/mapache-chrome-status.js`
 - Managed Pi MCP ownership: `session-runner/lib/patchPiMcpAdapter.js`, `piWebUiProcess.js`, and the pinned `upstream/pi-web-ui/patches/0006-single-managed-mcp-path.patch`; the runner materializes `/workspace/.mcp.json`, while the Pi SDK discovers the image-owned adapter exactly once.
 - Managed Pi workspace/history binding: `upstream/pi-web-ui/patches/0007-workspace-root-and-flat-history.patch` fixes the child cwd at `/workspace`, passes the explicit flat `PI_CODING_AGENT_SESSION_DIR` to every SDK session operation, and canonicalizes workspace/history paths before accepting browser control requests. Client IDs retain only display state; they do not select separate transcript roots.
-- Managed Pi state capture: `session-runner/lib/agentSnapshot.service.js` stages complete flat JSONL history, allowlisted non-secret Pi settings, upstream UI state, and only referenced uploads into a checksummed manifest. It validates stable JSON/settings, drops only an incomplete trailing JSONL record during live capture, rejects unsafe symlinks/traversal, and never publishes remotely; checkpoint upload/publication owns the next step.
+- Managed Pi state capture/publication: `session-runner/lib/agentSnapshot.service.js` stages complete flat JSONL history, allowlisted non-secret Pi settings, upstream UI state, and only referenced uploads into a checksummed manifest. `session-runner/lib/agentCheckpoint.service.js` uploads those files as immutable objects and transactionally publishes the pointer against the workspace/session boot authority. It also publishes marked-runtime workspace files as versioned manifests with tombstones; unmarked workspaces retain legacy flat sync. It validates stable JSON/settings, drops only an incomplete trailing JSONL record during live capture, rejects unsafe symlinks/traversal, and exposes only safe checkpoint status fields.
 - GitHub workspace reconstruction: `session-runner/lib/workspaceGithub.service.js`
 - Harness-backed auth materialization: `session-runner/lib/workspaceAuth.service.js`
 - Git facade and manual endpoints: `session-runner/lib/git.js` and `git*.service.js`
@@ -39,6 +39,12 @@ Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, pr
 - Codex workspace guidance and native skill materialization: `session-runner/lib/codex.js`, `session-runner/lib/codexSeededWorkspace.service.js`, and `session-runner/seeded-codex/AGENTS.md`
 
 ## Current Behavior
+
+Checkpoint publication is owned by `session-runner/lib/agentCheckpoint.service.js`.
+It uploads immutable Task 14 captures and marked-runtime workspace files, then
+publishes each pointer only in a generation/boot authority transaction. Workspace
+file manifests carry hashes and tombstones; unmarked workspaces retain legacy
+flat sync. Checkpoint status is exposed through the safe fields on `/healthz`.
 
 Managed pi-web-ui sessions expose `/workspace` as the fixed upstream cwd and use
 the runner-provided `/var/lib/mapache/agent/sessions` as the explicit flat

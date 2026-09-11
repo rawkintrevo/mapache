@@ -53,6 +53,7 @@ const {createGoalsRpcService} = require("./lib/goalsRpc.service");
 const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
+const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 
 const config = createConfig(runnerEnvironment);
@@ -84,13 +85,22 @@ const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 const sshSession = createSshSessionService({config});
-const workspace = createWorkspaceService({admin, config, db, git, storage});
 let piWebUi = null;
 const workspaceAuthority = createWorkspaceAuthority({
   admin,
   config,
   db,
   onLost: () => piWebUi?.stop?.(),
+});
+const checkpointPublisher = createAgentCheckpointService({admin, config, db, storage});
+const workspace = createWorkspaceService({
+  admin,
+  checkpointIdentity: () => ({bootInstanceId: workspaceAuthority.status().bootInstanceId}),
+  checkpointPublisher,
+  config,
+  db,
+  git,
+  storage,
 });
 const workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
@@ -207,6 +217,7 @@ registerBrowserRoutes({
   app,
   browserVncWebSocketPath,
   chromeRuntime,
+  checkpointPublisher,
   config,
   expressStatic: express.static,
   preview,
