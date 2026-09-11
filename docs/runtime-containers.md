@@ -64,6 +64,18 @@ processes, loopback VNC, and CDP to be ready before it opens the session HTTP po
 this bootstrap path require rebuilt `pi-chrome` and `codex-chrome` revisions; existing Cloud Run
 services retain their bundled startup behavior until restarted or recreated.
 
+The `pi-chrome` build also packages the pinned pi-web-ui runtime under
+`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` fetches
+commit `46880b3772591beac91c0c1792bdc79a6fe3671f` (package `0.79.0`), verifies
+the source archive and package/license hashes, applies the checked-in patch
+series, runs the upstream typecheck/tests/build, and copies only generated
+runtime files plus `build-info.json` into the image. The build pins Pi SDK
+`0.84.4` and `pi-mcp-adapter` `2.32.1`; it does not download or install anything
+at runner startup. The generated health descriptor is safe for runtime status
+reporting. Existing Cloud Run sessions do not contain this artifact until they
+receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
+for the staged rollout.
+
 The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-n64`, `pi-chrome`, and `codex-chrome`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`. The `chat` capability is enabled only for `pi-basic`, `pi-web`, and `pi-chrome`; the other images keep Chat disabled. The `goals` capability is currently enabled for those same three Pi images.
 
 Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, `n64`, and `chrome`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.

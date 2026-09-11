@@ -1,0 +1,32 @@
+diff --git a/server/index.ts b/server/index.ts
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -222,8 +222,29 @@ const MANAGED = isManaged();
+ /** PI_WEB_TABS: the tabs this instance offers. null = all of them, as before. */
+ const TABS = parseTabs();
+ 
++function safeBuildDescriptor(): {
++	upstreamCommit: string;
++	packageVersion: string;
++	piSdkVersion: string;
++	piMcpAdapterVersion: string;
++} | null {
++	try {
++		const value = JSON.parse(readFileSync(join(resolvePkgRoot(), "build-info.json"), "utf8")) as Record<string, unknown>;
++		const stringValue = (key: string): string => typeof value[key] === "string" ? value[key] as string : "";
++		const descriptor = {
++			upstreamCommit: stringValue("upstreamCommit"),
++			packageVersion: stringValue("packageVersion"),
++			piSdkVersion: stringValue("piSdkVersion"),
++			piMcpAdapterVersion: stringValue("piMcpAdapterVersion"),
++		};
++		return Object.values(descriptor).every(Boolean) ? descriptor : null;
++	} catch {
++		return null;
++	}
++}
++
+ app.get("/api/health", (_req, res) => {
+-	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE });
++	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE, build: safeBuildDescriptor() });
+ });

@@ -6,9 +6,10 @@ RUN apt-get update \
   && python3 --version \
   && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://pi.dev/install.sh | sh
+RUN npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent@0.84.4 \
+  && test "$(pi --version)" = "0.84.4"
 
-RUN pi install npm:pi-mcp-adapter
+RUN pi install npm:pi-mcp-adapter@2.32.1
 RUN pi install npm:pi-goal-x@0.31.2
 RUN npm install -g chrome-devtools-mcp@1.6.0
 
@@ -16,6 +17,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev \
   && npm install -g @playwright/test
+COPY upstream ./upstream
+RUN node /app/upstream/pi-web-ui/build.mjs --output-dir /opt/mapache/pi-web-ui
 COPY server.js ./
 COPY bin ./bin
 COPY lib ./lib
