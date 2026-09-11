@@ -76,6 +76,34 @@ reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the staged rollout.
 
+The managed pi-web-ui build is compiled with `PI_WEB_BASE_PATH=/agent/`. The
+browser therefore keeps every public asset and application endpoint under the
+embedded prefix while the supervised upstream process continues to listen on
+its internal root at port 8787. Tasks 4–6 own the child process and gateway
+that translate these public paths:
+
+| Public path | Internal pi-web-ui path | Owner |
+| --- | --- | --- |
+| `/agent/` and `/agent/assets/*` | `/` and `/assets/*` | HTTP gateway |
+| `/agent/api/*` | `/api/*` | HTTP gateway |
+| `/agent/themes/*`, `/agent/plugins/*`, `/agent/icons/*`, `/agent/manifest.webmanifest` | matching root-relative upstream path | HTTP gateway |
+| `/agent/ws` | `/ws` | WebSocket gateway |
+
+The only source-level root-relative exception is the favicon, which is patched
+to `./favicon.svg`; Vite emits the module and stylesheet assets with the
+`/agent/` base. The existing `appUrl` helper adds the same prefix to API,
+WebSocket, theme, plugin, file-preview, download, locale, and notification
+URLs. The managed build does not register a service worker. On upgrade it
+unregisters only the exact app-scope `/agent/` registration or a worker whose
+script URL is `/agent/sw.js`, leaving any Mapache parent-scope worker alone.
+
+`PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
+installation, and plugin-catalog installation messages. The managed client
+hides those actions, and the managed server forces `ENGINE=pi` even if a stale
+`PI_WEB_ENGINE=dsh` value is present. Existing installed plugins and ordinary
+agent settings remain available. The build and runtime environment are still
+owned by the runner image and deployment pipeline.
+
 The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-n64`, `pi-chrome`, and `codex-chrome`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`. The `chat` capability is enabled only for `pi-basic`, `pi-web`, and `pi-chrome`; the other images keep Chat disabled. The `goals` capability is currently enabled for those same three Pi images.
 
 Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, `n64`, and `chrome`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.

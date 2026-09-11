@@ -29,6 +29,7 @@
   },
   "build": {
     "nodeMajor": 24,
+    "webBasePath": "/agent/",
     "commands": [
       "npm ci",
       "npm run typecheck",
@@ -38,6 +39,8 @@
     "runtimeRoot": "/opt/mapache/pi-web-ui"
   },
   "patches": [
-    "patches/0001-expose-build-descriptor.patch"
+    "patches/0001-expose-build-descriptor.patch",
+    "patches/0002-managed-engine.patch",
+    "patches/0003-managed-subpath-and-service-worker.patch"
   ]
 }

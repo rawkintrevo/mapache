@@ -1,0 +1,16 @@
+diff --git a/server/index.ts b/server/index.ts
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -217,10 +217,10 @@ function installAuthMiddleware(): void {
+ }
+ 
+ /** 引擎选择：PI_WEB_ENGINE=pi|dsh（默认 pi）。重启生效。 */
+-const ENGINE: "pi" | "dsh" = process.env.PI_WEB_ENGINE === "dsh" ? "dsh" : "pi";
++/** Managed deployments always use the embedded Pi runtime, regardless of a
++ * stale or externally supplied PI_WEB_ENGINE value. */
+ 
+ /** PI_WEB_MANAGED=1: this instance is updated by whoever deploys it. */
+ const MANAGED = isManaged();
++const ENGINE: "pi" | "dsh" = MANAGED ? "pi" : process.env.PI_WEB_ENGINE === "dsh" ? "dsh" : "pi";
+ /** PI_WEB_TABS: the tabs this instance offers. null = all of them, as before. */
+ const TABS = parseTabs();
