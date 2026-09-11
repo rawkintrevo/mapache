@@ -1,5 +1,9 @@
 # Frontend Architecture
 
+Planned replacement: [pi-web-ui integration](./plans/pi-web-ui-integration.md)
+records the agreed pi-chrome-only direction and one-off HubSpot migration.
+It is not implemented; the behavior below describes the current code.
+
 ## Purpose
 
 This page owns the current frontend architecture: state ownership, React rendering boundaries, workflow modules, and UI/component routing.

@@ -34,6 +34,10 @@ Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud terminal
 
 ## Canonical Versus Historical
 
+Active planned implementation: [pi-web-ui sequential checklist](../task_list.md).
+Its [execution guide](./plans/pi-web-ui-tasks/README.md) fixes the implementation
+boundaries and stop rules. It describes planned work, not current runtime behavior.
+
 Active wiki pages under `docs/` are the current source of truth unless they explicitly say they are raw notes or planning material. ADRs under `adrs/` are accepted decision records and are indexed from [decisions.md](./decisions.md). Historical implementation plans remain under [prior_task_lists](./prior_task_lists/) and should not be treated as current architecture.
 
 When active docs disagree with code, verify against the current tree and update the relevant active page in the same change. When active docs disagree with each other and the correct behavior is not obvious, record the uncertainty in the closest active page or `task_list.md` rather than silently choosing a truth.

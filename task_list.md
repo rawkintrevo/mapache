@@ -1,150 +1,80 @@
-# Developer Wiki Refactor Task List
+# pi-web-ui sequential task list
 
-## Goal
+Goal: integrate pi-web-ui into the sole pi-chrome runner, with one active runner
+per workspace, and preserve the HubSpot Chrome session's files and Pi history.
 
-Refactor `docs/` into a developer-facing, LLM-friendly knowledge base. The result should make future agents and maintainers quickly answer:
+Status: planning complete; all implementation tasks are unstarted. These are local
+issue specifications, not GitHub issue numbers. Each link contains the task's
+starting files, implementation steps, acceptance criteria, validation, and scope limits.
 
-- What is this system?
-- Which docs should I read before touching a subsystem?
-- What is canonical versus historical?
-- How should I update the wiki after changing code?
+## Start here
 
-This is a practical "Karpathy-style if you squint" docs pass: preserve useful raw notes, create concise navigable summaries, add strong reading/update protocols, and avoid a heavy generated-docs framework.
+- [Execution guide and suggested implementation-agent goal](docs/plans/pi-web-ui-tasks/README.md)
+- [Fixed product decisions and selected engineering defaults](docs/plans/pi-web-ui-tasks/decisions.md)
+- [Shared interfaces, storage, auth, and lifecycle contracts](docs/plans/pi-web-ui-tasks/contracts.md)
+- [Architecture overview](docs/plans/pi-web-ui-integration.md)
 
-## Scope
+Execute the first unchecked task, in numeric order. All earlier tasks are prerequisites.
+For a whole-checklist goal, verify and commit each task, then continue automatically.
+For a single `next task` request, complete one task. Never mark failed or blocked work
+complete, skip a prerequisite, or invent a missing source ID/credential. Follow the
+linked stop rules. No further product decisions are queued; missing external access
+or contradictory evidence still requires an explicit stop.
 
-- `docs/` is both the raw material and the output wiki.
-- `community/` remains user-facing docs/blog content and is out of scope.
-- `adrs/` remains the decision-record archive unless a task explicitly links or indexes it from `docs/`.
-- `docs/prior_task_lists/` is historical and should stay separate from the active wiki path.
-- Code refactors are out of scope unless needed to support docs validation or local agent skills.
+Difficulty: **easy** means inspection or a small focused change; **medium** means a
+bounded implementation with the design already specified and meaningful tests.
+These are not timing guarantees. Split oversized work into local lettered steps
+within its task file while keeping the root task unchecked.
 
-## Task Sizing
+## Ordered checklist
 
-- `easy`: focused docs edits, index pages, templates, small validation scripts, or skill scaffolding.
-- `medium`: reorganizing several docs, creating cross-linked subsystem pages, or adding docs validation.
-- `large`: broad rewrite of multiple architecture docs or creating automation that changes docs structure.
-- `human`: product/architecture decisions, final information architecture approval, or resolving unclear source-of-truth conflicts.
+- [ ] 1. **[Inventory the deployment and identify the HubSpot source](docs/plans/pi-web-ui-tasks/01-inventory-and-protect-source.md)** - easy
+- [ ] 2. **[Add the pinned upstream build and patch manifest](docs/plans/pi-web-ui-tasks/02-pin-upstream-build.md)** - medium
+- [ ] 3. **[Configure the managed app for the agent subpath](docs/plans/pi-web-ui-tasks/03-managed-embedded-build.md)** - medium
+- [ ] 4. **[Launch pi-web-ui as a supervised runner child](docs/plans/pi-web-ui-tasks/04-launch-upstream-process.md)** - medium
+- [ ] 5. **[Add the authenticated HTTP gateway for the embedded app](docs/plans/pi-web-ui-tasks/05-http-gateway.md)** - medium
+- [ ] 6. **[Proxy agent WebSockets alongside existing runner sockets](docs/plans/pi-web-ui-tasks/06-websocket-gateway.md)** - medium
+- [ ] 7. **[Expose gated signed agent access URLs from Functions](docs/plans/pi-web-ui-tasks/07-signed-agent-access-api.md)** - medium
+- [ ] 8. **[Embed the agent canvas and renew access without reload](docs/plans/pi-web-ui-tasks/08-iframe-and-renewal.md)** - medium
+- [ ] 9. **[Keep credential mutations in Mapache](docs/plans/pi-web-ui-tasks/09-credential-ownership.md)** - medium
+- [ ] 10. **[Connect the existing MCP adapter to the SDK runtime](docs/plans/pi-web-ui-tasks/10-single-mcp-path.md)** - medium
+- [ ] 11. **[Bind upstream projects and history to one workspace](docs/plans/pi-web-ui-tasks/11-workspace-binding.md)** - medium
+- [ ] 12. **[Serialize workspace Start requests](docs/plans/pi-web-ui-tasks/12-workspace-start-reservation.md)** - medium
+- [ ] 13. **[Fence duplicate and stale runner instances](docs/plans/pi-web-ui-tasks/13-boot-instance-fencing.md)** - medium
+- [ ] 14. **[Capture versioned agent-state snapshots](docs/plans/pi-web-ui-tasks/14-capture-agent-state.md)** - medium
+- [ ] 15. **[Publish checkpoints without stale-writer overwrite](docs/plans/pi-web-ui-tasks/15-publish-checkpoints.md)** - medium
+- [ ] 16. **[Restore saved state before starting the agent](docs/plans/pi-web-ui-tasks/16-restore-before-start.md)** - medium
+- [ ] 17. **[Restore native Goal information in a paused state](docs/plans/pi-web-ui-tasks/17-persist-paused-native-goals.md)** - medium
+- [ ] 18. **[Stop upstream agent and tool writers through a narrow control hook](docs/plans/pi-web-ui-tasks/18-quiesce-runtime.md)** - medium
+- [ ] 19. **[Schedule saves and require a final checkpoint on manual Stop](docs/plans/pi-web-ui-tasks/19-checkpoint-and-stop.md)** - medium
+- [ ] 20. **[Make Cloud Run lifetime independent of browser traffic](docs/plans/pi-web-ui-tasks/20-cloud-run-lifecycle.md)** - medium
+- [ ] 21. **[Show runtime and persistence failures in the session shell](docs/plans/pi-web-ui-tasks/21-recovery-status-ui.md)** - medium
+- [ ] 22. **[Verify the complete local runtime before cloud rollout](docs/plans/pi-web-ui-tasks/22-local-vertical-slice.md)** - medium
+- [ ] 23. **[Build the one-off HubSpot export and manifest tool](docs/plans/pi-web-ui-tasks/23-one-off-export-tool.md)** - medium
+- [ ] 24. **[Import and validate HubSpot files and history](docs/plans/pi-web-ui-tasks/24-one-off-import-tool.md)** - medium
+- [ ] 25. **[Write bounded hosted QA cases and migration checks](docs/plans/pi-web-ui-tasks/25-compose-hosted-qa.md)** - medium
+- [ ] 26. **[Deploy a pinned canary and preview UI](docs/plans/pi-web-ui-tasks/26-deploy-isolated-canary.md)** - medium
+- [ ] 27. **[Run hosted functional browser QA](docs/plans/pi-web-ui-tasks/27-hosted-functional-qa.md)** - medium
+- [ ] 28. **[Run hosted persistence and failure-recovery QA](docs/plans/pi-web-ui-tasks/28-hosted-lifecycle-qa.md)** - medium
+- [ ] 29. **[Rehearse the one-off migration from a consistent source backup](docs/plans/pi-web-ui-tasks/29-rehearse-hubspot-migration.md)** - medium
+- [ ] 30. **[Move the HubSpot workspace to the validated runner](docs/plans/pi-web-ui-tasks/30-cut-over-hubspot.md)** - medium
+- [ ] 31. **[Make the embedded app the primary workspace surface](docs/plans/pi-web-ui-tasks/31-simplify-workspace-shell.md)** - medium
+- [ ] 32. **[Make pi-chrome the sole backend creation path](docs/plans/pi-web-ui-tasks/32-default-pi-chrome-backend.md)** - medium
+- [ ] 33. **[Remove the old Chat, Goals, and duplicate agent controls](docs/plans/pi-web-ui-tasks/33-retire-legacy-agent-controls.md)** - medium
+- [ ] 34. **[Remove unsupported runner families and build paths](docs/plans/pi-web-ui-tasks/34-retire-other-runner-builds.md)** - medium
+- [ ] 35. **[Validate the final code and reconcile developer documentation](docs/plans/pi-web-ui-tasks/35-final-validation-and-docs.md)** - medium
+- [ ] 36. **[Publish and verify the final one-runner release](docs/plans/pi-web-ui-tasks/36-publish-final-release.md)** - medium
+- [ ] 37. **[Clean up QA resources and close the implementation checklist](docs/plans/pi-web-ui-tasks/37-cleanup-and-handoff.md)** - easy
 
-## Source Documents
+## Completion notes
 
-Before implementation tasks, read:
+Add each task's dated Completed or Blocked note immediately below its checkbox,
+including verification and deployment outcome when applicable. Store sensitive
+migration inventories/backups outside Git. Keep screenshots/traces in the ignored
+artifact locations specified by the execution guide.
 
-- `AGENTS.md`
-- `docs/app-overview.md`
-- `docs/runtime-containers.md`
-- `docs/github-workspaces.md`
-- `docs/testing.md`
-- `docs/ui-components.md`
-- `docs/STYLE_GUIDE.md`
-- The focused docs for the subsystem being edited.
+## Previous checklist
 
-## Wiki Principles
-
-- Optimize for agent routing first: every doc should say when to read it and what it owns.
-- Keep summaries short and link to deeper raw/source pages.
-- Historical task lists belong under `docs/prior_task_lists/`, not in the active navigation path.
-- Prefer one canonical page per subsystem, with explicit "related docs" links.
-- When docs disagree, create a task or note the uncertainty instead of silently choosing a truth.
-- Do not move or rewrite `community/` content in this phase.
-
-## Tasks
-
-- [x] 1. **Inventory and classify current docs** - easy
-  - List every file under `docs/` and `adrs/`.
-  - Classify each as active wiki, raw source material, historical archive, generated/reference asset, or stale candidate.
-  - Flag broken links and missing referenced pages, including the current `docs/css-decomposition.md` reference.
-
-- [x] 2. **Define the target wiki information architecture** - human
-  - Decide the top-level wiki sections and naming convention.
-  - Keep `docs/prior_task_lists/` as archive-only.
-  - Decide whether ADRs stay outside `docs/` with a wiki index or move under a docs decision-log section.
-
-- [x] 3. **Create the wiki entrypoint** - easy
-  - Add `docs/README.md` as the first file an agent should read.
-  - Include a subsystem routing table: frontend, backend, runner, GitHub workspaces, Pi auth/packages/skills, testing, deployment, styling.
-  - Include "read these before changing X" guidance.
-
-- [x] 4. **Create an LLM reading protocol** - easy
-  - Add a focused page such as `docs/llm-reading-protocol.md`.
-  - Define how agents should choose docs, when to read raw notes, and when to stop reading.
-  - Include guidance for resolving stale or conflicting docs.
-
-- [x] 5. **Create an LLM wiki update protocol** - easy
-  - Add a focused page such as `docs/wiki-update-protocol.md`.
-  - Define when docs must be updated, how to choose the page, and how to keep edits scoped.
-  - Include a checklist for architecture/runtime/deployment/UI workflow changes.
-
-- [x] 6. **Add docs page templates** - easy
-  - Add `docs/templates/wiki-page.md`.
-  - Include fields for purpose, read-when, canonical owner, related code paths, related docs, and last verified assumptions.
-  - Include a short subsystem-page template and a decision-note template.
-
-- [x] 7. **Add local agent skills for wiki usage** - medium
-  - Create `.agents/skills/read_developer_wiki/SKILL.md`.
-  - Create `.agents/skills/update_developer_wiki/SKILL.md`.
-  - The read skill should route agents through `docs/README.md` and focused subsystem docs.
-  - The update skill should enforce the wiki update protocol and discourage broad rewrites.
-
-- [x] 8. **Create a subsystem map page** - medium
-  - Add or refactor a page that maps major code areas to docs and runtime responsibilities.
-  - Include `src/`, `functions/`, `session-runner/`, Firebase config/rules, GitHub Actions, `community/`, and `adrs/`.
-  - Keep it shorter than `app-overview.md`; link deeper pages instead of duplicating them.
-
-- [x] 9. **Split or slim `docs/app-overview.md`** - medium
-  - Keep it as a concise product/system overview.
-  - Move detailed backend/frontend/runtime/deployment sections into focused pages where they belong.
-  - Remove stale "planned" language for implemented package/extension behavior.
-
-- [x] 10. **Create or repair focused architecture pages** - medium
-  - Ensure canonical pages exist for frontend architecture, backend/API architecture, session runner architecture, deployment, testing, and styling.
-  - Create `docs/css-decomposition.md` or remove/replace references to it.
-  - Link each focused page from `docs/README.md`.
-
-- [x] 11. **Normalize cross-links and related-doc sections** - medium
-  - Add consistent "Related docs" sections to active wiki pages.
-  - Link ADRs from relevant active docs instead of requiring agents to discover them manually.
-  - Make historical task lists discoverable only through an archive note.
-
-- [x] 12. **Separate active knowledge from raw/historical notes** - medium
-  - Move or relabel any remaining planning/task-list material that should not be treated as current architecture.
-  - Keep useful raw notes accessible from active pages when they explain why a decision exists.
-  - Do not delete historical material unless it is clearly duplicate junk.
-
-- [x] 13. **Add docs validation** - medium
-  - Add a lightweight local check for broken relative links in `docs/`, `adrs/`, and `AGENTS.md`.
-  - Include the check in the maintenance docs or root verification task once stable.
-  - Avoid external network requirements.
-
-- [x] 14. **Update `AGENTS.md` to use the wiki** - easy
-  - Point agents at `docs/README.md` as the developer-wiki entrypoint.
-  - Reference the read/update wiki skills once they exist.
-  - Keep the existing docs/community ownership boundary.
-
-- [x] 15. **Review docs for stale implementation claims** - medium
-  - Search for "planned", "future", "current", and old file paths.
-  - Verify claims against the current tree before editing.
-  - Create follow-up tasks for anything that requires code knowledge beyond docs cleanup.
-
-- [x] 16. **Finalize the phase 2 handoff checklist** - easy
-  - Mark completed wiki tasks.
-  - List remaining docs uncertainties.
-  - Record the expected workflow for future agents: read wiki, change code, update wiki, run docs validation.
-
-## Phase 2 Handoff
-
-Completed: 2026-06-17 - Refactored `docs/` into an active developer wiki with entrypoint routing, reading/update protocols, templates, local wiki skills, subsystem map, focused frontend/backend/runtime/deployment/styling pages, ADR index, archive note, link validation, and updated agent instructions.
-
-Remaining docs uncertainties:
-
-- `docs/pi-extension-manager.md` still records open implementation decisions for package cache archive shape, operation persistence, Pi package API integration, user-scoped package detail, and whether `.pi/settings.json` should be hidden in Files UI.
-- ADRs still contain historical "planned/future" wording by design; do not rewrite accepted decision history unless superseding it with a new decision note or ADR.
-- Historical task lists under `docs/prior_task_lists/` still mention old paths and plans by design; use active wiki pages for current architecture.
-
-Expected future workflow:
-
-1. Read `docs/README.md`.
-2. Follow `docs/llm-reading-protocol.md` to choose focused subsystem docs.
-3. Change code or docs in the owning subsystem.
-4. Follow `docs/wiki-update-protocol.md` before handoff.
-5. Run `npm run docs:check` for docs edits and `npm run check` for full local verification when feasible.
+The completed developer-wiki refactor checklist is preserved in
+[the historical archive](docs/prior_task_lists/developer-wiki-refactor-completed-2026-06-17.md).
+It is not part of this implementation goal.
