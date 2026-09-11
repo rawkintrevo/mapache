@@ -42,6 +42,7 @@
     "patches/0001-expose-build-descriptor.patch",
     "patches/0002-managed-engine.patch",
     "patches/0003-managed-subpath-and-service-worker.patch",
-    "patches/0004-embedded-agent-renewal.patch"
+    "patches/0004-embedded-agent-renewal.patch",
+    "patches/0005-managed-credential-ownership.patch"
   ]
 }

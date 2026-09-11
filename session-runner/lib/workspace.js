@@ -180,6 +180,7 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     findArchiveFile: archives.findArchiveFile,
     materializeAuthNow: auth.materializeAuthNow,
     prepareWorkspaceSource,
+    secretFileInventory: auth.secretFileInventory,
     extractStorageArchive: archives.extractStorageArchive,
     syncArchivesDown: archives.syncArchivesDown,
     syncArchivesUp: archives.syncArchivesUp,

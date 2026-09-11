@@ -133,11 +133,25 @@ closes live pairs when access expires. Chrome VNC, terminal, shell, Chat, and
 metrics upgrades remain separate dispatcher branches.
 
 `PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
-installation, and plugin-catalog installation messages. The managed client
-hides those actions, and the managed server forces `ENGINE=pi` even if a stale
-`PI_WEB_ENGINE=dsh` value is present. Existing installed plugins and ordinary
-agent settings remain available. The build and runtime environment are still
-owned by the runner image and deployment pipeline.
+installation, plugin-catalog installation, and provider-credential mutation
+messages. Credential-bearing model probes and saves are also rejected; the
+server omits API keys and secret headers from managed model-config responses
+while preserving existing server-side secrets for metadata-only edits. The
+managed client replaces upstream credential entry points with a Mapache-owned
+explanation, while model selection and non-secret model metadata remain usable.
+The managed server forces `ENGINE=pi` even if a stale `PI_WEB_ENGINE=dsh` value
+is present. Existing installed plugins and ordinary agent settings remain
+available. The build and runtime environment are still owned by the runner
+image and deployment pipeline.
+
+Managed auth is materialized from the canonical Mapache provider document into
+`/var/lib/mapache/agent/pi/auth.json` after workspace restore and before the
+supervised child starts. Restored `$HOME/.pi/agent/auth.json` is never imported
+as managed input, and a stale `/var/lib/mapache/agent/pi/provider-keys.json` is
+removed. `workspaceAuth.service.js` publishes a path-only, capture-excluded
+inventory for native auth, provider keys, `models.json`, Pi MCP OAuth state,
+GitHub CLI hosts, and the legacy restored auth path so the later capture helper
+can exclude every known secret-bearing location.
 
 The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-n64`, `pi-chrome`, and `codex-chrome`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`. The `chat` capability is enabled only for `pi-basic`, `pi-web`, and `pi-chrome`; the other images keep Chat disabled. The `goals` capability is currently enabled for those same three Pi images.
 
@@ -205,7 +219,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
 - `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
-- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization lives in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
+- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization and secret-file inventory live in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
 - `git.js` composes runner Git behavior. Manual status/stage/commit/pull/push/PR preparation stays in the facade, while automatic Pi branch/commit/push/PR lifecycle lives in `gitAutomation.service.js`. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it. Preview log/SSE collection and static share export similarly live in `previewLog.service.js` and `previewShare.service.js`, leaving `preview.js` as the mode/config facade.
 - `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`; workspace skill CRUD and recursive native/shared/user-root discovery live in `workspaceSkill.service.js`; workspace subagent CRUD lives in `workspaceSubagent.service.js`; seeded skill file creation lives in `piSeededSkills.service.js`; the managed `pi-goal-x` declaration reconciliation lives in `goalsPackageBootstrap.js`; and shared package/skill validation helpers live in `piValidation.helpers.js`.
 - `harnesses/index.js` and `harnesses/metadata.js` resolve the active runner harness and define which auth, MCP, skill, package, and subagent hooks are supported at startup.
