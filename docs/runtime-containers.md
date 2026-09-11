@@ -124,8 +124,13 @@ redirect, the access cookie is scoped to `/agent/`, upstream cookies and
 off-origin redirects are discarded, and state-changing requests require the
 runner's exact Origin. The gateway streams request/response bodies and Range
 headers while enforcing the upstream 10 MiB JSON/body limit; `/agent/api/health`
-is not a public authentication bypass. WebSocket forwarding remains in the
-central upgrade dispatcher and is added by the following integration task.
+is not a public authentication bypass. The central noServer upgrade dispatcher
+maps `/agent/ws` to the child's `/ws` and authenticates the signed audience,
+generation, expiry, and exact Origin before opening the child connection. It
+forwards message payloads with bounded backpressure, strips public headers and
+query credentials, injects the private token, closes both sides together, and
+closes live pairs when access expires. Chrome VNC, terminal, shell, Chat, and
+metrics upgrades remain separate dispatcher branches.
 
 `PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
 installation, and plugin-catalog installation messages. The managed client

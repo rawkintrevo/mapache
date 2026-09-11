@@ -4,6 +4,7 @@ function createWebSocketUpgradeRouter({
   terminalWss,
   browserWss,
   chatWss,
+  agentWebSocket,
   metricsWss,
   shellWss,
   hasBrowserAccess,
@@ -35,6 +36,14 @@ function createWebSocketUpgradeRouter({
         return;
       }
       handleUpgrade(chatWss, request, socket, head);
+      return;
+    }
+    if (pathname === "/agent/ws") {
+      if (typeof agentWebSocket !== "function") {
+        rejectUpgrade(socket);
+        return;
+      }
+      agentWebSocket(request, socket, head);
       return;
     }
     if (pathname === "/metrics") {

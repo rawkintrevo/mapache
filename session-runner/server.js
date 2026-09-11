@@ -52,6 +52,7 @@ const {createGoalsBridgeService} = require("./lib/goalsProtocol");
 const {createGoalsRpcService} = require("./lib/goalsRpc.service");
 const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
+const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
@@ -71,6 +72,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({noServer: true});
 const browserWss = new WebSocketServer({noServer: true});
 const shellWss = new WebSocketServer({noServer: true});
+const agentWss = new WebSocketServer({noServer: true, maxPayload: 256 * 1024 * 1024});
 const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
 const chromeRuntime = createChromeRuntime(config, {
@@ -138,6 +140,14 @@ const piWebUi = createPiWebUiProcess(config, {
 });
 const agentGateway = createAgentGateway({
   accessVerifier: agentAccess,
+  enabled: config.agentRuntimeEnabled,
+  getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
+  upstreamHost: config.piWebUiHost,
+  upstreamPort: config.piWebUiPort,
+});
+const agentWebSocket = createAgentWebSocketGateway({
+  accessVerifier: agentAccess,
+  clientWss: agentWss,
   enabled: config.agentRuntimeEnabled,
   getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
   upstreamHost: config.piWebUiHost,
@@ -233,6 +243,7 @@ browserWss.on("connection", (socket) => {
 });
 
 server.on("upgrade", createWebSocketUpgradeRouter({
+  agentWebSocket: agentWebSocket.handleUpgrade,
   chatWss: piChat.server,
   metricsWss: resourceMetricsSocket.server,
   shellWss,

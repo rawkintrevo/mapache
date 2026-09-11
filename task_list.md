@@ -3,7 +3,7 @@
 Goal: integrate pi-web-ui into the sole pi-chrome runner, with one active runner
 per workspace, and preserve the HubSpot Chrome session's files and Pi history.
 
-Status: implementation in progress; Tasks 1–5 are complete. These are local
+Status: implementation in progress; Tasks 1–6 are complete. These are local
 issue specifications, not GitHub issue numbers. Each link contains the task's
 starting files, implementation steps, acceptance criteria, validation, and scope limits.
 
@@ -38,7 +38,8 @@ within its task file while keeping the root task unchecked.
   - Completed: 2026-09-11 — added the marked-runtime config/state contract and `session-runner/lib/piWebUiProcess.js`, which starts exactly one loopback-only pinned child after restore/materialization, waits for authenticated local health, and performs bounded SIGTERM/SIGKILL shutdown without respawn or token logging. Marked runners disable the legacy Pi PTY/TUI, Chat, Goals bridge/RPC, and package declaration path; unmarked sessions retain existing behavior. Focused and aggregate session-runner tests passed (263 before the final Goals guard, then the focused guard test), lint and `npm run docs:check` passed, and local `Dockerfile.pi-chrome` build/Chrome smoke plus in-container managed health/stop smoke passed. Evidence: `artifacts/qa/pi-web-ui/task-4/README.md`. No Cloud Run service was launched or deployed. Task 5 should use the fixed internal `127.0.0.1:8787` process and marker/state paths; no storage or provisioning changes were made.
 - [x] 5. **[Add the authenticated HTTP gateway for the embedded app](docs/plans/pi-web-ui-tasks/05-http-gateway.md)** - medium
   - Completed: 2026-09-11 — added the authenticated `/agent` HTTP gateway before the runner JSON parser, with signed session/audience/generation verification, scoped bootstrap cookie, private-token injection, exact-Origin mutation checks, traversal and redirect fencing, upstream-cookie filtering, streamed bodies, Range preservation, and a 10 MiB request bound based on the pinned upstream Express limit. Focused gateway/access tests passed (9), aggregate runner tests passed (269), lint and `npm run docs:check` passed. Evidence: `artifacts/qa/pi-web-ui/task-5/README.md`. No Cloud Run service was launched or deployed. Task 6 owns WebSocket forwarding.
-- [ ] 6. **[Proxy agent WebSockets alongside existing runner sockets](docs/plans/pi-web-ui-tasks/06-websocket-gateway.md)** - medium
+- [x] 6. **[Proxy agent WebSockets alongside existing runner sockets](docs/plans/pi-web-ui-tasks/06-websocket-gateway.md)** - medium
+  - Completed: 2026-09-11 — added `session-runner/lib/agentWebSocketGateway.js` and routed `/agent/ws` through the central noServer dispatcher to the fixed loopback `/ws`, with signed session/audience/generation/expiry and exact-Origin checks before upstream connection, private-token-only headers, query/cookie stripping, bounded message backpressure, paired close handling, and expiry fencing. Fake-upstream hello/ready/snapshot, terminal/metrics coexistence, rejection, and expiry tests passed; aggregate runner tests passed (271), lint and `npm run docs:check` passed. Evidence: `artifacts/qa/pi-web-ui/task-6/README.md`. No Cloud Run service was launched or deployed. Task 7 owns signed access API issuance.
 - [ ] 7. **[Expose gated signed agent access URLs from Functions](docs/plans/pi-web-ui-tasks/07-signed-agent-access-api.md)** - medium
 - [ ] 8. **[Embed the agent canvas and renew access without reload](docs/plans/pi-web-ui-tasks/08-iframe-and-renewal.md)** - medium
 - [ ] 9. **[Keep credential mutations in Mapache](docs/plans/pi-web-ui-tasks/09-credential-ownership.md)** - medium
