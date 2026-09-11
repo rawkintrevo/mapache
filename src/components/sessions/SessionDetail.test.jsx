@@ -27,9 +27,10 @@ function renderDetail(overrides = {}, options = {}) {
         sshForwards={{}}
         workspaceId="workspace-1"
         workspaceSessions={options.workspaceSessions || [currentSession]}
-        onGetSessionAccessUrls={vi.fn().mockResolvedValue({
+        onGetSessionAccessUrls={vi.fn().mockResolvedValue(options.accessUrls || {
           terminalUrl: "https://runner.example/?mapache_access=terminal-token",
           browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
+          agentUrl: "https://runner.example/agent/?mapache_access=agent-token",
         })}
         onResizeSession={vi.fn()}
         onRetryProvisioningSession={options.onRetryProvisioningSession}
@@ -61,6 +62,27 @@ describe("SessionDetail Chrome workflow", () => {
         "src",
         "https://runner.example/browser/?mapache_access=browser-token",
     );
+  });
+
+  test("mounts the Agent canvas only when signed agent access is supplied", async () => {
+    const user = userEvent.setup();
+    renderDetail({name: "Embedded agent", capabilities: {terminal: true, preview: false, chrome: true}});
+
+    const agentTab = await screen.findByRole("tab", {name: "Agent"});
+    const agentFrame = screen.getByTitle("Agent Embedded agent");
+    await user.click(screen.getByRole("tab", {name: "Chrome"}));
+    expect(screen.getByTitle("Agent Embedded agent")).toBe(agentFrame);
+    await user.click(agentTab);
+    expect(screen.getByTitle("Agent Embedded agent")).toBe(agentFrame);
+  });
+
+  test("does not offer Agent when the access response omits agentUrl", async () => {
+    renderDetail({name: "Legacy Chrome", capabilities: {terminal: true, preview: false, chrome: true}}, {accessUrls: {
+      terminalUrl: "https://runner.example/?mapache_access=terminal-token",
+      browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
+    }});
+    expect(await screen.findByRole("tab", {name: "Chrome"})).toBeInTheDocument();
+    expect(screen.queryByRole("tab", {name: "Agent"})).not.toBeInTheDocument();
   });
 
   test("does not add a Chrome canvas to a normal terminal session", () => {

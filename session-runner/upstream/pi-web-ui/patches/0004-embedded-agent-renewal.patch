@@ -1,0 +1,269 @@
+diff --git a/tests/unit/embedded-agent-bridge.test.ts b/tests/unit/embedded-agent-bridge.test.ts
+new file mode 100644
+index 0000000..0ce60ba
+--- /dev/null
++++ b/tests/unit/embedded-agent-bridge.test.ts
+@@ -0,0 +1,36 @@
++import { describe, expect, it } from "vitest";
++import {
++	EMBEDDED_AGENT_BRIDGE_VERSION,
++	isValidAgentAccessUrl,
++	parentOrigin,
++	parseAgentParentMessage,
++} from "../../web/src/embedded-agent-bridge";
++
++describe("embedded agent bridge", () => {
++	it("accepts only the typed access message", () => {
++		expect(parseAgentParentMessage({
++			type: "mapache.agent.access",
++			version: EMBEDDED_AGENT_BRIDGE_VERSION,
++			agentUrl: "https://runner.example/agent/?mapache_access=signed",
++		})).toEqual({
++			type: "mapache.agent.access",
++			version: 1,
++			agentUrl: "https://runner.example/agent/?mapache_access=signed",
++		});
++		expect(parseAgentParentMessage({type: "mapache.agent.access", version: 2, agentUrl: "https://runner.example/agent/"})).toBeNull();
++		expect(parseAgentParentMessage({type: "mapache.agent.access", version: 1, agentUrl: "https://evil.example/agent/?mapache_access=x"})).not.toBeNull();
++	});
++
++	it("validates renewal URL origin, path, and exactly one access query", () => {
++		const current = "https://runner.example/agent/";
++		expect(isValidAgentAccessUrl("https://runner.example/agent/?mapache_access=one", current, "/agent/")).toBe(true);
++		expect(isValidAgentAccessUrl("https://evil.example/agent/?mapache_access=one", current, "/agent/")).toBe(false);
++		expect(isValidAgentAccessUrl("https://runner.example/api/?mapache_access=one", current, "/agent/")).toBe(false);
++		expect(isValidAgentAccessUrl("https://runner.example/agent/?mapache_access=one&mapache_access=two", current, "/agent/")).toBe(false);
++	});
++
++	it("derives an exact parent origin from the referrer", () => {
++		expect(parentOrigin("https://mapache.tools/app?session=one")).toBe("https://mapache.tools");
++		expect(parentOrigin("not a URL")).toBe("");
++	});
++});
+diff --git a/web/src/App.tsx b/web/src/App.tsx
+index bdab3cb..119202e 100644
+--- a/web/src/App.tsx
++++ b/web/src/App.tsx
+@@ -47,6 +47,7 @@ import { projectNameFromCwd, useProjectTitle } from "./title-settings";
+ import { notify } from "./notify";
+ import { useTheme } from "./theme";
+ import { useWallpaperEffect } from "./wallpaper";
++import { installEmbeddedAgentBridge } from "./embedded-agent-bridge";
+ 
+ export interface PendingAttachment {
+ 	path: string;
+@@ -170,6 +171,7 @@ export function App() {
+ 	const t = useT();
+ 	const { locale } = useI18n();
+ 	const { chat, send, dismissNotice, pushNotice, terminal } = useChat();
++	useEffect(() => installEmbeddedAgentBridge(), []);
+ 	// 快捷短语 seeding：首次看到空列表 → 按界面语言填一批内置常用短语，之后即为用户
+ 	// 数据（增删改/恢复默认/关闭都在设置里）。「已 seed」标记存服务端全局
+ 	// （settings.quickPhrasesSeeded，非浏览器 localStorage）——clientId 在
+diff --git a/web/src/embedded-agent-bridge.ts b/web/src/embedded-agent-bridge.ts
+new file mode 100644
+index 0000000..29bac43
+--- /dev/null
++++ b/web/src/embedded-agent-bridge.ts
+@@ -0,0 +1,123 @@
++import { appBase } from "./base-url";
++
++export const EMBEDDED_AGENT_BRIDGE_VERSION = 1 as const;
++export const AGENT_ACCESS_RENEWED_EVENT = "mapache-agent-access-renewed";
++export type AgentRenewalReason = "expired" | "bootstrap" | "connection-error";
++
++export type AgentParentMessage = {
++	type: "mapache.agent.access";
++	version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++	agentUrl: string;
++};
++
++export type AgentChildMessage =
++	| {
++			type: "mapache.agent.ready";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++		}
++	| {
++			type: "mapache.agent.renewal-request";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++			reason: AgentRenewalReason;
++		}
++	| {
++			type: "mapache.agent.status";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++			status: "access-renewed" | "access-error";
++			error?: "access_refresh_failed";
++		};
++
++type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
++
++export function parseAgentParentMessage(value: unknown): AgentParentMessage | null {
++	if (!value || typeof value !== "object") return null;
++	const candidate = value as Partial<AgentParentMessage>;
++	if (candidate.version !== EMBEDDED_AGENT_BRIDGE_VERSION || candidate.type !== "mapache.agent.access") return null;
++	if (typeof candidate.agentUrl !== "string" || candidate.agentUrl.length === 0 || candidate.agentUrl.length > 4096) return null;
++	return { type: candidate.type, version: candidate.version, agentUrl: candidate.agentUrl };
++}
++
++export function parentOrigin(referrer: string): string {
++	if (!referrer) return "";
++	try {
++		return new URL(referrer).origin;
++	} catch {
++		return "";
++	}
++}
++
++export function isValidAgentAccessUrl(value: string, currentUrl: string, expectedPath: string): boolean {
++	try {
++		const target = new URL(value, currentUrl);
++		const current = new URL(currentUrl);
++		return target.origin === current.origin && target.pathname === expectedPath &&
++			target.searchParams.getAll("mapache_access").length === 1 &&
++			target.searchParams.get("mapache_access") !== "";
++	} catch {
++		return false;
++	}
++}
++
++export async function refreshEmbeddedAgentAccess(
++	agentUrl: string,
++	{fetchImpl = globalThis.fetch, currentUrl = globalThis.location?.href || ""}: {fetchImpl?: FetchLike; currentUrl?: string} = {},
++): Promise<boolean> {
++	const expected = new URL(appBase(), currentUrl || "http://localhost/agent/");
++	if (!isValidAgentAccessUrl(agentUrl, currentUrl || expected.href, expected.pathname)) return false;
++	try {
++		const response = await fetchImpl(agentUrl, {
++			cache: "no-store",
++			credentials: "include",
++			redirect: "follow",
++		});
++		if (!response.ok) return false;
++		globalThis.window?.dispatchEvent(new Event(AGENT_ACCESS_RENEWED_EVENT));
++		return true;
++	} catch {
++		return false;
++	}
++}
++
++export function postAgentBridgeMessage(message: AgentChildMessage): boolean {
++	if (typeof window === "undefined" || window.parent === window) return false;
++	const origin = parentOrigin(document.referrer);
++	if (!origin) return false;
++	window.parent.postMessage(message, origin);
++	return true;
++}
++
++export function requestEmbeddedAgentAccess(reason: AgentRenewalReason): boolean {
++	if (reason !== "expired" && reason !== "bootstrap" && reason !== "connection-error") return false;
++	return postAgentBridgeMessage({
++		type: "mapache.agent.renewal-request",
++		version: EMBEDDED_AGENT_BRIDGE_VERSION,
++		reason,
++	});
++}
++
++export function installEmbeddedAgentBridge(): () => void {
++	if (typeof window === "undefined" || window.parent === window) return () => {};
++	const expectedOrigin = parentOrigin(document.referrer);
++	if (!expectedOrigin) return () => {};
++	const parent = window.parent;
++	const onMessage = (event: MessageEvent<unknown>) => {
++		if (event.source !== parent || event.origin !== expectedOrigin) return;
++		const message = parseAgentParentMessage(event.data);
++		if (!message) return;
++		void refreshEmbeddedAgentAccess(message.agentUrl).then((ok) => {
++			postAgentBridgeMessage(ok ? {
++				type: "mapache.agent.status",
++				version: EMBEDDED_AGENT_BRIDGE_VERSION,
++				status: "access-renewed",
++			} : {
++				type: "mapache.agent.status",
++				version: EMBEDDED_AGENT_BRIDGE_VERSION,
++				status: "access-error",
++				error: "access_refresh_failed",
++			});
++		});
++	};
++	window.addEventListener("message", onMessage);
++	postAgentBridgeMessage({type: "mapache.agent.ready", version: EMBEDDED_AGENT_BRIDGE_VERSION});
++	return () => window.removeEventListener("message", onMessage);
++}
+diff --git a/web/src/use-chat.ts b/web/src/use-chat.ts
+index b54b530..c2bab1f 100644
+--- a/web/src/use-chat.ts
++++ b/web/src/use-chat.ts
+@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
+ import { randomUuid } from "./uuid";
+ import { withToken } from "./auth-token";
+ import { appUrl } from "./base-url";
++import { AGENT_ACCESS_RENEWED_EVENT, requestEmbeddedAgentAccess } from "./embedded-agent-bridge";
+ import type {
+ 	ClientMessage,
+ 	BgServer,
+@@ -834,6 +835,7 @@ export function useChat() {
+ 	const bridgeRef = useRef(makeTerminalBridge());
+ 	/** Reconnect backoff counter — ref so it never causes re-renders. */
+ 	const retryRef = useRef(0);
++	const reconnectAfterAccessRef = useRef(false);
+ 	/** Pending reconnect timer. */
+ 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ 	/** False once the hook is unmounted/cleaned up — stops stale onclose handlers from reconnecting. */
+@@ -1256,7 +1258,7 @@ export function useChat() {
+ 			}
+ 		};
+ 
+-		ws.onclose = () => {
++		ws.onclose = (event) => {
+ 			if (wsRef.current === ws) wsRef.current = null;
+ 			// Terminals died with the server-side PTYs — drop writers/buffers.
+ 			bridgeRef.current.clear();
+@@ -1266,6 +1268,13 @@ export function useChat() {
+ 			// this socket's close) — do not spawn a third connection that would
+ 			// shadow the live one and drop its incoming messages.
+ 			if (wsRef.current && wsRef.current !== ws) return;
++			if (event.code === 4001) requestEmbeddedAgentAccess("expired");
++			if (reconnectAfterAccessRef.current) {
++				reconnectAfterAccessRef.current = false;
++				retryRef.current = 0;
++				connect();
++				return;
++			}
+ 			dispatch({ type: "status", status: "closed" });
+ 			// Reconnect with exponential backoff (1s → 2s → 4s → … capped at 10s).
+ 			const delay = Math.min(1000 * 2 ** retryRef.current, 10_000);
+@@ -1284,6 +1293,34 @@ export function useChat() {
+ 		};
+ 	}, []);
+ 
++	// The embedded parent rotates the signed agent URL and refreshes the scoped
++	// cookie. Reconnect the existing protocol socket after that cookie update;
++	// the iframe and all React conversation state stay mounted.
++	useEffect(() => {
++		const onAccessRenewed = () => {
++			if (timerRef.current) {
++				clearTimeout(timerRef.current);
++				timerRef.current = null;
++			}
++			retryRef.current = 0;
++			reconnectAfterAccessRef.current = true;
++			const ws = wsRef.current;
++			if (!ws || ws.readyState === WebSocket.CLOSED) {
++				reconnectAfterAccessRef.current = false;
++				connect();
++				return;
++			}
++			if (ws.readyState === WebSocket.OPEN) ws.close(1000, "agent_access_renewed");
++			if (ws.readyState === WebSocket.CONNECTING) {
++				ws.addEventListener("open", () => {
++					if (reconnectAfterAccessRef.current && wsRef.current === ws) ws.close(1000, "agent_access_renewed");
++				}, {once: true});
++			}
++		};
++		window.addEventListener(AGENT_ACCESS_RENEWED_EVENT, onAccessRenewed);
++		return () => window.removeEventListener(AGENT_ACCESS_RENEWED_EVENT, onAccessRenewed);
++	}, [connect]);
++
+ 	// UI language changes (i18n.tsx setLocale) → report to the server so tool
+ 	// return values / AI prompts follow the UI locale (issue #91). Socket may
+ 	// be mid-reconnect — hello already carries the fresh code on re-open.

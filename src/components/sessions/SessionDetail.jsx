@@ -5,6 +5,7 @@ import {Button} from "../common/Button.jsx";
 import {WorkspaceGoalsPanel} from "../goals/WorkspaceGoalsPanel.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiChatCanvas} from "./PiChatCanvas.jsx";
+import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
 import {derivePiChatSocketUrl} from "../../utils/piChat.js";
@@ -47,6 +48,7 @@ export function SessionDetail({
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
+  const hasAgent = Boolean(hasRunnerUrl && accessUrls?.agentUrl);
   const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
   const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
   const isPiSession = session.harnessId === "pi" || session.terminalKind === "pi";
@@ -77,7 +79,7 @@ export function SessionDetail({
   return (
     <div className="session-detail">
       <div className="canvas-header">
-        {hasChat || capabilities.preview || capabilities.chrome ? (
+        {hasAgent || hasChat || capabilities.preview || capabilities.chrome ? (
           <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -87,6 +89,16 @@ export function SessionDetail({
           >
             Terminal
           </Button>
+          {hasAgent ? (
+            <Button
+              aria-selected={activeCanvas === "agent"}
+              role="tab"
+              variant={activeCanvas === "agent" ? "primary" : "secondary"}
+              onClick={() => setActiveCanvas("agent")}
+            >
+              Agent
+            </Button>
+          ) : null}
           {hasChat ? (
             <Button
               aria-selected={activeCanvas === "chat"}
@@ -159,6 +171,16 @@ export function SessionDetail({
               <br />
               <code>{accessError || session.lastError || session.status}</code>
             </p>
+          </div>
+        ) : null}
+        {hasAgent ? (
+          <div className="canvas-panel" hidden={activeCanvas !== "agent"}>
+            <PiWebUiCanvas
+              key={session.id}
+              onAccessRefreshNeeded={refreshAfterConnectionFailure}
+              sessionName={session.name}
+              url={accessUrls.agentUrl}
+            />
           </div>
         ) : null}
         {hasChat ? (
