@@ -26,6 +26,29 @@ test("accepts a signed current-session token from query or cookie", () => {
   assert.equal(verifier.maxAgeMs(token), 60_000);
 });
 
+test("can require an agent audience and non-empty current generation", () => {
+  const now = 1_700_000_000_000;
+  const verifier = createBrowserAccessVerifier({
+    audience: "agent",
+    generation: "7",
+    requireAudience: true,
+    requireGeneration: true,
+    secret: "browser-secret",
+    sessionId: "session-1",
+    now: () => now,
+  });
+  const sign = (claims) => {
+    const payload = Buffer.from(JSON.stringify({exp: now / 1000 + 60, sid: "session-1", ...claims})).toString("base64url");
+    const signature = crypto.createHmac("sha256", "browser-secret").update(payload).digest("base64url");
+    return `${payload}.${signature}`;
+  };
+
+  assert.equal(verifier.verify(sign({aud: "agent", gen: "7"})), true);
+  assert.equal(verifier.verify(sign({aud: "browser", gen: "7"})), false);
+  assert.equal(verifier.verify(sign({aud: "agent", gen: "6"})), false);
+  assert.equal(verifier.verify(sign({aud: "agent"})), false);
+});
+
 test("rejects tampered, expired, and cross-session browser tokens", () => {
   const now = 1_700_000_000_000;
   const verifier = createBrowserAccessVerifier({secret: "browser-secret", sessionId: "session-1", now: () => now});

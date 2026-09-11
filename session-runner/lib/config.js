@@ -84,7 +84,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
+    agentAccessAudience: "agent",
     agentRuntimeEnabled,
+    agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
     agentStateRoot,
     agentUiVersion,
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,

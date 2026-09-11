@@ -115,6 +115,18 @@ Pi Goals package declaration bootstrap are not started, preventing a second
 agent process. Unmarked Pi sessions retain the existing terminal, Chat, and
 Goals behavior during rollout.
 
+The marked runner's `/agent` HTTP gateway is owned by
+`session-runner/lib/agentGateway.js`. It strips `/agent` before forwarding to
+the loopback child, authenticates the signed agent audience and current
+generation before any upstream request, and injects only the adapter's private
+health token. Query credentials are removed by a no-referrer bootstrap
+redirect, the access cookie is scoped to `/agent/`, upstream cookies and
+off-origin redirects are discarded, and state-changing requests require the
+runner's exact Origin. The gateway streams request/response bodies and Range
+headers while enforcing the upstream 10 MiB JSON/body limit; `/agent/api/health`
+is not a public authentication bypass. WebSocket forwarding remains in the
+central upgrade dispatcher and is added by the following integration task.
+
 `PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
 installation, and plugin-catalog installation messages. The managed client
 hides those actions, and the managed server forces `ENGINE=pi` even if a stale

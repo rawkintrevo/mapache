@@ -8,6 +8,7 @@ const express = require("express");
 const {createVncBridge} = require("./lib/vncBridge");
 const {WebSocketServer} = require("ws");
 const {createActivityService} = require("./lib/activity");
+const {createAgentGateway} = require("./lib/agentGateway");
 const {browserVncWebSocketPath, createBrowserAccessVerifier} = require("./lib/browserAccess");
 const {createBrowserQaService} = require("./lib/browserQa");
 const {createChromeRuntime} = require("./lib/chromeRuntime");
@@ -54,6 +55,14 @@ const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
+  secret: config.sessionBrowserTokenSecret,
+  sessionId: config.sessionId,
+});
+const agentAccess = createBrowserAccessVerifier({
+  audience: config.agentAccessAudience,
+  generation: config.agentRuntimeGeneration,
+  requireAudience: true,
+  requireGeneration: true,
   secret: config.sessionBrowserTokenSecret,
   sessionId: config.sessionId,
 });
@@ -127,6 +136,13 @@ const piChat = createPiChatWebSocket({
 const piWebUi = createPiWebUiProcess(config, {
   onExit: ({error}) => activity.markRuntimeStartupFailure(error),
 });
+const agentGateway = createAgentGateway({
+  accessVerifier: agentAccess,
+  enabled: config.agentRuntimeEnabled,
+  getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
+  upstreamHost: config.piWebUiHost,
+  upstreamPort: config.piWebUiPort,
+});
 const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
   hasBrowserAccess,
@@ -152,6 +168,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   workspaceSync,
 });
 
+app.use("/agent", agentGateway.handle);
 app.use(express.json());
 app.use(
     "/xterm",

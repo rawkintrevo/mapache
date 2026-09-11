@@ -2,7 +2,15 @@
 
 const crypto = require("crypto");
 
-function createBrowserAccessVerifier({secret = "", sessionId = "", now = () => Date.now()} = {}) {
+function createBrowserAccessVerifier({
+  secret = "",
+  sessionId = "",
+  audience = "",
+  generation = null,
+  requireAudience = false,
+  requireGeneration = false,
+  now = () => Date.now(),
+} = {}) {
   return {
     extractToken,
     maxAgeMs,
@@ -34,7 +42,12 @@ function createBrowserAccessVerifier({secret = "", sessionId = "", now = () => D
     const expected = crypto.createHmac("sha256", secret).update(parts[0]).digest("base64url");
     if (!timingSafeEqual(parts[1], expected)) return false;
     const payload = parsePayload(parts[0]);
-    return Boolean(payload && payload.sid === sessionId && Number(payload.exp || 0) > Math.floor(now() / 1000));
+    if (!payload || payload.sid !== sessionId || Number(payload.exp || 0) <= Math.floor(now() / 1000)) return false;
+    if (requireAudience && (!audience || payload.aud !== audience)) return false;
+    if (audience && payload.aud !== audience) return false;
+    if (requireGeneration && (!generation || payload.gen === undefined || String(payload.gen) !== String(generation))) return false;
+    if (generation !== null && generation !== undefined && String(payload.gen) !== String(generation)) return false;
+    return true;
   }
 
   function maxAgeMs(token) {

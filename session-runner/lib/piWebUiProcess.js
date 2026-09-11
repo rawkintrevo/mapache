@@ -50,6 +50,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     enabled: () => enabled,
     start,
     health,
+    upstreamHeaders() {
+      return privateToken ? {"x-pi-token": privateToken} : {};
+    },
     stop,
     status,
     onStateChange(listener) {
