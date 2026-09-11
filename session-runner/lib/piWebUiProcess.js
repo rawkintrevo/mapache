@@ -91,6 +91,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     const root = String(config.piWebUiRoot || "").trim();
     const entry = path.join(root, "dist", "server", "index.js");
     if (!root || !await pathExists(entry)) throw publicError("pi_web_ui_runtime_missing");
+    const adapterPath = String(config.piMcpAdapterPath || environment.PI_WEB_MCP_ADAPTER_PATH || "").trim();
+    const adapterCheck = validatePiMcpAdapter(fsImpl, adapterPath, config.piMcpAdapterVersion || "2.32.1");
+    if (adapterCheck !== "ok") throw publicError(adapterCheck);
 
     await fsImpl.promises.mkdir(config.piWebUiDataDir, {recursive: true, mode: 0o700});
     await fsImpl.promises.mkdir(config.piWebUiPiDir, {recursive: true, mode: 0o700});
@@ -280,6 +283,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       PI_WEB_ENGINE: "pi",
       PI_WEB_HOST: config.piWebUiHost || "127.0.0.1",
       PI_WEB_MANAGED: "1",
+      PI_WEB_MCP_ADAPTER_PATH: config.piMcpAdapterPath || environment.PI_WEB_MCP_ADAPTER_PATH || "",
       PI_WEB_PKG_ROOT: config.piWebUiRoot,
       PI_WEB_PORT: String(config.piWebUiPort || 8787),
       PI_WEB_TOKEN: token,
@@ -338,6 +342,19 @@ function safeBuildDescriptor(value) {
   return Object.keys(result).length ? result : null;
 }
 
+function validatePiMcpAdapter(fsImpl, adapterPath, expectedVersion) {
+  if (!adapterPath) return "pi_mcp_adapter_missing";
+  const packageRoot = path.dirname(adapterPath);
+  try {
+    const packageJson = JSON.parse(fsImpl.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+    if (packageJson.name !== "pi-mcp-adapter" || packageJson.version !== expectedVersion || !packageJson.pi?.extensions?.includes("./index.ts")) return "pi_mcp_adapter_incompatible";
+    if (!fsImpl.statSync(adapterPath).isFile()) return "pi_mcp_adapter_incompatible";
+    return "ok";
+  } catch (error) {
+    return error?.code === "ENOENT" ? "pi_mcp_adapter_missing" : "pi_mcp_adapter_incompatible";
+  }
+}
+
 function positiveNumber(value, fallback) {
   const parsed = Number(value ?? fallback);
   return Number.isFinite(parsed) ? Math.max(1, parsed) : fallback;
@@ -351,8 +368,8 @@ function publicError(code) {
 }
 
 function toPublicError(error, fallback = "pi_web_ui_failed") {
-  if (error?.publicMessage && /^pi_web_ui_[a-z0-9_]+$/.test(error.publicMessage)) return error;
-  if (error?.code && /^pi_web_ui_[a-z0-9_]+$/.test(error.code)) return publicError(error.code);
+  if (error?.publicMessage && /^pi_(?:web_ui|mcp_adapter)_[a-z0-9_]+$/.test(error.publicMessage)) return error;
+  if (error?.code && /^pi_(?:web_ui|mcp_adapter)_[a-z0-9_]+$/.test(error.code)) return publicError(error.code);
   return publicError(fallback);
 }
 
@@ -364,4 +381,5 @@ module.exports = {
   createPiWebUiProcess,
   makePrivateToken,
   safeBuildDescriptor,
+  validatePiMcpAdapter,
 };

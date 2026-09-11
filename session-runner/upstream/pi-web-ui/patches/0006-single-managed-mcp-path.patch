@@ -1,0 +1,130 @@
+--- a/server/managed.ts
++++ b/server/managed.ts
+@@ -60,6 +60,17 @@
+ }
+ 
+ /**
++ * The image-owned adapter entry point used by managed Pi sessions. Keeping
++ * this as an explicit environment contract makes an unsupported/missing
++ * adapter a startup failure rather than an accidental second MCP path.
++ */
++export function managedMcpAdapterPath(env: NodeJS.ProcessEnv = process.env): string | null {
++	if (!isManaged(env)) return null;
++	const value = (env.PI_WEB_MCP_ADAPTER_PATH ?? "").trim();
++	return value || null;
++}
++
++/**
+  * The reason to send back, or null when the message may proceed.
+  *
+  * Returning the text rather than a boolean keeps the caller a single line and
+  * puts the explanation next to the rule it comes from — the user gets a
+  * sentence, not a silently dropped message.
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -70,7 +70,7 @@
+ } from "./client-state.js";
+ import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
+ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
+-import { isManaged } from "./managed.js";
++import { isManaged, managedMcpAdapterPath } from "./managed.js";
+ 
+ import {
+ 	applyHeadTail,
+@@ -1615,6 +1615,8 @@
+ 		ownerId?: string,
+ 	): CreateAgentSessionRuntimeFactory {
+ 		return async ({ cwd: effectiveCwd, sessionManager }) => {
++			const managedAdapterPath = managedMcpAdapterPath();
++			if (isManaged() && !managedAdapterPath) throw new Error("managed_mcp_adapter_missing");
+ 			const services = await createAgentSessionServices({
+ 				cwd: effectiveCwd,
+ 				modelRuntime: this.sharedModelRuntime,
+@@ -1629,6 +1631,10 @@
+ 				// 末尾（此时主会话的自定义 prompt 不再叠加，角色由模板定义）；非空
+ 				// 白名单取代主会话开关（只启用这些），空白名单 = 跟随主会话。
+ 				resourceLoaderOptions: {
++					// Managed sessions discover the one image-owned MCP adapter through
++					// the SDK extension loader. The runner has already validated this
++					// exact entry point and the adapter reads the runner-owned .mcp.json.
++					additionalExtensionPaths: managedAdapterPath ? [managedAdapterPath] : undefined,
+ 					// 系统提示词 base：主会话（组合模板）恒返回 undefined → SDK 走默认分支，
+ 					// 工具列表/Guidelines/文档指引等自动段照常拼装；SYSTEM.md 内容仅在
+ 					// 此处捕获（lastBaseSystemPrompt）作 {{soul}} 自动内容。子代理模板
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -880,12 +880,15 @@
+ // Optional UI plugins (<dataDir>/plugins/<id>/): scanned on every client
+ // attach so freshly dropped plugins appear without a server restart.
+ const pluginMgr = new PluginManager(DATA_DIR, CWD, join(pkgRoot, "plugins", "catalog.json"));
+-// MCP 工具桥：读取 <dataDir>/mcp.json 启动外部 MCP 服务器（stdio），把它们的
+-// 工具并入与插件工具相同的 customTools 管线；单服务器失败不炸进程。
+-const mcpBridge = new McpBridge(DATA_DIR, (...a) => console.log("[mcp]", ...a));
+-void mcpBridge.load().then(() => {
+-	if (mcpBridge.getTools().length) service.applyPluginAgentTools();
+-});
++// Legacy MCP bridge: managed sessions use the pinned pi-mcp-adapter through
++// SDK extension discovery, so starting this second stdio bridge would create
++// duplicate servers/tools. Keep the old path for unmarked standalone runs.
++const mcpBridge = MANAGED ? null : new McpBridge(DATA_DIR, (...a) => console.log("[mcp]", ...a));
++if (mcpBridge) {
++	void mcpBridge.load().then(() => {
++		if (mcpBridge.getTools().length) service.applyPluginAgentTools();
++	});
++}
+ // 插件扩展点：SDK 工具执行事件（bash/读文件等 start+end）转发给已注册的插件。
+ service.onToolEvent = (ev) => pluginMgr.emitToolEvent(ev);
+ service.onRunEvent = (ev) => pluginMgr.emitRunEvent(ev);
+@@ -896,7 +899,7 @@
+ pluginMgr.conversationProvider = () => service.readConversationForPlugins?.() ?? null;
+ // 插件扩展点：插件注册的 AI 工具（registerAgentTool）+ MCP 桥工具 → 会话创建时
+ // 带上 + 变化时动态注入/移除已有会话。
+-service.pluginToolsProvider = () => [...pluginMgr.getAgentTools(), ...mcpBridge.getTools()];
++service.pluginToolsProvider = () => [...pluginMgr.getAgentTools(), ...(mcpBridge?.getTools() ?? [])];
+ pluginMgr.onAgentToolsChanged = () => service.applyPluginAgentTools();
+ // 插件扩展点：插件斜杠命令（registerCommand）→ 命令选择器目录 + prompt 拦截执行。
+ pluginMgr.onCommandsChanged = () => service.applyPluginCommandCatalog();
+@@ -1556,7 +1559,7 @@
+ 	clearInterval(heartbeatTimer);
+ 	stopControl();
+ 	pluginMgr.dispose();
+-	mcpBridge.dispose();
++	mcpBridge?.dispose();
+ 	await service.disposeAll();
+ 	wss.close();
+ 	httpServer.close();
+--- a/tests/unit/managed.test.ts
++++ b/tests/unit/managed.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it } from "vitest";
+ import {
+ 	isManaged,
++	managedMcpAdapterPath,
+ 	managedCredentialRefusal,
+ 	managedRefusal,
+ 	MANAGED_CREDENTIAL_MESSAGES,
+@@ -64,6 +65,17 @@
+ 		}
+ 	});
+ 
++	it("requires an explicit image-owned MCP adapter path only when managed", () => {
++		expect(managedMcpAdapterPath({})).toBeNull();
++		expect(managedMcpAdapterPath({ PI_WEB_MANAGED: "1" })).toBeNull();
++		expect(
++			managedMcpAdapterPath({
++				PI_WEB_MANAGED: "1",
++				PI_WEB_MCP_ADAPTER_PATH: "  /root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts  ",
++			}),
++		).toBe("/root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts");
++	});
++
+ 	it("rejects credential-bearing commands but permits metadata-only probes and saves", () => {
+ 		for (const type of MANAGED_CREDENTIAL_MESSAGES) {
+ 			expect(managedCredentialRefusal(type, true, {}), type).toMatch(/credentials.*Mapache/i);
+*** Update File: /home/rawkintrevo/gits/rawkintrevo/mapache/session-runner/upstream/pi-web-ui/manifest.json
+@@
+     "patches/0003-managed-subpath-and-service-worker.patch",
+     "patches/0004-embedded-agent-renewal.patch",
+-    "patches/0005-managed-credential-ownership.patch"
++    "patches/0005-managed-credential-ownership.patch",
++    "patches/0006-single-managed-mcp-path.patch"

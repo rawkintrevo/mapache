@@ -79,7 +79,7 @@ If refresh returns `invalid_grant`, the connection is marked `reconnect_required
 
 The local REST client retries a Google request once after a 401. It calls the dedicated token-broker Function with the workspace ID, session ID, provisioned connection ID, and the existing per-session shutdown credential. The broker verifies that the session exists, is running, owns that shutdown credential, and is still bound to the same Google connection before Functions decrypts the saved refresh token. Successful responses contain only a new short-lived access token, use `Cache-Control: no-store`, and are cached only in the MCP process. Concurrent 401 responses share one in-process refresh request, and a second 401 is returned without another retry. The broker never returns or provisions the Google refresh token, OAuth client secret, or encryption key.
 
-Pi and Codex render the normalized MCP config through their native adapters. Pi OAuth material is archived separately under the hidden workspace prefix:
+Pi and Codex render the normalized MCP config through their native adapters. Managed pi-web discovers the pinned `pi-mcp-adapter@2.32.1` once through the SDK extension loader and reads the runner-materialized `/workspace/.mcp.json`; its legacy pi-web MCP bridge and connection editor are disabled. Google uses a `bearer_env` entry, so the adapter sees only the environment-variable name and the local wrapper keeps the refreshed access token in process memory. No access token is copied into persisted UI state or MCP config. Pi OAuth material is archived separately under the hidden workspace prefix:
 
 ```text
 {workspaceStoragePrefix}/.mapache-internal/pi-mcp-oauth/mcp-oauth.tar.gz

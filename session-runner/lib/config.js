@@ -29,6 +29,8 @@ function normalizePreviewBasePath(value) {
   return clean === "/" ? "/preview" : clean;
 }
 
+const PI_MCP_ADAPTER_VERSION = "2.32.1";
+
 function parseRunnerCapabilities() {
   const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false, chat: false, goals: false};
   try {
@@ -54,6 +56,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const piWebUiDataDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
   const piWebUiPiDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
   const piWebUiSessionDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
+  const piMcpAdapterPath = normalizeEnvString(process.env.PI_WEB_MCP_ADAPTER_PATH) ||
+    path.join(piHomeDir, "agent", "npm", "node_modules", "pi-mcp-adapter", "index.ts");
   const piAgentDir = agentRuntimeEnabled ? piWebUiPiDir :
     normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
   const bucketName = process.env.STORAGE_BUCKET || "";
@@ -155,6 +159,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     ownerUid: process.env.OWNER_UID || "",
     piAgentDir,
     piHomeDir,
+    piMcpAdapterPath,
+    piMcpAdapterVersion: PI_MCP_ADAPTER_VERSION,
     piSessionDir,
     piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
     piWebUiDataDir,

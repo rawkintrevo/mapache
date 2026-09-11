@@ -32,5 +32,8 @@ for (const dockerfile of ["Dockerfile.pi-basic", "Dockerfile.pi-web", "Dockerfil
     assert.match(source, /ENV GOAL_BRIDGE_ENABLED=true/);
     assert.match(source, /ENV GOAL_RPC_ENABLED=true/);
     assert.match(source, /ENV PI_GOAL_X_VERSION=0\.31\.2/);
+    assert.match(source, /pi-mcp-adapter@2\.32\.1/);
+    assert.match(source, /RUN node \/app\/lib\/patchPiMcpAdapter\.js/);
+    assert.match(source, /ENV PI_WEB_MCP_ADAPTER_PATH=\/root\/\.pi\/agent\/npm\/node_modules\/pi-mcp-adapter\/index\.ts/);
   });
 }

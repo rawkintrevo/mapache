@@ -27,12 +27,18 @@ async function fixture() {
   const runtimeRoot = path.join(root, "runtime");
   await fs.mkdir(path.join(runtimeRoot, "dist", "server"), {recursive: true});
   await fs.writeFile(path.join(runtimeRoot, "dist", "server", "index.js"), "// test runtime\n");
+  const adapterRoot = path.join(root, "pi-mcp-adapter");
+  await fs.mkdir(adapterRoot, {recursive: true});
+  await fs.writeFile(path.join(adapterRoot, "package.json"), JSON.stringify({name: "pi-mcp-adapter", version: "2.32.1", pi: {extensions: ["./index.ts"]}}));
+  await fs.writeFile(path.join(adapterRoot, "index.ts"), "// test adapter\n");
   return {
     root,
     config: {
       agentRuntimeEnabled: true,
       homeDir: path.join(root, "home"),
       piWebUiDataDir: path.join(root, "state", "ui"),
+      piMcpAdapterPath: path.join(adapterRoot, "index.ts"),
+      piMcpAdapterVersion: "2.32.1",
       piWebUiHealthIntervalMs: 1,
       piWebUiHost: "127.0.0.1",
       piWebUiPiDir: path.join(root, "state", "pi"),
@@ -80,6 +86,7 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(spawnCalls[0].options.env.PI_WEB_HOST, "127.0.0.1");
     assert.equal(spawnCalls[0].options.env.PI_WEB_PORT, "8787");
     assert.equal(spawnCalls[0].options.env.PI_WEB_MANAGED, "1");
+    assert.equal(spawnCalls[0].options.env.PI_WEB_MCP_ADAPTER_PATH, config.piMcpAdapterPath);
     assert.equal(spawnCalls[0].options.env.PI_WEB_ENGINE, "pi");
     assert.equal(spawnCalls[0].options.env.PI_WEB_TOKEN.length > 20, true);
     assert.equal(spawnCalls[0].options.env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
@@ -90,6 +97,19 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(process.status().state, "stopped");
     assert.equal(child.killed, true);
     assert.equal(spawnCalls.length, 1);
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("fails closed when the pinned MCP adapter is missing or incompatible", async () => {
+  const {root, config} = await fixture();
+  try {
+    config.piMcpAdapterPath = path.join(root, "missing", "index.ts");
+    await assert.rejects(() => createPiWebUiProcess(config).start(), (error) => error.code === "pi_mcp_adapter_missing");
+    config.piMcpAdapterPath = path.join(root, "pi-mcp-adapter", "index.ts");
+    await fs.writeFile(path.join(root, "pi-mcp-adapter", "package.json"), JSON.stringify({name: "pi-mcp-adapter", version: "9.9.9"}));
+    await assert.rejects(() => createPiWebUiProcess(config).start(), (error) => error.code === "pi_mcp_adapter_incompatible");
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }

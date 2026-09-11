@@ -109,6 +109,8 @@ test("marked runners use the managed pi-web-ui state contract while unmarked run
     assert.equal(managed.piAgentDir, path.join("/tmp/mapache-agent-state-test", "pi"));
     assert.equal(managed.piSessionDir, path.join("/tmp/mapache-agent-state-test", "sessions"));
     assert.equal(managed.piWebUiDataDir, path.join("/tmp/mapache-agent-state-test", "ui"));
+    assert.equal(managed.piMcpAdapterVersion, "2.32.1");
+    assert.equal(managed.piMcpAdapterPath, path.join(process.env.HOME || "/root", ".pi", "agent", "npm", "node_modules", "pi-mcp-adapter", "index.ts"));
   } finally {
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];

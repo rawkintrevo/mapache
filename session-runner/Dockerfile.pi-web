@@ -8,7 +8,7 @@ RUN apt-get update \
 
 RUN curl -fsSL https://pi.dev/install.sh | sh
 
-RUN pi install npm:pi-mcp-adapter
+RUN pi install npm:pi-mcp-adapter@2.32.1
 RUN pi install npm:pi-goal-x@0.31.2
 
 WORKDIR /app
@@ -22,6 +22,7 @@ COPY routes ./routes
 COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
 RUN node /app/lib/patchPiGoalX.js
+RUN node /app/lib/patchPiMcpAdapter.js
 
 RUN chmod +x /app/bin/mapache-preview-qa.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa
@@ -36,6 +37,7 @@ ENV TERMINAL_ARGS='["-c"]'
 ENV GOAL_BRIDGE_ENABLED=true
 ENV GOAL_RPC_ENABLED=true
 ENV PI_GOAL_X_VERSION=0.31.2
+ENV PI_WEB_MCP_ADAPTER_PATH=/root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts
 ENV PREVIEW_ENABLED=true
 ENV PREVIEW_BASE_PATH=/preview
 ENV PREVIEW_STATIC_ROOT=/workspace/build
