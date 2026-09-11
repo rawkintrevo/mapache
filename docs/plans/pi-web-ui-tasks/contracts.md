@@ -56,12 +56,21 @@ heartbeat by itself force-stop a still-live source or authorize concurrent write
 | Credentials/connections | Mapache stores and materialization | Regenerate before launching engine; do not invent a second credential database |
 | Chrome profile | Existing Chrome lifecycle | Continue existing behavior for new runner use; excluded from the one-off migration |
 
-Agent snapshots go under a new versioned internal workspace storage prefix. Task
-13 records its exact path derived from the existing prefix; never mix it with a
-legacy source archive. Use manifest version 1: relative path, kind, byte length,
-SHA-256, and safe permission metadata; include workspace/session/generation and
-capture time. Reject traversal and unsafe symlink extraction. Do not follow
-symlinks into credentials or unrelated directories.
+Agent snapshots go under the versioned internal workspace storage prefix
+`{workspacePrefix}/{internalStorageDir}/agent-snapshots/v1` (for example,
+`users/u/workspaces/w/.mapache-internal/agent-snapshots/v1`); never mix them with
+a legacy source archive. Task 14's local staging layout is `sessions/` for the
+complete flat Pi JSONL history, `pi/` for allowlisted non-secret Pi settings,
+`ui/` for upstream UI state, and `uploads/` for only upload files referenced by
+the captured history. Use manifest version 1: relative path, kind, byte length,
+SHA-256, and safe permission metadata; include workspace/session/generation,
+boot-instance identity, capture time, and the exact storage prefix. A live save
+may omit an incomplete trailing JSONL record, but must mark that fact and never
+accept malformed interior records. Stable JSON/settings files are parsed and
+must remain unchanged through acceptance. Reject traversal and unsafe symlink
+extraction. Preserve only relative symlinks whose resolved target stays within
+the same source root; do not follow symlinks into credentials or unrelated
+directories.
 
 Upload to immutable unique objects first, then transactionally publish a pointer
 only while generation/instance still owns the workspace. Readers use only the

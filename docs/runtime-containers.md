@@ -125,6 +125,23 @@ writer admission. Shutdown sends a cooperative group signal and applies the
 existing bounded stop/force-stop policy before final runner persistence, then
 releases the boot ID only through the controlled lifecycle.
 
+Managed agent persistence capture lives in `session-runner/lib/agentSnapshot.service.js`.
+It stages the fixed `/var/lib/mapache/agent/sessions`, `/pi`, and `/ui` roots
+under a private local directory, then writes a manifest with version, workspace /
+session / generation / boot identity, capture time, relative paths, byte lengths,
+SHA-256 checksums, and owner-safe permission bits. The storage namespace is
+`{workspacePrefix}/{internalStorageDir}/agent-snapshots/v1`; Task 14 does not
+publish to it. Pi settings are allowlisted, known auth/connector material and
+cache/process state are excluded using the auth inventory, and uploads are
+copied only when complete history records reference them. JSON settings must
+parse and remain unchanged through acceptance. JSONL capture keeps complete
+records and marks an incomplete trailing append for the next save. Relative
+symlinks are retained without dereferencing when their resolved target remains
+inside the same source root; absolute, escaping, dangling, or secret-targeting
+links fail the capture rather than exposing an outside path. The staging
+manifest is the handoff for Task 15's immutable upload/publication step; this
+capture helper performs no remote write or checkpoint-pointer update.
+
 On the marked path, the legacy Pi PTY/TUI, Mapache Chat bridge, Goals RPC, and
 Pi Goals package declaration bootstrap are not started, preventing a second
 agent process. Unmarked Pi sessions retain the existing terminal, Chat, and
