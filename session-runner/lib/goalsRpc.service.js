@@ -23,7 +23,8 @@ function createGoalsRpcService({
   timers = globalThis,
 } = {}) {
   const enabled = String(env.GOAL_RPC_ENABLED || "").toLowerCase() === "true" &&
-    String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi";
+    String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi" &&
+    config.agentRuntimeEnabled !== true;
   const events = new EventEmitter();
   const pendingResponses = new Map();
   const pendingUi = new Map();

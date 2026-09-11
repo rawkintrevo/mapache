@@ -88,6 +88,16 @@ test("rejects a managed goal command while the terminal Pi process is active", a
   }), /goal_terminal_process_active/);
 });
 
+test("does not create a second Pi process for the managed pi-web-ui runtime", () => {
+  const rpc = createGoalsRpcService({
+    config: {agentRuntimeEnabled: true, harnessId: "pi"},
+    env: {GOAL_RPC_ENABLED: "true"},
+    spawn: () => { throw new Error("spawn should not be called"); },
+  });
+  assert.equal(rpc.supported, false);
+  assert.equal(rpc.capabilities().structuredDialogs, false);
+});
+
 test("hands off the terminal only after explicit consent and waits for its exit", async () => {
   const child = fakePiProcess();
   let release;

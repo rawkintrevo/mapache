@@ -50,6 +50,7 @@ const {registerGoalsRoutes} = require("./routes/goalsRoutes");
 const {createGoalsBridgeService} = require("./lib/goalsProtocol");
 const {createGoalsRpcService} = require("./lib/goalsRpc.service");
 const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
+const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
@@ -94,7 +95,7 @@ const terminalSession = createTerminalSession({
   admin,
   config,
   activity,
-  canStartProcess: () => !goalsRpc?.isActive?.(),
+  canStartProcess: () => !config.agentRuntimeEnabled && !goalsRpc?.isActive?.(),
   onTerminalExit: async ({command, exitCode}) => {
     const executable = path.basename(String(command && command.file || ""));
     if (executable === "pi") {
@@ -123,6 +124,9 @@ const piChat = createPiChatWebSocket({
   terminalSession,
   transcriptService: piChatTranscript,
 });
+const piWebUi = createPiWebUiProcess(config, {
+  onExit: ({error}) => activity.markRuntimeStartupFailure(error),
+});
 const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
   hasBrowserAccess,
@@ -140,6 +144,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   goalsPackage,
   listen: (onListening) => server.listen(config.port, onListening),
   piChat,
+  piWebUi,
   resourceMetrics: resourceMetricsSocket,
   piModelScope,
   sshSession,

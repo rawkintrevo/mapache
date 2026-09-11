@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const test = require("node:test");
 const {createConfig} = require("./config");
 
@@ -73,5 +74,45 @@ test("runner capability parsing defaults Chat off and preserves explicit Chat su
   } finally {
     if (previous === undefined) delete process.env.RUNNER_CAPABILITIES;
     else process.env.RUNNER_CAPABILITIES = previous;
+  }
+});
+
+test("marked runners use the managed pi-web-ui state contract while unmarked runners retain Pi paths", () => {
+  const names = [
+    "MAPACHE_AGENT_UI_VERSION",
+    "MAPACHE_AGENT_STATE_ROOT",
+    "MAPACHE_PI_WEB_UI_ROOT",
+    "PI_CODING_AGENT_DIR",
+    "PI_SESSION_DIR",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    MAPACHE_AGENT_STATE_ROOT: "/tmp/mapache-agent-state-test",
+    MAPACHE_PI_WEB_UI_ROOT: "/opt/mapache/pi-web-ui-test",
+    PI_CODING_AGENT_DIR: "/restored/pi-agent",
+    PI_SESSION_DIR: "/restored/pi-session",
+  });
+  try {
+    delete process.env.MAPACHE_AGENT_UI_VERSION;
+    const legacy = createConfig();
+    assert.equal(legacy.agentRuntimeEnabled, false);
+    assert.equal(legacy.piAgentDir, "/restored/pi-agent");
+    assert.equal(legacy.piSessionDir, "/restored/pi-session");
+
+    process.env.MAPACHE_AGENT_UI_VERSION = "pi-web-ui-v1";
+    const managed = createConfig();
+    assert.equal(managed.agentRuntimeEnabled, true);
+    assert.equal(managed.agentUiVersion, "pi-web-ui-v1");
+    assert.equal(managed.piWebUiRoot, "/opt/mapache/pi-web-ui-test");
+    assert.equal(managed.piWebUiHost, "127.0.0.1");
+    assert.equal(managed.piWebUiPort, 8787);
+    assert.equal(managed.piAgentDir, path.join("/tmp/mapache-agent-state-test", "pi"));
+    assert.equal(managed.piSessionDir, path.join("/tmp/mapache-agent-state-test", "sessions"));
+    assert.equal(managed.piWebUiDataDir, path.join("/tmp/mapache-agent-state-test", "ui"));
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
   }
 });

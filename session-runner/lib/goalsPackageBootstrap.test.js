@@ -46,6 +46,27 @@ test("does not declare the package when the baked files are missing", async () =
   }
 });
 
+test("does not mutate Pi settings on the managed pi-web-ui path", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-goal-package-"));
+  const agentDir = path.join(root, ".pi", "agent");
+  await fs.mkdir(path.join(agentDir, "npm", "node_modules", "pi-goal-x"), {recursive: true});
+  const settingsPath = path.join(agentDir, "settings.json");
+  await fs.writeFile(settingsPath, JSON.stringify({packages: ["npm:other-package@1.0.0"]}));
+  const previous = process.env.GOAL_BRIDGE_ENABLED;
+  process.env.GOAL_BRIDGE_ENABLED = "true";
+  try {
+    const result = await createGoalsPackageBootstrap({
+      config: {agentRuntimeEnabled: true, harnessId: "pi", piAgentDir: agentDir},
+    }).ensureInstalledDeclaration();
+    assert.deepEqual(result, {enabled: false, reason: "agent_runtime_enabled"});
+    assert.equal(await fs.readFile(settingsPath, "utf8"), JSON.stringify({packages: ["npm:other-package@1.0.0"]}));
+  } finally {
+    if (previous === undefined) delete process.env.GOAL_BRIDGE_ENABLED;
+    else process.env.GOAL_BRIDGE_ENABLED = previous;
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("recognizes string and object package entries", () => {
   assert.equal(isGoalPackageSource("npm:pi-goal-x@0.31.2"), true);
   assert.equal(isGoalPackageSource({source: "npm:pi-goal-x@0.30.5"}), true);

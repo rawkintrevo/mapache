@@ -47,15 +47,23 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
   const piHomeDir = path.join(homeDir, ".pi");
-  const piAgentDir = normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
+  const agentUiVersion = normalizeEnvString(process.env.MAPACHE_AGENT_UI_VERSION);
+  const agentRuntimeEnabled = agentUiVersion === "pi-web-ui-v1";
+  const agentStateRoot = path.resolve(process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
+  const piWebUiRoot = path.resolve(process.env.MAPACHE_PI_WEB_UI_ROOT || "/opt/mapache/pi-web-ui");
+  const piWebUiDataDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
+  const piWebUiPiDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
+  const piWebUiSessionDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
+  const piAgentDir = agentRuntimeEnabled ? piWebUiPiDir :
+    normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
   const bucketName = process.env.STORAGE_BUCKET || "";
   const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
   const homeStorageBucketName = process.env.HOME_STORAGE_BUCKET || bucketName;
   const homeStoragePrefix = normalizePrefix(process.env.HOME_STORAGE_PREFIX || "");
   const homeSyncMode = normalizeEnvString(process.env.HOME_SYNC_MODE) || "persistent";
   const homeArchiveName = normalizeEnvString(process.env.HOME_ARCHIVE_NAME) || "home.tar.gz";
-  const piSessionDir = normalizeEnvString(process.env.PI_SESSION_DIR) ||
-    path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
+  const piSessionDir = agentRuntimeEnabled ? piWebUiSessionDir :
+    normalizeEnvString(process.env.PI_SESSION_DIR) || path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
   const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
   const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
   const codexHomeDir = path.resolve(process.env.CODEX_HOME || path.join("/tmp", "mapache-codex", process.env.SESSION_ID || "session"));
@@ -76,6 +84,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
+    agentRuntimeEnabled,
+    agentStateRoot,
+    agentUiVersion,
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
     resourceMetricsIntervalMs: positiveNumber(process.env.RESOURCE_METRICS_INTERVAL_MS, 2000),
@@ -144,6 +155,15 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piHomeDir,
     piSessionDir,
     piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
+    piWebUiDataDir,
+    piWebUiHealthIntervalMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_HEALTH_INTERVAL_MS, 100),
+    piWebUiHost: "127.0.0.1",
+    piWebUiPiDir,
+    piWebUiPort: 8787,
+    piWebUiRoot,
+    piWebUiSessionDir,
+    piWebUiStartupTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STARTUP_TIMEOUT_MS, 30000),
+    piWebUiStopTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STOP_TIMEOUT_MS, 5000),
     piSessionStorageBucket,
     piSessionStoragePrefix,
     port: Number(process.env.PORT || 8080),

@@ -3,7 +3,7 @@
 Goal: integrate pi-web-ui into the sole pi-chrome runner, with one active runner
 per workspace, and preserve the HubSpot Chrome session's files and Pi history.
 
-Status: planning complete; all implementation tasks are unstarted. These are local
+Status: implementation in progress; Tasks 1–3 are complete. These are local
 issue specifications, not GitHub issue numbers. Each link contains the task's
 starting files, implementation steps, acceptance criteria, validation, and scope limits.
 
@@ -34,7 +34,8 @@ within its task file while keeping the root task unchecked.
   - Completed: 2026-09-11 — added `session-runner/upstream/pi-web-ui/manifest.json`, ordered strict patching, reproducible source-fetch/build helper, and the pinned `pi-chrome` Docker integration. Verified the requested upstream commit/package (`46880b3` / `0.79.0`), Pi SDK `0.84.4`, adapter `2.32.1`, generated server/web output, LICENSE, and safe build descriptor. Upstream typecheck and 636 tests passed; helper negative tests passed; local Docker build and Chrome smoke passed. No cloud runner launch or deployment performed. Handoff: Task 3 can use `/opt/mapache/pi-web-ui`; existing Cloud Run services still need a later revision.
 - [x] 3. **[Configure the managed app for the agent subpath](docs/plans/pi-web-ui-tasks/03-managed-embedded-build.md)** - medium
   - Completed: 2026-09-11 — added the pinned `/agent/` Vite base, fixed the favicon root-relative exception, preserved the existing `appUrl` API/WS/theme/plugin/file-preview mappings, removed service-worker registration with exact app-scope cleanup, and forced managed instances to the Pi engine while refusing self-update/runtime-install/plugin-catalog protocol messages. Upstream typecheck and 636 tests passed; generated bundle inspection, local HTTP load, managed health, and direct WebSocket refusal checks passed. Evidence: `artifacts/qa/pi-web-ui/task-3/README.md`. No Cloud Run service was launched, stopped, or deployed; Tasks 4–6 own the supervised process and public gateway mapping.
-- [ ] 4. **[Launch pi-web-ui as a supervised runner child](docs/plans/pi-web-ui-tasks/04-launch-upstream-process.md)** - medium
+- [x] 4. **[Launch pi-web-ui as a supervised runner child](docs/plans/pi-web-ui-tasks/04-launch-upstream-process.md)** - medium
+  - Completed: 2026-09-11 — added the marked-runtime config/state contract and `session-runner/lib/piWebUiProcess.js`, which starts exactly one loopback-only pinned child after restore/materialization, waits for authenticated local health, and performs bounded SIGTERM/SIGKILL shutdown without respawn or token logging. Marked runners disable the legacy Pi PTY/TUI, Chat, Goals bridge/RPC, and package declaration path; unmarked sessions retain existing behavior. Focused and aggregate session-runner tests passed (263 before the final Goals guard, then the focused guard test), lint and `npm run docs:check` passed, and local `Dockerfile.pi-chrome` build/Chrome smoke plus in-container managed health/stop smoke passed. Evidence: `artifacts/qa/pi-web-ui/task-4/README.md`. No Cloud Run service was launched or deployed. Task 5 should use the fixed internal `127.0.0.1:8787` process and marker/state paths; no storage or provisioning changes were made.
 - [ ] 5. **[Add the authenticated HTTP gateway for the embedded app](docs/plans/pi-web-ui-tasks/05-http-gateway.md)** - medium
 - [ ] 6. **[Proxy agent WebSockets alongside existing runner sockets](docs/plans/pi-web-ui-tasks/06-websocket-gateway.md)** - medium
 - [ ] 7. **[Expose gated signed agent access URLs from Functions](docs/plans/pi-web-ui-tasks/07-signed-agent-access-api.md)** - medium

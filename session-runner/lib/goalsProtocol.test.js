@@ -86,3 +86,27 @@ test("bridge sends a typed start command through the existing terminal session",
     else process.env.GOAL_BRIDGE_ENABLED = previous;
   }
 });
+
+test("disables the legacy Goals bridge on the managed pi-web-ui path", () => {
+  const previous = process.env.GOAL_BRIDGE_ENABLED;
+  process.env.GOAL_BRIDGE_ENABLED = "true";
+  try {
+    const bridge = createGoalsBridgeService({
+      config: {agentRuntimeEnabled: true, harnessId: "pi", workspaceDir: "/workspace"},
+      terminalSession: {writePrompt: () => { throw new Error("must not write to Pi"); }},
+    });
+    assert.equal(bridge.capabilities().enabled, false);
+    assert.equal(bridge.capabilities().reason, "goal_bridge_disabled");
+    return assert.rejects(() => bridge.command({
+      protocolVersion: 1,
+      type: "command",
+      operationId: "managed-goal",
+      goalId: "goal-1",
+      action: "start",
+      payload: {objective: "must not run"},
+    }), /goal_bridge_unavailable/);
+  } finally {
+    if (previous === undefined) delete process.env.GOAL_BRIDGE_ENABLED;
+    else process.env.GOAL_BRIDGE_ENABLED = previous;
+  }
+});

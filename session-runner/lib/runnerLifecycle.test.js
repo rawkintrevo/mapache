@@ -46,6 +46,7 @@ function createLifecycleHarness(events, overrides = {}) {
     listen: overrides.listen || (() => events.push("server.listen")),
     logger: overrides.logger || {error: () => {}, log: () => {}},
     piChat: overrides.piChat,
+    piWebUi: overrides.piWebUi,
     resourceMetrics: overrides.resourceMetrics,
     piModelScope: overrides.piModelScope || {
       persist: async () => events.push("piModelScope.persist"),
@@ -106,6 +107,24 @@ test("startup failure prevents later lifecycle steps and listen", async () => {
     "workspace.prepareWorkspaceSource",
     "activity.markRuntimeStartupFailure",
   ]);
+});
+
+test("managed startup launches pi-web-ui after materialization and stops it first", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    config: {agentRuntimeEnabled: true},
+    piWebUi: {
+      start: async () => events.push("piWebUi.start"),
+      stop: async () => events.push("piWebUi.stop"),
+    },
+    piChat: {close: () => events.push("piChat.close")},
+  });
+
+  await lifecycle.start();
+  assert.equal(events.indexOf("piWebUi.start") > events.indexOf("activeHarness.materializeSubagents"), true);
+  assert.equal(events.indexOf("piWebUi.start") < events.indexOf("chromeProfileSnapshots.start"), true);
+  await lifecycle.shutdown();
+  assert.equal(events.indexOf("piWebUi.stop") < events.indexOf("piChat.close"), true);
 });
 
 test("shutdown closes forwards before final profile snapshot and activity update", async () => {

@@ -97,6 +97,24 @@ URLs. The managed build does not register a service worker. On upgrade it
 unregisters only the exact app-scope `/agent/` registration or a worker whose
 script URL is `/agent/sw.js`, leaving any Mapache parent-scope worker alone.
 
+The server-owned workspace marker `agentUiVersion: "pi-web-ui-v1"` is passed to
+the runner as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`. A marked `pi-chrome`
+runner completes workspace restore and harness materialization before starting
+exactly one supervised child from `/opt/mapache/pi-web-ui/dist/server/index.js`.
+The child is fixed to loopback `127.0.0.1:8787`, uses `/var/lib/mapache/agent/pi`
+for non-secret Pi configuration, `/var/lib/mapache/agent/sessions` for flat
+transcripts, and `/var/lib/mapache/agent/ui` for UI state. The runner creates a
+private per-boot token, uses it only for the local `/api/health` check, and
+never includes it in status or logs. Startup is bounded by local health; a
+startup failure or unexpected child exit is reported through runner activity
+with no automatic respawn. Shutdown sends a cooperative signal and applies the
+existing bounded stop/force-stop policy before final runner persistence.
+
+On the marked path, the legacy Pi PTY/TUI, Mapache Chat bridge, Goals RPC, and
+Pi Goals package declaration bootstrap are not started, preventing a second
+agent process. Unmarked Pi sessions retain the existing terminal, Chat, and
+Goals behavior during rollout.
+
 `PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
 installation, and plugin-catalog installation messages. The managed client
 hides those actions, and the managed server forces `ENGINE=pi` even if a stale

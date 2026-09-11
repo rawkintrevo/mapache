@@ -71,7 +71,8 @@ function createPiChatWebSocket({
 }
 
 function isSupported(config) {
-  return String(config.harnessId || "").trim().toLowerCase() === "pi" && Boolean(config.runnerCapabilities?.chat);
+  return config.agentRuntimeEnabled !== true &&
+    String(config.harnessId || "").trim().toLowerCase() === "pi" && Boolean(config.runnerCapabilities?.chat);
 }
 
 function parseClientMessage(raw) {

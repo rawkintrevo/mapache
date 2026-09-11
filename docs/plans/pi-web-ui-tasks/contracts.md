@@ -7,7 +7,7 @@ record a mechanical name change here and in dependent task files in the same tas
 
 ## Rollout and provisioning
 
-- Server-owned workspace field `agentUiVersion: "pi-web-ui-v1"` selects the new path during development. Never accept arbitrary UI version/image URI from a browser. Unmarked workspaces retain old behavior until the backend default changes in Task 32.
+- Server-owned workspace field `agentUiVersion: "pi-web-ui-v1"` selects the new path during development. The runner receives that server-owned marker as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`; never accept arbitrary UI version/image URI from a browser. Unmarked workspaces retain old behavior until the backend default changes in Task 32.
 - Session access responses add `agentUrl` only for a marked workspace with a ready compatible runner. Keep old fields until legacy retirement.
 - Use existing operation IDs and session documents. Extend workspace writer coordination with a monotonically increasing runtime generation and a per-boot instance ID. Admission must occur before the upstream engine accepts work.
 - Concurrent Start requests converge on one session/service. Restart/resize performs quiesce, final checkpoint, confirmed old-service deletion, then create. A timeout or uncertain deletion cannot authorize a second service.

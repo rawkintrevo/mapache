@@ -41,7 +41,8 @@ function boundedObject(value) {
 
 function createGoalsBridgeService({config = {}, terminalSession, fsModule = fs, rpcService} = {}) {
   const enabled = String(process.env.GOAL_BRIDGE_ENABLED || "").toLowerCase() === "true" &&
-    String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi";
+    String(config.harnessId || config.terminalKind || "").toLowerCase() === "pi" &&
+    config.agentRuntimeEnabled !== true;
   const goalsDirectory = path.join(config.workspaceDir || "/workspace", ".pi", "goals");
   const operations = new Map();
   let packageAvailable = true;

@@ -14,6 +14,7 @@ function createGoalsPackageBootstrap({config = {}, fsModule = fs, version = DEFA
   const packageSource = `npm:pi-goal-x@${version}`;
 
   async function ensureInstalledDeclaration() {
+    if (config.agentRuntimeEnabled === true) return {enabled: false, reason: "agent_runtime_enabled"};
     const harness = String(config.harnessId || config.terminalKind || "").trim().toLowerCase();
     if (harness !== "pi") return {enabled: false, reason: "unsupported_harness"};
     if (String(process.env.GOAL_BRIDGE_ENABLED || "").toLowerCase() !== "true") {

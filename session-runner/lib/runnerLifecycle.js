@@ -13,6 +13,7 @@ function createRunnerLifecycleCoordinator({
   listen,
   logger = console,
   piChat,
+  piWebUi,
   resourceMetrics,
   piModelScope,
   setIntervalFn = setInterval,
@@ -39,6 +40,7 @@ function createRunnerLifecycleCoordinator({
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
       await activeHarness.materializeSubagents();
+      if (config.agentRuntimeEnabled) await piWebUi.start();
       chromeProfileSnapshots.start();
       startSyncLoop();
       listen(() => {
@@ -53,6 +55,7 @@ function createRunnerLifecycleCoordinator({
   }
 
   async function shutdown() {
+    if (config.agentRuntimeEnabled) await piWebUi?.stop?.();
     piChat?.close?.();
     try {
       await goalsPackage?.stop?.();

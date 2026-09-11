@@ -171,6 +171,17 @@ test("rejects unauthorized and unsupported Chat connections", async () => {
   }
 });
 
+test("does not expose the legacy Chat bridge for the managed pi-web-ui runtime", () => {
+  const chat = createPiChatWebSocket({
+    config: supportedConfig({agentRuntimeEnabled: true}),
+    hasBrowserAccess: () => true,
+    terminalSession: {writePrompt() {}},
+    transcriptService: transcriptStub(),
+  });
+  assert.equal(chat.supported, false);
+  chat.close();
+});
+
 test("does not acknowledge a prompt when the PTY bridge fails", async () => {
   const runtime = await createServer({terminalSession: {writePrompt: () => { throw new Error("private"); }}});
   try {
