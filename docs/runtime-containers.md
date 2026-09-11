@@ -101,10 +101,17 @@ The server-owned workspace marker `agentUiVersion: "pi-web-ui-v1"` is passed to
 the runner as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`. A marked `pi-chrome`
 runner completes workspace restore and harness materialization before starting
 exactly one supervised child from `/opt/mapache/pi-web-ui/dist/server/index.js`.
-The child is fixed to loopback `127.0.0.1:8787`, uses `/var/lib/mapache/agent/pi`
-for non-secret Pi configuration, `/var/lib/mapache/agent/sessions` for flat
-transcripts, and `/var/lib/mapache/agent/ui` for UI state. The runner creates a
-private per-boot token, uses it only for the local `/api/health` check, and
+The child is fixed to loopback `127.0.0.1:8787`, runs with `/workspace` as its
+fixed upstream cwd, uses `/var/lib/mapache/agent/pi` for non-secret Pi
+configuration, `/var/lib/mapache/agent/sessions` as the explicit flat
+`PI_CODING_AGENT_SESSION_DIR`, and `/var/lib/mapache/agent/ui` for UI state.
+The upstream project picker and history actions follow existing symlinks and
+reject paths outside those canonical roots; stale client workspace state is
+ignored when it resolves outside `/workspace`. This constrains browser controls
+without claiming a shell sandbox: the ordinary shell/PTY process still shares
+the runner workspace. All browser clients list and open the same workspace
+transcripts, including their SDK-preserved IDs and branches. The runner creates
+a private per-boot token, uses it only for the local `/api/health` check, and
 never includes it in status or logs. Startup is bounded by local health; a
 startup failure or unexpected child exit is reported through runner activity
 with no automatic respawn. Shutdown sends a cooperative signal and applies the

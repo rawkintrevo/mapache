@@ -1,3 +1,4 @@
+diff --git a/server/managed.ts b/server/managed.ts
 --- a/server/managed.ts
 +++ b/server/managed.ts
 @@ -60,6 +60,17 @@
@@ -18,8 +19,7 @@
   * The reason to send back, or null when the message may proceed.
   *
   * Returning the text rather than a boolean keeps the caller a single line and
-  * puts the explanation next to the rule it comes from — the user gets a
-  * sentence, not a silently dropped message.
+diff --git a/server/agent-service.ts b/server/agent-service.ts
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
 @@ -70,7 +70,7 @@
@@ -51,6 +51,7 @@
  					// 系统提示词 base：主会话（组合模板）恒返回 undefined → SDK 走默认分支，
  					// 工具列表/Guidelines/文档指引等自动段照常拼装；SYSTEM.md 内容仅在
  					// 此处捕获（lastBaseSystemPrompt）作 {{soul}} 自动内容。子代理模板
+diff --git a/server/index.ts b/server/index.ts
 --- a/server/index.ts
 +++ b/server/index.ts
 @@ -880,12 +880,15 @@
@@ -93,6 +94,7 @@
  	await service.disposeAll();
  	wss.close();
  	httpServer.close();
+diff --git a/tests/unit/managed.test.ts b/tests/unit/managed.test.ts
 --- a/tests/unit/managed.test.ts
 +++ b/tests/unit/managed.test.ts
 @@ -1,6 +1,7 @@
@@ -121,10 +123,3 @@
  	it("rejects credential-bearing commands but permits metadata-only probes and saves", () => {
  		for (const type of MANAGED_CREDENTIAL_MESSAGES) {
  			expect(managedCredentialRefusal(type, true, {}), type).toMatch(/credentials.*Mapache/i);
-*** Update File: /home/rawkintrevo/gits/rawkintrevo/mapache/session-runner/upstream/pi-web-ui/manifest.json
-@@
-     "patches/0003-managed-subpath-and-service-worker.patch",
-     "patches/0004-embedded-agent-renewal.patch",
--    "patches/0005-managed-credential-ownership.patch"
-+    "patches/0005-managed-credential-ownership.patch",
-+    "patches/0006-single-managed-mcp-path.patch"
