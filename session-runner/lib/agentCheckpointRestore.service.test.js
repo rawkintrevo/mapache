@@ -120,6 +120,7 @@ async function makeFixture(t) {
     "sessions/chat.jsonl": Buffer.from("{\"type\":\"session\"}\n{\"type\":\"message\"}\n"),
     "pi/settings.json": Buffer.from("{\"theme\":\"dark\"}\n"),
     "ui/client-state.json": Buffer.from("{\"active\":\"chat\"}\n"),
+    "ui/subagent-templates.seeded.json": Buffer.from("[{\"name\":\"fixture-template\"}]\n"),
     "uploads/client-1/note.txt": Buffer.from("attachment\n"),
   };
   const agentFiles = Object.entries(agentContents).map(([relativePath, content]) => {
@@ -204,6 +205,10 @@ test("restores workspace files, history, settings, UI state, attachments, and sa
   assert.equal(await fs.readFile(path.join(config.piSessionDir, "chat.jsonl"), "utf8"), "{\"type\":\"session\"}\n{\"type\":\"message\"}\n");
   assert.equal(await fs.readFile(path.join(config.piAgentDir, "settings.json"), "utf8"), "{\"theme\":\"dark\"}\n");
   assert.equal(await fs.readFile(path.join(config.piWebUiDataDir, "client-state.json"), "utf8"), "{\"active\":\"chat\"}\n");
+  assert.deepEqual(
+      JSON.parse(await fs.readFile(path.join(config.piWebUiDataDir, "subagent-templates.seeded.json"), "utf8")),
+      [{name: "fixture-template"}],
+  );
   assert.equal(await fs.readFile(path.join(config.piWebUiDataDir, "uploads/client-1/note.txt"), "utf8"), "attachment\n");
   assert.equal(await fs.readlink(path.join(config.piWebUiDataDir, "shortcut.json")), "client-state.json");
 });

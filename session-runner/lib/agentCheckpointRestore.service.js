@@ -459,7 +459,9 @@ function validateAgentContent(entry, content, relativePath) {
   if ((entry.kind === "pi-setting" || entry.kind === "ui-state") && path.posix.extname(relativePath).toLowerCase() === ".json") {
     try {
       const parsed = JSON.parse(content.toString("utf8"));
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+      if (!parsed || typeof parsed !== "object" || (entry.kind === "pi-setting" && Array.isArray(parsed))) {
+        throw new Error("invalid JSON state shape");
+      }
     } catch (error) {
       throw restoreError("checkpoint_manifest_invalid", `Restored JSON state is invalid: ${relativePath}`, error);
     }
