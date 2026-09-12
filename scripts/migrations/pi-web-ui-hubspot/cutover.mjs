@@ -173,7 +173,11 @@ export async function executeCutover({
     await releaseMigrationAuthority({db, admin, workspaceId, sessionId, generation: cleanGeneration, bootInstanceId: cleanBoot});
 
     const functions = require("../../../functions/index.js");
-    const restarted = await functions.operations.restartSession(ownerUid, workspaceId, sessionId);
+    const restartSession = functions.__mapacheMigrationOperations?.restartSession;
+    if (typeof restartSession !== "function") {
+      throw cutoverError("migration_restart_unavailable", "the internal session restart operation is unavailable");
+    }
+    const restarted = await restartSession(ownerUid, workspaceId, sessionId);
     serviceStarted = true;
     const result = {
       ok: true,

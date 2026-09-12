@@ -369,6 +369,17 @@ const API_HANDLERS = createApiHandlers({
   },
 });
 
+// Keep migration-only programmatic operations available to checked-in
+// migration scripts without advertising them as deployed Firebase functions.
+// The property is intentionally non-enumerable so the Functions runtime does
+// not treat it as a trigger export.
+Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
+  configurable: false,
+  enumerable: false,
+  value: Object.freeze({restartSession}),
+  writable: false,
+});
+
 exports.api = onRequest({
   cors: true,
   timeoutSeconds: 540,
