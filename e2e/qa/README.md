@@ -47,6 +47,14 @@ Common action types inside scripts:
 
 Keep manifests deterministic. Do not put secrets in case or script files.
 
+Managed pi-web cases use `cases/pi-web-marked-workspace-setup.json`. Before
+running one, an operator must create a disposable workspace, record its exact
+owner/workspace IDs, mark only that workspace with the server-owned
+`agentUiVersion=pi-web-ui-v1`, and provide the workspace name as the case
+parameter. The browser case does not mark workspaces and does not select by a
+production display name. If the marker, provider, browser, Cloud Run service,
+or named fault harness is unavailable, record the case as blocked.
+
 Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted execution. Do not assume a standalone local headless Chrome or Playwright launch is available in every sandboxed environment.
 
 ## Initial Case Catalog
@@ -66,6 +74,10 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
+- `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable pi-chrome workspace.
+- `cases/pi-web-functional.json`: Managed agent chat, read-only MCP/auth probes, files, history, terminal coexistence, Chrome/Preview, and native Goal assertions.
+- `cases/pi-web-history-git-resources.json`: Multiple session histories, file visibility, read-only Git status, resize, restart, and final-stop checks.
+- `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
 - `cases/mcp-servers-crud.json`: Right-drawer MCP server save path for selected workspaces.
@@ -76,3 +88,8 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/git-status.json`: Git status panel for GitHub-backed sessions.
 - `cases/git-change-pr-flow.json`: Git stage/commit/push/open PR.
 - `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke.
+
+Migration-specific checks live in `migration/hubspot-import-checks.md` and use
+the Task 24 importer against a restricted immutable backup and isolated target.
+They are not browser steps and never authorize a HubSpot CRM write or a source
+prefix mutation.

@@ -1,0 +1,41 @@
+{
+  "id": "pi-web.functional",
+  "title": "Managed pi-web functional surface",
+  "description": "Exercise one marked pi-chrome workspace through an inert chat turn, read-only connector probes, files, history, terminal coexistence, Chrome/Preview health, and inspector ownership.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/pi-web.functional",
+  "requires": {
+    "cloudRun": "Creates one billable marked pi-chrome service",
+    "piProvider": "Use an already configured QA provider; missing model access is blocked",
+    "readOnlyMcp": "An existing read-only connector may be present; no server is created or mutated",
+    "turnBudget": "At most two live turns, each bounded to 120 seconds; no CRM writes or Goal execution"
+  },
+  "steps": [
+    {"useCase": "cases/pi-web-marked-workspace-setup.json"},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-functional-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-functional"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "agent-ui-ready", "expected": "The marked session access response is ready and the embedded Agent UI reports readiness without a second browser or runner process."},
+    {"assert": "native-goal-surface", "expected": "The upstream native Goal control is visible when the pinned runtime exposes it; absence is a failure, and no Mapache legacy Goal bridge is used."},
+    {"assert": "native-goal-explicit-resume", "expected": "A one-question native Goal fixture remains paused until an explicit user action; no background Goal execution is accepted."},
+    {"useScript": "scripts/create-workspace-file-api.json", "parameters": {"path": "qa/pi-web-functional.txt", "fileName": "pi-web-functional.txt", "content": "managed pi web QA fixture"}},
+    {"useScript": "scripts/open-file-actions-menu.json"},
+    {"useScript": "scripts/expand-inspector.json"},
+    {"assert": "snapshot-text", "expected": "Authentication Center"},
+    {"assert": "snapshot-text", "expected": "MCP Servers"},
+    {"assert": "snapshot-text", "expected": "Skills"},
+    {"assert": "snapshot-text", "expected": "Extensions"},
+    {"assert": "preview-health", "expected": "Preview remains available beside the embedded agent and reports its safe readiness state."},
+    {"useScript": "scripts/read-only-pi-workspace-probes.json"},
+    {"useScript": "scripts/manage-pi-auth-modal.json"},
+    {"useScript": "scripts/pi-web-inert-turn.json"},
+    {"useScript": "scripts/pi-web-read-only-tool-turn.json"},
+    {"assert": "assistant-message-present", "expected": "One completed assistant response is visible with the requested MIGRATION_QA_OK text or a recorded provider failure; a provider failure is a case failure, not a pass."},
+    {"assert": "history-discovery-no-duplicates", "expected": "The completed conversation appears once after switching between Agent and Terminal views; no transcript is duplicated or rewritten."},
+    {"assert": "mcp-read-only-call", "expected": "The preconfigured read-only connector is called once with no write-capable operation; any missing connector is blocked rather than replaced with a mock pass."},
+    {"capture": "screenshot", "fileName": "managed-agent-functional.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

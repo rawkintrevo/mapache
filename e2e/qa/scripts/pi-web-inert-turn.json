@@ -1,0 +1,20 @@
+{
+  "id": "script.piWebInertTurn",
+  "title": "Submit one bounded inert Pi web turn",
+  "requires": {
+    "provider": "An existing QA-configured Pi provider; missing provider access blocks the case",
+    "modelTurn": "One live turn only; no tools, CRM mutations, or Goal execution"
+  },
+  "actions": [
+    {"type": "click", "text": "Chat"},
+    {"type": "waitForSnapshotText", "text": "Open Terminal", "timeoutMs": 10000},
+    {"type": "fill", "placeholder": "Ask Pi anything…", "value": "Reply exactly MIGRATION_QA_OK; do not use tools, browse, edit files, or start a Goal."},
+    {"type": "submit", "buttonName": "Send"},
+    {"type": "waitForSnapshotText", "text": "Pi is working…", "timeoutMs": 15000},
+    {"type": "waitForSnapshotNotText", "text": "Pi is working…", "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "The inert prompt is submitted once",
+    "Pi reaches a completed state within the 120-second turn bound"
+  ]
+}

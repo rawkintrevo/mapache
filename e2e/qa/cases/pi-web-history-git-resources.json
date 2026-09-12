@@ -1,0 +1,39 @@
+{
+  "id": "pi-web.history-git-resources",
+  "title": "Managed history, Git visibility, and session resources",
+  "description": "Use a marked disposable GitHub-backed workspace to validate multiple sessions, file visibility, read-only Git status, resource resize, and restart without writing a remote repository.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/pi-web.history-git-resources",
+  "requires": {
+    "cloudRun": "Creates and restarts one billable marked pi-chrome service",
+    "githubWorkspace": "The pre-marked disposable workspace is GitHub-backed and its exact workspace ID is recorded in restricted evidence",
+    "remoteSafety": "Do not push, open a PR, or mutate the remote repository in this case"
+  },
+  "steps": [
+    {"useCase": "cases/pi-web-marked-workspace-setup.json"},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-history-a-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-history"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-history-b-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-history"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "multiple-history-records", "expected": "The selected workspace session list contains both recorded session IDs, and each session retains its own history identity."},
+    {"useScript": "scripts/create-workspace-file-api.json", "parameters": {"path": "qa/pi-web-git.txt", "fileName": "pi-web-git.txt", "content": "read-only Git status fixture"}},
+    {"useScript": "scripts/refresh-git-status.json"},
+    {"assert": "git-status-read-only", "expected": "Git branch, working-tree, and ahead/behind status are visible; no push, commit, branch, or PR request occurs."},
+    {"useScript": "scripts/resize-selected-session.json", "parameters": {"cpu": "1", "memory": "1Gi"}},
+    {"assert": "resource-summary-updated", "expected": "The selected session reports the requested resource pair and does not silently select an unsupported preset."},
+    {"useScript": "scripts/restart-selected-session.json"},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "history-survives-restart", "expected": "The selected session returns with its same session identity and prior history remains discoverable without automatic model execution."},
+    {"useScript": "scripts/stop-selected-session.json"},
+    {"assert": "manual-stop-checkpoint", "expected": "Stop returns only after the final checkpoint/stop acknowledgement or reports a visible stop failure; uncertain stop never permits replacement."},
+    {"useScript": "scripts/restart-selected-session.json"},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"capture": "screenshot", "fileName": "history-git-resources.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/select-session-by-name.json", "parameters": {"sessionName": "qa-pi-web-history-a-{{timestamp}}"}},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

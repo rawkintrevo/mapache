@@ -54,6 +54,7 @@ Candidate flows:
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi-to-Codex handoff.
 - Skills and Extensions drawer smoke paths against a controlled runner fixture.
 - Workspace Goals draft creation, Pi capability gating, lifecycle command delivery, and operation recovery against a controlled runner fixture. The opt-in `e2e/qa/cases/workspace-goals-start.json` case covers the selected-session Start path, readable goal titles, explicit terminal handoff, and two consecutive answers through the native RPC adapter.
+- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including embedded chat/tools, multiple histories, terminal/files/Git, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, and deterministic failure-recovery assertions.
 
 Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome`.
 
@@ -114,6 +115,13 @@ Run slower checks when a change touches the related subsystem:
   the flat session layout through the actual pinned Pi SDK list/open APIs, preserve
   branches and bytes, record the intentional `pi-goal-x` settings cleanup, protect new
   target work, and prove repeat/verify-only behavior without model execution.
+- Hosted pi-web QA manifests: use `e2e/qa/cases/pi-web-marked-workspace-setup.json`
+  followed by the functional, history/resource, or failure-recovery case. These
+  cases are opt-in and blocked when the explicitly marked disposable workspace,
+  existing provider, read-only connector, browser, cloud service, or named
+  deterministic fault harness is unavailable. Migration instructions are in
+  `e2e/qa/migration/hubspot-import-checks.md`; they never authorize a live
+  HubSpot source write or CRM mutation.
 
 ## LLM-Assisted Regression Suite
 

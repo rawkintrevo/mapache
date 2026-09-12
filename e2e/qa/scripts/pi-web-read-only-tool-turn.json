@@ -1,0 +1,19 @@
+{
+  "id": "script.piWebReadOnlyToolTurn",
+  "title": "Submit one bounded read-only MCP tool turn",
+  "requires": {
+    "provider": "An existing QA-configured Pi provider; missing model access blocks the case",
+    "readOnlyMcp": "An existing configured read-only MCP tool with a deterministic response; do not add a server or use CRM mutations",
+    "modelTurn": "One live turn only, bounded to 120 seconds"
+  },
+  "actions": [
+    {"type": "fill", "placeholder": "Ask Pi anything…", "value": "Use only the already configured read-only MCP tool and reply with its bounded result. Do not write to HubSpot, edit files, browse, or start a Goal."},
+    {"type": "submit", "buttonName": "Send"},
+    {"type": "waitForSnapshotText", "text": "Pi is working…", "timeoutMs": 15000},
+    {"type": "waitForSnapshotNotText", "text": "Pi is working…", "timeoutMs": 120000}
+  ],
+  "successSignals": [
+    "The read-only tool prompt is submitted once",
+    "The tool result and completed assistant response are visible within the 120-second turn bound"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "id": "script.duplicateStartSameOperation",
+  "title": "Submit the same explicit session operation twice",
+  "parameters": {
+    "operationId": "qa-duplicate-start-{{timestamp}}",
+    "sessionName": "qa-duplicate-start-{{timestamp}}"
+  },
+  "requires": {
+    "cloudRun": "Creates one disposable marked pi-chrome session",
+    "operation": "The operation ID is unique to this run and must not be reused against another workspace"
+  },
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions",
+      "body": {"operationId": "{{operationId}}", "name": "{{sessionName}}", "imageKey": "pi-chrome", "sessionType": "cloud", "cpu": "1", "memory": "2Gi"}
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201, "timeoutMs": 30000},
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions",
+      "body": {"operationId": "{{operationId}}", "name": "{{sessionName}}", "imageKey": "pi-chrome", "sessionType": "cloud", "cpu": "1", "memory": "2Gi"}
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201, "timeoutMs": 30000}
+  ],
+  "successSignals": [
+    "Both POST requests use the same explicit operationId",
+    "The two responses identify one session ID and do not create a second writer"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "pi-web.marked-workspace-setup",
+  "title": "Use one explicitly marked disposable pi-chrome workspace",
+  "description": "Preflight for all managed pi-web QA cases. The workspace is created and marked outside the browser case with exact recorded IDs; this case only selects and verifies it.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/pi-web.marked-workspace-setup",
+  "parameters": {
+    "qaWorkspaceName": "qa-pi-web-marked-{{timestamp}}"
+  },
+  "requires": {
+    "chromeDevtools": true,
+    "devServer": "npm run dev",
+    "markedWorkspace": "A disposable workspace is pre-created and marked by the operator with agentUiVersion=pi-web-ui-v1",
+    "cleanup": "The selected workspace ID and every created session ID are recorded before cleanup; never substitute the HubSpot source ID"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/select-marked-pi-chrome-workspace.json", "parameters": {"workspaceName": "{{qaWorkspaceName}}"}},
+    {"assert": "workspace-marker", "expected": "The selected record in the authenticated GET /api/workspaces response has agentUiVersion exactly pi-web-ui-v1; if not, stop as blocked."},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"capture": "screenshot", "fileName": "marked-workspace-selected.png"}
+  ]
+}
