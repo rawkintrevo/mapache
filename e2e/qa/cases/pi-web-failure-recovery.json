@@ -28,6 +28,7 @@
     {"useScript": "scripts/refresh-app-state.json"},
     {"assert": "storage-failure-preserves-last-good", "expected": "The injected storage failure leaves the last good checkpoint pointer and reports a safe checkpoint error without empty fallback."},
     {"useScript": "scripts/arm-qa-fault.json", "parameters": {"fault": "uncertain-replacement"}},
+    {"useScript": "scripts/restart-after-uncertain-replacement.json"},
     {"assert": "replacement-needs-confirmed-stop", "expected": "An injected uncertain deletion or replacement does not authorize a successor runner until old-service deletion and generation handoff are confirmed."},
     {"useScript": "scripts/arm-qa-fault.json", "parameters": {"fault": "writer-revocation"}},
     {"useScript": "scripts/revoke-qa-writer.json"},

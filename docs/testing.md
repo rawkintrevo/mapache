@@ -122,7 +122,9 @@ Run slower checks when a change touches the related subsystem:
   deterministic fault harness is unavailable. The failure-recovery harness is
   enabled only for a session carrying `QA_CASE=pi-web-failure-recovery` and
   `MAPACHE_QA_FAULT_HARNESS=pi-web-failure-recovery-v1`; its checked-in scripts
-  arm and consume faults through the authenticated session API. Migration instructions are in
+  arm and consume faults through the authenticated session API. Short-lived
+  access fixtures renew on a bounded proportional schedule so the embedded
+  Agent iframe can settle before its next refresh. Migration instructions are in
   `e2e/qa/migration/hubspot-import-checks.md`; they never authorize a live
   HubSpot source write or CRM mutation.
 

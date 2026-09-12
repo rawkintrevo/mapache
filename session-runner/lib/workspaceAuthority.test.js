@@ -164,3 +164,19 @@ test("coordination loss fails closed and invokes child termination", async () =>
   assert.equal(childTerminated, true);
   await assert.rejects(() => authority.assertCurrentWriter(), (error) => error.code === "workspace_writer_authority_lost");
 });
+
+test("keeps the admitted writer usable for the bounded final save during stopping", async () => {
+  const store = initialStore();
+  store.workspace.agentRuntimeState = "stopping";
+  store.sessions["session-a"].status = "stopping";
+  const authority = createWorkspaceAuthority({
+    admin,
+    config: config("session-a", 1),
+    db: store.db,
+    instanceId: "boot-a",
+  });
+
+  await authority.acquire();
+  await authority.assertCurrentWriter();
+  assert.equal(authority.isCurrentWriter(), true);
+});

@@ -1,0 +1,23 @@
+{
+  "id": "script.restartAfterUncertainReplacement",
+  "title": "Attempt restart after the disposable uncertain-replacement fault",
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions/{{selectedSessionId}}/restart",
+      "body": {}
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/restart",
+      "method": "POST",
+      "expectedStatus": 502,
+      "timeoutMs": 60000
+    }
+  ],
+  "successSignals": [
+    "The injected uncertain deletion is consumed",
+    "Restart fails closed and does not launch a successor runner"
+  ]
+}

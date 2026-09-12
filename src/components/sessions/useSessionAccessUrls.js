@@ -5,6 +5,7 @@ const RENEWAL_RETRY_MS = 30 * 1000;
 const RENEWAL_MAX_RETRY_MS = 5 * 60 * 1000;
 const FAILURE_REFRESH_COOLDOWN_MS = 30 * 1000;
 const FAILURE_REFRESH_MAX_COOLDOWN_MS = 5 * 60 * 1000;
+const SHORT_LIVED_RENEWAL_MIN_DELAY_MS = 250;
 
 const EMPTY_STATE = {
   accessUrls: null,
@@ -92,7 +93,7 @@ export function useSessionAccessUrls({
         }
       }, delay);
     };
-    schedule(Math.max(0, expiresAtMs - Date.now() - RENEWAL_LEAD_MS));
+    schedule(renewalDelayMs(expiresAtMs));
 
     return () => {
       cancelled = true;
@@ -117,10 +118,22 @@ export function useSessionAccessUrls({
   return {...state, refresh, refreshAfterConnectionFailure};
 }
 
+function renewalDelayMs(expiresAtMs, now = Date.now()) {
+  const remainingMs = expiresAtMs - now;
+  if (remainingMs <= 0) return 0;
+  if (remainingMs > RENEWAL_LEAD_MS) return remainingMs - RENEWAL_LEAD_MS;
+  const shortLivedLeadMs = Math.max(
+      SHORT_LIVED_RENEWAL_MIN_DELAY_MS,
+      Math.floor(remainingMs / 2),
+  );
+  return Math.max(SHORT_LIVED_RENEWAL_MIN_DELAY_MS, remainingMs - shortLivedLeadMs);
+}
+
 export const sessionAccessTimings = {
   failureRefreshCooldownMs: FAILURE_REFRESH_COOLDOWN_MS,
   failureRefreshMaxCooldownMs: FAILURE_REFRESH_MAX_COOLDOWN_MS,
   renewalLeadMs: RENEWAL_LEAD_MS,
+  shortLivedRenewalMinDelayMs: SHORT_LIVED_RENEWAL_MIN_DELAY_MS,
   renewalMaxRetryMs: RENEWAL_MAX_RETRY_MS,
   renewalRetryMs: RENEWAL_RETRY_MS,
 };

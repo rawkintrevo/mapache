@@ -3,8 +3,8 @@
 const {randomUUID} = require("node:crypto");
 
 const DEFAULT_RENEWAL_INTERVAL_MS = 5_000;
-const ADMISSION_WORKSPACE_STATES = new Set(["starting", "running"]);
-const ADMISSION_SESSION_STATES = new Set(["provisioning", "running", "restarting", "resizing"]);
+const ADMISSION_WORKSPACE_STATES = new Set(["starting", "running", "stopping", "deleting"]);
+const ADMISSION_SESSION_STATES = new Set(["provisioning", "running", "restarting", "resizing", "stopping", "deleting"]);
 
 /**
  * Fences one physical runner boot inside the generation reserved by Functions.

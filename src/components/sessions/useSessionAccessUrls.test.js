@@ -39,6 +39,28 @@ describe("useSessionAccessUrls", () => {
     expect(loadAccessUrls).toHaveBeenCalledTimes(2);
   });
 
+  test("gives short-lived access fixtures time to settle before renewing", async () => {
+    const now = Date.now();
+    const loadAccessUrls = vi.fn()
+        .mockResolvedValueOnce({terminalUrl: "https://runner/short-one", expiresAt: new Date(now + 4 * 1000).toISOString()})
+        .mockResolvedValueOnce({terminalUrl: "https://runner/short-two", expiresAt: new Date(now + 4 * 1000).toISOString()});
+    const {result} = renderAccessHook(loadAccessUrls);
+    await waitFor(() => expect(result.current.accessUrls?.terminalUrl).toBe("https://runner/short-one"));
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(loadAccessUrls).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.accessUrls?.terminalUrl).toBe("https://runner/short-two"));
+    expect(loadAccessUrls).toHaveBeenCalledTimes(2);
+  });
+
   test("keeps working URLs on renewal failure and rate-limits recovery refreshes", async () => {
     const loadAccessUrls = vi.fn()
         .mockResolvedValueOnce({terminalUrl: "https://runner/one"})
