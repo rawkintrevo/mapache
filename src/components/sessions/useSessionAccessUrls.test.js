@@ -53,10 +53,31 @@ describe("useSessionAccessUrls", () => {
     });
     await waitFor(() => expect(loadAccessUrls).toHaveBeenCalledTimes(2));
     expect(result.current.accessUrls?.terminalUrl).toBe("https://runner/one");
-    expect(result.current.error).toBe("");
+    expect(result.current.error).toBe("temporary");
 
     act(() => vi.advanceTimersByTime(sessionAccessTimings.failureRefreshCooldownMs));
     act(() => expect(result.current.refreshAfterConnectionFailure()).toBe(true));
     await waitFor(() => expect(result.current.accessUrls?.terminalUrl).toBe("https://runner/two"));
+  });
+
+  test("backs off repeated browser access refresh failures", async () => {
+    const loadAccessUrls = vi.fn()
+        .mockResolvedValueOnce({terminalUrl: "https://runner/one"})
+        .mockRejectedValue(new Error("temporary"));
+    const {result} = renderAccessHook(loadAccessUrls);
+    await waitFor(() => expect(result.current.accessUrls?.terminalUrl).toBe("https://runner/one"));
+
+    act(() => expect(result.current.refreshAfterConnectionFailure()).toBe(true));
+    await waitFor(() => expect(loadAccessUrls).toHaveBeenCalledTimes(2));
+
+    act(() => vi.advanceTimersByTime(sessionAccessTimings.failureRefreshCooldownMs));
+    act(() => expect(result.current.refreshAfterConnectionFailure()).toBe(true));
+    await waitFor(() => expect(loadAccessUrls).toHaveBeenCalledTimes(3));
+
+    act(() => vi.advanceTimersByTime(sessionAccessTimings.failureRefreshCooldownMs));
+    act(() => expect(result.current.refreshAfterConnectionFailure()).toBe(false));
+    act(() => vi.advanceTimersByTime(sessionAccessTimings.failureRefreshCooldownMs));
+    act(() => expect(result.current.refreshAfterConnectionFailure()).toBe(true));
+    await waitFor(() => expect(loadAccessUrls).toHaveBeenCalledTimes(4));
   });
 });

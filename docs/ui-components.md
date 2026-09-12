@@ -50,6 +50,7 @@ This document serves as an index for significant UI components in the applicatio
 | `WorkspaceGoalsPanel` | `src/components/goals/WorkspaceGoalsPanel.jsx` | Workspace-level saved Goal list, draft form, and Pi lifecycle controls. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
 | `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal-first selected-session view with capability-gated Chat, Preview, and Chrome canvases, Models and Goal controls for Pi sessions, restart controls, SSH port-forward controls, and Git status placement. |
+| `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Marked pi-web-ui runtime status surface for server-reported lifecycle state, checkpoint time, persistent persistence/lifecycle errors, and separate signed browser-access failures. |
 | `PiChatCanvas` | `src/components/sessions/PiChatCanvas.jsx` | Capability-gated Pi Chat canvas with authoritative transcript replay, pending/working states, prompt composer, and Terminal fallback. |
 | `PiChatMessage` | `src/components/sessions/PiChatMessage.jsx` | Accessible user/assistant message bubble; assistant content uses safe GitHub Flavored Markdown without raw HTML. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |

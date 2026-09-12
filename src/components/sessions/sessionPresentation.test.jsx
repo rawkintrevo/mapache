@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {DrawerSessionList} from "../drawers/DrawerSessionList.jsx";
 import {SessionList} from "./SessionList.jsx";
-import {getSessionImageFreshness, getSessionResourceSummary, getSessionRunnerTags, getSessionStatusLabel, getSessionStatusTone, isRetryableProvisioningFailure} from "./sessionPresentation.js";
+import {formatSessionCheckpointTime, getSessionImageFreshness, getSessionResourceSummary, getSessionRunnerTags, getSessionRuntimeError, getSessionRuntimeStatus, getSessionStatusLabel, getSessionStatusTone, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
 
 const baseSession = {
   id: "session-1",
@@ -58,6 +58,33 @@ describe("session presentation helpers", () => {
     expect(getSessionResourceSummary({...baseSession, resources: {cpu: "1", memory: "2Gi"}})).toBe("Small · 1 vCPU / 2 GiB");
     expect(getSessionResourceSummary({...baseSession, resources: {cpu: "1", memory: "1Gi"}})).toBe("Custom · 1 vCPU / 1 GiB");
     expect(getSessionResourceSummary({...baseSession, resources: null})).toBe("Custom · — vCPU / —");
+  });
+
+  test("maps marked runtime lifecycle and persistence state to user-facing status", () => {
+    expect(getSessionRuntimeStatus({status: "provisioning", agentRuntimeState: "starting"})).toMatchObject({
+      state: "starting",
+      label: "Starting",
+    });
+    expect(getSessionRuntimeStatus({status: "running", agentRuntimeState: "running"})).toMatchObject({
+      state: "ready",
+      label: "Ready",
+    });
+    expect(getSessionRuntimeStatus({status: "stopping", agentRuntimeState: "stopping"})).toMatchObject({
+      state: "stopping",
+      label: "Stopping",
+    });
+    expect(getSessionRuntimeStatus({status: "stopped", agentRuntimeState: "stopped"})).toMatchObject({
+      state: "stopped",
+      label: "Stopped",
+    });
+    expect(getSessionRuntimeStatus({status: "running", agentRuntimeState: "running", agentRuntimeCheckpointError: "checkpoint_storage_failed"})).toMatchObject({
+      state: "error",
+      label: "Error",
+    });
+    expect(getSessionRuntimeError({agentRuntimeRecoveryWarning: "interrupted"})).toBe("runtime_interrupted_checkpoint_recovery_required");
+    expect(isRuntimeStopUncertain({status: "delete_failed"})).toBe(true);
+    expect(isRuntimeStopUncertain({status: "running", agentRuntimeState: "running"})).toBe(false);
+    expect(formatSessionCheckpointTime("not-a-timestamp")).toBe("Not recorded");
   });
 });
 
@@ -152,13 +179,30 @@ describe("session row rendering", () => {
             pendingOperations: {},
             selectedSessionId: "",
             selectedWorkspaceId: "workspace-1",
-            sessions: [{...baseSession, status: "stopped"}],
+            sessions: [{...baseSession, agentRuntimeState: "stopping", status: "stopped"}],
           }}
           onDeleteSession={vi.fn()}
           onRestartSession={onRestartSession}
           onSelectSession={vi.fn()}
           onStopSession={onStopSession}
         />,
+    );
+
+    expect(screen.getByRole("button", {name: "Resume Pi smoke"})).toBeDisabled();
+
+    rerender(
+      <DrawerSessionList
+        state={{
+          pendingOperations: {},
+          selectedSessionId: "",
+          selectedWorkspaceId: "workspace-1",
+          sessions: [{...baseSession, agentRuntimeState: "stopped", status: "stopped"}],
+        }}
+        onDeleteSession={vi.fn()}
+        onRestartSession={onRestartSession}
+        onSelectSession={vi.fn()}
+        onStopSession={onStopSession}
+      />,
     );
 
     await user.click(screen.getByRole("button", {name: "Resume Pi smoke"}));

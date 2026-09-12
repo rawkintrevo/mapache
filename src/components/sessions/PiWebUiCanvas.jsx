@@ -5,12 +5,13 @@ import {Button} from "../common/Button.jsx";
 const BRIDGE_VERSION = 1;
 const ACCESS_MESSAGE = "mapache.agent.access";
 
-export function PiWebUiCanvas({sessionName, url, onAccessRefreshNeeded}) {
+export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefreshNeeded}) {
   const frameRef = useRef(null);
   const initialUrlRef = useRef(url);
   const origin = getAgentOrigin(url);
   const [status, setStatus] = useState(origin ? "loading" : "error");
   const [error, setError] = useState(origin ? "" : "agent_access_unavailable");
+  const visibleError = accessError || error;
 
   const sendAccess = useCallback(() => {
     const frame = frameRef.current;
@@ -107,8 +108,8 @@ export function PiWebUiCanvas({sessionName, url, onAccessRefreshNeeded}) {
         />
         {status !== "ready" ? (
           <div aria-live="polite" className={`pi-web-ui-canvas__status pi-web-ui-canvas__status--${status}`} role="status">
-            <strong>{status === "renewing" ? "Refreshing Agent access" : status === "error" ? "Agent access error" : "Loading Agent"}</strong>
-            {status === "error" ? <code>{error || "agent_access_refresh_failed"}</code> : <span>The embedded workspace is connecting.</span>}
+            <strong>{accessError ? "Agent access error" : status === "renewing" ? "Refreshing Agent access" : status === "error" ? "Agent access error" : "Loading Agent"}</strong>
+            {status === "error" || accessError ? <code>{visibleError || "agent_access_refresh_failed"}</code> : <span>The embedded workspace is connecting.</span>}
           </div>
         ) : null}
       </div>

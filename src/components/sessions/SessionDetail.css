@@ -83,6 +83,87 @@
   border-color: color-mix(in srgb, #f59e0b 55%, var(--line));
 }
 
+.session-runtime-status {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.session-runtime-status--success {
+  border-color: color-mix(in srgb, #22c55e 45%, var(--line));
+}
+
+.session-runtime-status--warning {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--line));
+}
+
+.session-runtime-status--danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+}
+
+.session-runtime-status__summary,
+.session-runtime-status__error,
+.session-runtime-status__access {
+  display: grid;
+  gap: 3px;
+}
+
+.session-runtime-status__summary strong,
+.session-runtime-status__error strong,
+.session-runtime-status__access strong {
+  color: var(--text);
+}
+
+.session-runtime-status__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+}
+
+.session-runtime-status__details div {
+  display: grid;
+  gap: 2px;
+}
+
+.session-runtime-status__details dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.session-runtime-status__details dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.session-runtime-status__error,
+.session-runtime-status__access {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.session-runtime-status__error strong {
+  color: var(--danger);
+}
+
+.session-runtime-status__error code,
+.session-runtime-status__access code {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.session-runtime-status__access .button {
+  justify-self: start;
+  margin-top: 4px;
+}
+
 .session-restart-button--stale {
   border-color: #d97706;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);

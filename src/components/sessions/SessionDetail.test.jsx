@@ -228,6 +228,37 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.getByText(/older runner image/)).toBeInTheDocument();
   });
 
+  test("renders server-reported marked runtime status and checkpoint time", async () => {
+    renderDetail({
+      agentUiVersion: "pi-web-ui-v1",
+      agentRuntimeGeneration: 3,
+      agentRuntimeLastCheckpointAt: "2026-08-29T12:00:00.000Z",
+      agentRuntimeState: "running",
+    });
+
+    expect(await screen.findByRole("region", {name: "Agent runtime status"})).toHaveTextContent("Ready");
+    expect(screen.getByText("Last successful checkpoint")).toBeInTheDocument();
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    expect(screen.getByText("Runtime generation")).toBeInTheDocument();
+  });
+
+  test("keeps stop and persistence failures visible and blocks unsafe restart", () => {
+    renderDetail({
+      agentUiVersion: "pi-web-ui-v1",
+      agentRuntimeState: "stopping",
+      lastError: "checkpoint_storage_failed",
+      status: "stop_failed",
+    });
+
+    expect(screen.getByText("Error")).toBeInTheDocument();
+    expect(screen.getByRole("region", {name: "Agent runtime status"})).toHaveTextContent("checkpoint_storage_failed");
+    expect(screen.getByRole("button", {name: "Restart"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Restart"})).toHaveAttribute(
+        "title",
+        "Restart is disabled until the server confirms the stop outcome",
+    );
+  });
+
   test("opens the Goal controls below the session canvas and removes preview publishing actions", async () => {
     const user = userEvent.setup();
     const api = {listGoals: vi.fn().mockResolvedValue({goals: []})};

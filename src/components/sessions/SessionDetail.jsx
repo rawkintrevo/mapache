@@ -7,7 +7,8 @@ import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiChatCanvas} from "./PiChatCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
-import {getSessionImageFreshness, isRetryableProvisioningFailure} from "./sessionPresentation.js";
+import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
+import {getSessionImageFreshness, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
 import {derivePiChatSocketUrl} from "../../utils/piChat.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {deriveShellUrl} from "../../utils/shell.js";
@@ -38,6 +39,7 @@ export function SessionDetail({
     accessUrls,
     error: accessError,
     refreshAfterConnectionFailure,
+    refresh: refreshAccess,
   } = useSessionAccessUrls({
     enabled: hasRunnerUrl,
     workspaceId,
@@ -59,6 +61,7 @@ export function SessionDetail({
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
   const isRetryableFailure = isRetryableProvisioningFailure(session);
+  const isRestartBlocked = isRuntimeStopUncertain(session);
   const imageFreshness = getSessionImageFreshness(session);
   const isStaleImage = imageFreshness.state === "stale";
   const metrics = useResourceMetrics({
@@ -78,6 +81,11 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
+      <SessionRuntimeStatus
+        accessError={accessError}
+        onRetryAccess={refreshAccess}
+        session={session}
+      />
       <div className="canvas-header">
         {hasAgent || hasChat || capabilities.preview || capabilities.chrome ? (
           <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
@@ -177,6 +185,7 @@ export function SessionDetail({
           <div className="canvas-panel" hidden={activeCanvas !== "agent"}>
             <PiWebUiCanvas
               key={session.id}
+              accessError={accessError}
               onAccessRefreshNeeded={refreshAfterConnectionFailure}
               sessionName={session.name}
               url={accessUrls.agentUrl}
@@ -269,8 +278,8 @@ export function SessionDetail({
             <Button
               aria-label={isStaleImage ? "Restart session to pick up the latest container image" : "Restart"}
               className={isStaleImage ? "session-restart-button--stale" : ""}
-              disabled={busy}
-              title={isStaleImage ? "Restart to pick up the latest container image" : "Restart"}
+              disabled={busy || isRestartBlocked}
+              title={isRestartBlocked ? "Restart is disabled until the server confirms the stop outcome" : isStaleImage ? "Restart to pick up the latest container image" : "Restart"}
               variant="secondary"
               onClick={() => onRestartSession(session.id)}
             >
