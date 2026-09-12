@@ -8,6 +8,7 @@ import {Button} from "../common/Button.jsx";
 import {WorkspaceFileTree} from "../files/WorkspaceFileTree.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {GitDrawerSection} from "./GitDrawerSection.jsx";
+import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 
 export function LeftDrawer({
   state,
@@ -39,6 +40,8 @@ export function LeftDrawer({
   const fileActionsRef = useRef(null);
   const [fileActionsOpen, setFileActionsOpen] = useState(false);
   const selectedSession = (state.sessions || []).find((session) => session.id === state.selectedSessionId);
+  const selectedWorkspace = (state.workspaces || []).find((workspace) => workspace.id === state.selectedWorkspaceId);
+  const embeddedAgentSurface = selectedWorkspace?.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(selectedSession);
   const busy = hasPendingOperations(state.pendingOperations);
   const fileScopeIsSsh = Boolean(
       selectedSession &&
@@ -106,7 +109,7 @@ export function LeftDrawer({
           <h2>Navigation</h2>
           {toggleButton}
         </div>
-        <DrawerSection
+        {!embeddedAgentSurface ? <DrawerSection
           actions={[
             <div className="files-action-menu" key="file-actions" ref={fileActionsRef}>
               <Button
@@ -200,7 +203,7 @@ export function LeftDrawer({
             onSelectWorkspaceFile={onSelectWorkspaceFile}
             onToggleWorkspaceFileDir={onToggleWorkspaceFileDir}
           />
-        </DrawerSection>
+        </DrawerSection> : null}
         <DrawerSection
           actions={[
             <Button
@@ -232,14 +235,16 @@ export function LeftDrawer({
             onStopSession={onStopSession}
           />
         </DrawerSection>
-        <GitDrawerSection
-          busy={busy}
-          state={state}
-          onOpenGitManager={onOpenGitManager}
-          onPullGit={onPullGit}
-          onPushGit={onPushGit}
-          onToggleDrawerSection={onToggleDrawerSection}
-        />
+        {!embeddedAgentSurface ? (
+          <GitDrawerSection
+            busy={busy}
+            state={state}
+            onOpenGitManager={onOpenGitManager}
+            onPullGit={onPullGit}
+            onPushGit={onPushGit}
+            onToggleDrawerSection={onToggleDrawerSection}
+          />
+        ) : null}
       </div>
       <UserMenu
         state={state}

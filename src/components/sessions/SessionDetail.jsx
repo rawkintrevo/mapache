@@ -8,7 +8,8 @@ import {PiChatCanvas} from "./PiChatCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
-import {getSessionImageFreshness, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
+import {ManagedAgentSurface} from "./ManagedAgentSurface.jsx";
+import {getSessionImageFreshness, isMarkedRuntimeSession, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
 import {derivePiChatSocketUrl} from "../../utils/piChat.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {deriveShellUrl} from "../../utils/shell.js";
@@ -26,6 +27,7 @@ export function SessionDetail({
   onOpenPiModels,
   onRetryProvisioningSession,
   onRestartSession,
+  onStopSession,
   onCloseSshSessionForward,
   onCreateSshSessionForward,
   onUpdateSshForwardPort,
@@ -33,6 +35,7 @@ export function SessionDetail({
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [showGoals, setShowGoals] = useState(false);
   const [showShell, setShowShell] = useState(false);
+  const isManagedAgentSurface = isMarkedRuntimeSession(session);
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
   const {
@@ -71,8 +74,8 @@ export function SessionDetail({
   });
 
   useEffect(() => {
-    setActiveCanvas("terminal");
-  }, [workspaceId, session.id]);
+    setActiveCanvas(isManagedAgentSurface ? "agent" : "terminal");
+  }, [workspaceId, session.id, isManagedAgentSurface]);
 
   useEffect(() => {
     setShowGoals(false);
@@ -86,8 +89,8 @@ export function SessionDetail({
         onRetryAccess={refreshAccess}
         session={session}
       />
-      <div className="canvas-header">
-        {hasAgent || hasChat || capabilities.preview || capabilities.chrome ? (
+      {!isManagedAgentSurface ? <div className="canvas-header">
+        {(hasAgent || hasChat || capabilities.preview || capabilities.chrome) ? (
           <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -144,7 +147,7 @@ export function SessionDetail({
         {metricsSocketUrl && !isSshSession && session.status === "running" ? (
           <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} />
         ) : null}
-      </div>
+      </div> : null}
       {isProvisioning ? (
         <div aria-live="polite" className="provisioning-status">
           <strong>{session.provisioningState === "queued" ? "Queued for provisioning" : "Provisioning in progress"}</strong>
@@ -163,6 +166,29 @@ export function SessionDetail({
           <span>{imageFreshness.message}</span>
         </div>
       ) : null}
+      {isManagedAgentSurface ? (
+        <ManagedAgentSurface
+          accessError={accessError}
+          accessUrls={accessUrls}
+          activeCanvas={activeCanvas}
+          busy={busy}
+          capabilities={capabilities}
+          hasAgent={hasAgent}
+          hasBrowser={hasBrowser}
+          hasPreview={hasPreview}
+          hasRunnerUrl={hasRunnerUrl}
+          isRestartBlocked={isRestartBlocked}
+          isRetryableFailure={isRetryableFailure}
+          isStaleImage={isStaleImage}
+          metrics={metricsSocketUrl && !isSshSession && session.status === "running" ? <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} /> : null}
+          onAccessRefreshNeeded={refreshAfterConnectionFailure}
+          onRestartSession={onRestartSession}
+          onRetryProvisioningSession={onRetryProvisioningSession}
+          onStopSession={onStopSession}
+          session={session}
+          setActiveCanvas={setActiveCanvas}
+        />
+      ) : <>
       <div className="canvas-shell">
         {hasTerminal ? (
           <div className="canvas-panel" hidden={activeCanvas !== "terminal"}>
@@ -357,6 +383,7 @@ export function SessionDetail({
           ) : null}
         </div>
       ) : null}
+      </>}
     </div>
   );
 }

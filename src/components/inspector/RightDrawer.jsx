@@ -8,9 +8,11 @@ import {GoogleWorkspacePanel} from "./GoogleWorkspacePanel.jsx";
 import {McpServersPanel} from "./McpServersPanel.jsx";
 import {SkillsPanel} from "./SkillsPanel.jsx";
 import {SubagentsPanel} from "./SubagentsPanel.jsx";
+import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 
 export function RightDrawer({
   selectedSession,
+  selectedWorkspace,
   state,
   onInstallPiPackage,
   onCancelPiSkillEdit,
@@ -64,6 +66,8 @@ export function RightDrawer({
     return <aside className="drawer inspector collapsed">{toggleButton}</aside>;
   }
 
+  const embeddedAgentSurface = selectedWorkspace?.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(selectedSession);
+
   return (
     <aside className="drawer inspector">
       <div className="drawer-header">
@@ -79,7 +83,7 @@ export function RightDrawer({
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}
       />
-      <SkillsPanel
+      {!embeddedAgentSurface ? <SkillsPanel
         workspaceSkills={state.workspaceSkills}
         selectedSession={selectedSession}
         state={state}
@@ -89,8 +93,8 @@ export function RightDrawer({
         onOpenWorkspaceSkillModal={onOpenWorkspaceSkillModal}
         onRefreshWorkspaceSkills={onRefreshPiSkills}
         onToggleDrawerSection={onToggleDrawerSection}
-      />
-      <SubagentsPanel
+      /> : null}
+      {!embeddedAgentSurface ? <SubagentsPanel
         selectedSession={selectedSession}
         state={state}
         workspaceSubagents={state.workspaceSubagents}
@@ -100,7 +104,7 @@ export function RightDrawer({
         onOpenWorkspaceSubagentModal={onOpenWorkspaceSubagentModal}
         onRefreshWorkspaceSubagents={onRefreshWorkspaceSubagents}
         onToggleDrawerSection={onToggleDrawerSection}
-      />
+      /> : null}
       <McpServersPanel
         mcpServers={state.mcpServers}
         state={state}
@@ -122,7 +126,7 @@ export function RightDrawer({
         onToggleDrawerSection={onToggleDrawerSection}
         onUnbindConnection={onUnbindGoogleConnection}
       />
-      <ExtensionsPanel
+      {!embeddedAgentSurface ? <ExtensionsPanel
         piPackages={state.piPackages}
         selectedSession={selectedSession}
         state={state}
@@ -133,7 +137,7 @@ export function RightDrawer({
         onToggleDrawerSection={onToggleDrawerSection}
         onUpdatePiInstallSource={onUpdatePiInstallSource}
         onUpdatePiPackage={onUpdatePiPackage}
-      />
+      /> : null}
     </aside>
   );
 }

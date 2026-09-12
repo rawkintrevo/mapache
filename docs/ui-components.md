@@ -25,7 +25,7 @@ This document serves as an index for significant UI components in the applicatio
 | `AppShell` | `src/components/layout/AppShell.jsx` | React signed-in shell that owns the app wrapper, top bar, grid layout, drawers, workspace panel, and modal stack. |
 | `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, workspace dropdown, workspace create/delete actions, documentation links, and refresh control. |
 | `GlobalActionIndicator` | `src/components/layout/GlobalActionIndicator.jsx` | Shell-level live status indicator shown while global `state.busy` actions are running. |
-| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for workspace files, sessions, and the pinned user menu. |
+| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for sessions and the pinned user menu; legacy Files/Git sections remain only for unmarked rollout records. |
 | `GitDrawerSection` | `src/components/drawers/GitDrawerSection.jsx` | GitHub-session navigation section with current branch, pull/push actions, and Git manager entry point. |
 | `DrawerList` | `src/components/drawers/DrawerList.jsx` | Shared drawer row/list primitives for workspace, session, auth provider, package, extension, and future skill rows. |
 | `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
@@ -34,7 +34,7 @@ This document serves as an index for significant UI components in the applicatio
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
-| `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer. |
+| `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer; marked embedded-agent workspaces retain credentials, generic environment, MCP, and Google connection controls while upstream owns agent settings. |
 | `InspectorResourcePanel` | `src/components/inspector/InspectorResourcePanel.jsx` | Shared inspector section chrome for resource create, refresh, status, list, edit, and delete workflows. |
 | `InspectorResourceRow` | `src/components/inspector/InspectorResourcePanel.jsx` | Shared inspector resource row with configurable edit, delete, and domain-specific actions. |
 | `InspectorEditorModal` | `src/components/inspector/InspectorEditorModal.jsx` | Shared create/edit dialog shell used by inspector resource editors. |
@@ -46,10 +46,11 @@ This document serves as an index for significant UI components in the applicatio
 | `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for harness-gated workspace-local packages, currently Pi-only. |
 | `PackageInstallForm` | `src/components/inspector/PackageInstallForm.jsx` | React form for installing Pi packages into the active workspace. |
 | `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
-| `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders terminal-first session detail or workspace overview/session list. |
+| `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders Agent-first marked session detail or the legacy terminal-first workspace view during rollout. |
 | `WorkspaceGoalsPanel` | `src/components/goals/WorkspaceGoalsPanel.jsx` | Workspace-level saved Goal list, draft form, and Pi lifecycle controls. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React terminal-first selected-session view with capability-gated Chat, Preview, and Chrome canvases, Models and Goal controls for Pi sessions, restart controls, SSH port-forward controls, and Git status placement. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React selected-session view; marked sessions delegate to the Agent-first `ManagedAgentSurface` with Persistent Chrome/Preview siblings and runner lifecycle actions, while unmarked sessions retain the legacy canvases during rollout. |
+| `ManagedAgentSurface` | `src/components/sessions/ManagedAgentSurface.jsx` | Agent-first marked-session surface with signed embedded pi-web-ui, Persistent Chrome/Preview tabs, resource metrics, and Start/Stop/Restart controls. |
 | `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Marked pi-web-ui runtime status surface for server-reported lifecycle state, checkpoint time, persistent persistence/lifecycle errors, and separate signed browser-access failures. |
 | `PiChatCanvas` | `src/components/sessions/PiChatCanvas.jsx` | Capability-gated Pi Chat canvas with authoritative transcript replay, pending/working states, prompt composer, and Terminal fallback. |
 | `PiChatMessage` | `src/components/sessions/PiChatMessage.jsx` | Accessible user/assistant message bubble; assistant content uses safe GitHub Flavored Markdown without raw HTML. |

@@ -490,14 +490,13 @@ describe("frontend smoke coverage", () => {
 
     const sessionDialog = await screen.findByRole("dialog", {name: "New session"});
     expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
-    expect(within(sessionDialog).getByLabelText("Container image")).toBeInTheDocument();
+    expect(within(sessionDialog).queryByLabelText("Container image")).not.toBeInTheDocument();
     await user.type(within(sessionDialog).getByLabelText("Name"), "Agent Shell");
     await user.click(within(sessionDialog).getByRole("button", {name: "Create session"}));
 
     expect(sessionHandlers.sessions.createSession).toHaveBeenCalledWith({
       cpu: "1",
       env: {},
-      imageKey: "default",
       memory: "2Gi",
       name: "Agent Shell",
       sessionType: "cloud",

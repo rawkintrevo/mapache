@@ -3,6 +3,7 @@ import {SessionList} from "../sessions/SessionList.jsx";
 import {WorkspaceHeader} from "./WorkspaceHeader.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {WorkspaceGoalsPanel} from "../goals/WorkspaceGoalsPanel.jsx";
+import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 
 export function WorkspacePanel({
   selectedSession,
@@ -13,6 +14,7 @@ export function WorkspacePanel({
   onOpenPiModels,
   onRetryProvisioningSession,
   onRestartSession,
+  onStopSession,
   onCloseSshSessionForward,
   onCreateSshSessionForward,
   onSelectSession,
@@ -35,6 +37,7 @@ export function WorkspacePanel({
           onOpenPiModels={onOpenPiModels}
           onRetryProvisioningSession={onRetryProvisioningSession}
           onRestartSession={onRestartSession}
+          onStopSession={onStopSession}
           onCloseSshSessionForward={onCloseSshSessionForward}
           onCreateSshSessionForward={onCreateSshSessionForward}
           onUpdateSshForwardPort={onUpdateSshForwardPort}
@@ -47,7 +50,9 @@ export function WorkspacePanel({
     <section className="workspace">
       <WorkspaceHeader workspace={selectedWorkspace} />
       {state.error ? <div className="error">{state.error}</div> : null}
-      <WorkspaceGoalsPanel api={state.api} sessions={state.sessions} workspaceId={state.selectedWorkspaceId} />
+      {selectedWorkspace?.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(selectedSession) ? null : (
+        <WorkspaceGoalsPanel api={state.api} sessions={state.sessions} workspaceId={state.selectedWorkspaceId} />
+      )}
       <SessionList
         selectedSessionId={state.selectedSessionId}
         selectedWorkspaceId={state.selectedWorkspaceId}

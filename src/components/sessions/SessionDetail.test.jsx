@@ -35,11 +35,34 @@ function renderDetail(overrides = {}, options = {}) {
         onResizeSession={vi.fn()}
         onRetryProvisioningSession={options.onRetryProvisioningSession}
         onRestartSession={options.onRestartSession || vi.fn()}
+        onStopSession={options.onStopSession}
       />,
   );
 }
 
 describe("SessionDetail Chrome workflow", () => {
+  test("makes the embedded Agent the default managed workspace surface", async () => {
+    const user = userEvent.setup();
+    const onStopSession = vi.fn();
+    renderDetail({
+      agentUiVersion: "pi-web-ui-v1",
+      harnessId: "pi",
+      capabilities: {terminal: true, preview: true, chrome: true, chat: true},
+    }, {onStopSession});
+
+    expect(await screen.findByRole("tab", {name: "Agent"})).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", {name: "Persistent Chrome"})).toBeInTheDocument();
+    expect(screen.getByRole("tab", {name: "Preview"})).toBeInTheDocument();
+    expect(screen.queryByRole("tab", {name: "Terminal"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Models"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Goal"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Shell"})).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: "Stop"}));
+    expect(onStopSession).toHaveBeenCalledWith("session-1");
+  });
+
   test("places resource meters beside rather than inside the canvas tabs", async () => {
     vi.stubGlobal("WebSocket", class {
       addEventListener() {}

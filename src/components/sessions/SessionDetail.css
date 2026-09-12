@@ -169,6 +169,14 @@
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
 }
 
+.workspace-runner-lifecycle {
+  align-items: center;
+}
+
+.workspace-runner-lifecycle__hint {
+  margin-left: auto;
+}
+
 .canvas-shell iframe,
 .terminal-placeholder {
   width: 100%;
@@ -350,5 +358,10 @@
   .preview-url-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .workspace-runner-lifecycle__hint {
+    width: 100%;
+    margin-left: 0;
   }
 }

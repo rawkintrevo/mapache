@@ -1,6 +1,5 @@
 import {Plus, X} from "lucide-react";
 import {useState} from "react";
-import {sessionImages} from "../../config/sessionImages.js";
 import {parseEnvText} from "../../utils/envText.js";
 import {getDefaultSessionResources} from "../../utils/sessionResources.js";
 import {Button} from "../common/Button.jsx";
@@ -35,23 +34,11 @@ export function SessionModal({busy, error = "", selectedWorkspace = null, enviro
               env: parseEnvText(formData.get("env")),
             };
             if (environmentEntryIds.length) base.environmentEntryIds = environmentEntryIds;
-            onCreateSession(sessionType === "ssh" ? {
-              ...base,
-            } : {
-              ...base,
-              imageKey: formData.get("imageKey"),
-            });
+            onCreateSession(base);
           }}
         >
           <label><span>Name</span><input autoComplete="off" name="name" placeholder="shell" required /></label>
-          {sessionType === "cloud" ? (
-            <label>
-              <span>Container image</span>
-              <select name="imageKey" defaultValue={sessionImages[0]?.key}>
-                {sessionImages.map((image) => <option key={image.key} value={image.key}>{image.label}</option>)}
-              </select>
-            </label>
-          ) : workspaceSsh ? (
+          {workspaceSsh ? (
             <div className="workspace-source-fields">
               <p className="subtle">
                 This session will connect to {selectedWorkspace.source?.target?.username}@{selectedWorkspace.source?.target?.host}.

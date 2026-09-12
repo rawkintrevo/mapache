@@ -1,6 +1,6 @@
 import {Pause, Pencil, Play, RotateCcw, Trash2} from "lucide-react";
 import {SessionStatusSummary} from "../sessions/SessionStatusSummary.jsx";
-import {getSessionResourceSummary, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
+import {getSessionResourceSummary, isMarkedRuntimeSession, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {DrawerList, DrawerListActionButton, DrawerListItem} from "./DrawerList.jsx";
 
@@ -18,6 +18,7 @@ export function DrawerSessionList({state, onDeleteSession, onEditSession, onRest
     <DrawerList>
       {state.sessions.map((session) => {
         const actions = [];
+        const embeddedAgentSurface = isMarkedRuntimeSession(session);
         const stopUncertain = isRuntimeStopUncertain(session);
         actions.push(
           <DrawerListActionButton
@@ -50,11 +51,11 @@ export function DrawerSessionList({state, onDeleteSession, onEditSession, onRest
         if (session.status === "running") {
           actions.push(
           <DrawerListActionButton
-              disabled={busy || stopUncertain}
-              icon={<Pause aria-hidden="true" />}
-              key="pause"
-              label={`Pause ${session.name}`}
-              title={stopUncertain ? "Pause is disabled until the server confirms the stop outcome" : `Pause ${session.name}`}
+            disabled={busy || stopUncertain}
+            icon={<Pause aria-hidden="true" />}
+            key="pause"
+            label={`${embeddedAgentSurface ? "Stop" : "Pause"} ${session.name}`}
+            title={stopUncertain ? "Stop is disabled until the server confirms the stop outcome" : `${embeddedAgentSurface ? "Stop" : "Pause"} ${session.name}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onStopSession(session.id);
@@ -64,11 +65,11 @@ export function DrawerSessionList({state, onDeleteSession, onEditSession, onRest
         } else if (session.status === "stopped") {
           actions.push(
           <DrawerListActionButton
-              disabled={busy || stopUncertain}
-              icon={<Play aria-hidden="true" />}
-              key="resume"
-              label={`Resume ${session.name}`}
-              title={stopUncertain ? "Resume is disabled until the server confirms the stop outcome" : `Resume ${session.name}`}
+            disabled={busy || stopUncertain}
+            icon={<Play aria-hidden="true" />}
+            key="resume"
+            label={`${embeddedAgentSurface ? "Start" : "Resume"} ${session.name}`}
+            title={stopUncertain ? "Start is disabled until the server confirms the stop outcome" : `${embeddedAgentSurface ? "Start" : "Resume"} ${session.name}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onRestartSession?.(session.id);

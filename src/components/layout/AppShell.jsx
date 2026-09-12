@@ -100,7 +100,7 @@ export function AppShell(props) {
             />
           </Suspense>
         ) : (
-          <WorkspacePanel
+        <WorkspacePanel
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
@@ -108,7 +108,8 @@ export function AppShell(props) {
             onOpenPiAuthManage={modals.openPiAuthManageModal}
             onOpenPiModels={modals.openPiModelsModal}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
-            onRestartSession={sessions.restartSession}
+          onRestartSession={sessions.restartSession}
+          onStopSession={sessions.stopSession}
             onCloseSshSessionForward={sessions.closeSshSessionForward}
             onCreateSshSessionForward={sessions.createSshSessionForward}
             onSelectSession={sessions.selectSession}
@@ -117,6 +118,7 @@ export function AppShell(props) {
         )}
         <RightDrawer
           selectedSession={selectedSession}
+          selectedWorkspace={selectedWorkspace}
           state={state}
           onCancelWorkspaceSubagentEdit={pi.cancelWorkspaceSubagentEdit}
           onInstallPiPackage={pi.installPiPackage}
