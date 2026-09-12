@@ -101,6 +101,19 @@ is preparation for the later rehearsal/cutover tasks: do not run it against the
 live HubSpot source during ordinary deployment work, and never write to the
 source prefix.
 
+The companion importer lives under `scripts/migrations/pi-web-ui-hubspot/`. It
+requires a verified export plus explicit new owner/workspace/session IDs,
+storage prefix, and separate target roots for `/workspace`, flat Pi sessions,
+non-secret Pi config, and UI data. It rejects source/target identity or prefix
+overlap, checksum/path/symlink failures, credentials, unsupported history, and
+targets containing work. It stages the copy, validates discovery and opening
+through the pinned Pi SDK's `SessionManager.listAll` and `SessionManager.open`,
+then installs the fixed layout without starting an agent or model turn. The
+only managed-config rewrite is in the copied settings file: conflicting
+`pi-goal-x` package/launch declarations are removed and recorded in the
+comparison report; the backup remains unchanged. Use `--verify-only` for
+cutover or rollback evidence, and pass `--execute` only for an isolated target.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.

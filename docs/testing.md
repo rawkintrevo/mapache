@@ -109,6 +109,11 @@ Run slower checks when a change touches the related subsystem:
   These fixtures stay local and verify restricted inventory matching, dry-run defaults,
   quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary
   bytes, selected history, attachment references, and immutable manifest metadata.
+- One-off HubSpot import changes: `node --test scripts/migrations/pi-web-ui-hubspot/import.test.mjs`.
+  These fixtures build a checksummed export, verify manifest/path/symlink safety, import
+  the flat session layout through the actual pinned Pi SDK list/open APIs, preserve
+  branches and bytes, record the intentional `pi-goal-x` settings cleanup, protect new
+  target work, and prove repeat/verify-only behavior without model execution.
 
 ## LLM-Assisted Regression Suite
 
