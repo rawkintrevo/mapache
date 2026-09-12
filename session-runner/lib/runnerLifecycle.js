@@ -7,6 +7,7 @@ function createRunnerLifecycleCoordinator({
   chromeProfile,
   chromeProfileSnapshots,
   chromeRuntime,
+  checkpointScheduler,
   config,
   git,
   goalsPackage,
@@ -17,6 +18,9 @@ function createRunnerLifecycleCoordinator({
   resourceMetrics,
   piModelScope,
   setIntervalFn = setInterval,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+  now = () => Date.now(),
   sshSession,
   workspace,
   workspaceAuthority,
@@ -28,6 +32,7 @@ function createRunnerLifecycleCoordinator({
     isCurrentWriter: () => true,
     release: async () => false,
   };
+  let shutdownInFlight = null;
 
   async function start() {
     try {
@@ -52,7 +57,8 @@ function createRunnerLifecycleCoordinator({
       await activeHarness.materializeSubagents();
       if (config.agentRuntimeEnabled) await piWebUi.start();
       chromeProfileSnapshots.start();
-      startSyncLoop();
+      if (checkpointScheduler) checkpointScheduler.start();
+      else startSyncLoop();
       listen(() => {
         logger.log(`session runner listening on ${config.port}`);
       });
@@ -68,6 +74,20 @@ function createRunnerLifecycleCoordinator({
   }
 
   async function shutdown() {
+    return shutdownWithBudget({reason: "manual", budgetMs: config.manualSaveBudgetMs || 120_000});
+  }
+
+  async function shutdownWithBudget({reason, budgetMs}) {
+    if (shutdownInFlight) return shutdownInFlight;
+    shutdownInFlight = shutdownInternal({reason, budgetMs}).finally(() => {
+      shutdownInFlight = null;
+    });
+    return shutdownInFlight;
+  }
+
+  async function shutdownInternal({reason, budgetMs}) {
+    const deadline = now() + Math.max(1, Number(budgetMs) || 120_000);
+    checkpointScheduler?.stop?.();
     try {
       if (config.agentRuntimeEnabled) {
         try {
@@ -89,18 +109,22 @@ function createRunnerLifecycleCoordinator({
       resourceMetrics?.close?.();
       sshSession.closeAll();
       await chromeRuntime.stop();
-      await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
+      if (!checkpointScheduler) {
+        await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
+      }
       if (chromeProfileSnapshots.enabled()) {
         await chromeProfileSnapshots.stop();
-        if (authority.isCurrentWriter()) {
-          await chromeProfileSnapshots.finalize();
-        } else {
-          logger.warn?.("final Chrome profile snapshot skipped after writer authority loss");
-        }
+        if (authority.isCurrentWriter()) await bounded(chromeProfileSnapshots.finalize(), deadline, "checkpoint_timeout");
+        else logger.warn?.("final Chrome profile snapshot skipped after writer authority loss");
+      } else if (checkpointScheduler) {
+        await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
       } else if (authority.isCurrentWriter()) {
-        await workspaceSync.syncUp({includeArchives: true});
+        await bounded(workspaceSync.syncUp({includeArchives: true}), deadline, "checkpoint_timeout");
       } else {
         logger.warn?.("final workspace sync skipped after writer authority loss");
+      }
+      if (checkpointScheduler && chromeProfileSnapshots.enabled()) {
+        await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
       }
       await activity.updateSessionActivity({
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -111,6 +135,21 @@ function createRunnerLifecycleCoordinator({
         logger.error("workspace runtime authority release failed during shutdown", error);
       });
     }
+  }
+
+  function bounded(value, deadline, code) {
+    const remaining = Math.max(1, deadline - now());
+    let timer;
+    const timeout = new Promise((resolve, reject) => {
+      timer = setTimeoutFn(() => {
+        const error = new Error(code);
+        error.code = code;
+        reject(error);
+      }, remaining);
+    });
+    return Promise.race([value, timeout]).finally(() => {
+      if (timer !== undefined) clearTimeoutFn(timer);
+    });
   }
 
   function startSyncLoop() {
@@ -137,7 +176,7 @@ function createRunnerLifecycleCoordinator({
     }, config.syncIntervalMs);
   }
 
-  return {shutdown, start};
+  return {shutdown, shutdownWithBudget, start};
 }
 
 module.exports = {createRunnerLifecycleCoordinator};

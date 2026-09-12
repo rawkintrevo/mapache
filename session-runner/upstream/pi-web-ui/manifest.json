@@ -47,6 +47,7 @@
     "patches/0006-single-managed-mcp-path.patch",
     "patches/0007-workspace-root-and-flat-history.patch",
     "patches/0008-native-goal-persistence.patch",
-    "patches/0009-runtime-quiesce-control.patch"
+    "patches/0009-runtime-quiesce-control.patch",
+    "patches/0010-completed-turn-counter.patch"
   ]
 }

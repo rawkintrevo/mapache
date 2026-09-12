@@ -32,6 +32,7 @@ const {
 const {
   isActiveGithubWorkspaceSession,
   isShellSession,
+  normalizeSessionState,
   sessionStatusUpdate,
 } = require("./sessionLifecycle.helpers");
 const {resolveSessionCapabilities} = require("./runnerCatalog.helpers");
@@ -95,6 +96,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   const session = sessionSnap.data();
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  if (normalizeSessionState(session.status) === "stop_failed") throw httpError(409, "session_stop_failed");
 
   const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
   if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
@@ -197,7 +199,8 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }
-  await dependencies.deleteSessionService(sessionRef, session, {reason: "manual"});
+  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason: "manual"});
+  if (!serviceDeleted) throw httpError(502, "session_stop_failed");
   return toClientDoc(await sessionRef.get());
 }
 
@@ -288,8 +291,7 @@ async function reapIdleSessions(dependencies = {}) {
       stopReason: "idle_timeout",
       updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
     }));
-    await dependencies.deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
-    return true;
+    return dependencies.deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
   }));
 
   const stopped = results.filter((result) => result.status === "fulfilled" && result.value).length;

@@ -549,6 +549,32 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(idempotentDoc.provisioningState, "completed");
   assert.strictEqual(idempotentDoc.provisioningCloudRunOperationName, "operations/idempotent-create");
 
+  const originalFetch = global.fetch;
+  const shutdownUpdates = [];
+  let deleteCalled = false;
+  global.fetch = async () => ({ok: false, status: 500});
+  const shutdownFailureService = createCloudRunService({
+    auth: {getClient: async () => ({
+      request: async () => {
+        deleteCalled = true;
+        return {data: {}};
+      },
+    })},
+  });
+  const shutdownFailureRef = {
+    update: async (updates) => shutdownUpdates.push(updates),
+  };
+  const stopped = await shutdownFailureService.deleteSessionService(shutdownFailureRef, {
+    serviceName: "projects/p/locations/us-central1/services/runner",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "shutdown-token",
+    status: "stopping",
+  }, {reason: "manual"});
+  assert.strictEqual(stopped, false);
+  assert.strictEqual(deleteCalled, false);
+  assert.strictEqual(shutdownUpdates[0].status, "stop_failed");
+  global.fetch = originalFetch;
+
   if (originalProject === undefined) delete process.env.GCLOUD_PROJECT;
   else process.env.GCLOUD_PROJECT = originalProject;
   if (originalRunnerServiceAccount === undefined) delete process.env.SESSION_RUNNER_SERVICE_ACCOUNT;

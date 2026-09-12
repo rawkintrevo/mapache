@@ -41,6 +41,7 @@ const {createWorkspaceService} = require("./lib/workspace");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
+const {createAgentCheckpointScheduler} = require("./lib/agentCheckpointScheduler");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
 const {registerGitRoutes} = require("./routes/gitRoutes");
@@ -54,6 +55,7 @@ const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
+const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 
@@ -94,10 +96,11 @@ const workspaceAuthority = createWorkspaceAuthority({
   onLost: () => piWebUi?.stop?.(),
 });
 const checkpointPublisher = createAgentCheckpointService({admin, config, db, storage});
+const checkpointIdentity = () => ({bootInstanceId: workspaceAuthority.status().bootInstanceId});
 const checkpointRestore = createAgentCheckpointRestoreService({config, db, storage});
 const workspace = createWorkspaceService({
   admin,
-  checkpointIdentity: () => ({bootInstanceId: workspaceAuthority.status().bootInstanceId}),
+  checkpointIdentity,
   checkpointPublisher,
   checkpointRestore,
   config,
@@ -160,6 +163,16 @@ const piChat = createPiChatWebSocket({
 piWebUi = createPiWebUiProcess(config, {
   onExit: ({error}) => activity.markRuntimeStartupFailure(error),
 });
+const agentSnapshot = createAgentSnapshotService({config});
+const checkpointScheduler = createAgentCheckpointScheduler({
+  agentSnapshot,
+  checkpointIdentity,
+  checkpointPublisher,
+  config,
+  piModelScope,
+  piWebUi,
+  workspaceSync,
+});
 const agentGateway = createAgentGateway({
   accessVerifier: agentAccess,
   enabled: config.agentRuntimeEnabled,
@@ -189,6 +202,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   chromeProfile,
   chromeProfileSnapshots,
   chromeRuntime,
+  checkpointScheduler,
   config,
   git,
   goalsPackage,
@@ -302,6 +316,23 @@ runnerLifecycle.start()
       console.error("session runner failed to start", error);
       process.exit(1);
     });
+
+let signalShutdown = null;
+async function handleSignal(signal) {
+  if (signalShutdown) return signalShutdown;
+  signalShutdown = runnerLifecycle.shutdownWithBudget({
+    reason: signal,
+    budgetMs: config.sigtermSaveBudgetMs,
+  }).catch((error) => {
+    console.error(`session runner ${signal} shutdown failed`, error);
+  }).finally(() => {
+    process.exit(0);
+  });
+  return signalShutdown;
+}
+
+process.once("SIGTERM", () => { void handleSignal("SIGTERM"); });
+process.once("SIGINT", () => { void handleSignal("SIGINT"); });
 
 function hasRunnerAccess(req) {
   return Boolean(config.shutdownToken) && req.get("x-shutdown-token") === config.shutdownToken;

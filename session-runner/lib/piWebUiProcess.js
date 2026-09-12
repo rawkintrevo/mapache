@@ -345,7 +345,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       let socket;
       let settled = false;
       let buffer = "";
-      const timer = setTimeoutImpl(() => finish({ok: false, error: "control_timeout"}), Math.max(1, timeoutMs));
+      let timer;
       const finish = (value) => {
         if (settled) return;
         settled = true;
@@ -353,6 +353,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
         socket?.destroy?.();
         resolve(value);
       };
+      timer = setTimeoutImpl(() => finish({ok: false, error: "control_timeout"}), Math.max(1, timeoutMs));
       try {
         socket = controlConnectImpl(controlPath);
       } catch {
@@ -433,7 +434,7 @@ function safeActivity(value) {
   const result = {ok: source.ok === true};
   if (typeof source.error === "string" && source.error) result.error = source.error;
   if (typeof source.quiesced === "boolean") result.quiesced = source.quiesced;
-  for (const key of ["connectedClients", "activeConversations", "activeTools", "pendingMessages"]) {
+  for (const key of ["connectedClients", "activeConversations", "activeTools", "completedTurns", "pendingMessages"]) {
     if (Number.isFinite(source[key])) result[key] = Math.max(0, Math.floor(source[key]));
   }
   return result;

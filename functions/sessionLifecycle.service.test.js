@@ -33,11 +33,13 @@ const sessionRef = {
   },
 };
 const workspace = {source: {type: "blank"}, bucket: "bucket", storagePrefix: "workspaces/user-1/workspace-1", mcpConfig: {}};
+let deleteServiceResult = true;
 const lifecycle = createSessionLifecycleService({
   admin,
   deleteSessionService: async (...args) => {
     calls.push({kind: "deleteService", args});
-    return true;
+    if (!deleteServiceResult) currentSession = {...currentSession, status: "stop_failed"};
+    return deleteServiceResult;
   },
   normalizeRequestedSessionResources: () => ({cpu: "2", memory: "2Gi"}),
   patchSessionService: async (...args) => calls.push({kind: "patchService", args}),
@@ -151,6 +153,19 @@ assert.strictEqual(isIdleSession({
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};
   assert.deepStrictEqual(await lifecycle.deleteSession("user-1", "workspace-1", "session-1"), {ok: true});
   assert.strictEqual(calls.some((call) => call.kind === "delete"), true);
+
+  deleteServiceResult = false;
+  currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};
+  await assert.rejects(
+      lifecycle.stopSession("user-1", "workspace-1", "session-1"),
+      (error) => error.status === 502 && error.publicMessage === "session_stop_failed",
+  );
+  assert.strictEqual(currentSession.status, "stop_failed");
+  await assert.rejects(
+      lifecycle.restartSession("user-1", "workspace-1", "session-1"),
+      (error) => error.status === 409 && error.publicMessage === "session_stop_failed",
+  );
+  deleteServiceResult = true;
 
   console.log("session lifecycle service tests passed");
 })().catch((error) => {

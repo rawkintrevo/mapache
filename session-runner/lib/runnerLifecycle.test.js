@@ -41,6 +41,7 @@ function createLifecycleHarness(events, overrides = {}) {
       start: async () => events.push("chromeRuntime.start"),
       stop: async () => events.push("chromeRuntime.stop"),
     },
+    checkpointScheduler: overrides.checkpointScheduler,
     config,
     git: overrides.git || service("prepareGithubAutomationBranch", "git.prepareGithubAutomationBranch"),
     listen: overrides.listen || (() => events.push("server.listen")),
@@ -160,6 +161,60 @@ test("managed shutdown escalates after cooperative quiesce fails", async () => {
   await lifecycle.shutdown();
 
   assert.deepEqual(events.slice(0, 3), ["piWebUi.quiesce", "logger.warn", "piWebUi.stop"]);
+});
+
+test("managed shutdown finalizes the checkpoint scheduler after writers stop", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    checkpointScheduler: {
+      start: () => events.push("checkpointScheduler.start"),
+      stop: () => events.push("checkpointScheduler.stop"),
+      finalize: async () => events.push("checkpointScheduler.finalize"),
+    },
+    chromeProfileSnapshots: {
+      enabled: () => false,
+      finalize: async () => events.push("chromeProfileSnapshots.finalize"),
+      start: () => events.push("chromeProfileSnapshots.start"),
+      stop: async () => events.push("chromeProfileSnapshots.stop"),
+    },
+    config: {agentRuntimeEnabled: true},
+    piWebUi: {
+      start: async () => events.push("piWebUi.start"),
+      quiesce: async () => events.push("piWebUi.quiesce"),
+      stop: async () => events.push("piWebUi.stop"),
+    },
+  });
+
+  await lifecycle.start();
+  await lifecycle.shutdown();
+
+  assert.equal(events.indexOf("checkpointScheduler.start") < events.indexOf("server.listen"), true);
+  assert.equal(events.indexOf("checkpointScheduler.stop") < events.indexOf("piWebUi.quiesce"), true);
+  assert.equal(events.indexOf("piWebUi.stop") < events.indexOf("checkpointScheduler.finalize"), true);
+  assert.equal(events.indexOf("checkpointScheduler.finalize") < events.indexOf("activity.updateSessionActivity"), true);
+});
+
+test("checkpoint failure prevents shutdown acknowledgement", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    checkpointScheduler: {
+      start: () => {},
+      stop: () => events.push("checkpointScheduler.stop"),
+      finalize: async () => {
+        events.push("checkpointScheduler.finalize");
+        throw Object.assign(new Error("checkpoint storage failed"), {code: "checkpoint_storage_failed"});
+      },
+    },
+    chromeProfileSnapshots: {
+      enabled: () => false,
+      finalize: async () => {},
+      start: () => {},
+      stop: async () => {},
+    },
+  });
+
+  await assert.rejects(() => lifecycle.shutdown(), (error) => error.code === "checkpoint_storage_failed");
+  assert.equal(events.includes("activity.updateSessionActivity"), false);
 });
 
 test("shutdown closes forwards before final profile snapshot and activity update", async () => {

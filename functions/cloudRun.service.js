@@ -347,7 +347,7 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
   }
 
   try {
-    await requestRunnerShutdown(session);
+    await requestRunnerShutdown(session, {requireAcknowledgement: options.reason !== "idle_timeout"});
     const client = await auth.getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const response = await client.request({url, method: "DELETE"});
@@ -360,10 +360,11 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       return true;
     }
 
-    await sessionRef.update(sessionStatusUpdate(session, "stop_failed", {
+    const failureState = options.reason === "manual" || options.reason === "idle_timeout" ? "stop_failed" : "delete_failed";
+    await sessionRef.update(sessionStatusUpdate(session, failureState, {
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, {reconciliationReason: "cloud_run_stop_failed"}));
+    }, {reconciliationReason: failureState === "stop_failed" ? "cloud_run_stop_failed" : "cloud_run_delete_failed"}));
     return false;
   }
 }
@@ -654,8 +655,8 @@ function stringifyMcpConfig(value) {
   }
 }
 
-async function requestRunnerShutdown(session) {
-  if (!session.serviceUrl || !session.shutdownToken) return;
+async function requestRunnerShutdown(session, options = {}) {
+  if (!session.serviceUrl || !session.shutdownToken) return {ok: true, skipped: true};
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS);
@@ -666,16 +667,22 @@ async function requestRunnerShutdown(session) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      logger.warn("runner shutdown request failed", {
-        serviceId: session.serviceId,
-        status: response.status,
-      });
+      const error = new Error(`runner_shutdown_http_${response.status || "failed"}`);
+      error.code = "runner_shutdown_failed";
+      throw error;
     }
+    return {ok: true};
   } catch (error) {
     logger.warn("runner shutdown request failed", {
       serviceId: session.serviceId,
       error: cleanName(error.message || error),
     });
+    if (options.requireAcknowledgement) {
+      const failure = new Error("runner_shutdown_failed");
+      failure.code = "runner_shutdown_failed";
+      throw failure;
+    }
+    return {ok: false};
   } finally {
     clearTimeout(timeout);
   }
