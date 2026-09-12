@@ -66,7 +66,6 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 
 ## Initial Case Catalog
 
-- `cases/workspace-goals-start.json`: Start from an open Pi terminal, explicitly hand off, and answer consecutive native goal questions.
 - `cases/login.json`: QA custom-token login and signed-in shell.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-drawers.json`: Left drawer, drawer sections, inspector, refresh.
@@ -75,26 +74,21 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.
 - `cases/workspace-create-delete.json`: Blank workspace creation and deletion.
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
-- `cases/workspace-files-editor.json`: Workspace file create/edit/download URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
 - `cases/session-sidebar-entry-point.json`: Single create-session action in the left sidebar.
 - `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
 - `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable pi-chrome workspace.
-- `cases/pi-web-functional.json`: Managed agent chat, read-only MCP/auth probes, files, history, terminal coexistence, Chrome/Preview, and native Goal assertions.
-- `cases/pi-web-history-git-resources.json`: Multiple session histories, file visibility, read-only Git status, resize, restart, and final-stop checks.
+- `cases/pi-web-functional.json`: Managed Agent turns, read-only MCP/auth probes, native history, shell coexistence, Chrome/Preview, and native Goal assertions.
 - `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
 - `cases/mcp-servers-crud.json`: Right-drawer MCP server save path for selected workspaces.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
-- `cases/skills-crud.json`: Workspace-local Pi skill create/edit/delete.
-- `cases/skills-crud-codex.json`: Workspace-local Codex skill create/edit/delete.
-- `cases/extensions-package-crud.json`: Pi package install/update/remove.
-- `cases/git-status.json`: Git status panel for GitHub-backed sessions.
-- `cases/git-change-pr-flow.json`: Git stage/commit/push/open PR.
-- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke.
+- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path and retained inspector.
+
+Parent-level Files, Git, Skills, Subagents, Extensions, Models, Chat, and Mapache Goals cases are intentionally absent. Upstream Agent owns the live workspace, Git, model, history, skill, and native Goal surfaces; Mapache retains only lifecycle, authentication, MCP, Google Workspace, and migration/persistence boundaries.
 
 Migration-specific checks live in `migration/hubspot-import-checks.md` and use
 the Task 24 importer against a restricted immutable backup and isolated target.

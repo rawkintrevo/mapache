@@ -12,7 +12,7 @@ Locations:
 
 - `functions/*.helpers.test.js` for backend helper modules.
 - Frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
-- Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. The Goals protocol and baked-package bootstrap follow this pattern.
+- Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. Native upstream persistence and managed-agent boundary helpers follow this pattern.
 
 Default commands:
 
@@ -52,9 +52,8 @@ Candidate flows:
 - GitHub workspace clone/resume/status/push behavior.
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi-to-Codex handoff.
-- Skills and Extensions drawer smoke paths against a controlled runner fixture.
-- Workspace Goals draft creation, Pi capability gating, lifecycle command delivery, and operation recovery against a controlled runner fixture. The opt-in `e2e/qa/cases/workspace-goals-start.json` case covers the selected-session Start path, readable goal titles, explicit terminal handoff, and two consecutive answers through the native RPC adapter.
-- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including embedded chat/tools, multiple histories, terminal/files/Git, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, and deterministic failure-recovery assertions.
+- Native upstream Goal persistence and explicit paused/resume behavior inside the embedded Agent surface.
+- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, and deterministic failure-recovery assertions.
 
 Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome`.
 
@@ -149,7 +148,7 @@ Some sandboxed hosts still cannot launch a standalone local Chrome or Chromium C
 
 Chrome-image QA attaches to the runner-owned headed browser through CDP. It must verify that QA actions are visible in noVNC, that the shared browser and user tabs remain open after the run, and that reports stay under `$MAPACHE_QA_DIR` without cookies, response bodies, credentials, or profile paths. The checked-in `mapache-chrome` skill and `mapache-chrome-status` command are the supported diagnostics; QA must not launch a second Chromium instance.
 
-The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace files and editor behavior, session creation/lifecycle, Authentication Center, Pi auth selection, workspace skills for Pi and Codex sessions, Extensions, Git status, Git commit/push/PR flows, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
+The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, session creation/lifecycle, Authentication Center, Pi auth selection, MCP/Google connections, embedded Agent/Chrome/Preview surfaces, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
 
 Guardrails:
 

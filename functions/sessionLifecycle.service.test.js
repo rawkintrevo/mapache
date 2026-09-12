@@ -161,7 +161,7 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), false);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "chrome-lease");
-  assert.strictEqual(currentSession.capabilities.chat, true);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(currentSession.capabilities, "chat"), false);
 
   calls.length = 0;
   currentSession = {

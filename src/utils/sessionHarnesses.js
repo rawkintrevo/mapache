@@ -10,8 +10,6 @@ function normalizeCapabilities(capabilities = {}) {
     functions: Boolean(capabilities.functions),
     n64: Boolean(capabilities.n64),
     chrome: Boolean(capabilities.chrome),
-    chat: Boolean(capabilities.chat),
-    goals: Boolean(capabilities.goals),
   };
 }
 
@@ -24,10 +22,7 @@ function cloneHarness(harness) {
   return {
     ...harness,
     auth: {...(harness.auth || {supported: false})},
-    skills: {...(harness.skills || {supported: false})},
     mcp: {...(harness.mcp || {supported: false})},
-    subagents: {...(harness.subagents || {supported: false})},
-    packages: {...(harness.packages || {supported: false})},
   };
 }
 
@@ -79,31 +74,6 @@ export function sessionSupportsAuth(session) {
   return Boolean(sessionHarness(session)?.auth?.supported);
 }
 
-export function sessionSupportsWorkspaceSkills(session) {
-  return Boolean(sessionHarness(session)?.skills?.supported);
-}
-
-export function sessionSupportsPackages(session) {
-  return Boolean(sessionHarness(session)?.packages?.supported);
-}
-
-export function sessionSupportsSubagents(session) {
-  return Boolean(sessionHarness(session)?.subagents?.supported);
-}
-
-export function sessionSkillHarness(session) {
-  const harness = sessionHarness(session);
-  if (!harness?.skills?.supported) return null;
-  return {
-    id: harness.id,
-    label: harness.label,
-    managerLabel: "workspace-local skills",
-    relativeSkillsPath: harness.skills.relativePath,
-    examplePath: harness.skills.examplePath,
-    restartHint: harness.skills.restartHint,
-  };
-}
-
 export function sessionAuthHarness(session) {
   const harness = sessionHarness(session);
   if (!harness?.auth?.supported) return null;
@@ -115,21 +85,5 @@ export function sessionAuthHarness(session) {
     manageTitle: harness.auth.manageTitle,
     manageDescription: harness.auth.manageDescription,
     reloadHint: harness.auth.reloadHint,
-  };
-}
-
-export function sessionSubagentHarness(session) {
-  const harness = sessionHarness(session);
-  if (!harness?.subagents?.supported) return null;
-  return {
-    id: harness.id,
-    label: harness.label,
-    relativePath: harness.subagents.relativePath,
-    chainsRelativePath: harness.subagents.chainsRelativePath || "",
-    settingsRelativePath: harness.subagents.settingsRelativePath || "",
-    configPath: harness.subagents.configPath || "",
-    schema: harness.subagents.schema || "",
-    examplePath: harness.subagents.examplePath || "",
-    restartHint: harness.subagents.restartHint || "",
   };
 }

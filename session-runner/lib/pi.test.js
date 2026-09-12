@@ -4,7 +4,7 @@ const assert = require("assert");
 const test = require("node:test");
 const {createPiService} = require("./pi");
 
-test("shell harness defers unsupported skill and subagent services until route use", async () => {
+test("Pi service exposes only startup-owned seeded skill materialization", async () => {
   const service = createPiService({
     config: {
       harnessId: "shell",
@@ -14,12 +14,9 @@ test("shell harness defers unsupported skill and subagent services until route u
     syncUp: async () => {},
   });
 
-  await assert.rejects(
-      () => service.listWorkspaceSkills(),
-      (error) => error && error.code === "runner_skill_listing_unsupported",
-  );
-  await assert.rejects(
-      () => service.listWorkspaceSubagents(),
-      (error) => error && error.code === "runner_subagent_listing_unsupported",
-  );
+  assert.equal(typeof service.seedDefaultRuntimeSkills, "function");
+  for (const name of [
+    "listWorkspacePiPackages", "installWorkspacePiPackage", "updateWorkspacePiPackages",
+    "listWorkspaceSkills", "saveWorkspaceSkill", "listWorkspaceSubagents", "saveWorkspaceSubagent",
+  ]) assert.equal(service[name], undefined, `${name} is retired`);
 });

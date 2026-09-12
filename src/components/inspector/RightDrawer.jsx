@@ -3,49 +3,29 @@ import "./InspectorPanels.css";
 import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
-import {ExtensionsPanel} from "./ExtensionsPanel.jsx";
 import {GoogleWorkspacePanel} from "./GoogleWorkspacePanel.jsx";
 import {McpServersPanel} from "./McpServersPanel.jsx";
-import {SkillsPanel} from "./SkillsPanel.jsx";
-import {SubagentsPanel} from "./SubagentsPanel.jsx";
-import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 
 export function RightDrawer({
   selectedSession,
   selectedWorkspace,
   state,
-  onInstallPiPackage,
-  onCancelPiSkillEdit,
-  onDeletePiSkill,
-  onDeleteWorkspaceSubagent,
   onDeleteMcpServer,
   onEditMcpServer,
   onDeleteGoogleConnection,
   onEditGoogleConnection,
-  onEditPiSkill,
-  onEditWorkspaceSubagent,
   onOpenPiAuthManage,
   onOpenGenericEnvironment,
-  onOpenWorkspaceSkillModal,
-  onOpenWorkspaceSubagentModal,
   onNewMcpServer,
-  onNewPiPackage,
   onRefreshPiAuth,
   onRefreshMcpServers,
   onRefreshGoogleWorkspace,
-  onRefreshPiPackages,
-  onRefreshPiSkills,
-  onRefreshWorkspaceSubagents,
-  onRemovePiPackage,
   onToggleDrawerSection,
   onToggleRightDrawer,
-  onUpdatePiInstallSource,
   onUpdateMcpServerForm,
-  onUpdatePiPackage,
   onSaveMcpServer,
   onBindGoogleConnection,
   onUnbindGoogleConnection,
-  onCancelWorkspaceSubagentEdit,
 }) {
   const toggleButton = (
     <Button
@@ -66,8 +46,6 @@ export function RightDrawer({
     return <aside className="drawer inspector collapsed">{toggleButton}</aside>;
   }
 
-  const embeddedAgentSurface = selectedWorkspace?.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(selectedSession);
-
   return (
     <aside className="drawer inspector">
       <div className="drawer-header">
@@ -83,28 +61,6 @@ export function RightDrawer({
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}
       />
-      {!embeddedAgentSurface ? <SkillsPanel
-        workspaceSkills={state.workspaceSkills}
-        selectedSession={selectedSession}
-        state={state}
-        onCancelWorkspaceSkillEdit={onCancelPiSkillEdit}
-        onDeleteWorkspaceSkill={onDeletePiSkill}
-        onEditWorkspaceSkill={onEditPiSkill}
-        onOpenWorkspaceSkillModal={onOpenWorkspaceSkillModal}
-        onRefreshWorkspaceSkills={onRefreshPiSkills}
-        onToggleDrawerSection={onToggleDrawerSection}
-      /> : null}
-      {!embeddedAgentSurface ? <SubagentsPanel
-        selectedSession={selectedSession}
-        state={state}
-        workspaceSubagents={state.workspaceSubagents}
-        onCancelWorkspaceSubagentEdit={onCancelWorkspaceSubagentEdit}
-        onDeleteWorkspaceSubagent={onDeleteWorkspaceSubagent}
-        onEditWorkspaceSubagent={onEditWorkspaceSubagent}
-        onOpenWorkspaceSubagentModal={onOpenWorkspaceSubagentModal}
-        onRefreshWorkspaceSubagents={onRefreshWorkspaceSubagents}
-        onToggleDrawerSection={onToggleDrawerSection}
-      /> : null}
       <McpServersPanel
         mcpServers={state.mcpServers}
         state={state}
@@ -126,18 +82,6 @@ export function RightDrawer({
         onToggleDrawerSection={onToggleDrawerSection}
         onUnbindConnection={onUnbindGoogleConnection}
       />
-      {!embeddedAgentSurface ? <ExtensionsPanel
-        piPackages={state.piPackages}
-        selectedSession={selectedSession}
-        state={state}
-        onInstallPiPackage={onInstallPiPackage}
-        onNewPiPackage={onNewPiPackage}
-        onRefreshPiPackages={onRefreshPiPackages}
-        onRemovePiPackage={onRemovePiPackage}
-        onToggleDrawerSection={onToggleDrawerSection}
-        onUpdatePiInstallSource={onUpdatePiInstallSource}
-        onUpdatePiPackage={onUpdatePiPackage}
-      /> : null}
     </aside>
   );
 }

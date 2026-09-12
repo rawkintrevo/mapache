@@ -3,7 +3,6 @@
   "title": "Create a session for the selected workspace",
   "parameters": {
     "sessionName": "qa-session-{{timestamp}}",
-    "imageKey": "pi-basic",
     "cpu": "1",
     "memory": "2Gi",
     "sessionEnv": "QA_SESSION=1"
@@ -11,7 +10,6 @@
   "actions": [
     {"useScript": "scripts/open-session-modal.json"},
     {"type": "fill", "label": "Name", "value": "{{sessionName}}"},
-    {"type": "select", "name": "imageKey", "value": "{{imageKey}}"},
     {"type": "click", "text": "Advanced settings"},
     {"type": "select", "name": "cpu", "value": "{{cpu}}"},
     {"type": "select", "name": "memory", "value": "{{memory}}"},

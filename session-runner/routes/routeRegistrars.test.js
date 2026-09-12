@@ -5,7 +5,6 @@ const assert = require("node:assert/strict");
 const {registerBrowserRoutes} = require("./browserPreviewRoutes");
 const {registerWorkspaceRoutes} = require("./workspaceRoutes");
 const {registerGoogleMcpRoutes} = require("./googleMcpRoutes");
-const {registerGoalsRoutes} = require("./goalsRoutes");
 
 function createFakeApp() {
   const routes = [];
@@ -225,25 +224,4 @@ test("Google MCP status route requires runner access and returns safe status", a
   const authorized = createResponse();
   await route.handlers[0]({authorized: true}, authorized);
   assert.deepEqual(authorized.body, {ok: true, supported: true, servers: []});
-});
-
-test("goal routes keep runner access protection and operation lookup bounded", async () => {
-  const app = createFakeApp();
-  const goalsBridge = {
-    capabilities: () => ({ok: true, enabled: true, protocolVersion: 1}),
-    operation: () => ({ok: true, status: "accepted", operationId: "op-1"}),
-    snapshot: async () => ({ok: true, goals: []}),
-    command: async () => ({ok: true, accepted: true}),
-  };
-  registerGoalsRoutes({app, goalsBridge, hasRunnerAccess: (req) => req.authorized === true});
-
-  const capabilities = app.routes.find(({method, path}) => method === "GET" && path === "/goals/capabilities");
-  const unauthorized = createResponse();
-  await capabilities.handlers[0]({authorized: false}, unauthorized);
-  assert.equal(unauthorized.statusCode, 404);
-
-  const operation = app.routes.find(({method, path}) => method === "GET" && path === "/goals/operations/:operationId");
-  const authorized = createResponse();
-  await operation.handlers[0]({authorized: true, params: {operationId: "op-1"}}, authorized);
-  assert.deepEqual(authorized.body, {ok: true, status: "accepted", operationId: "op-1"});
 });

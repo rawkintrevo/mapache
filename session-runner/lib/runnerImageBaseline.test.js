@@ -18,22 +18,15 @@ const dockerfiles = [
 for (const dockerfile of dockerfiles) {
   test(`${dockerfile} provides and validates Python 3`, () => {
     const source = fs.readFileSync(path.join(runnerRoot, dockerfile), "utf8");
-
     assert.match(source, /apt-get install[^\n]*\bpython3\b/);
     assert.match(source, /&& python3 --version \\/);
   });
 }
 
-for (const dockerfile of ["Dockerfile.pi-basic", "Dockerfile.pi-web", "Dockerfile.pi-chrome"]) {
-  test(`${dockerfile} preinstalls the pinned Pi Goals package`, () => {
-    const source = fs.readFileSync(path.join(runnerRoot, dockerfile), "utf8");
-    assert.match(source, /RUN pi install npm:pi-goal-x@0\.31\.2/);
-    assert.match(source, /RUN node \/app\/lib\/patchPiGoalX\.js/);
-    assert.match(source, /ENV GOAL_BRIDGE_ENABLED=true/);
-    assert.match(source, /ENV GOAL_RPC_ENABLED=true/);
-    assert.match(source, /ENV PI_GOAL_X_VERSION=0\.31\.2/);
-    assert.match(source, /pi-mcp-adapter@2\.32\.1/);
-    assert.match(source, /RUN node \/app\/lib\/patchPiMcpAdapter\.js/);
-    assert.match(source, /ENV PI_WEB_MCP_ADAPTER_PATH=\/root\/\.pi\/agent\/npm\/node_modules\/pi-mcp-adapter\/index\.ts/);
-  });
-}
+test("the supported pi-chrome image has one upstream agent entrypoint", () => {
+  const source = fs.readFileSync(path.join(runnerRoot, "Dockerfile.pi-chrome"), "utf8");
+  assert.match(source, /pi-mcp-adapter@2\.32\.1/);
+  assert.match(source, /RUN node \/app\/lib\/patchPiMcpAdapter\.js/);
+  assert.match(source, /ENV PI_WEB_MCP_ADAPTER_PATH=\/root\/\.pi\/agent\/npm\/node_modules\/pi-mcp-adapter\/index\.ts/);
+  assert.doesNotMatch(source, /pi-goal-x|GOAL_RPC|patchPiGoalX|PI_GOAL_X/);
+});

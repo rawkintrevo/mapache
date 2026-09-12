@@ -1,13 +1,5 @@
 export const OPERATION_KEYS = Object.freeze({
   APP_REFRESH: "app.refresh",
-  GIT_COMMIT: "git.commit",
-  GIT_PULL: "git.pull",
-  GIT_PUSH: "git.push",
-  GIT_PULL_REQUEST: "git.pull-request",
-  GIT_STAGE: "git.stage",
-  GIT_UNSTAGE: "git.unstage",
-  GIT_BRANCH: "git.branch",
-  GIT_IGNORE: "git.ignore",
   SESSION_CREATE: "session.create",
   SESSION_DELETE: "session.delete",
   SESSION_EDIT: "session.edit",
@@ -19,7 +11,6 @@ export const OPERATION_KEYS = Object.freeze({
   SSH_FORWARD_CREATE: "ssh.forward-create",
   WORKSPACE_CREATE: "workspace.create",
   WORKSPACE_DELETE: "workspace.delete",
-  WORKSPACE_FILES_REFRESH: "workspace-files.refresh",
   WORKSPACE_RENAME: "workspace.rename",
   WORKSPACE_SELECT: "workspace.select",
 });

@@ -34,7 +34,6 @@ function renderModal(overrides = {}) {
     onClose: vi.fn(),
     onDelete: vi.fn(),
     onEdit: vi.fn(),
-    onOpenModelsFile: vi.fn(),
     onSave: vi.fn(),
     ...overrides,
   };
@@ -48,8 +47,7 @@ describe("PiAuthManageModal", () => {
     const props = renderModal();
 
     expect(screen.getByRole("button", {name: "Add authentication provider"})).toBeInTheDocument();
-    await user.click(screen.getByRole("button", {name: "Inspect/edit models.json"}));
-    expect(props.onOpenModelsFile).toHaveBeenCalled();
+    expect(screen.queryByRole("button", {name: "Inspect/edit models.json"})).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", {name: /Main Anthropic/})).toBeChecked();
     expect(screen.getByRole("checkbox", {name: /Backup Anthropic/})).not.toBeChecked();
     expect(screen.queryByText("Old environment key")).not.toBeInTheDocument();

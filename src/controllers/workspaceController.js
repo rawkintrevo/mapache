@@ -28,7 +28,7 @@ export function createWorkspaceController({
   loadSessions,
   loadMcpServers,
   loadGoogleWorkspace = async () => {},
-  loadSelectedSessionPanels,
+  loadSelectedSessionAccess,
   resetWorkspacePanels,
 }) {
   async function refreshWorkspaceList() {
@@ -114,7 +114,7 @@ export function createWorkspaceController({
       await loadSessions();
       await loadMcpServers();
       await loadGoogleWorkspace();
-      await loadSelectedSessionPanels();
+      await loadSelectedSessionAccess();
     }, "Working...", OPERATION_KEYS.WORKSPACE_SELECT);
   }
 

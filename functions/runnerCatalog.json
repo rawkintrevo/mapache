@@ -7,18 +7,9 @@
       "auth": {
         "supported": false
       },
-      "skills": {
-        "supported": false
-      },
       "mcp": {
         "supported": false,
         "sharedPath": ".mcp.json"
-      },
-      "subagents": {
-        "supported": false
-      },
-      "packages": {
-        "supported": false
       }
     },
     "ssh": {
@@ -28,18 +19,9 @@
       "auth": {
         "supported": false
       },
-      "skills": {
-        "supported": false
-      },
       "mcp": {
         "supported": false,
         "sharedPath": ".mcp.json"
-      },
-      "subagents": {
-        "supported": false
-      },
-      "packages": {
-        "supported": false
       }
     },
     "pi": {
@@ -87,34 +69,10 @@
         "manageDescription": "Choose which saved credentials should be written into this session's Pi auth.json.",
         "reloadHint": "Run /reload in Pi after saving if the active agent should reload credentials."
       },
-      "skills": {
-        "supported": true,
-        "relativePath": ".pi/skills",
-        "examplePath": "/workspace/.pi/skills/<name>/SKILL.md",
-        "restartHint": "Restart Pi in the terminal if a running agent needs to rescan skills."
-      },
       "mcp": {
         "supported": true,
         "sharedPath": ".mcp.json",
         "harnessSpecificPath": ".pi/mcp.json"
-      },
-      "subagents": {
-        "supported": true,
-        "relativePath": ".pi/agents",
-        "chainsRelativePath": ".pi/chains",
-        "settingsRelativePath": ".pi/settings.json",
-        "schema": "pi-agent-markdown",
-        "examplePath": "/workspace/.pi/agents/<name>.md",
-        "restartHint": "Restart Pi in the terminal if a running agent should reload subagents."
-      },
-      "packages": {
-        "supported": true,
-        "relativePath": ".pi/settings.json",
-        "restartHint": "Refresh after Pi CLI changes to reload workspace-local packages."
-      },
-      "goals": {
-        "supported": true,
-        "restartHint": "Start or resume managed goals from the workspace Goals panel."
       }
     },
     "codex": {
@@ -134,27 +92,10 @@
         "manageDescription": "Choose which saved credentials should be written into this session's Codex auth.json.",
         "reloadHint": "Restart Codex in the terminal after saving if the active agent should reload credentials."
       },
-      "skills": {
-        "supported": true,
-        "relativePath": ".agents/skills",
-        "examplePath": "/workspace/.agents/skills/<name>/SKILL.md",
-        "restartHint": "Restart Codex in the terminal if a running agent needs to rescan skills."
-      },
       "mcp": {
         "supported": true,
         "sharedPath": ".mcp.json",
         "harnessSpecificPath": ".codex/config.toml"
-      },
-      "subagents": {
-        "supported": true,
-        "relativePath": ".codex/agents",
-        "configPath": ".codex/config.toml",
-        "schema": "codex-agent-toml",
-        "examplePath": "/workspace/.codex/agents/<name>.toml",
-        "restartHint": "Restart Codex in the terminal if a running agent should reload subagents."
-      },
-      "packages": {
-        "supported": false
       }
     }
   },
@@ -170,8 +111,7 @@
         "preview": false,
         "previewQa": false,
         "functions": false,
-        "n64": false,
-        "chat": false
+        "n64": false
       }
     },
     {
@@ -185,9 +125,7 @@
         "preview": false,
         "previewQa": false,
         "functions": false,
-        "n64": false,
-        "chat": true,
-        "goals": true
+        "n64": false
       }
     },
     {
@@ -201,8 +139,7 @@
         "preview": false,
         "previewQa": false,
         "functions": false,
-        "n64": false,
-        "chat": false
+        "n64": false
       }
     },
     {
@@ -216,9 +153,7 @@
         "preview": true,
         "previewQa": true,
         "functions": true,
-        "n64": false,
-        "chat": true,
-        "goals": true
+        "n64": false
       }
     },
     {
@@ -232,8 +167,7 @@
         "preview": true,
         "previewQa": true,
         "functions": true,
-        "n64": false,
-        "chat": false
+        "n64": false
       }
     },
     {
@@ -248,9 +182,7 @@
         "previewQa": true,
         "functions": true,
         "n64": false,
-        "chrome": true,
-        "chat": true,
-        "goals": true
+        "chrome": true
       }
     },
     {
@@ -265,8 +197,7 @@
         "previewQa": true,
         "functions": true,
         "n64": false,
-        "chrome": true,
-        "chat": false
+        "chrome": true
       }
     },
     {
@@ -280,8 +211,7 @@
         "preview": true,
         "previewQa": false,
         "functions": false,
-        "n64": true,
-        "chat": false
+        "n64": true
       }
     }
   ]

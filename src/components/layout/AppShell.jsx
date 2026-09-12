@@ -13,7 +13,7 @@ const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({Profi
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, drawer, files, git, github, google = {}, modals, pi, sessions, workspaces} = handlers;
+  const {admin, app, drawer, github, google = {}, modals, pi, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -26,19 +26,13 @@ export function AppShell(props) {
   ].filter(Boolean).join(" ");
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
-    state.fileEditor?.open ||
     state.genericEnvironmentModalOpen ||
-    state.gitStatus?.manageOpen ||
     state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
-    state.piModelsModalOpen ||
-    state.pullRequestForm?.open ||
     state.sessionEditModalSessionId ||
     state.sessionModalOpen ||
     state.workspaceEditModalOpen ||
-    state.workspaceModalOpen ||
-    state.workspaceSkillModalOpen ||
-    state.workspaceSubagentModalOpen;
+    state.workspaceModalOpen;
 
   return (
     <div className="app">
@@ -60,23 +54,13 @@ export function AppShell(props) {
           onRestartSession={sessions.restartSession}
           onRetryProvisioningSession={sessions.retryProvisioningSession}
           onRefresh={app.refreshAll}
-          onRefreshWorkspaceFiles={files.refreshWorkspaceFiles}
-          onDownloadWorkspaceFile={files.downloadWorkspaceFile}
-          onOpenGitManager={git.openGitManagerModal}
-          onPullGit={git.pullGit}
-          onPushGit={git.pushGit}
-          onCreateWorkspaceDirectory={files.createWorkspaceDirectory}
-          onCreateWorkspaceFile={files.createWorkspaceFile}
-          onUploadWorkspaceFiles={files.uploadWorkspaceFiles}
           onSelectSession={sessions.selectSession}
           onShowProfile={modals.showProfile}
           onShowAdmin={admin.showAdmin}
-          onSelectWorkspaceFile={files.selectWorkspaceFile}
           onSignOut={app.signOut}
           onStopSession={sessions.stopSession}
           onToggleDrawer={drawer.toggleDrawer}
           onToggleDrawerSection={drawer.toggleDrawerSection}
-          onToggleWorkspaceFileDir={files.toggleWorkspaceFileDir}
         />
         {state.activePage === "admin" ? (
           <Suspense fallback={<LazySurfaceFallback label="Loading admin..." />}>
@@ -105,8 +89,6 @@ export function AppShell(props) {
             selectedWorkspace={selectedWorkspace}
             state={state}
             onGetSessionAccessUrls={sessions.getSessionAccessUrls}
-            onOpenPiAuthManage={modals.openPiAuthManageModal}
-            onOpenPiModels={modals.openPiModelsModal}
             onRetryProvisioningSession={sessions.retryProvisioningSession}
           onRestartSession={sessions.restartSession}
           onStopSession={sessions.stopSession}
@@ -120,35 +102,19 @@ export function AppShell(props) {
           selectedSession={selectedSession}
           selectedWorkspace={selectedWorkspace}
           state={state}
-          onCancelWorkspaceSubagentEdit={pi.cancelWorkspaceSubagentEdit}
-          onInstallPiPackage={pi.installPiPackage}
-          onCancelPiSkillEdit={pi.cancelPiSkillEdit}
           onDeleteMcpServer={pi.deleteMcpServer}
           onEditMcpServer={pi.editMcpServer}
           onDeleteGoogleConnection={google.deleteConnection}
           onEditGoogleConnection={modals.openGoogleWorkspaceModal}
-          onDeletePiSkill={pi.deletePiSkill}
-          onDeleteWorkspaceSubagent={pi.deleteWorkspaceSubagent}
-          onEditPiSkill={pi.editPiSkill}
-          onEditWorkspaceSubagent={pi.editWorkspaceSubagent}
           onOpenPiAuthManage={modals.openPiAuthManageModal}
           onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
-          onOpenWorkspaceSkillModal={modals.openWorkspaceSkillModal}
-          onOpenWorkspaceSubagentModal={modals.openWorkspaceSubagentModal}
           onNewMcpServer={pi.newMcpServer}
-          onNewPiPackage={pi.newPiPackage}
           onRefreshMcpServers={pi.refreshMcpServers}
           onRefreshGoogleWorkspace={google.loadGoogleWorkspace}
           onRefreshPiAuth={pi.refreshPiAuth}
-          onRefreshPiPackages={pi.refreshPiPackages}
-          onRefreshPiSkills={pi.refreshPiSkills}
-          onRefreshWorkspaceSubagents={pi.refreshWorkspaceSubagents}
-          onRemovePiPackage={pi.removePiPackage}
           onToggleDrawerSection={drawer.toggleDrawerSection}
           onToggleRightDrawer={drawer.toggleRightDrawer}
           onUpdateMcpServerForm={pi.updateMcpServerForm}
-          onUpdatePiInstallSource={pi.updatePiInstallSource}
-          onUpdatePiPackage={pi.updatePiPackage}
           onSaveMcpServer={pi.saveMcpServer}
           onBindGoogleConnection={google.bindConnection}
           onUnbindGoogleConnection={google.unbindConnection}

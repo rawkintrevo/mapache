@@ -43,11 +43,7 @@ function freezeHarness(harness) {
   return Object.freeze({
     ...harness,
     auth: Object.freeze(harness.auth || {supported: false}),
-    skills: Object.freeze(harness.skills || {supported: false}),
     mcp: Object.freeze(harness.mcp || {supported: false}),
-    subagents: Object.freeze(harness.subagents || {supported: false}),
-    packages: Object.freeze(harness.packages || {supported: false}),
-    goals: Object.freeze(harness.goals || {supported: false}),
   });
 }
 
@@ -59,9 +55,7 @@ function cloneCapabilities(capabilities) {
     functions: Boolean(capabilities && capabilities.functions),
     n64: Boolean(capabilities && capabilities.n64),
     chrome: Boolean(capabilities && capabilities.chrome),
-    chat: Boolean(capabilities && capabilities.chat),
   };
-  if (capabilities && Object.prototype.hasOwnProperty.call(capabilities, "goals")) result.goals = Boolean(capabilities.goals);
   return result;
 }
 
@@ -117,7 +111,6 @@ function resolveSessionCapabilities(session = {}) {
     ...capabilities,
     ...persistedCapabilities,
     preview: false,
-    chat: false,
   };
 }
 

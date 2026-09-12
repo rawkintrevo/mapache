@@ -1,6 +1,6 @@
 import {APP_ACTIONS} from "../state/appStore.js";
 
-export function createModalController({state, dispatch = () => {}, render, loadPiAuth, loadPiModels}) {
+export function createModalController({state, dispatch = () => {}, render, loadPiAuth}) {
   function showProfile() {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
@@ -50,16 +50,6 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
-  function openWorkspaceSkillModal() {
-    state.workspaceSkillModalOpen = true;
-    render();
-  }
-
-  function closeWorkspaceSkillModal() {
-    state.workspaceSkillModalOpen = false;
-    render();
-  }
-
   function openGoogleWorkspaceModal(connection = null) {
     const enabledServices = Array.isArray(connection?.enabledServices) ? connection.enabledServices : [];
     state.googleWorkspace = {
@@ -76,16 +66,6 @@ export function createModalController({state, dispatch = () => {}, render, loadP
 
   function closeGoogleWorkspaceModal() {
     state.googleWorkspaceModalOpen = false;
-    render();
-  }
-
-  function openWorkspaceSubagentModal() {
-    state.workspaceSubagentModalOpen = true;
-    render();
-  }
-
-  function closeWorkspaceSubagentModal() {
-    state.workspaceSubagentModalOpen = false;
     render();
   }
 
@@ -136,38 +116,21 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
-  function openPiModelsModal() {
-    state.piModelsModalOpen = true;
-    void loadPiModels();
-    render();
-  }
-
-  function closePiModelsModal() {
-    state.piModelsModalOpen = false;
-    render();
-  }
-
   return {
     closeAuthModal,
     closeGoogleWorkspaceModal,
     closePiAuthManageModal,
-    closePiModelsModal,
     closeSessionEditModal,
     closeSessionModal,
-    closeWorkspaceSubagentModal,
-    closeWorkspaceSkillModal,
     closeWorkspaceModal,
     closeWorkspaceEditModal,
     openAuthModal,
     openGoogleWorkspaceModal,
     openPiAuthManageModal,
-    openPiModelsModal,
     openGenericEnvironmentModal,
     openSessionEditModal,
     closeGenericEnvironmentModal,
     openSessionModal,
-    openWorkspaceSubagentModal,
-    openWorkspaceSkillModal,
     openWorkspaceModal,
     openWorkspaceEditModal,
     showProfile,

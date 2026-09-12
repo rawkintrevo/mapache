@@ -6,6 +6,6 @@
     {"type": "waitForSnapshotText", "text": "Authentication Center", "timeoutMs": 5000}
   ],
   "successSignals": [
-    "Inspector shows Authentication Center, Skills, and Extensions sections"
+    "Inspector shows Authentication Center, MCP Servers, and Google Workspace sections"
   ]
 }

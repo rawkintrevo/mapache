@@ -7,50 +7,32 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
-  DIRECTORY_MARKER_FILES,
   INTERNAL_STORAGE_DIR,
-  MAX_WORKSPACE_TEXT_FILE_BYTES,
-  MAX_WORKSPACE_UPLOAD_BYTES,
 } = require("./backendConfig");
 const {
-  cleanContentType,
   cleanName,
-  contentTypeForPath,
   httpError,
   normalizeStoragePrefix,
-  safeContentDispositionFilename,
   slugify,
   sortByUpdatedAtDesc,
   toClientDoc,
   userPath,
-  workspaceUploadBuffer,
 } = require("./backendUtils.helpers");
 const {normalizeEnvMap} = require("./env.helpers");
 const {
   normalizeMcpConfigPayload,
   normalizeStoredMcpConfig,
 } = require("./mcpConfig.helpers");
-const {
-  isDirectoryMarkerFileName,
-  isInternalStorageDirName,
-} = require("./runtimePaths.helpers");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 function createWorkspaceService(dependencies = {}) {
   return {
     createWorkspace: (uid, payload) => createWorkspace(uid, payload, dependencies),
-    createWorkspaceDirectory,
-    createWorkspaceFile,
-    createWorkspaceFileDownloadUrl,
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
-    listWorkspaceFiles,
     listWorkspaces,
-    readWorkspaceFile,
     renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
-    saveWorkspaceFile,
-    uploadWorkspaceFile,
   };
 }
 
@@ -398,159 +380,6 @@ async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
   await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
 }
 
-async function listWorkspaceFiles(uid, workspaceId, directoryPath = "") {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  if (!bucketName || !prefix) return {files: [], truncated: false};
-
-  const cleanDirectoryPath = normalizeWorkspaceDirectoryPath(directoryPath);
-  const basePrefix = `${prefix}/`;
-  const queryPrefix = cleanDirectoryPath ? `${basePrefix}${cleanDirectoryPath}/` : basePrefix;
-  const [files, nextQuery, response] = await admin.storage().bucket(bucketName).getFiles({
-    autoPaginate: false,
-    delimiter: "/",
-    maxResults: 500,
-    prefix: queryPrefix,
-  });
-  const directoryRows = (response && response.prefixes || [])
-      .map((storagePrefix) => storagePrefixToClientDirectory(storagePrefix, basePrefix))
-      .filter(Boolean);
-  const fileRows = files
-      .map((file) => storageFileToClientFile(file, basePrefix))
-      .filter(Boolean);
-  const byPath = new Map();
-  for (const entry of [...directoryRows, ...fileRows]) {
-    byPath.set(`${entry.type}:${entry.path}`, entry);
-  }
-
-  return {
-    files: Array.from(byPath.values())
-        .sort((left, right) => left.path.localeCompare(right.path)),
-    path: cleanDirectoryPath,
-    truncated: Boolean(nextQuery),
-  };
-}
-
-async function readWorkspaceFile(uid, workspaceId, path) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const [exists] = await file.exists();
-  if (!exists) throw httpError(404, "file_not_found");
-
-  const [metadata] = await file.getMetadata();
-  const size = Number(metadata.size || 0);
-  if (size > MAX_WORKSPACE_TEXT_FILE_BYTES) throw httpError(413, "file_too_large");
-
-  const [buffer] = await file.download();
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    content: buffer.toString("utf8"),
-    contentType: metadata.contentType || "text/plain",
-    size,
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function saveWorkspaceFile(uid, workspaceId, path, payload) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const content = String(payload.content ?? "");
-  if (Buffer.byteLength(content, "utf8") > MAX_WORKSPACE_TEXT_FILE_BYTES) {
-    throw httpError(413, "file_too_large");
-  }
-
-  await file.save(content, {
-    contentType: contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function uploadWorkspaceFile(uid, workspaceId, path, req) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const buffer = workspaceUploadBuffer(req);
-  if (!buffer.length) throw httpError(400, "empty_file_upload");
-  if (buffer.length > MAX_WORKSPACE_UPLOAD_BYTES) throw httpError(413, "file_too_large");
-
-  await file.save(buffer, {
-    contentType: cleanContentType(req.get("content-type")) || contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceFile(uid, workspaceId, payload = {}) {
-  const {bucket, file, prefix, relativePath} = await workspaceEntryStorageFile(
-      uid,
-      workspaceId,
-      payload.path,
-  );
-  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
-  await file.save("", {
-    contentType: contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${prefix}/`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceDirectory(uid, workspaceId, payload = {}) {
-  const {bucket, prefix, relativePath} = await workspaceEntryStorageFile(
-      uid,
-      workspaceId,
-      payload.path,
-  );
-  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
-  const markerRelativePath = `${relativePath}/${DIRECTORY_MARKER_FILES[0]}`;
-  const markerFile = bucket.file(`${prefix}/${markerRelativePath}`);
-  await markerFile.save("", {
-    contentType: "application/x-mapache-directory",
-    resumable: false,
-  });
-
-  const [metadata] = await markerFile.getMetadata();
-  return {
-    file: storageFileToClientFile(markerFile, `${prefix}/`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceFileDownloadUrl(uid, workspaceId, path) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const [exists] = await file.exists();
-  if (!exists) throw httpError(404, "file_not_found");
-
-  const expiresAtMs = Date.now() + 10 * 60 * 1000;
-  const filename = relativePath.split("/").pop() || "download";
-  const [url] = await file.getSignedUrl({
-    action: "read",
-    expires: expiresAtMs,
-    responseDisposition: `attachment; filename="${safeContentDispositionFilename(filename)}"`,
-    version: "v4",
-  });
-
-  return {
-    ok: true,
-    expiresAt: new Date(expiresAtMs).toISOString(),
-    filename,
-    url,
-  };
-}
-
 async function requireWorkspace(uid, workspaceId) {
   const snap = await db.collection("workspaces").doc(workspaceId).get();
   if (!snap.exists) throw httpError(404, "workspace_not_found");
@@ -563,131 +392,12 @@ function workspaceSessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
 }
 
-function storageFileToClientFile(file, queryPrefix) {
-  const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
-  if (!relativePath || relativePath.endsWith("/")) return null;
-  if (isHiddenWorkspaceFilePath(relativePath)) {
-    return null;
-  }
-  const directoryPath = workspaceDirectoryPathFromMarker(relativePath);
-  if (directoryPath) {
-    return {
-      path: directoryPath,
-      name: directoryPath.split("/").pop(),
-      type: "directory",
-      size: 0,
-      updatedAt: "",
-    };
-  }
-  const metadata = file.metadata || {};
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    type: "file",
-    size: Number(metadata.size || 0),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function workspaceStorageFile(uid, workspaceId, path) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  const relativePath = normalizeWorkspaceFilePath(path);
-  if (!bucketName || !prefix) throw httpError(400, "workspace_storage_not_configured");
-  return {
-    bucket: admin.storage().bucket(bucketName),
-    file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
-    prefix,
-    relativePath,
-  };
-}
-
-async function workspaceEntryStorageFile(uid, workspaceId, path) {
-  if (!String(path || "").trim()) throw httpError(400, "empty_file_name");
-  return workspaceStorageFile(uid, workspaceId, path);
-}
-
-async function assertWorkspacePathAvailable(bucket, prefix, relativePath) {
-  const pathParts = relativePath.split("/");
-  for (let index = 1; index < pathParts.length; index += 1) {
-    const [parentFileExists] = await bucket.file(`${prefix}/${pathParts.slice(0, index).join("/")}`).exists();
-    if (parentFileExists) throw httpError(409, "workspace_path_conflict");
-  }
-
-  const [targetExists] = await bucket.file(`${prefix}/${relativePath}`).exists();
-  if (targetExists) throw httpError(409, "workspace_path_conflict");
-
-  const [children] = await bucket.getFiles({
-    autoPaginate: false,
-    maxResults: 1,
-    prefix: `${prefix}/${relativePath}/`,
-  });
-  if (children.length) throw httpError(409, "workspace_path_conflict");
-}
-
-function normalizeWorkspaceFilePath(value) {
-  const path = String(value || "").replace(/^\/+|\/+$/g, "");
-  const parts = path.split("/").filter(Boolean);
-  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
-    throw httpError(400, "invalid_file_path");
-  }
-  if (parts.some((part) => isDirectoryMarkerFileName(part))) {
-    throw httpError(400, "invalid_file_path");
-  }
-  if (isHiddenWorkspaceFilePath(parts.join("/"))) {
-    throw httpError(400, "invalid_file_path");
-  }
-  return parts.join("/");
-}
-
-function normalizeWorkspaceDirectoryPath(value) {
-  const path = String(value || "").replace(/^\/+|\/+$/g, "");
-  if (!path) return "";
-  return normalizeWorkspaceFilePath(path);
-}
-
-function isHiddenWorkspaceFilePath(relativePath) {
-  const parts = String(relativePath || "").split("/").filter(Boolean);
-  if (isInternalStorageDirName(parts[0])) return true;
-  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
-}
-
-function storagePrefixToClientDirectory(storagePrefix, basePrefix) {
-  const relativePath = String(storagePrefix || "")
-      .slice(basePrefix.length)
-      .replace(/\/+$/g, "");
-  if (!relativePath || isHiddenWorkspaceFilePath(relativePath)) return null;
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    type: "directory",
-    size: 0,
-    updatedAt: "",
-  };
-}
-
-function workspaceDirectoryPathFromMarker(relativePath) {
-  for (const marker of DIRECTORY_MARKER_FILES) {
-    if (relativePath.endsWith(`/${marker}`)) {
-      return relativePath.slice(0, -(`/${marker}`).length) || "";
-    }
-  }
-  return "";
-}
-
 module.exports = {
   createWorkspaceService,
-  createWorkspaceDirectory,
-  createWorkspaceFile,
   deleteWorkspaceStorageIfUnshared,
-  isHiddenWorkspaceFilePath,
-  listWorkspaceFiles,
   listWorkspaces,
   getWorkspaceMcpConfig,
   normalizePublicGitHubRepoUrl,
-  normalizeWorkspaceDirectoryPath,
-  normalizeWorkspaceFilePath,
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSourcePayload,
   normalizeWorkspaceSyncPolicy,
@@ -695,7 +405,4 @@ module.exports = {
   requireWorkspace,
   renameWorkspace,
   saveWorkspaceMcpConfig,
-  storagePrefixToClientDirectory,
-  storageFileToClientFile,
-  workspaceStorageFile,
 };

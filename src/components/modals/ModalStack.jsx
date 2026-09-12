@@ -2,22 +2,16 @@ import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
 import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {GoogleWorkspaceModal} from "./GoogleWorkspaceModal.jsx";
-import {FileEditorDialog} from "./FileEditorDialog.jsx";
-import {PullRequestModal} from "./PullRequestModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
-import {PiModelsModal} from "./PiModelsModal.jsx";
 import {SessionModal} from "./SessionModal.jsx";
 import {SessionEditModal} from "./SessionEditModal.jsx";
-import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
-import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
-import {GitManagerModal} from "./GitManagerModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
   const {handlers, state} = props;
-  const {files, git, github, google, modals, pi, sessions, workspaces} = handlers;
+  const {github, google, modals, pi, sessions, workspaces} = handlers;
   const busy = hasPendingOperations(state.pendingOperations);
   const editingSession = state.sessions.find((session) => session.id === state.sessionEditModalSessionId);
 
@@ -91,76 +85,7 @@ export function ModalStack(props) {
           onClose={modals.closePiAuthManageModal}
           onDelete={pi.deletePiAuthProvider}
           onEdit={modals.openAuthModal}
-          onOpenModelsFile={files.openPiModelsFile}
           onSave={pi.saveSessionPiAuthSelection}
-        />
-      ) : null}
-      {state.piModelsModalOpen ? (
-        <PiModelsModal
-          modelState={state.piModels}
-          onClose={modals.closePiModelsModal}
-          onRefresh={sessions.loadPiModels}
-          onSave={sessions.savePiModelScope}
-        />
-      ) : null}
-      {state.workspaceSkillModalOpen ? (
-        <WorkspaceSkillModal
-          selectedSession={props.selectedSession}
-          workspaceSkills={state.workspaceSkills}
-          onCancelWorkspaceSkillEdit={pi.cancelPiSkillEdit}
-          onClose={modals.closeWorkspaceSkillModal}
-          onDeleteWorkspaceSkill={pi.deletePiSkill}
-          onEditWorkspaceSkill={pi.editPiSkill}
-          onSaveWorkspaceSkill={pi.savePiSkill}
-          onUpdateWorkspaceSkillForm={pi.updatePiSkillForm}
-        />
-      ) : null}
-      {state.workspaceSubagentModalOpen ? (
-        <WorkspaceSubagentModal
-          selectedSession={props.selectedSession}
-          workspaceSubagents={state.workspaceSubagents}
-          onCancelWorkspaceSubagentEdit={pi.cancelWorkspaceSubagentEdit}
-          onClose={modals.closeWorkspaceSubagentModal}
-          onSaveWorkspaceSubagent={async () => {
-            await pi.saveWorkspaceSubagent();
-            if (!state.workspaceSubagents?.error) {
-              modals.closeWorkspaceSubagentModal();
-            }
-          }}
-          onUpdateWorkspaceSubagentForm={pi.updateWorkspaceSubagentForm}
-        />
-      ) : null}
-      {state.fileEditor.open ? (
-        <FileEditorDialog
-          editor={state.fileEditor}
-          onClose={files.closeFileEditor}
-          onSave={files.saveFileEditor}
-          onUpdateContent={files.updateFileEditorContent}
-        />
-      ) : null}
-      {state.pullRequestForm.open ? (
-        <PullRequestModal
-          formState={state.pullRequestForm}
-          onClose={git.closePullRequestModal}
-          onSubmit={git.submitPullRequest}
-          onUpdate={git.updatePullRequestForm}
-        />
-      ) : null}
-      {state.gitStatus?.manageOpen ? (
-        <GitManagerModal
-          busy={busy}
-          gitStatus={state.gitStatus}
-          session={props.selectedSession}
-          onCheckoutBranch={git.checkoutGitBranch}
-          onClose={git.closeGitManagerModal}
-          onCommitGit={git.commitGit}
-          onCreateBranch={git.createGitBranch}
-          onIgnoreGitPath={git.ignoreGitPath}
-          onOpenPullRequest={git.openPullRequestModal}
-          onRefreshBranches={git.loadGitBranches}
-          onStageGitPath={git.stageGitPath}
-          onUnstageGitPath={git.unstageGitPath}
-          onUpdateGitCommitMessage={git.updateGitCommitMessage}
         />
       ) : null}
     </>

@@ -62,20 +62,15 @@ const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.ser
 const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
 const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
 const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
-const {createGitSessionService} = require("./gitSession.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
-const {createPiModelsService} = require("./piModels.service");
-const {createPiPackagesService} = require("./piPackages.service");
-const {createGoalsService} = require("./goals.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
 const {createSshSessionService} = require("./sshSession.service");
-const {createWorkspaceAgentAssetsService} = require("./workspaceAgentAssets.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
@@ -128,31 +123,6 @@ const agentAuthService = createAgentAuthService({
   requireWorkspace,
 });
 const openAiCodexAuthService = createOpenAiCodexAuthService({agentAuthService});
-const piPackagesService = createPiPackagesService({
-  admin,
-  db,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const goalsService = createGoalsService({
-  admin,
-  db,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const piModelsService = createPiModelsService({
-  admin,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const workspaceAgentAssetsService = createWorkspaceAgentAssetsService({
-  requireSession,
-  requireWorkspace,
-  requestRunnerJson,
-});
 const environmentKeysService = createEnvironmentKeysService({admin, db});
 const qaAuthService = createQaAuthService();
 const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
@@ -206,25 +176,6 @@ const {
   readSshSessionFile,
   saveSshSessionFile,
 } = sshSessionService;
-const gitSessionService = createGitSessionService({
-  githubService,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const {
-  commitGit,
-  getGitStatusSummary,
-  listGitBranches,
-  checkoutGitBranch,
-  createGitBranch,
-  ignoreGitPath,
-  openPullRequest,
-  pullGit,
-  pushGit,
-  stageGit,
-  unstageGit,
-} = gitSessionService;
 const sessionCreationService = createSessionCreationService({
   admin,
   db,
@@ -326,12 +277,8 @@ function googleMcpTokenRefreshUrl() {
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
   environmentKeysService,
-  goalsService,
   openAiCodexAuthService,
-  piModelsService,
-  piPackagesService,
   qaFaultHarnessService,
-  workspaceAgentAssetsService,
   workspaceService,
   githubService,
   googleWorkspaceService: googleWorkspaceApiService,
@@ -339,7 +286,6 @@ const API_HANDLERS = createApiHandlers({
     userWithUsage,
     listAdminUsers,
     setAdminUserWhitelist,
-    syncWorkspaceFiles,
     listSessions,
     createSession,
     renameSession,
@@ -355,17 +301,6 @@ const API_HANDLERS = createApiHandlers({
     listSshSessionForwards,
     createSshSessionForward,
     closeSshSessionForward,
-    getGitStatusSummary,
-    listGitBranches,
-    checkoutGitBranch,
-    createGitBranch,
-    ignoreGitPath,
-    pullGit,
-    stageGit,
-    unstageGit,
-    commitGit,
-    pushGit,
-    openPullRequest,
   },
 });
 
@@ -545,38 +480,6 @@ function currentRunnerImageReference(session = {}) {
   return session.image || "";
 }
 
-async function syncWorkspaceFiles(uid, workspaceId) {
-  await requireWorkspace(uid, workspaceId);
-  const snap = await sessionCollection(workspaceId)
-      .where("status", "==", "running")
-      .get();
-  const cloudSessions = snap.docs
-      .map((doc) => ({id: doc.id, ...doc.data()}))
-      .filter((session) => session.ownerUid === uid && session.serviceUrl && session.sessionType !== "ssh");
-
-  const results = await Promise.all(cloudSessions.map(async (session) => {
-    try {
-      await requestRunnerWorkspaceSyncDown(session);
-      return {sessionId: session.id, ok: true};
-    } catch (error) {
-      logger.warn("runner workspace sync down failed", {
-        workspaceId,
-        sessionId: session.id,
-        error: error.publicMessage || error.message,
-      });
-      return {sessionId: session.id, ok: false, error: error.publicMessage || "runner_workspace_sync_down_failed"};
-    }
-  }));
-
-  return {
-    ok: true,
-    sessionCount: cloudSessions.length,
-    syncedCount: results.filter((result) => result.ok).length,
-    failedCount: results.filter((result) => !result.ok).length,
-    results,
-  };
-}
-
 async function prepareSessionForProvisioning(session = {}) {
   if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") return session;
   const secretDocId = session.sshProvisioningSecretDocId || `sshWorkspace_${session.workspaceId}`;
@@ -676,14 +579,6 @@ function normalizeRequestedSessionResources(payload, options = {}) {
 
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
-}
-
-async function requestRunnerWorkspaceSyncDown(session) {
-  return requestRunnerJson(session, "/workspace/sync-down", {
-    method: "POST",
-    unavailableError: "runner_workspace_sync_down_unavailable",
-    failureError: "runner_workspace_sync_down_failed",
-  });
 }
 
 async function requestRunnerJson(session, routePath, options = {}) {

@@ -1,101 +1,90 @@
 # Frontend Architecture
 
-Planned replacement: [pi-web-ui integration](./plans/pi-web-ui-integration.md)
-records the agreed pi-chrome-only direction and one-off HubSpot migration.
-It is not implemented; the behavior below describes the current code.
+This page owns the current frontend state, rendering, and workflow boundaries.
+The embedded upstream application is the agent surface for marked workspaces;
+Mapache owns the surrounding workspace/session shell and account connections.
 
-## Purpose
+## Canonical owners
 
-This page owns the current frontend architecture: state ownership, React rendering boundaries, workflow modules, and UI/component routing.
-
-## Read When
-
-Read this before changing frontend startup, workspace/session state, modals, drawers, terminal/preview placement, Git controls, Pi panels, file workflows, or shared app styling.
-
-## Canonical Owner
-
-- Startup and global state: `src/main.js`
-- Workspace refresh, selection, creation, and deletion: `src/controllers/workspaceController.js`
-- Session subscription and selection repair: `src/controllers/sessionSubscriptionController.js`
-- React root: `src/App.jsx`
-- Shell and layout: `src/components/layout/`
-- Domain workflows: `src/workflows/`
-- UI controllers: `src/controllers/`
+- Startup and orchestration: `src/main.js`
+- App state and reducer boundary: `src/state/appStore.js` and
+  `src/state/initialState.js`
+- Workspace selection and CRUD: `src/controllers/workspaceController.js`
+- Session subscription/selection: `src/controllers/sessionSubscriptionController.js`
 - API client: `src/services/api.js`
-- Component inventory: [ui-components.md](./ui-components.md)
+- React root and shell: `src/App.jsx`, `src/components/layout/`,
+  `src/components/drawers/`, and `src/components/workspaces/`
+- Lifecycle workflows: `src/workflows/sessionLifecycle.js`
+- Account/connection workflows: `src/workflows/piAuth.js`,
+  `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
+  `src/workflows/githubConnection.js`
+- Component inventory: [UI components](./ui-components.md)
 
-## Current Behavior
+## Current behavior
 
-The frontend uses Vite and React. `src/main.js` initializes Firebase/Auth, owns the top-level app store facade, coordinates selected workspace/session subscriptions, and passes grouped handlers into React. `src/state/appStore.js` provides the reducer and observable store boundary; `src/main.js` subscribes the React root to that boundary so migrated domain updates render consistently. Migrated domains expose focused owners rather than mutating shared state directly. `src/App.jsx` chooses between the public landing page, fatal error surface, and signed-in app shell.
+`src/main.js` initializes Firebase Auth, creates the API client, maintains the
+store facade, subscribes to workspace sessions, and passes grouped handlers to
+React. Selection changes load only retained SSH-forward state; access URLs are
+loaded by the selected session surface. Workspace and session lifecycle actions
+are server-authoritative and use the shared pending-operation boundary.
 
-Top-level identity, selection, page, pending-operation, and error transitions go through the reducer-backed store in `src/state/appStore.js`. Named pending operations live in `state.pendingOperations` with reference counts and user-facing messages, so overlapping and nested `runBusy` calls can finish independently. The store keeps a stable state facade while the remaining domain fields are migrated incrementally, so existing workflow modules can continue receiving their state reference. Reducers return immutable next-state objects, and store subscribers notify the React root when a migrated slice changes.
+The signed-in shell has a Sessions drawer, workspace/session lifecycle controls,
+the workspace/session view, an account/profile surface, and a retained
+Mapache-owned inspector. The inspector contains Authentication Center, generic
+environment keys, MCP configuration, and Google Workspace connections. GitHub
+account/repository connection controls remain in the profile and workspace
+creation flows.
 
-The signed-in shell is componentized under `src/components/`. `AppShell` owns the outer app wrapper, drawers, workspace panel, profile page, right inspector drawer, and modal stack. Admin, profile, and modal surfaces are deferred with `React.lazy`; the workspace shell renders independently, with `LazySurfaceFallback` covering a deferred surface while its chunk loads. The Profile page includes account details, runner usage, and account-level GitHub connector controls for status, OAuth restart/connect, repository refresh, installation settings, and soft disconnect. New `pi-web-ui-v1` workspaces use `ManagedAgentSurface.jsx` as the primary canvas; unmarked sessions remain a readable terminal-first compatibility surface but cannot be newly launched. Runner-dependent panels reset while a selected session is provisioning, stopped, failed, or missing `serviceUrl`. Session status presentation distinguishes queued provisioning from active provisioning. Retryable provisioning failures expose one retry action that is disabled while an operation is pending, while unsupported historical records fail closed instead of being converted. Managed sessions render `SessionRuntimeStatus.jsx`, which presents server-reported starting/ready/stopping/stopped/error state, the last successful checkpoint, and persistent checkpoint/lifecycle errors; uncertain stop states disable restart/stop actions. The status surface treats signed browser access and iframe renewal errors as a separate, retryable browser concern and never infers execution state from browser presence.
+New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
+server-selected `pi-chrome` sessions. A marked running session renders
+`ManagedAgentSurface`, whose sibling tabs are Agent, Persistent Chrome, and
+Preview; resource metrics are separate read-only status. The embedded Agent
+iframe communicates through the signed `/agent/` gateway and a bounded
+postMessage bridge. Persistent Chrome and Preview keep their existing signed
+access URLs. A shell iframe remains available as a separate terminal surface;
+historical SSH sessions retain only their compatibility terminal and
+port-forward behavior.
 
-The managed shell keeps parent Files and Git sections hidden because those actions belong to the embedded app. `RightDrawer` exposes Mapache-owned authentication, generic environment, MCP, and Google connection controls, but hides the duplicate Skills, Subagents, and Extensions panels for managed sessions. `SessionModal` keeps resource presets and lifecycle creation but does not expose a client-selectable runner image. The unmarked branch remains only as a readable compatibility path for historical records while later tasks retire its duplicate controls.
+Unmarked historical sessions remain readable, but they do not expose a second
+Mapache Chat, Goals, file browser/editor, Git manager, model editor, package
+manager, skills manager, subagent manager, or extensions panel. Files, Git,
+model selection, skills, extensions, subagents, and native Goals belong to the
+embedded upstream application when that application is available.
 
-The workspace modal creates only Blank and GitHub workspaces. Historical Dev machine workspaces remain readable, but their session modal explains that new sessions cannot be started. The session modal derives a Cloud `pi-chrome` session with resource presets and never exposes a runner-image chooser; selected historical SSH sessions retain compatibility rendering without a new launch path.
+`PiAuthManageModal` manages only saved credential selection and entry CRUD. It
+does not edit model files or expose provider secrets. MCP and Google controls
+remain Mapache-owned because they configure external connections and token
+materialization rather than upstream agent preferences.
 
-Preview-capable sessions show the Preview tab in `SessionDetail`. Marked sessions render Agent, Persistent Chrome, and Preview through `ManagedAgentSurface.jsx`; Agent is selected when access becomes available, while signed browser/access failures remain visible beside the server runtime status. `PiWebUiCanvas.jsx` validates the runner origin and child window source for typed postMessage readiness, renewal requests, and status messages, then posts refreshed signed access without changing the iframe `src`; a new-tab action uses the same current signed agent URL. `BrowserCanvas.jsx` continues to render the authenticated Persistent Chrome sibling, and running Cloud sessions show `ResourceUtilization` beside the managed canvas tabs. The unmarked compatibility branch still owns the legacy Terminal, Chat, Shell, Models, Goal, SSH-forward, and old parent file/Git surfaces until later retirement tasks. `src/components/sessions/useSessionAccessUrls.js` owns initial signed access loading and renewal before `expiresAt`; failed renewals retain current URLs and surface an actionable access error. Mapache-owned Authentication Center, generic environment, MCP, and Google connection panels remain in the right inspector for marked sessions; upstream owns embedded agent settings, skills, extensions, subagents, files, and Git.
-
-The top bar owns workspace selection through a compact dropdown, with adjacent create, edit, and delete actions. The edit action opens `WorkspaceEditModal`, which renames the selected workspace without changing its storage prefix or session state. The left drawer always exposes the workspace's Sessions section and lifecycle controls, including session creation, selection/open, edit/resource controls, stop, restart, and delete. It also shows the legacy workspace-scoped Files and Git sections only on the unmarked compatibility path; marked embedded-agent sessions leave those surfaces to upstream. `SessionEditModal` owns session renaming plus the existing resource preset and advanced CPU/memory resize controls; managed-session detail displays a hint directing resource changes to that existing editor. The selected workspace header shows a type tag from `src/components/workspaces/workspaceSourceSummary.js` (`Blank`, `GitHub`, or `Dev machine`) instead of exposing implementation-flavored storage/session prefixes in the primary summary. The left drawer user menu shows an Admin item only when the current profile includes `isAdmin: true`. The Admin page lives in `src/components/admin/AdminPage.jsx` and reads paginated user summaries through `src/services/api.js`; `src/main.js` owns the admin page cursor stack, refresh, and whitelist toggle handlers.
-
-Live GitHub-backed sessions add a Git section below Sessions in the left navigation drawer. It shows the current branch and pull/push actions. `src/components/modals/GitManagerModal.jsx` owns branch listing, local/remote branch switching, branch creation, current commit and ahead/behind metadata, staged/unstaged/untracked file actions, `.gitignore` entries, commits, and pull requests. Git status and branch operations remain selected-session scoped.
-
-Workflow modules under `src/workflows/` own cohesive API/state sequences such as session lifecycle, GitHub connection and repository refresh, Git/PR operations, Pi auth, Pi packages, workspace skills, workspace subagents, and workspace file/editor actions. The Pi packages reference migration uses `src/state/piPackagesStore.js` for all slice updates and resets; `src/workflows/piPackages.js` never mutates `state.piPackages` or accepts a render callback. Controller modules under `src/controllers/` own drawer toggles, modal visibility, file tree/editor handlers, and right-panel handlers so `src/main.js` does not keep growing flat callback lists.
-
-Workspace file browsing is lazy. `src/workflows/workspaceFiles.js` loads the root directory first, tracks loaded directories in `state.workspaceFileLoadedDirs`, and fetches a directory's immediate children only when `WorkspaceFileTree` expands that folder. The workflow supports both Cloud Storage-backed workspaces and selected SSH sessions through the same directory-scoped API shape.
-
-Selected-session panel loads capture the current workspace/session identity through `src/utils/sessionRequest.js`. Git, Pi packages, skills, subagents, workspace files, and SSH forwarding ignore responses from requests that belong to an older selection. Independent panel requests launch concurrently through `src/workflows/selectedSessionPanels.js`, while capability-gated panels retain their existing reset and error states.
-
-The Files section action trigger opens an accessible popover with upload, create-file, and create-directory actions. New Cloud Storage-backed files and directory markers are created through the workspace API in the active directory (the selected file's parent or the last expanded directory), then synced and reloaded; new files are opened in the editor automatically. SSH-backed file scopes keep creation disabled and surface the existing unsupported-action message for uploads.
-
-`FileEditorDialog` keeps text editing as the default view for every file. Files ending in `.md` or `.markdown` additionally expose Edit and Preview tabs; Preview renders the dialog's current content, including unsaved edits, with GitHub Flavored Markdown support while leaving the existing Save action available. Raw HTML is not rendered by the Markdown preview.
-
-The right inspector uses `InspectorResourcePanel` and `InspectorResourceRow` in `src/components/inspector/InspectorResourcePanel.jsx` as the shared resource-management interface. The common layer owns section action order, status messaging, accessibility labels, and row edit/delete treatment; refresh and exceptional bulk actions remain compact header controls. Each domain panel supplies its own resource mapping, capability gates, and exceptional actions. `InspectorEditorModal` provides the shared editor dialog shell for modal-backed create/edit forms. Authentication Center is intentionally compact in the inspector: it exposes session-scoped auth management and generic-environment management actions without listing credentials or showing an add-provider action. `PiAuthManageModal` owns provider creation, selection, edit, and delete controls. The Skills inspector follows the same compact pattern: `SkillsPanel` launches `WorkspaceSkillModal`, which owns skill creation plus the checked discovered-skill inventory and writable-root edit/delete actions. Skill state remains harness-neutral under `state.workspaceSkills`; Pi writes `.pi/skills/**`, Codex writes `.agents/skills/**`, and the runner augments the modal inventory with recursive shared and user-local discovery roots. Shell and SSH sessions show an unsupported-state message. The right inspector also owns workspace-scoped MCP server management through `state.mcpServers`. The MCP panel edits the selected workspace's shared MCP config, not a single session; newly created sessions receive the config snapshot automatically and active sessions pick up edits after restart. Harness capability routing is centralized in `src/utils/sessionHarnesses.js` so panels do not guess behavior from image prefixes. The Subagents inspector mirrors the harness-neutral state model under `state.workspaceSubagents`, writing `.pi/agents/*.md` for Pi and `.codex/agents/*.toml` for Codex.
-
-The Google Workspace inspector uses `state.googleWorkspace` and `src/controllers/googleWorkspaceController.js` to render only safe saved-account summaries. A checked account is bound to the selected workspace and an unplugged account is unbound; the row toggle removes or restores that workspace binding with the account's authorized services. Add and edit actions open `GoogleWorkspaceModal`, which owns Workspace service selection, read-only/read-write access, and starting OAuth. OAuth completion refreshes the account list through a popup-close watcher. Account deletion warns with the number of affected workspace bindings, while binding changes apply only to the selected workspace and take effect for newly created or restarted sessions.
-
-The Authentication Center also manages generic environment keys through the separate `src/components/modals/GenericEnvironmentModal.jsx` surface and the Pi auth workflow. Names and labels are visible, but values are write-only after save. Saving a key while a session is selected automatically adds it to that session, and each registered-key row exposes a checkbox for changing the active session selection. Workspace and session creation forms can also select saved key IDs. Generic environment keys do not appear in the Pi auth management modal; saving provider selections preserves the session's existing environment-key selection. Applying a changed environment selection requires restart or reprovisioning. `PiAuthManageModal` also opens the active Pi session's `~/.pi/agent/models.json` through the runner `/models-file` route for direct inspection and validated JSON edits.
-
-Running Pi sessions expose a Models action beside the session controls. `PiModelsModal` loads the live authenticated catalog through the Functions proxy and runner `GET /models` route, supports search and bulk selection, and saves the ordered model IDs through `PUT /models`. Saving updates both Pi's `enabledModels` setting and the session document's `piScopedModels`; the user restarts Pi inside the terminal to apply the cycle list to an already-running Pi process.
-
-Cloud runner creation and resize use the shared resource catalog in `functions/sessionResourceCatalog.json`, imported by `src/utils/sessionResources.js`. `SessionResourceSelector` renders the priced `Small`, `Medium`, and `Large` presets as the primary control and keeps CPU/memory selectors under an accessible `Advanced settings` disclosure. Presets and advanced edits update the same normalized CPU/memory state; an exact preset is labeled by name and every other supported pair is labeled `Custom`. `SessionModal` uses the Small mapping by default for the server-selected `pi-chrome` runner. Historical SSH records retain their stored resource metadata but do not expose a new creation path. `SessionEditModal` reuses the same controls for supported sessions, submitting a resize only when CPU or memory changed and a rename only when the trimmed name changed. `SessionList` and `DrawerSessionList` summarize matched allocations with the preset label and show `Custom` for legacy or non-preset pairs.
-
-Session rows show runner image freshness independently from lifecycle status. The backend persists the deployed Cloud Run image digest and periodically compares it with the current Artifact Registry digest for the session's selected `imageKey`, exposing `latest`, `stale`, or `unknown`. Stale running sessions show a yellow freshness indicator and a restart action that explicitly explains it will pick up the latest container; stopped, provisioning, legacy, or lookup-failure states remain neutral/unknown.
-
-The catalog currently maps Small to `1 vCPU / 2 GiB`, Medium to `2 vCPU / 4 GiB`, and Large to `4 vCPU / 8 GiB`. Displayed prices are compute-only hourly estimates from the catalog's us-central1 rate metadata; they exclude free tier, discounts, network, storage, build, and other charges. Existing CPU/memory values remain the submitted API fields, so the UI does not require or persist a size key.
-
-Running sessions expose a Shell action in `src/components/sessions/SessionDetail.jsx`. It opens a second authenticated xterm iframe at the runner's `/shell` endpoint, so the shell has its own PTY while sharing the selected session workspace and environment with the agent terminal. `src/utils/shell.js` derives that page URL from the signed session access URL.
-
-## Styling
-
-Global CSS enters through `src/styles.css`, which imports `src/styles/tokens.css`, `src/styles/base.css`, `src/styles/primitives.css`, and `src/styles/layout.css`. Component-specific selectors live beside their React components as plain CSS sidecars when practical. See [css-decomposition.md](./css-decomposition.md).
+`loadSelectedSessionAccess` in `src/main.js` is intentionally narrow: it refreshes
+retained SSH-forward state for a selected historical SSH session. There is no
+generic panel fan-out for retired Mapache controls. The API client likewise
+contains only workspace/session lifecycle, signed access, retained SSH
+forwarding, credentials, MCP, Google, GitHub connector, and admin operations.
 
 ## Invariants
 
-- Keep Agent-first selected-session behavior for new managed runtimes; retain terminal-first rendering only for readable historical compatibility records, which the backend must not launch.
-- Keep `src/main.js` as the state orchestration point until a touched area is deliberately extracted.
-- Add new feature logic to focused controllers, workflows, services, or components instead of expanding monoliths.
-- Keep the shared session resource catalog and pricing helpers authoritative; do not duplicate preset or rate literals in session components.
-- Update [ui-components.md](./ui-components.md) when adding significant components.
-- Keep `community/` out of frontend app refactors unless the task explicitly targets user-facing community docs.
+- The browser cannot select an image or runtime UI version; Functions resolves
+  the curated runner.
+- Agent execution state comes from the server/runtime status, never from iframe
+  presence or rendered terminal text.
+- Parent UI code does not implement the upstream chat protocol or duplicate
+  upstream files/Git/models/skills/extensions/subagents/Goals behavior.
+- Account credentials and external connection bindings stay in Mapache-owned
+  workflows; secret values are not rendered into the agent iframe by Mapache.
+- New frontend behavior belongs in focused controllers, workflows, or
+  components rather than expanding `src/main.js`.
 
 ## Verification
 
 - `npm run test:frontend`
-- `npm run build` for frontend-facing changes when feasible.
-- `npm run docs:check` after docs edits.
+- `npm run build`
+- `npm run docs:check`
 
-## Last Verified Assumptions
+## Related docs
 
-- 2026-09-11: Source tree contains the marked-runtime status surface, capped signed-access renewal, React component sidecars, controller modules, workflow modules, and global style layers matching this page.
-
-## Related Docs
-
-- [App overview](./app-overview.md)
 - [UI components](./ui-components.md)
+- [Backend API architecture](./backend-api-architecture.md)
 - [Runner harnesses](./runner-harnesses.md)
-- [Style guide](./STYLE_GUIDE.md)
-- [CSS decomposition](./css-decomposition.md)
-- [SSH-backed sessions guide](./guides/ssh-backed-sessions.md)
+- [Runtime containers](./runtime-containers.md)
+- [Deployment](./deployment.md)

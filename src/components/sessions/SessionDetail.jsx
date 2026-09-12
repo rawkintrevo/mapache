@@ -1,16 +1,13 @@
 import "./SessionDetail.css";
-import {ExternalLink, RotateCcw, SlidersHorizontal, Target} from "lucide-react";
+import {ExternalLink, RotateCcw} from "lucide-react";
 import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
-import {WorkspaceGoalsPanel} from "../goals/WorkspaceGoalsPanel.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
-import {PiChatCanvas} from "./PiChatCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
 import {ManagedAgentSurface} from "./ManagedAgentSurface.jsx";
 import {getSessionImageFreshness, isMarkedRuntimeSession, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
-import {derivePiChatSocketUrl} from "../../utils/piChat.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {deriveShellUrl} from "../../utils/shell.js";
 import {useResourceMetrics} from "./useResourceMetrics.js";
@@ -18,13 +15,10 @@ import {useSessionAccessUrls} from "./useSessionAccessUrls.js";
 
 export function SessionDetail({
   busy,
-  api,
   session,
   sshForwards,
   workspaceId,
-  workspaceSessions,
   onGetSessionAccessUrls,
-  onOpenPiModels,
   onRetryProvisioningSession,
   onRestartSession,
   onStopSession,
@@ -33,7 +27,6 @@ export function SessionDetail({
   onUpdateSshForwardPort,
 }) {
   const [activeCanvas, setActiveCanvas] = useState("terminal");
-  const [showGoals, setShowGoals] = useState(false);
   const [showShell, setShowShell] = useState(false);
   const isManagedAgentSurface = isMarkedRuntimeSession(session);
   const capabilities = session.capabilities || {};
@@ -54,9 +47,6 @@ export function SessionDetail({
   const hasPreview = Boolean(capabilities.preview && hasRunnerUrl && accessUrls?.previewUrl);
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const hasAgent = Boolean(hasRunnerUrl && accessUrls?.agentUrl);
-  const chatSocketUrl = derivePiChatSocketUrl(accessUrls?.terminalUrl, capabilities);
-  const hasChat = Boolean(capabilities.chat && hasRunnerUrl && chatSocketUrl);
-  const isPiSession = session.harnessId === "pi" || session.terminalKind === "pi";
   const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
   const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
   const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);
@@ -78,7 +68,6 @@ export function SessionDetail({
   }, [workspaceId, session.id, isManagedAgentSurface]);
 
   useEffect(() => {
-    setShowGoals(false);
     setShowShell(false);
   }, [workspaceId, session.id]);
 
@@ -90,7 +79,7 @@ export function SessionDetail({
         session={session}
       />
       {!isManagedAgentSurface ? <div className="canvas-header">
-        {(hasAgent || hasChat || capabilities.preview || capabilities.chrome) ? (
+        {(hasAgent || capabilities.preview || capabilities.chrome) ? (
           <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -108,16 +97,6 @@ export function SessionDetail({
               onClick={() => setActiveCanvas("agent")}
             >
               Agent
-            </Button>
-          ) : null}
-          {hasChat ? (
-            <Button
-              aria-selected={activeCanvas === "chat"}
-              role="tab"
-              variant={activeCanvas === "chat" ? "primary" : "secondary"}
-              onClick={() => setActiveCanvas("chat")}
-            >
-              Chat
             </Button>
           ) : null}
           {capabilities.preview ? (
@@ -218,18 +197,6 @@ export function SessionDetail({
             />
           </div>
         ) : null}
-        {hasChat ? (
-          <div className="canvas-panel" hidden={activeCanvas !== "chat"}>
-            <PiChatCanvas
-              error={accessError || (!chatSocketUrl && accessUrls ? "chat_access_unavailable" : "")}
-              onAccessRefreshNeeded={refreshAfterConnectionFailure}
-              onOpenTerminal={() => setActiveCanvas("terminal")}
-              sessionId={session.id}
-              sessionName={session.name}
-              socketUrl={chatSocketUrl}
-            />
-          </div>
-        ) : null}
         {activeCanvas === "chrome" && capabilities.chrome ? (
           hasBrowser ? (
             <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
@@ -264,23 +231,6 @@ export function SessionDetail({
       </div>
       <div className="toolbar">
         <div className="session-actions">
-          {isPiSession ? (
-            <Button disabled={busy || !hasRunnerUrl} variant="secondary" onClick={onOpenPiModels}>
-              <SlidersHorizontal aria-hidden="true" />
-              Models
-            </Button>
-          ) : null}
-          {isPiSession ? (
-            <Button
-              aria-expanded={showGoals}
-              aria-controls="session-goals-panel"
-              variant={showGoals ? "primary" : "secondary"}
-              onClick={() => setShowGoals((current) => !current)}
-            >
-              <Target aria-hidden="true" />
-              Goal
-            </Button>
-          ) : null}
           <Button
             aria-expanded={showShell}
             aria-controls="session-shell-panel"
@@ -322,16 +272,6 @@ export function SessionDetail({
             allow="clipboard-read; clipboard-write"
             src={shellUrl}
             title={`Shell ${session.name}`}
-          />
-        </div>
-      ) : null}
-      {showGoals ? (
-        <div id="session-goals-panel">
-          <WorkspaceGoalsPanel
-            api={api}
-            initialSessionId={session.id}
-            sessions={workspaceSessions}
-            workspaceId={workspaceId}
           />
         </div>
       ) : null}

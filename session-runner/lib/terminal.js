@@ -16,51 +16,10 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
   let piSessionScanTimer = null;
   let piSessionScanAttempts = 0;
   let publishedPiJsonlPath = "";
-  let releasingForGoal = false;
-  let goalHandoffTerm = null;
 
   return {
     isRunning() {
       return Boolean(term);
-    },
-    async releaseForGoal() {
-      const current = term;
-      if (!current) return;
-      releasingForGoal = true;
-      goalHandoffTerm = current;
-      try {
-        await new Promise((resolve, reject) => {
-          const cleanup = () => {
-            timers.clearTimeout(forceStop);
-            timers.clearTimeout(timeout);
-            subscription.dispose();
-          };
-          // Pi's interactive shutdown can stall in extension cleanup. The user
-          // has explicitly requested interruption, so bound the graceful wait.
-          const forceStop = timers.setTimeout(() => {
-            try { current.kill("SIGKILL"); } catch (error) {
-              cleanup();
-              reject(error);
-            }
-          }, 5000);
-          const timeout = timers.setTimeout(() => {
-            cleanup();
-            const error = new Error("goal_terminal_stop_timeout");
-            error.code = "goal_terminal_stop_timeout";
-            reject(error);
-          }, 10000);
-          const subscription = current.onExit(() => {
-            cleanup();
-            resolve();
-          });
-          try { current.kill("SIGTERM"); } catch (error) {
-            cleanup();
-            reject(error);
-          }
-        });
-      } finally {
-        releasingForGoal = false;
-      }
     },
     attach(socket, replayOutput) {
       const activeTerm = ensureTerm();
@@ -87,15 +46,10 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
   };
 
   function ensureTerm() {
-    if (releasingForGoal) {
-      const error = new Error("goal_rpc_process_active");
-      error.code = "goal_rpc_process_active";
-      throw error;
-    }
     if (term) return term;
     if (typeof canStartProcess === "function" && !canStartProcess()) {
-      const error = new Error("goal_rpc_process_active");
-      error.code = "goal_rpc_process_active";
+      const error = new Error("terminal_unavailable");
+      error.code = "terminal_unavailable";
       throw error;
     }
 
@@ -121,12 +75,6 @@ function createTerminalSession({admin, config, activity, onTerminalExit, canStar
       closeSockets();
       term = null;
       clearPiSessionBindingScan();
-      // A mode switch is not session completion: do not commit/push the
-      // workspace or finalize its automation branch during the handoff.
-      if (goalHandoffTerm === spawnedTerm) {
-        goalHandoffTerm = null;
-        return;
-      }
       Promise.resolve(onTerminalExit ? onTerminalExit({command, exitCode: code}) : null)
           .catch((error) => {
             const message = error && error.message ? error.message : error;

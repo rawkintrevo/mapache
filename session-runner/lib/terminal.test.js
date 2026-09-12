@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {formatPrompt, renderTerminalPage, socketActivityUpdate} = require("./terminal");
 
-test("formats Chat prompts as one bracketed paste followed by carriage return", () => {
+test("formats prompts as one bracketed paste followed by carriage return", () => {
   assert.equal(formatPrompt("one\ntwo"), "\x1b[200~one\ntwo\x1b[201~\r");
 });
 

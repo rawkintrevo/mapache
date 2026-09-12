@@ -26,9 +26,6 @@ function createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace}) 
         }
         return {ok: true};
       },
-      async materializeSubagents() {
-        return {ok: true, skipped: true};
-      },
     };
   }
 

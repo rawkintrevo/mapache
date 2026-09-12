@@ -10,8 +10,8 @@
     {"useScript": "scripts/toggle-drawer-sections.json"},
     {"useScript": "scripts/expand-inspector.json"},
     {"assert": "snapshot-text", "expected": "Authentication Center"},
-    {"assert": "snapshot-text", "expected": "Skills"},
-    {"assert": "snapshot-text", "expected": "Extensions"},
+    {"assert": "snapshot-text", "expected": "MCP Servers"},
+    {"assert": "snapshot-text", "expected": "Google Workspace"},
     {"useScript": "scripts/refresh-app-state.json"},
     {"capture": "screenshot", "fileName": "drawers.png"}
   ]

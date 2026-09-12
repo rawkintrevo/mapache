@@ -1,85 +1,52 @@
 # UI Components Index
 
-## Purpose
+This index maps significant React components to their current responsibilities.
 
-This page maps significant React UI components to file locations and responsibilities.
+| Component | File | Responsibility |
+| --- | --- | --- |
+| `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
+| `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in layout, drawers, workspace panel, and modal stack. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection, create/edit/delete, refresh, and documentation links. |
+| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | Sessions list and lifecycle actions plus the user menu. |
+| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Session rows with select/edit/restart/stop/delete actions. |
+| `UserMenu` | `src/components/drawers/UserMenu.jsx` | Profile, admin, refresh, and sign-out actions. |
+| `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/session list or selected-session detail. |
+| `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | Workspace name and source summary. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | Terminal-first historical view with Agent/Chrome/Preview and shell surfaces. |
+| `ManagedAgentSurface` | `src/components/sessions/ManagedAgentSurface.jsx` | Marked Agent-first view with Agent, Persistent Chrome, Preview, metrics, and lifecycle controls. |
+| `PiWebUiCanvas` | `src/components/sessions/PiWebUiCanvas.jsx` | Signed embedded upstream `/agent/` iframe and access renewal bridge. |
+| `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Signed Persistent Chrome iframe and pop-out action. |
+| `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface. |
+| `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Server-reported runtime/checkpoint/lifecycle status and access errors. |
+| `SessionList` | `src/components/sessions/SessionList.jsx` | Session list for the selected workspace. |
+| `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced resource presets and advanced CPU/memory fields. |
+| `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | Retained Mapache inspector sections. |
+| `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | Saved credential selection and generic environment entry access. |
+| `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | Workspace MCP configuration. |
+| `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | Google connection summaries and workspace bindings. |
+| `ModalStack` | `src/components/modals/ModalStack.jsx` | Coordinates retained workspace/session/auth/connection dialogs. |
+| `AuthModal` | `src/components/modals/AuthModal.jsx` | Adds/edits saved provider credentials and OpenAI device login. |
+| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | Selects saved auth entries for the active harness; never edits models. |
+| `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | Creates/edits/deletes masked environment keys and session selection. |
+| `WorkspaceModal` | `src/components/modals/WorkspaceModal.jsx` | Creates blank/GitHub workspaces and chooses saved environment keys. |
+| `SessionModal` | `src/components/modals/SessionModal.jsx` | Creates the server-selected managed Cloud runner. |
+| `SessionEditModal` | `src/components/modals/SessionEditModal.jsx` | Renames/resizes an existing session. |
+| `WorkspaceEditModal` | `src/components/modals/WorkspaceEditModal.jsx` | Renames an existing workspace. |
+| `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth. |
+| `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
+| `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |
 
-## Read When
+Files, Git, model selection, skills, extensions, subagents, and native Goals
+are upstream-owned surfaces inside the embedded Agent application. The deleted
+Mapache Chat canvas, Workspace Goals panel, file/editor dialogs, Git manager,
+model editor, package/extension panel, skills panel, and subagent panel are not
+valid component references.
 
-Read this before adding, moving, or substantially changing UI components.
+When adding a significant component, update this index and keep ownership in a
+focused file rather than expanding `src/main.js`.
 
-This document serves as an index for significant UI components in the application, helping maintainers locate functionality and understand component purpose.
-
-| Component | File Path | Purpose |
-| :--- | :--- | :--- |
-| `App` | `src/App.jsx` | React root component that routes between the `/` landing page, fatal error, and the signed-in `/app` shell. |
-| `LandingPageScreen` | `src/components/auth/LandingPageScreen.jsx` | React landing page for public or signed-out users, with a sign-in action or app-open action for signed-in users at `/`. |
-| `LandingHeroSection` | `src/components/auth/landing/LandingHeroSection.jsx` | Landing-page hero copy, actions, and local-setup comparison visual. |
-| `LandingWorkspaceSection` | `src/components/auth/landing/LandingWorkspaceSection.jsx` | Landing-page context-isolation workspace matrix. |
-| `LandingEngineSection` | `src/components/auth/landing/LandingEngineSection.jsx` | Landing-page session-engine product visual. |
-| `LandingAuthSection` | `src/components/auth/landing/LandingAuthSection.jsx` | Landing-page Authentication Center workflow visual. |
-| `LandingTransparencySection` | `src/components/auth/landing/LandingTransparencySection.jsx` | Landing-page open-build trust copy, CTA, and usage carousel. |
-| `Button` | `src/components/common/Button.jsx` | Shared button component for semantic variants, icon sizing, and icon-only tooltips. |
-| `FatalError` | `src/components/common/FatalError.jsx` | React configuration/startup error screen. |
-| `LazySurfaceFallback` | `src/components/common/LazySurfaceFallback.jsx` | Lightweight status surface shown while deferred pages or dialogs load. |
-| `AppShell` | `src/components/layout/AppShell.jsx` | React signed-in shell that owns the app wrapper, top bar, grid layout, drawers, workspace panel, and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | React signed-in header with brand, workspace dropdown, workspace create/delete actions, documentation links, and refresh control. |
-| `GlobalActionIndicator` | `src/components/layout/GlobalActionIndicator.jsx` | Shell-level live status indicator shown while global `state.busy` actions are running. |
-| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | React left navigation drawer for sessions and the pinned user menu; legacy Files/Git sections remain only for unmarked rollout records. |
-| `GitDrawerSection` | `src/components/drawers/GitDrawerSection.jsx` | GitHub-session navigation section with current branch, pull/push actions, and Git manager entry point. |
-| `DrawerList` | `src/components/drawers/DrawerList.jsx` | Shared drawer row/list primitives for workspace, session, auth provider, package, extension, and future skill rows. |
-| `DrawerSection` | `src/components/drawers/DrawerSection.jsx` | Reusable collapsible drawer section component. |
-| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | React session list used by the left drawer, including edit, stop, and delete actions. |
-| `WorkspaceFileTree` | `src/components/files/WorkspaceFileTree.jsx` | React expandable file tree used by the left drawer for workspace storage files or selected SSH session files. |
-| `UserMenu` | `src/components/drawers/UserMenu.jsx` | Pinned left-drawer user avatar/profile popover with profile, refresh, and sign-out actions. |
-| `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin-only React page for paginated user listing, allowlist toggles, per-user cost display, and reserved user type selection. |
-| `ProfilePage` | `src/components/profile/ProfilePage.jsx` | User profile page showing Firebase profile details, GitHub connector controls, runner usage, and account actions. |
-| `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | React right inspector drawer; marked embedded-agent workspaces retain credentials, generic environment, MCP, and Google connection controls while upstream owns agent settings. |
-| `InspectorResourcePanel` | `src/components/inspector/InspectorResourcePanel.jsx` | Shared inspector section chrome for resource create, refresh, status, list, edit, and delete workflows. |
-| `InspectorResourceRow` | `src/components/inspector/InspectorResourcePanel.jsx` | Shared inspector resource row with configurable edit, delete, and domain-specific actions. |
-| `InspectorEditorModal` | `src/components/inspector/InspectorEditorModal.jsx` | Shared create/edit dialog shell used by inspector resource editors. |
-| `AuthCenterPanel` | `src/components/inspector/AuthCenterPanel.jsx` | React Authentication Center panel showing saved user-scoped auth entries filtered to the selected session harness. |
-| `McpServersPanel` | `src/components/inspector/McpServersPanel.jsx` | React MCP server management panel for selected-workspace MCP configuration applied to new and restarted Pi/Codex sessions. |
-| `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | Compact saved-Google-account list with checked/unplugged workspace-binding toggles plus add, edit, and delete actions. |
-| `SkillsPanel` | `src/components/inspector/SkillsPanel.jsx` | Compact React Skills panel that launches the selected harness's discovered-skill management modal. |
-| `SubagentsPanel` | `src/components/inspector/SubagentsPanel.jsx` | React Subagents panel for workspace-local Pi `.pi/agents/*.md` and Codex `.codex/agents/*.toml` files based on the selected session harness. |
-| `ExtensionsPanel` | `src/components/inspector/ExtensionsPanel.jsx` | React Extensions panel for harness-gated workspace-local packages, currently Pi-only. |
-| `PackageInstallForm` | `src/components/inspector/PackageInstallForm.jsx` | React form for installing Pi packages into the active workspace. |
-| `PackageRow` | `src/components/inspector/PackageRow.jsx` | React row for installed, user-scoped, and known Pi packages. |
-| `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | React main workspace panel; renders Agent-first marked session detail or the legacy terminal-first workspace view during rollout. |
-| `WorkspaceGoalsPanel` | `src/components/goals/WorkspaceGoalsPanel.jsx` | Workspace-level saved Goal list, draft form, and Pi lifecycle controls. |
-| `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | React workspace title and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | React selected-session view; marked sessions delegate to the Agent-first `ManagedAgentSurface` with Persistent Chrome/Preview siblings and runner lifecycle actions, while unmarked sessions retain the legacy canvases during rollout. |
-| `ManagedAgentSurface` | `src/components/sessions/ManagedAgentSurface.jsx` | Agent-first marked-session surface with signed embedded pi-web-ui, Persistent Chrome/Preview tabs, resource metrics, and Start/Stop/Restart controls. |
-| `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Marked pi-web-ui runtime status surface for server-reported lifecycle state, checkpoint time, persistent persistence/lifecycle errors, and separate signed browser-access failures. |
-| `PiChatCanvas` | `src/components/sessions/PiChatCanvas.jsx` | Capability-gated Pi Chat canvas with authoritative transcript replay, pending/working states, prompt composer, and Terminal fallback. |
-| `PiChatMessage` | `src/components/sessions/PiChatMessage.jsx` | Accessible user/assistant message bubble; assistant content uses safe GitHub Flavored Markdown without raw HTML. |
-| `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Capability-gated persistent Chrome iframe with an authenticated `Open Chrome` pop-out action. |
-| `PiWebUiCanvas` | `src/components/sessions/PiWebUiCanvas.jsx` | Capability-gated persistent embedded pi-web-ui iframe with origin/source-checked access renewal and a new-tab fallback. |
-| `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Live CPU and RAM utilization meters for running Cloud sessions. |
-| `GitManagerModal` | `src/components/modals/GitManagerModal.jsx` | GitHub-session modal for branch selection/creation, commit metadata, staged/unstaged/untracked file actions, ignore entries, commits, and pull requests. |
-| `SessionList` | `src/components/sessions/SessionList.jsx` | React session list for the selected workspace with preset/custom CPU and memory summaries. |
-| `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced Small/Medium/Large selector and Advanced CPU/memory controls used by Cloud session creation and resize. |
-| `SessionStatusSummary` | `src/components/sessions/SessionStatusSummary.jsx` | Shared session-row accessory that renders the accessible status light tooltip and hyphen-split runner tags for both session list variants. |
-| `ModalStack` | `src/components/modals/ModalStack.jsx` | React modal coordinator for all app modals. |
-| `ModalBackdrop` | `src/components/modals/ModalBackdrop.jsx` | Shared React modal overlay/backdrop behavior. |
-| `AuthModal` | `src/components/modals/AuthModal.jsx` | React modal for adding named authentication provider entries, including API keys and the OpenAI Codex subscription device-code login flow. |
-| `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | React modal for creating, replacing, and deleting masked generic environment keys. |
-| `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file, with direct editing for the active Pi `models.json`. |
-| `PiModelsModal` | `src/components/modals/PiModelsModal.jsx` | React modal for loading the active Pi runner's authenticated model catalog and saving an ordered session-scoped model selection. |
-| `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | React modal for choosing Google Workspace services and read-only/read-write access before starting add or reconnect OAuth. |
-| `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank or GitHub-backed workspace, including the GitHub App repository picker; historical Dev machine creation is no longer exposed. |
-| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating the server-selected `pi-chrome` Cloud runner with priced size presets; historical SSH workspaces show a readable inactive explanation instead of a start action. |
-| `SessionEditModal` | `src/components/modals/SessionEditModal.jsx` | React modal launched from a sidebar session row for renaming and resizing that session with shared preset/advanced resource controls. |
-| `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React text file editor modal with Edit and rendered Preview tabs for Markdown files. |
-| `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |
-| `WorkspaceSkillModal` | `src/components/modals/WorkspaceSkillModal.jsx` | React modal for adding skills and listing all recursively discovered local skills with discovery checkboxes plus writable-root edit/delete actions. |
-| `WorkspaceSubagentModal` | `src/components/modals/WorkspaceSubagentModal.jsx` | React modal for creating and editing workspace-local subagents from the right inspector Subagents panel. |
-
-When adding new UI components, please update this index.
-
-## Related Docs
+## Related docs
 
 - [Frontend architecture](./frontend-architecture.md)
-- [Style guide](./STYLE_GUIDE.md)
-- [CSS decomposition](./css-decomposition.md)
+- [Backend API architecture](./backend-api-architecture.md)
+- [Runtime containers](./runtime-containers.md)

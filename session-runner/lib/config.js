@@ -32,7 +32,7 @@ function normalizePreviewBasePath(value) {
 const PI_MCP_ADAPTER_VERSION = "2.32.1";
 
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false, chat: false, goals: false};
+  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false};
   try {
     const parsed = JSON.parse(process.env.RUNNER_CAPABILITIES || "{}");
     return Object.fromEntries(Object.keys(fallback).map((key) => [

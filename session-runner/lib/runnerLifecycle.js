@@ -10,10 +10,8 @@ function createRunnerLifecycleCoordinator({
   checkpointScheduler,
   config,
   git,
-  goalsPackage,
   listen,
   logger = console,
-  piChat,
   piWebUi,
   resourceMetrics,
   piModelScope,
@@ -41,11 +39,6 @@ function createRunnerLifecycleCoordinator({
       await workspace.prepareWorkspaceSource();
       await workspace.restoreCheckpoint?.();
       await authority.acquire();
-      const goalsPackageResult = await goalsPackage?.ensureInstalledDeclaration?.();
-      goalsPackage?.setBridgeAvailability?.(goalsPackageResult?.enabled !== false);
-      if (goalsPackageResult?.reason === "managed_package_missing") {
-        (logger.warn || logger.log || console.warn)("managed pi-goal-x package is missing from the image; goal controls remain disabled");
-      }
       await piModelScope.restore();
       await chromeProfile.restore();
       await chromeRuntime.start();
@@ -54,7 +47,6 @@ function createRunnerLifecycleCoordinator({
       await git.prepareGithubAutomationBranch();
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
-      await activeHarness.materializeSubagents();
       if (config.agentRuntimeEnabled) await piWebUi.start();
       chromeProfileSnapshots.start();
       if (checkpointScheduler) checkpointScheduler.start();
@@ -99,12 +91,6 @@ function createRunnerLifecycleCoordinator({
           logger.warn?.("pi-web-ui quiesce failed; escalating to process-group stop", error);
         }
         await piWebUi?.stop?.();
-      }
-      piChat?.close?.();
-      try {
-        await goalsPackage?.stop?.();
-      } catch (error) {
-        logger.error("goal RPC shutdown failed", error);
       }
       resourceMetrics?.close?.();
       sshSession.closeAll();

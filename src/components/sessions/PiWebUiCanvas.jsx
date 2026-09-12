@@ -35,7 +35,6 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
       return undefined;
     }
     setStatus((current) => current === "ready" ? "renewing" : current);
-    sendAccess();
     const onMessage = (event) => {
       const frame = frameRef.current;
       if (!frame?.contentWindow || event.source !== frame.contentWindow || event.origin !== origin) return;
@@ -104,7 +103,6 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
           className="pi-web-ui-canvas__frame"
           src={initialUrlRef.current}
           title={`Agent ${sessionName}`}
-          onLoad={sendAccess}
         />
         {status !== "ready" ? (
           <div aria-live="polite" className={`pi-web-ui-canvas__status pi-web-ui-canvas__status--${status}`} role="status">

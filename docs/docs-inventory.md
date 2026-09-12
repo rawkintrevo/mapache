@@ -18,8 +18,8 @@ This page classifies every file under `docs/` and `adrs/` as of 2026-06-17 and r
 | `docs/frontend-architecture.md` | Active wiki | Frontend state, workflows, React shell, and component ownership. |
 | `docs/github-workspaces.md` | Active wiki | GitHub workspace source-of-truth and session model. |
 | `docs/llm-reading-protocol.md` | Active wiki | Agent routing and stopping protocol. |
-| `docs/pi-extension-manager.md` | Active wiki | Pi package manager architecture and current implementation contract. |
-| `docs/pi-skills-manager.md` | Active wiki | Pi skills manager architecture and current implementation contract. |
+| `docs/pi-extension-manager.md` | Active wiki | Retirement note for the former Mapache package manager; upstream owns extensions. |
+| `docs/pi-skills-manager.md` | Active wiki | Upstream skills ownership and retained startup seeding contract. |
 | `docs/runtime-containers.md` | Active wiki | Runtime image, terminal, preview, sync, and runner behavior. |
 | `docs/session-runner-architecture.md` | Active wiki | Short runner module map and responsibilities. |
 | `docs/subsystem-map.md` | Active wiki | Major code area to doc/runtime responsibility map. |

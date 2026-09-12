@@ -19,14 +19,11 @@ function renderDetail(overrides = {}, options = {}) {
   const currentSession = session(overrides);
   return render(
       <SessionDetail
-        api={options.api}
         busy={options.busy || false}
-        gitStatus={null}
         isGithubWorkspace={false}
         session={currentSession}
         sshForwards={{}}
         workspaceId="workspace-1"
-        workspaceSessions={options.workspaceSessions || [currentSession]}
         onGetSessionAccessUrls={vi.fn().mockResolvedValue(options.accessUrls || {
           terminalUrl: "https://runner.example/?mapache_access=terminal-token",
           browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
@@ -47,7 +44,7 @@ describe("SessionDetail Chrome workflow", () => {
     renderDetail({
       agentUiVersion: "pi-web-ui-v1",
       harnessId: "pi",
-      capabilities: {terminal: true, preview: true, chrome: true, chat: true},
+      capabilities: {terminal: true, preview: true, chrome: true},
     }, {onStopSession});
 
     expect(await screen.findByRole("tab", {name: "Agent"})).toHaveAttribute("aria-selected", "true");
@@ -117,64 +114,6 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
   });
 
-  test("shows Chat only for a capability-backed Pi session and keeps Terminal first", async () => {
-    const user = userEvent.setup();
-    renderDetail({
-      name: "Pi chat",
-      harnessId: "pi",
-      capabilities: {terminal: true, preview: false, chrome: false, chat: true},
-    });
-
-    expect(await screen.findByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", {name: "Chat"})).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", {name: "Chat"}));
-    expect(screen.getByRole("region", {name: "Chat Pi chat"})).toBeInTheDocument();
-    expect(screen.getByText(/Connecting to Pi|Connection lost/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", {name: "Open Terminal"}));
-    expect(screen.getByRole("tab", {name: "Terminal"})).toHaveAttribute("aria-selected", "true");
-  });
-
-  test("keeps Terminal and Chat mounted while switching canvases", async () => {
-    const sockets = [];
-    class PersistentWebSocket {
-      constructor(url) {
-        this.url = url;
-        this.readyState = 0;
-        this.listeners = new Map();
-        sockets.push(this);
-      }
-      addEventListener(type, listener) {
-        const listeners = this.listeners.get(type) || new Set();
-        listeners.add(listener);
-        this.listeners.set(type, listeners);
-      }
-      close() {
-        this.readyState = 3;
-      }
-    }
-    vi.stubGlobal("WebSocket", PersistentWebSocket);
-    const user = userEvent.setup();
-    renderDetail({
-      name: "Persistent chat",
-      harnessId: "pi",
-      capabilities: {terminal: true, preview: false, chrome: false, chat: true},
-    });
-
-    const chatTab = await screen.findByRole("tab", {name: "Chat"});
-    const terminalFrame = screen.getByTitle("Terminal Persistent chat");
-    const chatRegion = screen.getByRole("region", {name: "Chat Persistent chat", hidden: true});
-    await user.click(chatTab);
-    await user.type(screen.getByRole("textbox", {name: "Message Pi"}), "keep this draft");
-    await user.click(screen.getByRole("tab", {name: "Terminal"}));
-    expect(screen.getByTitle("Terminal Persistent chat")).toBe(terminalFrame);
-    await user.click(chatTab);
-
-    expect(screen.getByRole("region", {name: "Chat Persistent chat"})).toBe(chatRegion);
-    expect(screen.getByRole("textbox", {name: "Message Pi"})).toHaveValue("keep this draft");
-    expect(sockets.filter((socket) => socket.url.includes("/chat"))).toHaveLength(1);
-    vi.unstubAllGlobals();
-  });
-
   test("does not show Chat when capability or signed terminal access is absent", async () => {
     const {rerender} = renderDetail({name: "Shell", capabilities: {terminal: true, chat: false}});
     expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
@@ -182,7 +121,6 @@ describe("SessionDetail Chrome workflow", () => {
     rerender(
       <SessionDetail
         busy={false}
-        gitStatus={null}
         isGithubWorkspace={false}
         session={session({name: "Pi without access", harnessId: "pi", capabilities: {terminal: true, chat: true}})}
         sshForwards={{}}
@@ -280,26 +218,6 @@ describe("SessionDetail Chrome workflow", () => {
         "title",
         "Restart is disabled until the server confirms the stop outcome",
     );
-  });
-
-  test("opens the Goal controls below the session canvas and removes preview publishing actions", async () => {
-    const user = userEvent.setup();
-    const api = {listGoals: vi.fn().mockResolvedValue({goals: []})};
-    renderDetail({
-      harnessId: "pi",
-      capabilities: {terminal: true, preview: true, chrome: false},
-    }, {api});
-
-    expect(screen.queryByRole("button", {name: "Share Preview"})).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", {name: "Publish"})).not.toBeInTheDocument();
-
-    const goalButton = screen.getByRole("button", {name: "Goal"});
-    expect(goalButton).toHaveAttribute("aria-expanded", "false");
-    await user.click(goalButton);
-
-    expect(goalButton).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByRole("heading", {name: "Goals"})).toBeInTheDocument();
-    expect(api.listGoals).toHaveBeenCalledWith("workspace-1");
   });
 
   test("opens a separate shell tied to the selected runner", async () => {

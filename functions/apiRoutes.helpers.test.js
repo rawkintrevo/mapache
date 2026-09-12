@@ -48,30 +48,6 @@ assertRoute("/api/workspaces/workspace-1", {
   name: "workspace",
   workspaceId: "workspace-1",
 });
-assertRoute("/api/workspaces/workspace-1/files", {
-  name: "workspaceFiles",
-  workspaceId: "workspace-1",
-});
-assertRoute("/api/workspaces/workspace-1/sync-files", {
-  name: "workspaceSyncFiles",
-  workspaceId: "workspace-1",
-});
-assertRoute("/api/workspaces/workspace-1/file", {
-  name: "workspaceFile",
-  workspaceId: "workspace-1",
-});
-assertRoute("/api/workspaces/workspace-1/create-file", {
-  name: "workspaceCreateFile",
-  workspaceId: "workspace-1",
-});
-assertRoute("/api/workspaces/workspace-1/create-directory", {
-  name: "workspaceCreateDirectory",
-  workspaceId: "workspace-1",
-});
-assertRoute("/api/workspaces/workspace-1/file/download-url", {
-  name: "workspaceFileDownloadUrl",
-  workspaceId: "workspace-1",
-});
 assertRoute("/api/workspaces/workspace-1/mcp", {
   name: "workspaceMcp",
   workspaceId: "workspace-1",
@@ -121,53 +97,19 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/ssh-ports/5173", {
   sessionId: "session-1",
   port: "5173",
 });
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/git-status", {
-  name: "gitStatus",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/git-open-pr", {
-  name: "gitOpenPr",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-packages/install", {
-  name: "piPackageInstall",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/models", {
-  name: "piModels",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills", {
-  name: "sessionSkills",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/skills/delete", {
-  name: "sessionSkillDelete",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagents", {
-  name: "sessionSubagents",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagents/delete", {
-  name: "sessionSubagentDelete",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
+for (const obsoletePath of [
+  "/api/workspaces/workspace-1/files",
+  "/api/workspaces/workspace-1/file",
+  "/api/workspaces/workspace-1/create-file",
+  "/api/workspaces/workspace-1/sessions/session-1/git-status",
+  "/api/workspaces/workspace-1/sessions/session-1/models",
+  "/api/workspaces/workspace-1/sessions/session-1/skills",
+  "/api/workspaces/workspace-1/sessions/session-1/subagents",
+]) {
+  assertRoute(obsoletePath, {name: "unknown"});
+}
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagent-chains", {name: "unknown"});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/subagent-chains/delete", {name: "unknown"});
-assertRoute("/api/workspaces/workspace-1/sessions/session-1/pi-skills/delete", {
-  name: "sessionSkillDelete",
-  workspaceId: "workspace-1",
-  sessionId: "session-1",
-});
 assertRoute("/api/github/connect", {name: "githubConnect"});
 assertRoute("/api/github/connection", {name: "githubConnection"});
 assertRoute("/api/github/disconnect", {name: "githubDisconnect"});

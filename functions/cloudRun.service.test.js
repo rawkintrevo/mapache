@@ -229,7 +229,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
   }));
-  assert.strictEqual(JSON.parse(refreshedLegacyChromeEnv.RUNNER_CAPABILITIES).chat, true);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(JSON.parse(refreshedLegacyChromeEnv.RUNNER_CAPABILITIES), "chat"), false);
 
   const githubEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",

@@ -1,7 +1,6 @@
 import {describe, expect, test, vi} from "vitest";
 import {createPiPanelsController} from "../controllers/piPanelsController.js";
 import {createAppStore} from "../state/appStore.js";
-import {createPiPackagesStore} from "../state/piPackagesStore.js";
 
 describe("createPiPanelsController", () => {
   test("saves the provider values submitted by the auth modal", async () => {
@@ -20,10 +19,8 @@ describe("createPiPanelsController", () => {
       },
       sessions: [],
     };
-    const appStore = createAppStore(state);
     const controller = createPiPanelsController({
-      state: appStore.state,
-      piPackagesStore: createPiPackagesStore(appStore),
+      state,
       render: vi.fn(),
     });
 

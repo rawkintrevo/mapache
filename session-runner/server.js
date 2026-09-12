@@ -19,10 +19,8 @@ const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
 const {createRunnerHarnessRegistry} = require("./lib/harnesses");
-const {createPiService, sendPiPackageError, sendPiSkillError} = require("./lib/pi");
+const {createPiService} = require("./lib/pi");
 const {createPiModelScopeService} = require("./lib/piModelScope.service");
-const {createPiChatTranscriptService} = require("./lib/piChat.service");
-const {createPiChatWebSocket} = require("./lib/piChatWebSocket");
 const {createMcpConfigService} = require("./lib/mcpConfig.service");
 const {createGoogleMcpStatusService} = require("./lib/googleMcpStatus.service");
 const {createPreviewService} = require("./lib/preview");
@@ -36,7 +34,6 @@ const {
   shouldReplayTerminal,
 } = require("./lib/terminal");
 const {createShellSession} = require("./lib/shell");
-const {compactErrorMessage} = require("./lib/utils");
 const {createWorkspaceService} = require("./lib/workspace");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
@@ -44,15 +41,10 @@ const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
 const {createAgentCheckpointScheduler} = require("./lib/agentCheckpointScheduler");
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
-const {registerGitRoutes} = require("./routes/gitRoutes");
 const {registerGoogleMcpRoutes} = require("./routes/googleMcpRoutes");
 const {registerSshRoutes} = require("./routes/sshRoutes");
 const {registerWorkspaceRoutes} = require("./routes/workspaceRoutes");
-const {registerGoalsRoutes} = require("./routes/goalsRoutes");
 const {registerQaFaultRoutes} = require("./routes/qaFaultRoutes");
-const {createGoalsBridgeService} = require("./lib/goalsProtocol");
-const {createGoalsRpcService} = require("./lib/goalsRpc.service");
-const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
@@ -133,12 +125,11 @@ const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
 const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
-let goalsRpc = null;
 const terminalSession = createTerminalSession({
   admin,
   config,
   activity,
-  canStartProcess: () => !config.agentRuntimeEnabled && !goalsRpc?.isActive?.(),
+  canStartProcess: () => !config.agentRuntimeEnabled,
   onTerminalExit: async ({command, exitCode}) => {
     const executable = path.basename(String(command && command.file || ""));
     if (executable === "pi") {
@@ -152,21 +143,6 @@ const terminalSession = createTerminalSession({
   },
 });
 const shellSession = createShellSession({admin, config, activity});
-goalsRpc = createGoalsRpcService({config, terminalSession});
-const goalsBridge = createGoalsBridgeService({config, terminalSession, rpcService: goalsRpc});
-const goalsPackageBootstrap = createGoalsPackageBootstrap({config, version: process.env.PI_GOAL_X_VERSION || undefined});
-const goalsPackage = {
-  ensureInstalledDeclaration: goalsPackageBootstrap.ensureInstalledDeclaration,
-  setBridgeAvailability: (value) => goalsBridge.setPackageAvailable(value),
-  stop: () => goalsBridge.stop(),
-};
-const piChatTranscript = createPiChatTranscriptService({config});
-const piChat = createPiChatWebSocket({
-  config,
-  hasBrowserAccess,
-  terminalSession,
-  transcriptService: piChatTranscript,
-});
 piWebUi = createPiWebUiProcess(config, {
   onExit: ({error}) => activity.markRuntimeStartupFailure(error),
 });
@@ -212,9 +188,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   checkpointScheduler,
   config,
   git,
-  goalsPackage,
   listen: (onListening) => server.listen(config.port, onListening),
-  piChat,
   piWebUi,
   resourceMetrics: resourceMetricsSocket,
   piModelScope,
@@ -258,10 +232,8 @@ registerWorkspaceRoutes({
   shutdown: runnerLifecycle.shutdown,
   workspaceSync,
 });
-registerGoalsRoutes({app, goalsBridge, hasRunnerAccess});
 registerQaFaultRoutes({app, faultHarness: qaFaultHarness, hasRunnerAccess});
-registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace});
-registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAccess});
+registerAgentRoutes({app, hasRunnerAccess, workspace});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 
 wss.on("connection", (socket, request) => {
@@ -273,7 +245,7 @@ wss.on("connection", (socket, request) => {
   try {
     terminalSession.attach(socket, shouldReplayTerminal(request));
   } catch (error) {
-    socket.close(1013, error?.code === "goal_rpc_process_active" ? "goal_running_in_web_ui" : "terminal_unavailable");
+    socket.close(1013, "terminal_unavailable");
     return;
   }
 
@@ -293,13 +265,11 @@ browserWss.on("connection", (socket) => {
 
 server.on("upgrade", createWebSocketUpgradeRouter({
   agentWebSocket: agentWebSocket.handleUpgrade,
-  chatWss: piChat.server,
   metricsWss: resourceMetricsSocket.server,
   shellWss,
   terminalWss: wss,
   browserWss,
   hasBrowserAccess,
-  hasChatAccess: (request) => piChat.supported && hasBrowserAccess(request),
   hasMetricsAccess: hasBrowserAccess,
   hasShellAccess: hasBrowserAccess,
 }));

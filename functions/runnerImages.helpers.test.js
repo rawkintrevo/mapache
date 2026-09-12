@@ -28,8 +28,6 @@ assert.deepStrictEqual(webImage.capabilities, {
   functions: true,
   n64: false,
   chrome: false,
-  chat: true,
-  goals: true,
 });
 assert.strictEqual(webImage.canProvision, true);
 
@@ -44,7 +42,6 @@ assert.deepStrictEqual(codexWebImage.capabilities, {
   functions: true,
   n64: false,
   chrome: false,
-  chat: false,
 });
 assert.strictEqual(codexWebImage.canProvision, true);
 
@@ -52,12 +49,12 @@ const piChromeImage = resolveRunnerImage({imageKey: "pi-chrome"});
 assert.strictEqual(piChromeImage.terminalKind, "pi");
 assert.strictEqual(piChromeImage.capabilities.chrome, true);
 assert.strictEqual(piChromeImage.capabilities.previewQa, true);
-assert.strictEqual(piChromeImage.capabilities.chat, true);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(piChromeImage.capabilities, "chat"), false);
 
 const codexChromeImage = resolveRunnerImage({imageKey: "codex-chrome"});
 assert.strictEqual(codexChromeImage.terminalKind, "codex");
 assert.strictEqual(codexChromeImage.capabilities.chrome, true);
-assert.strictEqual(codexChromeImage.capabilities.chat, false);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(codexChromeImage.capabilities, "chat"), false);
 
 const shellImage = resolveRunnerImage({imageKey: "default"});
 assert.strictEqual(shellImage.key, "default");
@@ -80,17 +77,15 @@ const refreshedLegacyPiChrome = resolveSessionCapabilities({
     chrome: true,
   },
 });
-assert.strictEqual(refreshedLegacyPiChrome.chat, true);
 assert.strictEqual(refreshedLegacyPiChrome.chrome, true);
 
 const sshCapabilities = resolveSessionCapabilities({
   imageKey: "default",
   sessionType: "ssh",
   terminalKind: "ssh",
-  capabilities: {terminal: true, preview: true, chat: true, ssh: true, sshFiles: true},
+  capabilities: {terminal: true, preview: true, ssh: true, sshFiles: true},
 });
 assert.strictEqual(sshCapabilities.preview, false);
-assert.strictEqual(sshCapabilities.chat, false);
 assert.strictEqual(sshCapabilities.ssh, true);
 
 assert.strictEqual(code(() => resolveRunnerImage({imageKey: "unknown"})), "invalid_runner_image");
@@ -112,7 +107,6 @@ assert.deepStrictEqual(runnerImageCapabilities("unknown"), {
   functions: false,
   n64: false,
   chrome: false,
-  chat: false,
 });
 
 assert.strictEqual(resolveRunnerImage({}, "").canProvision, false);

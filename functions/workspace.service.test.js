@@ -2,17 +2,12 @@
 
 const assert = require("assert");
 const {
-  isHiddenWorkspaceFilePath,
   createWorkspaceService,
   normalizePublicGitHubRepoUrl,
-  normalizeWorkspaceFilePath,
-  normalizeWorkspaceDirectoryPath,
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
   renameWorkspace,
-  storagePrefixToClientDirectory,
-  storageFileToClientFile,
 } = require("./workspace.service");
 
 assert.strictEqual(normalizePublicGitHubRepoUrl(123), "123");
@@ -72,75 +67,6 @@ assert.throws(() => normalizeWorkspaceHomePolicy({
   bucket: "bucket-1",
   storagePrefix: "workspaces/u/demo",
 }, {path: "../root"}), /invalid_workspace_home_path/);
-
-assert.strictEqual(normalizeWorkspaceFilePath("/src/App.jsx"), "src/App.jsx");
-assert.throws(() => normalizeWorkspaceFilePath("../secret"), /invalid_file_path/);
-assert.throws(() => normalizeWorkspaceFilePath(".mapache-directory"), /invalid_file_path/);
-assert.throws(() => normalizeWorkspaceFilePath(".mapahce-directory"), /invalid_file_path/);
-assert.throws(() => normalizeWorkspaceFilePath(".pi/npm/package.json"), /invalid_file_path/);
-assert.strictEqual(normalizeWorkspaceDirectoryPath(""), "");
-assert.strictEqual(normalizeWorkspaceDirectoryPath("/src/components/"), "src/components");
-assert.throws(() => normalizeWorkspaceDirectoryPath(".mapache-internal"), /invalid_file_path/);
-
-assert.strictEqual(isHiddenWorkspaceFilePath(".mapache-internal/archives/x"), true);
-assert.strictEqual(isHiddenWorkspaceFilePath(".mapahce-internal/archives/x"), true);
-assert.strictEqual(isHiddenWorkspaceFilePath(".pi/git/repo"), true);
-assert.strictEqual(isHiddenWorkspaceFilePath(".pi/skills/demo/SKILL.md"), false);
-
-assert.deepStrictEqual(storageFileToClientFile({
-  name: "workspaces/u/w/src/App.jsx",
-  metadata: {size: "123", updated: "2026-06-17T00:00:00.000Z"},
-}, "workspaces/u/w/"), {
-  path: "src/App.jsx",
-  name: "App.jsx",
-  type: "file",
-  size: 123,
-  updatedAt: "2026-06-17T00:00:00.000Z",
-});
-assert.deepStrictEqual(storageFileToClientFile({
-  name: "workspaces/u/w/src/.mapahce-directory",
-  metadata: {},
-}, "workspaces/u/w/"), {
-  path: "src",
-  name: "src",
-  type: "directory",
-  size: 0,
-  updatedAt: "",
-});
-assert.deepStrictEqual(storageFileToClientFile({
-  name: "workspaces/u/w/src/.mapache-directory",
-  metadata: {},
-}, "workspaces/u/w/"), {
-  path: "src",
-  name: "src",
-  type: "directory",
-  size: 0,
-  updatedAt: "",
-});
-assert.strictEqual(storageFileToClientFile({
-  name: "workspaces/u/w/.mapahce-internal/archives/x",
-  metadata: {},
-}, "workspaces/u/w/"), null);
-assert.strictEqual(storageFileToClientFile({
-  name: "workspaces/u/w/.mapache-internal/archives/x",
-  metadata: {},
-}, "workspaces/u/w/"), null);
-
-assert.deepStrictEqual(storagePrefixToClientDirectory("workspaces/u/w/src/", "workspaces/u/w/"), {
-  path: "src",
-  name: "src",
-  type: "directory",
-  size: 0,
-  updatedAt: "",
-});
-assert.deepStrictEqual(storagePrefixToClientDirectory("workspaces/u/w/src/components/", "workspaces/u/w/"), {
-  path: "src/components",
-  name: "components",
-  type: "directory",
-  size: 0,
-  updatedAt: "",
-});
-assert.strictEqual(storagePrefixToClientDirectory("workspaces/u/w/.mapache-internal/", "workspaces/u/w/"), null);
 
 async function testRenameWorkspace() {
   let workspace = {ownerUid: "user-1", name: "Old name"};

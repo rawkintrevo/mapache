@@ -12,7 +12,7 @@ Read this before changing workspace/session workflow, authenticated app shape, s
 
 Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud runner sessions. Authenticated users create workspaces, start isolated Cloud Run runner sessions, and work from the signed-in workspace shell. Marked `pi-web-ui-v1` sessions open an embedded Agent surface first; unmarked sessions remain terminal-first during the staged rollout. The public landing page is served from `/`; the authenticated workspace shell is served from `/app` and `/app/**`; the Docusaurus community site remains under `/community/**`.
 
-The selected-session view is Agent-first for marked sessions, with `Persistent Chrome` and `Preview` as sibling surfaces and server-owned runtime status/resource indicators. Legacy sessions retain their terminal, file, Git, and harness-specific controls until the backend default changes. The left drawer keeps workspace/session navigation and lifecycle actions; marked sessions leave file/Git ownership to the embedded app. The right drawer keeps Mapache-owned Authentication Center, generic environment, MCP, and Google connection controls, while the embedded app owns agent settings.
+The selected-session view is Agent-first for marked sessions, with `Persistent Chrome` and `Preview` as sibling surfaces and server-owned runtime status/resource indicators. Historical sessions remain readable with their retained terminal/shell/SSH compatibility surfaces, but the parent shell no longer duplicates upstream files, Git, models, skills, extensions, subagents, Chat, or Goals. The left drawer keeps workspace/session navigation and lifecycle actions. The right drawer keeps Mapache-owned Authentication Center, generic environment, MCP, and Google connection controls, while the embedded app owns agent settings.
 
 Admin users are identified by `isAdmin: true` on their `users/{uid}` Firestore document. They get an Admin page from the left drawer user menu for paginated user visibility, allowlist toggles, and per-user runner cost summaries.
 
@@ -26,8 +26,8 @@ The detailed model for GitHub-backed workspaces lives in [github-workspaces.md](
 
 - Firebase Hosting serves the Vite frontend from `dist/`.
 - Firebase Auth handles Google sign-in.
-- Cloud Functions exposes `/api/**` for workspace, session, GitHub, Pi auth, skills, and package operations.
-- Firestore stores user profiles, workspaces, sessions, usage ledgers, GitHub connection metadata, and Pi package catalog metadata.
+- Cloud Functions exposes `/api/**` for workspace/session lifecycle, signed access, credentials, MCP/Google connections, GitHub connections, and QA controls.
+- Firestore stores user profiles, workspaces, sessions, usage ledgers, GitHub connection metadata, and versioned runtime pointers.
 - Cloud Storage stores blank workspace files, cached GitHub worktrees, and archive-backed runtime state.
 - Cloud Run runs per-session terminal containers from curated runner images.
 
@@ -53,7 +53,7 @@ Read [backend-api-architecture.md](./backend-api-architecture.md) before changin
 
 ## Runtime Summary
 
-Runner containers serve the terminal, preview, protected Git/Pi endpoints, workspace restore/sync, and runtime capability surfaces. The backend is authoritative for image selection and provisions per-session Cloud Run services with separate browser-access and backend-management tokens.
+Runner containers serve the upstream Agent gateway, terminal/shell, Preview, Chrome, metrics, workspace restore/sync, and runtime capability surfaces. The backend is authoritative for image selection and provisions per-session Cloud Run services with separate browser-access and backend-management tokens.
 
 Read [runtime-containers.md](./runtime-containers.md) and [session-runner-architecture.md](./session-runner-architecture.md) before changing runtime images, PTY/WebSocket behavior, preview behavior, or sync.
 
@@ -67,8 +67,8 @@ Read [runtime-containers.md](./runtime-containers.md) and [session-runner-archit
 - Enforce one active Pi/agent session at a time for GitHub workspaces; shell sessions may run alongside for manual inspection.
 - Enforce at most one active Chrome-capable session per workspace; shell and other non-Chrome sessions may run alongside it.
 - Keep the Chrome profile in the workspace-owned internal archive path and never expose that archive, raw CDP, or VNC directly to users.
-- Keep Pi skills and package management additive to Pi terminal tooling by reading/writing the same workspace-local files.
-- Do not expose duplicate parent file/Git or agent-setting controls for marked embedded-agent sessions; retain them only on the unmarked compatibility path until later retirement tasks.
+- Keep upstream skills and extensions configurable inside the upstream Agent/terminal; seed only Mapache-owned runtime guidance when needed.
+- Do not expose duplicate parent file/Git or agent-setting controls for any session. Native Goals and conversation controls belong upstream.
 - Keep developer knowledge in `docs/` and user-facing community content in `community/`.
 
 ## Related Docs
