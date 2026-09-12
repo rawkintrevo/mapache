@@ -158,6 +158,15 @@ function routeRequest(path) {
     parts.length === 6 &&
     parts[0] === "workspaces" &&
     parts[2] === "sessions" &&
+    parts[4] === "qa" &&
+    parts[5] === "faults"
+  ) {
+    return {name: "sessionQaFaults", workspaceId: parts[1], sessionId: parts[3]};
+  }
+  if (
+    parts.length === 6 &&
+    parts[0] === "workspaces" &&
+    parts[2] === "sessions" &&
     parts[4] === "ssh-ports"
   ) {
     return {name: "sshSessionForward", workspaceId: parts[1], sessionId: parts[3], port: parts[5]};

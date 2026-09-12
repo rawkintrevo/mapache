@@ -43,6 +43,7 @@ function createWorkspaceAuthority({
     enabled: () => enabled,
     isCurrentWriter: () => !enabled || admitted,
     release,
+    revokeForQa,
     renew,
     status,
   };
@@ -155,6 +156,30 @@ function createWorkspaceAuthority({
       });
       throw normalizeAuthorityError(error);
     }
+  }
+
+  async function revokeForQa(reason = "qa_writer_revoked") {
+    if (!enabled) throw authorityError("workspace_writer_authority_lost");
+    if (!admitted) throw authorityError("workspace_writer_authority_lost");
+    const refs = authorityRefs();
+    await runAuthorityTransaction(async (transaction) => {
+      const {workspace, session} = await readAuthority(transaction, refs);
+      validateCurrent(workspace, session);
+      const timestamp = serverTimestamp();
+      transaction.update(refs.workspaceRef, {
+        agentRuntimeAuthorityState: "released",
+        agentRuntimeBootHeartbeatAt: timestamp,
+        agentRuntimeBootInstanceId: null,
+      });
+      transaction.update(refs.sessionRef, {
+        agentRuntimeAuthorityState: "released",
+        agentRuntimeBootHeartbeatAt: timestamp,
+        agentRuntimeBootInstanceId: null,
+      });
+    });
+    const error = authorityError(reason);
+    await loseAuthority(error);
+    return {ok: true, reason};
   }
 
   function startRenewal() {

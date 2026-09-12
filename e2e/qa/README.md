@@ -55,6 +55,13 @@ parameter. The browser case does not mark workspaces and does not select by a
 production display name. If the marker, provider, browser, Cloud Run service,
 or named fault harness is unavailable, record the case as blocked.
 
+The failure-recovery harness is available only on a disposable session created
+with `QA_CASE=pi-web-failure-recovery` and
+`MAPACHE_QA_FAULT_HARNESS=pi-web-failure-recovery-v1`. Its controls are the
+session-scoped `qa-fault-status`, `arm-qa-fault`, `revoke-qa-writer`, and
+`force-qa-loss` scripts. They are not general runner controls and must never be
+used against the HubSpot source or an unmarked workspace.
+
 Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted execution. Do not assume a standalone local headless Chrome or Playwright launch is available in every sandboxed environment.
 
 ## Initial Case Catalog

@@ -70,6 +70,7 @@ const {createPiModelsService} = require("./piModels.service");
 const {createPiPackagesService} = require("./piPackages.service");
 const {createGoalsService} = require("./goals.service");
 const {createPreviewService} = require("./preview.service");
+const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
@@ -186,6 +187,10 @@ const previewService = createPreviewService({
   requestRunnerJson,
   requireSession,
   storage,
+});
+const qaFaultHarnessService = createQaFaultHarnessService({
+  requestRunnerJson,
+  requireSession,
 });
 const {
   createSessionAccessUrls,
@@ -325,6 +330,7 @@ const API_HANDLERS = createApiHandlers({
   openAiCodexAuthService,
   piModelsService,
   piPackagesService,
+  qaFaultHarnessService,
   workspaceAgentAssetsService,
   workspaceService,
   githubService,

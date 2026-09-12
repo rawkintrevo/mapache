@@ -49,6 +49,7 @@ const {registerGoogleMcpRoutes} = require("./routes/googleMcpRoutes");
 const {registerSshRoutes} = require("./routes/sshRoutes");
 const {registerWorkspaceRoutes} = require("./routes/workspaceRoutes");
 const {registerGoalsRoutes} = require("./routes/goalsRoutes");
+const {registerQaFaultRoutes} = require("./routes/qaFaultRoutes");
 const {createGoalsBridgeService} = require("./lib/goalsProtocol");
 const {createGoalsRpcService} = require("./lib/goalsRpc.service");
 const {createGoalsPackageBootstrap} = require("./lib/goalsPackageBootstrap");
@@ -58,6 +59,7 @@ const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
+const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
@@ -95,7 +97,12 @@ const workspaceAuthority = createWorkspaceAuthority({
   db,
   onLost: () => piWebUi?.stop?.(),
 });
-const checkpointPublisher = createAgentCheckpointService({admin, config, db, storage});
+const qaFaultHarness = createQaFaultHarness({
+  config,
+  db,
+  workspaceAuthority,
+});
+const checkpointPublisher = createAgentCheckpointService({admin, config, db, faultHarness: qaFaultHarness, storage});
 const checkpointIdentity = () => ({bootInstanceId: workspaceAuthority.status().bootInstanceId});
 const checkpointRestore = createAgentCheckpointRestoreService({config, db, storage});
 const workspace = createWorkspaceService({
@@ -252,6 +259,7 @@ registerWorkspaceRoutes({
   workspaceSync,
 });
 registerGoalsRoutes({app, goalsBridge, hasRunnerAccess});
+registerQaFaultRoutes({app, faultHarness: qaFaultHarness, hasRunnerAccess});
 registerAgentRoutes({app, hasRunnerAccess, pi, piModelScope, sendPiPackageError, sendPiSkillError, workspace});
 registerGitRoutes({app, compactErrorMessage, config, git, hasRunnerAccess});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});

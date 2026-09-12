@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({agentAuthService, environmentKeysService, goalsService, openAiCodexAuthService, piModelsService, piPackagesService, workspaceAgentAssetsService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({agentAuthService, environmentKeysService, goalsService, openAiCodexAuthService, piModelsService, piPackagesService, qaFaultHarnessService, workspaceAgentAssetsService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
   const goals = goalsService || {
     listGoals: async () => ({}),
     createGoal: async () => ({}),
@@ -33,6 +33,8 @@ function createApiHandlers({agentAuthService, environmentKeysService, goalsServi
     installPiPackage: piPackagesService.installPiPackage,
     removePiPackage: piPackagesService.removePiPackage,
     updatePiPackage: piPackagesService.updatePiPackage,
+    getSessionQaFaults: qaFaultHarnessService?.getStatus || (async () => { throw new Error("QA fault harness service is unavailable"); }),
+    armSessionQaFault: qaFaultHarnessService?.arm || (async () => { throw new Error("QA fault harness service is unavailable"); }),
     listGoals: goals.listGoals,
     createGoal: goals.createGoal,
     getGoal: goals.getGoal,

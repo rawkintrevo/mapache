@@ -236,6 +236,15 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/access-url`,
         {method: "POST", body: {}},
     ),
+    getSessionQaFaults: (workspaceId, sessionId) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/qa/faults`,
+    ),
+    armSessionQaFault: (workspaceId, sessionId, body) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/qa/faults`,
+        {method: "POST", body},
+    ),
     shareSessionPreview: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/share-preview`,

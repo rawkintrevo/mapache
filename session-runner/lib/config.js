@@ -79,6 +79,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const workspaceSyncRole = normalizeWorkspaceSyncRole(process.env.WORKSPACE_SYNC_ROLE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
+  const qaFaultHarness = normalizeEnvString(process.env.MAPACHE_QA_FAULT_HARNESS);
+  const qaCase = normalizeEnvString(process.env.QA_CASE);
   const runnerCapabilities = parseRunnerCapabilities();
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
@@ -171,6 +173,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piWebUiPort: 8787,
     piWebUiRoot,
     piWebUiSessionDir,
+    qaCase,
+    qaFaultHarness,
     agentActivityPollIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_ACTIVITY_POLL_INTERVAL_MS, 1000),
     agentCompletedTurnDebounceMs: positiveNumber(process.env.MAPACHE_AGENT_COMPLETED_TURN_DEBOUNCE_MS, 1000),
     agentSnapshotIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_SNAPSHOT_INTERVAL_MS, 60000),

@@ -36,6 +36,7 @@ const {
   isMarkedRuntimeSession,
   runtimeSessionStateUpdate,
 } = require("./runtimeReservation.helpers");
+const {consumeQaFault} = require("./qaFaultHarness.helpers");
 
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
 
@@ -358,6 +359,14 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       requireAcknowledgement: options.reason !== "idle_timeout",
       timeoutMs: dependencies.shutdownTimeoutMs,
     });
+    if (await consumeQaFault(sessionRef, session, "uncertain-replacement", {
+      db: dependencies.db || db,
+      workspace: {agentUiVersion: session.agentUiVersion},
+    })) {
+      const error = new Error("qa_injected_uncertain_replacement");
+      error.code = "qa_injected_uncertain_replacement";
+      throw error;
+    }
     const client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const response = await client.request({url, method: "DELETE"});

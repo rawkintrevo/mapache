@@ -41,6 +41,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["sessionAccess", ["POST"]],
   ["sessionSharePreview", ["POST"]],
   ["sessionPiAuthSelection", ["POST"]],
+  ["sessionQaFaults", ["GET", "POST"]],
   ["gitStatus", ["GET"]],
   ["gitBranches", ["POST"]],
   ["gitCheckout", ["POST"]],

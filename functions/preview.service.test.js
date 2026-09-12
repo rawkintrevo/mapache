@@ -79,6 +79,23 @@ console.log("preview service tests passed");
     }),
   }).createSessionAccessUrls("owner-1", "workspace-1", "session-1");
   assert.equal(unmarked.agentUrl, undefined);
+
+  const shortLived = await createPreviewService({
+    browserAccessTtlMs: 60 * 60 * 1000,
+    requireSession: async () => ({
+      sessionSnap: {data: () => ({
+        ...session,
+        qaFaultHarness: {
+          id: "pi-web-failure-recovery-v1",
+          accessRenewalTtlMs: 1000,
+        },
+      })},
+      workspace,
+    }),
+  }).createSessionAccessUrls("owner-1", "workspace-1", "session-1");
+  const shortLivedToken = new URL(shortLived.agentUrl).searchParams.get("mapache_access");
+  const shortLivedPayload = JSON.parse(Buffer.from(shortLivedToken.split(".")[0], "base64url").toString("utf8"));
+  assert.ok(shortLivedPayload.exp <= Math.floor(Date.now() / 1000) + 2);
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

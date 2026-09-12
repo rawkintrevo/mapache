@@ -23,6 +23,8 @@ Firebase Hosting serves the Vite app from `dist/`, rewrites `/api/**` to the `ap
 
 The `/api/**` rewrite also serves public shared website previews at `/api/public-previews/{token}/...`. Those requests are intentionally unauthenticated and are authorized by unguessable preview tokens plus `publicPreviews/{token}` metadata. Deploying Share Preview requires both the Cloud Functions API revision and the web-capable session runner image revision that includes `POST /preview/share`; existing running Cloud Run sessions need restart/recreation before they can export shared previews. Deploying browser QA contract changes likewise requires rebuilt `pi-web` and `codex-web` runner images; existing running web sessions keep the old browser QA command/status behavior until they are restarted or recreated.
 
+The disposable failure-recovery injector is part of the shared runner and Functions revisions. Deploy the Functions revision before calling the session-scoped fault API, and rebuild/recreate the disposable `pi-chrome` session before hosted QA so it contains the runner routes. The injector is marker- and environment-gated; it is unavailable on ordinary sessions and does not move the production `pi-chrome` tag by itself.
+
 The repo targets the `pi-agents-cloud` Firebase/GCP project. Use explicit project flags for remote build and deploy commands:
 
 ```bash

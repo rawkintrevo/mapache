@@ -119,7 +119,10 @@ Run slower checks when a change touches the related subsystem:
   followed by the functional, history/resource, or failure-recovery case. These
   cases are opt-in and blocked when the explicitly marked disposable workspace,
   existing provider, read-only connector, browser, cloud service, or named
-  deterministic fault harness is unavailable. Migration instructions are in
+  deterministic fault harness is unavailable. The failure-recovery harness is
+  enabled only for a session carrying `QA_CASE=pi-web-failure-recovery` and
+  `MAPACHE_QA_FAULT_HARNESS=pi-web-failure-recovery-v1`; its checked-in scripts
+  arm and consume faults through the authenticated session API. Migration instructions are in
   `e2e/qa/migration/hubspot-import-checks.md`; they never authorize a live
   HubSpot source write or CRM mutation.
 

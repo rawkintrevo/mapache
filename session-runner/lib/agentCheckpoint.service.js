@@ -19,6 +19,7 @@ function createAgentCheckpointService({
   config = {},
   db,
   fsImpl = fs,
+  faultHarness,
   now = () => Date.now(),
   randomId = () => crypto.randomUUID(),
   storage,
@@ -48,6 +49,7 @@ function createAgentCheckpointService({
         admin,
         config,
         db,
+        faultHarness,
         uploaded,
         now,
       });
@@ -59,6 +61,7 @@ function createAgentCheckpointService({
         admin,
         config,
         db,
+        faultHarness,
         fsImpl,
         now,
         randomId,
@@ -185,6 +188,7 @@ async function commitCheckpoint({
   admin,
   config = {},
   db,
+  faultHarness,
   now = () => Date.now(),
   uploaded,
 } = {}) {
@@ -208,6 +212,7 @@ async function commitCheckpoint({
     publishedAt: timestamp,
   };
 
+  await injectPublicationFailure(faultHarness);
   await db.runTransaction(async (transaction) => {
     const [workspaceSnap, sessionSnap] = await Promise.all([
       transaction.get(workspaceRef),
@@ -242,6 +247,7 @@ async function publishWorkspaceFiles({
   db,
   files,
   fsImpl = fs,
+  faultHarness,
   generation,
   now = () => Date.now(),
   randomId = () => crypto.randomUUID(),
@@ -363,6 +369,7 @@ async function publishWorkspaceFiles({
     basePointer: publicationBase,
     config,
     db,
+    faultHarness,
     identity,
     manifestRef,
     now,
@@ -393,6 +400,7 @@ async function commitWorkspaceFileManifest({
   basePointer,
   config,
   db,
+  faultHarness,
   identity,
   now,
   pointer,
@@ -404,6 +412,7 @@ async function commitWorkspaceFileManifest({
   const workspaceRef = workspaceDocument(db, identity.workspaceId);
   const sessionRef = sessionDocument(workspaceRef, identity.sessionId);
   const expectedCaptureId = basePointer?.captureId || null;
+  await injectPublicationFailure(faultHarness);
   await db.runTransaction(async (transaction) => {
     const [workspaceSnap, sessionSnap] = await Promise.all([
       transaction.get(workspaceRef),
@@ -742,6 +751,16 @@ function checkpointError(code, message, cause) {
   error.code = code;
   if (cause) error.cause = cause;
   return error;
+}
+
+async function injectPublicationFailure(faultHarness) {
+  if (typeof faultHarness?.enabled !== "function" || !faultHarness.enabled()) return;
+  if (await faultHarness.consume("storage-publication")) {
+    throw checkpointError(
+        "qa_injected_storage_publication_failure",
+        "QA fault harness injected a storage publication failure",
+    );
+  }
 }
 
 module.exports = {

@@ -9,6 +9,7 @@ const {
   explicitRuntimeGeneration,
   isCompatibleAgentSession,
 } = require("./agentRuntime.helpers");
+const {qaFaultAccessTtlMs} = require("./qaFaultHarness.helpers");
 
 function createPreviewService(dependencies = {}) {
   return {
@@ -28,7 +29,7 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
     throw httpError(409, "session_requires_restart_for_browser_access");
   }
 
-  const expiresAtMs = Date.now() + dependencies.browserAccessTtlMs;
+  const expiresAtMs = Date.now() + qaFaultAccessTtlMs(session, dependencies.browserAccessTtlMs);
   const token = signSessionBrowserAccessToken(session, expiresAtMs);
   const baseUrl = session.serviceUrl.replace(/\/+$/, "");
   const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
