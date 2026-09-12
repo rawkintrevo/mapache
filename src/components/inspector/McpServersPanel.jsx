@@ -80,7 +80,7 @@ export function McpServersPanel({
       className="mcp-panel"
       create={{label: "New MCP server", onClick: openNew}}
       id="right-mcp"
-      description="Manage workspace MCP servers once. New sessions apply them automatically; restart an active Pi or Codex session after edits."
+      description="Manage workspace MCP servers once. New sessions apply them automatically; restart an active Pi session after edits."
       refresh={{onClick: onRefreshMcpServers}}
       state={state}
       status={status}

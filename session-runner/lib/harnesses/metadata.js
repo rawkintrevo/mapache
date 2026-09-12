@@ -10,20 +10,6 @@ function sharedCapability(harnessId, capability, overrides = {}) {
 }
 
 const HARNESSES = Object.freeze({
-  shell: Object.freeze({
-    id: "shell",
-    label: "Shell",
-    terminalKind: "shell",
-    auth: sharedCapability("shell", "auth"),
-    mcp: sharedCapability("shell", "mcp"),
-  }),
-  ssh: Object.freeze({
-    id: "ssh",
-    label: "SSH",
-    terminalKind: "ssh",
-    auth: sharedCapability("ssh", "auth"),
-    mcp: sharedCapability("ssh", "mcp"),
-  }),
   pi: Object.freeze({
     id: "pi",
     label: "Pi",
@@ -38,20 +24,6 @@ const HARNESSES = Object.freeze({
       harnessSpecificPath: ".pi/mcp.json",
     }),
   }),
-  codex: Object.freeze({
-    id: "codex",
-    label: "Codex",
-    terminalKind: "codex",
-    auth: sharedCapability("codex", "auth", {
-      storagePath: (config) => path.join(config.codexHomeDir, "auth.json"),
-      selectionField: "authSelection",
-      providerKeys: ["openai", "openai-codex", "github-cli"],
-    }),
-    mcp: sharedCapability("codex", "mcp", {
-      sharedPath: ".mcp.json",
-      harnessSpecificPath: ".codex/config.toml",
-    }),
-  }),
 });
 
 function resolveHarnessMetadata(source = {}) {
@@ -62,7 +34,7 @@ function resolveHarnessMetadata(source = {}) {
   const terminalHarness = Object.values(HARNESSES).find((harness) => harness.terminalKind === terminalKind);
   if (terminalHarness) return terminalHarness;
 
-  return HARNESSES.shell;
+  return HARNESSES.pi;
 }
 
 function listHarnessMetadata() {

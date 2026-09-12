@@ -31,22 +31,18 @@ const dependencies = {
     reservations.push({kind: "reserveSync", args});
     storedSession = {...args[2], syncWriterRole: "writer"};
   },
-  resolveHarness: (harnessId) => ({terminalKind: harnessId === "codex" ? "codex" : harnessId === "ssh" ? "ssh" : "shell"}),
-  resolveRunnerImage: (payload) => ["chrome", "pi-chrome"].includes(payload.imageKey) ? {
-    key: payload.imageKey,
-    imageKey: payload.imageKey,
-    image: "gcr.io/example/chrome",
-    harnessId: "pi",
-    terminalKind: "pi",
-    capabilities: {terminal: true, preview: true, chrome: true},
-    canProvision: true,
-  } : {
-    key: "default",
-    image: "gcr.io/example/default",
-    harnessId: "shell",
-    terminalKind: "shell",
-    capabilities: {terminal: true, preview: true},
-    canProvision: true,
+  resolveHarness: () => ({terminalKind: "pi"}),
+  resolveRunnerImage: (payload) => {
+    if (payload.imageKey !== "pi-chrome") throw Object.assign(new Error("invalid_runner_image"), {code: "invalid_runner_image"});
+    return {
+      key: payload.imageKey,
+      imageKey: payload.imageKey,
+      image: "gcr.io/example/chrome",
+      harnessId: "pi",
+      terminalKind: "pi",
+      capabilities: {terminal: true, preview: true, chrome: true},
+      canProvision: true,
+    };
   },
   requireWorkspace: async (uid, workspaceId) => ({
     ownerUid: uid,
@@ -143,19 +139,8 @@ async function createWithWorkspace(workspace, payload) {
         agentUiVersion: AGENT_UI_VERSION,
         source: {type: "blank"},
         mcpConfig: {},
-      }, {operationId: "marked-ssh-1", type: "ssh"}),
-      (error) => error.status === 400 && error.publicMessage === "ssh_sessions_disabled",
-  );
-
-  await assert.rejects(
-      createWithWorkspace({
-        ownerUid: "user-1",
-        bucket: "bucket",
-        storagePrefix: "workspaces/user-1/ssh",
-        source: {type: "ssh"},
-        mcpConfig: {},
-      }, {operationId: "ssh-workspace-1"}),
-      (error) => error.status === 400 && error.publicMessage === "ssh_sessions_disabled",
+      }, {operationId: "marked-unsupported-1", type: "ssh"}),
+      (error) => error.status === 400 && error.publicMessage === "unsupported_session_type",
   );
 
   console.log("session creation service tests passed");

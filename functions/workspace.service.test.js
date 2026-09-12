@@ -128,7 +128,7 @@ async function testCreateWorkspaceUsesManagedDefaults() {
   assert.strictEqual(created.source.type, "blank");
   await assert.rejects(
       service.createWorkspace("user-1", {name: "Dev machine", source: {type: "ssh"}}),
-      /ssh_workspace_creation_disabled/,
+      /unsupported_workspace_source_type/,
   );
 }
 

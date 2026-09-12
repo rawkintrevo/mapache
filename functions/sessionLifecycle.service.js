@@ -31,7 +31,6 @@ const {
 } = require("./userUsage.service");
 const {
   isActiveGithubWorkspaceSession,
-  isShellSession,
   normalizeSessionState,
   sessionStatusUpdate,
 } = require("./sessionLifecycle.helpers");
@@ -112,7 +111,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (normalizeSessionState(session.status) === "stop_failed") throw httpError(409, "session_stop_failed");
 
   const recreatingSessionService = shouldRecreateSessionServiceOnRestart(session);
-  if (recreatingSessionService && isGithubWorkspace(workspace) && !isShellSession(session)) {
+  if (recreatingSessionService && isGithubWorkspace(workspace)) {
     await assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies);
   }
   let syncWriterUpdates = {};
@@ -205,7 +204,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
 
 async function recreateSessionService(workspace, workspaceId, sessionRef, session, dependencies, options = {}) {
   const restartOperationId = crypto.randomUUID();
-  if (isGithubWorkspace(workspace) && !isShellSession(session)) {
+  if (isGithubWorkspace(workspace)) {
     await assertNoActiveGithubWorkspaceSession(workspaceId, sessionRef.id, session, dependencies);
   }
 
@@ -472,7 +471,7 @@ async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, sess
     const activeSession = snap.docs.find((doc) => {
       if (doc.id === sessionId) return false;
       const active = doc.data();
-      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+      return isActiveGithubWorkspaceSession(active);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before restarting this one.");

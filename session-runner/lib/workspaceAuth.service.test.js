@@ -7,7 +7,6 @@ const path = require("path");
 const test = require("node:test");
 const {
   authFileProviders,
-  buildCodexAuthFile,
   buildGitHubCliHostsYaml,
   createWorkspaceAuthService,
   githubCliHostsPath,
@@ -112,44 +111,6 @@ test("readSessionAuthSelection ignores removed legacy piAuthSelection", async ()
   });
 
   assert.strictEqual(await service.readSessionAuthSelection(), null);
-});
-
-test("buildCodexAuthFile matches current Codex api key auth mode", () => {
-  assert.deepStrictEqual(buildCodexAuthFile({
-    openai: {type: "api_key", key: "sk-test"},
-  }), {
-    auth_mode: "apikey",
-    OPENAI_API_KEY: "sk-test",
-  });
-});
-
-test("buildCodexAuthFile drops malformed Codex oauth credentials", () => {
-  assert.strictEqual(buildCodexAuthFile({
-    "openai-codex": {
-      type: "oauth",
-      id: "",
-      access: "access-token",
-      refresh: "refresh-token",
-      accountId: "acct_123",
-    },
-  }), null);
-});
-
-test("buildCodexAuthFile preserves valid Codex oauth credentials", () => {
-  const auth = buildCodexAuthFile({
-    "openai-codex": {
-      type: "oauth",
-      id: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature",
-      access: "access-token",
-      refresh: "refresh-token",
-      accountId: "acct_123",
-      expires: 1760000000000,
-    },
-  });
-  assert.equal(auth.auth_mode, "chatgpt");
-  assert.equal(auth.tokens.id_token, "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature");
-  assert.equal(auth.tokens.account_id, "acct_123");
-  assert.equal(auth.last_refresh, "2025-10-09T08:53:20.000Z");
 });
 
 test("github cli api key credentials materialize as gh hosts.yml", () => {

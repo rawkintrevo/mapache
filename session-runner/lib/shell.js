@@ -4,7 +4,6 @@ const path = require("path");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
-const {prepareSshMaterial, sshCommand} = require("./sshSession");
 
 /**
  * Owns the second, user-controlled shell for a runner session. The agent
@@ -86,10 +85,6 @@ function createShellSession({admin, config, activity} = {}) {
 }
 
 function shellCommand(config = {}) {
-  if (String(config.harnessId || config.terminalKind || "").trim().toLowerCase() === "ssh") {
-    prepareSshMaterial(config);
-    return sshCommand(config, {tty: true, loginShell: true});
-  }
   const shell = process.env.SHELL || "bash";
   return {file: shell, args: ["-l"], display: `${shell} -l`};
 }

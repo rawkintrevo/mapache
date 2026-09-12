@@ -3,7 +3,7 @@
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {cleanName, httpError} = require("./backendUtils.helpers");
 const {findActiveChromeSession, isChromeSession} = require("./chromeReservation.helpers");
-const {isActiveGithubWorkspaceSession, isShellSession} = require("./sessionLifecycle.helpers");
+const {isActiveGithubWorkspaceSession} = require("./sessionLifecycle.helpers");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {
   resolveRuntimeReservation,
@@ -82,7 +82,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       const activeGithub = sessionsSnap.docs.find((doc) => {
         if (doc.id === sessionRef.id) return false;
         const active = doc.data();
-        return isActiveGithubWorkspaceSession(active) && !isShellSession(active);
+        return isActiveGithubWorkspaceSession(active);
       });
       if (activeGithub) {
         throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");

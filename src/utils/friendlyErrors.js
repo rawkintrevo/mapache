@@ -45,6 +45,6 @@ export function friendlyPiAuthError(error) {
   if (message === "invalid_pi_auth_provider") return "Choose a supported API key provider.";
   if (message === "invalid_pi_auth_key") return "Enter a valid API key value.";
   if (message === "invalid_pi_auth_entry") return "Choose a saved authentication entry.";
-  if (message === "auth_selection_unsupported") return "Choose a Pi or Codex session before managing session auth.";
+  if (message === "auth_selection_unsupported") return "Choose a Pi session before managing session auth.";
   return message;
 }

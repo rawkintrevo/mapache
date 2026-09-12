@@ -6,14 +6,13 @@ import {
 
 describe("sessionHarnesses", () => {
   it("prefers persisted harnessId", () => {
-    expect(sessionHarness({harnessId: "codex", terminalKind: "pi"})?.id).toBe("codex");
+    expect(sessionHarness({harnessId: "pi", terminalKind: "pi"})?.id).toBe("pi");
   });
 
   it("returns auth metadata for auth-capable harnesses", () => {
     expect(sessionAuthHarness({harnessId: "pi"})?.storagePath).toContain(".pi/agent/auth.json");
     expect(sessionAuthHarness({harnessId: "pi"})?.providerKeys).toContain("github-cli");
-    expect(sessionAuthHarness({harnessId: "codex"})?.providerKeys).toContain("github-cli");
-    expect(sessionAuthHarness({harnessId: "shell"})).toBeNull();
+    expect(sessionAuthHarness({harnessId: "pi"})?.providerKeys).toContain("openai-codex");
   });
 
 });

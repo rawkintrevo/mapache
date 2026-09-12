@@ -55,7 +55,6 @@ function createLifecycleHarness(events, overrides = {}) {
       events.push("syncLoop.start");
       return {unref: () => {}};
     }),
-    sshSession: overrides.sshSession || {closeAll: () => events.push("sshSession.closeAll")},
     workspace: overrides.workspace || {
       ensureWorkspace: async () => events.push("workspace.ensureWorkspace"),
       prepareWorkspaceSource: async () => events.push("workspace.prepareWorkspaceSource"),
@@ -212,7 +211,7 @@ test("checkpoint failure prevents shutdown acknowledgement", async () => {
   assert.equal(events.includes("activity.updateSessionActivity"), false);
 });
 
-test("shutdown closes forwards before final profile snapshot and activity update", async () => {
+test("shutdown closes runtime resources before final profile snapshot and activity update", async () => {
   const events = [];
   const lifecycle = createLifecycleHarness(events, {
     resourceMetrics: {close: () => events.push("resourceMetrics.close")},
@@ -222,7 +221,6 @@ test("shutdown closes forwards before final profile snapshot and activity update
 
   assert.deepEqual(events, [
     "resourceMetrics.close",
-    "sshSession.closeAll",
     "chromeRuntime.stop",
     "piModelScope.persist",
     "chromeProfileSnapshots.stop",
@@ -245,7 +243,6 @@ test("shutdown syncs archives directly for non-Chrome runners", async () => {
   await lifecycle.shutdown();
 
   assert.deepEqual(events, [
-    "sshSession.closeAll",
     "chromeRuntime.stop",
     "piModelScope.persist",
     "workspaceSync.syncUp",

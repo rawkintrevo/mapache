@@ -1,3 +1,11 @@
+const SUPPORTED_VARIANT = "pi-chrome";
+
+function normalizeVariant(variant) {
+  const cleanVariant = String(variant || "").trim();
+  if (cleanVariant !== SUPPORTED_VARIANT) throw new Error(`unsupported runner image variant: ${cleanVariant || "missing"}`);
+  return cleanVariant;
+}
+
 function normalizeSha(sourceSha) {
   const sha = String(sourceSha || "").trim().toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error("runner image source revision must be a 40-character commit SHA");
@@ -5,21 +13,18 @@ function normalizeSha(sourceSha) {
 }
 
 function immutableRunnerTag(variant, sourceSha) {
-  const cleanVariant = String(variant || "").trim();
-  if (!cleanVariant) throw new Error("runner image variant is required");
+  const cleanVariant = normalizeVariant(variant);
   return `${cleanVariant}-${normalizeSha(sourceSha)}`;
 }
 
 function pullRequestRunnerTag(variant, pullRequestNumber, sourceSha) {
   const number = String(pullRequestNumber || "").trim();
   if (!/^\d+$/.test(number)) throw new Error("pull request number is required for preview runner tags");
-  return `${variant}-pr-${number}-${normalizeSha(sourceSha).slice(0, 12)}`;
+  return `${normalizeVariant(variant)}-pr-${number}-${normalizeSha(sourceSha).slice(0, 12)}`;
 }
 
 function compatibilityRunnerTag(variant) {
-  const cleanVariant = String(variant || "").trim();
-  if (!cleanVariant) throw new Error("runner image variant is required");
-  return cleanVariant === "default" ? "latest" : cleanVariant;
+  return normalizeVariant(variant);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -34,4 +39,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(tag);
 }
 
-export {compatibilityRunnerTag, immutableRunnerTag, normalizeSha, pullRequestRunnerTag};
+export {SUPPORTED_VARIANT, compatibilityRunnerTag, immutableRunnerTag, normalizeSha, normalizeVariant, pullRequestRunnerTag};

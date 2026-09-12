@@ -1,29 +1,5 @@
 {
   "harnesses": {
-    "shell": {
-      "id": "shell",
-      "label": "Shell",
-      "terminalKind": "shell",
-      "auth": {
-        "supported": false
-      },
-      "mcp": {
-        "supported": false,
-        "sharedPath": ".mcp.json"
-      }
-    },
-    "ssh": {
-      "id": "ssh",
-      "label": "SSH",
-      "terminalKind": "ssh",
-      "auth": {
-        "supported": false
-      },
-      "mcp": {
-        "supported": false,
-        "sharedPath": ".mcp.json"
-      }
-    },
     "pi": {
       "id": "pi",
       "label": "Pi",
@@ -74,102 +50,9 @@
         "sharedPath": ".mcp.json",
         "harnessSpecificPath": ".pi/mcp.json"
       }
-    },
-    "codex": {
-      "id": "codex",
-      "label": "Codex",
-      "terminalKind": "codex",
-      "auth": {
-        "supported": true,
-        "providerKeys": [
-          "openai",
-          "openai-codex",
-          "github-cli"
-        ],
-        "selectionField": "authSelection",
-        "storagePath": "$CODEX_HOME/auth.json",
-        "manageTitle": "Manage Codex Auth",
-        "manageDescription": "Choose which saved credentials should be written into this session's Codex auth.json.",
-        "reloadHint": "Restart Codex in the terminal after saving if the active agent should reload credentials."
-      },
-      "mcp": {
-        "supported": true,
-        "sharedPath": ".mcp.json",
-        "harnessSpecificPath": ".codex/config.toml"
-      }
     }
   },
   "images": [
-    {
-      "imageKey": "default",
-      "harnessId": "shell",
-      "variant": "default",
-      "label": "Shell",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
-      "capabilities": {
-        "terminal": true,
-        "preview": false,
-        "previewQa": false,
-        "functions": false,
-        "n64": false
-      }
-    },
-    {
-      "imageKey": "pi-basic",
-      "harnessId": "pi",
-      "variant": "basic",
-      "label": "pi-basic",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic",
-      "capabilities": {
-        "terminal": true,
-        "preview": false,
-        "previewQa": false,
-        "functions": false,
-        "n64": false
-      }
-    },
-    {
-      "imageKey": "codex-basic",
-      "harnessId": "codex",
-      "variant": "basic",
-      "label": "codex-basic",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-basic",
-      "capabilities": {
-        "terminal": true,
-        "preview": false,
-        "previewQa": false,
-        "functions": false,
-        "n64": false
-      }
-    },
-    {
-      "imageKey": "pi-web",
-      "harnessId": "pi",
-      "variant": "web",
-      "label": "pi-web",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web",
-      "capabilities": {
-        "terminal": true,
-        "preview": true,
-        "previewQa": true,
-        "functions": true,
-        "n64": false
-      }
-    },
-    {
-      "imageKey": "codex-web",
-      "harnessId": "codex",
-      "variant": "web",
-      "label": "codex-web",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web",
-      "capabilities": {
-        "terminal": true,
-        "preview": true,
-        "previewQa": true,
-        "functions": true,
-        "n64": false
-      }
-    },
     {
       "imageKey": "pi-chrome",
       "harnessId": "pi",
@@ -181,37 +64,7 @@
         "preview": true,
         "previewQa": true,
         "functions": true,
-        "n64": false,
         "chrome": true
-      }
-    },
-    {
-      "imageKey": "codex-chrome",
-      "harnessId": "codex",
-      "variant": "chrome",
-      "label": "codex-chrome",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-chrome",
-      "capabilities": {
-        "terminal": true,
-        "preview": true,
-        "previewQa": true,
-        "functions": true,
-        "n64": false,
-        "chrome": true
-      }
-    },
-    {
-      "imageKey": "pi-n64",
-      "harnessId": "pi",
-      "variant": "n64",
-      "label": "pi-n64",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
-      "capabilities": {
-        "terminal": true,
-        "preview": true,
-        "previewQa": false,
-        "functions": false,
-        "n64": true
       }
     }
   ]

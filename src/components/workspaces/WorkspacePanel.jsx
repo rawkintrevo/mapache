@@ -11,10 +11,7 @@ export function WorkspacePanel({
   onRetryProvisioningSession,
   onRestartSession,
   onStopSession,
-  onCloseSshSessionForward,
-  onCreateSshSessionForward,
   onSelectSession,
-  onUpdateSshForwardPort,
 }) {
   const busy = hasPendingOperations(state.pendingOperations);
 
@@ -24,15 +21,11 @@ export function WorkspacePanel({
         <SessionDetail
           busy={busy}
           session={selectedSession}
-          sshForwards={state.sshForwards}
           workspaceId={state.selectedWorkspaceId}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
           onRetryProvisioningSession={onRetryProvisioningSession}
           onRestartSession={onRestartSession}
           onStopSession={onStopSession}
-          onCloseSshSessionForward={onCloseSshSessionForward}
-          onCreateSshSessionForward={onCreateSshSessionForward}
-          onUpdateSshForwardPort={onUpdateSshForwardPort}
         />
       </section>
     );

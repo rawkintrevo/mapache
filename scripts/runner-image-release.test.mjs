@@ -10,19 +10,23 @@ import {
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 
 test("immutable tags include the complete source revision", () => {
-  assert.equal(immutableRunnerTag("codex-web", SHA), `codex-web-${SHA}`);
-  assert.notEqual(immutableRunnerTag("codex-web", SHA), immutableRunnerTag("codex-web", `${SHA.slice(0, 39)}8`));
+  assert.equal(immutableRunnerTag("pi-chrome", SHA), `pi-chrome-${SHA}`);
+  assert.notEqual(immutableRunnerTag("pi-chrome", SHA), immutableRunnerTag("pi-chrome", `${SHA.slice(0, 39)}8`));
 });
 
 test("pull request tags are unique but bounded for logs", () => {
-  assert.equal(pullRequestRunnerTag("pi-basic", 246, SHA), "pi-basic-pr-246-0123456789ab");
+  assert.equal(pullRequestRunnerTag("pi-chrome", 246, SHA), "pi-chrome-pr-246-0123456789ab");
 });
 
 test("invalid revisions fail closed", () => {
   assert.throws(() => normalizeSha("not-a-sha"), /40-character commit SHA/);
 });
 
-test("compatibility tags map the default runner to latest", () => {
-  assert.equal(compatibilityRunnerTag("default"), "latest");
-  assert.equal(compatibilityRunnerTag("pi-basic"), "pi-basic");
+test("compatibility tags use the supported runner key", () => {
+  assert.equal(compatibilityRunnerTag("pi-chrome"), "pi-chrome");
+});
+
+test("retired variants fail closed", () => {
+  assert.throws(() => immutableRunnerTag("codex-web", SHA), /unsupported runner image variant/);
+  assert.throws(() => compatibilityRunnerTag("default"), /unsupported runner image variant/);
 });

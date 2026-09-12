@@ -18,7 +18,6 @@ import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
   resetGoogleWorkspace as resetGoogleWorkspaceState,
   resetMcpServers as resetMcpServersState,
-  resetSshForwards as resetSshForwardsState,
   resetSignedOutState,
 } from "./state/resetters.js";
 import {createAdminController} from "./controllers/adminController.js";
@@ -107,9 +106,7 @@ const handlers = {
   modals: modalController,
   pi: piPanelsController,
   sessions: {
-    closeSshSessionForward,
     createSession,
-    createSshSessionForward,
     deleteSession,
     editSession,
     getSessionAccessUrls,
@@ -119,7 +116,6 @@ const handlers = {
     shareSessionPreview,
     selectSession,
     stopSession,
-    updateSshForwardPort,
   },
   workspaces: workspaceController,
 };
@@ -196,14 +192,9 @@ function resetGoogleWorkspace() {
   resetGoogleWorkspaceState(state);
 }
 
-function resetSshForwards() {
-  resetSshForwardsState(state);
-}
-
 function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
   if (includeMcp) resetMcpServers();
   resetGoogleWorkspace();
-  resetSshForwards();
 }
 
 async function refreshAll() {
@@ -270,7 +261,6 @@ async function selectSession(sessionId) {
 
 async function loadSelectedSessionAccess() {
   const request = sessionRequestTracker.capture();
-  await loadSshForwards(request);
   if (!request.isCurrent()) return;
   render();
 }
@@ -327,52 +317,6 @@ async function getSessionAccessUrls(workspaceId, sessionId) {
 
 async function shareSessionPreview(workspaceId, sessionId) {
   return state.api.shareSessionPreview(workspaceId, sessionId);
-}
-
-function updateSshForwardPort(port) {
-  state.sshForwards.port = port;
-  render();
-}
-
-async function loadSshForwards(request = sessionRequestTracker.capture()) {
-  if (!isCurrentSessionRequest(request)) return;
-  const session = getSelectedSession();
-  if (!session || (session.sessionType !== "ssh" && session.terminalKind !== "ssh") || !session.serviceUrl) {
-    resetSshForwards();
-    return;
-  }
-  state.sshForwards.loading = true;
-  state.sshForwards.error = "";
-  render();
-  try {
-    const data = await state.api.getSshSessionForwards(state.selectedWorkspaceId, session.id);
-    if (!isCurrentSessionRequest(request)) return;
-    state.sshForwards.forwards = data.forwards || [];
-  } catch (error) {
-    if (!isCurrentSessionRequest(request)) return;
-    state.sshForwards.error = error.message || "ssh_forwards_unavailable";
-  } finally {
-    if (isCurrentSessionRequest(request)) state.sshForwards.loading = false;
-  }
-}
-
-async function createSshSessionForward() {
-  const session = getSelectedSession();
-  if (!session || !state.sshForwards.port) return;
-  await runBusy(async () => {
-    await state.api.createSshSessionForward(state.selectedWorkspaceId, session.id, state.sshForwards.port);
-    state.sshForwards.port = "";
-    await loadSshForwards();
-  }, "Working...", OPERATION_KEYS.SSH_FORWARD_CREATE);
-}
-
-async function closeSshSessionForward(port) {
-  const session = getSelectedSession();
-  if (!session) return;
-  await runBusy(async () => {
-    await state.api.closeSshSessionForward(state.selectedWorkspaceId, session.id, port);
-    await loadSshForwards();
-  }, "Working...", OPERATION_KEYS.SSH_FORWARD_CLOSE);
 }
 
 async function runBusy(task, message = "Working...", operationKey = "global") {

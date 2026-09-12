@@ -63,19 +63,6 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}`,
         {method: "DELETE"},
     ),
-    getSshSessionFiles: (workspaceId, sessionId, path = "") => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-files${path ? `?path=${encodePathQuery(path)}` : ""}`,
-    ),
-    getSshSessionFile: (workspaceId, sessionId, path) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-file?path=${encodePathQuery(path)}`,
-    ),
-    saveSshSessionFile: (workspaceId, sessionId, path, content) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-file?path=${encodePathQuery(path)}`,
-        {method: "PUT", body: {content}},
-    ),
     getWorkspaceMcpConfig: (workspaceId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/mcp`,
@@ -167,20 +154,6 @@ export function createApiClient(getToken) {
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/share-preview`,
         {method: "POST", body: {}},
-    ),
-    getSshSessionForwards: (workspaceId, sessionId) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-ports`,
-    ),
-    createSshSessionForward: (workspaceId, sessionId, port) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-ports`,
-        {method: "POST", body: {port}},
-    ),
-    closeSshSessionForward: (workspaceId, sessionId, port) => request(
-        getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-ports/${encodeURIComponent(port)}`,
-        {method: "DELETE"},
     ),
     saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => {
       const body = {selection: selection.providers || selection};

@@ -124,7 +124,6 @@ function createWorkspaceAuthService({admin, config, db}) {
     const authPath = authFilePath();
     try {
       const content = await fs.promises.readFile(authPath, "utf8");
-      if (harness.id === "codex") return normalizeAuthProviders(parseCodexAuthFile(content));
       return normalizeAuthProviders(JSON.parse(content));
     } catch (error) {
       if (error && error.code === "ENOENT") return {};
@@ -137,19 +136,6 @@ function createWorkspaceAuthService({admin, config, db}) {
     const authPath = authFilePath();
     const nativeAuth = authFileProviders(auth);
     await fs.promises.mkdir(path.dirname(authPath), {recursive: true});
-    if (harness.id === "codex") {
-      const codexAuth = buildCodexAuthFile(nativeAuth);
-      if (!codexAuth) {
-        await fs.promises.unlink(authPath).catch((error) => {
-          if (error && error.code !== "ENOENT") throw error;
-        });
-        return;
-      }
-      const content = JSON.stringify(codexAuth, null, 2);
-      await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
-      await fs.promises.chmod(authPath, 0o600).catch(() => {});
-      return;
-    }
     const content = JSON.stringify(normalizeAuthProviders(nativeAuth), null, 2);
     await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
     await fs.promises.chmod(authPath, 0o600).catch(() => {});
@@ -285,93 +271,6 @@ function providersForHarness(providers, harness) {
   }, {});
 }
 
-function parseCodexAuthFile(content) {
-  try {
-    const parsed = JSON.parse(String(content || "{}"));
-    const providers = {};
-    if (parsed.tokens && typeof parsed.tokens === "object") {
-      providers["openai-codex"] = normalizePlainAuthObject({
-        type: "oauth",
-        id: parsed.tokens.id_token || "",
-        access: parsed.tokens.access_token || "",
-        refresh: parsed.tokens.refresh_token || "",
-        accountId: parsed.tokens.account_id || "",
-        lastRefresh: parsed.last_refresh || 0,
-      });
-    }
-    if (parsed.OPENAI_API_KEY) {
-      providers.openai = {type: "api_key", key: String(parsed.OPENAI_API_KEY)};
-    }
-    return providers;
-  } catch (error) {
-    return {};
-  }
-}
-
-function buildCodexAuthFile(auth) {
-  const providers = normalizeAuthProviders(auth);
-  const oauth = normalizeCodexOauthCredential(providers["openai-codex"]);
-  const apiKey = normalizeCodexApiKey(providers.openai);
-  if (!oauth && !apiKey) return null;
-  if (!oauth) {
-    return {
-      auth_mode: "apikey",
-      OPENAI_API_KEY: apiKey,
-    };
-  }
-  return {
-    auth_mode: "chatgpt",
-    OPENAI_API_KEY: apiKey || "",
-    tokens: {
-      id_token: oauth.id,
-      access_token: oauth.access,
-      refresh_token: oauth.refresh,
-      account_id: oauth.accountId,
-    },
-    last_refresh: normalizeCodexLastRefresh(oauth.lastRefresh),
-  };
-}
-
-function normalizeCodexApiKey(credential) {
-  if (!credential || credential.type !== "api_key") return "";
-  return String(credential.key || "").trim();
-}
-
-function normalizeCodexLastRefresh(value) {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
-  return null;
-}
-
-function normalizeCodexOauthCredential(credential) {
-  if (!credential || credential.type !== "oauth") return null;
-  const id = String(credential.id || "").trim();
-  const access = String(credential.access || "").trim();
-  const refresh = String(credential.refresh || "").trim();
-  if (!looksLikeJwt(id) || !access || !refresh) return null;
-  return {
-    id,
-    access,
-    refresh,
-    accountId: String(credential.accountId || "").trim(),
-    lastRefresh: credential.lastRefresh ?? credential.expires ?? null,
-  };
-}
-
-function looksLikeJwt(value) {
-  const parts = String(value || "").trim().split(".");
-  if (parts.length !== 3 || parts.some((part) => !part)) return false;
-  return parts.slice(0, 2).every((part) => {
-    try {
-      const decoded = Buffer.from(part, "base64url").toString("utf8");
-      const parsed = JSON.parse(decoded);
-      return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed);
-    } catch (error) {
-      return false;
-    }
-  });
-}
-
 function normalizeAuthProviders(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.entries(value).reduce((acc, [provider, credential]) => {
@@ -472,7 +371,6 @@ function normalizeAuthKey(value) {
 module.exports = {
   authFileProviders,
   buildGitHubCliHostsYaml,
-  buildCodexAuthFile,
   createWorkspaceAuthService,
   githubCliHostsPath,
   isManagedAgentRuntime,
@@ -481,6 +379,5 @@ module.exports = {
   normalizeAuthEntries,
   normalizeAuthProviders,
   normalizeAuthSelection,
-  parseCodexAuthFile,
   secretFileInventory,
 };

@@ -32,7 +32,7 @@ function normalizePreviewBasePath(value) {
 const PI_MCP_ADAPTER_VERSION = "2.32.1";
 
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false};
+  const fallback = {terminal: true, preview: true, previewQa: true, functions: true, chrome: true};
   try {
     const parsed = JSON.parse(process.env.RUNNER_CAPABILITIES || "{}");
     return Object.fromEntries(Object.keys(fallback).map((key) => [
@@ -70,11 +70,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     normalizeEnvString(process.env.PI_SESSION_DIR) || path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
   const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
   const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
-  const codexHomeDir = path.resolve(process.env.CODEX_HOME || path.join("/tmp", "mapache-codex", process.env.SESSION_ID || "session"));
-  const codexHomeStorageBucketName = process.env.CODEX_HOME_STORAGE_BUCKET || bucketName;
-  const codexHomeStoragePrefix = normalizePrefix(process.env.CODEX_HOME_STORAGE_PREFIX || "");
-  const codexConfigPath = path.resolve(process.env.CODEX_CONFIG_PATH || path.join(workspaceDir, ".codex", "config.toml"));
-  const harnessId = normalizeEnvString(process.env.HARNESS_ID) || normalizeEnvString(process.env.TERMINAL_KIND) || "shell";
+  const harnessId = "pi";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
   const workspaceSyncRole = normalizeWorkspaceSyncRole(process.env.WORKSPACE_SYNC_ROLE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
@@ -86,7 +82,6 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
-  const sshConfigDir = path.join(homeDir, ".mapache", "ssh");
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
@@ -130,10 +125,6 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     chromeVncHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_VNC_HOST) || "127.0.0.1" : "",
     chromeVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_VNC_PORT, 5900) : 0,
     bucketName,
-    codexConfigPath,
-    codexHomeDir,
-    codexHomeStorageBucketName,
-    codexHomeStoragePrefix,
     directoryMarkerFile: DIRECTORY_MARKER_FILE,
     githubCloneToken: normalizeEnvString(process.env.GITHUB_CLONE_TOKEN),
     githubCloneUsername: normalizeEnvString(process.env.GITHUB_CLONE_USERNAME) || "x-access-token",
@@ -192,31 +183,15 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     previewEnabled,
     previewInjectLogger: previewEnabled && envFlag(process.env.PREVIEW_INJECT_LOGGER, true),
     previewLogLimit: positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500),
-    previewN64RomPath: path.resolve(process.env.PREVIEW_N64_ROM_PATH || path.join(workspaceDir, "build", "game.z64")),
     previewStaticRoot: path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
     runnerCapabilities,
     sessionBrowserTokenSecret: normalizeEnvString(process.env.SESSION_BROWSER_TOKEN_SECRET),
     sessionId: process.env.SESSION_ID || "",
     sessionName: normalizeEnvString(process.env.SESSION_NAME) || "Terminal session",
     shutdownToken: process.env.SESSION_SHUTDOWN_TOKEN || "",
-    sshAuthMode: normalizeEnvString(process.env.SSH_AUTH_MODE) === "certificate" ? "certificate" : "private-key",
-    sshCertificate: normalizeEnvString(process.env.SSH_CERTIFICATE),
-    sshCertificatePath: path.join(sshConfigDir, "id_user-cert.pub"),
-    sshConfigDir,
-    sshHost: normalizeEnvString(process.env.SSH_TARGET_HOST),
-    sshInitialDirectory: normalizeEnvString(process.env.SSH_INITIAL_DIRECTORY) || "~",
-    sshKnownHosts: normalizeEnvString(process.env.SSH_KNOWN_HOSTS),
-    sshKnownHostsPath: path.join(sshConfigDir, "known_hosts"),
-    sshMaxFileBytes: positiveNumber(process.env.SSH_MAX_FILE_BYTES, 1024 * 1024),
-    sshPort: positiveNumber(process.env.SSH_TARGET_PORT, 22),
-    sshPrivateKey: normalizeEnvString(process.env.SSH_PRIVATE_KEY),
-    sshPrivateKeyPath: path.join(sshConfigDir, "id_user"),
-    sshShell: normalizeEnvString(process.env.SSH_SHELL) || "bash",
-    sshStrictHostKeyChecking: envFlag(process.env.SSH_STRICT_HOST_KEY_CHECKING, true),
-    sshUsername: normalizeEnvString(process.env.SSH_TARGET_USERNAME),
     syncIntervalMs: Number(process.env.SYNC_INTERVAL_MS || 30000),
     terminalReplayLimit: positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000),
-    terminalKind: normalizeEnvString(process.env.TERMINAL_KIND) || "pi",
+    terminalKind: "pi",
     workspaceDir,
     workspaceGoogleApplicationCredentials: normalizeEnvString(workspaceGoogleApplicationCredentials),
     workspaceId: process.env.WORKSPACE_ID || "",

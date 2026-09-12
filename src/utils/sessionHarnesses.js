@@ -8,7 +8,6 @@ function normalizeCapabilities(capabilities = {}) {
     preview: Boolean(capabilities.preview),
     previewQa: Boolean(capabilities.previewQa),
     functions: Boolean(capabilities.functions),
-    n64: Boolean(capabilities.n64),
     chrome: Boolean(capabilities.chrome),
   };
 }
@@ -63,11 +62,11 @@ export function sessionHarness(session) {
   const image = findSessionImage(session?.imageKey || session?.image);
   if (image) return resolveHarness(image.harnessId);
 
-  return resolveHarness("shell");
+  return resolveHarness("pi");
 }
 
 export function normalizeSessionTerminalKind(session) {
-  return sessionHarness(session)?.terminalKind || "shell";
+  return sessionHarness(session)?.terminalKind || "pi";
 }
 
 export function sessionSupportsAuth(session) {

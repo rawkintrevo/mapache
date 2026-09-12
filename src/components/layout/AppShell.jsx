@@ -92,10 +92,7 @@ export function AppShell(props) {
             onRetryProvisioningSession={sessions.retryProvisioningSession}
           onRestartSession={sessions.restartSession}
           onStopSession={sessions.stopSession}
-            onCloseSshSessionForward={sessions.closeSshSessionForward}
-            onCreateSshSessionForward={sessions.createSshSessionForward}
             onSelectSession={sessions.selectSession}
-            onUpdateSshForwardPort={sessions.updateSshForwardPort}
           />
         )}
         <RightDrawer

@@ -85,9 +85,6 @@ function routeRequest(path) {
     ["share-preview", "sessionSharePreview"],
     ["auth-selection", "sessionPiAuthSelection"],
     ["pi-auth-selection", "sessionPiAuthSelection"],
-    ["ssh-files", "sshSessionFiles"],
-    ["ssh-file", "sshSessionFile"],
-    ["ssh-ports", "sshSessionForwards"],
   ]);
   if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "sessions") {
     const name = sessionActionRoutes.get(parts[4]);
@@ -102,14 +99,6 @@ function routeRequest(path) {
     parts[5] === "faults"
   ) {
     return {name: "sessionQaFaults", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "ssh-ports"
-  ) {
-    return {name: "sshSessionForward", workspaceId: parts[1], sessionId: parts[3], port: parts[5]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};

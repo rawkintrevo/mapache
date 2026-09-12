@@ -16,17 +16,18 @@ does not import the Functions package directly.
 
 ## Current behavior
 
-Each session records a stable `harnessId`; `imageKey` selects a curated image
-and `terminalKind` remains a compatibility runtime hint. The catalog still
-contains historical shell, SSH, Pi, and Codex image records so old session
-documents can be displayed and cleaned up. New session creation is server-owned
-and resolves the marked `pi-chrome`/Pi combination.
+Each session records a stable `harnessId`; `imageKey` selects the only supported
+curated image, `pi-chrome`, and `terminalKind` remains a compatibility runtime
+hint for restored records. Historical session documents can still be displayed
+and cleaned up, but they are not launchable. New session creation is
+server-owned and resolves the marked `pi-chrome`/Pi combination.
 
-Image capabilities describe terminal, Preview, Preview QA, Functions, N64, and
-Chrome access only. Legacy Chat and Goals capability flags are not part of the
-catalog. The frontend uses the catalog for access-surface decisions and for
-credential-harness selection; it does not use it to render Mapache managers for
-upstream files, Git, models, skills, extensions, subagents, or Goals.
+Image capabilities describe terminal, Preview, Preview QA, Functions, and
+Chrome access. Legacy Chat, Goals, SSH, and N64 capability flags are not part of
+the supported catalog. The frontend uses the catalog for access-surface
+decisions and credential-harness selection; it does not use it to render
+Mapache managers for upstream files, Git, models, skills, extensions,
+subagents, or Goals.
 
 ## Auth and connections
 
@@ -54,9 +55,8 @@ Runner harness resolution provides a small ordered set of startup hooks:
 6. managed upstream agent launch when `agentRuntimeEnabled` is true
 
 Pi skill seeding is limited to missing Mapache-owned runtime skill files needed
-to explain retained Chrome/MCP integration. Codex compatibility startup may
-seed its existing workspace guidance. These hooks do not expose a CRUD API or
-replace upstream's settings and discovery behavior.
+to explain retained Chrome/MCP integration. These hooks do not expose a CRUD API
+or replace upstream's settings and discovery behavior.
 
 The runner has no harness hook or route for Mapache Goals, Chat, package CRUD,
 model editing, file editing, Git controls, skills CRUD, or subagent CRUD. The
@@ -66,6 +66,8 @@ the server-owned credential boundary.
 ## Invariants and verification
 
 - Browser payloads cannot choose a runner image or harness.
+- `pi-chrome` is the only catalog image and the only image accepted by
+  provisioning and release automation.
 - Catalog changes regenerate `session-runner/lib/harnesses/generatedCatalog.json`.
 - Existing Cloud Run services keep their old image until a revision/recreation;
   rebuilding a tag alone does not change a running service.

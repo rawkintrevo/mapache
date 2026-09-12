@@ -19,7 +19,6 @@ function createRunnerLifecycleCoordinator({
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
   now = () => Date.now(),
-  sshSession,
   workspace,
   workspaceAuthority,
   workspaceSync,
@@ -93,7 +92,6 @@ function createRunnerLifecycleCoordinator({
         await piWebUi?.stop?.();
       }
       resourceMetrics?.close?.();
-      sshSession.closeAll();
       await chromeRuntime.stop();
       if (!checkpointScheduler) {
         await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));

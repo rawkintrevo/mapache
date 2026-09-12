@@ -15,7 +15,6 @@ const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createChromeDesktopService} = require("./lib/chromeDesktop");
 const {createChromeProfileService} = require("./lib/chromeProfile.service");
 const {createChromeProfileSnapshotService} = require("./lib/chromeProfileSnapshot.service");
-const {createCodexService} = require("./lib/codex");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
 const {createRunnerHarnessRegistry} = require("./lib/harnesses");
@@ -26,7 +25,6 @@ const {createGoogleMcpStatusService} = require("./lib/googleMcpStatus.service");
 const {createPreviewService} = require("./lib/preview");
 const {createResourceMetricsService} = require("./lib/resourceMetrics.service");
 const {createResourceMetricsWebSocket} = require("./lib/resourceMetricsWebSocket");
-const {createSshSessionService} = require("./lib/sshSession");
 const {admin, db, storage} = require("./lib/services");
 const {
   createTerminalSession,
@@ -42,7 +40,6 @@ const {createAgentCheckpointScheduler} = require("./lib/agentCheckpointScheduler
 const {registerAgentRoutes} = require("./routes/agentRoutes");
 const {registerBrowserRoutes, registerPreviewRoutes} = require("./routes/browserPreviewRoutes");
 const {registerGoogleMcpRoutes} = require("./routes/googleMcpRoutes");
-const {registerSshRoutes} = require("./routes/sshRoutes");
 const {registerWorkspaceRoutes} = require("./routes/workspaceRoutes");
 const {registerQaFaultRoutes} = require("./routes/qaFaultRoutes");
 const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
@@ -78,10 +75,8 @@ const chromeRuntime = createChromeRuntime(config, {
   desktop: createChromeDesktopService(config),
 });
 const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
-const codex = createCodexService({config});
 const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
-const sshSession = createSshSessionService({config});
 let piWebUi = null;
 const workspaceAuthority = createWorkspaceAuthority({
   admin,
@@ -123,7 +118,7 @@ const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const piModelScope = createPiModelScopeService({admin, config, db});
 const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
-const harnesses = createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace});
+const harnesses = createRunnerHarnessRegistry({config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
 const terminalSession = createTerminalSession({
   admin,
@@ -136,9 +131,6 @@ const terminalSession = createTerminalSession({
       await git.finalizeGithubAutomationBranch(exitCode);
       await workspaceSync.syncUp({includeArchives: true});
       return;
-    }
-    if (executable === "codex") {
-      await workspaceSync.syncUp({includeArchives: true});
     }
   },
 });
@@ -192,7 +184,6 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   piWebUi,
   resourceMetrics: resourceMetricsSocket,
   piModelScope,
-  sshSession,
   workspace,
   workspaceAuthority,
   workspaceSync,
@@ -224,7 +215,6 @@ registerBrowserRoutes({
   requireBrowserOrRunnerAccess,
   renderTerminalPage,
 });
-registerSshRoutes({app, hasRunnerAccess, requireBrowserAccess, sshSession});
 registerPreviewRoutes({app, browserQa, config, hasRunnerAccess, preview, requireBrowserAccess, storage});
 registerWorkspaceRoutes({
   app,

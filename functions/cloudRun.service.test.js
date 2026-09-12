@@ -4,8 +4,6 @@ const assert = require("assert");
 const {
   buildCloudRunPatch,
   buildCloudRunService,
-  codexHomeDir,
-  codexHomeStoragePrefix,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,
@@ -61,8 +59,6 @@ assert.deepStrictEqual(resourceLimits({cpu: "2", memory: "512Mi"}), {
   memory: "512Mi",
 });
 
-assert.strictEqual(codexHomeDir("session-1"), "/tmp/mapache-codex/session-1");
-assert.strictEqual(codexHomeStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/codex-home");
 assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapache-internal/home");
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
@@ -73,9 +69,9 @@ assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [" env-1
 assert.deepStrictEqual(sessionEnvironmentEntryIds({genericEnvironmentEntryIds: ["legacy-env"]}), ["legacy-env"]);
 assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [], genericEnvironmentEntryIds: ["legacy-env"]}), []);
 
-assert.deepStrictEqual(terminalCommandEnv({terminalKind: "shell"}), {
-  command: "bash",
-  args: ["-l"],
+assert.deepStrictEqual(terminalCommandEnv({terminalKind: "pi", piSessionDir: "/root/.pi/agent/mapache-sessions/session"}), {
+  command: "pi",
+  args: ["--session-dir", "/root/.pi/agent/mapache-sessions/session", "-c"],
 });
 assert.deepStrictEqual(terminalCommandEnv({
   terminalKind: "pi",
@@ -84,15 +80,6 @@ assert.deepStrictEqual(terminalCommandEnv({
   command: "pi",
   args: ["--session-dir", "/root/.pi/agent/mapache-sessions/session-1", "-c"],
 });
-assert.deepStrictEqual(terminalCommandEnv({terminalKind: "codex"}), {
-  command: "codex",
-  args: [],
-});
-assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
-  command: "",
-  args: [],
-});
-
 (async () => {
   const originalProject = process.env.GCLOUD_PROJECT;
   const originalRunnerServiceAccount = process.env.SESSION_RUNNER_SERVICE_ACCOUNT;
@@ -113,7 +100,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     workspaceEnv: {FOO: "workspace", SHARED: "workspace"},
     sessionEnv: {SHARED: "session"},
     mcpConfig: {mcpServers: {demo: {command: "node", args: ["server.js"]}}},
-    capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
   }));
   assert.strictEqual(shellEnv.FIREBASE_PROJECT_ID, "pi-agents-cloud");
   assert.strictEqual(shellEnv.HOME, "/root");
@@ -151,13 +138,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   }));
   assert.strictEqual(googleRuntimeEnv.GOOGLE_MCP_ACCESS_TOKEN, "short-lived-token");
   assert.strictEqual(googleRuntimeEnv.GOOGLE_MCP_CONNECTION_ID, "connection-1");
-  assert.strictEqual(shellEnv.TERMINAL_COMMAND, "bash");
-  assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"-l\"]");
+  assert.strictEqual(shellEnv.TERMINAL_COMMAND, "pi");
+  assert.strictEqual(shellEnv.TERMINAL_ARGS, "[\"--session-dir\",\"/root/.pi/agent/mapache-sessions/session-1\",\"-c\"]");
   assert.deepStrictEqual(JSON.parse(shellEnv.MCP_CONFIG), {
     version: 1,
     mcpServers: {demo: {command: "node", args: ["server.js"]}},
   });
-  assert.strictEqual(shellEnv.RUNNER_CAPABILITIES, "{\"terminal\":true,\"preview\":false,\"previewQa\":false,\"functions\":false,\"n64\":false}");
+  assert.strictEqual(shellEnv.RUNNER_CAPABILITIES, "{\"terminal\":true,\"preview\":false,\"previewQa\":false,\"functions\":false}");
   assert.strictEqual(shellEnv.MAPACHE_AGENT_UI_VERSION, "");
   assert.strictEqual(shellEnv.MAPACHE_AGENT_RUNTIME_GENERATION, "");
 
@@ -181,26 +168,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     workspaceStorageBucket: "bucket-1",
     workspaceStoragePrefix: "workspaces/uid-1/demo",
     terminalKind: "pi",
-    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false},
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true},
   }));
   assert.strictEqual(previewEnv.TERMINAL_COMMAND, "pi");
   assert.strictEqual(previewEnv.PI_CODING_AGENT_DIR, "/root/.pi/agent");
   assert.strictEqual(previewEnv.PREVIEW_ENABLED, "true");
   assert.strictEqual(previewEnv.PREVIEW_STATIC_ROOT, "/workspace/build");
   assert.strictEqual(previewEnv.MAPACHE_PREVIEW_URL, "http://127.0.0.1:8080/preview/");
-
-  const codexEnv = envMap(await sessionRunnerEnv({
-    ownerUid: "uid-1",
-    workspaceId: "workspace-1",
-    runnerSessionId: "session-1",
-    workspaceStorageBucket: "bucket-1",
-    workspaceStoragePrefix: "workspaces/uid-1/demo",
-    terminalKind: "codex",
-    capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
-  }));
-  assert.strictEqual(codexEnv.TERMINAL_COMMAND, "codex");
-  assert.strictEqual(codexEnv.CODEX_HOME, "/tmp/mapache-codex/session-1");
-  assert.strictEqual(codexEnv.CODEX_HOME_STORAGE_PREFIX, "workspaces/uid-1/demo/.mapache-internal/codex-home");
 
   const chromeEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",
@@ -209,7 +183,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     workspaceStorageBucket: "bucket-1",
     workspaceStoragePrefix: "workspaces/uid-1/demo",
     terminalKind: "pi",
-    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
     sessionEnv: {},
   }));
   assert.strictEqual(chromeEnv.CHROME_PROFILE_DIR, "/var/lib/mapache/chrome/profile");
@@ -227,7 +201,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     imageKey: "pi-chrome",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     terminalKind: "pi",
-    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
   }));
   assert.strictEqual(Object.prototype.hasOwnProperty.call(JSON.parse(refreshedLegacyChromeEnv.RUNNER_CAPABILITIES), "chat"), false);
 
@@ -244,7 +218,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     sourceRepoName: "mapache",
     sourceRequestedBranch: "main",
     sourceResolvedBranch: "main",
-    capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
   }, {}, {
     buildGithubAuthEnv: async () => [
       {name: "GITHUB_AUTOMATION_USERNAME", value: "x-access-token"},
@@ -263,12 +237,12 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   }, {
     ownerUid: "uid-1",
     runnerSessionId: "session-1",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
-    terminalKind: "shell",
+    terminalKind: "pi",
     shutdownToken: "shutdown",
     browserAccessTokenSecret: "browser-secret",
-    capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
   });
   assert.strictEqual(service.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(service.template.scaling.minInstanceCount, 1);
@@ -286,7 +260,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     agentRuntimeGeneration: 4,
     ownerUid: "uid-1",
     runnerSessionId: "agent-session",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
@@ -298,10 +272,10 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
 
   const patch = await buildCloudRunPatch({
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "2", memory: "2Gi"},
-    terminalKind: "shell",
-    capabilities: {terminal: true, preview: false, previewQa: false, functions: false, n64: false},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
   }, {restart: true});
   assert.strictEqual(patch.template.scaling.minInstanceCount, 1);
   assert.strictEqual(patch.template.scaling.maxInstanceCount, 1);
@@ -312,7 +286,7 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   const markedPatch = await buildCloudRunPatch({
     agentUiVersion: "pi-web-ui-v1",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},

@@ -11,10 +11,6 @@ const WORKSPACE_SKILL_PROFILES = Object.freeze({
   github: Object.freeze([
     "mapache-github-issue",
   ]),
-  n64: Object.freeze([
-    "mapache-n64-build",
-    "mapache-n64-preview",
-  ]),
   web: Object.freeze([
     "mapache-preview-build",
     "mapache-api-hosting",
@@ -28,8 +24,7 @@ function defaultWorkspaceSkillProfileIds(config = {}) {
 
   if (config.workspaceSourceMode === "github") profileIds.push("github");
   if (capabilities.chrome) profileIds.push("chrome");
-  if (capabilities.n64) profileIds.push("n64");
-  else if (capabilities.preview) profileIds.push("web");
+  if (capabilities.preview) profileIds.push("web");
 
   return profileIds;
 }

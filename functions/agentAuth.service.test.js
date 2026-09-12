@@ -158,7 +158,7 @@ function createFakeDependencies() {
   await service.deletePiAuthEntry("uid-1", entryId);
   assert.deepStrictEqual((await service.getPiAuth("uid-1")).providers, {});
 
-  let sessionData = {terminalKind: "codex", serviceUrl: "https://runner", shutdownToken: "token", environmentEntryIds: ["env-existing"]};
+  let sessionData = {terminalKind: "pi", serviceUrl: "https://runner", shutdownToken: "token", environmentEntryIds: ["env-existing"]};
   const sessionSnap = {
     data: () => sessionData,
     ref: {set: async (data, options) => {
@@ -171,7 +171,7 @@ function createFakeDependencies() {
     selection: {openai: entryId},
     environmentEntryIds: ["env-1", "env-1"],
   });
-  assert.deepStrictEqual(selectionResult.selection, {harness: "codex", providers: {}});
+  assert.deepStrictEqual(selectionResult.selection, {harness: "pi", providers: {}});
   assert.deepStrictEqual(sessionData.environmentEntryIds, ["env-1"]);
   assert.ok(!Object.prototype.hasOwnProperty.call(sessionData, "piAuthSelection"));
   assert.strictEqual(calls[0].routePath, "/auth/materialize");

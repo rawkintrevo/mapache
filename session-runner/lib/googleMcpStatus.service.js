@@ -25,7 +25,7 @@ async function googleMcpStatus(config = {}, fsImpl = fs, {probeLocal = probeLoca
         serviceKey,
         state,
         account: safeAccount(config),
-        adapter: config.harnessId === "codex" ? "codex" : "pi",
+        adapter: "pi",
       })),
     };
   }
@@ -37,7 +37,7 @@ async function googleMcpStatus(config = {}, fsImpl = fs, {probeLocal = probeLoca
         serviceKey,
         state: hostedConnectionState(config, server, fsImpl),
         account: safeAccount(config),
-        adapter: config.harnessId === "codex" ? "codex" : "pi",
+        adapter: "pi",
       }));
   return {ok: true, supported: true, servers};
 }

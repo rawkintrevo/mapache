@@ -59,8 +59,7 @@ function createTestApiHandlers() {
   const operations = Object.fromEntries([
     "userWithUsage", "listAdminUsers", "setAdminUserWhitelist", "listSessions", "createSession",
     "renameSession", "resizeSession", "restartSession", "stopSession", "deleteSession",
-    "createSessionAccessUrls", "shareSessionPreview", "listSshSessionFiles", "readSshSessionFile",
-    "saveSshSessionFile", "listSshSessionForwards", "createSshSessionForward", "closeSshSessionForward",
+    "createSessionAccessUrls", "shareSessionPreview",
   ].map((name) => [name, stub]));
   const service = new Proxy({}, {get: () => stub});
   return createApiHandlers({
@@ -96,15 +95,6 @@ function createTestApiHandlers() {
     status: 200,
     payload: {handler: "completeOpenAiCodexDeviceCode", args: ["user-1", {deviceCode: "abc"}]},
   });
-  assert.deepStrictEqual(await collectDispatch({
-    method: "GET",
-    route: {name: "sshSessionFiles", workspaceId: "workspace-1", sessionId: "session-1"},
-    query: {path: "/root"},
-  }), {
-    status: 200,
-    payload: {handler: "listSshSessionFiles", args: ["user-1", "workspace-1", "session-1", "/root"]},
-  });
-
   const registry = createTestApiHandlers();
   for (const [method, routeName] of dispatcherEntries) {
     const handlers = new Proxy({}, {
@@ -123,7 +113,6 @@ function createTestApiHandlers() {
   }
   assert.strictEqual(typeof registry.getWorkspaceMcpConfig, "function");
   assert.strictEqual(typeof registry.startOpenAiCodexDeviceCode, "function");
-  assert.strictEqual(typeof registry.listSshSessionFiles, "function");
   console.log("api dispatch helper tests passed");
 })().catch((error) => {
   console.error(error);

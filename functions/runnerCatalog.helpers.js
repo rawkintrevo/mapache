@@ -3,8 +3,6 @@
 const catalog = require("./runnerCatalog.json");
 const {AGENT_IMAGE_KEY} = require("./agentRuntime.helpers");
 
-const DEFAULT_RUNNER_IMAGE_KEY = "default";
-
 const HARNESSES = Object.freeze(
     Object.entries(catalog.harnesses || {}).reduce((acc, [id, harness]) => {
       acc[id] = freezeHarness(harness);
@@ -53,7 +51,6 @@ function cloneCapabilities(capabilities) {
     preview: Boolean(capabilities && capabilities.preview),
     previewQa: Boolean(capabilities && capabilities.previewQa),
     functions: Boolean(capabilities && capabilities.functions),
-    n64: Boolean(capabilities && capabilities.n64),
     chrome: Boolean(capabilities && capabilities.chrome),
   };
   return result;
@@ -84,13 +81,13 @@ function resolveSessionHarness(session = {}) {
   const keyMatch = RUNNER_IMAGES[cleanRunnerImageValue(session.imageKey)];
   if (keyMatch) return resolveHarness(keyMatch.harnessId);
 
-  return resolveHarness("shell");
+  return resolveHarness("pi");
 }
 
 function runnerImageCapabilities(image) {
   const normalizedImage = cleanRunnerImageValue(image);
   const runnerImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || RUNNER_IMAGES[normalizedImage];
-  return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({terminal: true});
+  return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({});
 }
 
 function resolveSessionCapabilities(session = {}) {
@@ -104,14 +101,7 @@ function resolveSessionCapabilities(session = {}) {
   }
 
   const capabilities = runnerImageCapabilities(imageValue);
-  const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
-  if (!isSshSession) return capabilities;
-
-  return {
-    ...capabilities,
-    ...persistedCapabilities,
-    preview: false,
-  };
+  return capabilities;
 }
 
 function resolveRunnerImage(payload = {}, defaultImage = "") {
@@ -130,30 +120,9 @@ function resolveRunnerImage(payload = {}, defaultImage = "") {
   }
 
   const configuredDefaultImage = cleanRunnerImageValue(defaultImage);
-  if (!configuredDefaultImage) {
-    return {
-      key: "",
-      imageKey: "",
-      image: "",
-      harnessId: "shell",
-      terminalKind: "shell",
-      capabilities: cloneCapabilities({terminal: true}),
-      canProvision: false,
-    };
-  }
-
   const runnerImage = RUNNER_IMAGES_BY_IMAGE[configuredDefaultImage];
   if (runnerImage) return resolvedRunnerImage(runnerImage);
-
-  return {
-    key: "configured-default",
-    imageKey: "configured-default",
-    image: configuredDefaultImage,
-    harnessId: "shell",
-    terminalKind: "shell",
-    capabilities: cloneCapabilities({terminal: true}),
-    canProvision: true,
-  };
+  throw invalidRunnerImageError();
 }
 
 /**
@@ -165,7 +134,6 @@ function isSupportedProvisioningSession(session = {}) {
   if (!runnerImage) return false;
   if (cleanRunnerImageValue(session.imageKey) !== AGENT_IMAGE_KEY) return false;
   if (cleanRunnerImageValue(session.image) !== runnerImage.image) return false;
-  if (session.sessionType === "ssh" || session.terminalKind === "ssh") return false;
   if (cleanRunnerImageValue(session.harnessId) && cleanRunnerImageValue(session.harnessId) !== "pi") return false;
   if (cleanRunnerImageValue(session.terminalKind) && cleanRunnerImageValue(session.terminalKind) !== "pi") return false;
   return true;
@@ -194,7 +162,6 @@ function cleanRunnerImageValue(value) {
 }
 
 module.exports = {
-  DEFAULT_RUNNER_IMAGE_KEY,
   HARNESSES,
   RUNNER_IMAGES,
   cloneCapabilities,

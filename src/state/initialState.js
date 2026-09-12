@@ -90,22 +90,11 @@ export function createAdminState(overrides = {}) {
   };
 }
 
-export function createSshForwardsState(overrides = {}) {
-  return {
-    loading: false,
-    error: "",
-    port: "",
-    forwards: [],
-    ...overrides,
-  };
-}
-
 export function createInitialState() {
   return {
     user: null,
     profile: null,
     admin: createAdminState(),
-    sshForwards: createSshForwardsState(),
     api: null,
     workspaces: [],
     sessions: [],

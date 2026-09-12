@@ -5,14 +5,7 @@ const test = require("node:test");
 
 const runnerRoot = path.resolve(__dirname, "..");
 const dockerfiles = [
-  "Dockerfile",
-  "Dockerfile.pi-basic",
-  "Dockerfile.pi-web",
-  "Dockerfile.pi-n64",
   "Dockerfile.pi-chrome",
-  "Dockerfile.codex-basic",
-  "Dockerfile.codex-web",
-  "Dockerfile.codex-chrome",
 ];
 
 for (const dockerfile of dockerfiles) {

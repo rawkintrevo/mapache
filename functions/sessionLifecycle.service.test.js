@@ -153,7 +153,7 @@ assert.strictEqual(isIdleSession({
     serviceUrl: null,
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
-    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
     syncWriterRole: "none",
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");

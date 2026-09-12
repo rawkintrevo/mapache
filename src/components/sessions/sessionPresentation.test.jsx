@@ -45,13 +45,13 @@ describe("session presentation helpers", () => {
   });
 
   test("derives runner tags from normalized keys and legacy image values", () => {
-    expect(getSessionRunnerTags({imageKey: "codex-web"})).toEqual(["codex", "web"]);
+    expect(getSessionRunnerTags({imageKey: "pi-chrome"})).toEqual(["pi", "chrome"]);
     expect(getSessionRunnerTags({imageKey: "default"})).toEqual(["default"]);
     expect(
         getSessionRunnerTags({
-          image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64",
+          image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
         }),
-    ).toEqual(["pi", "n64"]);
+    ).toEqual(["pi", "chrome"]);
   });
 
   test("summarizes preset, custom, and missing resources safely", () => {
@@ -94,7 +94,7 @@ describe("session row rendering", () => {
         <SessionList
           selectedSessionId=""
           selectedWorkspaceId="workspace-1"
-          sessions={[{...baseSession, status: "provision_failed", imageKey: "codex-web", name: "Broken web"}]}
+          sessions={[{...baseSession, status: "provision_failed", imageKey: "pi-chrome", name: "Broken web"}]}
           onSelectSession={vi.fn()}
         />,
     );
@@ -104,8 +104,8 @@ describe("session row rendering", () => {
     expect(statusLight).toHaveAttribute("tabindex", "0");
     expect(statusLight).toHaveAttribute("aria-describedby");
     expect(within(row).getByText("provision_failed")).toHaveAttribute("role", "tooltip");
-    expect(within(row).getByText("codex")).toBeInTheDocument();
-    expect(within(row).getByText("web")).toBeInTheDocument();
+    expect(within(row).getByText("pi")).toBeInTheDocument();
+    expect(within(row).getByText("chrome")).toBeInTheDocument();
   });
 
   test("renders the same accessory cluster in the drawer session list", () => {

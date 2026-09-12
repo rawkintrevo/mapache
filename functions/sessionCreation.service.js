@@ -5,7 +5,6 @@ const {
   DEFAULT_BUCKET,
   DEFAULT_CPU,
   DEFAULT_IDLE_TIMEOUT_MINUTES,
-  DEFAULT_IMAGE,
   DEFAULT_MEMORY,
   DEFAULT_REGION,
 } = require("./backendConfig");
@@ -19,8 +18,6 @@ const {
 } = require("./backendUtils.helpers");
 const {resolveHarness} = require("./runnerCatalog.helpers");
 const {
-  codexHomeDir,
-  codexHomeStoragePrefix,
   homeStoragePrefix,
   piSessionDir,
   piSessionStoragePrefix,
@@ -73,9 +70,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     return toClientDoc(existingSessionSnap);
   }
 
-  const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
-  const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
-  if (sessionType === "ssh" || workspaceSshSource) throw httpError(400, "ssh_sessions_disabled");
+  const sessionType = cleanName(payload.sessionType || payload.type || "cloud").toLowerCase();
   if (sessionType !== "cloud") throw httpError(400, "unsupported_session_type");
   const markedAgentWorkspace = isMarkedAgentWorkspace(workspace);
   const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
@@ -91,7 +86,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const serviceId = resolveCloudRunServiceId(sessionRef.id);
   let runnerImage;
   try {
-    runnerImage = dependencies.resolveRunnerImage({imageKey: AGENT_IMAGE_KEY}, DEFAULT_IMAGE);
+    runnerImage = dependencies.resolveRunnerImage({imageKey: AGENT_IMAGE_KEY});
   } catch (error) {
     if (error && error.code === "invalid_runner_image") {
       throw httpError(400, "invalid_runner_image", error);
@@ -106,7 +101,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   if (requestedImage && requestedImage !== runnerImage.image) {
     throw httpError(400, "invalid_runner_image");
   }
-  const harnessId = runnerImage.harnessId || "pi";
+  const harnessId = "pi";
   const harness = dependencies.resolveHarness(harnessId);
   const envMetadata = sessionEnvMetadata(workspace, payload);
   const session = {
@@ -120,9 +115,6 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     piSessionStoragePrefix: piSessionStoragePrefix(workspace.storagePrefix, sessionRef.id),
     piSessionJsonlPath: null,
     piSessionJsonlRelativePath: null,
-    codexHomeDir: harnessId === "codex" ? codexHomeDir(sessionRef.id) : "",
-    codexHomeStorageBucket: harnessId === "codex" ? (workspace.bucket || DEFAULT_BUCKET) : "",
-    codexHomeStoragePrefix: harnessId === "codex" ? codexHomeStoragePrefix(workspace.storagePrefix, sessionRef.id) : "",
     terminalHistoryPath: `workspaces/${workspaceId}/sessions/${sessionRef.id}/terminalHistory`,
     name: cleanName(payload.name || "Terminal session"),
     status: runnerImage.canProvision ? "provisioning" : "needs_image",

@@ -1,5 +1,5 @@
 import "./SessionDetail.css";
-import {ExternalLink, RotateCcw} from "lucide-react";
+import {RotateCcw} from "lucide-react";
 import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
@@ -16,15 +16,11 @@ import {useSessionAccessUrls} from "./useSessionAccessUrls.js";
 export function SessionDetail({
   busy,
   session,
-  sshForwards,
   workspaceId,
   onGetSessionAccessUrls,
   onRetryProvisioningSession,
   onRestartSession,
   onStopSession,
-  onCloseSshSessionForward,
-  onCreateSshSessionForward,
-  onUpdateSshForwardPort,
 }) {
   const [activeCanvas, setActiveCanvas] = useState("terminal");
   const [showShell, setShowShell] = useState(false);
@@ -50,7 +46,6 @@ export function SessionDetail({
   const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
   const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
   const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);
-  const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
   const isRetryableFailure = isRetryableProvisioningFailure(session);
@@ -58,7 +53,7 @@ export function SessionDetail({
   const imageFreshness = getSessionImageFreshness(session);
   const isStaleImage = imageFreshness.state === "stale";
   const metrics = useResourceMetrics({
-    enabled: Boolean(session.status === "running" && hasRunnerUrl && !isSshSession && metricsSocketUrl),
+    enabled: Boolean(session.status === "running" && hasRunnerUrl && metricsSocketUrl),
     sessionId: session.id,
     socketUrl: metricsSocketUrl || "",
   });
@@ -123,7 +118,7 @@ export function SessionDetail({
           ) : null}
           </div>
         ) : null}
-        {metricsSocketUrl && !isSshSession && session.status === "running" ? (
+        {metricsSocketUrl && session.status === "running" ? (
           <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} />
         ) : null}
       </div> : null}
@@ -159,7 +154,7 @@ export function SessionDetail({
           isRestartBlocked={isRestartBlocked}
           isRetryableFailure={isRetryableFailure}
           isStaleImage={isStaleImage}
-          metrics={metricsSocketUrl && !isSshSession && session.status === "running" ? <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} /> : null}
+          metrics={metricsSocketUrl && session.status === "running" ? <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} /> : null}
           onAccessRefreshNeeded={refreshAfterConnectionFailure}
           onRestartSession={onRestartSession}
           onRetryProvisioningSession={onRetryProvisioningSession}
@@ -275,62 +270,7 @@ export function SessionDetail({
           />
         </div>
       ) : null}
-      {isSshSession ? (
-        <div className="ssh-forward-panel">
-          <form
-            className="toolbar"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onCreateSshSessionForward?.();
-            }}
-          >
-            <label>
-              <span>Forward port</span>
-              <input
-                inputMode="numeric"
-                placeholder="5173"
-                value={sshForwards?.port || ""}
-                onChange={(event) => onUpdateSshForwardPort?.(event.target.value)}
-              />
-            </label>
-            <Button disabled={busy || !hasRunnerUrl || sshForwards?.loading || !sshForwards?.port} type="submit">
-              <ExternalLink aria-hidden="true" />
-              Open
-            </Button>
-          </form>
-          {sshForwards?.error ? <p className="preview-share-error">{sshForwards.error}</p> : null}
-          {sshForwards?.forwards?.length ? (
-            <div className="ssh-forward-list">
-              {sshForwards.forwards.map((forward) => {
-                const url = sshForwardUrl(accessUrls?.sshForwardBaseUrl, forward.port);
-                return (
-                  <div className="preview-url-row" key={forward.port}>
-                    <div>
-                      <span>localhost:{forward.port}</span>
-                      {url ? <a href={url} rel="noreferrer" target="_blank">{url}</a> : null}
-                    </div>
-                    <Button disabled={!url} variant="secondary" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
-                      <ExternalLink aria-hidden="true" />
-                      Open
-                    </Button>
-                    <Button variant="secondary" onClick={() => onCloseSshSessionForward?.(forward.port)}>
-                      Close
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
       </>}
     </div>
   );
-}
-
-function sshForwardUrl(baseUrl, port) {
-  if (!baseUrl || !port) return "";
-  const url = new URL(baseUrl);
-  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${encodeURIComponent(port)}/`;
-  return url.toString();
 }

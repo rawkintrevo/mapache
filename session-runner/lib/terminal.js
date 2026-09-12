@@ -5,7 +5,6 @@ const path = require("path");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
-const {prepareSshMaterial, sshCommand} = require("./sshSession");
 
 function createTerminalSession({admin, config, activity, onTerminalExit, canStartProcess, spawnProcess = spawnTerminal, timers = globalThis}) {
   const sockets = new Set();
@@ -226,11 +225,6 @@ function sendTerminalMessage(socket, message) {
 }
 
 function terminalCommand(config = {}) {
-  if (String(config.harnessId || config.terminalKind || "").trim().toLowerCase() === "ssh") {
-    prepareSshMaterial(config);
-    return sshCommand(config, {tty: true, loginShell: true});
-  }
-
   const command = String(process.env.TERMINAL_COMMAND || "").trim();
   if (command) {
     const args = normalizePiTerminalArgs(command, terminalArgs(), config);

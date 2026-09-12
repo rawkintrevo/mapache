@@ -12,7 +12,6 @@ const {
 const {
   DEFAULT_BUCKET,
   DEFAULT_FUNCTION_REGION,
-  DEFAULT_IMAGE,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
@@ -70,7 +69,6 @@ const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
-const {createSshSessionService} = require("./sshSession.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
@@ -85,7 +83,6 @@ const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
 const {createWorkspaceSessionReservationService} = require("./workspaceSessionReservation.service");
 const {
   isActiveGithubWorkspaceSession,
-  isShellSession,
 } = require("./sessionLifecycle.helpers");
 
 const workspaceSessionReservationService = createWorkspaceSessionReservationService({admin, db});
@@ -167,15 +164,6 @@ const {
   servePublicPreview,
   shareSessionPreview,
 } = previewService;
-const sshSessionService = createSshSessionService({requestRunnerJson, requireSession});
-const {
-  closeSshSessionForward,
-  createSshSessionForward,
-  listSshSessionFiles,
-  listSshSessionForwards,
-  readSshSessionFile,
-  saveSshSessionFile,
-} = sshSessionService;
 const sessionCreationService = createSessionCreationService({
   admin,
   db,
@@ -295,12 +283,6 @@ const API_HANDLERS = createApiHandlers({
     deleteSession,
     createSessionAccessUrls,
     shareSessionPreview,
-    listSshSessionFiles,
-    readSshSessionFile,
-    saveSshSessionFile,
-    listSshSessionForwards,
-    createSshSessionForward,
-    closeSshSessionForward,
   },
 });
 
@@ -468,7 +450,7 @@ async function listSessions(uid, workspaceId) {
 function currentRunnerImageReference(session = {}) {
   try {
     if (session.imageKey) {
-      const resolved = resolveRunnerImage({imageKey: session.imageKey}, DEFAULT_IMAGE);
+      const resolved = resolveRunnerImage({imageKey: session.imageKey});
       if (resolved.image) return resolved.image;
     }
   } catch (error) {
@@ -481,21 +463,7 @@ function currentRunnerImageReference(session = {}) {
 }
 
 async function prepareSessionForProvisioning(session = {}) {
-  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") return session;
-  const secretDocId = session.sshProvisioningSecretDocId || `sshWorkspace_${session.workspaceId}`;
-  const privateSnap = await db.collection("users").doc(session.ownerUid).collection("private").doc(secretDocId).get();
-  if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
-  const secrets = privateSnap.data() || {};
-  return {
-    ...session,
-    sessionEnv: {
-      ...(session.sessionEnv || {}),
-      SSH_AUTH_MODE: secrets.authMode || session.sessionEnv?.SSH_AUTH_MODE || "private-key",
-      SSH_PRIVATE_KEY: secrets.privateKey || "",
-      SSH_CERTIFICATE: secrets.certificate || "",
-      SSH_KNOWN_HOSTS: secrets.knownHosts || "",
-    },
-  };
+  return session;
 }
 
 async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, options = {}) {
@@ -532,7 +500,7 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const activeSession = sessionsSnap.docs.find((doc) => {
       const active = doc.data();
-      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+      return isActiveGithubWorkspaceSession(active);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
@@ -558,7 +526,7 @@ async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, sess
     const activeSession = snap.docs.find((doc) => {
       if (doc.id === sessionId) return false;
       const active = doc.data();
-      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+      return isActiveGithubWorkspaceSession(active);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before restarting this one.");

@@ -105,9 +105,6 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
   }
 
   await deleteWorkspaceStorageIfUnshared(uid, workspace);
-  await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).delete().catch((error) => {
-    logger.warn("ssh workspace auth cleanup failed", {workspaceId, error: error.message});
-  });
   if (typeof db.recursiveDelete === "function") {
     await db.recursiveDelete(workspaceRef);
   } else {
@@ -128,9 +125,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
   const storagePrefix = `workspaces/${uid}/${slugify(name)}`;
-  const sourceSecrets = source.secrets || null;
   const publicSource = {...source};
-  delete publicSource.secrets;
   const doc = {
     ownerUid: uid,
     agentUiVersion: AGENT_UI_VERSION,
@@ -139,12 +134,6 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     bucket,
     source: publicSource.type === "blank" ? {
       type: "blank",
-      status: "ready",
-      statusMessage: null,
-      resolvedBranch: null,
-      resolvedCommit: null,
-    } : publicSource.type === "ssh" ? {
-      ...publicSource,
       status: "ready",
       statusMessage: null,
       resolvedBranch: null,
@@ -170,16 +159,6 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     updatedAt: now,
   };
   const ref = await workspaceDb.collection("workspaces").add(doc);
-  if (sourceSecrets) {
-    await workspaceDb.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${ref.id}`).set({
-      ownerUid: uid,
-      workspaceId: ref.id,
-      type: sourceSecrets.authMode === "certificate" ? "openssh-user-certificate" : "private-key",
-      ...sourceSecrets,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
   const snap = await ref.get();
   return toClientDoc(snap);
 }
@@ -214,7 +193,7 @@ async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) 
     return {type: "blank"};
   }
   if (type === "ssh" || type === "dev-machine" || type === "dev-machine-backed") {
-    throw httpError(400, "ssh_workspace_creation_disabled");
+    throw httpError(400, "unsupported_workspace_source_type");
   }
   if (type !== "github") {
     throw httpError(400, "unsupported_workspace_source_type");

@@ -22,7 +22,6 @@ function renderDetail(overrides = {}, options = {}) {
         busy={options.busy || false}
         isGithubWorkspace={false}
         session={currentSession}
-        sshForwards={{}}
         workspaceId="workspace-1"
         onGetSessionAccessUrls={vi.fn().mockResolvedValue(options.accessUrls || {
           terminalUrl: "https://runner.example/?mapache_access=terminal-token",
@@ -123,7 +122,6 @@ describe("SessionDetail Chrome workflow", () => {
         busy={false}
         isGithubWorkspace={false}
         session={session({name: "Pi without access", harnessId: "pi", capabilities: {terminal: true, chat: true}})}
-        sshForwards={{}}
         workspaceId="workspace-1"
         onGetSessionAccessUrls={vi.fn().mockResolvedValue({})}
         onRestartSession={vi.fn()}

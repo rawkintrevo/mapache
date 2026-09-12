@@ -6,7 +6,6 @@ function normalizeCapabilities(capabilities = {}) {
     preview: Boolean(capabilities.preview),
     previewQa: Boolean(capabilities.previewQa),
     functions: Boolean(capabilities.functions),
-    n64: Boolean(capabilities.n64),
     chrome: Boolean(capabilities.chrome),
   };
 }
@@ -33,7 +32,7 @@ function findSessionImage(imageValue) {
 
 export function sessionImageCapabilities(imageValue) {
   const image = findSessionImage(imageValue);
-  return image ? image.capabilities : normalizeCapabilities({terminal: true});
+  return image ? image.capabilities : normalizeCapabilities({});
 }
 
 export function normalizeSessionImageKey(session = {}) {
