@@ -538,8 +538,11 @@ function parseCompleteJsonl(content, sourcePath) {
 function parseJsonSettings(content, sourcePath) {
   try {
     const parsed = JSON.parse(content.toString("utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("JSON settings must be an object");
+    // Upstream settings include both object-shaped state and valid array-shaped
+    // catalogs (for example the seeded subagent-template list). Preserve either
+    // JSON container while still rejecting null and scalar values.
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("JSON settings must be an object or array");
     }
   } catch (error) {
     throw snapshotError("snapshot_invalid_json", `Invalid JSON settings: ${sourcePath}`, error);

@@ -164,6 +164,25 @@ test("rejects a JSON/settings replacement detected before acceptance", async (t)
   );
 });
 
+test("accepts valid array-shaped JSON UI state", async (t) => {
+  const {config, root} = await makeFixture(t);
+  const catalogPath = path.join(config.piWebUiDataDir, "subagent-templates.seeded.json");
+  await fs.writeFile(catalogPath, JSON.stringify([{name: "fixture-template"}]));
+
+  const result = await captureAgentSnapshot({
+    bootInstanceId: "boot-a",
+    config,
+    stagingDir: path.join(root, "staging"),
+    secretInventory: [],
+  });
+
+  assert.equal(entry(result, "ui/subagent-templates.seeded.json").path, "ui/subagent-templates.seeded.json");
+  assert.deepEqual(
+      JSON.parse(await fs.readFile(path.join(result.stagingDir, "ui/subagent-templates.seeded.json"), "utf8")),
+      [{name: "fixture-template"}],
+  );
+});
+
 test("rejects traversal and unsafe symlinks instead of following them", async (t) => {
   const {config, root} = await makeFixture(t);
   const uploadRoot = path.join(config.piWebUiDataDir, "uploads");

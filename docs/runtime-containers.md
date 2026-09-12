@@ -138,7 +138,7 @@ SHA-256 checksums, and owner-safe permission bits. The storage namespace is
 `{workspacePrefix}/{internalStorageDir}/agent-snapshots/v1`. Pi settings are allowlisted, known auth/connector material and
 cache/process state are excluded using the auth inventory, and uploads are
 copied only when complete history records reference them. JSON settings must
-parse and remain unchanged through acceptance. JSONL capture keeps complete
+parse as an object or array and remain unchanged through acceptance. JSONL capture keeps complete
 records and marks an incomplete trailing append for the next save. Relative
 symlinks are retained without dereferencing when their resolved target remains
 inside the same source root; absolute, escaping, dangling, or secret-targeting

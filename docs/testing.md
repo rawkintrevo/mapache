@@ -99,6 +99,12 @@ Run slower checks when a change touches the related subsystem:
 - Session sizing: `functions/sessionResources.helpers.test.js`, `src/utils/sessionResources.test.js`, `SessionResourceSelector.test.jsx`, `SessionModal.test.jsx`, `SessionEditModal.test.jsx`, and the opt-in `e2e/qa/cases/session-resource-sizing.json` case cover catalog parity, preset/custom inference, estimate formatting, invalid pairs, create/edit payloads, resize payloads, and compact summaries.
 - Deployment, service accounts, Cloud Run provisioning, or Firebase rules: staging deploy or scheduled workflow with explicit `--project pi-agents-cloud` flags.
 - N64 runtime behavior: explicit N64 container build/smoke workflow only, never the default root check.
+- Managed pi-web-ui runtime changes: build the local `pi-chrome` image, then run the opt-in
+  `session-runner/lib/piWebUi.localVertical.test.js` suite with
+  `MAPACHE_RUN_PI_WEB_UI_VERTICAL=1`. The suite uses a deterministic local model and MCP
+  fixture through the real pi-web-ui server, gateway, WebSocket, terminal, Goal, checkpoint,
+  and restart paths; it does not require paid model or cloud credentials. This is local
+  integration coverage, not hosted/browser QA.
 
 ## LLM-Assisted Regression Suite
 
