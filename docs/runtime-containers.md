@@ -789,7 +789,7 @@ The scheduled Cloud Function `reapIdleSessions` runs every 5 minutes. It scans r
 
 Idle is defined as no terminal I/O or connection lifecycle activity. A long-running command that continues producing output keeps the session active. If the browser is left open without terminal I/O past the timeout, or is closed/disconnected past the timeout, the session service is deleted.
 
-Cloud Run create, resize, and restart templates keep one instance allocated while the session lifecycle is active. The reaper remains the authority that releases those resources: it performs the final best-effort sync, deletes the service, and marks the session stopped. Do not change the minimum instance count back to zero without adding durable PTY recovery and renewable startup credentials for private GitHub workspaces.
+Cloud Run create, resize, and restart templates keep one instance allocated while the session lifecycle is active. Marked pi-web-ui services additionally use instance-based CPU allocation and bypass browser-idle reaping so background agent work can continue without an open request; explicit Stop performs quiesce, final checkpoint, confirmed deletion, and releases the resource. The legacy unmarked path retains the idle reaper and its final best-effort sync/delete behavior. Do not change the minimum instance count back to zero without adding durable PTY recovery and renewable startup credentials for private GitHub workspaces.
 
 ## Existing Sessions vs New Sessions
 

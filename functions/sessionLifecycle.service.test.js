@@ -48,7 +48,15 @@ const lifecycle = createSessionLifecycleService({
   requireWorkspace: async () => workspace,
   reserveChromeWorkspaceSession: async (...args) => {
     calls.push({kind: "reserveChrome", args});
-    return {syncWriterRole: "writer", syncWriterLeaseId: "chrome-lease"};
+    const session = args[2] || {};
+    return {
+      syncWriterRole: "writer",
+      syncWriterLeaseId: "chrome-lease",
+      ...(session.agentUiVersion ? {
+        agentRuntimeGeneration: Number(session.agentRuntimeGeneration || 0) + 1,
+        agentRuntimeState: "starting",
+      } : {}),
+    };
   },
   reserveWorkspaceSyncSession: async (...args) => {
     calls.push({kind: "reserveSync", args});
@@ -166,6 +174,112 @@ assert.strictEqual(isIdleSession({
       (error) => error.status === 409 && error.publicMessage === "session_stop_failed",
   );
   deleteServiceResult = true;
+
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 3,
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    browserAccessTokenSecret: "secret",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await lifecycle.restartSession("user-1", "workspace-1", "session-1");
+  assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+    "deleteService", "reserveChrome", "provisionService",
+  ]);
+  assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
+  assert.strictEqual(currentSession.status, "provisioning");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].agentRuntimeGeneration, 4);
+
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 4,
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    browserAccessTokenSecret: "secret",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await lifecycle.resizeSession("user-1", "workspace-1", "session-1", {});
+  assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+    "deleteService", "reserveChrome", "provisionService",
+  ]);
+  assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
+  assert.deepStrictEqual(calls.find((call) => call.kind === "provisionService").args[2].resources, {cpu: "2", memory: "2Gi"});
+
+  deleteServiceResult = false;
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 5,
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await assert.rejects(
+      lifecycle.restartSession("user-1", "workspace-1", "session-1"),
+      (error) => error.status === 502 && error.publicMessage === "session_stop_failed",
+  );
+  assert.strictEqual(calls.some((call) => call.kind === "provisionService"), false);
+  deleteServiceResult = true;
+
+  let reaperDeleted = 0;
+  const reaperDocs = [
+    {
+      ref: {update: async () => { throw new Error("marked runtime should be bypassed"); }},
+      data: () => ({
+        workspaceId: "workspace-1",
+        agentUiVersion: "pi-web-ui-v1",
+        status: "running",
+        lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+      }),
+    },
+    {
+      ref: {update: async () => {}},
+      data: () => ({
+        workspaceId: "workspace-1",
+        status: "running",
+        lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+      }),
+    },
+  ];
+  const reaper = createSessionLifecycleService({
+    admin,
+    db: {
+      collectionGroup: () => ({
+        where: () => ({get: async () => ({docs: reaperDocs, size: reaperDocs.length})}),
+      }),
+    },
+    deleteSessionService: async () => {
+      reaperDeleted += 1;
+      return true;
+    },
+  });
+  const reaped = await reaper.reapIdleSessions();
+  assert.deepStrictEqual(reaped, {checked: 2, stopped: 1, failed: 0});
+  assert.strictEqual(reaperDeleted, 1);
 
   console.log("session lifecycle service tests passed");
 })().catch((error) => {

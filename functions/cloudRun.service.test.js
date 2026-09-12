@@ -274,7 +274,27 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(service.template.scaling.minInstanceCount, 1);
   assert.strictEqual(service.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(service.template.containers[0].resources.limits.cpu, "1");
+  assert.strictEqual(service.template.containers[0].resources.cpuIdle, undefined);
   assert.strictEqual(envMap(service.template.containers[0].env).WORKSPACE_ID, "workspace-1");
+
+  const markedService = await buildCloudRunService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, {
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 4,
+    ownerUid: "uid-1",
+    runnerSessionId: "agent-session",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  });
+  assert.strictEqual(markedService.template.scaling.minInstanceCount, 1);
+  assert.strictEqual(markedService.template.scaling.maxInstanceCount, 1);
+  assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
+  assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
 
   const patch = await buildCloudRunPatch({
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
@@ -287,6 +307,17 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(patch.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
+  assert.strictEqual(patch.template.containers[0].resources.cpuIdle, undefined);
+
+  const markedPatch = await buildCloudRunPatch({
+    agentUiVersion: "pi-web-ui-v1",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  });
+  assert.strictEqual(markedPatch.template.containers[0].resources.cpuIdle, false);
 
   let operationPolls = 0;
   const delayedUpdates = [];
@@ -548,6 +579,70 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
   assert.strictEqual(idempotentDoc.provisioningAttempt, 1);
   assert.strictEqual(idempotentDoc.provisioningState, "completed");
   assert.strictEqual(idempotentDoc.provisioningCloudRunOperationName, "operations/idempotent-create");
+
+  const deletionUpdates = [];
+  const deletionEvents = [];
+  const deletionClient = {
+    request: async ({url, method}) => {
+      deletionEvents.push({method, url});
+      if (method === "DELETE") return {data: {name: "operations/delete-complete"}};
+      if (method === "GET" && url.endsWith("operations/delete-complete")) return {data: {done: true}};
+      if (method === "GET" && url.includes("/services/session-deleting")) {
+        const error = new Error("missing");
+        error.response = {status: 404, data: {error: {code: 404}}};
+        throw error;
+      }
+      throw new Error(`Unexpected deletion request: ${method} ${url}`);
+    },
+  };
+  const deletionService = createCloudRunService({
+    auth: {getClient: async () => deletionClient},
+    markSessionStopped: async () => deletionEvents.push({kind: "stopped"}),
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  assert.strictEqual(await deletionService.deleteSessionService({
+    update: async (updates) => deletionUpdates.push(updates),
+  }, {
+    serviceName: "projects/p/locations/us-central1/services/session-deleting",
+    status: "stopping",
+  }, {reason: "manual"}), true);
+  assert.strictEqual(deletionEvents.at(-1).kind, "stopped");
+  assert.strictEqual(deletionUpdates.length, 0);
+
+  const recoveryUpdates = [];
+  assert.strictEqual(await deletionService.deleteSessionService({
+    update: async (updates) => recoveryUpdates.push(updates),
+  }, {
+    serviceName: "projects/p/locations/us-central1/services/session-deleting",
+    status: "stopping",
+  }, {reason: "manual", recoveryWarning: "interrupted"}), true);
+  assert.strictEqual(recoveryUpdates[0].agentRuntimeRecoveryWarning, "interrupted");
+  assert.strictEqual(recoveryUpdates[0].lastError, "runtime_interrupted_checkpoint_recovery_required");
+
+  const uncertainUpdates = [];
+  const uncertainClient = {
+    request: async ({url, method}) => {
+      if (method === "DELETE") return {data: {name: "operations/delete-uncertain"}};
+      if (method === "GET" && url.endsWith("operations/delete-uncertain")) return {data: {done: true}};
+      if (method === "GET" && url.includes("/services/session-uncertain")) return {data: {uri: "https://still-there.example"}};
+      throw new Error(`Unexpected uncertain deletion request: ${method} ${url}`);
+    },
+  };
+  const uncertainService = createCloudRunService({
+    auth: {getClient: async () => uncertainClient},
+    operationTimeoutMs: 4000,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  assert.strictEqual(await uncertainService.deleteSessionService({
+    update: async (updates) => uncertainUpdates.push(updates),
+  }, {
+    serviceName: "projects/p/locations/us-central1/services/session-uncertain",
+    status: "stopping",
+  }, {reason: "manual"}), false);
+  assert.strictEqual(uncertainUpdates[0].status, "stop_failed");
+  assert.match(uncertainUpdates[0].lastError, /not confirmed after 4000ms/);
 
   const originalFetch = global.fetch;
   const shutdownUpdates = [];

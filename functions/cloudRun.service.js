@@ -32,7 +32,12 @@ const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {agentRuntimeEnvironment} = require("./agentRuntime.helpers");
-const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
+const {
+  isMarkedRuntimeSession,
+  runtimeSessionStateUpdate,
+} = require("./runtimeReservation.helpers");
+
+const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -305,18 +310,20 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
   }
 
   try {
-    const client = await auth.getClient();
+    const client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = await buildCloudRunPatch(session, options, dependencies);
     const updateMask = options.restart ?
       "template.containers,template.serviceAccount" :
-      "template.containers.resources.limits,template.serviceAccount";
+      isMarkedRuntimeSession(session) ?
+        "template.containers.resources,template.serviceAccount" :
+        "template.containers.resources.limits,template.serviceAccount";
     const response = await client.request({
       url: `${url}?updateMask=${encodeURIComponent(updateMask)}`,
       method: "PATCH",
       data: body,
     });
-    await waitForOperation(client, response.data);
+    await waitForOperation(client, response.data, dependencies);
     const service = await getCloudRunService(client, session.serviceName);
     const runnerImageMetadata = await deployedRunnerImageMetadata(client, session.serviceName, session, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(session, "running", {
@@ -347,16 +354,26 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
   }
 
   try {
-    await requestRunnerShutdown(session, {requireAcknowledgement: options.reason !== "idle_timeout"});
-    const client = await auth.getClient();
+    await requestRunnerShutdown(session, {
+      requireAcknowledgement: options.reason !== "idle_timeout",
+      timeoutMs: dependencies.shutdownTimeoutMs,
+    });
+    const client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const response = await client.request({url, method: "DELETE"});
-    await waitForOperation(client, response.data);
+    await waitForOperation(client, response.data, dependencies);
+    const deletionConfirmed = await waitForCloudRunServiceDeleted(client, session.serviceName, dependencies);
     await markSessionStopped(dependencies, sessionRef, session, options.reason);
+    if (deletionConfirmed === "absent" && options.recoveryWarning) {
+      await recordInterruptedRuntimeWarning(sessionRef);
+    }
     return true;
   } catch (error) {
     if (isGoogleNotFound(error)) {
       await markSessionStopped(dependencies, sessionRef, session, options.reason);
+      if (options.recoveryWarning) {
+        await recordInterruptedRuntimeWarning(sessionRef);
+      }
       return true;
     }
 
@@ -387,7 +404,7 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
       containers: [{
         image: session.image,
         ports: [{containerPort: 8080}],
-        resources: {limits: resourceLimits(session.resources)},
+        resources: runtimeResourceRequirements(session),
         env: [
           ...await sessionRunnerEnv({
             ...session,
@@ -411,7 +428,7 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
       },
       containers: [{
         image: session.image,
-        resources: {limits: resourceLimits(session.resources)},
+        resources: runtimeResourceRequirements(session),
         env: options.restart ? await sessionRunnerEnv(session, {
           restartNonce: Date.now().toString(),
         }, dependencies) : undefined,
@@ -659,7 +676,8 @@ async function requestRunnerShutdown(session, options = {}) {
   if (!session.serviceUrl || !session.shutdownToken) return {ok: true, skipped: true};
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS);
+  const timeoutMs = positiveOperationNumber(options.timeoutMs, DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}/shutdown`, {
       method: "POST",
@@ -686,6 +704,37 @@ async function requestRunnerShutdown(session, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function waitForCloudRunServiceDeleted(client, serviceName, options = {}) {
+  const timeoutMs = positiveOperationNumber(
+      options.operationTimeoutMs,
+      DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
+  );
+  const pollIntervalMs = positiveOperationNumber(options.operationPollIntervalMs, 2000);
+  const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+  const sleep = options.sleep || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await getCloudRunService(client, serviceName);
+    } catch (error) {
+      if (isGoogleNotFound(error)) return "absent";
+      throw error;
+    }
+    if (attempt + 1 < maxAttempts) await sleep(pollIntervalMs);
+  }
+  const error = new Error(`Cloud Run service deletion was not confirmed after ${timeoutMs}ms.`);
+  error.code = "cloud_run_delete_confirmation_timeout";
+  throw error;
+}
+
+async function recordInterruptedRuntimeWarning(sessionRef) {
+  await sessionRef.update({
+    agentRuntimeRecoveryWarning: "interrupted",
+    agentRuntimeRecoveryWarningAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastError: INTERRUPTED_RUNTIME_WARNING,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
 async function setPublicInvoker(client, serviceName) {
@@ -802,6 +851,12 @@ function resourceLimits(resources) {
   };
 }
 
+function runtimeResourceRequirements(session = {}) {
+  const resources = {limits: resourceLimits(session.resources)};
+  if (isMarkedRuntimeSession(session)) resources.cpuIdle = false;
+  return resources;
+}
+
 module.exports = {
   buildCloudRunPatch,
   buildCloudRunService,
@@ -815,6 +870,7 @@ module.exports = {
   requestRunnerShutdown,
   requireRunnerServiceAccount,
   resourceLimits,
+  runtimeResourceRequirements,
   runnerServiceAccountValue,
   sessionEnvironmentEntryIds,
   sessionRunnerEnv,
@@ -822,4 +878,5 @@ module.exports = {
   stringifySyncPolicyExclude,
   terminalCommandEnv,
   waitForOperation,
+  waitForCloudRunServiceDeleted,
 };
