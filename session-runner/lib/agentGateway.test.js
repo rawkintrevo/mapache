@@ -173,6 +173,7 @@ test("authenticates bootstrap, scopes the cookie, and streams a Range response w
     const root = await request(runtime.port, "/agent/", {headers: {cookie}});
     assert.equal(root.status, 200);
     assert.equal(root.body, "<html>agent</html>");
+    assert.equal(root.headers["referrer-policy"], "strict-origin-when-cross-origin");
     assert.equal(root.headers["set-cookie"], undefined);
     assert.equal(runtime.upstreamRequests[0].headers.cookie, undefined);
     assert.equal(runtime.upstreamRequests[0].headers.authorization, undefined);

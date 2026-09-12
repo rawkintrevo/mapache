@@ -9,6 +9,7 @@ const DEFAULT_UPSTREAM_PORT = 8787;
 const DEFAULT_REQUEST_LIMIT_BYTES = 10 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const ACCESS_COOKIE = "mapache_access";
+const EMBEDDED_AGENT_REFERRER_POLICY = "strict-origin-when-cross-origin";
 const AUTH_QUERY_KEYS = new Set([ACCESS_COOKIE, "token", "pi_web_token"]);
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -70,7 +71,10 @@ function createAgentGateway({
       writeError(res, 404, "not_found");
       return;
     }
-    res.setHeader("Referrer-Policy", "no-referrer");
+    // The embedded pi-web-ui bridge uses the referrer origin to validate its
+    // parent postMessage source. Send only the origin; forwarded requests
+    // still strip referer/origin so the private upstream never sees it.
+    res.setHeader("Referrer-Policy", EMBEDDED_AGENT_REFERRER_POLICY);
     res.setHeader("X-Content-Type-Options", "nosniff");
     if (isStateChanging(req.method) && !originAllowed(req)) {
       writeError(res, 403, "origin_not_allowed");
@@ -137,7 +141,7 @@ function createAgentGateway({
       }
       const responseHeaders = filteredResponseHeaders(upstreamResponse.headers);
       if (locationResult.location) responseHeaders.location = locationResult.location;
-      responseHeaders["referrer-policy"] = "no-referrer";
+      responseHeaders["referrer-policy"] = EMBEDDED_AGENT_REFERRER_POLICY;
       responseHeaders["x-content-type-options"] = "nosniff";
       res.writeHead(upstreamResponse.statusCode || 502, responseHeaders);
       settled = true;

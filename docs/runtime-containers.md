@@ -321,6 +321,8 @@ Chrome profiles are not part of the visible workspace tree or the general home a
 
 The Chrome DevTools MCP package is baked into both Chrome images at `chrome-devtools-mcp@1.6.0`. The runner materializes a reserved `chrome-devtools` MCP server with `--browser-url http://127.0.0.1:9222`, disables usage statistics/update checks, and attaches to the existing browser rather than launching another one. Chrome-image QA uses Playwright `connectOverCDP`; it closes only the temporary QA page and writes its normal reports under `$MAPACHE_QA_DIR`.
 
+The authenticated `/agent` gateway returns `Referrer-Policy: strict-origin-when-cross-origin` so the embedded pi-web-ui can validate the parent origin for its postMessage access bridge. It still strips `referer`, `origin`, cookies, and access query parameters before forwarding requests to the private upstream UI.
+
 Both Chrome Dockerfiles run `bin/check-chrome-runtime.js` and `bin/chrome-smoke.js` during image construction. The smoke check is bounded and credential-free: it verifies CDP, loopback VNC, multiple page targets, browser cookie/local-storage interaction, profile file creation, and clean desktop shutdown. Profile archive restore and cross-image Pi-to-Codex handoff remain covered by runner persistence tests and the canary checklist.
 
 For the default shell runner, that process is a login shell:
