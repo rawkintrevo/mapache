@@ -178,6 +178,7 @@ export async function executeCutover({
       throw cutoverError("migration_restart_unavailable", "the internal session restart operation is unavailable");
     }
     const restarted = await restartSession(ownerUid, workspaceId, sessionId);
+    assertRuntimeReady(restarted, cleanImage);
     serviceStarted = true;
     const result = {
       ok: true,
@@ -230,6 +231,15 @@ async function assertRemotePreconditions({before, bucketName, project, sourcePre
   await assertCloudRunAbsent({project, region: before.session.region || "us-central1", serviceId: before.session.serviceId});
   if (before.session.imageKey !== AGENT_IMAGE_KEY || before.session.harnessId !== "pi") {
     throw cutoverError("source_session_not_pi_chrome", "restricted source session is not the selected pi-chrome session");
+  }
+}
+
+export function assertRuntimeReady(session, image) {
+  if (session?.status !== "running" || session?.runtimeState !== "running" || !String(session?.serviceUrl || "").trim()) {
+    throw cutoverError("runtime_not_ready", "session restart returned without a running runtime");
+  }
+  if (session.runnerImageDigest !== image || session.runnerImageCurrentDigest !== image) {
+    throw cutoverError("runtime_image_mismatch", "running runtime does not report the requested immutable image");
   }
 }
 

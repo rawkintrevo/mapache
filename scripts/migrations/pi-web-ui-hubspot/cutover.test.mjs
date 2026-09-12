@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {createRequire} from "node:module";
 import test from "node:test";
-import {toRunnerFsImpl} from "./cutover.mjs";
+import {assertRuntimeReady, toRunnerFsImpl} from "./cutover.mjs";
 
 const require = createRequire(import.meta.url);
 const {createAgentSnapshotService} = require("../../../session-runner/lib/agentSnapshot.service.js");
@@ -36,4 +36,18 @@ test("adapts promise-only migration fs for session-runner snapshot services", as
   assert.equal(runnerFs.promises, fs);
   assert.equal(capture.manifest.kind, "mapache-agent-state-snapshot");
   assert.equal(await fs.stat(path.join(stagingDir, "manifest.json")).then((stat) => stat.isFile()), true);
+});
+
+test("rejects a restart result that did not produce a running immutable runtime", () => {
+  assert.throws(
+    () => assertRuntimeReady({status: "provision_failed", runtimeState: "failed"}, "image"),
+    (error) => error.code === "runtime_not_ready",
+  );
+  assert.doesNotThrow(() => assertRuntimeReady({
+    status: "running",
+    runtimeState: "running",
+    serviceUrl: "https://runner.invalid",
+    runnerImageDigest: "image",
+    runnerImageCurrentDigest: "image",
+  }, "image"));
 });
