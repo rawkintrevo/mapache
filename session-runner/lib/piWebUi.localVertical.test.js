@@ -383,12 +383,15 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     await model.close().catch(() => {});
     if (previousFixtureInstanceFile === undefined) delete process.env.MCP_FIXTURE_INSTANCE_FILE;
     else process.env.MCP_FIXTURE_INSTANCE_FILE = previousFixtureInstanceFile;
-    // The image runs as root and writes the mounted transcript/UI state. Give
-    // the invoking test user ownership back before removing the bounded tree.
-    const uid = typeof process.getuid === "function" ? process.getuid() : 0;
-    const gid = typeof process.getgid === "function" ? process.getgid() : 0;
-    execFileSync("docker", ["run", "--rm", "-v", `${root}:/state`, "--entrypoint", "sh", IMAGE,
-      "-lc", `chown -R ${uid}:${gid} /state`], {stdio: "ignore"});
+    // The image runs as root and writes the mounted transcript/UI state. Remove
+    // the bounded fixture through an explicit temporary-root mount so teardown
+    // does not depend on the host test UID owning every nested path.
+    try {
+      execFileSync("docker", ["run", "--rm", "-v", `${root}:/state`, "--entrypoint", "sh", IMAGE,
+        "-lc", "rm -rf /state/* /state/.[!.]* /state/..?*"], {stdio: "ignore"});
+    } catch (error) {
+      // The host-side removal below still handles a normal user-owned fixture.
+    }
     await fsp.rm(root, {recursive: true, force: true});
   }
 });
