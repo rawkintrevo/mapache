@@ -3,6 +3,7 @@
 const {
   DEFAULT_RUNNER_IMAGE_KEY,
   RUNNER_IMAGES,
+  isSupportedProvisioningSession,
   resolveRunnerImage,
   resolveSessionCapabilities,
   runnerImageCapabilities,
@@ -11,6 +12,7 @@ const {
 module.exports = {
   DEFAULT_RUNNER_IMAGE_KEY,
   RUNNER_IMAGES,
+  isSupportedProvisioningSession,
   resolveRunnerImage,
   resolveSessionCapabilities,
   runnerImageCapabilities,

@@ -15,8 +15,12 @@ assert.strictEqual(isQueuedProvisioningSession({status: "running", provisioningS
     ownerUid: "uid-1",
     workspaceId: "workspace-1",
     status: "provisioning",
-    provisioningOperationId: "operation-1",
-    provisioningState: "queued",
+  provisioningOperationId: "operation-1",
+  provisioningState: "queued",
+  imageKey: "pi-chrome",
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  sessionType: "cloud",
+  terminalKind: "pi",
   };
   const updates = [];
   const workspace = {id: "workspace-1", ownerUid: "uid-1"};
@@ -98,6 +102,20 @@ assert.strictEqual(isQueuedProvisioningSession({status: "running", provisioningS
   assert.strictEqual(failureUpdates[0].provisioningState, "failed");
   assert.strictEqual(failureUpdates[0].provisioningRetryable, false);
   assert.strictEqual(failureUpdates[0].lastError, "workspace lookup failed");
+
+  const unsupportedRef = {update: async (update) => failureUpdates.push(update)};
+  const unsupported = await worker({
+    params: {workspaceId: "workspace-1", sessionId: "session-unsupported"},
+    data: {
+      after: {
+        id: "session-unsupported",
+        ref: unsupportedRef,
+        exists: true,
+        data: () => ({...session, imageKey: "codex-web", image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web"}),
+      },
+    },
+  });
+  assert.deepStrictEqual(unsupported, {provisioned: false, sessionId: "session-unsupported", skipped: "unsupported_runner"});
 
   console.log("provisioning worker tests passed");
 })().catch((error) => {

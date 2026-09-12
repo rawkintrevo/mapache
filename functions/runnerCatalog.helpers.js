@@ -1,6 +1,7 @@
 "use strict";
 
 const catalog = require("./runnerCatalog.json");
+const {AGENT_IMAGE_KEY} = require("./agentRuntime.helpers");
 
 const DEFAULT_RUNNER_IMAGE_KEY = "default";
 
@@ -162,6 +163,21 @@ function resolveRunnerImage(payload = {}, defaultImage = "") {
   };
 }
 
+/**
+ * Task 32 keeps historical catalog entries readable while making pi-chrome
+ * the only runner that backend provisioning may launch.
+ */
+function isSupportedProvisioningSession(session = {}) {
+  const runnerImage = RUNNER_IMAGES[AGENT_IMAGE_KEY];
+  if (!runnerImage) return false;
+  if (cleanRunnerImageValue(session.imageKey) !== AGENT_IMAGE_KEY) return false;
+  if (cleanRunnerImageValue(session.image) !== runnerImage.image) return false;
+  if (session.sessionType === "ssh" || session.terminalKind === "ssh") return false;
+  if (cleanRunnerImageValue(session.harnessId) && cleanRunnerImageValue(session.harnessId) !== "pi") return false;
+  if (cleanRunnerImageValue(session.terminalKind) && cleanRunnerImageValue(session.terminalKind) !== "pi") return false;
+  return true;
+}
+
 function resolvedRunnerImage(runnerImage) {
   return {
     key: runnerImage.key,
@@ -189,6 +205,7 @@ module.exports = {
   HARNESSES,
   RUNNER_IMAGES,
   cloneCapabilities,
+  isSupportedProvisioningSession,
   listRunnerImages,
   resolveHarness,
   resolveRunnerImage,

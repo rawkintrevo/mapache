@@ -355,11 +355,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     runnerSessionId: "delayed",
     serviceId: "session-delayed",
     region: "us-central1",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
-    terminalKind: "shell",
+    terminalKind: "pi",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    capabilities: {terminal: true, preview: false},
+    sessionType: "cloud",
+    capabilities: {terminal: true, preview: true, chrome: true},
   });
   assert.strictEqual(operationPolls, 31);
   assert.strictEqual(delayedUpdates.length, 1);
@@ -403,11 +405,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     runnerSessionId: "reconciled",
     serviceId: "session-reconciled",
     region: "us-central1",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
-    terminalKind: "shell",
+    terminalKind: "pi",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    capabilities: {terminal: true, preview: false},
+    sessionType: "cloud",
+    capabilities: {terminal: true, preview: true, chrome: true},
   });
   assert.strictEqual(reconciledUpdates.length, 1);
   assert.strictEqual(reconciledUpdates[0].status, "running");
@@ -453,11 +457,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     runnerSessionId: "existing",
     serviceId: "session-existing",
     region: "us-central1",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
-    terminalKind: "shell",
+    terminalKind: "pi",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    capabilities: {terminal: true, preview: false},
+    sessionType: "cloud",
+    capabilities: {terminal: true, preview: true, chrome: true},
   });
   assert.strictEqual(existingServicePolls, 2);
   assert.strictEqual(existingUpdates.length, 1);
@@ -502,11 +508,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     runnerSessionId: "stuck",
     serviceId: "session-stuck",
     region: "us-central1",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
-    terminalKind: "shell",
+    terminalKind: "pi",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    capabilities: {terminal: true, preview: false},
+    sessionType: "cloud",
+    capabilities: {terminal: true, preview: true, chrome: true},
   });
   assert.ok(timeoutRequests.some(({method, url}) =>
     method === "DELETE" && url.includes("/services/session-stuck")));
@@ -520,11 +528,13 @@ assert.deepStrictEqual(terminalCommandEnv({terminalKind: "ssh"}), {
     runnerSessionId: "idempotent",
     serviceId: "session-idempotent",
     region: "us-central1",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
-    terminalKind: "shell",
+    terminalKind: "pi",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
-    capabilities: {terminal: true, preview: false},
+    sessionType: "cloud",
+    capabilities: {terminal: true, preview: true, chrome: true},
     status: "provisioning",
     provisioningOperationId: "operation-idempotent",
     provisioningState: "pending",

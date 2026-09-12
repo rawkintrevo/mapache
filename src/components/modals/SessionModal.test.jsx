@@ -25,11 +25,10 @@ describe("SessionModal session sizing", () => {
     expect(onCreateSession.mock.calls[0][0]).not.toHaveProperty("imageKey");
   });
 
-  test("keeps SSH creation on the existing advanced CPU/memory controls", () => {
+  test("does not launch historical SSH workspaces", () => {
     render(<SessionModal busy={false} selectedWorkspace={{id: "workspace-ssh", source: {type: "ssh"}}} onClose={vi.fn()} onCreateSession={vi.fn()} />);
 
-    expect(screen.queryByRole("radiogroup", {name: "Session size presets"})).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox", {name: "CPU"})).toHaveValue("1");
-    expect(screen.getByRole("combobox", {name: "Memory"})).toHaveValue("1Gi");
+    expect(screen.getByText("Dev machine workspaces are historical and cannot start new sessions.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Create session"})).not.toBeInTheDocument();
   });
 });

@@ -550,8 +550,7 @@ describe("frontend smoke coverage", () => {
     expect(handlers.modals.closeWorkspaceEditModal).toHaveBeenCalledTimes(1);
   });
 
-  test("create session modal derives ssh sessions from dev machine workspaces", async () => {
-    const user = userEvent.setup();
+  test("keeps historical dev machine workspaces readable without a start action", async () => {
     const sshWorkspace = {
       ...workspace,
       source: {
@@ -570,22 +569,12 @@ describe("frontend smoke coverage", () => {
     const sessionDialog = await screen.findByRole("dialog", {name: "New session"});
     expect(within(sessionDialog).queryByLabelText("Session type")).not.toBeInTheDocument();
     expect(within(sessionDialog).queryByLabelText("Container image")).not.toBeInTheDocument();
-    expect(within(sessionDialog).getByText("This session will connect to developer@dev.example.com.")).toBeInTheDocument();
-
-    await user.type(within(sessionDialog).getByLabelText("Name"), "Dev shell");
-    await user.click(within(sessionDialog).getByRole("button", {name: "Create session"}));
-
-    expect(handlers.sessions.createSession).toHaveBeenCalledWith({
-      cpu: "1",
-      env: {},
-      memory: "1Gi",
-      name: "Dev shell",
-      sessionType: "ssh",
-    });
+    expect(within(sessionDialog).getByText("Dev machine workspaces are historical and cannot start new sessions.")).toBeInTheDocument();
+    expect(within(sessionDialog).queryByRole("button", {name: "Create session"})).not.toBeInTheDocument();
+    expect(handlers.sessions.createSession).not.toHaveBeenCalled();
   });
 
-  test("submits dev machine workspace source", async () => {
-    const user = userEvent.setup();
+  test("does not expose dev machine workspace creation", async () => {
     const handlers = createHandlers();
     render(
         <AppShell
@@ -595,26 +584,9 @@ describe("frontend smoke coverage", () => {
     );
 
     const dialog = await screen.findByRole("dialog", {name: "Create Workspace"});
-    await user.type(within(dialog).getByLabelText("Workspace Name"), "Dev Box");
-    await user.click(within(dialog).getByLabelText("Dev machine"));
-    await user.type(within(dialog).getByLabelText("Host"), "dev.example.com");
-    await user.clear(within(dialog).getByLabelText("Username"));
-    await user.type(within(dialog).getByLabelText("Username"), "developer");
-    await user.type(within(dialog).getByLabelText("Private key"), "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----");
-    expect(within(dialog).queryByLabelText("Signed certificate")).not.toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", {name: "Create Workspace"}));
-
-    expect(handlers.workspaces.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({
-      name: "Dev Box",
-      source: expect.objectContaining({
-        type: "ssh",
-        sshTarget: expect.objectContaining({
-          authMode: "private-key",
-          host: "dev.example.com",
-          username: "developer",
-        }),
-      }),
-    }));
+    expect(within(dialog).queryByLabelText("Dev machine")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Host")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Private key")).not.toBeInTheDocument();
   });
 
   test("creates a skill from the management modal", async () => {

@@ -68,6 +68,12 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       throw httpError(409, "agent_runtime_workspace_busy");
     }
 
+    if (options.singleRunner) {
+      const activeRunner = sessions.find((candidate) =>
+        candidate.id !== sessionRef.id && isActiveWorkspaceRunner(candidate));
+      if (activeRunner) throw httpError(409, "workspace_already_has_active_runner");
+    }
+
     const activeChrome = findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
     if (activeChrome) {
       throw httpError(409, "This workspace already has an active Chrome session. Stop it before creating another one.");
@@ -152,6 +158,19 @@ async function updateChromeWorkspaceRuntimeState(sessionRef, session, state, dep
     transaction.update(workspaceRef, updates);
     return true;
   });
+}
+
+function isActiveWorkspaceRunner(session = {}) {
+  return ![
+    "stopped",
+    "inactive",
+    "needs_image",
+    "needs_service",
+    "provision_failed",
+    "update_failed",
+    "stop_failed",
+    "delete_failed",
+  ].includes(String(session.status || "").trim().toLowerCase());
 }
 
 module.exports = {

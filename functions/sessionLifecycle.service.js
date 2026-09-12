@@ -35,7 +35,7 @@ const {
   normalizeSessionState,
   sessionStatusUpdate,
 } = require("./sessionLifecycle.helpers");
-const {resolveSessionCapabilities} = require("./runnerCatalog.helpers");
+const {isSupportedProvisioningSession, resolveSessionCapabilities} = require("./runnerCatalog.helpers");
 const {
   isMarkedRuntimeSession,
   runtimeSessionStateUpdate,
@@ -79,6 +79,7 @@ async function renameSession(uid, workspaceId, sessionId, payload, dependencies 
 async function resizeSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
   const {sessionRef, sessionSnap, workspace} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertSupportedSessionLaunch(session);
   const resources = dependencies.normalizeRequestedSessionResources(payload, {defaultResources: null});
   if (isMarkedRuntimeSession(session)) {
     assertRuntimeRecreationAllowed(session);
@@ -102,6 +103,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   let session = sessionSnap.data();
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  assertSupportedSessionLaunch(session);
   if (isMarkedRuntimeSession(session)) {
     assertRuntimeRecreationAllowed(session);
     session = await stopSessionBeforeRecreation(sessionRef, session, dependencies);
@@ -121,6 +123,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
       githubWorkspace: isGithubWorkspace(workspace),
       newRuntime: isMarkedRuntimeSession(session),
       runtimeOperationId: restartOperationId,
+      singleRunner: true,
       syncWriterEligible: true,
     }) || {};
   }
@@ -213,6 +216,7 @@ async function recreateSessionService(workspace, workspaceId, sessionRef, sessio
       githubWorkspace: isGithubWorkspace(workspace),
       newRuntime: isMarkedRuntimeSession(session),
       runtimeOperationId: restartOperationId,
+      singleRunner: true,
       syncWriterEligible: true,
     }) || {};
   }
@@ -483,6 +487,10 @@ function shouldRecreateSessionServiceOnRestart(session) {
   if (!session.serviceUrl) return true;
   const lastError = String(session.lastError || "").toLowerCase();
   return lastError.includes("\"code\":404") || lastError.includes("does not exist") || lastError.includes("not found");
+}
+
+function assertSupportedSessionLaunch(session) {
+  if (!isSupportedProvisioningSession(session)) throw httpError(409, "unsupported_runner");
 }
 
 function isGithubWorkspace(workspace) {

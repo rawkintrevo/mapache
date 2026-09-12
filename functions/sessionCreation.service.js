@@ -26,11 +26,9 @@ const {
   piSessionStoragePrefix,
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
-const {isChromeSession} = require("./chromeReservation.helpers");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {sessionSourceMetadata} = require("./github.service");
 const {normalizeEnvMap} = require("./env.helpers");
-const {normalizeSshSessionPayload} = require("./sshSession.helpers");
 const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
 const {
   AGENT_IMAGE_KEY,
@@ -77,20 +75,14 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
 
   const workspaceSshSource = workspace.source && workspace.source.type === "ssh" ? workspace.source : null;
   const sessionType = cleanName(payload.sessionType || payload.type || (workspaceSshSource ? "ssh" : "cloud")).toLowerCase();
+  if (sessionType === "ssh" || workspaceSshSource) throw httpError(400, "ssh_sessions_disabled");
+  if (sessionType !== "cloud") throw httpError(400, "unsupported_session_type");
   const markedAgentWorkspace = isMarkedAgentWorkspace(workspace);
-  if (markedAgentWorkspace && sessionType === "ssh") {
-    throw httpError(400, "agent_workspace_requires_pi_chrome");
-  }
-  const sshPayload = sessionType === "ssh" ?
-    await normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload, dependencies) :
-    null;
   const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
   const region = cleanName(payload.region || DEFAULT_REGION);
   const resources = dependencies.normalizeRequestedSessionResources(payload, {
-    defaultResources: sshPayload ?
-      {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} :
-      (process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
-        {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} : undefined),
+    defaultResources: process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
+      {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} : undefined,
   });
   const idleTimeoutMinutes = positiveNumber(
       payload.idleTimeoutMinutes,
@@ -99,16 +91,22 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const serviceId = resolveCloudRunServiceId(sessionRef.id);
   let runnerImage;
   try {
-    const runnerPayload = sshPayload ? {...payload, imageKey: "default"} :
-      markedAgentWorkspace ? {...payload, imageKey: AGENT_IMAGE_KEY} : payload;
-    runnerImage = dependencies.resolveRunnerImage(runnerPayload, DEFAULT_IMAGE);
+    runnerImage = dependencies.resolveRunnerImage({imageKey: AGENT_IMAGE_KEY}, DEFAULT_IMAGE);
   } catch (error) {
     if (error && error.code === "invalid_runner_image") {
       throw httpError(400, "invalid_runner_image", error);
     }
     throw error;
   }
-  const harnessId = sshPayload ? "ssh" : (runnerImage.harnessId || "shell");
+  const requestedImageKey = cleanName(payload.imageKey);
+  const requestedImage = cleanName(payload.image);
+  if (requestedImageKey && requestedImageKey !== AGENT_IMAGE_KEY) {
+    throw httpError(400, "invalid_runner_image");
+  }
+  if (requestedImage && requestedImage !== runnerImage.image) {
+    throw httpError(400, "invalid_runner_image");
+  }
+  const harnessId = runnerImage.harnessId || "pi";
   const harness = dependencies.resolveHarness(harnessId);
   const envMetadata = sessionEnvMetadata(workspace, payload);
   const session = {
@@ -134,9 +132,9 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     image: runnerImage.image,
     imageKey: runnerImage.key,
     harnessId,
-    sessionType: sshPayload ? "ssh" : "cloud",
+    sessionType: "cloud",
     terminalKind: harness?.terminalKind || runnerImage.terminalKind || "shell",
-    capabilities: sshPayload ? {...runnerImage.capabilities, preview: false, ssh: true, sshFiles: true, sshForwarding: true} : runnerImage.capabilities,
+    capabilities: runnerImage.capabilities,
     serviceAccount: dependencies.runnerServiceAccountValue() || null,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),
@@ -152,18 +150,6 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
       ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
       ...(Array.isArray(payload.environmentEntryIds) ? payload.environmentEntryIds : []),
     ])],
-    ...(sshPayload ? {
-      sshTarget: sshPayload.public,
-      sessionEnv: {
-        ...(envMetadata.sessionEnv || {}),
-        SSH_TARGET_HOST: sshPayload.public.host,
-        SSH_TARGET_PORT: String(sshPayload.public.port),
-        SSH_TARGET_USERNAME: sshPayload.public.username,
-        SSH_INITIAL_DIRECTORY: sshPayload.public.initialDirectory,
-        SSH_AUTH_MODE: sshPayload.public.auth.type === "openssh-user-certificate" ? "certificate" : "private-key",
-        SSH_STRICT_HOST_KEY_CHECKING: sshPayload.public.auth.strictHostKeyChecking ? "true" : "false",
-      },
-    } : {}),
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
@@ -185,42 +171,19 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   };
 
   const syncWriterEligible = runnerImage.canProvision;
-  if (isChromeSession(session)) {
-    await dependencies.reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
-      githubWorkspace: isGithubWorkspace(workspace),
-      newRuntime: markedAgentWorkspace,
-      runtimeOperationId: provisioningOperationId,
-      syncWriterEligible,
-    });
-  } else if (isGithubWorkspace(workspace)) {
-    await dependencies.reserveGithubWorkspaceSession(workspaceId, sessionRef, session, {syncWriterEligible});
-  } else {
-    await dependencies.reserveWorkspaceSyncSession(workspaceId, sessionRef, session, {syncWriterEligible});
-  }
+  await dependencies.reserveChromeWorkspaceSession(workspaceId, sessionRef, session, {
+    githubWorkspace: isGithubWorkspace(workspace),
+    newRuntime: markedAgentWorkspace,
+    runtimeOperationId: provisioningOperationId,
+    singleRunner: true,
+    syncWriterEligible,
+  });
 
-  if (!runnerImage.canProvision && isChromeSession(session)) {
+  if (!runnerImage.canProvision) {
     await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "needs_image");
   }
 
   return toClientDoc(await sessionRef.get());
-}
-
-async function normalizeCreateSessionSshPayload(uid, workspaceId, workspaceSshSource, payload, dependencies) {
-  if (payload && payload.sshTarget) return normalizeSshSessionPayload(payload);
-  if (!workspaceSshSource) return normalizeSshSessionPayload(payload);
-  const privateSnap = await dependencies.db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).get();
-  if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
-  const secrets = privateSnap.data() || {};
-  return normalizeSshSessionPayload({
-    sshTarget: {
-      ...(workspaceSshSource.target || {}),
-      privateKey: secrets.privateKey,
-      certificate: secrets.certificate,
-      knownHosts: secrets.knownHosts,
-      authMode: secrets.authMode || workspaceSshSource.target?.auth?.type,
-      strictHostKeyChecking: workspaceSshSource.target?.auth?.strictHostKeyChecking,
-    },
-  });
 }
 
 function isGithubWorkspace(workspace) {

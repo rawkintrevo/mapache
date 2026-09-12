@@ -90,7 +90,13 @@ assert.strictEqual(isIdleSession({
   );
 
   calls.length = 0;
-  currentSession = {ownerUid: "user-1", name: "Old name", status: "running"};
+  currentSession = {
+    ownerUid: "user-1",
+    name: "Old name",
+    status: "running",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
   const renamed = await lifecycle.renameSession("user-1", "workspace-1", "session-1", {name: "  New name  "});
   assert.strictEqual(renamed.name, "New name");
   assert.strictEqual(currentSession.name, "New name");
@@ -111,7 +117,10 @@ assert.strictEqual(isIdleSession({
     ownerUid: "user-1",
     status: "stopped",
     terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     serviceUrl: null,
+    capabilities: {chrome: true},
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
     syncWriterRole: "none",
@@ -123,10 +132,11 @@ assert.strictEqual(isIdleSession({
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(currentSession.status, "provisioning");
-  assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), true);
+  assert.strictEqual(calls.some((call) => call.kind === "reserveChrome"), true);
+  assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), false);
   assert.strictEqual(calls.some((call) => call.kind === "provisionService"), true);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
-  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "workspace-lease");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "chrome-lease");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceType, "blank");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceMode, null);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceRepoUrl, null);
@@ -154,7 +164,14 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(currentSession.capabilities.chat, true);
 
   calls.length = 0;
-  currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    serviceUrl: "https://runner",
+    shutdownToken: "token",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
   assert.deepStrictEqual(await lifecycle.stopSession("user-1", "workspace-1", "session-1"), {id: "session-1", ...currentSession});
   assert.strictEqual(calls.some((call) => call.kind === "deleteService"), true);
 
@@ -163,7 +180,14 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(calls.some((call) => call.kind === "delete"), true);
 
   deleteServiceResult = false;
-  currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    serviceUrl: "https://runner",
+    shutdownToken: "token",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
   await assert.rejects(
       lifecycle.stopSession("user-1", "workspace-1", "session-1"),
       (error) => error.status === 502 && error.publicMessage === "session_stop_failed",
@@ -184,7 +208,7 @@ assert.strictEqual(isIdleSession({
     agentRuntimeGeneration: 3,
     terminalKind: "pi",
     imageKey: "pi-chrome",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     serviceName: "projects/p/locations/us-central1/services/session-1",
     serviceUrl: "https://runner.example",
     shutdownToken: "token",
@@ -208,7 +232,7 @@ assert.strictEqual(isIdleSession({
     agentRuntimeGeneration: 4,
     terminalKind: "pi",
     imageKey: "pi-chrome",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     serviceName: "projects/p/locations/us-central1/services/session-1",
     serviceUrl: "https://runner.example",
     shutdownToken: "token",
@@ -232,7 +256,7 @@ assert.strictEqual(isIdleSession({
     agentRuntimeGeneration: 5,
     terminalKind: "pi",
     imageKey: "pi-chrome",
-    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/pi-chrome:latest",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     serviceName: "projects/p/locations/us-central1/services/session-1",
     serviceUrl: "https://runner.example",
     shutdownToken: "token",

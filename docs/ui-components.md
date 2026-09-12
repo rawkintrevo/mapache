@@ -68,8 +68,8 @@ This document serves as an index for significant UI components in the applicatio
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | React modal for selecting which saved auth entry per provider is materialized into the active harness auth file, with direct editing for the active Pi `models.json`. |
 | `PiModelsModal` | `src/components/modals/PiModelsModal.jsx` | React modal for loading the active Pi runner's authenticated model catalog and saving an ordered session-scoped model selection. |
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | React modal for choosing Google Workspace services and read-only/read-write access before starting add or reconnect OAuth. |
-| `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank, GitHub-backed, or Dev machine workspace, including the GitHub App repository picker and SSH target setup fields. |
-| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating a Cloud runner session with priced size presets or an SSH target session with its existing CPU/memory controls, defaulting to SSH for Dev machine workspaces. |
+| `WorkspaceModal`| `src/components/modals/WorkspaceModal.jsx` | React modal for creating a new blank or GitHub-backed workspace, including the GitHub App repository picker; historical Dev machine creation is no longer exposed. |
+| `SessionModal` | `src/components/modals/SessionModal.jsx` | React modal for creating the server-selected `pi-chrome` Cloud runner with priced size presets; historical SSH workspaces show a readable inactive explanation instead of a start action. |
 | `SessionEditModal` | `src/components/modals/SessionEditModal.jsx` | React modal launched from a sidebar session row for renaming and resizing that session with shared preset/advanced resource controls. |
 | `FileEditorDialog`| `src/components/modals/FileEditorDialog.jsx` | React text file editor modal with Edit and rendered Preview tabs for Markdown files. |
 | `PullRequestModal`| `src/components/modals/PullRequestModal.jsx` | React pull request creation modal. |

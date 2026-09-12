@@ -2,6 +2,7 @@
 
 const assert = require("assert");
 const {
+  isSupportedProvisioningSession,
   resolveRunnerImage,
   resolveSessionCapabilities,
   runnerImageCapabilities,
@@ -115,5 +116,19 @@ assert.deepStrictEqual(runnerImageCapabilities("unknown"), {
 });
 
 assert.strictEqual(resolveRunnerImage({}, "").canProvision, false);
+assert.strictEqual(isSupportedProvisioningSession({
+  imageKey: "pi-chrome",
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  sessionType: "cloud",
+  terminalKind: "pi",
+}), true);
+assert.strictEqual(isSupportedProvisioningSession({
+  imageKey: "codex-web",
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web",
+}), false);
+assert.strictEqual(isSupportedProvisioningSession({
+  imageKey: "pi-chrome",
+  image: "docker.io/attacker/runner:latest",
+}), false);
 
 console.log("runner image helper tests passed");

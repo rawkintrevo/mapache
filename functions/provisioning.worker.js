@@ -6,6 +6,7 @@ const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {publicGoogleError} = require("./backendUtils.helpers");
 const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
+const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
 
 function createProvisioningWorker(dependencies = {}) {
   const requireWorkspace = dependencies.requireWorkspace;
@@ -36,6 +37,16 @@ async function provisionQueuedSession(event, dependencies) {
 
   const session = {id: after.id, ...after.data()};
   if (!isQueuedProvisioningSession(session)) return {skipped: "not_queued"};
+
+  if (!isSupportedProvisioningSession(session)) {
+    const error = new Error("unsupported_runner");
+    error.code = "unsupported_runner";
+    const markedFailure = await markProvisioningWorkerFailure(after.ref, session, error, dependencies);
+    if (markedFailure && typeof dependencies.releaseChromeWorkspaceSession === "function") {
+      await dependencies.releaseChromeWorkspaceSession(after.ref, session, "provision_failed").catch(() => {});
+    }
+    return {provisioned: false, sessionId: after.id, skipped: "unsupported_runner"};
+  }
 
   const workspaceId = event.params && event.params.workspaceId || session.workspaceId;
   try {

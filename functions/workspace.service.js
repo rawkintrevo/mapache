@@ -34,7 +34,7 @@ const {
   isDirectoryMarkerFileName,
   isInternalStorageDirName,
 } = require("./runtimePaths.helpers");
-const {normalizeSshSessionPayload} = require("./sshSession.helpers");
+const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 function createWorkspaceService(dependencies = {}) {
   return {
@@ -138,7 +138,10 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
 }
 
 async function createWorkspace(uid, payload, dependencies = {}) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  payload = payload || {};
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const now = workspaceAdmin.firestore.FieldValue.serverTimestamp();
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
@@ -148,6 +151,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   delete publicSource.secrets;
   const doc = {
     ownerUid: uid,
+    agentUiVersion: AGENT_UI_VERSION,
     userPath: userPath(uid),
     name,
     bucket,
@@ -183,9 +187,9 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     createdAt: now,
     updatedAt: now,
   };
-  const ref = await db.collection("workspaces").add(doc);
+  const ref = await workspaceDb.collection("workspaces").add(doc);
   if (sourceSecrets) {
-    await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${ref.id}`).set({
+    await workspaceDb.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${ref.id}`).set({
       ownerUid: uid,
       workspaceId: ref.id,
       type: sourceSecrets.authMode === "certificate" ? "openssh-user-certificate" : "private-key",
@@ -228,13 +232,7 @@ async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) 
     return {type: "blank"};
   }
   if (type === "ssh" || type === "dev-machine" || type === "dev-machine-backed") {
-    const normalized = normalizeSshSessionPayload({sshTarget: source.sshTarget || source.target || source});
-    return {
-      type: "ssh",
-      mode: "dev-machine",
-      target: normalized.public,
-      secrets: normalized.secrets,
-    };
+    throw httpError(400, "ssh_workspace_creation_disabled");
   }
   if (type !== "github") {
     throw httpError(400, "unsupported_workspace_source_type");

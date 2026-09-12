@@ -27,7 +27,7 @@ const {
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
-const {resolveSessionCapabilities, resolveSessionHarness} = require("./runnerCatalog.helpers");
+const {isSupportedProvisioningSession, resolveSessionCapabilities, resolveSessionHarness} = require("./runnerCatalog.helpers");
 const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
@@ -52,6 +52,16 @@ function createCloudRunService(dependencies = {}) {
 }
 
 async function provisionSessionService(workspace, sessionRef, session, dependencies = {}) {
+  if (!isSupportedProvisioningSession(session)) {
+    await sessionRef.update(sessionStatusUpdate(session, "provision_failed", {
+      lastError: "unsupported_runner",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {reconciliationReason: "unsupported_runner"}));
+    if (typeof dependencies.releaseChromeWorkspaceSession === "function") {
+      await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "provision_failed");
+    }
+    return;
+  }
   let client;
   let claimedSession = session;
   let operationName = session.provisioningCloudRunOperationName || null;

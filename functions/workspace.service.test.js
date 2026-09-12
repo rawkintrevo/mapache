@@ -3,6 +3,7 @@
 const assert = require("assert");
 const {
   isHiddenWorkspaceFilePath,
+  createWorkspaceService,
   normalizePublicGitHubRepoUrl,
   normalizeWorkspaceFilePath,
   normalizeWorkspaceDirectoryPath,
@@ -173,7 +174,39 @@ async function testRenameWorkspace() {
   );
 }
 
-testRenameWorkspace().then(() => {
+async function testCreateWorkspaceUsesManagedDefaults() {
+  let stored = null;
+  const workspaceRef = {
+    id: "workspace-1",
+    async get() {
+      return {exists: Boolean(stored), id: this.id, data: () => stored};
+    },
+  };
+  const dependencies = {
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
+    db: {
+      collection(name) {
+        assert.strictEqual(name, "workspaces");
+        return {
+          add: async (doc) => {
+            stored = doc;
+            return workspaceRef;
+          },
+        };
+      },
+    },
+  };
+  const service = createWorkspaceService(dependencies);
+  const created = await service.createWorkspace("user-1", {name: "Managed blank", source: {type: "blank"}});
+  assert.strictEqual(created.agentUiVersion, "pi-web-ui-v1");
+  assert.strictEqual(created.source.type, "blank");
+  await assert.rejects(
+      service.createWorkspace("user-1", {name: "Dev machine", source: {type: "ssh"}}),
+      /ssh_workspace_creation_disabled/,
+  );
+}
+
+Promise.all([testRenameWorkspace(), testCreateWorkspaceUsesManagedDefaults()]).then(() => {
   console.log("workspace service tests passed");
 }).catch((error) => {
   console.error(error);
