@@ -1,5 +1,9 @@
 import {createGoogleWorkspaceQaMock} from "./googleWorkspaceQaMock.js";
 
+function encodePathQuery(value) {
+  return encodeURIComponent(encodeURIComponent(String(value || "")));
+}
+
 export function createApiClient(getToken) {
   const api = {
     getMe: () => request(getToken, "/api/me"),
@@ -105,7 +109,7 @@ export function createApiClient(getToken) {
     ),
     getWorkspaceFiles: (workspaceId, path = "") => request(
         getToken,
-        `/api/workspaces/${workspaceId}/files${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+        `/api/workspaces/${workspaceId}/files${path ? `?path=${encodePathQuery(path)}` : ""}`,
     ),
     syncWorkspaceFiles: (workspaceId) => request(
         getToken,
@@ -114,29 +118,29 @@ export function createApiClient(getToken) {
     ),
     getWorkspaceFile: (workspaceId, path) => request(
         getToken,
-        `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+        `/api/workspaces/${workspaceId}/file?path=${encodePathQuery(path)}`,
     ),
     saveWorkspaceFile: (workspaceId, path, content) => request(
         getToken,
-        `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+        `/api/workspaces/${workspaceId}/file?path=${encodePathQuery(path)}`,
         {method: "PUT", body: {content}},
     ),
     getSshSessionFiles: (workspaceId, sessionId, path = "") => request(
         getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-files${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-files${path ? `?path=${encodePathQuery(path)}` : ""}`,
     ),
     getSshSessionFile: (workspaceId, sessionId, path) => request(
         getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-file?path=${encodeURIComponent(path)}`,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-file?path=${encodePathQuery(path)}`,
     ),
     saveSshSessionFile: (workspaceId, sessionId, path, content) => request(
         getToken,
-        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-file?path=${encodeURIComponent(path)}`,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/ssh-file?path=${encodePathQuery(path)}`,
         {method: "PUT", body: {content}},
     ),
     getWorkspaceFileDownloadUrl: (workspaceId, path) => request(
         getToken,
-        `/api/workspaces/${workspaceId}/file/download-url?path=${encodeURIComponent(path)}`,
+        `/api/workspaces/${workspaceId}/file/download-url?path=${encodePathQuery(path)}`,
         {method: "POST", body: {}},
     ),
     getWorkspaceMcpConfig: (workspaceId) => request(

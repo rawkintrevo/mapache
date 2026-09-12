@@ -210,6 +210,17 @@ function createTestApiHandlers() {
   });
 
   assert.deepStrictEqual(await collectDispatch({
+    route: {name: "workspaceFile", workspaceId: "workspace-1"},
+    query: {path: "qa%252Fpi-web-functional.txt"},
+  }), {
+    status: 200,
+    payload: {
+      handler: "readWorkspaceFile",
+      args: ["user-1", "workspace-1", "qa/pi-web-functional.txt"],
+    },
+  });
+
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "gitCommit", workspaceId: "workspace-1", sessionId: "session-1"},
     body: {message: "hello"},

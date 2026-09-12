@@ -2,6 +2,20 @@
 
 const {routeAllowsMethod} = require("./apiRoutes.helpers");
 
+function decodeQueryPath(value) {
+  let text = String(value || "");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const decoded = decodeURIComponent(text);
+      if (decoded === text) break;
+      text = decoded;
+    } catch {
+      break;
+    }
+  }
+  return text;
+}
+
 function jsonResult(handler) {
   return async (context) => ({body: await handler(context)});
 }
@@ -48,14 +62,14 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "workspaces", createdNamedJsonResult("workspace", ({handlers, req, user}) => handlers.createWorkspace(user.uid, req.body || {}))],
     ["PATCH", "workspace", namedJsonResult("workspace", ({handlers, req, route, user}) => handlers.renameWorkspace(user.uid, route.workspaceId, req.body || {}))],
     ["DELETE", "workspace", jsonResult(({handlers, route, user}) => handlers.deleteWorkspace(user.uid, route.workspaceId))],
-    ["GET", "workspaceFiles", jsonResult(({handlers, req, route, user}) => handlers.listWorkspaceFiles(user.uid, route.workspaceId, req.query.path))],
+    ["GET", "workspaceFiles", jsonResult(({handlers, req, route, user}) => handlers.listWorkspaceFiles(user.uid, route.workspaceId, decodeQueryPath(req.query.path)))],
     ["POST", "workspaceSyncFiles", jsonResult(({handlers, route, user}) => handlers.syncWorkspaceFiles(user.uid, route.workspaceId))],
-    ["GET", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.readWorkspaceFile(user.uid, route.workspaceId, req.query.path))],
-    ["PUT", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceFile(user.uid, route.workspaceId, req.query.path, req.body || {}))],
-    ["POST", "workspaceFile", createdJsonResult(({handlers, req, route, user}) => handlers.uploadWorkspaceFile(user.uid, route.workspaceId, req.query.path, req))],
+    ["GET", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.readWorkspaceFile(user.uid, route.workspaceId, decodeQueryPath(req.query.path)))],
+    ["PUT", "workspaceFile", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceFile(user.uid, route.workspaceId, decodeQueryPath(req.query.path), req.body || {}))],
+    ["POST", "workspaceFile", createdJsonResult(({handlers, req, route, user}) => handlers.uploadWorkspaceFile(user.uid, route.workspaceId, decodeQueryPath(req.query.path), req))],
     ["POST", "workspaceCreateFile", createdJsonResult(({handlers, req, route, user}) => handlers.createWorkspaceFile(user.uid, route.workspaceId, req.body || {}))],
     ["POST", "workspaceCreateDirectory", createdJsonResult(({handlers, req, route, user}) => handlers.createWorkspaceDirectory(user.uid, route.workspaceId, req.body || {}))],
-    ["POST", "workspaceFileDownloadUrl", jsonResult(({handlers, req, route, user}) => handlers.createWorkspaceFileDownloadUrl(user.uid, route.workspaceId, req.query.path))],
+    ["POST", "workspaceFileDownloadUrl", jsonResult(({handlers, req, route, user}) => handlers.createWorkspaceFileDownloadUrl(user.uid, route.workspaceId, decodeQueryPath(req.query.path)))],
     ["GET", "workspaceMcp", jsonResult(({handlers, route, user}) => handlers.getWorkspaceMcpConfig(user.uid, route.workspaceId))],
     ["PUT", "workspaceMcp", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceMcpConfig(user.uid, route.workspaceId, req.body || {}))],
   ]),
