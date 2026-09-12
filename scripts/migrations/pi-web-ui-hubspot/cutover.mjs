@@ -235,7 +235,7 @@ async function assertRemotePreconditions({before, bucketName, project, sourcePre
 }
 
 export function assertRuntimeReady(session, image) {
-  const runtimeState = session?.runtimeState || session?.agentRuntimeState;
+  const runtimeState = session?.agentRuntimeState || session?.runtimeState;
   if (session?.status !== "running" || runtimeState !== "running" || !String(session?.serviceUrl || "").trim()) {
     throw cutoverError(
         "runtime_not_ready",

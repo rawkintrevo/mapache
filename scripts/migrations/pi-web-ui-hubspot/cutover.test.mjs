@@ -45,6 +45,7 @@ test("rejects a restart result that did not produce a running immutable runtime"
   );
   assert.doesNotThrow(() => assertRuntimeReady({
     status: "running",
+    runtimeState: "failed",
     agentRuntimeState: "running",
     serviceUrl: "https://runner.invalid",
     runnerImageDigest: "image",
