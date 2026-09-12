@@ -116,6 +116,7 @@ test("managed startup launches pi-web-ui after materialization and stops it firs
     config: {agentRuntimeEnabled: true},
     piWebUi: {
       start: async () => events.push("piWebUi.start"),
+      quiesce: async () => events.push("piWebUi.quiesce"),
       stop: async () => events.push("piWebUi.stop"),
     },
     piChat: {close: () => events.push("piChat.close")},
@@ -137,8 +138,28 @@ test("managed startup launches pi-web-ui after materialization and stops it firs
   assert.equal(events.indexOf("piWebUi.start") > events.indexOf("activeHarness.materializeSubagents"), true);
   assert.equal(events.indexOf("piWebUi.start") < events.indexOf("chromeProfileSnapshots.start"), true);
   await lifecycle.shutdown();
+  assert.equal(events.indexOf("piWebUi.quiesce") < events.indexOf("piWebUi.stop"), true);
   assert.equal(events.indexOf("piWebUi.stop") < events.indexOf("piChat.close"), true);
   assert.equal(events.at(-1), "workspaceAuthority.release:shutdown");
+});
+
+test("managed shutdown escalates after cooperative quiesce fails", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    config: {agentRuntimeEnabled: true},
+    logger: {error: () => {}, log: () => {}, warn: () => events.push("logger.warn")},
+    piWebUi: {
+      quiesce: async () => {
+        events.push("piWebUi.quiesce");
+        throw new Error("pi_web_ui_quiesce_timeout");
+      },
+      stop: async () => events.push("piWebUi.stop"),
+    },
+  });
+
+  await lifecycle.shutdown();
+
+  assert.deepEqual(events.slice(0, 3), ["piWebUi.quiesce", "logger.warn", "piWebUi.stop"]);
 });
 
 test("shutdown closes forwards before final profile snapshot and activity update", async () => {

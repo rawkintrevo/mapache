@@ -103,6 +103,78 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
   }
 });
 
+test("quiesces through the local control socket and reports activity without a browser", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild();
+  const commands = [];
+  try {
+    const managed = createPiWebUiProcess(config, {
+      fetch: healthyFetch({
+        ok: true,
+        engine: "pi",
+        build: {packageVersion: "0.79.0"},
+        activity: {ok: true, quiesced: false, connectedClients: 0, activeConversations: 1, activeTools: 1, pendingMessages: 0},
+      }),
+      processKill: (_pid, signal) => child.kill(signal),
+      spawn: () => child,
+      controlConnect: () => {
+        const socket = new EventEmitter();
+        socket.destroy = () => {};
+        socket.write = (line) => {
+          const request = JSON.parse(String(line));
+          commands.push(request.cmd);
+          const body = request.cmd === "quiesce"
+            ? {ok: true, quiesced: true, activeConversations: 0, activeTools: 0, pendingMessages: 0}
+            : {ok: true, quiesced: false, connectedClients: 0, activeConversations: 1, activeTools: 1, pendingMessages: 0};
+          setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")), 5);
+        };
+        setImmediate(() => socket.emit("connect"));
+        return socket;
+      },
+    });
+
+    await managed.start();
+    await assert.doesNotReject(() => managed.quiesce());
+    const activity = await managed.activity();
+    assert.deepEqual(commands, ["quiesce", "status"]);
+    assert.deepEqual(activity, {
+      ok: true,
+      quiesced: false,
+      connectedClients: 0,
+      activeConversations: 1,
+      activeTools: 1,
+      pendingMessages: 0,
+    });
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("does not acknowledge a timed-out cooperative quiesce", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild();
+  config.piWebUiQuiesceTimeoutMs = 10;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      fetch: healthyFetch(),
+      processKill: (_pid, signal) => child.kill(signal),
+      spawn: () => child,
+      controlConnect: () => {
+        const socket = new EventEmitter();
+        socket.destroy = () => {};
+        socket.write = () => {};
+        return socket;
+      },
+    });
+    await managed.start();
+    await assert.rejects(() => managed.quiesce(), (error) => error.code === "pi_web_ui_quiesce_timeout");
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("stops the managed process group so tool descendants cannot outlive the runner", async () => {
   const {root, config} = await fixture();
   const child = fakeChild(4343);

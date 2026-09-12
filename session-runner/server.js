@@ -223,6 +223,7 @@ registerBrowserRoutes({
   checkpointPublisher,
   config,
   expressStatic: express.static,
+  piWebUi,
   preview,
   requireBrowserAccess,
   requireBrowserOrRunnerAccess,

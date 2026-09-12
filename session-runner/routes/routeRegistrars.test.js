@@ -152,6 +152,48 @@ test("health route exposes checkpoint status without runner error details", asyn
   });
 });
 
+test("health route exposes safe managed-agent activity without browser sockets", async () => {
+  const app = createFakeApp();
+  registerBrowserRoutes({
+    activity: {updateSessionActivity: async () => {}},
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
+    app,
+    browserVncWebSocketPath: () => "/browser/vnc",
+    checkpointPublisher: {status: async () => ({})},
+    chromeRuntime: {status: () => ({enabled: false})},
+    config: {
+      chromeEnabled: false,
+      previewEnabled: false,
+      runnerCapabilities: {terminal: true},
+      workspaceId: "workspace-1",
+      sessionId: "session-1",
+      bucketName: "bucket",
+      prefix: "prefix",
+    },
+    expressStatic: () => () => {},
+    piWebUi: {
+      status: () => ({state: "ready", ready: true, pid: 42}),
+      activity: async () => ({ok: true, connectedClients: 0, activeConversations: 1, activeTools: 1, pendingMessages: 0}),
+    },
+    preview: {capabilityStatus: () => ({enabled: false})},
+    requireBrowserAccess: (req, res, next) => next(),
+    requireBrowserOrRunnerAccess: (req, res, next) => next(),
+    renderTerminalPage: () => "",
+  });
+  const route = app.routes.find(({method, path}) => method === "GET" && path === "/healthz");
+  const response = createResponse();
+  await route.handlers[1]({}, response);
+
+  assert.deepEqual(response.body.agentActivity, {
+    ok: true,
+    connectedClients: 0,
+    activeConversations: 1,
+    activeTools: 1,
+    pendingMessages: 0,
+  });
+  assert.deepEqual(response.body.agentRuntime, {state: "ready", ready: true, pid: 42});
+});
+
 test("workspace routes keep runner-only sync-down protection and response code", async () => {
   const app = createFakeApp();
   registerWorkspaceRoutes({

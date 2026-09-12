@@ -4,11 +4,13 @@ const fs = require("fs");
 const path = require("path");
 const {randomBytes} = require("node:crypto");
 const {spawn: defaultSpawn} = require("node:child_process");
+const {createConnection: defaultControlConnect} = require("node:net");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 
 const DEFAULT_HEALTH_INTERVAL_MS = 100;
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000;
 const DEFAULT_STOP_TIMEOUT_MS = 5_000;
+const DEFAULT_QUIESCE_TIMEOUT_MS = 5_000;
 
 /**
  * Owns the one embedded pi-web-ui process for a marked runner.
@@ -23,6 +25,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   const enabled = config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1";
   const fsImpl = deps.fs || fs;
   const spawnImpl = deps.spawn || defaultSpawn;
+  const controlConnectImpl = deps.controlConnect || defaultControlConnect;
   const processKillImpl = deps.processKill || process.kill.bind(process);
   const fetchImpl = deps.fetch || global.fetch;
   const randomBytesImpl = deps.randomBytes || randomBytes;
@@ -38,6 +41,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   const healthIntervalMs = positiveNumber(config.piWebUiHealthIntervalMs, DEFAULT_HEALTH_INTERVAL_MS);
   const startupTimeoutMs = positiveNumber(config.piWebUiStartupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
   const stopTimeoutMs = positiveNumber(config.piWebUiStopTimeoutMs, DEFAULT_STOP_TIMEOUT_MS);
+  const quiesceTimeoutMs = positiveNumber(config.piWebUiQuiesceTimeoutMs, DEFAULT_QUIESCE_TIMEOUT_MS);
   let state = enabled ? "stopped" : "disabled";
   let child = null;
   let privateToken = "";
@@ -51,6 +55,8 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     enabled: () => enabled,
     start,
     health,
+    quiesce,
+    activity,
     upstreamHeaders() {
       return privateToken ? {"x-pi-token": privateToken} : {};
     },
@@ -152,13 +158,42 @@ function createPiWebUiProcess(config = {}, deps = {}) {
         lastHealth = {ready: false, error};
         return {...status(), ready: false, error};
       }
-      lastHealth = {ready: true, engine: "pi", build: safeBuildDescriptor(body.build)};
-      return {...status(), ready: true, engine: "pi", build: lastHealth.build};
+      lastHealth = {
+        ready: true,
+        engine: "pi",
+        build: safeBuildDescriptor(body.build),
+        activity: safeActivity(body.activity),
+      };
+      return {...status(), ready: true, engine: "pi", build: lastHealth.build, activity: lastHealth.activity};
     } catch (cause) {
       const error = "pi_web_ui_health_unavailable";
       lastHealth = {ready: false, error};
       return {...status(), ready: false, error};
     }
+  }
+
+  /** Ask the local OS-authenticated upstream control socket to drain all
+   * writers. A successful response means the upstream has observed zero active
+   * conversations/tools/queued messages, not merely that a flag was flipped. */
+  async function quiesce() {
+    if (!enabled) return status();
+    if (!child) throw publicError("pi_web_ui_not_ready");
+    const response = await controlRequest("quiesce", quiesceTimeoutMs);
+    if (!response) throw publicError("pi_web_ui_quiesce_unavailable");
+    if (response.ok !== true) {
+      throw publicError(response.error === "control_timeout" ? "pi_web_ui_quiesce_timeout" : "pi_web_ui_quiesce_failed");
+    }
+    return response;
+  }
+
+  /** Read activity from the local control socket so status remains useful when
+   * no browser WebSocket is connected. */
+  async function activity() {
+    if (!enabled || !child) return {ok: false, error: "pi_web_ui_not_ready"};
+    const response = await controlRequest("status", quiesceTimeoutMs);
+    if (!response) return {ok: false, error: "pi_web_ui_activity_unavailable"};
+    const safe = safeActivity(response);
+    return safe || {ok: false, error: "pi_web_ui_activity_invalid"};
   }
 
   async function waitForHealthy() {
@@ -304,6 +339,42 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     };
   }
 
+  function controlRequest(command, timeoutMs) {
+    const controlPath = config.piWebUiControlPath || controlSocketPath(config);
+    return new Promise((resolve) => {
+      let socket;
+      let settled = false;
+      let buffer = "";
+      const timer = setTimeoutImpl(() => finish({ok: false, error: "control_timeout"}), Math.max(1, timeoutMs));
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeoutImpl(timer);
+        socket?.destroy?.();
+        resolve(value);
+      };
+      try {
+        socket = controlConnectImpl(controlPath);
+      } catch {
+        finish(null);
+        return;
+      }
+      socket.on("connect", () => socket.write(JSON.stringify({cmd: command}) + "\n"));
+      socket.on("data", (chunk) => {
+        buffer += chunk.toString("utf8");
+        const newline = buffer.indexOf("\n");
+        if (newline < 0) return;
+        try {
+          finish(JSON.parse(buffer.slice(0, newline)));
+        } catch {
+          finish(null);
+        }
+      });
+      socket.on("error", () => finish(null));
+      socket.on("close", () => finish(null));
+    });
+  }
+
   function status() {
     return {
       enabled,
@@ -356,6 +427,24 @@ function safeBuildDescriptor(value) {
   return Object.keys(result).length ? result : null;
 }
 
+function safeActivity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value;
+  const result = {ok: source.ok === true};
+  if (typeof source.error === "string" && source.error) result.error = source.error;
+  if (typeof source.quiesced === "boolean") result.quiesced = source.quiesced;
+  for (const key of ["connectedClients", "activeConversations", "activeTools", "pendingMessages"]) {
+    if (Number.isFinite(source[key])) result[key] = Math.max(0, Math.floor(source[key]));
+  }
+  return result;
+}
+
+function controlSocketPath(config) {
+  return process.platform === "win32"
+    ? `\\\\.\\pipe\\pi-web-ui-${config.piWebUiPort || 8787}`
+    : path.join(config.piWebUiDataDir, "pi-web-ui.sock");
+}
+
 function validatePiMcpAdapter(fsImpl, adapterPath, expectedVersion) {
   if (!adapterPath) return "pi_mcp_adapter_missing";
   const packageRoot = path.dirname(adapterPath);
@@ -395,5 +484,6 @@ module.exports = {
   createPiWebUiProcess,
   makePrivateToken,
   safeBuildDescriptor,
+  safeActivity,
   validatePiMcpAdapter,
 };

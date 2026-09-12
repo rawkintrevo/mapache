@@ -8,6 +8,7 @@ function registerBrowserRoutes({
   chromeRuntime,
   config,
   activity,
+  piWebUi,
   expressStatic,
   preview,
   requireBrowserAccess,
@@ -27,7 +28,7 @@ function registerBrowserRoutes({
 
   app.get("/healthz", requireBrowserAccess, async (req, res) => {
     const checkpoint = await checkpointPublisher?.status?.() || {};
-    res.json({
+    const health = {
       ok: true,
       workspaceId: config.workspaceId,
       sessionId: config.sessionId,
@@ -35,7 +36,12 @@ function registerBrowserRoutes({
       prefix: config.prefix,
       lastCheckpointAt: checkpoint.lastCheckpointAt || null,
       checkpointError: checkpoint.checkpointError || null,
-    });
+    };
+    if (piWebUi) {
+      health.agentRuntime = piWebUi.status?.() || null;
+      health.agentActivity = await piWebUi.activity?.() || null;
+    }
+    res.json(health);
   });
 
   app.get("/capabilities", requireBrowserAccess, (req, res) => {

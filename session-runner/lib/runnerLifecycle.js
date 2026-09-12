@@ -69,7 +69,17 @@ function createRunnerLifecycleCoordinator({
 
   async function shutdown() {
     try {
-      if (config.agentRuntimeEnabled) await piWebUi?.stop?.();
+      if (config.agentRuntimeEnabled) {
+        try {
+          await piWebUi?.quiesce?.();
+        } catch (error) {
+          // A stalled cooperative drain must not prevent process-group
+          // escalation. piWebUi.stop() confirms the child has exited before
+          // the rest of shutdown can touch shared workspace state.
+          logger.warn?.("pi-web-ui quiesce failed; escalating to process-group stop", error);
+        }
+        await piWebUi?.stop?.();
+      }
       piChat?.close?.();
       try {
         await goalsPackage?.stop?.();
