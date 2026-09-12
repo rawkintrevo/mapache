@@ -105,6 +105,10 @@ Run slower checks when a change touches the related subsystem:
   fixture through the real pi-web-ui server, gateway, WebSocket, terminal, Goal, checkpoint,
   and restart paths; it does not require paid model or cloud credentials. This is local
   integration coverage, not hosted/browser QA.
+- One-off HubSpot export changes: `node --test scripts/hubspotPiWebExport.test.mjs`.
+  These fixtures stay local and verify restricted inventory matching, dry-run defaults,
+  quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary
+  bytes, selected history, attachment references, and immutable manifest metadata.
 
 ## LLM-Assisted Regression Suite
 

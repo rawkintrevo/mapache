@@ -85,6 +85,22 @@ The runner's compatibility default for a missing `WORKSPACE_SYNC_ROLE` is `write
 
 Running sessions also persist the immutable Cloud Run image digest. The `refreshRunnerImageFreshness` scheduled function compares that digest with the current Artifact Registry digest behind each curated image tag and records `latest`, `stale`, or `unknown` for the frontend. Artifact Registry lookup failures remain unknown and never claim that a session is current.
 
+The HubSpot migration has one migration-specific export command at
+`scripts/hubspot-pi-web-export.mjs`. It reads the restricted Task 1 inventory,
+requires explicit owner/workspace/session IDs plus the exact source prefix and a
+separate output prefix, and defaults to a no-write inspection plan. An execute
+run additionally requires local materialized workspace and selected-session
+roots plus a controller module implementing the actual source `quiesce()` and
+`stop()` operations. The exporter refuses a non-quiescent proof, source/output
+prefix or path collisions, an existing output directory, and source mapping
+mismatches. It preserves hidden files, `.git`, binary bytes, selected-session
+JSONL, and referenced readable attachments in a restricted checksummed backup;
+Chrome profile state and other sessions are explicitly excluded. A trailing
+incomplete JSONL record is preserved and flagged in the manifest. This command
+is preparation for the later rehearsal/cutover tasks: do not run it against the
+live HubSpot source during ordinary deployment work, and never write to the
+source prefix.
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.
