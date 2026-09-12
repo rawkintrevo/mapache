@@ -235,8 +235,12 @@ async function assertRemotePreconditions({before, bucketName, project, sourcePre
 }
 
 export function assertRuntimeReady(session, image) {
-  if (session?.status !== "running" || session?.runtimeState !== "running" || !String(session?.serviceUrl || "").trim()) {
-    throw cutoverError("runtime_not_ready", "session restart returned without a running runtime");
+  const runtimeState = session?.runtimeState || session?.agentRuntimeState;
+  if (session?.status !== "running" || runtimeState !== "running" || !String(session?.serviceUrl || "").trim()) {
+    throw cutoverError(
+        "runtime_not_ready",
+        `session restart returned without a running runtime (status=${String(session?.status || "")}, state=${String(runtimeState || "")}, service=${Boolean(String(session?.serviceUrl || "").trim())})`,
+    );
   }
   if (session.runnerImageDigest !== image || session.runnerImageCurrentDigest !== image) {
     throw cutoverError("runtime_image_mismatch", "running runtime does not report the requested immutable image");
