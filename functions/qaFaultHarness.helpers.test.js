@@ -47,6 +47,8 @@ assert.strictEqual(isQaFaultHarnessSession(workspace, {
 }), false);
 assert.strictEqual(qaFaultAccessTtlMs({qaFaultHarness: {id: QA_FAULT_HARNESS_ID, accessRenewalTtlMs: 500}}, 60000), 1000);
 assert.strictEqual(qaFaultAccessTtlMs({qaFaultHarness: {id: QA_FAULT_HARNESS_ID, accessRenewalTtlMs: 999999}}, 60000), 60000);
+assert.strictEqual(qaFaultAccessTtlMs({qaFaultHarness: {id: QA_FAULT_HARNESS_ID, accessRenewalTtlMs: null}}, 60000), 60000);
+assert.strictEqual(qaFaultAccessTtlMs({qaFaultHarness: {id: QA_FAULT_HARNESS_ID, accessRenewalTtlMs: ""}}, 60000), 60000);
 assert.strictEqual(qaFaultAccessTtlMs({}, 60000), 60000);
 
 (async () => {

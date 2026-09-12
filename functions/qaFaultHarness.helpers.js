@@ -24,7 +24,9 @@ function isQaFaultHarnessSession(workspace = {}, session = {}) {
 
 function qaFaultAccessTtlMs(session = {}, fallbackMs) {
   if (!session.qaFaultHarness || session.qaFaultHarness.id !== QA_FAULT_HARNESS_ID) return fallbackMs;
-  const value = Number(session.qaFaultHarness.accessRenewalTtlMs);
+  const rawValue = session.qaFaultHarness.accessRenewalTtlMs;
+  if (rawValue === null || rawValue === undefined || rawValue === "") return fallbackMs;
+  const value = Number(rawValue);
   if (!Number.isFinite(value)) return fallbackMs;
   return Math.max(QA_ACCESS_TTL_MIN_MS, Math.min(QA_ACCESS_TTL_MAX_MS, Math.floor(value)));
 }
