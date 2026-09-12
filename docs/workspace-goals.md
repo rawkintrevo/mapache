@@ -3,6 +3,34 @@
 Workspace Goals is the workspace-level web dashboard for saved goals backed by
 the prebaked `pi-goal-x` extension in supported Pi runner images.
 
+## Managed pi-web-ui native Goal state
+
+The embedded managed `/agent/` surface has a separate native Goal implementation
+owned by the pinned upstream pi-web-ui source. It is intentionally distinct from
+the Workspace Goals dashboard and its legacy `pi-goal-x`/headless-RPC path. The
+managed integration patch is
+`session-runner/upstream/pi-web-ui/patches/0008-native-goal-persistence.patch`;
+it does not call Mapache Goals APIs or expose `pi-goal-x` to the native Goal bar.
+
+Native Goal display state is saved in the upstream UI data captured by the
+checkpoint flow, under the global `__settings__.conversationGoals` entry in
+`client-state.json`. Each record is keyed by the stable upstream session id (or
+the session-file path fallback), so a fresh browser client id can restore the
+same conversation. Only goal text, review preferences, round/verdict, feedback,
+and the last visible status are serialized. Wizard progress, reviewer jobs,
+queues, abort controllers, and streaming state are never serialized.
+
+When a conversation is recreated after restore or history open, a saved native
+Goal is shown as paused with a fresh wizard state and no automatic prompt,
+wizard, review, or resume request. The Goal bar offers an explicit Resume action;
+that action clears the paused marker and sends one ordinary upstream user
+message, after which the native Goal path may review the next completed turn.
+Goal state is conversation-scoped even when several browser tabs or sessions
+share one managed runner. Clearing or completing the native Goal removes its
+display record. This is a display/restart boundary, not a durable Goal
+scheduler; the Workspace Goals lifecycle remains separately authoritative for
+the legacy dashboard until its retirement tasks are complete.
+
 ## Current implementation
 
 The current release slice supports `pi-basic`, `pi-web`, and `pi-chrome`. Those
