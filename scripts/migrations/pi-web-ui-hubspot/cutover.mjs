@@ -2,6 +2,7 @@ import {execFile} from "node:child_process";
 import {createRequire} from "node:module";
 import {promisify} from "node:util";
 import * as fs from "node:fs/promises";
+import * as nativeFs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -141,7 +142,11 @@ export async function executeCutover({
       piWebUiDataDir: prepared.roots.ui,
       agentStateRoot: stagingRoot || path.join(os.tmpdir(), `mapache-hubspot-cutover-${cleanOperation}`),
     };
-    const snapshotService = createAgentSnapshotService({config, fsImpl});
+    // The migration helpers use node:fs/promises directly, while the runner
+    // services follow the session-runner contract and expect fs.promises.
+    // Adapt the former at this boundary before capturing or publishing state.
+    const runnerFsImpl = toRunnerFsImpl(fsImpl);
+    const snapshotService = createAgentSnapshotService({config, fsImpl: runnerFsImpl});
     const capture = await snapshotService.capture({
       bootInstanceId: cleanBoot,
       generation: cleanGeneration,
@@ -149,7 +154,7 @@ export async function executeCutover({
       stagingRoot: config.agentStateRoot,
       workspaceId,
     });
-    const checkpointService = createAgentCheckpointService({admin, config, db, fsImpl, storage});
+    const checkpointService = createAgentCheckpointService({admin, config, db, fsImpl: runnerFsImpl, storage});
     const uploaded = await checkpointService.uploadCapture({
       ...capture,
       bucketName,
@@ -436,6 +441,11 @@ function requireValue(value, label) {
 function safeNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+export function toRunnerFsImpl(fsImpl = fs) {
+  if (fsImpl && fsImpl.promises) return fsImpl;
+  return {...nativeFs, promises: fsImpl};
 }
 
 function sha256(content) {
