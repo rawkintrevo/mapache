@@ -147,7 +147,7 @@ Some sandboxed hosts still cannot launch a standalone local Chrome or Chromium C
 
 Chrome-image QA attaches to the runner-owned headed browser through CDP. It must verify that QA actions are visible in noVNC, that the shared browser and user tabs remain open after the run, and that reports stay under `$MAPACHE_QA_DIR` without cookies, response bodies, credentials, or profile paths. The checked-in `mapache-chrome` skill and `mapache-chrome-status` command are the supported diagnostics; QA must not launch a second Chromium instance.
 
-The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace Play/Pause lifecycle, Authentication Center, Pi auth selection, MCP/Google connections, embedded Agent/Chrome/Preview surfaces, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
+The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace Play/Pause lifecycle, top-navigation auth and MCP dialogs, Pi auth selection, Google connections, embedded Agent/Chrome/Preview surfaces, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
 
 Guardrails:
 

@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {KeyRound, Pause, Pencil, Play, Plus, RefreshCw, Trash2, Variable} from "lucide-react";
+import {KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
@@ -10,6 +10,7 @@ export function Topbar({
   state,
   onDeleteWorkspace,
   onOpenGenericEnvironment,
+  onOpenMcpServers,
   onOpenPiAuthManage,
   onOpenWorkspaceEditModal,
   onOpenWorkspaceModal,
@@ -131,6 +132,17 @@ export function Topbar({
           onClick={onOpenGenericEnvironment}
         >
           <Variable aria-hidden="true" />
+        </Button>
+        <Button
+          aria-label="Manage MCP servers"
+          disabled={!selectedWorkspace || state.mcpServers?.loading || state.mcpServers?.saving || !onOpenMcpServers}
+          icon
+          title="Manage MCP servers"
+          tooltip="Manage MCP servers"
+          variant="secondary"
+          onClick={onOpenMcpServers}
+        >
+          <PlugZap aria-hidden="true" />
         </Button>
         <a className="topbar-link" href="/community/blog">Blog</a>
         <a className="topbar-link" href="/community/docs/intro/">Docs</a>

@@ -2,26 +2,15 @@ import "../drawers/Drawers.css";
 import "./InspectorPanels.css";
 import {PanelRightClose, PanelRightOpen} from "lucide-react";
 import {Button} from "../common/Button.jsx";
-import {AuthCenterPanel} from "./AuthCenterPanel.jsx";
 import {GoogleWorkspacePanel} from "./GoogleWorkspacePanel.jsx";
-import {McpServersPanel} from "./McpServersPanel.jsx";
 
 export function RightDrawer({
-  selectedSession,
-  selectedWorkspace,
   state,
-  onDeleteMcpServer,
-  onEditMcpServer,
   onDeleteGoogleConnection,
   onEditGoogleConnection,
-  onNewMcpServer,
-  onRefreshPiAuth,
-  onRefreshMcpServers,
   onRefreshGoogleWorkspace,
   onToggleDrawerSection,
   onToggleRightDrawer,
-  onUpdateMcpServerForm,
-  onSaveMcpServer,
   onBindGoogleConnection,
   onUnbindGoogleConnection,
 }) {
@@ -50,23 +39,6 @@ export function RightDrawer({
         <h2>Inspector</h2>
         {toggleButton}
       </div>
-      <AuthCenterPanel
-        piAuth={state.piAuth}
-        state={state}
-        onRefreshPiAuth={onRefreshPiAuth}
-        onToggleDrawerSection={onToggleDrawerSection}
-      />
-      <McpServersPanel
-        mcpServers={state.mcpServers}
-        state={state}
-        onDeleteMcpServer={onDeleteMcpServer}
-        onEditMcpServer={onEditMcpServer}
-        onNewMcpServer={onNewMcpServer}
-        onRefreshMcpServers={onRefreshMcpServers}
-        onSaveMcpServer={onSaveMcpServer}
-        onToggleDrawerSection={onToggleDrawerSection}
-        onUpdateMcpServerForm={onUpdateMcpServerForm}
-      />
       <GoogleWorkspacePanel
         googleWorkspace={state.googleWorkspace}
         state={state}

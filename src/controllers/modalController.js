@@ -1,6 +1,6 @@
 import {APP_ACTIONS} from "../state/appStore.js";
 
-export function createModalController({state, dispatch = () => {}, render, loadPiAuth}) {
+export function createModalController({state, dispatch = () => {}, render, loadMcpServers, loadPiAuth}) {
   function showProfile() {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
@@ -111,6 +111,18 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
+  function openMcpServersModal() {
+    if (!state.selectedWorkspaceId) return;
+    state.mcpServersModalOpen = true;
+    if (!state.mcpServers.loading) void loadMcpServers?.();
+    render();
+  }
+
+  function closeMcpServersModal() {
+    state.mcpServersModalOpen = false;
+    render();
+  }
+
   function closePiAuthManageModal() {
     state.piAuthManageModalOpen = false;
     render();
@@ -119,6 +131,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
   return {
     closeAuthModal,
     closeGoogleWorkspaceModal,
+    closeMcpServersModal,
     closePiAuthManageModal,
     closeSessionEditModal,
     closeSessionModal,
@@ -126,6 +139,7 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     closeWorkspaceEditModal,
     openAuthModal,
     openGoogleWorkspaceModal,
+    openMcpServersModal,
     openPiAuthManageModal,
     openGenericEnvironmentModal,
     openSessionEditModal,

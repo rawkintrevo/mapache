@@ -2,6 +2,7 @@ import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
 import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {GoogleWorkspaceModal} from "./GoogleWorkspaceModal.jsx";
+import {McpServersModal} from "./McpServersModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
@@ -46,6 +47,18 @@ export function ModalStack(props) {
         />
       ) : null}
       {state.genericEnvironmentModalOpen ? <GenericEnvironmentModal piAuth={state.piAuth} selectedSession={props.selectedSession} onClose={modals.closeGenericEnvironmentModal} onSave={pi.saveGenericEnvironmentKey} onUpdate={pi.updateGenericEnvironmentForm} onEdit={pi.editGenericEnvironmentKey} onDelete={pi.deleteGenericEnvironmentKey} onToggleSelection={pi.updateGenericEnvironmentSelection} /> : null}
+      {state.mcpServersModalOpen ? (
+        <McpServersModal
+          mcpServers={state.mcpServers}
+          onClose={modals.closeMcpServersModal}
+          onDelete={pi.deleteMcpServer}
+          onEdit={pi.editMcpServer}
+          onNew={pi.newMcpServer}
+          onRefresh={pi.refreshMcpServers}
+          onSave={pi.saveMcpServer}
+          onUpdate={pi.updateMcpServerForm}
+        />
+      ) : null}
       {state.googleWorkspaceModalOpen ? (
         <GoogleWorkspaceModal
           googleWorkspace={state.googleWorkspace}

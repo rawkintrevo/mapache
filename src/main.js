@@ -75,6 +75,7 @@ const modalController = createModalController({
   state,
   dispatch,
   render,
+  loadMcpServers: piPanelsController.loadMcpServers,
   loadPiAuth: piPanelsController.loadPiAuth,
 });
 const workspaceController = createWorkspaceController({

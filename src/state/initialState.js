@@ -116,6 +116,7 @@ export function createInitialState() {
     authReturnToManage: false,
     piAuthManageModalOpen: false,
     genericEnvironmentModalOpen: false,
+    mcpServersModalOpen: false,
     googleWorkspaceModalOpen: false,
     pendingOperations: {},
     operationSequence: 0,

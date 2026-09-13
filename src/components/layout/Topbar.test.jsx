@@ -14,11 +14,13 @@ function renderTopbar(session = null) {
   const onToggleWorkspace = vi.fn();
   const onOpenPiAuthManage = vi.fn();
   const onOpenGenericEnvironment = vi.fn();
+  const onOpenMcpServers = vi.fn();
   render(
     <Topbar
       state={state}
       onDeleteWorkspace={vi.fn()}
       onOpenGenericEnvironment={onOpenGenericEnvironment}
+      onOpenMcpServers={onOpenMcpServers}
       onOpenPiAuthManage={onOpenPiAuthManage}
       onOpenWorkspaceEditModal={vi.fn()}
       onOpenWorkspaceModal={vi.fn()}
@@ -27,7 +29,7 @@ function renderTopbar(session = null) {
       onToggleWorkspace={onToggleWorkspace}
     />,
   );
-  return {onOpenGenericEnvironment, onOpenPiAuthManage, onToggleWorkspace};
+  return {onOpenGenericEnvironment, onOpenMcpServers, onOpenPiAuthManage, onToggleWorkspace};
 }
 
 describe("Topbar workspace lifecycle", () => {
@@ -38,19 +40,23 @@ describe("Topbar workspace lifecycle", () => {
     expect(onToggleWorkspace).toHaveBeenCalledOnce();
   });
 
-  test("opens Pi auth and generic environment management from icon buttons", async () => {
+  test("opens Pi auth, generic environment, and MCP management from icon buttons", async () => {
     const user = userEvent.setup();
     const handlers = renderTopbar({id: "session-1", status: "running", terminalKind: "pi"});
 
     const piAuthButton = screen.getByRole("button", {name: "Manage Pi Auth"});
     const environmentButton = screen.getByRole("button", {name: "Manage generic environment keys"});
+    const mcpButton = screen.getByRole("button", {name: "Manage MCP servers"});
     expect(piAuthButton).toHaveAttribute("title", "Manage Pi Auth");
     expect(environmentButton).toHaveAttribute("title", "Manage generic environment keys");
+    expect(mcpButton).toHaveAttribute("title", "Manage MCP servers");
 
     await user.click(piAuthButton);
     await user.click(environmentButton);
+    await user.click(mcpButton);
     expect(handlers.onOpenPiAuthManage).toHaveBeenCalledOnce();
     expect(handlers.onOpenGenericEnvironment).toHaveBeenCalledOnce();
+    expect(handlers.onOpenMcpServers).toHaveBeenCalledOnce();
   });
 
   test("pauses a running workspace", () => {

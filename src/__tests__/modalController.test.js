@@ -85,4 +85,21 @@ describe("createModalController", () => {
     controller.closeWorkspaceEditModal();
     expect(state.workspaceEditModalOpen).toBe(false);
   });
+
+  test("opens and refreshes MCP management for the selected workspace", () => {
+    const loadMcpServers = vi.fn();
+    const state = {
+      selectedWorkspaceId: "workspace-1",
+      mcpServersModalOpen: false,
+      mcpServers: {loading: false},
+    };
+    const controller = createModalController({state, render: vi.fn(), loadMcpServers, loadPiAuth: vi.fn()});
+
+    controller.openMcpServersModal();
+    expect(state.mcpServersModalOpen).toBe(true);
+    expect(loadMcpServers).toHaveBeenCalledOnce();
+
+    controller.closeMcpServersModal();
+    expect(state.mcpServersModalOpen).toBe(false);
+  });
 });

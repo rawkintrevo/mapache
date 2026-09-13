@@ -41,6 +41,7 @@ export function AppShell(props) {
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
     state.genericEnvironmentModalOpen ||
+    state.mcpServersModalOpen ||
     state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
     state.workspaceEditModalOpen ||
@@ -52,6 +53,7 @@ export function AppShell(props) {
         state={state}
         onDeleteWorkspace={workspaces.deleteWorkspace}
         onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
+        onOpenMcpServers={modals.openMcpServersModal}
         onOpenPiAuthManage={modals.openPiAuthManageModal}
         onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
@@ -105,21 +107,12 @@ export function AppShell(props) {
           />
         )}
         <RightDrawer
-          selectedSession={selectedSession}
-          selectedWorkspace={selectedWorkspace}
           state={state}
-          onDeleteMcpServer={pi.deleteMcpServer}
-          onEditMcpServer={pi.editMcpServer}
           onDeleteGoogleConnection={google.deleteConnection}
           onEditGoogleConnection={modals.openGoogleWorkspaceModal}
-          onNewMcpServer={pi.newMcpServer}
-          onRefreshMcpServers={pi.refreshMcpServers}
           onRefreshGoogleWorkspace={google.loadGoogleWorkspace}
-          onRefreshPiAuth={pi.refreshPiAuth}
           onToggleDrawerSection={drawer.toggleDrawerSection}
           onToggleRightDrawer={drawer.toggleRightDrawer}
-          onUpdateMcpServerForm={pi.updateMcpServerForm}
-          onSaveMcpServer={pi.saveMcpServer}
           onBindGoogleConnection={google.bindConnection}
           onUnbindGoogleConnection={google.unbindConnection}
         />

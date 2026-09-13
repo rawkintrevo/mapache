@@ -39,8 +39,8 @@ the upstream child starts. Generic environment values, Google tokens, MCP
 OAuth, and GitHub CLI credentials are likewise resolved/materialized server-side
 and excluded from agent snapshots.
 
-The frontend exposes only Authentication Center, generic environment keys, MCP,
-Google Workspace, and GitHub connector workflows. Upstream owns model metadata,
+The frontend exposes top-navigation dialogs for saved authentication, generic environment keys, and MCP, plus
+Google Workspace and GitHub connector workflows. Upstream owns model metadata,
 model selection, skills, extensions, subagents, files, Git, and native Goals.
 
 ## Startup hooks
