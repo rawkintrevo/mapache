@@ -12,7 +12,7 @@ Read this before changing workspace/session workflow, authenticated app shape, s
 
 Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud runner sessions. Authenticated users create workspaces, start isolated Cloud Run `pi-chrome` runner sessions, and work from the signed-in workspace shell. New server-marked workspaces open the embedded Agent surface first; historical unmarked sessions remain terminal-first for compatibility. The public landing page is served from `/`; the authenticated workspace shell is served from `/app` and `/app/**`; the Docusaurus community site remains under `/community/**`.
 
-The selected-session view is Agent-first for marked sessions, with `Persistent Chrome` and `Preview` as sibling surfaces and server-owned runtime status/resource indicators. Historical sessions remain readable with their retained terminal/shell/SSH compatibility surfaces, but the parent shell no longer duplicates upstream files, Git, models, skills, extensions, subagents, Chat, or Goals. The left drawer keeps workspace/session navigation and lifecycle actions. The right drawer keeps Mapache-owned Authentication Center, generic environment, MCP, and Google connection controls, while the embedded app owns agent settings.
+The selected-workspace view is Agent-first for the workspace's canonical marked runtime. Agent and `Persistent Chrome` controls are in the left drawer's `Logs` rail, while the center is reserved for the borderless embedded Agent canvas; Preview is not a workspace navigation surface. The workspace is either on or off; Play/Pause in the top navigation controls that runtime. Historical sessions remain readable with their retained terminal/shell/SSH compatibility surfaces, but the parent shell no longer duplicates upstream files, Git, models, skills, extensions, subagents, Chat, or Goals. The left drawer remains collapsed by default. The right drawer keeps Mapache-owned Authentication Center, generic environment, MCP, and Google connection controls, while the embedded app owns agent settings.
 
 Admin users are identified by `isAdmin: true` on their `users/{uid}` Firestore document. They get an Admin page from the left drawer user menu for paginated user visibility, allowlist toggles, and per-user runner cost summaries.
 
@@ -35,7 +35,7 @@ The detailed model for GitHub-backed workspaces lives in [github-workspaces.md](
 
 Firebase Auth UID is the user ownership boundary. Backend routes verify the Firebase ID token, apply the optional Firestore allow list at `appConfig/access`, upsert `users/{uid}`, then serve only workspaces and sessions whose `ownerUid` matches that UID. Firestore rules mirror this boundary for direct client reads.
 
-Workspaces live at `workspaces/{workspaceId}`. Sessions live under `workspaces/{workspaceId}/sessions/{sessionId}`. Session stop/delete paths clean up Cloud Run services and record allocated usage under `users/{uid}/sessionUsage/{sessionId}`.
+Workspaces live at `workspaces/{workspaceId}` and store workspace-level runtime resources plus a lazily adopted `canonicalSessionId`. Runtime records remain under `workspaces/{workspaceId}/sessions/{sessionId}` so Cloud Run identity, checkpoints, access, and usage remain stable. Session stop/delete paths clean up Cloud Run services and record allocated usage under `users/{uid}/sessionUsage/{sessionId}`.
 
 ## Frontend Summary
 
@@ -59,13 +59,13 @@ Read [runtime-containers.md](./runtime-containers.md) and [session-runner-archit
 
 ## Current Design Decisions
 
-- Keep session creation in a modal launched from the workspace/sidebar context.
+- Start and pause the workspace's canonical runtime from the topbar Play/Pause control; the backend creates the first session on demand and retains session-addressed APIs for runtime plumbing.
 - Keep the embedded Agent content first for new marked sessions; keep active terminal content first for historical unmarked sessions.
 - Treat runner capabilities as explicit image/session metadata.
 - Use Cloud Run per session for isolation and resource control.
 - Treat workspace source mode as an explicit domain concept.
-- Enforce one active Pi/agent session at a time for GitHub workspaces; shell sessions may run alongside for manual inspection.
-- Enforce at most one active Chrome-capable session per workspace; shell and other non-Chrome sessions may run alongside it.
+- Treat the workspace's `canonicalSessionId` as the only user-visible runtime. Existing workspaces adopt an active session first, otherwise the most recently updated session, without requiring a data migration.
+- Enforce one active Pi/agent runtime per workspace; the embedded pi-web-ui owns conversations and any internal session concepts.
 - Keep the Chrome profile in the workspace-owned internal archive path and never expose that archive, raw CDP, or VNC directly to users.
 - Keep upstream skills and extensions configurable inside the upstream Agent/terminal; seed only Mapache-owned runtime guidance when needed.
 - Do not expose duplicate parent file/Git or agent-setting controls for any session. Native Goals and conversation controls belong upstream.

@@ -53,12 +53,15 @@ CRUD API in the current manifest.
 
 ## Workspace and session state
 
-Workspace documents carry owner, source, storage, sync, MCP, and home-policy
-metadata. Sessions live below the workspace and carry the resolved runner
-identity, lifecycle state, resource allocation, access metadata, and runtime
-generation/boot authority fields. New blank and GitHub workspaces receive the
-server-owned `agentUiVersion: "pi-web-ui-v1"` marker. New sessions resolve the
-curated `pi-chrome` image and Pi harness regardless of browser payloads.
+Workspace documents carry owner, source, storage, sync, MCP, home-policy, and
+workspace-level resource metadata. They also carry a lazily populated
+`canonicalSessionId`; existing workspaces adopt an active child session first,
+otherwise the most recently updated child. Sessions remain below the workspace
+and carry the resolved runner identity, lifecycle state, resource allocation,
+access metadata, and runtime generation/boot authority fields. New blank and
+GitHub workspaces receive the server-owned `agentUiVersion: "pi-web-ui-v1"`
+marker. New sessions use the workspace resource setting and resolve the curated
+`pi-chrome` image and Pi harness regardless of browser payloads.
 
 The workspace authority transaction admits one managed runtime and sync writer.
 Generation and boot-instance fencing prevent a stale Cloud Run container from

@@ -73,11 +73,13 @@ function renderShell(stateOverrides = {}) {
 }
 
 describe("frontend shell ownership", () => {
-  test("renders retained navigation and omits retired duplicate controls", () => {
+  test("keeps the left drawer empty and collapsed while exposing workspace lifecycle", () => {
     renderShell({selectedSessionId: session.id});
 
-    expect(screen.getByRole("heading", {name: "Navigation"})).toBeInTheDocument();
-    expect(screen.getByRole("heading", {name: "Sessions"})).toBeInTheDocument();
+    expect(screen.queryByRole("heading", {name: "Navigation"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", {name: "Sessions"})).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Expand drawer"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Pause workspace"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Authentication Center"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "MCP Servers"})).toBeInTheDocument();
     for (const label of ["Files", "Git", "Skills", "Subagents", "Extensions", "Models", "Goals", "Chat"]) {
@@ -96,14 +98,29 @@ describe("frontend shell ownership", () => {
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
   });
 
-  test("retains workspace and session modal entry points", async () => {
+  test("places managed Agent and Chrome controls in the left Logs rail", async () => {
+    const user = userEvent.setup();
+    const managedSession = {...session, agentUiVersion: "pi-web-ui-v1"};
+    renderShell({sessions: [managedSession], selectedSessionId: managedSession.id});
+
+    expect(screen.getByRole("heading", {name: "Logs"})).toBeInTheDocument();
+    expect(await screen.findByRole("tab", {name: "Agent"})).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", {name: "Persistent Chrome"})).toBeInTheDocument();
+    expect(screen.queryByRole("tab", {name: "Preview"})).not.toBeInTheDocument();
+    expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
+    expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", {name: "Persistent Chrome"}));
+    expect(await screen.findByTitle("Chrome Pi smoke")).toBeInTheDocument();
+  });
+
+  test("retains workspace modal entry point without a session creation control", async () => {
     const user = userEvent.setup();
     const {handlers} = renderShell();
 
     await user.click(screen.getByRole("button", {name: "Create workspace"}));
     expect(handlers.modals.openWorkspaceModal).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole("button", {name: "Create session"}));
-    expect(handlers.modals.openSessionModal).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", {name: "Create session"})).not.toBeInTheDocument();
   });
 
   test("renders Pi credential management without a models editor", async () => {

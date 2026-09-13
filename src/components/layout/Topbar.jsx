@@ -1,13 +1,29 @@
 import "./Topbar.css";
-import {Pencil, Plus, RefreshCw, Trash2} from "lucide-react";
+import {Pause, Pencil, Play, Plus, RefreshCw, Trash2} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
+import {isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
+import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 
-export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOpenWorkspaceModal, onRefresh, onSelectWorkspace}) {
+export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOpenWorkspaceModal, onRefresh, onSelectWorkspace, onToggleWorkspace}) {
   const busy = hasPendingOperations(state.pendingOperations);
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
+  const canonicalSession = state.sessions.find(
+      (session) => session.id === selectedWorkspace?.canonicalSessionId,
+  ) || state.sessions.find((session) => session.id === state.selectedSessionId) || state.sessions[0];
+  const sessionStatus = String(canonicalSession?.status || "").toLowerCase();
+  const workspaceTransitioning = [
+    "provisioning", "queued", "restarting", "resizing", "needs_service", "stopping", "deleting",
+  ].includes(sessionStatus);
+  const workspaceOn = ["running", "ready"].includes(sessionStatus);
+  const hasSessionImageMetadata = Boolean(canonicalSession?.imageKey || canonicalSession?.image);
+  const workspaceUnsupported = selectedWorkspace?.source?.type === "ssh" ||
+    Boolean(canonicalSession && hasSessionImageMetadata && normalizeSessionImageKey(canonicalSession) !== "pi-chrome");
+  const workspaceStartBlocked = workspaceUnsupported && !workspaceOn;
+  const workspaceStopUncertain = isRuntimeStopUncertain(canonicalSession || {});
+  const workspaceActionLabel = workspaceOn ? "Pause workspace" : "Start workspace";
 
   return (
     <header className="topbar">
@@ -32,6 +48,17 @@ export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOp
             <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
           ))}
         </select>
+        <Button
+          aria-label={workspaceActionLabel}
+          disabled={busy || !selectedWorkspace || workspaceTransitioning || workspaceStartBlocked || workspaceStopUncertain}
+          icon
+          title={workspaceStartBlocked ? "This historical runtime cannot be started" : workspaceStopUncertain ? "Workspace stop is still being confirmed" : workspaceTransitioning ? "Workspace is changing state" : workspaceActionLabel}
+          tooltip={workspaceStartBlocked ? "This historical runtime cannot be started" : workspaceStopUncertain ? "Workspace stop is still being confirmed" : workspaceTransitioning ? "Workspace is changing state" : workspaceActionLabel}
+          variant="secondary"
+          onClick={onToggleWorkspace}
+        >
+          {workspaceOn ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+        </Button>
         <Button
           aria-label="Create workspace"
           disabled={busy}

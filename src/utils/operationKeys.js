@@ -9,6 +9,7 @@ export const OPERATION_KEYS = Object.freeze({
   SESSION_STOP: "session.stop",
   WORKSPACE_CREATE: "workspace.create",
   WORKSPACE_DELETE: "workspace.delete",
+  WORKSPACE_TOGGLE: "workspace.toggle",
   WORKSPACE_RENAME: "workspace.rename",
   WORKSPACE_SELECT: "workspace.select",
 });

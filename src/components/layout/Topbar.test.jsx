@@ -1,0 +1,46 @@
+import {render, screen} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import {describe, expect, test, vi} from "vitest";
+import {Topbar} from "./Topbar.jsx";
+import {createInitialState} from "../../state/initialState.js";
+
+function renderTopbar(session = null) {
+  const state = {
+    ...createInitialState(),
+    workspaces: [{id: "workspace-1", name: "HubSpot", source: {type: "blank"}, canonicalSessionId: session?.id || null}],
+    selectedWorkspaceId: "workspace-1",
+    sessions: session ? [session] : [],
+  };
+  const onToggleWorkspace = vi.fn();
+  render(
+    <Topbar
+      state={state}
+      onDeleteWorkspace={vi.fn()}
+      onOpenWorkspaceEditModal={vi.fn()}
+      onOpenWorkspaceModal={vi.fn()}
+      onRefresh={vi.fn()}
+      onSelectWorkspace={vi.fn()}
+      onToggleWorkspace={onToggleWorkspace}
+    />,
+  );
+  return onToggleWorkspace;
+}
+
+describe("Topbar workspace lifecycle", () => {
+  test("starts an off workspace", async () => {
+    const user = userEvent.setup();
+    const onToggleWorkspace = renderTopbar({id: "session-1", status: "stopped"});
+    await user.click(screen.getByRole("button", {name: "Start workspace"}));
+    expect(onToggleWorkspace).toHaveBeenCalledOnce();
+  });
+
+  test("pauses a running workspace", () => {
+    renderTopbar({id: "session-1", status: "running"});
+    expect(screen.getByRole("button", {name: "Pause workspace"})).toBeEnabled();
+  });
+
+  test("starts a workspace with no existing session", () => {
+    renderTopbar();
+    expect(screen.getByRole("button", {name: "Start workspace"})).toBeEnabled();
+  });
+});

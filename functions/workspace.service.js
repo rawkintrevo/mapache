@@ -13,8 +13,10 @@ const {
   cleanName,
   httpError,
   normalizeStoragePrefix,
+  serialize,
   slugify,
   sortByUpdatedAtDesc,
+  timestampMillis,
   toClientDoc,
   userPath,
 } = require("./backendUtils.helpers");
@@ -24,23 +26,40 @@ const {
   normalizeStoredMcpConfig,
 } = require("./mcpConfig.helpers");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
+const {normalizeSessionResources} = require("./sessionResources.helpers");
+
+const ACTIVE_SESSION_STATUSES = new Set([
+  "running",
+  "ready",
+  "provisioning",
+  "queued",
+  "restarting",
+  "resizing",
+  "needs_service",
+  "stopping",
+]);
 
 function createWorkspaceService(dependencies = {}) {
   return {
     createWorkspace: (uid, payload) => createWorkspace(uid, payload, dependencies),
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
-    listWorkspaces,
+    listWorkspaces: (uid) => listWorkspaces(uid, dependencies),
     renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
   };
 }
 
-async function listWorkspaces(uid) {
-  const snap = await db.collection("workspaces")
+async function listWorkspaces(uid, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const snap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
-  return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
+  const workspaces = await Promise.all(snap.docs.map((doc) =>
+    ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
+  ));
+  return workspaces.map(serialize).sort(sortByUpdatedAtDesc);
 }
 
 async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
@@ -49,16 +68,46 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
   const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
   const workspaceSnap = await workspaceRef.get();
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  const workspace = workspaceSnap.data() || {};
+  let workspace = workspaceSnap.data() || {};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
 
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_workspace_name");
-  await workspaceRef.update({
+  const update = {
     name,
     updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (payload && Object.prototype.hasOwnProperty.call(payload, "resources")) {
+    try {
+      update.resources = normalizeSessionResources(payload.resources || {});
+    } catch (error) {
+      if (error && error.code === "invalid_session_resources") {
+        throw httpError(400, error.code, error);
+      }
+      throw error;
+    }
+    workspace = await ensureCanonicalSession(uid, workspaceSnap, {
+      db: workspaceDb,
+      admin: workspaceAdmin,
+    });
+    await updateCanonicalSessionResources(workspaceRef, workspace, update.resources, workspaceAdmin);
+  }
+  await workspaceRef.update(update);
   return toClientDoc(await workspaceRef.get());
+}
+
+async function updateCanonicalSessionResources(workspaceRef, workspace, resources, workspaceAdmin) {
+  const canonicalSessionId = workspace.canonicalSessionId;
+  if (!canonicalSessionId || typeof workspaceRef.collection !== "function") return;
+  const sessionRef = workspaceRef.collection("sessions").doc(canonicalSessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) return;
+  const status = String(sessionSnap.data()?.status || "").toLowerCase();
+  if (["running", "ready"].includes(status)) return;
+  await sessionRef.update({
+    resources,
+    updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
 async function getWorkspaceMcpConfig(uid, workspaceId) {
@@ -124,6 +173,15 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
+  let resources;
+  try {
+    resources = normalizeSessionResources(payload.resources || payload);
+  } catch (error) {
+    if (error && error.code === "invalid_session_resources") {
+      throw httpError(400, error.code, error);
+    }
+    throw error;
+  }
   const storagePrefix = `workspaces/${uid}/${slugify(name)}`;
   const publicSource = {...source};
   const doc = {
@@ -153,6 +211,8 @@ async function createWorkspace(uid, payload, dependencies = {}) {
       reservedNameErrorCode: "reserved_workspace_env_name",
     }),
     environmentEntryIds: Array.isArray(payload.environmentEntryIds) ? [...new Set(payload.environmentEntryIds.map((id) => String(id || "").trim()).filter(Boolean))] : [],
+    resources,
+    canonicalSessionId: null,
     mcpConfig: normalizeMcpConfigPayload(payload.mcpConfig || {}),
     storagePrefix,
     createdAt: now,
@@ -367,6 +427,43 @@ async function requireWorkspace(uid, workspaceId) {
   return {id: snap.id, ...data};
 }
 
+async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
+  const workspace = {id: workspaceDoc.id, ...workspaceDoc.data()};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const sessionsRef = workspaceDb.collection("workspaces").doc(workspace.id).collection("sessions");
+  const sessionsSnap = await sessionsRef.get();
+  const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
+  let canonical = workspace.canonicalSessionId ?
+    sessions.find((session) => session.id === workspace.canonicalSessionId) : null;
+  if (!canonical && sessions.length) {
+    canonical = [...sessions].sort((left, right) => {
+      const leftActive = ACTIVE_SESSION_STATUSES.has(String(left.status || "").toLowerCase()) ? 1 : 0;
+      const rightActive = ACTIVE_SESSION_STATUSES.has(String(right.status || "").toLowerCase()) ? 1 : 0;
+      if (leftActive !== rightActive) return rightActive - leftActive;
+      return timestampMillis(right.updatedAt) - timestampMillis(left.updatedAt) || String(left.id).localeCompare(String(right.id));
+    })[0];
+  }
+
+  if (canonical && workspace.canonicalSessionId !== canonical.id) {
+    await workspaceDoc.ref.update({
+      canonicalSessionId: canonical.id,
+      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+    });
+    workspace.canonicalSessionId = canonical.id;
+  } else if (!canonical && workspace.canonicalSessionId) {
+    await workspaceDoc.ref.update({
+      canonicalSessionId: null,
+      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+    });
+    workspace.canonicalSessionId = null;
+  }
+
+  return workspace;
+}
+
 function workspaceSessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
 }
@@ -374,6 +471,7 @@ function workspaceSessionCollection(workspaceId) {
 module.exports = {
   createWorkspaceService,
   deleteWorkspaceStorageIfUnshared,
+  ensureCanonicalSession,
   listWorkspaces,
   getWorkspaceMcpConfig,
   normalizePublicGitHubRepoUrl,

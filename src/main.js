@@ -117,7 +117,10 @@ const handlers = {
     selectSession,
     stopSession,
   },
-  workspaces: workspaceController,
+  workspaces: {
+    ...workspaceController,
+    toggleWorkspace,
+  },
 };
 
 start();
@@ -246,10 +249,35 @@ async function createSession(payload) {
   if (!state.selectedWorkspaceId) return;
   await runBusy(async () => {
     const data = await state.api.createSession(state.selectedWorkspaceId, payload);
+    const selectedWorkspace = state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId);
+    if (selectedWorkspace && !selectedWorkspace.canonicalSessionId) {
+      selectedWorkspace.canonicalSessionId = data.session.id;
+    }
     dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: data.session.id});
     state.sessionModalOpen = false;
     await loadSelectedSessionAccess();
   }, "Working...", OPERATION_KEYS.SESSION_CREATE);
+}
+
+async function toggleWorkspace() {
+  const workspace = state.workspaces.find((candidate) => candidate.id === state.selectedWorkspaceId);
+  if (!workspace) return;
+  const session = sessionSubscriptionController.chooseCanonicalSession(state.sessions, workspace.canonicalSessionId);
+  const status = String(session?.status || "").toLowerCase();
+  if (workspace.source?.type === "ssh" && !["running", "ready"].includes(status)) return;
+  if (["provisioning", "queued", "restarting", "resizing", "needs_service", "stopping", "deleting"].includes(status)) return;
+  if (session && ["running", "ready"].includes(status)) {
+    await stopSession(session.id);
+    return;
+  }
+  if (session) {
+    await restartSession(session.id);
+    return;
+  }
+  await createSession({
+    name: `${workspace.name} runtime`,
+    ...(workspace.resources ? {resources: workspace.resources} : {}),
+  });
 }
 
 async function selectSession(sessionId) {
@@ -263,10 +291,6 @@ async function loadSelectedSessionAccess() {
   const request = sessionRequestTracker.capture();
   if (!request.isCurrent()) return;
   render();
-}
-
-function getSelectedSession() {
-  return sessionSubscriptionController.getSelectedSession();
 }
 
 async function resizeSession(sessionId, payload) {

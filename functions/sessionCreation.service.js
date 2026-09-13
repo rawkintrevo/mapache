@@ -75,9 +75,12 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const markedAgentWorkspace = isMarkedAgentWorkspace(workspace);
   const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
   const region = cleanName(payload.region || DEFAULT_REGION);
-  const resources = dependencies.normalizeRequestedSessionResources(payload, {
-    defaultResources: process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
-      {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} : undefined,
+  const resources = dependencies.normalizeRequestedSessionResources({
+    ...payload,
+    ...(payload.resources || {}),
+  }, {
+    defaultResources: workspace.resources || (process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
+      {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} : undefined),
   });
   const idleTimeoutMinutes = positiveNumber(
       payload.idleTimeoutMinutes,
@@ -170,6 +173,17 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     singleRunner: true,
     syncWriterEligible,
   });
+
+  if (dependencies.db && typeof dependencies.db.collection === "function") {
+    const workspaceRef = dependencies.db.collection("workspaces").doc(workspaceId);
+    const latestWorkspaceSnap = await workspaceRef.get();
+    if (latestWorkspaceSnap.exists && !latestWorkspaceSnap.data().canonicalSessionId) {
+      await workspaceRef.update({
+        canonicalSessionId: sessionRef.id,
+        updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }
 
   if (!runnerImage.canProvision) {
     await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "needs_image");

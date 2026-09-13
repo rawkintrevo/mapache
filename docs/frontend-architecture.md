@@ -9,8 +9,8 @@ Mapache owns the surrounding workspace/session shell and account connections.
 - Startup and orchestration: `src/main.js`
 - App state and reducer boundary: `src/state/appStore.js` and
   `src/state/initialState.js`
-- Workspace selection and CRUD: `src/controllers/workspaceController.js`
-- Session subscription/selection: `src/controllers/sessionSubscriptionController.js`
+- Workspace selection, resource settings, and lifecycle: `src/controllers/workspaceController.js`
+- Canonical runtime subscription/selection: `src/controllers/sessionSubscriptionController.js`
 - API client: `src/services/api.js`
 - React root and shell: `src/App.jsx`, `src/components/layout/`,
   `src/components/drawers/`, and `src/components/workspaces/`
@@ -24,12 +24,13 @@ Mapache owns the surrounding workspace/session shell and account connections.
 
 `src/main.js` initializes Firebase Auth, creates the API client, maintains the
 store facade, subscribes to workspace sessions, and passes grouped handlers to
-React. Selection changes load only retained SSH-forward state; access URLs are
-loaded by the selected session surface. Workspace and session lifecycle actions
-are server-authoritative and use the shared pending-operation boundary.
+React. The subscription resolves the workspace's canonical runtime; access URLs
+are loaded by that runtime surface. Workspace lifecycle actions are
+server-authoritative and use the shared pending-operation boundary.
 
-The signed-in shell has a Sessions drawer, workspace/session lifecycle controls,
-the workspace/session view, an account/profile surface, and a retained
+The signed-in shell has a collapsed-by-default empty left drawer, workspace
+Play/Pause lifecycle control beside the workspace selector, the
+workspace/canonical-runtime view, an account/profile surface, and a retained
 Mapache-owned inspector. The inspector contains Authentication Center, generic
 environment keys, MCP configuration, and Google Workspace connections. GitHub
 account/repository connection controls remain in the profile and workspace
@@ -37,13 +38,13 @@ creation flows.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
-`ManagedAgentSurface`, whose sibling tabs are Agent, Persistent Chrome, and
-Preview; resource metrics are separate read-only status. The embedded Agent
-iframe communicates through the signed `/agent/` gateway and a bounded
-postMessage bridge. Persistent Chrome and Preview keep their existing signed
-access URLs. A shell iframe remains available as a separate terminal surface;
-historical SSH sessions retain only their compatibility terminal and
-port-forward behavior.
+`ManagedAgentSurface` as the borderless, full-height center surface. Agent and
+Persistent Chrome controls live in the left drawer's `Logs` rail; Preview is
+not a workspace navigation surface. The embedded Agent iframe communicates
+through the signed `/agent/` gateway and a bounded postMessage bridge.
+Persistent Chrome keeps its signed access URL. A shell iframe remains
+available as a separate terminal surface; historical SSH sessions retain only
+their compatibility terminal and port-forward behavior.
 
 Unmarked historical sessions remain readable and terminal-first, but they do not expose a second
 Mapache Chat, Goals, file browser/editor, Git manager, model editor, package
@@ -56,11 +57,14 @@ does not edit model files or expose provider secrets. MCP and Google controls
 remain Mapache-owned because they configure external connections and token
 materialization rather than upstream agent preferences.
 
-`loadSelectedSessionAccess` in `src/main.js` is intentionally narrow: it refreshes
-retained SSH-forward state for a selected historical SSH session. There is no
-generic panel fan-out for retired Mapache controls. The API client likewise
-contains only workspace/session lifecycle, signed access, retained SSH
-forwarding, credentials, MCP, Google, GitHub connector, and admin operations.
+`loadSelectedSessionAccess` in `src/main.js` remains narrow and is keyed by the
+workspace's canonical runtime. Workspace Play/Pause delegates to the retained
+session lifecycle API internally; users do not select, create, rename, resize,
+restart, stop, or delete sibling sessions from the Mapache shell. Compute size
+is edited from the workspace edit modal and stored on the workspace. The API
+client retains session-addressed lifecycle/access calls for runtime plumbing
+and compatibility, alongside workspace, credentials, MCP, Google, GitHub
+connector, and admin operations.
 
 ## Invariants
 

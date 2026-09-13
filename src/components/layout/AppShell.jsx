@@ -1,4 +1,4 @@
-import {lazy, Suspense} from "react";
+import {lazy, Suspense, useEffect, useState} from "react";
 import {LazySurfaceFallback} from "../common/LazySurfaceFallback.jsx";
 import {LeftDrawer} from "../drawers/LeftDrawer.jsx";
 import {RightDrawer} from "../inspector/RightDrawer.jsx";
@@ -6,6 +6,7 @@ import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
 import {hasPendingOperations, getPendingOperationMessage} from "../../state/pendingOperations.js";
 import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
 import {Topbar} from "./Topbar.jsx";
+import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 
 const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: page}) => ({default: page})));
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
@@ -18,8 +19,18 @@ export function AppShell(props) {
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
   const selectedSession = state.sessions.find(
-      (session) => session.id === state.selectedSessionId,
-  );
+    (session) => session.id === selectedWorkspace?.canonicalSessionId,
+  ) || state.sessions.find(
+    (session) => session.id === state.selectedSessionId,
+  ) || state.sessions[0];
+  const [activeCanvas, setActiveCanvas] = useState(() => (
+    isMarkedRuntimeSession(selectedSession) ? "agent" : "terminal"
+  ));
+  const selectedSessionIsManaged = isMarkedRuntimeSession(selectedSession);
+
+  useEffect(() => {
+    setActiveCanvas(selectedSessionIsManaged ? "agent" : "terminal");
+  }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
   const shellClassName = [
     state.drawerCollapsed ? "drawer-collapsed" : "",
     state.rightDrawerCollapsed ? "right-drawer-collapsed" : "",
@@ -29,8 +40,6 @@ export function AppShell(props) {
     state.genericEnvironmentModalOpen ||
     state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
-    state.sessionEditModalSessionId ||
-    state.sessionModalOpen ||
     state.workspaceEditModalOpen ||
     state.workspaceModalOpen;
 
@@ -43,24 +52,20 @@ export function AppShell(props) {
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
         onSelectWorkspace={workspaces.selectWorkspace}
+        onToggleWorkspace={workspaces.toggleWorkspace}
       />
       <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
       <main className={shellClassName}>
         <LeftDrawer
+          activeCanvas={activeCanvas}
           state={state}
-          onDeleteSession={sessions.deleteSession}
-          onEditSession={modals.openSessionEditModal}
-          onOpenSessionModal={modals.openSessionModal}
-          onRestartSession={sessions.restartSession}
-          onRetryProvisioningSession={sessions.retryProvisioningSession}
+          selectedSession={selectedSession}
           onRefresh={app.refreshAll}
-          onSelectSession={sessions.selectSession}
+          onSelectCanvas={setActiveCanvas}
           onShowProfile={modals.showProfile}
           onShowAdmin={admin.showAdmin}
           onSignOut={app.signOut}
-          onStopSession={sessions.stopSession}
           onToggleDrawer={drawer.toggleDrawer}
-          onToggleDrawerSection={drawer.toggleDrawerSection}
         />
         {state.activePage === "admin" ? (
           <Suspense fallback={<LazySurfaceFallback label="Loading admin..." />}>
@@ -85,14 +90,12 @@ export function AppShell(props) {
           </Suspense>
         ) : (
         <WorkspacePanel
+            activeCanvas={activeCanvas}
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
             onGetSessionAccessUrls={sessions.getSessionAccessUrls}
-            onRetryProvisioningSession={sessions.retryProvisioningSession}
-          onRestartSession={sessions.restartSession}
-          onStopSession={sessions.stopSession}
-            onSelectSession={sessions.selectSession}
+            onSelectCanvas={setActiveCanvas}
           />
         )}
         <RightDrawer

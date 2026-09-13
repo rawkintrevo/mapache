@@ -6,15 +6,15 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in layout, drawers, workspace panel, and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection, create/edit/delete, refresh, and documentation links. |
-| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | Sessions list and lifecycle actions plus the user menu. |
-| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Session rows with select/edit/restart/stop/delete actions. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection, Play/Pause lifecycle control, create/edit/delete, refresh, and documentation links. |
+| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | Collapsed-by-default navigation rail, marked-runtime `Logs` surface controls, and the user menu. |
+| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; no longer mounted by the empty left drawer. |
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Profile, admin, refresh, and sign-out actions. |
-| `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/session list or selected-session detail. |
+| `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | Workspace name and source summary. |
-| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | Terminal-first historical view with Agent/Chrome/Preview and shell surfaces. |
-| `ManagedAgentSurface` | `src/components/sessions/ManagedAgentSurface.jsx` | Marked Agent-first view with Agent, Persistent Chrome, Preview, metrics, and lifecycle controls. |
-| `PiWebUiCanvas` | `src/components/sessions/PiWebUiCanvas.jsx` | Signed embedded upstream `/agent/` iframe and access renewal bridge. |
+| `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | Canonical runtime view with legacy terminal/Agent/Chrome and shell surfaces; marked-runtime lifecycle is controlled from the topbar. |
+| `ManagedAgentSurface` | `src/components/sessions/ManagedAgentSurface.jsx` | Borderless, full-height marked-runtime Agent or Persistent Chrome canvas. |
+| `PiWebUiCanvas` | `src/components/sessions/PiWebUiCanvas.jsx` | Full-height signed embedded upstream `/agent/` iframe and access renewal bridge. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Signed Persistent Chrome iframe and pop-out action. |
 | `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface. |
 | `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Server-reported runtime/checkpoint/lifecycle status and access errors. |
@@ -29,9 +29,7 @@ This index maps significant React components to their current responsibilities.
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | Selects saved auth entries for the active harness; never edits models. |
 | `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | Creates/edits/deletes masked environment keys and session selection. |
 | `WorkspaceModal` | `src/components/modals/WorkspaceModal.jsx` | Creates blank/GitHub workspaces and chooses saved environment keys. |
-| `SessionModal` | `src/components/modals/SessionModal.jsx` | Creates the server-selected managed Cloud runner. |
-| `SessionEditModal` | `src/components/modals/SessionEditModal.jsx` | Renames/resizes an existing session. |
-| `WorkspaceEditModal` | `src/components/modals/WorkspaceEditModal.jsx` | Renames an existing workspace. |
+| `WorkspaceEditModal` | `src/components/modals/WorkspaceEditModal.jsx` | Renames a workspace and edits its canonical runtime compute size. |
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |

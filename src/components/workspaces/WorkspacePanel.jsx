@@ -1,31 +1,24 @@
 import {SessionDetail} from "../sessions/SessionDetail.jsx";
-import {SessionList} from "../sessions/SessionList.jsx";
+import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 import {WorkspaceHeader} from "./WorkspaceHeader.jsx";
-import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function WorkspacePanel({
+  activeCanvas,
   selectedSession,
   selectedWorkspace,
   state,
   onGetSessionAccessUrls,
-  onRetryProvisioningSession,
-  onRestartSession,
-  onStopSession,
-  onSelectSession,
+  onSelectCanvas,
 }) {
-  const busy = hasPendingOperations(state.pendingOperations);
-
   if (selectedSession) {
     return (
-      <section className="workspace">
+      <section className={`workspace${isMarkedRuntimeSession(selectedSession) ? " workspace--managed-agent" : ""}`}>
         <SessionDetail
-          busy={busy}
+          activeCanvas={activeCanvas}
           session={selectedSession}
           workspaceId={state.selectedWorkspaceId}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
-          onRetryProvisioningSession={onRetryProvisioningSession}
-          onRestartSession={onRestartSession}
-          onStopSession={onStopSession}
+          onSelectCanvas={onSelectCanvas}
         />
       </section>
     );
@@ -35,12 +28,10 @@ export function WorkspacePanel({
     <section className="workspace">
       <WorkspaceHeader workspace={selectedWorkspace} />
       {state.error ? <div className="error">{state.error}</div> : null}
-      <SessionList
-        selectedSessionId={state.selectedSessionId}
-        selectedWorkspaceId={state.selectedWorkspaceId}
-        sessions={state.sessions}
-        onSelectSession={onSelectSession}
-      />
+      <div className="workspace-off-state" role="status">
+        <strong>Workspace is off</strong>
+        <span>Press Play in the navigation bar to start its runtime.</span>
+      </div>
     </section>
   );
 }

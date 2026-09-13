@@ -38,25 +38,22 @@ function renderDetail(overrides = {}, options = {}) {
 
 describe("SessionDetail Chrome workflow", () => {
   test("makes the embedded Agent the default managed workspace surface", async () => {
-    const user = userEvent.setup();
-    const onStopSession = vi.fn();
     renderDetail({
       agentUiVersion: "pi-web-ui-v1",
       harnessId: "pi",
       capabilities: {terminal: true, preview: true, chrome: true},
-    }, {onStopSession});
+    });
 
-    expect(await screen.findByRole("tab", {name: "Agent"})).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", {name: "Persistent Chrome"})).toBeInTheDocument();
-    expect(screen.getByRole("tab", {name: "Preview"})).toBeInTheDocument();
+    expect(await screen.findByTitle("Agent Chrome smoke")).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", {name: "Workspace surfaces"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", {name: "Preview"})).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", {name: "Terminal"})).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", {name: "Chat"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Models"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Goal"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Shell"})).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", {name: "Stop"}));
-    expect(onStopSession).toHaveBeenCalledWith("session-1");
+    expect(screen.queryByRole("button", {name: "Stop"})).not.toBeInTheDocument();
   });
 
   test("places resource meters beside rather than inside the canvas tabs", async () => {
@@ -144,45 +141,35 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.queryByRole("button", {name: "Restart"})).not.toBeInTheDocument();
   });
 
-  test("shows one retry action for retryable failures", async () => {
-    const user = userEvent.setup();
-    const onRetryProvisioningSession = vi.fn();
+  test("directs provisioning failures to the workspace lifecycle control", () => {
     renderDetail(
         {status: "provision_failed", provisioningRetryable: true, serviceUrl: null},
-        {busy: false, onRetryProvisioningSession},
+        {busy: false},
     );
 
-    const retry = screen.getByRole("button", {name: "Retry provisioning"});
-    await user.click(retry);
-    expect(onRetryProvisioningSession).toHaveBeenCalledOnce();
+    expect(screen.getByText("Use Play in the navigation bar to restart the workspace runtime.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
   });
 
-  test("shows restart for non-retryable provisioning failures", async () => {
-    const user = userEvent.setup();
-    const onRestartSession = vi.fn();
+  test("does not expose restart controls inside session detail", () => {
     renderDetail(
         {status: "provision_failed", provisioningRetryable: false, serviceUrl: null},
-        {onRestartSession},
+        {},
     );
     expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
-    const restart = screen.getByRole("button", {name: "Restart"});
-    await user.click(restart);
-    expect(onRestartSession).toHaveBeenCalledWith("session-1");
+    expect(screen.queryByRole("button", {name: "Restart"})).not.toBeInTheDocument();
   });
 
-  test("disables retry while another operation is pending", () => {
+  test("does not expose retry while another operation is pending", () => {
     renderDetail(
         {status: "provision_failed", provisioningRetryable: true, serviceUrl: null},
         {busy: true, onRetryProvisioningSession: vi.fn()},
     );
-    expect(screen.getByRole("button", {name: "Retry provisioning"})).toBeDisabled();
+    expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
   });
 
-  test("emphasizes restart when the running image is stale", () => {
+  test("shows stale image guidance without an in-content restart button", () => {
     renderDetail({runnerImageFreshness: "stale"});
-    const restart = screen.getByRole("button", {name: "Restart session to pick up the latest container image"});
-    expect(restart).toHaveClass("session-restart-button--stale");
-    expect(restart).toHaveAttribute("title", "Restart to pick up the latest container image");
     expect(screen.getByText("Stale image")).toBeInTheDocument();
     expect(screen.getByText(/older runner image/)).toBeInTheDocument();
   });
@@ -195,10 +182,8 @@ describe("SessionDetail Chrome workflow", () => {
       agentRuntimeState: "running",
     });
 
-    expect(await screen.findByRole("region", {name: "Agent runtime status"})).toHaveTextContent("Ready");
-    expect(screen.getByText("Last successful checkpoint")).toBeInTheDocument();
-    expect(screen.getByText(/2026/)).toBeInTheDocument();
-    expect(screen.getByText("Runtime generation")).toBeInTheDocument();
+    expect(await screen.findByTitle("Agent Chrome smoke")).toBeInTheDocument();
+    expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
   });
 
   test("keeps stop and persistence failures visible and blocks unsafe restart", () => {
@@ -209,13 +194,10 @@ describe("SessionDetail Chrome workflow", () => {
       status: "stop_failed",
     });
 
-    expect(screen.getByText("Error")).toBeInTheDocument();
-    expect(screen.getByRole("region", {name: "Agent runtime status"})).toHaveTextContent("checkpoint_storage_failed");
-    expect(screen.getByRole("button", {name: "Restart"})).toBeDisabled();
-    expect(screen.getByRole("button", {name: "Restart"})).toHaveAttribute(
-        "title",
-        "Restart is disabled until the server confirms the stop outcome",
-    );
+    expect(screen.getByText("Agent access is not ready.")).toBeInTheDocument();
+    expect(screen.getByText("checkpoint_storage_failed")).toBeInTheDocument();
+    expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Restart"})).not.toBeInTheDocument();
   });
 
   test("opens a separate shell tied to the selected runner", async () => {

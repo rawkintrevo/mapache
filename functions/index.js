@@ -229,6 +229,8 @@ const {provisionQueuedSession} = createProvisioningWorker({
 });
 
 const workspaceService = createWorkspaceService({
+  admin,
+  db,
   deleteSessionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,

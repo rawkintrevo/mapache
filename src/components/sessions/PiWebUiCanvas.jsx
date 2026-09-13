@@ -1,6 +1,4 @@
-import {ExternalLink} from "lucide-react";
 import {useCallback, useEffect, useRef, useState} from "react";
-import {Button} from "../common/Button.jsx";
 
 const BRIDGE_VERSION = 1;
 const ACCESS_MESSAGE = "mapache.agent.access";
@@ -85,17 +83,6 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
 
   return (
     <div className="pi-web-ui-canvas">
-      <div className="pi-web-ui-canvas__toolbar">
-        <span>Agent</span>
-        <Button
-          aria-label="Open Agent in new tab"
-          variant="secondary"
-          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-        >
-          <ExternalLink aria-hidden="true" />
-          Open Agent
-        </Button>
-      </div>
       <div className="pi-web-ui-canvas__frame-wrap">
         <iframe
           ref={frameRef}

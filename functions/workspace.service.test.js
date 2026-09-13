@@ -8,6 +8,7 @@ const {
   normalizeWorkspaceSyncPolicy,
   parsePublicGitHubRepoUrl,
   renameWorkspace,
+  ensureCanonicalSession,
 } = require("./workspace.service");
 
 assert.strictEqual(normalizePublicGitHubRepoUrl(123), "123");
@@ -132,7 +133,43 @@ async function testCreateWorkspaceUsesManagedDefaults() {
   );
 }
 
-Promise.all([testRenameWorkspace(), testCreateWorkspaceUsesManagedDefaults()]).then(() => {
+async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
+  let workspace = {ownerUid: "user-1", canonicalSessionId: null};
+  const workspaceRef = {
+    async update(update) {
+      workspace = {...workspace, ...update};
+    },
+  };
+  const sessions = [
+    {id: "stopped", status: "stopped", updatedAt: "2026-09-13T12:00:00Z"},
+    {id: "running", status: "running", updatedAt: "2026-09-13T11:00:00Z"},
+  ];
+  const dependencies = {
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
+    db: {
+      collection: () => ({
+        doc: () => ({
+          collection: () => ({
+            get: async () => ({docs: sessions.map((session) => ({id: session.id, data: () => session, ref: {}}))}),
+          }),
+        }),
+      }),
+    },
+  };
+  const adopted = await ensureCanonicalSession("user-1", {
+    id: "workspace-1",
+    data: () => workspace,
+    ref: workspaceRef,
+  }, dependencies);
+  assert.strictEqual(adopted.canonicalSessionId, "running");
+  assert.strictEqual(workspace.canonicalSessionId, "running");
+}
+
+Promise.all([
+  testRenameWorkspace(),
+  testCreateWorkspaceUsesManagedDefaults(),
+  testCanonicalSessionAdoptionPrefersActiveRuntime(),
+]).then(() => {
   console.log("workspace service tests passed");
 }).catch((error) => {
   console.error(error);

@@ -3,39 +3,17 @@ import {AuthModal} from "./AuthModal.jsx";
 import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {GoogleWorkspaceModal} from "./GoogleWorkspaceModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
-import {SessionModal} from "./SessionModal.jsx";
-import {SessionEditModal} from "./SessionEditModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
   const {handlers, state} = props;
-  const {github, google, modals, pi, sessions, workspaces} = handlers;
+  const {github, google, modals, pi, workspaces} = handlers;
   const busy = hasPendingOperations(state.pendingOperations);
-  const editingSession = state.sessions.find((session) => session.id === state.sessionEditModalSessionId);
 
   return (
     <>
-      {editingSession ? (
-        <SessionEditModal
-          busy={busy}
-          error={state.error}
-          session={editingSession}
-          onClose={modals.closeSessionEditModal}
-          onSave={sessions.editSession}
-        />
-      ) : null}
-      {state.sessionModalOpen ? (
-        <SessionModal
-          busy={busy}
-          error={state.error}
-          selectedWorkspace={props.selectedWorkspace}
-          environmentEntries={state.piAuth.environmentEntries}
-          onClose={modals.closeSessionModal}
-          onCreateSession={sessions.createSession}
-        />
-      ) : null}
       {state.workspaceModalOpen ? (
         <WorkspaceModal
           repoPicker={state.repoPicker}
