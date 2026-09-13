@@ -47,6 +47,14 @@ Persistent Chrome keeps its signed access URL. A shell iframe remains
 available as a separate terminal surface; historical SSH sessions retain only
 their compatibility terminal and port-forward behavior.
 
+The managed center surface owns the available shell height instead of applying
+the legacy terminal canvas viewport cap. Its iframe and intermediate wrappers
+must preserve a `min-height: 0` / `height: 100%` chain so the upstream UI fills
+the desktop viewport without exposing the canvas background below it. The
+outer app uses the dynamic viewport unit when supported, and narrow layouts
+retain a bounded minimum managed-surface height while the drawer layout remains
+stacked.
+
 Unmarked historical sessions remain readable and terminal-first, but they do not expose a second
 Mapache Chat, Goals, file browser/editor, Git manager, model editor, package
 manager, skills manager, subagent manager, or extensions panel. Files, Git,

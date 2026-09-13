@@ -40,6 +40,7 @@
 .canvas-shell--managed-agent {
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
 }
@@ -171,8 +172,8 @@
   margin-top: 4px;
 }
 
-.canvas-shell iframe,
-.terminal-placeholder {
+.canvas-shell:not(.canvas-shell--managed-agent) iframe,
+.canvas-shell:not(.canvas-shell--managed-agent) .terminal-placeholder {
   width: 100%;
   height: min(62vh, 720px);
   min-height: 360px;
@@ -188,6 +189,13 @@
 .canvas-shell--managed-agent .browser-canvas {
   height: 100%;
   min-height: 0;
+}
+
+.canvas-shell--managed-agent .terminal-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
 }
 
 .canvas-panel[hidden] {
