@@ -4,11 +4,6 @@ export function createDrawerController({state, render}) {
     render();
   }
 
-  function toggleRightDrawer() {
-    state.rightDrawerCollapsed = !state.rightDrawerCollapsed;
-    render();
-  }
-
   function toggleDrawerSection(sectionId) {
     if (state.collapsedDrawerSections.has(sectionId)) {
       state.collapsedDrawerSections.delete(sectionId);
@@ -20,7 +15,6 @@ export function createDrawerController({state, render}) {
 
   return {
     toggleDrawer,
-    toggleRightDrawer,
     toggleDrawerSection,
   };
 }

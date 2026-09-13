@@ -1,6 +1,6 @@
 import {APP_ACTIONS} from "../state/appStore.js";
 
-export function createModalController({state, dispatch = () => {}, render, loadMcpServers, loadPiAuth}) {
+export function createModalController({state, dispatch = () => {}, render, loadGoogleWorkspace, loadMcpServers, loadPiAuth}) {
   function showProfile() {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
@@ -60,12 +60,28 @@ export function createModalController({state, dispatch = () => {}, render, loadM
       message: "",
       selectedServices: enabledServices,
     };
+    state.googleWorkspaceReturnToManage = Boolean(state.googleWorkspaceManageModalOpen);
+    state.googleWorkspaceManageModalOpen = false;
     state.googleWorkspaceModalOpen = true;
     render();
   }
 
   function closeGoogleWorkspaceModal() {
     state.googleWorkspaceModalOpen = false;
+    if (state.googleWorkspaceReturnToManage) state.googleWorkspaceManageModalOpen = true;
+    state.googleWorkspaceReturnToManage = false;
+    render();
+  }
+
+  function openGoogleWorkspaceManageModal() {
+    if (!state.selectedWorkspaceId) return;
+    state.googleWorkspaceManageModalOpen = true;
+    if (!state.googleWorkspace.loading) void loadGoogleWorkspace?.();
+    render();
+  }
+
+  function closeGoogleWorkspaceManageModal() {
+    state.googleWorkspaceManageModalOpen = false;
     render();
   }
 
@@ -130,6 +146,7 @@ export function createModalController({state, dispatch = () => {}, render, loadM
 
   return {
     closeAuthModal,
+    closeGoogleWorkspaceManageModal,
     closeGoogleWorkspaceModal,
     closeMcpServersModal,
     closePiAuthManageModal,
@@ -138,6 +155,7 @@ export function createModalController({state, dispatch = () => {}, render, loadM
     closeWorkspaceModal,
     closeWorkspaceEditModal,
     openAuthModal,
+    openGoogleWorkspaceManageModal,
     openGoogleWorkspaceModal,
     openMcpServersModal,
     openPiAuthManageModal,

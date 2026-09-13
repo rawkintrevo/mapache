@@ -1,14 +1,14 @@
 {
   "id": "app.shell-empty",
   "title": "Signed-in shell empty-state smoke",
-  "description": "Validate the signed-in app shell, empty workspace state, and retained inspector entry point.",
+  "description": "Validate the signed-in app shell, empty workspace state, and workspace-dependent navbar controls.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/app.shell-empty",
   "steps": [
     {"useCase": "cases/login.json"},
     {"assert": "snapshot-text", "expected": "Navigation"},
     {"assert": "snapshot-text", "expected": "No workspaces yet."},
-    {"assert": "snapshot-text", "expected": "Expand inspector"},
+    {"assert": "accessible-button-absent", "name": "Manage Google Workspace"},
     {"assert": "snapshot-not-text", "expected": "Files"},
     {"assert": "snapshot-not-text", "expected": "Git"},
     {"assert": "snapshot-not-text", "expected": "Goals"},

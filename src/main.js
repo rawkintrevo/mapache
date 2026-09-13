@@ -75,6 +75,7 @@ const modalController = createModalController({
   state,
   dispatch,
   render,
+  loadGoogleWorkspace: googleWorkspaceController.loadGoogleWorkspace,
   loadMcpServers: piPanelsController.loadMcpServers,
   loadPiAuth: piPanelsController.loadPiAuth,
 });

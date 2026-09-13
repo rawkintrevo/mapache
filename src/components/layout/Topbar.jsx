@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, Trash2, Variable} from "lucide-react";
+import {Blocks, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
@@ -10,6 +10,7 @@ export function Topbar({
   state,
   onDeleteWorkspace,
   onOpenGenericEnvironment,
+  onOpenGoogleWorkspace,
   onOpenMcpServers,
   onOpenPiAuthManage,
   onOpenWorkspaceEditModal,
@@ -143,6 +144,17 @@ export function Topbar({
           onClick={onOpenMcpServers}
         >
           <PlugZap aria-hidden="true" />
+        </Button>
+        <Button
+          aria-label="Manage Google Workspace"
+          disabled={!selectedWorkspace || state.googleWorkspace?.loading || state.googleWorkspace?.saving || !onOpenGoogleWorkspace}
+          icon
+          title="Manage Google Workspace"
+          tooltip="Manage Google Workspace"
+          variant="secondary"
+          onClick={onOpenGoogleWorkspace}
+        >
+          <Blocks aria-hidden="true" />
         </Button>
         <a className="topbar-link" href="/community/blog">Blog</a>
         <a className="topbar-link" href="/community/docs/intro/">Docs</a>

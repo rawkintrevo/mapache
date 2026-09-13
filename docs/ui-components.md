@@ -6,7 +6,7 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in layout, drawers, workspace panel, and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection, Play/Pause lifecycle control, create/edit/delete, Pi auth, generic environment, and MCP entry points, refresh, and documentation links. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection, Play/Pause lifecycle control, create/edit/delete, Pi auth, generic environment, MCP, and Google Workspace entry points, refresh, and documentation links. |
 | `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | Collapsed-by-default navigation rail with marked-runtime Agent, Persistent Chrome, and Logs controls plus the user menu. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; no longer mounted by the empty left drawer. |
 | `UserMenu` | `src/components/drawers/UserMenu.jsx` | Profile, admin, refresh, and sign-out actions. |
@@ -21,16 +21,15 @@ This index maps significant React components to their current responsibilities.
 | `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Server-reported runtime/checkpoint/lifecycle status and access errors. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | Session list for the selected workspace. |
 | `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced resource presets and advanced CPU/memory fields. |
-| `RightDrawer` | `src/components/inspector/RightDrawer.jsx` | Retained Google Workspace inspector section. |
-| `GoogleWorkspacePanel` | `src/components/inspector/GoogleWorkspacePanel.jsx` | Google connection summaries and workspace bindings. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | Coordinates retained workspace/session/auth/connection dialogs. |
 | `AuthModal` | `src/components/modals/AuthModal.jsx` | Adds/edits saved provider credentials and OpenAI device login. |
 | `PiAuthManageModal` | `src/components/modals/PiAuthManageModal.jsx` | Selects saved auth entries for the active harness; never edits models. |
 | `GenericEnvironmentModal` | `src/components/modals/GenericEnvironmentModal.jsx` | Creates/edits/deletes masked environment keys and session selection. |
 | `McpServersModal` | `src/components/modals/McpServersModal.jsx` | Creates, edits, refreshes, and deletes workspace MCP configuration from the top navigation. |
+| `GoogleWorkspaceManageModal` | `src/components/modals/GoogleWorkspaceManageModal.jsx` | Lists saved Google accounts and manages the selected workspace binding from the top navigation. |
 | `WorkspaceModal` | `src/components/modals/WorkspaceModal.jsx` | Creates blank/GitHub workspaces and chooses saved environment keys. |
 | `WorkspaceEditModal` | `src/components/modals/WorkspaceEditModal.jsx` | Renames a workspace and edits its canonical runtime compute size. |
-| `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth. |
+| `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth, then returns to Google Workspace account management. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |
 

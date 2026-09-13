@@ -60,6 +60,41 @@ describe("createModalController", () => {
     });
   });
 
+  test("opens and refreshes Google Workspace management for the selected workspace", () => {
+    const loadGoogleWorkspace = vi.fn();
+    const state = {
+      selectedWorkspaceId: "workspace-1",
+      googleWorkspaceManageModalOpen: false,
+      googleWorkspace: {loading: false},
+    };
+    const controller = createModalController({state, render: vi.fn(), loadGoogleWorkspace, loadPiAuth: vi.fn()});
+
+    controller.openGoogleWorkspaceManageModal();
+    expect(state.googleWorkspaceManageModalOpen).toBe(true);
+    expect(loadGoogleWorkspace).toHaveBeenCalledOnce();
+
+    controller.closeGoogleWorkspaceManageModal();
+    expect(state.googleWorkspaceManageModalOpen).toBe(false);
+  });
+
+  test("returns to Google Workspace management after closing account editing", () => {
+    const state = {
+      googleWorkspaceManageModalOpen: true,
+      googleWorkspaceModalOpen: false,
+      googleWorkspaceReturnToManage: false,
+      googleWorkspace: {accessLevel: "read", selectedServices: []},
+    };
+    const controller = createModalController({state, render: vi.fn(), loadPiAuth: vi.fn()});
+
+    controller.openGoogleWorkspaceModal();
+    expect(state.googleWorkspaceManageModalOpen).toBe(false);
+    expect(state.googleWorkspaceModalOpen).toBe(true);
+
+    controller.closeGoogleWorkspaceModal();
+    expect(state.googleWorkspaceModalOpen).toBe(false);
+    expect(state.googleWorkspaceManageModalOpen).toBe(true);
+  });
+
   test("opens and closes session editing for a known session", () => {
     const state = {sessionEditModalSessionId: null, sessions: [{id: "session-1"}]};
     const controller = createModalController({state, render: vi.fn(), loadPiAuth: vi.fn()});

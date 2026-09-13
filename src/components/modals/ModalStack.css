@@ -219,7 +219,12 @@
   width: min(760px, 100%);
 }
 
-.mcp-servers-toolbar {
+.google-workspace-manage-panel {
+  width: min(760px, 100%);
+}
+
+.mcp-servers-toolbar,
+.google-workspace-manage-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;

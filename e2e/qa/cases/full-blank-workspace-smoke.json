@@ -1,7 +1,7 @@
 {
   "id": "full.blank-workspace-smoke",
   "title": "Full blank workspace smoke",
-  "description": "Broad blank-workspace smoke covering login, workspace creation, the sole pi-chrome session path, embedded Agent readiness, retained inspector panels, and cleanup.",
+  "description": "Broad blank-workspace smoke covering login, workspace creation, the sole pi-chrome session path, embedded Agent readiness, navbar connection controls, and cleanup.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/full.blank-workspace-smoke",
   "requires": {
@@ -13,10 +13,9 @@
     {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-full-session-{{timestamp}}"}},
     {"useScript": "scripts/wait-session-running.json"},
     {"assert": "agent-ui-ready", "expected": "The new session uses the marked pi-chrome path and the embedded Agent reports readiness."},
-    {"useScript": "scripts/expand-inspector.json"},
-    {"assert": "snapshot-text", "expected": "Authentication Center"},
-    {"assert": "snapshot-text", "expected": "MCP Servers"},
-    {"assert": "snapshot-text", "expected": "Google Workspace"},
+    {"assert": "button-present", "name": "Manage Pi Auth"},
+    {"assert": "button-present", "name": "Manage MCP servers"},
+    {"assert": "button-present", "name": "Manage Google Workspace"},
     {"assert": "snapshot-not-text", "expected": "Files"},
     {"assert": "snapshot-not-text", "expected": "Git"},
     {"assert": "snapshot-not-text", "expected": "Goals"},

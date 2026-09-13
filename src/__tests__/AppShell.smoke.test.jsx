@@ -4,6 +4,7 @@ import {describe, expect, test, vi} from "vitest";
 import {AppShell} from "../components/layout/AppShell.jsx";
 import {
   createGithubConnectionState,
+  createGoogleWorkspaceState,
   createInitialState,
   createMcpServersState,
   createPiAuthState,
@@ -69,7 +70,6 @@ function createState(overrides = {}) {
     sessions: [session],
     selectedWorkspaceId: workspace.id,
     selectedSessionId: null,
-    rightDrawerCollapsed: false,
     piAuth: createPiAuthState(),
     githubConnection: createGithubConnectionState(),
     ...overrides,
@@ -93,25 +93,28 @@ describe("frontend shell ownership", () => {
     expect(screen.getByRole("button", {name: "Manage Pi Auth"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Manage generic environment keys"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Manage MCP servers"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Manage Google Workspace"})).toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "Authentication Center"})).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "MCP Servers"})).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", {name: "Google Workspace"})).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Expand inspector"})).not.toBeInTheDocument();
     for (const label of ["Files", "Git", "Skills", "Subagents", "Extensions", "Models", "Goals", "Chat"]) {
       expect(screen.queryByText(label, {exact: true})).not.toBeInTheDocument();
     }
   });
 
-  test("opens auth and MCP management from the top navigation", async () => {
+  test("opens auth, MCP, and Google Workspace management from the top navigation", async () => {
     const user = userEvent.setup();
     const {handlers} = renderShell({selectedSessionId: session.id});
 
     await user.click(screen.getByRole("button", {name: "Manage Pi Auth"}));
     await user.click(screen.getByRole("button", {name: "Manage generic environment keys"}));
     await user.click(screen.getByRole("button", {name: "Manage MCP servers"}));
+    await user.click(screen.getByRole("button", {name: "Manage Google Workspace"}));
 
     expect(handlers.modals.openPiAuthManageModal).toHaveBeenCalledOnce();
     expect(handlers.modals.openGenericEnvironmentModal).toHaveBeenCalledOnce();
     expect(handlers.modals.openMcpServersModal).toHaveBeenCalledOnce();
+    expect(handlers.modals.openGoogleWorkspaceManageModal).toHaveBeenCalledOnce();
   });
 
   test("renders workspace MCP management in a modal", async () => {
@@ -125,6 +128,29 @@ describe("frontend shell ownership", () => {
     const dialog = await screen.findByRole("dialog", {name: "MCP Servers"});
     expect(within(dialog).getByText("linear")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", {name: "New MCP server"})).toBeInTheDocument();
+  });
+
+  test("renders Google Workspace account management in a modal", async () => {
+    renderShell({
+      googleWorkspaceManageModalOpen: true,
+      googleWorkspace: createGoogleWorkspaceState({
+        data: {
+          binding: null,
+          connections: [{
+            connectionId: "connection-a",
+            displayName: "Account A",
+            email: "a@example.com",
+            enabledServices: ["gmail"],
+            status: "connected",
+          }],
+          services: [],
+        },
+      }),
+    });
+
+    const dialog = await screen.findByRole("dialog", {name: "Google Workspace"});
+    expect(within(dialog).getByText("a@example.com")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", {name: "Add Google account"})).toBeInTheDocument();
   });
 
   test("keeps session terminal and upstream Agent surfaces available", async () => {

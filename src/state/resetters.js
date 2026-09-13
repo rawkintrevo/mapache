@@ -23,6 +23,9 @@ export function resetGoogleWorkspace(state) {
 
 export function resetSignedOutState(state) {
   state.sessionEditModalSessionId = null;
+  state.googleWorkspaceManageModalOpen = false;
+  state.googleWorkspaceModalOpen = false;
+  state.googleWorkspaceReturnToManage = false;
   state.workspaces = [];
   state.sessions = [];
   resetAdmin(state);

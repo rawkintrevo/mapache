@@ -68,7 +68,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 
 - `cases/login.json`: QA custom-token login and signed-in shell.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
-- `cases/navigation-drawers.json`: Left drawer, drawer sections, inspector, refresh.
+- `cases/navigation-drawers.json`: Left drawer, navbar connection controls, refresh.
 - `cases/global-action-indicator.json`: Busy indicator during global refresh.
 - `cases/profile.json`: Profile and runner usage view.
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.
@@ -84,9 +84,9 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
-- `cases/mcp-servers-crud.json`: Right-drawer MCP server save path for selected workspaces.
+- `cases/mcp-servers-crud.json`: Navbar MCP server modal save path for selected workspaces.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
-- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path and retained inspector.
+- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path and navbar connection controls.
 
 Parent-level Files, Git, Skills, Subagents, Extensions, Models, Chat, and Mapache Goals cases are intentionally absent. Upstream Agent owns the live workspace, Git, model, history, skill, and native Goal surfaces; Mapache retains only lifecycle, authentication, MCP, Google Workspace, and migration/persistence boundaries.
 

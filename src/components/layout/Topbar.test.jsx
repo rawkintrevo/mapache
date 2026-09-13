@@ -14,12 +14,14 @@ function renderTopbar(session = null) {
   const onToggleWorkspace = vi.fn();
   const onOpenPiAuthManage = vi.fn();
   const onOpenGenericEnvironment = vi.fn();
+  const onOpenGoogleWorkspace = vi.fn();
   const onOpenMcpServers = vi.fn();
   render(
     <Topbar
       state={state}
       onDeleteWorkspace={vi.fn()}
       onOpenGenericEnvironment={onOpenGenericEnvironment}
+      onOpenGoogleWorkspace={onOpenGoogleWorkspace}
       onOpenMcpServers={onOpenMcpServers}
       onOpenPiAuthManage={onOpenPiAuthManage}
       onOpenWorkspaceEditModal={vi.fn()}
@@ -29,7 +31,7 @@ function renderTopbar(session = null) {
       onToggleWorkspace={onToggleWorkspace}
     />,
   );
-  return {onOpenGenericEnvironment, onOpenMcpServers, onOpenPiAuthManage, onToggleWorkspace};
+  return {onOpenGenericEnvironment, onOpenGoogleWorkspace, onOpenMcpServers, onOpenPiAuthManage, onToggleWorkspace};
 }
 
 describe("Topbar workspace lifecycle", () => {
@@ -40,23 +42,27 @@ describe("Topbar workspace lifecycle", () => {
     expect(onToggleWorkspace).toHaveBeenCalledOnce();
   });
 
-  test("opens Pi auth, generic environment, and MCP management from icon buttons", async () => {
+  test("opens Pi auth, environment, MCP, and Google Workspace management from icon buttons", async () => {
     const user = userEvent.setup();
     const handlers = renderTopbar({id: "session-1", status: "running", terminalKind: "pi"});
 
     const piAuthButton = screen.getByRole("button", {name: "Manage Pi Auth"});
     const environmentButton = screen.getByRole("button", {name: "Manage generic environment keys"});
     const mcpButton = screen.getByRole("button", {name: "Manage MCP servers"});
+    const googleButton = screen.getByRole("button", {name: "Manage Google Workspace"});
     expect(piAuthButton).toHaveAttribute("title", "Manage Pi Auth");
     expect(environmentButton).toHaveAttribute("title", "Manage generic environment keys");
     expect(mcpButton).toHaveAttribute("title", "Manage MCP servers");
+    expect(googleButton).toHaveAttribute("title", "Manage Google Workspace");
 
     await user.click(piAuthButton);
     await user.click(environmentButton);
     await user.click(mcpButton);
+    await user.click(googleButton);
     expect(handlers.onOpenPiAuthManage).toHaveBeenCalledOnce();
     expect(handlers.onOpenGenericEnvironment).toHaveBeenCalledOnce();
     expect(handlers.onOpenMcpServers).toHaveBeenCalledOnce();
+    expect(handlers.onOpenGoogleWorkspace).toHaveBeenCalledOnce();
   });
 
   test("pauses a running workspace", () => {

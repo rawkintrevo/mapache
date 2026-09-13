@@ -2,6 +2,7 @@ import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
 import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {GoogleWorkspaceModal} from "./GoogleWorkspaceModal.jsx";
+import {GoogleWorkspaceManageModal} from "./GoogleWorkspaceManageModal.jsx";
 import {McpServersModal} from "./McpServersModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
@@ -66,6 +67,17 @@ export function ModalStack(props) {
           onStartConnection={google.startConnection}
           onUpdateAccessLevel={google.updateAccessLevel}
           onUpdateService={google.updateService}
+        />
+      ) : null}
+      {state.googleWorkspaceManageModalOpen ? (
+        <GoogleWorkspaceManageModal
+          googleWorkspace={state.googleWorkspace}
+          onBindConnection={google.bindConnection}
+          onClose={modals.closeGoogleWorkspaceManageModal}
+          onDeleteConnection={google.deleteConnection}
+          onEditConnection={modals.openGoogleWorkspaceModal}
+          onRefresh={google.loadGoogleWorkspace}
+          onUnbindConnection={google.unbindConnection}
         />
       ) : null}
       {state.piAuthManageModalOpen ? (

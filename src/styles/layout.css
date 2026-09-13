@@ -9,21 +9,13 @@
 
 main {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
 
 main.drawer-collapsed {
-  grid-template-columns: 58px minmax(0, 1fr) minmax(280px, 360px);
-}
-
-main.right-drawer-collapsed {
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr) 58px;
-}
-
-main.drawer-collapsed.right-drawer-collapsed {
-  grid-template-columns: 58px minmax(0, 1fr) 58px;
+  grid-template-columns: 58px minmax(0, 1fr);
 }
 
 .workspace {
@@ -77,14 +69,6 @@ main.drawer-collapsed.right-drawer-collapsed {
   }
 
   main.drawer-collapsed {
-    grid-template-columns: 1fr;
-  }
-
-  main.right-drawer-collapsed {
-    grid-template-columns: 1fr;
-  }
-
-  main.drawer-collapsed.right-drawer-collapsed {
     grid-template-columns: 1fr;
   }
 

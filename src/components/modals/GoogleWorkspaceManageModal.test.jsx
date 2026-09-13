@@ -1,7 +1,7 @@
 import {render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
-import {GoogleWorkspacePanel} from "./GoogleWorkspacePanel.jsx";
+import {GoogleWorkspaceManageModal} from "./GoogleWorkspaceManageModal.jsx";
 
 const account = {
   connectionId: "connection-a",
@@ -12,7 +12,7 @@ const account = {
   workspaceUsage: {count: 1, workspaces: [{id: "workspace-a", name: "Workspace A"}]},
 };
 
-function renderPanel(overrides = {}) {
+function renderModal(overrides = {}) {
   const props = {
     googleWorkspace: {
       loading: false,
@@ -23,34 +23,30 @@ function renderPanel(overrides = {}) {
       message: "",
       data: {
         binding: {connectionId: "connection-a", enabledServices: ["gmail"]},
-        connection: account,
         connections: [account],
-        services: [{key: "gmail", displayName: "Gmail", accessLevels: ["read", "write"]}],
       },
     },
-    state: {collapsedDrawerSections: new Set()},
     onBindConnection: vi.fn(),
+    onClose: vi.fn(),
     onDeleteConnection: vi.fn(),
     onEditConnection: vi.fn(),
     onRefresh: vi.fn(),
-    onToggleDrawerSection: vi.fn(),
     onUnbindConnection: vi.fn(),
     ...overrides,
   };
-  render(<GoogleWorkspacePanel {...props} />);
+  render(<GoogleWorkspaceManageModal {...props} />);
   return props;
 }
 
-describe("GoogleWorkspacePanel", () => {
-  test("shows only saved accounts and disables the checked workspace binding", async () => {
+describe("GoogleWorkspaceManageModal", () => {
+  test("manages the selected workspace binding and account editor", async () => {
     const user = userEvent.setup();
-    const props = renderPanel();
+    const props = renderModal();
 
-    expect(screen.getAllByText("a@example.com")).toHaveLength(1);
-    expect(screen.getByText(/1 workspace/)).toBeTruthy();
-    expect(screen.queryByText("Workspace services")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", {name: "Google Workspace"})).toBeInTheDocument();
+    expect(screen.getByText(/1 workspace/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Disable a@example.com"}));
-    expect(props.onUnbindConnection).toHaveBeenCalledTimes(1);
+    expect(props.onUnbindConnection).toHaveBeenCalledOnce();
     await user.click(screen.getByRole("button", {name: "Edit a@example.com"}));
     expect(props.onEditConnection).toHaveBeenCalledWith(account);
   });
@@ -58,7 +54,7 @@ describe("GoogleWorkspacePanel", () => {
   test("enables an unplugged saved account with its authorized services", async () => {
     const user = userEvent.setup();
     const onBindConnection = vi.fn();
-    renderPanel({
+    renderModal({
       onBindConnection,
       googleWorkspace: {
         loading: false,
@@ -67,7 +63,7 @@ describe("GoogleWorkspacePanel", () => {
         deleting: false,
         error: "",
         message: "",
-        data: {binding: null, connection: null, connections: [account], services: []},
+        data: {binding: null, connections: [account]},
       },
     });
 
@@ -75,11 +71,11 @@ describe("GoogleWorkspacePanel", () => {
     expect(onBindConnection).toHaveBeenCalledWith("connection-a", ["gmail"]);
   });
 
-  test("deletion confirmation names affected workspace count", async () => {
+  test("deletion confirmation names the affected workspace count", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const onDeleteConnection = vi.fn();
-    renderPanel({onDeleteConnection});
+    renderModal({onDeleteConnection});
     await user.click(screen.getByRole("button", {name: "Remove a@example.com"}));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining("used by 1 workspace"));
     expect(onDeleteConnection).not.toHaveBeenCalled();

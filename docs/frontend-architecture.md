@@ -30,9 +30,10 @@ server-authoritative and use the shared pending-operation boundary.
 
 The signed-in shell has a collapsed-by-default empty left drawer, workspace
 Play/Pause lifecycle control beside the workspace selector, compact topbar
-actions for Pi auth, generic environment keys, and workspace MCP servers, the
-workspace/canonical-runtime view, an account/profile surface, and a retained
-Mapache-owned inspector. The inspector contains Google Workspace connections. GitHub
+actions for Pi auth, generic environment keys, workspace MCP servers, and
+Google Workspace, the workspace/canonical-runtime view, and an account/profile
+surface. Google Workspace account management opens in a modal from its topbar
+icon; the shell no longer reserves a right inspector column. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
 
@@ -62,7 +63,8 @@ model selection, skills, extensions, subagents, and native Goals belong to the
 embedded upstream application when that application is available.
 
 `Topbar` owns the entry points for `PiAuthManageModal`,
-`GenericEnvironmentModal`, and `McpServersModal`. `PiAuthManageModal` manages only saved
+`GenericEnvironmentModal`, `McpServersModal`, and
+`GoogleWorkspaceManageModal`. `PiAuthManageModal` manages only saved
 credential selection and entry CRUD. It does not edit model files or expose
 provider secrets. MCP and Google controls remain Mapache-owned because they
 configure external connections and token materialization rather than upstream

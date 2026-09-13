@@ -1,7 +1,6 @@
 import {lazy, Suspense, useEffect, useState} from "react";
 import {LazySurfaceFallback} from "../common/LazySurfaceFallback.jsx";
 import {LeftDrawer} from "../drawers/LeftDrawer.jsx";
-import {RightDrawer} from "../inspector/RightDrawer.jsx";
 import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
 import {hasPendingOperations, getPendingOperationMessage} from "../../state/pendingOperations.js";
 import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
@@ -15,7 +14,7 @@ const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({Profi
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, drawer, github, google = {}, modals, pi, sessions, workspaces} = handlers;
+  const {admin, app, drawer, github, modals, pi, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -34,14 +33,12 @@ export function AppShell(props) {
     setActiveCanvas(selectedSessionIsManaged ? "agent" : "terminal");
     setLogsOpen(false);
   }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
-  const shellClassName = [
-    state.drawerCollapsed ? "drawer-collapsed" : "",
-    state.rightDrawerCollapsed ? "right-drawer-collapsed" : "",
-  ].filter(Boolean).join(" ");
+  const shellClassName = state.drawerCollapsed ? "drawer-collapsed" : "";
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
     state.genericEnvironmentModalOpen ||
     state.mcpServersModalOpen ||
+    state.googleWorkspaceManageModalOpen ||
     state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
     state.workspaceEditModalOpen ||
@@ -53,6 +50,7 @@ export function AppShell(props) {
         state={state}
         onDeleteWorkspace={workspaces.deleteWorkspace}
         onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
+        onOpenGoogleWorkspace={modals.openGoogleWorkspaceManageModal}
         onOpenMcpServers={modals.openMcpServersModal}
         onOpenPiAuthManage={modals.openPiAuthManageModal}
         onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
@@ -106,16 +104,6 @@ export function AppShell(props) {
             onSelectCanvas={setActiveCanvas}
           />
         )}
-        <RightDrawer
-          state={state}
-          onDeleteGoogleConnection={google.deleteConnection}
-          onEditGoogleConnection={modals.openGoogleWorkspaceModal}
-          onRefreshGoogleWorkspace={google.loadGoogleWorkspace}
-          onToggleDrawerSection={drawer.toggleDrawerSection}
-          onToggleRightDrawer={drawer.toggleRightDrawer}
-          onBindGoogleConnection={google.bindConnection}
-          onUnbindGoogleConnection={google.unbindConnection}
-        />
       </main>
       {hasOpenModal ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading dialog..." />}>
