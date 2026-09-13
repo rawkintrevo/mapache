@@ -3,7 +3,7 @@ import {useCallback, useEffect, useRef, useState} from "react";
 const BRIDGE_VERSION = 1;
 const ACCESS_MESSAGE = "mapache.agent.access";
 
-export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefreshNeeded}) {
+export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefreshNeeded, onOpenChrome}) {
   const frameRef = useRef(null);
   const initialUrlRef = useRef(url);
   const origin = getAgentOrigin(url);
@@ -53,6 +53,10 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
         }
         return;
       }
+      if (message.type === "mapache.agent.navigate") {
+        onOpenChrome?.();
+        return;
+      }
       if (message.status === "access-renewed") {
         setError("");
         setStatus("ready");
@@ -63,7 +67,7 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onAccessRefreshNeeded, origin, sendAccess]);
+  }, [onAccessRefreshNeeded, onOpenChrome, origin, sendAccess]);
 
   useEffect(() => {
     if (status === "ready" || status === "renewing") sendAccess();
@@ -114,6 +118,9 @@ export function getAgentOrigin(url) {
 export function parseBridgeMessage(value) {
   if (!value || typeof value !== "object" || value.version !== BRIDGE_VERSION || typeof value.type !== "string") return null;
   if (value.type === "mapache.agent.ready") return {type: value.type, version: value.version};
+  if (value.type === "mapache.agent.navigate" && value.surface === "chrome") {
+    return {type: value.type, version: value.version, surface: value.surface};
+  }
   if (value.type === "mapache.agent.renewal-request" && ["expired", "bootstrap", "connection-error"].includes(value.reason)) {
     return {type: value.type, version: value.version, reason: value.reason};
   }

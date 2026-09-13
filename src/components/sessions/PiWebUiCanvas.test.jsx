@@ -41,6 +41,25 @@ describe("PiWebUiCanvas", () => {
     expect(onAccessRefreshNeeded).toHaveBeenCalledOnce();
   });
 
+  test("opens Chrome only for a typed request from the current frame and exact origin", () => {
+    const onOpenChrome = vi.fn();
+    render(<PiWebUiCanvas onOpenChrome={onOpenChrome} sessionName="Agent smoke" url={firstUrl} />);
+    const frame = screen.getByTitle("Agent Agent smoke");
+    const dispatch = (source, origin, surface = "chrome") => fireEvent(window, new MessageEvent("message", {
+      data: {type: "mapache.agent.navigate", version: 1, surface},
+      origin,
+      source,
+    }));
+
+    dispatch(window, "https://runner.example");
+    dispatch(frame.contentWindow, "https://evil.example");
+    dispatch(frame.contentWindow, "https://runner.example", "terminal");
+    expect(onOpenChrome).not.toHaveBeenCalled();
+
+    dispatch(frame.contentWindow, "https://runner.example");
+    expect(onOpenChrome).toHaveBeenCalledOnce();
+  });
+
   test("reports invalid access URLs without mounting a frame", () => {
     render(<PiWebUiCanvas sessionName="Agent smoke" url="javascript:alert(1)" />);
     expect(screen.queryByTitle("Agent Agent smoke")).not.toBeInTheDocument();
@@ -52,6 +71,11 @@ describe("PiWebUiCanvas", () => {
     expect(unsafe).toMatchObject({status: "access-error"});
     expect(unsafe.error).toBeUndefined();
     expect(parseBridgeMessage({type: "mapache.agent.status", version: 2, status: "access-error"})).toBeNull();
+    expect(parseBridgeMessage({type: "mapache.agent.navigate", version: 1, surface: "chrome"})).toEqual({
+      type: "mapache.agent.navigate",
+      version: 1,
+      surface: "chrome",
+    });
     expect(getAgentOrigin("wss://runner.example/agent/")).toBe("");
   });
 });

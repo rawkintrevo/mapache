@@ -44,6 +44,13 @@ reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
 
+The managed-only presentation patch removes the upstream name/logo, version
+controls, and repository link from the embedded header. It adds Chrome beside
+the upstream Chat, Terminal, and Git tabs; that control emits the typed
+`mapache.agent.navigate` bridge message so the exact-origin parent iframe host
+can select the existing persistent Chrome canvas. The standalone upstream UI
+keeps its original branding, release controls, and repository link.
+
 The managed pi-web-ui build is compiled with `PI_WEB_BASE_PATH=/agent/`. The
 browser therefore keeps every public asset and application endpoint under the
 embedded prefix while the supervised upstream process continues to listen on

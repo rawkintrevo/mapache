@@ -9,6 +9,7 @@ export function ManagedAgentSurface({
   hasAgent,
   hasBrowser,
   onAccessRefreshNeeded,
+  onSelectCanvas,
   session,
 }) {
   return (
@@ -20,6 +21,7 @@ export function ManagedAgentSurface({
               key={session.id}
               accessError={accessError}
               onAccessRefreshNeeded={onAccessRefreshNeeded}
+              onOpenChrome={() => onSelectCanvas?.("chrome")}
               sessionName={session.name}
               url={accessUrls.agentUrl}
             />

@@ -164,20 +164,17 @@ describe("frontend shell ownership", () => {
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
   });
 
-  test("places Agent, Chrome, and Logs controls in the left toolbar", async () => {
+  test("keeps Agent and Logs in the left toolbar without a duplicate Chrome control", async () => {
     const user = userEvent.setup();
     const managedSession = {...session, agentUiVersion: "pi-web-ui-v1"};
     const {handlers} = renderShell({sessions: [managedSession], selectedSessionId: managedSession.id});
 
     expect(await screen.findByRole("button", {name: "Agent"})).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", {name: "Persistent Chrome"})).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Persistent Chrome"})).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Logs"})).toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Preview"})).not.toBeInTheDocument();
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
     expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", {name: "Persistent Chrome"}));
-    expect(await screen.findByTitle("Chrome Pi smoke")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", {name: "Logs"}));
     expect(await screen.findByRole("dialog", {name: "Logs"})).toBeInTheDocument();

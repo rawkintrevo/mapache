@@ -137,6 +137,7 @@ export function SessionDetail({
           hasAgent={hasAgent}
           hasBrowser={hasBrowser}
           onAccessRefreshNeeded={refreshAfterConnectionFailure}
+          onSelectCanvas={setActiveCanvas}
           session={session}
         />
       ) : <>

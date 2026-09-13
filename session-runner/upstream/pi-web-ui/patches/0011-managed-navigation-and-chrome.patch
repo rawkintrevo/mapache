@@ -1,0 +1,158 @@
+diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
+index d0e4149..cd5f722 100644
+--- a/web/src/components/TopBar.tsx
++++ b/web/src/components/TopBar.tsx
+@@ -25,8 +25,9 @@ import { SoundSettingsPanel } from "./SoundSettings";
+ import { NotifyToggle } from "./NotifyToggle";
+ import type { SoundKind, SoundSettings } from "../sounds";
+ import { useI18n, localeShort } from "../i18n";
+-import { appSend, useAppGlobals, useIsManaged } from "../app-globals";
++import { appSend, useIsManaged } from "../app-globals";
+ import { LocaleModal } from "./LocaleModal";
++import { openEmbeddedSurface } from "../embedded-agent-bridge";
+ 
+ interface TopBarProps {
+ 	chat: ChatState;
+@@ -86,8 +87,6 @@ export function TopBar({
+ 	onThemeChange,
+ }: TopBarProps) {
+ 	const { locale, setLocale, t, packs } = useI18n();
+-	// 受管标记与自身版本号：走全局（web/src/app-globals.ts），整个连接内不变。
+-	const { appVersion } = useAppGlobals();
+ 	const managed = useIsManaged();
+ 	const [soundOpen, setSoundOpen] = useState(false);
+ 	const [langOpen, setLangOpen] = useState(false);
+@@ -317,8 +316,8 @@ export function TopBar({
+ 				<button type="button" className="panel-toggle" title={t("openHistory")} onClick={() => onOpenPanel("left")}>
+ 					<FiMenu />
+ 				</button>
+-				<span className="brand-logo">π</span>
+-				<span className="brand-name">pi-web-ui</span>
++				{!managed && <span className="brand-logo">π</span>}
++				{!managed && <span className="brand-name">pi-web-ui</span>}
+ 				<span className={`conn-dot ${connClass}`} title={connLabel} />
+ 				<span className="conn-label">{connLabel}</span>
+ 			</div>
+@@ -359,6 +358,12 @@ export function TopBar({
+ 							<span>{t("scmTab")}</span>
+ 						</button>
+ 					)}
++					{managed && (
++						<button type="button" role="tab" aria-selected="false" onClick={() => openEmbeddedSurface("chrome")}>
++							<FiGlobe />
++							<span>Chrome</span>
++						</button>
++					)}
+ 					{(tabOn("plugins") ? plugins : [])
+ 						.filter((p) => p.view !== false)
+ 						.map((p) => {
+@@ -488,15 +493,9 @@ export function TopBar({
+ 						))}
+ 					</Dropdown>
+ 
+-					{/* Managed instance: the version is worth seeing, the update
+-					    machinery is not — whoever deploys this decides when it
+-					    changes. The server refuses those messages anyway. */}
+-					{managed ? (
+-						<span className="chip" title={t("updatesManaged")}>
+-							<FiDownload />
+-							<span className="chip-sub">v{appVersion ?? chat.update?.current ?? "…"}</span>
+-						</span>
+-					) : (
++					{/* Managed instances omit upstream release controls; the deployment
++					    pipeline decides when the embedded runtime changes. */}
++					{!managed && (
+ 						<Dropdown
+ 							trigger={
+ 								<>
+@@ -531,15 +530,17 @@ export function TopBar({
+ 						</Dropdown>
+ 					)}
+ 
+-					<a
+-						className="chip github"
+-						href="https://github.com/xing-shuyin/pi-web-ui"
+-						target="_blank"
+-						rel="noreferrer noopener"
+-						title={t("githubRepo")}
+-					>
+-						<FiGithub />
+-					</a>
++					{!managed && (
++						<a
++							className="chip github"
++							href="https://github.com/xing-shuyin/pi-web-ui"
++							target="_blank"
++							rel="noreferrer noopener"
++							title={t("githubRepo")}
++						>
++							<FiGithub />
++						</a>
++					)}
+ 				</div>
+ 
+ 				<button
+@@ -629,17 +630,21 @@ export function TopBar({
+ 								{locale === "zh" ? th.name : (th.nameEn ?? th.name)}
+ 							</DropdownItem>
+ 						))}
+-						<div className="dd-header">{t("update")}</div>
+-						{renderUpdateBody()}
+-						{renderAllUpdatesBody()}
+-						<a
+-							className="dd-refresh dd-more-link"
+-							href="https://github.com/xing-shuyin/pi-web-ui"
+-							target="_blank"
+-							rel="noreferrer noopener"
+-						>
+-							<FiGithub /> {t("githubRepo")}
+-						</a>
++						{!managed && (
++							<>
++								<div className="dd-header">{t("update")}</div>
++								{renderUpdateBody()}
++								{renderAllUpdatesBody()}
++								<a
++									className="dd-refresh dd-more-link"
++									href="https://github.com/xing-shuyin/pi-web-ui"
++									target="_blank"
++									rel="noreferrer noopener"
++								>
++									<FiGithub /> {t("githubRepo")}
++								</a>
++							</>
++						)}
+ 					</Dropdown>
+ 				</div>
+ 			</div>
+diff --git a/web/src/embedded-agent-bridge.ts b/web/src/embedded-agent-bridge.ts
+index 29bac43..3bc5f23 100644
+--- a/web/src/embedded-agent-bridge.ts
++++ b/web/src/embedded-agent-bridge.ts
+@@ -15,6 +15,11 @@ export type AgentChildMessage =
+ 			type: "mapache.agent.ready";
+ 			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
+ 		}
++	| {
++			type: "mapache.agent.navigate";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++			surface: "chrome";
++		}
+ 	| {
+ 			type: "mapache.agent.renewal-request";
+ 			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
+@@ -95,6 +100,14 @@ export function requestEmbeddedAgentAccess(reason: AgentRenewalReason): boolean
+ 	});
+ }
+ 
++export function openEmbeddedSurface(surface: "chrome"): boolean {
++	return postAgentBridgeMessage({
++		type: "mapache.agent.navigate",
++		version: EMBEDDED_AGENT_BRIDGE_VERSION,
++		surface,
++	});
++}
++
+ export function installEmbeddedAgentBridge(): () => void {
+ 	if (typeof window === "undefined" || window.parent === window) return () => {};
+ 	const expectedOrigin = parentOrigin(document.referrer);

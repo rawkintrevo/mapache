@@ -39,12 +39,16 @@ creation flows.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
-`ManagedAgentSurface` as the borderless, full-height center surface. Agent,
-Persistent Chrome, and Logs are peer controls in the left toolbar; Logs opens
-an owner-scoped modal with the runtime's Cloud Run entries and current recorded
-error. Preview is not a workspace navigation surface. The embedded Agent iframe communicates
-through the signed `/agent/` gateway and a bounded postMessage bridge.
-Persistent Chrome keeps its signed access URL. A shell iframe remains
+`ManagedAgentSurface` as the borderless, full-height center surface. Agent and
+Logs remain in the left toolbar; Logs opens an owner-scoped modal with the
+runtime's Cloud Run entries and current recorded error. The managed upstream
+header places Chrome beside Chat, Terminal, and Git and uses the bounded
+postMessage bridge to ask `PiWebUiCanvas` to select the parent-owned persistent
+browser canvas. That managed header also omits the upstream name/logo, release
+version controls, and repository link. Preview is not a workspace navigation
+surface. The embedded Agent iframe communicates through the signed `/agent/`
+gateway and the same exact-origin bridge. Persistent Chrome keeps its signed
+access URL. A shell iframe remains
 available as a separate terminal surface; historical SSH sessions retain only
 their compatibility terminal and port-forward behavior.
 

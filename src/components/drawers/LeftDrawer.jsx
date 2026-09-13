@@ -1,5 +1,5 @@
 import "./Drawers.css";
-import {Bot, Globe2, PanelLeftClose, PanelLeftOpen, ScrollText} from "lucide-react";
+import {Bot, PanelLeftClose, PanelLeftOpen, ScrollText} from "lucide-react";
 import {UserMenu} from "./UserMenu.jsx";
 import {Button} from "../common/Button.jsx";
 import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
@@ -49,21 +49,6 @@ export function LeftDrawer({
           <Bot aria-hidden="true" />
           <span>Agent</span>
         </Button>
-        {selectedSession?.capabilities?.chrome ? (
-          <Button
-            aria-label="Persistent Chrome"
-            aria-pressed={activeCanvas === "chrome"}
-            className="surface-toolbar__button"
-            disabled={!selectedSession?.serviceUrl}
-            icon={state.drawerCollapsed}
-            title="Persistent Chrome"
-            variant={activeCanvas === "chrome" ? "primary" : "secondary"}
-            onClick={() => onSelectCanvas?.("chrome")}
-          >
-            <Globe2 aria-hidden="true" />
-            <span>Persistent Chrome</span>
-          </Button>
-        ) : null}
         <Button
           aria-label="Logs"
           className="surface-toolbar__button"
