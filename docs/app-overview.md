@@ -10,7 +10,7 @@ Read this before changing workspace/session workflow, authenticated app shape, s
 
 ## Product Shape
 
-Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud runner sessions. Authenticated users create workspaces, start isolated Cloud Run runner sessions, and work from the signed-in workspace shell. Marked `pi-web-ui-v1` sessions open an embedded Agent surface first; unmarked sessions remain terminal-first during the staged rollout. The public landing page is served from `/`; the authenticated workspace shell is served from `/app` and `/app/**`; the Docusaurus community site remains under `/community/**`.
+Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud runner sessions. Authenticated users create workspaces, start isolated Cloud Run `pi-chrome` runner sessions, and work from the signed-in workspace shell. New server-marked workspaces open the embedded Agent surface first; historical unmarked sessions remain terminal-first for compatibility. The public landing page is served from `/`; the authenticated workspace shell is served from `/app` and `/app/**`; the Docusaurus community site remains under `/community/**`.
 
 The selected-session view is Agent-first for marked sessions, with `Persistent Chrome` and `Preview` as sibling surfaces and server-owned runtime status/resource indicators. Historical sessions remain readable with their retained terminal/shell/SSH compatibility surfaces, but the parent shell no longer duplicates upstream files, Git, models, skills, extensions, subagents, Chat, or Goals. The left drawer keeps workspace/session navigation and lifecycle actions. The right drawer keeps Mapache-owned Authentication Center, generic environment, MCP, and Google connection controls, while the embedded app owns agent settings.
 
@@ -60,7 +60,7 @@ Read [runtime-containers.md](./runtime-containers.md) and [session-runner-archit
 ## Current Design Decisions
 
 - Keep session creation in a modal launched from the workspace/sidebar context.
-- Keep the embedded Agent content first for marked sessions; keep active terminal content first for unmarked sessions during rollout.
+- Keep the embedded Agent content first for new marked sessions; keep active terminal content first for historical unmarked sessions.
 - Treat runner capabilities as explicit image/session metadata.
 - Use Cloud Run per session for isolation and resource control.
 - Treat workspace source mode as an explicit domain concept.

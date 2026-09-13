@@ -42,7 +42,7 @@ runtime files plus `build-info.json` into the image. The build pins Pi SDK
 at runner startup. The generated health descriptor is safe for runtime status
 reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
-for the staged rollout.
+for the revision rollout.
 
 The managed pi-web-ui build is compiled with `PI_WEB_BASE_PATH=/agent/`. The
 browser therefore keeps every public asset and application endpoint under the
@@ -707,7 +707,7 @@ agent-control API is part of the current deployment.
 - Idle shutdown is controlled by Cloud Functions instead of browser timers so abandoned sessions are cleaned up even after the browser is closed.
 - Runtime image selection is no longer user-facing for ordinary sessions. Cloud Functions selects and verifies `pi-chrome`; historical catalog entries remain only for readable metadata and cleanup. Bring-your-own-image support, if added later, must be a separate permission-gated untrusted-workload path rather than an extension of normal session creation.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
-- Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
+- Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing the curated `pi-chrome` runtime to select its managed Pi/Chrome startup contract.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
 - Pi auth/settings may be user-scoped, but Pi conversation JSONLs must be session-scoped. New app sessions start with a fresh Pi conversation; the same app session can resume that conversation from its own archive.
 - Native upstream model settings are restored as upstream-owned state; Mapache does not expose a duplicate model editor.

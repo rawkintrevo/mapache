@@ -1,11 +1,11 @@
 {
   "id": "session.terminal-input-persistence",
   "title": "Terminal helper input stays hidden after typing",
-  "description": "Log in, create a codex-basic session, wait for runner access, type a full sentence into the terminal input, wait a few seconds, and verify the helper textarea does not visibly echo and disappear.",
+  "description": "Log in, create a pi-chrome session, wait for runner access, type a full sentence into the terminal input, wait a few seconds, and verify the helper textarea does not visibly echo and disappear.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/session.terminal-input-persistence",
   "requires": {
-    "cloudRun": "Creates a billable codex-basic Cloud Run service"
+    "cloudRun": "Creates a billable pi-chrome Cloud Run service"
   },
   "steps": [
     {"useCase": "cases/login.json"},
@@ -14,9 +14,9 @@
       "useScript": "scripts/create-session.json",
       "parameters": {
         "sessionName": "qa-terminal-input-{{timestamp}}",
-        "imageKey": "codex-basic",
+        "imageKey": "pi-chrome",
         "cpu": "1",
-        "memory": "1Gi",
+        "memory": "2Gi",
         "sessionEnv": "QA_SESSION=1"
       }
     },

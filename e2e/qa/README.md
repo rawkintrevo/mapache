@@ -76,7 +76,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
 - `cases/session-sidebar-entry-point.json`: Single create-session action in the left sidebar.
-- `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome` session creation.
+- `cases/session-create-all-runners.json`: Blank workspace plus the supported `pi-chrome` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
 - `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable pi-chrome workspace.

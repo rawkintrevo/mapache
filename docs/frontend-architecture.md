@@ -45,7 +45,7 @@ access URLs. A shell iframe remains available as a separate terminal surface;
 historical SSH sessions retain only their compatibility terminal and
 port-forward behavior.
 
-Unmarked historical sessions remain readable, but they do not expose a second
+Unmarked historical sessions remain readable and terminal-first, but they do not expose a second
 Mapache Chat, Goals, file browser/editor, Git manager, model editor, package
 manager, skills manager, subagent manager, or extensions panel. Files, Git,
 model selection, skills, extensions, subagents, and native Goals belong to the
