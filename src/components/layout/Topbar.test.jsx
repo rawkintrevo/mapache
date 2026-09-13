@@ -27,7 +27,12 @@ function renderTopbar(session = null) {
       onOpenWorkspaceEditModal={vi.fn()}
       onOpenWorkspaceModal={vi.fn()}
       onRefresh={vi.fn()}
+      onSelectCanvas={vi.fn()}
       onSelectWorkspace={vi.fn()}
+      onShowAdmin={vi.fn()}
+      onShowLogs={vi.fn()}
+      onShowProfile={vi.fn()}
+      onSignOut={vi.fn()}
       onToggleWorkspace={onToggleWorkspace}
     />,
   );

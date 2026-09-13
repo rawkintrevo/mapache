@@ -1,13 +1,16 @@
 import "./Topbar.css";
-import {Blocks, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, Trash2, Variable} from "lucide-react";
+import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
+import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
-import {isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
+import {isMarkedRuntimeSession, isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 
 export function Topbar({
+  activeCanvas,
   state,
+  selectedSession,
   onDeleteWorkspace,
   onOpenGenericEnvironment,
   onOpenGoogleWorkspace,
@@ -16,14 +19,19 @@ export function Topbar({
   onOpenWorkspaceEditModal,
   onOpenWorkspaceModal,
   onRefresh,
+  onSelectCanvas,
   onSelectWorkspace,
+  onShowAdmin,
+  onShowLogs,
+  onShowProfile,
+  onSignOut,
   onToggleWorkspace,
 }) {
   const busy = hasPendingOperations(state.pendingOperations);
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
-  const canonicalSession = state.sessions.find(
+  const canonicalSession = selectedSession || state.sessions.find(
       (session) => session.id === selectedWorkspace?.canonicalSessionId,
   ) || state.sessions.find((session) => session.id === state.selectedSessionId) || state.sessions[0];
   const sessionStatus = String(canonicalSession?.status || "").toLowerCase();
@@ -40,6 +48,7 @@ export function Topbar({
   const authHarness = sessionAuthHarness(canonicalSession);
   const showManagePiAuth = sessionSupportsAuth(canonicalSession);
   const managePiAuthLabel = authHarness?.manageTitle || "Manage Auth";
+  const showWorkspaceTools = isMarkedRuntimeSession(canonicalSession);
 
   return (
     <header className="topbar">
@@ -110,6 +119,36 @@ export function Topbar({
         </Button>
       </div>
       <div className="topbar-actions">
+        {showWorkspaceTools ? (
+          <>
+            <Button
+              aria-label="Agent"
+              aria-pressed={state.activePage === "workspace" && activeCanvas === "agent"}
+              disabled={!canonicalSession?.serviceUrl}
+              icon
+              title="Agent"
+              tooltip="Agent"
+              variant={state.activePage === "workspace" && activeCanvas === "agent" ? "primary" : "secondary"}
+              onClick={() => {
+                onSelectCanvas?.("agent");
+                if (state.activePage !== "workspace" && selectedWorkspace) onSelectWorkspace?.(selectedWorkspace.id);
+              }}
+            >
+              <Bot aria-hidden="true" />
+            </Button>
+            <Button
+              aria-label="Logs"
+              icon
+              title="Logs"
+              tooltip="Logs"
+              variant="secondary"
+              onClick={onShowLogs}
+            >
+              <ScrollText aria-hidden="true" />
+            </Button>
+            <span aria-hidden="true" className="topbar-action-divider" />
+          </>
+        ) : null}
         {showManagePiAuth ? (
           <Button
             aria-label={managePiAuthLabel}
@@ -168,6 +207,13 @@ export function Topbar({
         >
           <RefreshCw aria-hidden="true" />
         </Button>
+        <TopbarUserMenu
+          state={state}
+          onRefresh={onRefresh}
+          onShowAdmin={onShowAdmin}
+          onShowProfile={onShowProfile}
+          onSignOut={onSignOut}
+        />
       </div>
     </header>
   );

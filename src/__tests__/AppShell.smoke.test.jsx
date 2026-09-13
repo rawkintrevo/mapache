@@ -36,7 +36,6 @@ function createHandlers() {
   const handlers = {
     admin: handlerGroup(),
     app: handlerGroup(),
-    drawer: handlerGroup(),
     github: handlerGroup(),
     google: handlerGroup(),
     modals: handlerGroup(),
@@ -83,17 +82,19 @@ function renderShell(stateOverrides = {}) {
 }
 
 describe("frontend shell ownership", () => {
-  test("keeps the left drawer empty and collapsed while exposing workspace lifecycle", () => {
+  test("removes the left drawer while exposing workspace lifecycle and the user menu in the top navigation", () => {
     renderShell({selectedSessionId: session.id});
 
     expect(screen.queryByRole("heading", {name: "Navigation"})).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "Sessions"})).not.toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Expand drawer"})).toBeInTheDocument();
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Expand drawer"})).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Pause workspace"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Manage Pi Auth"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Manage generic environment keys"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Manage MCP servers"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Manage Google Workspace"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Open user menu for Ada"})).toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "Authentication Center"})).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "MCP Servers"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Expand inspector"})).not.toBeInTheDocument();
@@ -164,7 +165,7 @@ describe("frontend shell ownership", () => {
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
   });
 
-  test("keeps Agent and Logs in the left toolbar without a duplicate Chrome control", async () => {
+  test("keeps Agent and Logs in the top navigation without a duplicate Chrome control", async () => {
     const user = userEvent.setup();
     const managedSession = {...session, agentUiVersion: "pi-web-ui-v1"};
     const {handlers} = renderShell({sessions: [managedSession], selectedSessionId: managedSession.id});
@@ -180,6 +181,17 @@ describe("frontend shell ownership", () => {
     expect(await screen.findByRole("dialog", {name: "Logs"})).toBeInTheDocument();
     expect(await screen.findByText("workspace_runtime_authority_denied")).toBeInTheDocument();
     expect(handlers.sessions.getSessionLogs).toHaveBeenCalledWith(workspace.id, managedSession.id);
+  });
+
+  test("opens account actions from the top navigation user icon", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell({selectedSessionId: session.id});
+
+    await user.click(screen.getByRole("button", {name: "Open user menu for Ada"}));
+    const menu = screen.getByRole("menu", {name: "User menu"});
+    await user.click(within(menu).getByRole("menuitem", {name: "Profile"}));
+
+    expect(handlers.modals.showProfile).toHaveBeenCalledOnce();
   });
 
   test("retains workspace modal entry point without a session creation control", async () => {

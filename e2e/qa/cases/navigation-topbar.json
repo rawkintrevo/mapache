@@ -1,0 +1,17 @@
+{
+  "id": "navigation.topbar",
+  "title": "Top navigation controls",
+  "description": "Exercise top navigation workspace, connection, account, and refresh controls without a left sidebar.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/navigation.topbar",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"assert": "accessible-button-absent", "name": "Expand drawer"},
+    {"assert": "button-present", "name": "Manage Pi Auth"},
+    {"assert": "button-present", "name": "Manage MCP servers"},
+    {"assert": "button-present", "name": "Manage Google Workspace"},
+    {"assert": "button-present", "nameIncludes": "Open user menu for"},
+    {"useScript": "scripts/refresh-app-state.json"},
+    {"capture": "screenshot", "fileName": "topbar.png"}
+  ]
+}

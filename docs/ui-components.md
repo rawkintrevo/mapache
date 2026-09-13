@@ -5,11 +5,10 @@ This index maps significant React components to their current responsibilities.
 | Component | File | Responsibility |
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
-| `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in layout, drawers, workspace panel, and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection, Play/Pause lifecycle control, create/edit/delete, Pi auth, generic environment, MCP, and Google Workspace entry points, refresh, and documentation links. |
-| `LeftDrawer` | `src/components/drawers/LeftDrawer.jsx` | Collapsed-by-default navigation rail with marked-runtime Agent and Logs controls plus the user menu. |
-| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; no longer mounted by the empty left drawer. |
-| `UserMenu` | `src/components/drawers/UserMenu.jsx` | Profile, admin, refresh, and sign-out actions. |
+| `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, marked-runtime Agent and Logs controls, auth/connection actions, user menu, refresh, and documentation links. |
+| `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, refresh, and sign-out actions. |
+| `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | Workspace name and source summary. |
 | `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | Canonical runtime view with legacy terminal/Agent/Chrome and shell surfaces; marked-runtime lifecycle is controlled from the topbar. |

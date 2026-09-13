@@ -68,14 +68,13 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 
 - `cases/login.json`: QA custom-token login and signed-in shell.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
-- `cases/navigation-drawers.json`: Left drawer, navbar connection controls, refresh.
+- `cases/navigation-topbar.json`: Workspace, connection, account, and refresh controls in the top navigation.
 - `cases/global-action-indicator.json`: Busy indicator during global refresh.
 - `cases/profile.json`: Profile and runner usage view.
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.
 - `cases/workspace-create-delete.json`: Blank workspace creation and deletion.
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
-- `cases/session-sidebar-entry-point.json`: Single create-session action in the left sidebar.
 - `cases/session-create-all-runners.json`: Blank workspace plus the supported `pi-chrome` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.

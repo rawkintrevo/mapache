@@ -21,7 +21,6 @@ import {
   resetSignedOutState,
 } from "./state/resetters.js";
 import {createAdminController} from "./controllers/adminController.js";
-import {createDrawerController} from "./controllers/drawerController.js";
 import {createModalController} from "./controllers/modalController.js";
 import {createPiPanelsController} from "./controllers/piPanelsController.js";
 import {createSessionSubscriptionController} from "./controllers/sessionSubscriptionController.js";
@@ -59,7 +58,6 @@ let fatalError = null;
 
 const APP_PATH = "/app";
 
-const drawerController = createDrawerController({state, render});
 const adminController = createAdminController({state, render, dispatch});
 const piPanelsController = createPiPanelsController({state, render});
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
@@ -96,7 +94,6 @@ const handlers = {
     refreshAll,
     signOut,
   },
-  drawer: drawerController,
   github: {
     connectGithub,
     disconnectGithub,

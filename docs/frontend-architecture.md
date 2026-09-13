@@ -28,19 +28,19 @@ React. The subscription resolves the workspace's canonical runtime; access URLs
 are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
-The signed-in shell has a collapsed-by-default empty left drawer, workspace
-Play/Pause lifecycle control beside the workspace selector, compact topbar
-actions for Pi auth, generic environment keys, workspace MCP servers, and
-Google Workspace, the workspace/canonical-runtime view, and an account/profile
-surface. Google Workspace account management opens in a modal from its topbar
-icon; the shell no longer reserves a right inspector column. GitHub
+The signed-in shell has no left drawer. Its top navigation contains workspace
+Play/Pause lifecycle control beside the workspace selector, marked-runtime
+Agent and Logs icons, compact actions for Pi auth, generic environment keys,
+workspace MCP servers, and Google Workspace, plus an avatar icon for the user
+menu. Google Workspace account management opens in a modal from its topbar
+icon; the shell no longer reserves either sidebar column. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
 `ManagedAgentSurface` as the borderless, full-height center surface. Agent and
-Logs remain in the left toolbar; Logs opens an owner-scoped modal with the
+Logs are icon actions in the top navigation; Logs opens an owner-scoped modal with the
 runtime's Cloud Run entries and current recorded error. The managed upstream
 header places Chrome beside Chat, Terminal, and Git and uses the bounded
 postMessage bridge to ask `PiWebUiCanvas` to select the parent-owned persistent
@@ -52,13 +52,12 @@ access URL. A shell iframe remains
 available as a separate terminal surface; historical SSH sessions retain only
 their compatibility terminal and port-forward behavior.
 
-The managed center surface owns the available shell height instead of applying
+The managed center surface owns the full available shell width and height instead of applying
 the legacy terminal canvas viewport cap. Its iframe and intermediate wrappers
 must preserve a `min-height: 0` / `height: 100%` chain so the upstream UI fills
 the desktop viewport without exposing the canvas background below it. The
 outer app uses the dynamic viewport unit when supported, and narrow layouts
-retain a bounded minimum managed-surface height while the drawer layout remains
-stacked.
+retain a bounded minimum managed-surface height while the top navigation stacks.
 
 Unmarked historical sessions remain readable and terminal-first, but they do not expose a second
 Mapache Chat, Goals, file browser/editor, Git manager, model editor, package

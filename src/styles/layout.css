@@ -9,13 +9,9 @@
 
 main {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-}
-
-main.drawer-collapsed {
-  grid-template-columns: 58px minmax(0, 1fr);
 }
 
 .workspace {
@@ -64,12 +60,8 @@ main.drawer-collapsed {
   }
 
   main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     overflow: visible;
-  }
-
-  main.drawer-collapsed {
-    grid-template-columns: 1fr;
   }
 
   .workspace {

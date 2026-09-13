@@ -106,7 +106,6 @@ export function createInitialState() {
     repoPicker: createRepoPickerState(),
     githubConnection: createGithubConnectionState(),
     googleWorkspace: createGoogleWorkspaceState(),
-    drawerCollapsed: true,
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     sessionEditModalSessionId: null,

@@ -1,6 +1,5 @@
 import {lazy, Suspense, useEffect, useState} from "react";
 import {LazySurfaceFallback} from "../common/LazySurfaceFallback.jsx";
-import {LeftDrawer} from "../drawers/LeftDrawer.jsx";
 import {WorkspacePanel} from "../workspaces/WorkspacePanel.jsx";
 import {hasPendingOperations, getPendingOperationMessage} from "../../state/pendingOperations.js";
 import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
@@ -14,7 +13,7 @@ const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({Profi
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, drawer, github, modals, pi, sessions, workspaces} = handlers;
+  const {admin, app, github, modals, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -33,7 +32,6 @@ export function AppShell(props) {
     setActiveCanvas(selectedSessionIsManaged ? "agent" : "terminal");
     setLogsOpen(false);
   }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
-  const shellClassName = state.drawerCollapsed ? "drawer-collapsed" : "";
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
     state.genericEnvironmentModalOpen ||
@@ -47,7 +45,9 @@ export function AppShell(props) {
   return (
     <div className="app">
       <Topbar
+        activeCanvas={activeCanvas}
         state={state}
+        selectedSession={selectedSession}
         onDeleteWorkspace={workspaces.deleteWorkspace}
         onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
         onOpenGoogleWorkspace={modals.openGoogleWorkspaceManageModal}
@@ -56,23 +56,16 @@ export function AppShell(props) {
         onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
+        onSelectCanvas={setActiveCanvas}
         onSelectWorkspace={workspaces.selectWorkspace}
+        onShowAdmin={admin.showAdmin}
+        onShowLogs={() => setLogsOpen(true)}
+        onShowProfile={modals.showProfile}
+        onSignOut={app.signOut}
         onToggleWorkspace={workspaces.toggleWorkspace}
       />
       <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
-      <main className={shellClassName}>
-        <LeftDrawer
-          activeCanvas={activeCanvas}
-          state={state}
-          selectedSession={selectedSession}
-          onRefresh={app.refreshAll}
-          onSelectCanvas={setActiveCanvas}
-          onShowLogs={() => setLogsOpen(true)}
-          onShowProfile={modals.showProfile}
-          onShowAdmin={admin.showAdmin}
-          onSignOut={app.signOut}
-          onToggleDrawer={drawer.toggleDrawer}
-        />
+      <main>
         {state.activePage === "admin" ? (
           <Suspense fallback={<LazySurfaceFallback label="Loading admin..." />}>
             <AdminPage
