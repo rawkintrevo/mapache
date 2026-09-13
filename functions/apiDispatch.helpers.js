@@ -60,6 +60,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "stopSession", namedJsonResult("session", ({handlers, route, user}) => handlers.stopSession(user.uid, route.workspaceId, route.sessionId))],
     ["DELETE", "session", jsonResult(({handlers, route, user}) => handlers.deleteSession(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "sessionAccess", jsonResult(({handlers, route, user}) => handlers.createSessionAccessUrls(user.uid, route.workspaceId, route.sessionId))],
+    ["GET", "sessionLogs", jsonResult(({handlers, req, route, user}) => handlers.listSessionLogs(user.uid, route.workspaceId, route.sessionId, req.query || {}))],
     ["GET", "sessionQaFaults", jsonResult(({handlers, route, user}) => handlers.getSessionQaFaults(user.uid, route.workspaceId, route.sessionId))],
     ["POST", "sessionQaFaults", jsonResult(({handlers, req, route, user}) => handlers.armSessionQaFault(user.uid, route.workspaceId, route.sessionId, req.body || {}))],
     ["POST", "sessionSharePreview", jsonResult(({handlers, req, route, user}) => handlers.shareSessionPreview(user.uid, route.workspaceId, route.sessionId, req))],

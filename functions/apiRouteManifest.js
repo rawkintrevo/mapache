@@ -26,6 +26,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["restartSession", ["POST"]],
   ["stopSession", ["POST"]],
   ["sessionAccess", ["POST"]],
+  ["sessionLogs", ["GET"]],
   ["sessionSharePreview", ["POST"]],
   ["sessionPiAuthSelection", ["POST"]],
   ["sessionQaFaults", ["GET", "POST"]],

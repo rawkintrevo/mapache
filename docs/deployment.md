@@ -43,12 +43,17 @@ firebase deploy --only hosting --project pi-agents-cloud
 
 Record the resulting Artifact Registry digest and verify the `pi-chrome` tag before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
 
-Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account and `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events. Restore the Eventarc binding with:
+Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account, `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events, and `roles/logging.viewer` so the authenticated session Logs modal can read the selected runner's Cloud Run entries. Restore the project-level bindings with:
 
 ```bash
 gcloud projects add-iam-policy-binding pi-agents-cloud \
   --member serviceAccount:mapache-api@pi-agents-cloud.iam.gserviceaccount.com \
   --role roles/eventarc.eventReceiver \
+  --condition=None
+
+gcloud projects add-iam-policy-binding pi-agents-cloud \
+  --member serviceAccount:mapache-api@pi-agents-cloud.iam.gserviceaccount.com \
+  --role roles/logging.viewer \
   --condition=None
 ```
 

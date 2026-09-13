@@ -47,6 +47,15 @@ function createHandlers() {
     browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
     agentUrl: "https://runner.example/agent/?mapache_access=agent-token",
   });
+  handlers.sessions.getSessionLogs.mockResolvedValue({
+    serviceId: "session-smoke",
+    logs: [{
+      id: "log-1",
+      timestamp: "2026-09-13T15:23:02Z",
+      severity: "ERROR",
+      message: "workspace_runtime_authority_denied",
+    }],
+  });
   return handlers;
 }
 
@@ -98,20 +107,25 @@ describe("frontend shell ownership", () => {
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
   });
 
-  test("places managed Agent and Chrome controls in the left Logs rail", async () => {
+  test("places Agent, Chrome, and Logs controls in the left toolbar", async () => {
     const user = userEvent.setup();
     const managedSession = {...session, agentUiVersion: "pi-web-ui-v1"};
-    renderShell({sessions: [managedSession], selectedSessionId: managedSession.id});
+    const {handlers} = renderShell({sessions: [managedSession], selectedSessionId: managedSession.id});
 
-    expect(screen.getByRole("heading", {name: "Logs"})).toBeInTheDocument();
-    expect(await screen.findByRole("tab", {name: "Agent"})).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", {name: "Persistent Chrome"})).toBeInTheDocument();
-    expect(screen.queryByRole("tab", {name: "Preview"})).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", {name: "Agent"})).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", {name: "Persistent Chrome"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Logs"})).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Preview"})).not.toBeInTheDocument();
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
     expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", {name: "Persistent Chrome"}));
+    await user.click(screen.getByRole("button", {name: "Persistent Chrome"}));
     expect(await screen.findByTitle("Chrome Pi smoke")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: "Logs"}));
+    expect(await screen.findByRole("dialog", {name: "Logs"})).toBeInTheDocument();
+    expect(await screen.findByText("workspace_runtime_authority_denied")).toBeInTheDocument();
+    expect(handlers.sessions.getSessionLogs).toHaveBeenCalledWith(workspace.id, managedSession.id);
   });
 
   test("retains workspace modal entry point without a session creation control", async () => {

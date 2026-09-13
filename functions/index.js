@@ -6,6 +6,7 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const {
   admin,
+  auth,
   db,
   storage,
 } = require("./backendContext");
@@ -69,6 +70,7 @@ const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
+const {createSessionLogsService} = require("./sessionLogs.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
@@ -112,6 +114,7 @@ const {
   restartSession,
   stopSession,
 } = sessionLifecycleService;
+const sessionLogsService = createSessionLogsService({auth, requireSession});
 const agentAuthService = createAgentAuthService({
   admin,
   db,
@@ -284,6 +287,7 @@ const API_HANDLERS = createApiHandlers({
     stopSession,
     deleteSession,
     createSessionAccessUrls,
+    listSessionLogs: sessionLogsService.listSessionLogs,
     shareSessionPreview,
   },
 });

@@ -12,6 +12,7 @@ Cloud Run provisioning contract.
 - Workspace lifecycle: `functions/workspace.service.js`
 - Session creation/lifecycle/provisioning: `functions/sessionCreation.service.js`,
   `functions/sessionLifecycle.service.js`, and `functions/cloudRun.service.js`
+- Owner-scoped Cloud Run log reads: `functions/sessionLogs.service.js`
 - Signed browser/agent access and preview publication: `functions/preview.service.js`
 - Credentials and environment keys: `functions/agentAuth.service.js`,
   `functions/environmentKeys.service.js`, and
@@ -36,8 +37,8 @@ Retained authenticated responsibilities are:
 
 - profile/admin and allowlist operations;
 - blank/GitHub workspace create/list/rename/delete;
-- session create/list/rename/access/lifecycle and signed Agent/Chrome/Preview
-  access;
+- session create/list/rename/access/lifecycle, owner-scoped runtime logs, and
+  signed Agent/Chrome/Preview access;
 - checkpoint/runtime QA fault controls used only by the disposable harness;
 - retained SSH compatibility file/forward routes for already-running historical
   SSH records;
@@ -74,6 +75,10 @@ Agent access is a short-lived signed URL/cookie flow with an `agent` audience,
 session identity, and current runtime generation. The runner gateway, not the
 browser, validates the token before forwarding to upstream. Browser, terminal,
 preview, metrics, and retained SSH access use their separate existing contracts.
+The authenticated session Logs route verifies workspace/session ownership and
+queries only the session's recorded Cloud Run service name. Responses are
+bounded to timestamp, severity, and message fields; request query strings and
+broader Logging metadata are not exposed to the browser.
 
 ## Persistence and connections
 

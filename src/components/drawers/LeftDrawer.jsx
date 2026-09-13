@@ -1,5 +1,5 @@
 import "./Drawers.css";
-import {Bot, Globe2, PanelLeftClose, PanelLeftOpen} from "lucide-react";
+import {Bot, Globe2, PanelLeftClose, PanelLeftOpen, ScrollText} from "lucide-react";
 import {UserMenu} from "./UserMenu.jsx";
 import {Button} from "../common/Button.jsx";
 import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
@@ -10,6 +10,7 @@ export function LeftDrawer({
   selectedSession,
   onRefresh,
   onSelectCanvas,
+  onShowLogs,
   onShowAdmin,
   onShowProfile,
   onSignOut,
@@ -33,16 +34,14 @@ export function LeftDrawer({
   );
 
   const surfaceToolbar = showSurfaceToolbar ? (
-    <section aria-label="Logs" className="surface-toolbar">
-      <h2 className="surface-toolbar__heading">Logs</h2>
-      <div aria-label="Workspace surfaces" className="surface-toolbar__actions" role="tablist">
+    <section aria-label="Workspace tools" className="surface-toolbar">
+      <div aria-label="Workspace tools" className="surface-toolbar__actions" role="group">
         <Button
           aria-label="Agent"
-          aria-selected={activeCanvas === "agent"}
+          aria-pressed={activeCanvas === "agent"}
           className="surface-toolbar__button"
           disabled={!selectedSession?.serviceUrl}
           icon={state.drawerCollapsed}
-          role="tab"
           title="Agent"
           variant={activeCanvas === "agent" ? "primary" : "secondary"}
           onClick={() => onSelectCanvas?.("agent")}
@@ -53,11 +52,10 @@ export function LeftDrawer({
         {selectedSession?.capabilities?.chrome ? (
           <Button
             aria-label="Persistent Chrome"
-            aria-selected={activeCanvas === "chrome"}
+            aria-pressed={activeCanvas === "chrome"}
             className="surface-toolbar__button"
             disabled={!selectedSession?.serviceUrl}
             icon={state.drawerCollapsed}
-            role="tab"
             title="Persistent Chrome"
             variant={activeCanvas === "chrome" ? "primary" : "secondary"}
             onClick={() => onSelectCanvas?.("chrome")}
@@ -66,6 +64,17 @@ export function LeftDrawer({
             <span>Persistent Chrome</span>
           </Button>
         ) : null}
+        <Button
+          aria-label="Logs"
+          className="surface-toolbar__button"
+          icon={state.drawerCollapsed}
+          title="Logs"
+          variant="secondary"
+          onClick={onShowLogs}
+        >
+          <ScrollText aria-hidden="true" />
+          <span>Logs</span>
+        </Button>
       </div>
     </section>
   ) : null;

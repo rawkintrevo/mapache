@@ -6,7 +6,7 @@ const TRANSITION_STATUSES = new Set(["queued", "provisioning", "restarting", "re
 const FAILURE_STATUSES = new Set(["provision_failed", "update_failed", "stop_failed", "delete_failed"]);
 const INACTIVE_STATUSES = new Set(["stopped", "inactive", "needs_image"]);
 const MARKED_RUNTIME_VERSION = "pi-web-ui-v1";
-const RUNTIME_STOP_UNCERTAIN_STATUSES = new Set(["stopping", "deleting", "stop_failed", "delete_failed"]);
+const RUNTIME_STOP_UNCERTAIN_STATUSES = new Set(["stopping", "deleting", "delete_failed"]);
 const RUNTIME_FAILURE_STATUSES = new Set(["provision_failed", "update_failed", "stop_failed", "delete_failed"]);
 
 const IMAGE_FRESHNESS_PRESENTATION = Object.freeze({
@@ -38,6 +38,7 @@ export function isMarkedRuntimeSession(session = {}) {
 export function isRuntimeStopUncertain(session = {}) {
   const lifecycleStatus = trimSessionStatus(session.status).toLowerCase();
   const runtimeState = trimSessionStatus(session.agentRuntimeState).toLowerCase();
+  if (lifecycleStatus === "stop_failed") return false;
   return RUNTIME_STOP_UNCERTAIN_STATUSES.has(lifecycleStatus) || runtimeState === "stopping";
 }
 

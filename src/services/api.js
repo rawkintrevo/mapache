@@ -141,6 +141,10 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/access-url`,
         {method: "POST", body: {}},
     ),
+    getSessionLogs: (workspaceId, sessionId, limit = 200) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/logs?limit=${encodeURIComponent(limit)}`,
+    ),
     getSessionQaFaults: (workspaceId, sessionId) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/qa/faults`,

@@ -66,6 +66,11 @@ assertRoute("/api/workspaces/workspace-1/sessions/session-1/access-url", {
   workspaceId: "workspace-1",
   sessionId: "session-1",
 });
+assertRoute("/api/workspaces/workspace-1/sessions/session-1/logs", {
+  name: "sessionLogs",
+  workspaceId: "workspace-1",
+  sessionId: "session-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions/session-1/qa/faults", {
   name: "sessionQaFaults",
   workspaceId: "workspace-1",

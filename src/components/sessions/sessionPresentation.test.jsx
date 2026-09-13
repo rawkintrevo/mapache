@@ -83,6 +83,7 @@ describe("session presentation helpers", () => {
     });
     expect(getSessionRuntimeError({agentRuntimeRecoveryWarning: "interrupted"})).toBe("runtime_interrupted_checkpoint_recovery_required");
     expect(isRuntimeStopUncertain({status: "delete_failed"})).toBe(true);
+    expect(isRuntimeStopUncertain({status: "stop_failed", agentRuntimeState: "stopping"})).toBe(false);
     expect(isRuntimeStopUncertain({status: "running", agentRuntimeState: "running"})).toBe(false);
     expect(formatSessionCheckpointTime("not-a-timestamp")).toBe("Not recorded");
   });

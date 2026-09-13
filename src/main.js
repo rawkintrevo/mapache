@@ -110,6 +110,7 @@ const handlers = {
     deleteSession,
     editSession,
     getSessionAccessUrls,
+    getSessionLogs,
     resizeSession,
     retryProvisioningSession,
     restartSession,
@@ -336,6 +337,10 @@ async function deleteSession(sessionId) {
 
 async function getSessionAccessUrls(workspaceId, sessionId) {
   return state.api.getSessionAccessUrls(workspaceId, sessionId);
+}
+
+async function getSessionLogs(workspaceId, sessionId) {
+  return state.api.getSessionLogs(workspaceId, sessionId);
 }
 
 

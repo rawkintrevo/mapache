@@ -227,6 +227,29 @@ assert.strictEqual(isIdleSession({
   currentSession = {
     ownerUid: "user-1",
     workspaceId: "workspace-1",
+    status: "stop_failed",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 4,
+    agentRuntimeState: "stopping",
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    browserAccessTokenSecret: "secret",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await lifecycle.restartSession("user-1", "workspace-1", "session-1");
+  assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+    "deleteService", "reserveChrome", "provisionService",
+  ]);
+  assert.strictEqual(currentSession.status, "provisioning");
+
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
     status: "running",
     agentUiVersion: "pi-web-ui-v1",
     agentRuntimeGeneration: 4,

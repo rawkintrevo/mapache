@@ -348,7 +348,6 @@ async function recordRuntimeStopFailure(sessionRef, session, dependencies, error
 
 function assertRuntimeRecreationAllowed(session) {
   const status = normalizeSessionState(session.status);
-  if (status === "stop_failed") throw httpError(409, "session_stop_failed");
   if (status === "delete_failed") throw httpError(409, "session_delete_failed");
 }
 

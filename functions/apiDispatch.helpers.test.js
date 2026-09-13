@@ -60,6 +60,7 @@ function createTestApiHandlers() {
     "userWithUsage", "listAdminUsers", "setAdminUserWhitelist", "listSessions", "createSession",
     "renameSession", "resizeSession", "restartSession", "stopSession", "deleteSession",
     "createSessionAccessUrls", "shareSessionPreview",
+    "listSessionLogs",
   ].map((name) => [name, stub]));
   const service = new Proxy({}, {get: () => stub});
   return createApiHandlers({

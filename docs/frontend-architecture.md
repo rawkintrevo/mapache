@@ -38,9 +38,10 @@ creation flows.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
-`ManagedAgentSurface` as the borderless, full-height center surface. Agent and
-Persistent Chrome controls live in the left drawer's `Logs` rail; Preview is
-not a workspace navigation surface. The embedded Agent iframe communicates
+`ManagedAgentSurface` as the borderless, full-height center surface. Agent,
+Persistent Chrome, and Logs are peer controls in the left toolbar; Logs opens
+an owner-scoped modal with the runtime's Cloud Run entries and current recorded
+error. Preview is not a workspace navigation surface. The embedded Agent iframe communicates
 through the signed `/agent/` gateway and a bounded postMessage bridge.
 Persistent Chrome keeps its signed access URL. A shell iframe remains
 available as a separate terminal surface; historical SSH sessions retain only

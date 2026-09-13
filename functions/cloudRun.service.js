@@ -365,8 +365,8 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
   }
 
   try {
-    await requestRunnerShutdown(session, {
-      requireAcknowledgement: options.reason !== "idle_timeout",
+    const shutdownResult = await requestRunnerShutdown(session, {
+      requireAcknowledgement: false,
       timeoutMs: dependencies.shutdownTimeoutMs,
     });
     if (await consumeQaFault(sessionRef, session, "uncertain-replacement", {
@@ -383,7 +383,7 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
     await waitForOperation(client, response.data, dependencies);
     const deletionConfirmed = await waitForCloudRunServiceDeleted(client, session.serviceName, dependencies);
     await markSessionStopped(dependencies, sessionRef, session, options.reason);
-    if (deletionConfirmed === "absent" && options.recoveryWarning) {
+    if (deletionConfirmed === "absent" && (options.recoveryWarning || !shutdownResult.ok)) {
       await recordInterruptedRuntimeWarning(sessionRef);
     }
     return true;

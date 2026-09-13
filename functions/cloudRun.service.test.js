@@ -632,13 +632,26 @@ assert.deepStrictEqual(terminalCommandEnv({
   const shutdownUpdates = [];
   let deleteCalled = false;
   global.fetch = async () => ({ok: false, status: 500});
-  const shutdownFailureService = createCloudRunService({
-    auth: {getClient: async () => ({
-      request: async () => {
+  const shutdownClient = {
+    request: async ({url, method}) => {
+      if (method === "DELETE") {
         deleteCalled = true;
-        return {data: {}};
-      },
-    })},
+        return {data: {name: "operations/delete-after-failed-shutdown"}};
+      }
+      if (method === "GET" && url.endsWith("operations/delete-after-failed-shutdown")) {
+        return {data: {done: true}};
+      }
+      if (method === "GET" && url.includes("/services/runner")) {
+        const error = new Error("missing");
+        error.response = {status: 404, data: {error: {code: 404}}};
+        throw error;
+      }
+      throw new Error(`Unexpected shutdown recovery request: ${method} ${url}`);
+    },
+  };
+  const shutdownFailureService = createCloudRunService({
+    auth: {getClient: async () => shutdownClient},
+    markSessionStopped: async () => {},
   });
   const shutdownFailureRef = {
     update: async (updates) => shutdownUpdates.push(updates),
@@ -649,9 +662,10 @@ assert.deepStrictEqual(terminalCommandEnv({
     shutdownToken: "shutdown-token",
     status: "stopping",
   }, {reason: "manual"});
-  assert.strictEqual(stopped, false);
-  assert.strictEqual(deleteCalled, false);
-  assert.strictEqual(shutdownUpdates[0].status, "stop_failed");
+  assert.strictEqual(stopped, true);
+  assert.strictEqual(deleteCalled, true);
+  assert.strictEqual(shutdownUpdates[0].agentRuntimeRecoveryWarning, "interrupted");
+  assert.strictEqual(shutdownUpdates[0].lastError, "runtime_interrupted_checkpoint_recovery_required");
   global.fetch = originalFetch;
 
   if (originalProject === undefined) delete process.env.GCLOUD_PROJECT;

@@ -7,6 +7,7 @@ import {hasPendingOperations, getPendingOperationMessage} from "../../state/pend
 import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
 import {Topbar} from "./Topbar.jsx";
 import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
+import {SessionLogsModal} from "../modals/SessionLogsModal.jsx";
 
 const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: page}) => ({default: page})));
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
@@ -26,10 +27,12 @@ export function AppShell(props) {
   const [activeCanvas, setActiveCanvas] = useState(() => (
     isMarkedRuntimeSession(selectedSession) ? "agent" : "terminal"
   ));
+  const [logsOpen, setLogsOpen] = useState(false);
   const selectedSessionIsManaged = isMarkedRuntimeSession(selectedSession);
 
   useEffect(() => {
     setActiveCanvas(selectedSessionIsManaged ? "agent" : "terminal");
+    setLogsOpen(false);
   }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
   const shellClassName = [
     state.drawerCollapsed ? "drawer-collapsed" : "",
@@ -62,6 +65,7 @@ export function AppShell(props) {
           selectedSession={selectedSession}
           onRefresh={app.refreshAll}
           onSelectCanvas={setActiveCanvas}
+          onShowLogs={() => setLogsOpen(true)}
           onShowProfile={modals.showProfile}
           onShowAdmin={admin.showAdmin}
           onSignOut={app.signOut}
@@ -124,6 +128,14 @@ export function AppShell(props) {
         <Suspense fallback={<LazySurfaceFallback label="Loading dialog..." />}>
           <ModalStack handlers={handlers} selectedSession={selectedSession} selectedWorkspace={selectedWorkspace} state={state} />
         </Suspense>
+      ) : null}
+      {logsOpen && selectedSession && selectedWorkspace ? (
+        <SessionLogsModal
+          session={selectedSession}
+          workspaceId={selectedWorkspace.id}
+          onClose={() => setLogsOpen(false)}
+          onLoadLogs={sessions.getSessionLogs}
+        />
       ) : null}
     </div>
   );

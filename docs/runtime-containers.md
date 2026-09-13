@@ -93,7 +93,12 @@ indeterminate coordination read rejects new work and signals the detached
 managed child process group, so physical container liveness is not treated as
 writer admission. Shutdown sends a cooperative group signal and applies the
 existing bounded stop/force-stop policy before final runner persistence, then
-releases the boot ID only through the controlled lifecycle.
+releases the boot ID only through the controlled lifecycle. If an
+already-unavailable runner cannot acknowledge cooperative shutdown, Functions
+deletes the Cloud Run service, clears the reserved authority through the normal
+stopped transition, and records an interrupted-checkpoint warning. This is the
+controlled recovery path for a fenced replacement boot; it does not permit
+heartbeat-only authority takeover or concurrent writers.
 
 Managed agent persistence capture and restore live in
 `session-runner/lib/agentSnapshot.service.js`,

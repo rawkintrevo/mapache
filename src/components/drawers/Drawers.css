@@ -264,15 +264,6 @@
   min-width: 0;
 }
 
-.surface-toolbar__heading {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
 .surface-toolbar__actions {
   display: grid;
   gap: 8px;
@@ -293,11 +284,6 @@
 .navigation-drawer.collapsed .surface-toolbar {
   justify-items: center;
   width: 100%;
-}
-
-.navigation-drawer.collapsed .surface-toolbar__heading {
-  font-size: 10px;
-  text-align: center;
 }
 
 .navigation-drawer.collapsed .surface-toolbar__button {

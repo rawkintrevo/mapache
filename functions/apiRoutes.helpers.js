@@ -82,6 +82,7 @@ function routeRequest(path) {
     ["restart", "restartSession"],
     ["stop", "stopSession"],
     ["access-url", "sessionAccess"],
+    ["logs", "sessionLogs"],
     ["share-preview", "sessionSharePreview"],
     ["auth-selection", "sessionPiAuthSelection"],
     ["pi-auth-selection", "sessionPiAuthSelection"],
