@@ -29,10 +29,11 @@ are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
 The signed-in shell has a collapsed-by-default empty left drawer, workspace
-Play/Pause lifecycle control beside the workspace selector, the
+Play/Pause lifecycle control beside the workspace selector, compact topbar
+actions for Pi auth and generic environment keys, the
 workspace/canonical-runtime view, an account/profile surface, and a retained
-Mapache-owned inspector. The inspector contains Authentication Center, generic
-environment keys, MCP configuration, and Google Workspace connections. GitHub
+Mapache-owned inspector. The inspector contains Authentication Center status,
+MCP configuration, and Google Workspace connections. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
 
@@ -61,10 +62,13 @@ manager, skills manager, subagent manager, or extensions panel. Files, Git,
 model selection, skills, extensions, subagents, and native Goals belong to the
 embedded upstream application when that application is available.
 
-`PiAuthManageModal` manages only saved credential selection and entry CRUD. It
-does not edit model files or expose provider secrets. MCP and Google controls
-remain Mapache-owned because they configure external connections and token
-materialization rather than upstream agent preferences.
+`Topbar` owns the entry points for `PiAuthManageModal` and
+`GenericEnvironmentModal`; the Authentication Center in the inspector retains
+auth refresh and status feedback. `PiAuthManageModal` manages only saved
+credential selection and entry CRUD. It does not edit model files or expose
+provider secrets. MCP and Google controls remain Mapache-owned because they
+configure external connections and token materialization rather than upstream
+agent preferences.
 
 `loadSelectedSessionAccess` in `src/main.js` remains narrow and is keyed by the
 workspace's canonical runtime. Workspace Play/Pause delegates to the retained

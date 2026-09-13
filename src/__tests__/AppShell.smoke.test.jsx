@@ -89,11 +89,24 @@ describe("frontend shell ownership", () => {
     expect(screen.queryByRole("heading", {name: "Sessions"})).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Expand drawer"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Pause workspace"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Manage Pi Auth"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Manage generic environment keys"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Authentication Center"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "MCP Servers"})).toBeInTheDocument();
     for (const label of ["Files", "Git", "Skills", "Subagents", "Extensions", "Models", "Goals", "Chat"]) {
       expect(screen.queryByText(label, {exact: true})).not.toBeInTheDocument();
     }
+  });
+
+  test("opens auth management from the top navigation", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell({selectedSessionId: session.id});
+
+    await user.click(screen.getByRole("button", {name: "Manage Pi Auth"}));
+    await user.click(screen.getByRole("button", {name: "Manage generic environment keys"}));
+
+    expect(handlers.modals.openPiAuthManageModal).toHaveBeenCalledOnce();
+    expect(handlers.modals.openGenericEnvironmentModal).toHaveBeenCalledOnce();
   });
 
   test("keeps session terminal and upstream Agent surfaces available", async () => {

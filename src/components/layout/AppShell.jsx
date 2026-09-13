@@ -51,6 +51,8 @@ export function AppShell(props) {
       <Topbar
         state={state}
         onDeleteWorkspace={workspaces.deleteWorkspace}
+        onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
+        onOpenPiAuthManage={modals.openPiAuthManageModal}
         onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
@@ -110,8 +112,6 @@ export function AppShell(props) {
           onEditMcpServer={pi.editMcpServer}
           onDeleteGoogleConnection={google.deleteConnection}
           onEditGoogleConnection={modals.openGoogleWorkspaceModal}
-          onOpenPiAuthManage={modals.openPiAuthManageModal}
-          onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
           onNewMcpServer={pi.newMcpServer}
           onRefreshMcpServers={pi.refreshMcpServers}
           onRefreshGoogleWorkspace={google.loadGoogleWorkspace}

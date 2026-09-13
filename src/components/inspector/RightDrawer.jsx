@@ -14,8 +14,6 @@ export function RightDrawer({
   onEditMcpServer,
   onDeleteGoogleConnection,
   onEditGoogleConnection,
-  onOpenPiAuthManage,
-  onOpenGenericEnvironment,
   onNewMcpServer,
   onRefreshPiAuth,
   onRefreshMcpServers,
@@ -54,10 +52,7 @@ export function RightDrawer({
       </div>
       <AuthCenterPanel
         piAuth={state.piAuth}
-        selectedSession={selectedSession}
         state={state}
-        onOpenPiAuthManage={onOpenPiAuthManage}
-        onOpenGenericEnvironment={onOpenGenericEnvironment}
         onRefreshPiAuth={onRefreshPiAuth}
         onToggleDrawerSection={onToggleDrawerSection}
       />

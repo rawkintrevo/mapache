@@ -1,11 +1,22 @@
 import "./Topbar.css";
-import {Pause, Pencil, Play, Plus, RefreshCw, Trash2} from "lucide-react";
+import {KeyRound, Pause, Pencil, Play, Plus, RefreshCw, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
+import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 
-export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOpenWorkspaceModal, onRefresh, onSelectWorkspace, onToggleWorkspace}) {
+export function Topbar({
+  state,
+  onDeleteWorkspace,
+  onOpenGenericEnvironment,
+  onOpenPiAuthManage,
+  onOpenWorkspaceEditModal,
+  onOpenWorkspaceModal,
+  onRefresh,
+  onSelectWorkspace,
+  onToggleWorkspace,
+}) {
   const busy = hasPendingOperations(state.pendingOperations);
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
@@ -24,6 +35,9 @@ export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOp
   const workspaceStartBlocked = workspaceUnsupported && !workspaceOn;
   const workspaceStopUncertain = isRuntimeStopUncertain(canonicalSession || {});
   const workspaceActionLabel = workspaceOn ? "Pause workspace" : "Start workspace";
+  const authHarness = sessionAuthHarness(canonicalSession);
+  const showManagePiAuth = sessionSupportsAuth(canonicalSession);
+  const managePiAuthLabel = authHarness?.manageTitle || "Manage Auth";
 
   return (
     <header className="topbar">
@@ -94,6 +108,30 @@ export function Topbar({state, onDeleteWorkspace, onOpenWorkspaceEditModal, onOp
         </Button>
       </div>
       <div className="topbar-actions">
+        {showManagePiAuth ? (
+          <Button
+            aria-label={managePiAuthLabel}
+            disabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenPiAuthManage}
+            icon
+            title={managePiAuthLabel}
+            tooltip={managePiAuthLabel}
+            variant="secondary"
+            onClick={onOpenPiAuthManage}
+          >
+            <KeyRound aria-hidden="true" />
+          </Button>
+        ) : null}
+        <Button
+          aria-label="Manage generic environment keys"
+          disabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenGenericEnvironment}
+          icon
+          title="Manage generic environment keys"
+          tooltip="Manage generic environment keys"
+          variant="secondary"
+          onClick={onOpenGenericEnvironment}
+        >
+          <Variable aria-hidden="true" />
+        </Button>
         <a className="topbar-link" href="/community/blog">Blog</a>
         <a className="topbar-link" href="/community/docs/intro/">Docs</a>
         <Button

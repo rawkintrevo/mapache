@@ -16,10 +16,7 @@ function renderPanel(overrides = {}) {
       },
       providers: {},
     },
-    selectedSession: {id: "session-1", imageKey: "pi-basic", terminalKind: "pi"},
     state: {collapsedSections: {}},
-    onOpenPiAuthManage: vi.fn(),
-    onOpenGenericEnvironment: vi.fn(),
     onRefreshPiAuth: vi.fn(),
     onToggleDrawerSection: vi.fn(),
     ...overrides,
@@ -31,7 +28,8 @@ function renderPanel(overrides = {}) {
 describe("AuthCenterPanel", () => {
   test("keeps provider actions and configured entries out of the inspector", () => {
     renderPanel();
-    expect(screen.getByRole("button", {name: "Manage Pi Auth"})).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Manage Pi Auth"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Manage generic environment keys"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Add authentication provider"})).not.toBeInTheDocument();
     expect(screen.queryByText("My Pi login")).not.toBeInTheDocument();
   });
