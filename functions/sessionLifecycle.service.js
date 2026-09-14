@@ -16,6 +16,7 @@ const {
   toClientDoc,
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
+const {assertNoActiveResize} = require("./sessionResize.service");
 const {sessionSourceMetadata} = require("./github.service");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {sessionSyncPolicyMetadata} = require("./sessionCreation.service");
@@ -102,6 +103,11 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   let session = sessionSnap.data();
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  assertNoActiveResize(session);
+  if (session.resizeOperationState === "failed") {
+    await sessionRef.update({resizeOperationState: null, resizeOperationError: null});
+    session = {...session, resizeOperationState: null, resizeOperationError: null};
+  }
   assertSupportedSessionLaunch(session);
   if (isMarkedRuntimeSession(session)) {
     assertRuntimeRecreationAllowed(session);
@@ -354,6 +360,7 @@ function assertRuntimeRecreationAllowed(session) {
 async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "stopping", {
     ...runtimeSessionStateUpdate(session, "stopping"),
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
@@ -369,6 +376,7 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
 async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "deleting", {
     ...runtimeSessionStateUpdate(session, "stopping"),
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),

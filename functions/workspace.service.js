@@ -1,4 +1,5 @@
 "use strict";
+const {assertNoActiveResize} = require("./sessionResize.service");
 
 const logger = require("firebase-functions/logger");
 const {
@@ -102,6 +103,7 @@ async function updateCanonicalSessionResources(workspaceRef, workspace, resource
   const sessionRef = workspaceRef.collection("sessions").doc(canonicalSessionId);
   const sessionSnap = await sessionRef.get();
   if (!sessionSnap.exists) return;
+  if (["queued", "running"].includes(sessionSnap.data()?.resizeOperationState)) return;
   const status = String(sessionSnap.data()?.status || "").toLowerCase();
   if (["running", "ready"].includes(status)) return;
   await sessionRef.update({
@@ -138,6 +140,7 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
 
   const sessionSnap = await workspaceSessionCollection(workspaceId).get();
+  for (const sessionDoc of sessionSnap.docs) assertNoActiveResize(sessionDoc.data() || {});
   for (const sessionDoc of sessionSnap.docs) {
     const session = sessionDoc.data() || {};
     if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");

@@ -76,6 +76,7 @@ function createTestApiHandlers() {
 }
 
 (async () => {
+  assert.strictEqual((await collectDispatch({method: "POST", route: {name: "resizeSession", workspaceId: "w", sessionId: "s"}, body: {cpu: "2", memory: "8Gi"}})).status, 202);
   assert.deepStrictEqual(await collectDispatch({route: {name: "workspaces"}}), {
     status: 200,
     payload: {workspaces: {handler: "listWorkspaces", args: ["user-1"]}},

@@ -70,6 +70,7 @@ const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
+const {createSessionResizeService} = require("./sessionResize.service");
 const {createSessionLogsService} = require("./sessionLogs.service");
 const {
   classifyRunnerResponseError,
@@ -111,10 +112,13 @@ const {
   reapIdleSessions,
   renameSession,
   requireSession,
-  resizeSession,
+  resizeSession: performSessionResize,
   restartSession,
   stopSession,
 } = sessionLifecycleService;
+const {enqueueResize: resizeSession, resizeQueuedSession} = createSessionResizeService({
+  admin, db, requireSession, resizeSession: performSessionResize, normalizeRequestedSessionResources,
+});
 const sessionLogsService = createSessionLogsService({auth, requireSession});
 const agentAuthService = createAgentAuthService({
   admin,
@@ -395,6 +399,19 @@ exports.provisionQueuedSession = onDocumentWritten({
     GOOGLE_OAUTH_ENCRYPTION_KEY,
   ],
 }, provisionQueuedSession);
+
+exports.resizeQueuedSession = onDocumentWritten({
+  document: "workspaces/{workspaceId}/sessions/{sessionId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, resizeQueuedSession);
 
 exports.reconcileWorkspaceSyncWriters = onSchedule("every 5 minutes", async () => {
   const workspaceSnap = await db.collection("workspaces").get();

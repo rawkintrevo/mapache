@@ -93,6 +93,12 @@ client retains session-addressed lifecycle/access calls for runtime plumbing
 and compatibility, alongside workspace, credentials, MCP, Google, GitHub
 connector, and admin operations.
 
+Resize saves close after the API acknowledges the queued operation. The existing
+session subscription follows `resizeOperationState`; queued/running operations
+show **Resizing** and disable the workspace lifecycle button. Terminal failure
+shows `resizeOperationError`, and successful completion restores the normal
+runtime status. The browser does not hold a request open for shutdown/startup.
+
 ## Invariants
 
 - The browser cannot select an image or runtime UI version; Functions resolves

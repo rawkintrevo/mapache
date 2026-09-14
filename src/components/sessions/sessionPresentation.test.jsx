@@ -210,3 +210,15 @@ describe("session row rendering", () => {
     expect(onRestartSession).toHaveBeenCalledWith("session-1");
   });
 });
+
+test("shows asynchronous resize progress and terminal outcomes from session snapshots", () => {
+  for (const resizeOperationState of ["queued", "running"]) {
+    const session = {status: "running", resizeOperationState, lastError: "old failure"};
+    expect(getSessionRuntimeStatus(session)).toMatchObject({label: "Resizing", state: "starting"});
+    expect(getSessionRuntimeError(session)).toBe("");
+  }
+  const failed = {status: "running", resizeOperationState: "failed", resizeOperationError: "session_stop_failed"};
+  expect(getSessionRuntimeStatus(failed)).toMatchObject({state: "error"});
+  expect(getSessionRuntimeError(failed)).toBe("session_stop_failed");
+  expect(getSessionRuntimeStatus({status: "running", resizeOperationState: "completed"})).toMatchObject({state: "ready"});
+});

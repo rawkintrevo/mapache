@@ -102,10 +102,11 @@ export function createWorkspaceController({
         const status = String(currentSession?.status || "").toLowerCase();
         const sessionIsRunning = ["running", "ready"].includes(status);
         const sessionNeedsRecovery = currentSession?.agentUiVersion === "pi-web-ui-v1" &&
-          ["provision_failed", "update_failed", "stop_failed"].includes(status);
+          (["provision_failed", "update_failed", "stop_failed"].includes(status) || currentSession.resizeOperationState === "failed");
         // Snapshot before saving: subscriptions can replace the recorded resources.
         // Failed runtimes may already record the requested size without applying it.
-        const shouldResize = resources && currentSession && (sessionNeedsRecovery || (sessionIsRunning && (
+        const resizePending = ["queued", "running"].includes(currentSession?.resizeOperationState);
+        const shouldResize = resources && currentSession && (resizePending || sessionNeedsRecovery || (sessionIsRunning && (
           resources.cpu !== currentSession.resources?.cpu || resources.memory !== currentSession.resources?.memory
         )));
         await state.api.renameWorkspace(workspaceId, resources ? {name: nextName, resources} : nextName);

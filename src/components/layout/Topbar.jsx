@@ -3,7 +3,7 @@ import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, Sc
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
-import {isMarkedRuntimeSession, isRuntimeStopUncertain} from "../sessions/sessionPresentation.js";
+import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 
@@ -37,7 +37,7 @@ export function Topbar({
   const sessionStatus = String(canonicalSession?.status || "").toLowerCase();
   const workspaceTransitioning = [
     "provisioning", "queued", "restarting", "resizing", "needs_service", "stopping", "deleting",
-  ].includes(sessionStatus);
+  ].includes(sessionStatus) || isSessionResizePending(canonicalSession);
   const workspaceOn = ["running", "ready"].includes(sessionStatus);
   const hasSessionImageMetadata = Boolean(canonicalSession?.imageKey || canonicalSession?.image);
   const workspaceUnsupported = selectedWorkspace?.source?.type === "ssh" ||
