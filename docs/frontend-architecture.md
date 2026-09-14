@@ -59,6 +59,12 @@ the desktop viewport without exposing the canvas background below it. The
 outer app uses the dynamic viewport unit when supported, and narrow layouts
 retain a bounded minimum managed-surface height while the top navigation stacks.
 
+The embedded Agent bridge sends access only for the child readiness handshake or
+when the signed access URL actually changes. Listener re-registration, parent
+callback identity changes, and access-renewed acknowledgements must not resend
+an unchanged URL or trigger a reconnect; genuine expiry/renewal still refreshes
+the scoped cookie and follows the upstream socket renewal protocol.
+
 Unmarked historical sessions remain readable and terminal-first, but they do not expose a second
 Mapache Chat, Goals, file browser/editor, Git manager, model editor, package
 manager, skills manager, subagent manager, or extensions panel. Files, Git,

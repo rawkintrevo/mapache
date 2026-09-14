@@ -5,7 +5,7 @@ import {PiWebUiCanvas, getAgentOrigin, parseBridgeMessage} from "./PiWebUiCanvas
 const firstUrl = "https://runner.example/agent/?mapache_access=first";
 
 describe("PiWebUiCanvas", () => {
-  test("keeps one iframe while access rotates", async () => {
+  test("sends access once on readiness and once for a new URL", () => {
     const {rerender} = render(<PiWebUiCanvas sessionName="Agent smoke" url={firstUrl} />);
     const frame = screen.getByTitle("Agent Agent smoke");
     const postMessage = vi.spyOn(frame.contentWindow, "postMessage").mockImplementation(() => {});
@@ -20,6 +20,37 @@ describe("PiWebUiCanvas", () => {
     expect(screen.getByTitle("Agent Agent smoke")).toBe(frame);
     expect(frame).toHaveAttribute("src", firstUrl);
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({agentUrl: expect.stringContaining("second")}), "https://runner.example");
+    expect(postMessage).toHaveBeenCalledTimes(2);
+
+    fireEvent(window, new MessageEvent("message", {
+      data: {type: "mapache.agent.status", version: 1, status: "access-renewed"},
+      origin: "https://runner.example",
+      source: frame.contentWindow,
+    }));
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    postMessage.mockRestore();
+  });
+
+  test("does not renew or resend access when parent callbacks change", () => {
+    const firstOnOpenChrome = vi.fn();
+    const {rerender} = render(
+      <PiWebUiCanvas onOpenChrome={firstOnOpenChrome} sessionName="Agent smoke" url={firstUrl} />,
+    );
+    const frame = screen.getByTitle("Agent Agent smoke");
+    const postMessage = vi.spyOn(frame.contentWindow, "postMessage").mockImplementation(() => {});
+
+    fireEvent(window, new MessageEvent("message", {
+      data: {type: "mapache.agent.ready", version: 1},
+      origin: "https://runner.example",
+      source: frame.contentWindow,
+    }));
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    postMessage.mockClear();
+
+    rerender(<PiWebUiCanvas onOpenChrome={() => {}} sessionName="Agent smoke" url={firstUrl} />);
+
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(screen.queryByText("Refreshing Agent access")).not.toBeInTheDocument();
     postMessage.mockRestore();
   });
 
