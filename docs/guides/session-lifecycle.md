@@ -18,8 +18,10 @@ Stored status strings remain backward compatible. A reconciliation path may pass
 `reconciliationReason` when repairing an old or externally changed document; normal
 API lifecycle writes must use an allowed transition.
 
-The five-minute idle reaper evaluates unmarked running sessions from `lastActivityAt`, falling
+The five-minute idle reaper evaluates running sessions from `lastActivityAt`, falling
 back to `updatedAt` and `createdAt` for legacy records. `lastConnectedAt` and
 `lastDisconnectedAt` are transport diagnostics only: automatic Cloud Run WebSocket
-reconnections must not reset the idle timeout. Marked pi-web-ui sessions bypass this
-browser-idle path and are released only by explicit lifecycle actions.
+reconnections must not reset the idle timeout. Marked pi-web-ui sessions default to
+`longRunning: false` and follow this policy. Users may explicitly enable Long-running
+to bypass automatic pause for browser-independent agent work; the reaper records the
+bypass reason and manual Pause still releases the runtime in either state.

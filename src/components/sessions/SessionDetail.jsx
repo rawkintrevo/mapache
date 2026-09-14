@@ -3,6 +3,7 @@ import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
+import {SessionIdlePolicy} from "./SessionIdlePolicy.jsx";
 import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
 import {ManagedAgentSurface} from "./ManagedAgentSurface.jsx";
 import {getSessionImageFreshness, isMarkedRuntimeSession, isSessionResizePending} from "./sessionPresentation.js";
@@ -10,6 +11,8 @@ import {deriveShellUrl} from "../../utils/shell.js";
 
 export function SessionDetail({
   activeCanvas: controlledActiveCanvas,
+  busy = false,
+  onSetSessionLongRunning,
   session,
   workspaceId,
   access,
@@ -47,6 +50,13 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
+      {isManagedAgentSurface ? (
+        <SessionIdlePolicy
+          disabled={busy}
+          onChange={(enabled) => onSetSessionLongRunning?.(session.id, enabled)}
+          session={session}
+        />
+      ) : null}
       {isManagedAgentSurface && isSessionResizePending(session) ? (
         <div className="session-runtime-status" role="status">Resizing runtime… Shutdown and startup can take a few minutes.</div>
       ) : null}

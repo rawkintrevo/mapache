@@ -75,6 +75,7 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(blank.sourceType, "blank");
   assert.strictEqual(blank.status, "provisioning");
   assert.strictEqual(blank.provisioningState, "queued");
+  assert.strictEqual(blank.longRunning, false);
   assert.ok(blank.serviceId.length < 50);
   assert.strictEqual(reservations[0].kind, "reserveChrome");
   await assert.rejects(
@@ -133,6 +134,7 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(marked.imageKey, "pi-chrome");
   assert.strictEqual(marked.harnessId, "pi");
   assert.strictEqual(marked.capabilities.chrome, true);
+  assert.strictEqual(marked.longRunning, false);
   await assert.rejects(
       createWithWorkspace({
         ownerUid: "user-1",

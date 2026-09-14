@@ -1,0 +1,19 @@
+{
+  "id": "script.toggleLongRunningPolicy",
+  "title": "Toggle and reload the managed runtime Long-running policy",
+  "parameters": {},
+  "actions": [
+    {"type": "click", "role": "checkbox", "name": "Long-running"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/long-running", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "waitForSnapshotText", "text": "Automatic pause is disabled", "timeoutMs": 10000},
+    {"type": "navigate", "url": "http://127.0.0.1:5173/app"},
+    {"type": "waitForSnapshotText", "text": "Automatic pause is disabled", "timeoutMs": 10000},
+    {"type": "click", "role": "checkbox", "name": "Long-running"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/long-running", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "waitForSnapshotText", "text": "Automatically pauses after", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The managed session persists Long-running enabled through a reload",
+    "Disabling Long-running restores the displayed automatic pause policy"
+  ]
+}

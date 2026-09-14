@@ -80,6 +80,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
 - `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable pi-chrome workspace.
 - `cases/pi-web-functional.json`: Managed Agent turns, read-only MCP/auth probes, native history, shell coexistence, Chrome/Preview, and native Goal assertions.
+- `cases/pi-web-long-running-policy.json`: Managed runtime Long-running switch, persisted policy across reload, automatic-pause messaging, and cleanup.
 - `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.

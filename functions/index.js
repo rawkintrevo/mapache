@@ -114,6 +114,7 @@ const {
   requireSession,
   resizeSession: performSessionResize,
   restartSession,
+  setSessionLongRunning,
   stopSession,
 } = sessionLifecycleService;
 const {enqueueResize: resizeSession, resizeQueuedSession} = createSessionResizeService({
@@ -289,6 +290,7 @@ const API_HANDLERS = createApiHandlers({
     renameSession,
     resizeSession,
     restartSession,
+    setSessionLongRunning,
     stopSession,
     deleteSession,
     createSessionAccessUrls,
