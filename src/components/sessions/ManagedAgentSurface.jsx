@@ -1,3 +1,4 @@
+import {useCallback} from "react";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 
@@ -12,6 +13,8 @@ export function ManagedAgentSurface({
   onSelectCanvas,
   session,
 }) {
+  const handleOpenChrome = useCallback(() => onSelectCanvas?.("chrome"), [onSelectCanvas]);
+
   return (
     <div className="canvas-shell canvas-shell--managed-agent">
       {activeCanvas === "agent" ? (
@@ -21,7 +24,7 @@ export function ManagedAgentSurface({
               key={session.id}
               accessError={accessError}
               onAccessRefreshNeeded={onAccessRefreshNeeded}
-              onOpenChrome={() => onSelectCanvas?.("chrome")}
+              onOpenChrome={handleOpenChrome}
               sessionName={session.name}
               url={accessUrls.agentUrl}
             />

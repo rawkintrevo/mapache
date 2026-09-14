@@ -7,19 +7,25 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
   const frameRef = useRef(null);
   const initialUrlRef = useRef(url);
   const origin = getAgentOrigin(url);
+  const readyRef = useRef(false);
+  const lastSentUrlRef = useRef(null);
+  const callbacksRef = useRef({onAccessRefreshNeeded, onOpenChrome});
   const [status, setStatus] = useState(origin ? "loading" : "error");
   const [error, setError] = useState(origin ? "" : "agent_access_unavailable");
   const visibleError = accessError || error;
 
-  const sendAccess = useCallback(() => {
+  callbacksRef.current = {onAccessRefreshNeeded, onOpenChrome};
+
+  const sendAccess = useCallback((accessUrl = url) => {
     const frame = frameRef.current;
-    if (!frame?.contentWindow || !origin || !url) return false;
+    if (!frame?.contentWindow || !origin || !accessUrl) return false;
     try {
       frame.contentWindow.postMessage({
         type: ACCESS_MESSAGE,
         version: BRIDGE_VERSION,
-        agentUrl: url,
+        agentUrl: accessUrl,
       }, origin);
+      lastSentUrlRef.current = accessUrl;
       return true;
     } catch {
       return false;
@@ -28,25 +34,27 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
 
   useEffect(() => {
     if (!origin) {
+      readyRef.current = false;
+      lastSentUrlRef.current = null;
       setStatus("error");
       setError("agent_access_unavailable");
       return undefined;
     }
-    setStatus((current) => current === "ready" ? "renewing" : current);
     const onMessage = (event) => {
       const frame = frameRef.current;
       if (!frame?.contentWindow || event.source !== frame.contentWindow || event.origin !== origin) return;
       const message = parseBridgeMessage(event.data);
       if (!message) return;
       if (message.type === "mapache.agent.ready") {
+        readyRef.current = true;
         setError("");
         setStatus("ready");
-        sendAccess();
+        if (lastSentUrlRef.current !== url) sendAccess(url);
         return;
       }
       if (message.type === "mapache.agent.renewal-request") {
         setStatus("renewing");
-        if (typeof onAccessRefreshNeeded === "function") onAccessRefreshNeeded();
+        if (typeof callbacksRef.current.onAccessRefreshNeeded === "function") callbacksRef.current.onAccessRefreshNeeded();
         else {
           setError("agent_access_renewal_unavailable");
           setStatus("error");
@@ -54,7 +62,7 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
         return;
       }
       if (message.type === "mapache.agent.navigate") {
-        onOpenChrome?.();
+        callbacksRef.current.onOpenChrome?.();
         return;
       }
       if (message.status === "access-renewed") {
@@ -67,11 +75,13 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onAccessRefreshNeeded, onOpenChrome, origin, sendAccess]);
+  }, [origin, sendAccess, url]);
 
   useEffect(() => {
-    if (status === "ready" || status === "renewing") sendAccess();
-  }, [sendAccess, status, url]);
+    if (!readyRef.current || lastSentUrlRef.current === url) return;
+    setStatus("renewing");
+    sendAccess(url);
+  }, [sendAccess, url]);
 
   if (!origin) {
     return (
