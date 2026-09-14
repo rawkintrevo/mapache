@@ -54,6 +54,10 @@ CRUD API in the current manifest.
 
 ## Workspace and session state
 
+Session creation and resize share `normalizeRequestedSessionResources` from
+`functions/index.js`; it must be supplied to both service dependency objects.
+Resize validates resources before stopping or recreating a managed runtime.
+
 Workspace documents carry owner, source, storage, sync, MCP, home-policy, and
 workspace-level resource metadata. They also carry a lazily populated
 `canonicalSessionId`; existing workspaces adopt an active child session first,

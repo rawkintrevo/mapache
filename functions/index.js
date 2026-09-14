@@ -100,6 +100,7 @@ const lifecycleDependencies = {
   admin,
   db,
   markChromeWorkspaceSessionStopping,
+  normalizeRequestedSessionResources,
   requireWorkspace,
   sessionCollection,
 };
