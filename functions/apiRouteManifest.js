@@ -22,6 +22,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["workspaceMcp", ["GET", "PUT"]],
   ["sessions", ["GET", "POST"]],
   ["session", ["PATCH", "DELETE"]],
+  ["sessionLongRunning", ["PATCH"]],
   ["resizeSession", ["POST"]],
   ["restartSession", ["POST"]],
   ["stopSession", ["POST"]],

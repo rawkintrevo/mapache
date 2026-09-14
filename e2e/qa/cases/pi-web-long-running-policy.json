@@ -1,0 +1,26 @@
+{
+  "id": "pi-web.long-running-policy",
+  "title": "Managed pi-web Long-running automatic-pause policy",
+  "description": "Verify the managed session Long-running switch is off by default, persists across reloads, bypasses automatic pause when enabled, and restores the configured idle timeout when disabled.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/pi-web.long-running-policy",
+  "requires": {
+    "cloudRun": "Creates one disposable marked pi-chrome service",
+    "managedWorkspace": "Use the explicitly marked disposable workspace setup",
+    "idlePolicy": "The session must expose the backend idle timeout and Long-running control"
+  },
+  "steps": [
+    {"useCase": "cases/pi-web-marked-workspace-setup.json"},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-long-running-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-long-running-policy"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "checkbox-present", "name": "Long-running"},
+    {"assert": "snapshot-text", "expected": "Automatically pauses after 60 minutes without activity."},
+    {"useScript": "scripts/toggle-long-running-policy.json"},
+    {"assert": "snapshot-text", "expected": "Automatically pauses after 60 minutes without activity."},
+    {"capture": "screenshot", "fileName": "long-running-policy.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"}
+  ]
+}

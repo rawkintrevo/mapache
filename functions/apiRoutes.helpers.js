@@ -81,6 +81,7 @@ function routeRequest(path) {
     ["resize", "resizeSession"],
     ["restart", "restartSession"],
     ["stop", "stopSession"],
+    ["long-running", "sessionLongRunning"],
     ["access-url", "sessionAccess"],
     ["logs", "sessionLogs"],
     ["share-preview", "sessionSharePreview"],

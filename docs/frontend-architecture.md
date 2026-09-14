@@ -53,7 +53,11 @@ surface. The embedded Agent iframe communicates through the signed `/agent/`
 gateway and the same exact-origin bridge. Persistent Chrome keeps its signed
 access URL. A shell iframe remains
 available as a separate terminal surface; historical SSH sessions retain only
-their compatibility terminal and port-forward behavior.
+their compatibility terminal and port-forward behavior. `SessionIdlePolicy` is
+shown for marked runtimes and persists the explicit Long-running switch through
+`setSessionLongRunningState`; it displays the stored idle timeout and explains
+that enabling the switch bypasses automatic pause while manual Pause remains
+available.
 
 The managed center surface owns the full available shell width and height instead of applying
 the legacy terminal canvas viewport cap. Its iframe and intermediate wrappers

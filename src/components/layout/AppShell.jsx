@@ -109,6 +109,8 @@ export function AppShell(props) {
         ) : (
         <WorkspacePanel
             activeCanvas={activeCanvas}
+            busy={busy}
+            onSetSessionLongRunning={sessions.setSessionLongRunning}
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}

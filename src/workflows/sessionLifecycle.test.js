@@ -1,5 +1,5 @@
 import {describe, expect, test, vi} from "vitest";
-import {editSessionState, retryProvisioningSessionState} from "./sessionLifecycle.js";
+import {editSessionState, retryProvisioningSessionState, setSessionLongRunningState} from "./sessionLifecycle.js";
 
 describe("session edit workflow", () => {
   test("renames and resizes only the fields that changed", async () => {
@@ -46,6 +46,26 @@ describe("session edit workflow", () => {
 
     expect(state.api.renameSession).not.toHaveBeenCalled();
     expect(state.api.resizeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("session idle policy workflow", () => {
+  test("persists the Long-running selection and refreshes the session", async () => {
+    const dispatch = vi.fn();
+    const state = {
+      selectedWorkspaceId: "workspace-1",
+      sessions: [{id: "session-1", longRunning: false}],
+      api: {
+        getSessions: vi.fn().mockResolvedValue({sessions: [{id: "session-1", longRunning: true}]}),
+        setSessionLongRunning: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    await setSessionLongRunningState(state, "session-1", true, dispatch);
+
+    expect(state.api.setSessionLongRunning).toHaveBeenCalledWith("workspace-1", "session-1", true);
+    expect(state.sessions[0].longRunning).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith({type: expect.any(String), sessionId: "session-1"});
   });
 });
 

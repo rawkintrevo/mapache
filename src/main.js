@@ -37,6 +37,7 @@ import {
   deleteSessionState,
   editSessionState,
   resizeSessionState,
+  setSessionLongRunningState,
   retryProvisioningSessionState,
   restartSessionState,
   stopSessionState,
@@ -111,6 +112,7 @@ const handlers = {
     getSessionAccessUrls,
     getSessionLogs,
     resizeSession,
+    setSessionLongRunning,
     retryProvisioningSession,
     restartSession,
     shareSessionPreview,
@@ -295,6 +297,14 @@ async function loadSelectedSessionAccess() {
 
 async function resizeSession(sessionId, payload) {
   await runBusy(() => resizeSessionState(state, sessionId, payload, dispatch), "Working...", OPERATION_KEYS.SESSION_RESIZE);
+}
+
+async function setSessionLongRunning(sessionId, enabled) {
+  await runBusy(
+      () => setSessionLongRunningState(state, sessionId, enabled, dispatch),
+      "Saving runtime policy...",
+      OPERATION_KEYS.SESSION_IDLE_POLICY,
+  );
 }
 
 async function editSession(sessionId, payload) {
