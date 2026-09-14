@@ -6,7 +6,7 @@ import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
 import {ManagedAgentSurface} from "./ManagedAgentSurface.jsx";
-import {getSessionImageFreshness, isMarkedRuntimeSession} from "./sessionPresentation.js";
+import {getSessionImageFreshness, isMarkedRuntimeSession, isSessionResizePending} from "./sessionPresentation.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {deriveShellUrl} from "../../utils/shell.js";
 import {useResourceMetrics} from "./useResourceMetrics.js";
@@ -65,6 +65,12 @@ export function SessionDetail({
 
   return (
     <div className="session-detail">
+      {isManagedAgentSurface && isSessionResizePending(session) ? (
+        <div className="session-runtime-status" role="status">Resizing runtime… Shutdown and startup can take a few minutes.</div>
+      ) : null}
+      {isManagedAgentSurface && session.resizeOperationState === "failed" ? (
+        <div className="error" role="alert">Runtime resize failed: {session.resizeOperationError || "Please try again."}</div>
+      ) : null}
       {!isManagedAgentSurface ? (
         <SessionRuntimeStatus
           accessError={accessError}

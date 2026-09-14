@@ -35,6 +35,10 @@ export function isMarkedRuntimeSession(session = {}) {
   return session.agentUiVersion === MARKED_RUNTIME_VERSION;
 }
 
+export function isSessionResizePending(session = {}) {
+  return ["queued", "running"].includes(session.resizeOperationState);
+}
+
 export function isRuntimeStopUncertain(session = {}) {
   const lifecycleStatus = trimSessionStatus(session.status).toLowerCase();
   const runtimeState = trimSessionStatus(session.agentRuntimeState).toLowerCase();
@@ -43,6 +47,12 @@ export function isRuntimeStopUncertain(session = {}) {
 }
 
 export function getSessionRuntimeStatus(session = {}) {
+  if (isSessionResizePending(session)) {
+    return {state: "starting", label: "Resizing", tone: "warning", message: "The server is resizing the runtime. Shutdown and startup continue in the background."};
+  }
+  if (session.resizeOperationState === "failed") {
+    return {state: "error", label: "Error", tone: "danger", message: "The runtime resize failed. Check the error and try again."};
+  }
   const lifecycleStatus = trimSessionStatus(session.status).toLowerCase();
   const runtimeState = trimSessionStatus(session.agentRuntimeState).toLowerCase();
   const checkpointError = trimSessionStatus(session.agentRuntimeCheckpointError);
@@ -105,6 +115,8 @@ export function getSessionRuntimeStatus(session = {}) {
 }
 
 export function getSessionRuntimeError(session = {}) {
+  if (isSessionResizePending(session)) return "";
+  if (session.resizeOperationState === "failed") return session.resizeOperationError || "session_resize_failed";
   const checkpointError = trimSessionStatus(session.agentRuntimeCheckpointError);
   if (checkpointError) return checkpointError;
   const lastError = trimSessionStatus(session.lastError);

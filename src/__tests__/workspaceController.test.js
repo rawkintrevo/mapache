@@ -11,6 +11,7 @@ function createFixture(overrides = {}) {
       createWorkspace: vi.fn().mockResolvedValue({workspace: {id: "workspace-new"}}),
       deleteWorkspace: vi.fn().mockResolvedValue({}),
       renameWorkspace: vi.fn().mockResolvedValue({workspace: {id: "workspace-1", name: "New Docs"}}),
+      resizeSession: vi.fn().mockResolvedValue({}),
     },
     ...overrides,
   };
@@ -36,6 +37,52 @@ afterEach(() => {
 });
 
 describe("workspaceController", () => {
+  test.each(["provision_failed", "update_failed", "stop_failed"])("recovers a %s runtime even when its saved size already matches", async (status) => {
+    const resources = {cpu: "2", memory: "8Gi"};
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", canonicalSessionId: "session-1"}],
+      sessions: [{id: "session-1", status, agentUiVersion: "pi-web-ui-v1", resources}],
+    });
+    await createWorkspaceController(fixture).renameWorkspace("workspace-1", {name: "Docs", resources});
+    expect(fixture.state.api.resizeSession).toHaveBeenCalledWith("workspace-1", "session-1", resources);
+    expect(fixture.loadSessions).toHaveBeenCalledOnce();
+  });
+
+  test.each(["stopped", "provisioning", "resizing", "stopping", "deleting", "delete_failed"])("does not launch or interrupt a %s runtime when saving size", async (status) => {
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", canonicalSessionId: "session-1"}],
+      sessions: [{id: "session-1", status, agentUiVersion: "pi-web-ui-v1", resources: {cpu: "1", memory: "2Gi"}}],
+    });
+    await createWorkspaceController(fixture).renameWorkspace("workspace-1", {name: "Docs", resources: {cpu: "2", memory: "8Gi"}});
+    expect(fixture.state.api.resizeSession).not.toHaveBeenCalled();
+  });
+
+  test("preserves the resize decision across resource subscription updates during save", async () => {
+    const resources = {cpu: "2", memory: "8Gi"};
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", canonicalSessionId: "session-1"}],
+      sessions: [{id: "session-1", status: "running", resources: {cpu: "1", memory: "2Gi"}}],
+    });
+    fixture.state.api.renameWorkspace.mockImplementation(async () => {
+      fixture.state.sessions = [{id: "session-1", status: "running", resources}];
+    });
+    await createWorkspaceController(fixture).renameWorkspace("workspace-1", {name: "Docs", resources});
+    expect(fixture.state.api.resizeSession).toHaveBeenCalledWith("workspace-1", "session-1", resources);
+  });
+
+  test("keeps a failed resize visible and retries a previously saved size", async () => {
+    const resources = {cpu: "2", memory: "8Gi"};
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", canonicalSessionId: "session-1"}],
+      sessions: [{id: "session-1", status: "update_failed", agentUiVersion: "pi-web-ui-v1", resources}],
+    });
+    fixture.state.api.resizeSession.mockRejectedValueOnce(new Error("session_stop_failed"));
+    const controller = createWorkspaceController(fixture);
+    await expect(controller.renameWorkspace("workspace-1", {name: "Docs", resources})).rejects.toThrow();
+    await controller.renameWorkspace("workspace-1", {name: "Docs", resources});
+    expect(fixture.state.api.resizeSession).toHaveBeenCalledTimes(2);
+  });
+
   test("repairs a removed selection and resets workspace-scoped panels", async () => {
     const fixture = createFixture({
       workspaces: [{id: "workspace-old"}],

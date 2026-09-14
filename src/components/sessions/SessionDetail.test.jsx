@@ -214,3 +214,13 @@ describe("SessionDetail Chrome workflow", () => {
     );
   });
 });
+
+test("shows resize progress on the managed agent surface", () => {
+  renderDetail({agentUiVersion: "pi-web-ui-v1", resizeOperationState: "queued", serviceUrl: null});
+  expect(screen.getByRole("status")).toHaveTextContent("Resizing runtime");
+});
+
+test("shows asynchronous resize failure on the managed agent surface", () => {
+  renderDetail({agentUiVersion: "pi-web-ui-v1", resizeOperationState: "failed", resizeOperationError: "session_stop_failed", serviceUrl: null});
+  expect(screen.getByRole("alert")).toHaveTextContent("session_stop_failed");
+});

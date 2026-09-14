@@ -84,9 +84,20 @@ workspace's canonical runtime. Workspace Play/Pause delegates to the retained
 session lifecycle API internally; users do not select, create, rename, resize,
 restart, stop, or delete sibling sessions from the Mapache shell. Compute size
 is edited from the workspace edit modal and stored on the workspace. The API
+resize call also recovers marked runtimes in `provision_failed`, `update_failed`,
+or `stop_failed` when resource settings are saved, even if their recorded size
+already matches: saved resources may not yet match Cloud Run. The controller
+captures the resize decision before the workspace save can update subscriptions.
+Stopped runtimes only save the size for their next start. The API
 client retains session-addressed lifecycle/access calls for runtime plumbing
 and compatibility, alongside workspace, credentials, MCP, Google, GitHub
 connector, and admin operations.
+
+Resize saves close after the API acknowledges the queued operation. The existing
+session subscription follows `resizeOperationState`; queued/running operations
+show **Resizing** and disable the workspace lifecycle button. Terminal failure
+shows `resizeOperationError`, and successful completion restores the normal
+runtime status. The browser does not hold a request open for shutdown/startup.
 
 ## Invariants
 

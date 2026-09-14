@@ -269,6 +269,19 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
   assert.deepStrictEqual(calls.find((call) => call.kind === "provisionService").args[2].resources, {cpu: "2", memory: "2Gi"});
 
+  for (const status of ["provision_failed", "update_failed", "stop_failed"]) {
+    calls.length = 0;
+    currentSession = {...currentSession, status, agentRuntimeGeneration: 4};
+    await lifecycle.resizeSession("user-1", "workspace-1", "session-1", {});
+    assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+      "deleteService", "reserveChrome", "provisionService",
+    ]);
+    const provisioned = calls.find((call) => call.kind === "provisionService").args[2];
+    assert.deepStrictEqual(provisioned.resources, {cpu: "2", memory: "2Gi"});
+    assert.strictEqual(provisioned.agentRuntimeGeneration, 5);
+    assert.strictEqual(currentSession.status, "provisioning");
+  }
+
   deleteServiceResult = false;
   calls.length = 0;
   currentSession = {

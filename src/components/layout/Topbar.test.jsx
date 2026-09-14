@@ -80,3 +80,8 @@ describe("Topbar workspace lifecycle", () => {
     expect(screen.getByRole("button", {name: "Start workspace"})).toBeEnabled();
   });
 });
+
+test("disables lifecycle actions while an asynchronous resize is queued", () => {
+  renderTopbar({id: "session-1", status: "running", resizeOperationState: "queued"});
+  expect(screen.getByRole("button", {name: "Pause workspace"})).toBeDisabled();
+});

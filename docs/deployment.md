@@ -19,6 +19,12 @@ Read this before changing Firebase config, deployment workflows, Cloud Functions
 
 ## Current Behavior
 
+Asynchronous runtime resize uses the `resizeQueuedSession` Firestore-triggered
+function in addition to `api`. Deploy `functions:resizeQueuedSession` before
+`functions:api`, then Hosting, when introducing this queue. The worker inherits
+the API service account and provisioning secrets and uses a 540-second timeout
+with event retries; its ten-minute claim prevents overlapping invocations.
+
 Firebase Hosting serves the Vite app from `dist/`, rewrites `/api/**` to the `api` Cloud Function, rewrites `/app` and `/app/**` to the app shell, and serves the Docusaurus community build under `/community/**`.
 
 The `/api/**` rewrite also serves public shared website previews at `/api/public-previews/{token}/...`. Those requests are intentionally unauthenticated and are authorized by unguessable preview tokens plus `publicPreviews/{token}` metadata. Deploying Share Preview or browser QA contract changes requires the Cloud Functions API revision and a rebuilt `pi-chrome` runner revision; existing running sessions need restart/recreation before they receive the new behavior.

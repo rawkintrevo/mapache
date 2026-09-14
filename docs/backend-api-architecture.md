@@ -54,6 +54,21 @@ CRUD API in the current manifest.
 
 ## Workspace and session state
 
+Session creation and resize share `normalizeRequestedSessionResources` from
+`functions/index.js`; it must be supplied to both service dependency objects.
+Resize validates resources before stopping or recreating a managed runtime.
+
+Resize requests return HTTP 202 after `sessionResize.service.js` transactionally
+records a `resizeOperationId`, requested resources, and `queued` state on the
+session. The `resizeQueuedSession` Firestore worker claims that operation and
+runs the existing stop/recreate flow, then publishes `completed` or `failed`
+and an owner-visible error. The HTTP request never waits for shutdown or Cloud
+Run startup, which can exceed Firebase Hosting's 60-second timeout. Identical
+pending requests reuse the operation; conflicting sizes and competing session
+lifecycle actions are rejected. Duplicate deliveries cannot overlap: a running
+claim is retried only after ten minutes, beyond the worker's 540-second limit.
+Deploy the worker before the API so accepted operations have a consumer.
+
 Workspace documents carry owner, source, storage, sync, MCP, home-policy, and
 workspace-level resource metadata. They also carry a lazily populated
 `canonicalSessionId`; existing workspaces adopt an active child session first,
