@@ -5,6 +5,11 @@ export async function resizeSessionState(state, sessionId, payload, dispatch) {
   await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
 }
 
+export async function setSessionLongRunningState(state, sessionId, enabled, dispatch) {
+  await state.api.setSessionLongRunning(state.selectedWorkspaceId, sessionId, enabled);
+  await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
+}
+
 export async function editSessionState(state, sessionId, {name, resources}, dispatch) {
   const currentSession = state.sessions.find((session) => session.id === sessionId);
   if (!currentSession) return;

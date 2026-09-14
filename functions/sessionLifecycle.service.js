@@ -49,6 +49,7 @@ function createSessionLifecycleService(dependencies = {}) {
     reapIdleSessions: () => reapIdleSessions(dependencies),
     requireSession: (uid, workspaceId, sessionId) => requireSession(uid, workspaceId, sessionId, dependencies),
     renameSession: (uid, workspaceId, sessionId, payload) => renameSession(uid, workspaceId, sessionId, payload, dependencies),
+    setSessionLongRunning: (uid, workspaceId, sessionId, payload) => setSessionLongRunning(uid, workspaceId, sessionId, payload, dependencies),
     resizeSession: (uid, workspaceId, sessionId, payload) => resizeSession(uid, workspaceId, sessionId, payload, dependencies),
     restartSession: (uid, workspaceId, sessionId) => restartSession(uid, workspaceId, sessionId, dependencies),
     stopSession: (uid, workspaceId, sessionId) => stopSession(uid, workspaceId, sessionId, dependencies),
@@ -71,6 +72,18 @@ async function renameSession(uid, workspaceId, sessionId, payload, dependencies 
   if (!name) throw httpError(400, "invalid_session_name");
   await sessionRef.update({
     name,
+    updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return toClientDoc(await sessionRef.get());
+}
+
+async function setSessionLongRunning(uid, workspaceId, sessionId, payload, dependencies = {}) {
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
+  const session = sessionSnap.data();
+  if (!isMarkedRuntimeSession(session)) throw httpError(409, "long_running_unavailable");
+  if (!payload || typeof payload.enabled !== "boolean") throw httpError(400, "invalid_long_running");
+  await sessionRef.update({
+    longRunning: payload.enabled,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   });
   return toClientDoc(await sessionRef.get());
@@ -451,25 +464,69 @@ async function reapIdleSessions(dependencies = {}) {
   const now = Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const session = doc.data();
-    if (isMarkedRuntimeSession(session)) return {bypassed: true};
+    if (isMarkedRuntimeSession(session) && session.longRunning === true) {
+      return {bypassed: true, bypassReason: "long_running"};
+    }
     if (!isIdleSession(session, now)) return {idle: false};
     logger.info("stopping idle session", {
       workspaceId: session.workspaceId,
       sessionId: doc.id,
       serviceId: session.serviceId,
+      managed: isMarkedRuntimeSession(session),
     });
-    await doc.ref.update(sessionStatusUpdate(session, "stopping", {
-      stopReason: "idle_timeout",
-      updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
-    }));
-    return dependencies.deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
+    try {
+      await doc.ref.update(sessionStatusUpdate(session, "stopping", {
+        stopReason: "idle_timeout",
+        updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+      }));
+      const stopped = await dependencies.deleteSessionService(doc.ref, session, {reason: "idle_timeout"});
+      return {
+        eligible: true,
+        stopped,
+        failed: !stopped,
+        reason: stopped ? "" : "deleteSessionService returned false",
+      };
+    } catch (error) {
+      return {
+        eligible: true,
+        stopped: false,
+        failed: true,
+        reason: error,
+      };
+    }
   }));
 
-  const stopped = results.filter((result) => result.status === "fulfilled" && result.value === true).length;
-  const failed = results.filter((result) => result.status === "rejected" || result.status === "fulfilled" && result.value === false);
+  const values = results.map((result) => result.status === "fulfilled" ? result.value : {
+    eligible: true,
+    stopped: false,
+    failed: true,
+    reason: result.reason,
+  });
+  const bypassed = values.filter((value) => value.bypassed);
+  const bypassedByReason = bypassed.reduce((counts, value) => {
+    counts[value.bypassReason] = (counts[value.bypassReason] || 0) + 1;
+    return counts;
+  }, {});
+  const eligible = values.filter((value) => value.eligible).length;
+  const stopped = values.filter((value) => value.stopped === true).length;
+  const failed = values.filter((value) => value.failed === true);
   failed.forEach((result) => logger.error("idle session stop failed", result.reason || "deleteSessionService returned false"));
-  logger.info("idle session reap complete", {checked: snap.size, stopped, failed: failed.length});
-  return {checked: snap.size, stopped, failed: failed.length};
+  logger.info("idle session reap complete", {
+    checked: snap.size,
+    eligible,
+    bypassed: bypassed.length,
+    bypassedByReason,
+    stopped,
+    failed: failed.length,
+  });
+  return {
+    checked: snap.size,
+    eligible,
+    bypassed: bypassed.length,
+    bypassedByReason,
+    stopped,
+    failed: failed.length,
+  };
 }
 
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies) {

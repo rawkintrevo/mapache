@@ -58,7 +58,7 @@ function createTestApiHandlers() {
   const stub = async () => ({});
   const operations = Object.fromEntries([
     "userWithUsage", "listAdminUsers", "setAdminUserWhitelist", "listSessions", "createSession",
-    "renameSession", "resizeSession", "restartSession", "stopSession", "deleteSession",
+    "renameSession", "setSessionLongRunning", "resizeSession", "restartSession", "stopSession", "deleteSession",
     "createSessionAccessUrls", "shareSessionPreview",
     "listSessionLogs",
   ].map((name) => [name, stub]));
@@ -77,6 +77,14 @@ function createTestApiHandlers() {
 
 (async () => {
   assert.strictEqual((await collectDispatch({method: "POST", route: {name: "resizeSession", workspaceId: "w", sessionId: "s"}, body: {cpu: "2", memory: "8Gi"}})).status, 202);
+  assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "sessionLongRunning", workspaceId: "workspace-1", sessionId: "session-1"},
+    body: {enabled: true},
+  }), {
+    status: 200,
+    payload: {session: {handler: "setSessionLongRunning", args: ["user-1", "workspace-1", "session-1", {enabled: true}]}},
+  });
   assert.deepStrictEqual(await collectDispatch({route: {name: "workspaces"}}), {
     status: 200,
     payload: {workspaces: {handler: "listWorkspaces", args: ["user-1"]}},

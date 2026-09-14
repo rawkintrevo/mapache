@@ -116,6 +116,11 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/sessions/${sessionId}`,
         {method: "PATCH", body: {name}},
     ),
+    setSessionLongRunning: (workspaceId, sessionId, enabled) => request(
+        getToken,
+        `/api/workspaces/${workspaceId}/sessions/${sessionId}/long-running`,
+        {method: "PATCH", body: {enabled}},
+    ),
     resizeSession: (workspaceId, sessionId, body) => request(
         getToken,
         `/api/workspaces/${workspaceId}/sessions/${sessionId}/resize`,

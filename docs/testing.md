@@ -53,7 +53,7 @@ Candidate flows:
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi provider handoff.
 - Native upstream Goal persistence and explicit paused/resume behavior inside the embedded Agent surface.
-- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, and deterministic failure-recovery assertions.
+- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, Long-running persistence and idle-policy behavior, and deterministic failure-recovery assertions.
 
 Routine browser QA and standard session-creation validation focus on the supported `pi-chrome` runner. Historical runner records may be inspected for cleanup, but retired runner families are not launch targets.
 
@@ -114,7 +114,7 @@ Run slower checks when a change touches the related subsystem:
   branches and bytes, record the intentional `pi-goal-x` settings cleanup, protect new
   target work, and prove repeat/verify-only behavior without model execution.
 - Hosted pi-web QA manifests: use `e2e/qa/cases/pi-web-marked-workspace-setup.json`
-  followed by the functional, history/resource, or failure-recovery case. These
+  followed by the functional, Long-running policy, history/resource, or failure-recovery case. These
   cases are opt-in and blocked when the explicitly marked disposable workspace,
   existing provider, read-only connector, browser, cloud service, or named
   deterministic fault harness is unavailable. The failure-recovery harness is

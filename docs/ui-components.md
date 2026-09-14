@@ -18,6 +18,7 @@ This index maps significant React components to their current responsibilities.
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Signed Persistent Chrome iframe and pop-out action. |
 | `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface, rendered in the top navbar for the selected canonical running cloud runtime. |
 | `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Server-reported runtime/checkpoint/lifecycle status and access errors. |
+| `SessionIdlePolicy` | `src/components/sessions/SessionIdlePolicy.jsx` | Displays the managed runtime idle timeout and persists the explicit Long-running automatic-pause policy. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | Session list for the selected workspace. |
 | `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced resource presets and advanced CPU/memory fields. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | Coordinates retained workspace/session/auth/connection dialogs. |

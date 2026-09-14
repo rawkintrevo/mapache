@@ -148,6 +148,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
+    longRunning: false,
     lastActivityAt: now,
     lastConnectedAt: null,
     lastDisconnectedAt: null,

@@ -74,9 +74,11 @@ workspace-level resource metadata. They also carry a lazily populated
 `canonicalSessionId`; existing workspaces adopt an active child session first,
 otherwise the most recently updated child. Sessions remain below the workspace
 and carry the resolved runner identity, lifecycle state, resource allocation,
-access metadata, and runtime generation/boot authority fields. New blank and
-GitHub workspaces receive the server-owned `agentUiVersion: "pi-web-ui-v1"`
-marker. New sessions use the workspace resource setting and resolve the curated
+access metadata, idle-timeout policy, and runtime generation/boot authority
+fields. New sessions persist `longRunning: false`; the authenticated session
+long-running policy route may change that field only for marked managed
+runtimes. New blank and GitHub workspaces receive the server-owned
+`agentUiVersion: "pi-web-ui-v1"` marker. New sessions use the workspace resource setting and resolve the curated
 `pi-chrome` image and Pi harness regardless of browser payloads.
 
 The workspace authority transaction admits one managed runtime and sync writer.

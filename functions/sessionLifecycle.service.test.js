@@ -106,6 +106,30 @@ assert.strictEqual(isIdleSession({
       (error) => error.status === 400 && error.publicMessage === "invalid_session_name",
   );
 
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    longRunning: false,
+  };
+  const longRunningEnabled = await lifecycle.setSessionLongRunning("user-1", "workspace-1", "session-1", {enabled: true});
+  assert.strictEqual(longRunningEnabled.longRunning, true);
+  assert.strictEqual(currentSession.longRunning, true);
+  const longRunningDisabled = await lifecycle.setSessionLongRunning("user-1", "workspace-1", "session-1", {enabled: false});
+  assert.strictEqual(longRunningDisabled.longRunning, false);
+  await assert.rejects(
+      lifecycle.setSessionLongRunning("user-1", "workspace-1", "session-1", {enabled: "true"}),
+      (error) => error.status === 400 && error.publicMessage === "invalid_long_running",
+  );
+
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
   calls.length = 0;
   const resized = await lifecycle.resizeSession("user-1", "workspace-1", "session-1", {});
   assert.strictEqual(resized.id, "session-1");
@@ -308,12 +332,36 @@ assert.strictEqual(isIdleSession({
   let reaperDeleted = 0;
   const reaperDocs = [
     {
-      ref: {update: async () => { throw new Error("marked runtime should be bypassed"); }},
+      ref: {update: async () => { throw new Error("long-running runtime should be bypassed"); }},
       data: () => ({
         workspaceId: "workspace-1",
         agentUiVersion: "pi-web-ui-v1",
+        longRunning: true,
         status: "running",
+        activeSocketCount: 0,
         lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+      }),
+    },
+    {
+      ref: {update: async () => {}},
+      data: () => ({
+        workspaceId: "workspace-1",
+        agentUiVersion: "pi-web-ui-v1",
+        longRunning: false,
+        status: "running",
+        activeSocketCount: 0,
+        lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+      }),
+    },
+    {
+      ref: {update: async () => { throw new Error("active runtime should not be reaped"); }},
+      data: () => ({
+        workspaceId: "workspace-1",
+        agentUiVersion: "pi-web-ui-v1",
+        longRunning: false,
+        status: "running",
+        activeSocketCount: 0,
+        lastActivityAt: Date.now() - 5 * 60 * 1000,
       }),
     },
     {
@@ -338,8 +386,46 @@ assert.strictEqual(isIdleSession({
     },
   });
   const reaped = await reaper.reapIdleSessions();
-  assert.deepStrictEqual(reaped, {checked: 2, stopped: 1, failed: 0});
-  assert.strictEqual(reaperDeleted, 1);
+  assert.deepStrictEqual(reaped, {
+    checked: 4,
+    eligible: 2,
+    bypassed: 1,
+    bypassedByReason: {long_running: 1},
+    stopped: 2,
+    failed: 0,
+  });
+  assert.strictEqual(reaperDeleted, 2);
+
+  const failedReaper = createSessionLifecycleService({
+    admin,
+    db: {
+      collectionGroup: () => ({
+        where: () => ({get: async () => ({
+          docs: [
+            {
+              ref: {update: async () => {}},
+              data: () => ({status: "running", lastActivityAt: Date.now() - 2 * 60 * 60 * 1000}),
+            },
+            {
+              ref: {update: async () => { throw new Error("idle update failed"); }},
+              data: () => ({status: "running", lastActivityAt: Date.now() - 2 * 60 * 60 * 1000}),
+            },
+          ],
+          size: 2,
+        })}),
+      }),
+    },
+    deleteSessionService: async () => false,
+  });
+  const failedReaped = await failedReaper.reapIdleSessions();
+  assert.deepStrictEqual(failedReaped, {
+    checked: 2,
+    eligible: 2,
+    bypassed: 0,
+    bypassedByReason: {},
+    stopped: 0,
+    failed: 2,
+  });
 
   console.log("session lifecycle service tests passed");
 })().catch((error) => {
