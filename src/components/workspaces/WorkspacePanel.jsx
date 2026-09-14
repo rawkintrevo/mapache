@@ -7,7 +7,7 @@ export function WorkspacePanel({
   selectedSession,
   selectedWorkspace,
   state,
-  onGetSessionAccessUrls,
+  access,
   onSelectCanvas,
 }) {
   if (selectedSession) {
@@ -15,9 +15,9 @@ export function WorkspacePanel({
       <section className={`workspace${isMarkedRuntimeSession(selectedSession) ? " workspace--managed-agent" : ""}`}>
         <SessionDetail
           activeCanvas={activeCanvas}
+          access={access}
           session={selectedSession}
           workspaceId={state.selectedWorkspaceId}
-          onGetSessionAccessUrls={onGetSessionAccessUrls}
           onSelectCanvas={onSelectCanvas}
         />
       </section>

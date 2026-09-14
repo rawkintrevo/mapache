@@ -6,7 +6,7 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, marked-runtime Agent and Logs controls, auth/connection actions, user menu, refresh, and documentation links. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Agent and Logs controls, auth/connection actions, user menu, refresh, and documentation links. |
 | `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, refresh, and sign-out actions. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
@@ -16,7 +16,7 @@ This index maps significant React components to their current responsibilities.
 | `PiWebUiCanvas` | `src/components/sessions/PiWebUiCanvas.jsx` | Full-height signed embedded upstream `/agent/` iframe plus exact-origin access-renewal and Chrome-navigation bridge. |
 | `SessionLogsModal` | `src/components/modals/SessionLogsModal.jsx` | Displays owner-scoped Cloud Run entries and the current recorded error for the canonical runtime. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Signed Persistent Chrome iframe and pop-out action. |
-| `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface. |
+| `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface, rendered in the top navbar for the selected canonical running cloud runtime. |
 | `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Server-reported runtime/checkpoint/lifecycle status and access errors. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | Session list for the selected workspace. |
 | `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced resource presets and advanced CPU/memory fields. |

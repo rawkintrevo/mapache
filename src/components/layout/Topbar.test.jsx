@@ -4,7 +4,7 @@ import {describe, expect, test, vi} from "vitest";
 import {Topbar} from "./Topbar.jsx";
 import {createInitialState} from "../../state/initialState.js";
 
-function renderTopbar(session = null) {
+function renderTopbar(session = null, resourceMetrics = null) {
   const state = {
     ...createInitialState(),
     workspaces: [{id: "workspace-1", name: "HubSpot", source: {type: "blank"}, canonicalSessionId: session?.id || null}],
@@ -34,6 +34,7 @@ function renderTopbar(session = null) {
       onShowProfile={vi.fn()}
       onSignOut={vi.fn()}
       onToggleWorkspace={onToggleWorkspace}
+      resourceMetrics={resourceMetrics}
     />,
   );
   return {onOpenGenericEnvironment, onOpenGoogleWorkspace, onOpenMcpServers, onOpenPiAuthManage, onToggleWorkspace};
@@ -84,4 +85,21 @@ describe("Topbar workspace lifecycle", () => {
 test("disables lifecycle actions while an asynchronous resize is queued", () => {
   renderTopbar({id: "session-1", status: "running", resizeOperationState: "queued"});
   expect(screen.getByRole("button", {name: "Pause workspace"})).toBeDisabled();
+});
+
+test("renders live resource meters between workspace controls and actions", () => {
+  renderTopbar(
+      {id: "session-1", status: "running"},
+      {connectionState: "connected", sample: {
+        type: "metrics",
+        sampledAt: 1700000000000,
+        cpu: {percent: 42.5, limitCores: 2},
+        memory: {usedBytes: 1073741824, limitBytes: 2147483648, percent: 50},
+      }},
+  );
+
+  const utilization = screen.getByLabelText("Resource utilization");
+  expect(utilization).toHaveClass("resource-utilization--navbar");
+  expect(screen.getByText("43%")).toBeInTheDocument();
+  expect(screen.getByText("1 GiB/2 GiB")).toBeInTheDocument();
 });

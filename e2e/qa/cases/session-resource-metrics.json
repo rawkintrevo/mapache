@@ -1,7 +1,7 @@
 {
   "id": "session.resource-metrics",
   "title": "Running session shows live CPU and RAM metrics",
-  "description": "Create a standard Cloud session, wait for runner access, and verify the parent session header renders CPU and RAM utilization meters.",
+  "description": "Create a running pi-chrome workspace, wait for runner access, and verify the Mapache top navbar renders CPU and RAM utilization meters.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/session.resource-metrics",
   "requires": {

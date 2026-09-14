@@ -17,17 +17,20 @@ function session(overrides = {}) {
 
 function renderDetail(overrides = {}, options = {}) {
   const currentSession = session(overrides);
+  const accessUrls = options.accessUrls || {
+    terminalUrl: "https://runner.example/?mapache_access=terminal-token",
+    browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
+    agentUrl: "https://runner.example/agent/?mapache_access=agent-token",
+  };
   return render(
       <SessionDetail
+        access={{accessUrls, error: "", refresh: vi.fn(), refreshAfterConnectionFailure: vi.fn()}}
         busy={options.busy || false}
         isGithubWorkspace={false}
+        metrics={{sample: null, connectionState: "connecting"}}
         session={currentSession}
         workspaceId="workspace-1"
-        onGetSessionAccessUrls={vi.fn().mockResolvedValue(options.accessUrls || {
-          terminalUrl: "https://runner.example/?mapache_access=terminal-token",
-          browserUrl: "https://runner.example/browser/?mapache_access=browser-token",
-          agentUrl: "https://runner.example/agent/?mapache_access=agent-token",
-        })}
+        onGetSessionAccessUrls={vi.fn().mockResolvedValue(accessUrls)}
         onResizeSession={vi.fn()}
         onRetryProvisioningSession={options.onRetryProvisioningSession}
         onRestartSession={options.onRestartSession || vi.fn()}
@@ -56,17 +59,9 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.queryByRole("button", {name: "Stop"})).not.toBeInTheDocument();
   });
 
-  test("places resource meters beside rather than inside the canvas tabs", async () => {
-    vi.stubGlobal("WebSocket", class {
-      addEventListener() {}
-      close() {}
-    });
+  test("does not render resource meters in the canvas-specific detail", () => {
     renderDetail();
-
-    const utilization = await screen.findByLabelText("Resource utilization");
-    expect(utilization).toBeInTheDocument();
-    expect(screen.getByRole("tablist")).not.toContainElement(utilization);
-    vi.unstubAllGlobals();
+    expect(screen.queryByLabelText("Resource utilization")).not.toBeInTheDocument();
   });
 
   test("shows the Chrome canvas only for Chrome-capable sessions", async () => {
@@ -116,8 +111,10 @@ describe("SessionDetail Chrome workflow", () => {
 
     rerender(
       <SessionDetail
+        access={{accessUrls: {}, error: "", refresh: vi.fn(), refreshAfterConnectionFailure: vi.fn()}}
         busy={false}
         isGithubWorkspace={false}
+        metrics={{sample: null, connectionState: "idle"}}
         session={session({name: "Pi without access", harnessId: "pi", capabilities: {terminal: true, chat: true}})}
         workspaceId="workspace-1"
         onGetSessionAccessUrls={vi.fn().mockResolvedValue({})}
@@ -194,8 +191,8 @@ describe("SessionDetail Chrome workflow", () => {
       status: "stop_failed",
     });
 
-    expect(screen.getByText("Agent access is not ready.")).toBeInTheDocument();
-    expect(screen.getByText("checkpoint_storage_failed")).toBeInTheDocument();
+    expect(screen.getByTitle("Agent Chrome smoke")).toBeInTheDocument();
+    expect(screen.queryByText("checkpoint_storage_failed")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Restart"})).not.toBeInTheDocument();
   });
