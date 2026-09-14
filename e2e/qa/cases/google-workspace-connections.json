@@ -19,7 +19,7 @@
         "workspaceEnv": "QA_CASE=google-workspace-connections"
       }
     },
-    {"useScript": "scripts/expand-inspector.json"},
+    {"useScript": "scripts/open-google-workspace-modal.json"},
     {"assert": "snapshot-text", "expected": "Google Workspace"},
     {"assert": "snapshot-text", "expected": "Add Google account"},
     {"useScript": "scripts/connect-google-qa-account.json"},
@@ -31,15 +31,19 @@
         "workspaceEnv": "QA_CASE=google-workspace-connections"
       }
     },
-    {"useScript": "scripts/expand-inspector.json"},
+    {"useScript": "scripts/open-google-workspace-modal.json"},
     {"useScript": "scripts/connect-google-qa-account.json"},
     {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-google-a-{{timestamp}}"}},
+    {"useScript": "scripts/open-google-workspace-modal.json"},
     {"assert": "snapshot-text", "expected": "google-a@example.test"},
     {"capture": "screenshot", "fileName": "workspace-a-still-account-a.png"},
+    {"type": "click", "role": "button", "name": "Done"},
     {"useScript": "scripts/disconnect-google-workspace.json"},
     {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-google-b-{{timestamp}}"}},
+    {"useScript": "scripts/open-google-workspace-modal.json"},
     {"assert": "snapshot-text", "expected": "google-b@example.test"},
-    {"capture": "screenshot", "fileName": "workspace-b-still-account-b.png"}
+    {"capture": "screenshot", "fileName": "workspace-b-still-account-b.png"},
+    {"type": "click", "role": "button", "name": "Done"}
   ],
   "cleanup": [
     {"useScript": "scripts/delete-selected-workspace.json", "description": "Delete workspace B and its test binding"},

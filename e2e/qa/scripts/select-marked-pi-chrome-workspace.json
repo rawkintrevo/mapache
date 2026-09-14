@@ -1,0 +1,20 @@
+{
+  "id": "script.selectMarkedPiChromeWorkspace",
+  "title": "Select and verify the explicitly marked disposable pi-chrome workspace",
+  "parameters": {
+    "workspaceName": ""
+  },
+  "requires": {
+    "workspace": "A disposable workspace created before the run and marked by the operator with agentUiVersion=pi-web-ui-v1",
+    "identity": "The exact owner UID and workspace ID are recorded in restricted run evidence; do not select by a production display name"
+  },
+  "actions": [
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "{{workspaceName}}"}},
+    {"type": "apiRequest", "method": "GET", "path": "/api/workspaces"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces", "method": "GET", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The requested disposable workspace is selected",
+    "The authenticated workspace response contains exactly one selected record with agentUiVersion=pi-web-ui-v1"
+  ]
+}

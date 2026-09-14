@@ -1,0 +1,81 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index b4cd939..27951e5 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -856,6 +856,8 @@ export class ClientSession {
+ 	private convs = new Map<string, Conversation>();
+ 	private activeId = "";
+ 	private convSeq = 0;
++	/** Monotonic completed-turn signal consumed by the runner checkpoint scheduler. */
++	private completedTurns = 0;
+ 	/** One ModelRuntime shared by all conversations — the model chosen in the
+ 	 *  top bar applies to every chat, not just the one that set it. Seeded by
+ 	 *  the first conversation and reused by later ones. */
+@@ -2342,6 +2344,7 @@ export class ClientSession {
+ 			// A run finished or a new entry was persisted — keep the session list fresh
+ 			// (new chat + first message, completed turns, compaction, etc.).
+ 			case "agent_end": {
++				if (!event.willRetry) this.completedTurns += 1;
+ 				// 可重试错误：SDK 随后发 auto_retry_start 并把末尾 error 消息从
+ 				// state 摘掉。这里先立占位，让本次立即 flush 的快照就不含瞬时红错
+ 				// ——否则快照先画红、摘掉后又消失，即「红色报错一闪而过」。
+@@ -3552,6 +3555,11 @@ export class ClientSession {
+ 		return n;
+ 	}
+ 
++	/** Number of completed non-retry turns for the browserless runner scheduler. */
++	completedTurnCount(): number {
++		return this.completedTurns;
++	}
++
+ 	/** Dispatch-side admission check used by terminal routes. */
+ 	isQuiesceActive(): boolean {
+ 		return this.isQuiesced();
+@@ -5731,6 +5739,12 @@ export class AgentService {
+ 		return n;
+ 	}
+ 
++	completedTurns(): number {
++		let n = 0;
++		for (const cs of this.clients.values()) n += cs.completedTurnCount();
++		return n;
++	}
++
+ 	/** 插件用：全客户端最近活跃对话的快照（at 最大者即“当前打开的对话”）。 */
+ 	readConversationForPlugins(): PluginConversationSnapshot | null {
+ 		let best: PluginConversationSnapshot | null = null;
+@@ -5763,6 +5777,7 @@ export class AgentService {
+ 		connectedClients: number;
+ 		activeConversations: number;
+ 		activeTools: number;
++		completedTurns: number;
+ 		pendingMessages: number;
+ 	} {
+ 		return {
+@@ -5773,6 +5788,7 @@ export class AgentService {
+ 			connectedClients: this.socketCount,
+ 			activeConversations: this.activeConversations(),
+ 			activeTools: this.activeTools(),
++			completedTurns: this.completedTurns(),
+ 			pendingMessages: this.pendingMessages(),
+ 		};
+ 	}
+diff --git a/server/control-socket.ts b/server/control-socket.ts
+index f41140e..4cd3d86 100644
+--- a/server/control-socket.ts
++++ b/server/control-socket.ts
+@@ -30,6 +30,7 @@ type ControlService = {
+ 		connectedClients: number;
+ 		activeConversations: number;
+ 		activeTools: number;
++		completedTurns?: number;
+ 		pendingMessages: number;
+ 	};
+ 	quiesce: () => Promise<{ ok: boolean; error?: string }>;
+@@ -63,6 +64,7 @@ export interface ControlStatus {
+ 	connectedClients?: number;
+ 	activeConversations?: number;
+ 	activeTools?: number;
++	completedTurns?: number;
+ 	pendingMessages?: number;
+ }

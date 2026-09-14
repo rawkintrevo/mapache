@@ -1,0 +1,66 @@
+diff --git a/web/vite.config.ts b/web/vite.config.ts
+--- a/web/vite.config.ts
++++ b/web/vite.config.ts
+@@ -4,6 +4,7 @@ import { join } from "node:path";
+ 
+ const __dirname = dirname(fileURLToPath(import.meta.url));
++const webBasePath = process.env.PI_WEB_BASE_PATH?.trim() || "/";
+ 
+ // Dev: Vite serves the web UI on :5173 and proxies the WebSocket + any API
+@@ -12,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
+ export default defineConfig({
+ 	root: __dirname,
+ 	plugins: [react()],
++	base: webBasePath,
+ 	build: {
+ 		outDir: join(__dirname, "dist"),
+ 		emptyOutDir: true,
+diff --git a/web/index.html b/web/index.html
+--- a/web/index.html
++++ b/web/index.html
+@@ -4,7 +4,7 @@
+ 		<meta charset="UTF-8" />
+ 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ 		<meta name="color-scheme" content="dark" />
+-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
++		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+ 		<!-- PWA manifest: relative so nginx sub-path deployments (/pi/) resolve correctly -->
+ 		<link rel="manifest" href="./manifest.webmanifest" />
+ 		<meta name="theme-color" content="#0f172a" />
+diff --git a/web/src/main.tsx b/web/src/main.tsx
+--- a/web/src/main.tsx
++++ b/web/src/main.tsx
+@@ -27,17 +27,31 @@ createRoot(document.getElementById("root")!).render(
+ 	</StrictMode>,
+ );
+ 
+-// PWA: register the service worker only in production builds so the Vite dev
+-// server (live reload / HMR) is never intercepted or cached. The scope is
+-// derived from the page URL (appBase), so sub-path deployments like /pi/ get
+-// a worker scoped to the app root instead of the site root.
++// Managed embedding deliberately does not register a service worker. An old
++// pi-web-ui worker may still be present after an upgrade, so remove only a
++// registration that belongs to this app's exact subpath. In particular, do
++// not unregister Mapache's parent-scope worker.
+ if (import.meta.env.PROD && "serviceWorker" in navigator) {
+-	// Register after load so it never blocks first paint.
+ 	window.addEventListener("load", () => {
+-		const base = appBase();
+-		navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((err) => {
+-			console.warn("Service worker registration failed:", err);
+-		});
++		const appScope = new URL(appBase(), window.location.href).href;
++		const appWorker = new URL("sw.js", appScope).href;
++		navigator.serviceWorker.getRegistrations().then((registrations) => {
++			const owned = registrations.filter((registration) => {
++				if (registration.scope === appScope) return true;
++				return [registration.active, registration.waiting, registration.installing].some(
++					(worker) => worker?.scriptURL === appWorker,
++				);
++			});
++			return Promise.all(owned.map((registration) => registration.unregister()));
++		}).catch((err) => {
++			console.warn("Managed service worker cleanup failed:", err);
++		});
+ 	});
+ }

@@ -10,7 +10,7 @@
   "steps": [
     {"useCase": "cases/login.json"},
     {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-resource-metrics-ws-{{timestamp}}"}},
-    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-resource-metrics-{{timestamp}}", "imageKey": "pi-basic", "cpu": "1", "memory": "2Gi"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-resource-metrics-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi"}},
     {"useScript": "scripts/wait-session-running.json"},
     {"assert": "snapshot-any-text", "expectedAny": ["CPU", "RAM"]},
     {"assert": "snapshot-text", "expected": "CPU utilization"},

@@ -1,13 +1,12 @@
 import {Save, X} from "lucide-react";
 import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
-import {SessionResourceFields, SessionResourceSelector} from "../sessions/SessionResourceSelector.jsx";
+import {SessionResourceSelector} from "../sessions/SessionResourceSelector.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
 export function SessionEditModal({busy, error = "", session, onClose, onSave}) {
   const [name, setName] = useState(session.name || "");
   const [resources, setResources] = useState(session.resources || {cpu: "1", memory: "1Gi"});
-  const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
 
   useEffect(() => {
     setName(session.name || "");
@@ -42,24 +41,14 @@ export function SessionEditModal({busy, error = "", session, onClose, onSave}) {
               onChange={(event) => setName(event.target.value)}
             />
           </label>
-          {isSshSession ? (
-            <SessionResourceFields
-              cpu={resources.cpu}
-              cpuName="editSessionCpu"
-              memory={resources.memory}
-              memoryName="editSessionMemory"
-              onChange={setResources}
-            />
-          ) : (
-            <SessionResourceSelector
-              cpu={resources.cpu}
-              cpuName="editSessionCpu"
-              memory={resources.memory}
-              memoryName="editSessionMemory"
-              onChange={setResources}
-              sizeName="editSessionSize"
-            />
-          )}
+          <SessionResourceSelector
+            cpu={resources.cpu}
+            cpuName="editSessionCpu"
+            memory={resources.memory}
+            memoryName="editSessionMemory"
+            onChange={setResources}
+            sizeName="editSessionSize"
+          />
           <div className="modal-form-actions">
             <Button disabled={busy || !name.trim()} type="submit">
               <Save aria-hidden="true" />

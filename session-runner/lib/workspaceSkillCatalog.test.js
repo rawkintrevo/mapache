@@ -21,8 +21,8 @@ test("selects harness-neutral skill profiles from workspace context and capabili
   }), ["github", "web"]);
   assert.deepEqual(defaultWorkspaceSkillProfileIds({
     workspaceSourceMode: "github",
-    runnerCapabilities: {preview: true, n64: true},
-  }), ["github", "n64"]);
+    runnerCapabilities: {preview: true},
+  }), ["github", "web"]);
   assert.deepEqual(defaultWorkspaceSkillProfileIds({
     workspaceSourceMode: "blank",
     runnerCapabilities: {chrome: true, preview: true},
@@ -30,7 +30,7 @@ test("selects harness-neutral skill profiles from workspace context and capabili
 });
 
 test("resolves optional profiles into one canonical file-backed skill catalog", () => {
-  assert.deepEqual(Object.keys(WORKSPACE_SKILL_PROFILES), ["chrome", "github", "n64", "web"]);
+  assert.deepEqual(Object.keys(WORKSPACE_SKILL_PROFILES), ["chrome", "github", "web"]);
   assert.deepEqual(skillsForWorkspaceProfiles(["web", "github", "web", "unknown"])
       .map((skill) => skill.name), [
     "mapache-preview-build",
@@ -49,6 +49,11 @@ test("resolves optional profiles into one canonical file-backed skill catalog", 
 
   assert.deepEqual(defaultWorkspaceSkills({
     workspaceSourceMode: "blank",
-    runnerCapabilities: {chrome: true},
-  }).map((skill) => skill.name), ["mapache-chrome"]);
+    runnerCapabilities: {chrome: true, preview: true},
+  }).map((skill) => skill.name), [
+    "mapache-chrome",
+    "mapache-preview-build",
+    "mapache-api-hosting",
+    "mapache-preview-qa",
+  ]);
 });

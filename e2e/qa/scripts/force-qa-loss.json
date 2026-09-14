@@ -1,0 +1,17 @@
+{
+  "id": "script.forceQaLoss",
+  "title": "Schedule disposable runner loss",
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions/{{selectedSessionId}}/qa/faults",
+      "body": {"action": "force-loss"}
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/qa/faults", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The runner acknowledges forced loss before terminating itself",
+    "Recovery requires an explicit restart and does not auto-resume a model turn"
+  ]
+}

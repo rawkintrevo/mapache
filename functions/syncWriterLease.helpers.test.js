@@ -12,7 +12,7 @@ const writer = {id: "session-writer", status: "running", sessionType: "cloud"};
 const reader = {id: "session-reader", status: "provisioning", sessionType: "cloud"};
 
 assert.strictEqual(isSyncWriterEligible(writer), true);
-assert.strictEqual(isSyncWriterEligible({status: "running", sessionType: "ssh", terminalKind: "ssh"}), false);
+assert.strictEqual(isSyncWriterEligible({status: "running", sessionType: "cloud", terminalKind: "pi"}), true);
 assert.strictEqual(isActiveSyncWriterSession({id: "stopped", status: "stopped"}), false);
 
 const firstLease = resolveSyncWriterLease({}, [], reader, reader.id, {now});
@@ -41,7 +41,7 @@ assert.strictEqual(staleLease.workspaceUpdates.syncWriterSessionId, writer.id);
 const nonEligible = resolveSyncWriterLease({
   syncWriterSessionId: "deleted-session",
   syncWriterLeaseId: "lease-old",
-}, [], {id: "ssh-1", status: "running", sessionType: "ssh", terminalKind: "ssh"}, "ssh-1", {now});
+}, [], {id: "stopped-1", status: "stopped", sessionType: "cloud", terminalKind: "pi"}, "stopped-1", {now});
 assert.strictEqual(nonEligible.sessionUpdates.syncWriterRole, "none");
 assert.strictEqual(nonEligible.workspaceUpdates.syncWriterSessionId, null);
 

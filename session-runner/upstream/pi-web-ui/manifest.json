@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/xing-shuyin/pi-web-ui",
+    "commit": "46880b3772591beac91c0c1792bdc79a6fe3671f",
+    "packageVersion": "0.79.0",
+    "archiveUrl": "https://github.com/xing-shuyin/pi-web-ui/archive/46880b3772591beac91c0c1792bdc79a6fe3671f.tar.gz",
+    "archiveSha256": "9efbdaaf3d5567d3e25f7361bd76e10fd6896a2109d2e058a5488444051663ec",
+    "files": {
+      "package.json": "844c22855283708d30bda1b88aa5fb6302d84f73b0c6d9e7589df1cd3fa2dce6",
+      "package-lock.json": "c05ef6f0da2f31c2457c504d36a4925a4bf7db6136e27e2304e358d84cf62d31",
+      "LICENSE": "94eaeecd542b4eac55480f4043c5045ac7b70be4f9e1e0b3f6574b1a745a4e6c"
+    }
+  },
+  "piSdk": {
+    "package": "@earendil-works/pi-coding-agent",
+    "version": "0.84.4",
+    "integrity": "sha512-jmOlrqUmvhh/siNWFRXjYLJzhKFIHNsAQaysRwzQPQFnPAaV/vhqHsLH/MBsIISA1Rjj7WTUFR3nJrpXoLx39w=="
+  },
+  "piMcpAdapter": {
+    "package": "pi-mcp-adapter",
+    "version": "2.32.1",
+    "integrity": "sha512-GNLYa2U9T5ZqIhZmhx/RTenEjfakJTelq/z6Q+At5SIxyuYvrvobriDEVsnx+lqetVDizUCudTWLfdZytQu0rg==",
+    "peerCompatibility": {
+      "@earendil-works/pi-ai": "^0.84.1",
+      "zod": "^3.25.0 || ^4.0.0",
+      "typebox": "*"
+    }
+  },
+  "build": {
+    "nodeMajor": 24,
+    "webBasePath": "/agent/",
+    "commands": [
+      "npm ci",
+      "npm run typecheck",
+      "npm test",
+      "npm run build"
+    ],
+    "runtimeRoot": "/opt/mapache/pi-web-ui"
+  },
+  "patches": [
+    "patches/0001-expose-build-descriptor.patch",
+    "patches/0002-managed-engine.patch",
+    "patches/0003-managed-subpath-and-service-worker.patch",
+    "patches/0004-embedded-agent-renewal.patch",
+    "patches/0005-managed-credential-ownership.patch",
+    "patches/0006-single-managed-mcp-path.patch",
+    "patches/0007-workspace-root-and-flat-history.patch",
+    "patches/0008-native-goal-persistence.patch",
+    "patches/0009-runtime-quiesce-control.patch",
+    "patches/0010-completed-turn-counter.patch",
+    "patches/0011-managed-navigation-and-chrome.patch"
+  ]
+}

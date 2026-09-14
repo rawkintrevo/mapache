@@ -7,44 +7,37 @@ function createRunnerLifecycleCoordinator({
   chromeProfile,
   chromeProfileSnapshots,
   chromeRuntime,
+  checkpointScheduler,
   config,
-  executionAuthority,
   git,
-  goalsPackage,
   listen,
   logger = console,
-  piChat,
+  piWebUi,
   resourceMetrics,
   piModelScope,
-  terminalSession,
   setIntervalFn = setInterval,
-  sshSession,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+  now = () => Date.now(),
   workspace,
+  workspaceAuthority,
   workspaceSync,
-  webFirst,
-  checkpoint,
 }) {
+  const authority = workspaceAuthority || {
+    acquire: async () => {},
+    assertCurrentWriter: async () => true,
+    isCurrentWriter: () => true,
+    release: async () => false,
+  };
+  let shutdownInFlight = null;
+
   async function start() {
     try {
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
-      const authority = await executionAuthority?.start?.();
-      webFirst?.setExecutionEpoch?.(authority?.executionEpoch);
-      if (config.webFirstEnabled && !executionAuthority?.canMutate?.()) {
-        logger.warn("web-first runner is read-only until execution authority is acquired");
-        await chromeRuntime.start();
-        await webFirst?.initialize?.();
-        listen(() => {
-          logger.log(`session runner listening on ${config.port} (recovery required)`);
-        });
-        return;
-      }
-      const goalsPackageResult = await goalsPackage?.ensureInstalledDeclaration?.();
-      goalsPackage?.setBridgeAvailability?.(goalsPackageResult?.enabled !== false);
-      if (goalsPackageResult?.reason === "managed_package_missing") {
-        (logger.warn || logger.log || console.warn)("managed pi-goal-x package is missing from the image; goal controls remain disabled");
-      }
+      await workspace.restoreCheckpoint?.();
+      await authority.acquire();
       await piModelScope.restore();
       await chromeProfile.restore();
       await chromeRuntime.start();
@@ -53,19 +46,17 @@ function createRunnerLifecycleCoordinator({
       await git.prepareGithubAutomationBranch();
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
-      await activeHarness.materializeSubagents();
-      if (config.webFirstEnabled && executionAuthority?.canMutate?.()) {
-        await checkpoint?.ensureInitial?.().catch((error) => {
-          logger.error("initial web-first checkpoint failed", error);
-        });
-      }
-      await webFirst?.initialize?.();
+      if (config.agentRuntimeEnabled) await piWebUi.start();
       chromeProfileSnapshots.start();
-      startSyncLoop();
+      if (checkpointScheduler) checkpointScheduler.start();
+      else startSyncLoop();
       listen(() => {
         logger.log(`session runner listening on ${config.port}`);
       });
     } catch (error) {
+      await authority.release("startup_failed").catch((releaseError) => {
+        logger.error("workspace runtime authority release failed after startup error", releaseError);
+      });
       await activity.markRuntimeStartupFailure(error).catch((writeError) => {
         logger.error("session runtime failure write failed", writeError);
       });
@@ -74,36 +65,74 @@ function createRunnerLifecycleCoordinator({
   }
 
   async function shutdown() {
-    if (config.webFirstEnabled && executionAuthority?.canMutate?.()) {
-      try {
-        const current = await webFirst?.snapshot?.();
-        if (!current?.control?.activeRun) await checkpoint?.create?.({reason: "shutdown"});
-      } catch (error) {
-        logger.error("final web-first checkpoint failed", error);
-      }
-    }
-    piChat?.close?.();
-    await webFirst?.close?.();
+    return shutdownWithBudget({reason: "manual", budgetMs: config.manualSaveBudgetMs || 120_000});
+  }
+
+  async function shutdownWithBudget({reason, budgetMs}) {
+    if (shutdownInFlight) return shutdownInFlight;
+    shutdownInFlight = shutdownInternal({reason, budgetMs}).finally(() => {
+      shutdownInFlight = null;
+    });
+    return shutdownInFlight;
+  }
+
+  async function shutdownInternal({reason, budgetMs}) {
+    const deadline = now() + Math.max(1, Number(budgetMs) || 120_000);
+    checkpointScheduler?.stop?.();
     try {
-      await goalsPackage?.stop?.();
-    } catch (error) {
-      logger.error("goal RPC shutdown failed", error);
+      if (config.agentRuntimeEnabled) {
+        try {
+          await piWebUi?.quiesce?.();
+        } catch (error) {
+          // A stalled cooperative drain must not prevent process-group
+          // escalation. piWebUi.stop() confirms the child has exited before
+          // the rest of shutdown can touch shared workspace state.
+          logger.warn?.("pi-web-ui quiesce failed; escalating to process-group stop", error);
+        }
+        await piWebUi?.stop?.();
+      }
+      resourceMetrics?.close?.();
+      await chromeRuntime.stop();
+      if (!checkpointScheduler) {
+        await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
+      }
+      if (chromeProfileSnapshots.enabled()) {
+        await chromeProfileSnapshots.stop();
+        if (authority.isCurrentWriter()) await bounded(chromeProfileSnapshots.finalize(), deadline, "checkpoint_timeout");
+        else logger.warn?.("final Chrome profile snapshot skipped after writer authority loss");
+      } else if (checkpointScheduler) {
+        await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
+      } else if (authority.isCurrentWriter()) {
+        await bounded(workspaceSync.syncUp({includeArchives: true}), deadline, "checkpoint_timeout");
+      } else {
+        logger.warn?.("final workspace sync skipped after writer authority loss");
+      }
+      if (checkpointScheduler && chromeProfileSnapshots.enabled()) {
+        await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
+      }
+      await activity.updateSessionActivity({
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+        shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } finally {
+      await authority.release("shutdown").catch((error) => {
+        logger.error("workspace runtime authority release failed during shutdown", error);
+      });
     }
-    resourceMetrics?.close?.();
-    sshSession.closeAll();
-    await terminalSession?.shutdown?.("runner_shutdown");
-    await chromeRuntime.stop();
-    await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
-    if (chromeProfileSnapshots.enabled()) {
-      await chromeProfileSnapshots.stop();
-      await chromeProfileSnapshots.finalize();
-    } else if (!config.webFirstEnabled) {
-      await workspaceSync.syncUp({includeArchives: true});
-    }
-    await executionAuthority?.release?.("runner_shutdown");
-    await activity.updateSessionActivity({
-      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
-      shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }
+
+  function bounded(value, deadline, code) {
+    const remaining = Math.max(1, deadline - now());
+    let timer;
+    const timeout = new Promise((resolve, reject) => {
+      timer = setTimeoutFn(() => {
+        const error = new Error(code);
+        error.code = code;
+        reject(error);
+      }, remaining);
+    });
+    return Promise.race([value, timeout]).finally(() => {
+      if (timer !== undefined) clearTimeoutFn(timer);
     });
   }
 
@@ -114,12 +143,6 @@ function createRunnerLifecycleCoordinator({
       if (syncUpRunning) return;
       syncUpRunning = true;
       const now = Date.now();
-      if (config.webFirstEnabled) {
-        checkpoint?.create?.({reason: "periodic"})
-            .catch((error) => logger.error("periodic checkpoint failed", error))
-            .finally(() => { syncUpRunning = false; });
-        return;
-      }
       const includeArchives = !chromeProfileSnapshots.enabled() &&
         now - lastArchiveSync >= config.archiveSyncIntervalMs;
       const sync = Promise.all([
@@ -137,7 +160,7 @@ function createRunnerLifecycleCoordinator({
     }, config.syncIntervalMs);
   }
 
-  return {shutdown, start};
+  return {shutdown, shutdownWithBudget, start};
 }
 
 module.exports = {createRunnerLifecycleCoordinator};

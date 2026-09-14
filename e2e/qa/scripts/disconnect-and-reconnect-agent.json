@@ -1,0 +1,13 @@
+{
+  "id": "script.disconnectAndReconnectAgent",
+  "title": "Disconnect the browser tab and return without submitting a new prompt",
+  "actions": [
+    {"type": "navigate", "url": "about:blank"},
+    {"type": "navigate", "url": "{{baseUrl}}/app"},
+    {"type": "waitForSnapshotText", "text": "Navigation", "timeoutMs": 15000}
+  ],
+  "successSignals": [
+    "The browser disconnects from the runner and reloads the signed-in shell",
+    "No prompt is submitted as part of reconnect"
+  ]
+}

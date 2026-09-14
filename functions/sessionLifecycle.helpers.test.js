@@ -6,7 +6,6 @@ const {
   canTransitionSession,
   isActiveGithubWorkspaceSession,
   isSessionFailure,
-  isShellSession,
   isSessionTerminal,
   sessionStatusUpdate,
 } = require("./sessionLifecycle.helpers");
@@ -37,12 +36,10 @@ test("classifies terminal and failure states", () => {
   assert.equal(isSessionFailure("running"), false);
 });
 
-test("classifies active GitHub and shell sessions for workspace reservations", () => {
+test("classifies active GitHub sessions for workspace reservations", () => {
   assert.equal(isActiveGithubWorkspaceSession({status: "running"}), true);
   assert.equal(isActiveGithubWorkspaceSession({status: "update_failed"}), true);
   assert.equal(isActiveGithubWorkspaceSession({status: "stopped"}), false);
   assert.equal(isActiveGithubWorkspaceSession({status: "needs_image"}), false);
   assert.equal(isActiveGithubWorkspaceSession({status: "provision_failed"}), false);
-  assert.equal(isShellSession({terminalKind: " Shell "}), true);
-  assert.equal(isShellSession({terminalKind: "pi"}), false);
 });

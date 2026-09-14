@@ -26,7 +26,7 @@ function createFixture(overrides = {}) {
     refreshAll: vi.fn(),
     loadSessions: vi.fn(),
     loadMcpServers: vi.fn(),
-    loadSelectedSessionPanels: vi.fn(),
+    loadSelectedSessionAccess: vi.fn(),
     resetWorkspacePanels: vi.fn(),
   };
 }
@@ -91,7 +91,7 @@ describe("workspaceController", () => {
     expect(fixture.resetWorkspacePanels).toHaveBeenCalledWith();
     expect(fixture.loadSessions).toHaveBeenCalledTimes(1);
     expect(fixture.loadMcpServers).toHaveBeenCalledTimes(1);
-    expect(fixture.loadSelectedSessionPanels).toHaveBeenCalledTimes(1);
+    expect(fixture.loadSelectedSessionAccess).toHaveBeenCalledTimes(1);
   });
 
   test("keeps delete confirmation and clears a deleted selection", async () => {

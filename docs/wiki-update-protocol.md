@@ -16,7 +16,7 @@ Update `docs/` in the same change when behavior changes in any of these areas:
 - Runtime image contents, image catalog selection, Cloud Run provisioning, PTY, preview, WebSocket, or sync behavior.
 - Firebase Hosting, Cloud Functions, Firestore, Cloud Storage, service accounts, or deployment flow.
 - Frontend architecture, major state/workflow ownership, component ownership, or shared styling conventions.
-- Pi auth, Pi skills, Pi package manager, GitHub workspace, GitHub App, Git controls, or PR workflows.
+- Pi/agent auth or settings ownership, GitHub workspace, GitHub App, Git controls, or PR workflows.
 - Any accepted decision future maintainers need before making a non-trivial fix.
 
 Small copy edits, isolated styling tweaks, and mechanical dependency updates do not need docs changes unless they affect one of those areas.

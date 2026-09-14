@@ -70,44 +70,6 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
     return {name: "workspaceMcp", workspaceId: parts[1]};
   }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "files") {
-    return {name: "workspaceFiles", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sync-files") {
-    return {name: "workspaceSyncFiles", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "file") {
-    return {name: "workspaceFile", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "create-file") {
-    return {name: "workspaceCreateFile", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "create-directory") {
-    return {name: "workspaceCreateDirectory", workspaceId: parts[1]};
-  }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "goals") {
-    return {name: "workspaceGoals", workspaceId: parts[1]};
-  }
-  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "goals") {
-    return {name: "workspaceGoal", workspaceId: parts[1], goalId: parts[3]};
-  }
-  if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "goals") {
-    const goalRoute = {
-      actions: "workspaceGoalAction",
-      events: "workspaceGoalEvents",
-      runtime: "workspaceGoalRuntime",
-    };
-    if (goalRoute[parts[4]]) return {name: goalRoute[parts[4]], workspaceId: parts[1], goalId: parts[3]};
-  }
-  if (parts.length === 7 && parts[0] === "workspaces" && parts[2] === "goals" && parts[4] === "questions" && parts[6] === "answer") {
-    return {name: "workspaceGoalQuestionAnswer", workspaceId: parts[1], goalId: parts[3], questionId: parts[5]};
-  }
-  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "goal-operations") {
-    return {name: "workspaceGoalOperation", workspaceId: parts[1], operationId: parts[3]};
-  }
-  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "file" && parts[3] === "download-url") {
-    return {name: "workspaceFileDownloadUrl", workspaceId: parts[1]};
-  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
     return {name: "sessions", workspaceId: parts[1]};
   }
@@ -120,78 +82,24 @@ function routeRequest(path) {
     ["restart", "restartSession"],
     ["stop", "stopSession"],
     ["access-url", "sessionAccess"],
+    ["logs", "sessionLogs"],
     ["share-preview", "sessionSharePreview"],
     ["auth-selection", "sessionPiAuthSelection"],
     ["pi-auth-selection", "sessionPiAuthSelection"],
-    ["git-status", "gitStatus"],
-    ["git-branches", "gitBranches"],
-    ["git-checkout", "gitCheckout"],
-    ["git-branch", "gitBranch"],
-    ["git-ignore", "gitIgnore"],
-    ["git-pull", "gitPull"],
-    ["git-stage", "gitStage"],
-    ["git-unstage", "gitUnstage"],
-    ["git-commit", "gitCommit"],
-    ["git-push", "gitPush"],
-    ["git-open-pr", "gitOpenPr"],
-    ["pi-packages", "piPackages"],
-    ["models", "piModels"],
-    ["models-file", "piModelsFile"],
-    ["skills", "sessionSkills"],
-    ["pi-skills", "sessionSkills"],
-    ["subagents", "sessionSubagents"],
-    ["ssh-files", "sshSessionFiles"],
-    ["ssh-file", "sshSessionFile"],
-    ["ssh-ports", "sshSessionForwards"],
   ]);
   if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "sessions") {
     const name = sessionActionRoutes.get(parts[4]);
     if (name) return {name, workspaceId: parts[1], sessionId: parts[3]};
   }
 
-  const piPackageActionRoutes = new Map([
-    ["install", "piPackageInstall"],
-    ["remove", "piPackageRemove"],
-    ["update", "piPackageUpdate"],
-  ]);
   if (
     parts.length === 6 &&
     parts[0] === "workspaces" &&
     parts[2] === "sessions" &&
-    parts[4] === "ssh-ports"
+    parts[4] === "qa" &&
+    parts[5] === "faults"
   ) {
-    return {name: "sshSessionForward", workspaceId: parts[1], sessionId: parts[3], port: parts[5]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "pi-packages"
-  ) {
-    const name = piPackageActionRoutes.get(parts[5]);
-    if (name) return {name, workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    (parts[4] === "skills" || parts[4] === "pi-skills") &&
-    parts[5] === "delete"
-  ) {
-    return {name: "sessionSkillDelete", workspaceId: parts[1], sessionId: parts[3]};
-  }
-  if (
-    parts.length === 6 &&
-    parts[0] === "workspaces" &&
-    parts[2] === "sessions" &&
-    parts[4] === "subagents" &&
-    parts[5] === "delete"
-  ) {
-    return {
-      name: "sessionSubagentDelete",
-      workspaceId: parts[1],
-      sessionId: parts[3],
-    };
+    return {name: "sessionQaFaults", workspaceId: parts[1], sessionId: parts[3]};
   }
   if (parts.length === 2 && parts[0] === "github" && parts[1] === "connect") {
     return {name: "githubConnect"};

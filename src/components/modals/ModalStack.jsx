@@ -2,46 +2,20 @@ import "./ModalStack.css";
 import {AuthModal} from "./AuthModal.jsx";
 import {GenericEnvironmentModal} from "./GenericEnvironmentModal.jsx";
 import {GoogleWorkspaceModal} from "./GoogleWorkspaceModal.jsx";
-import {FileEditorDialog} from "./FileEditorDialog.jsx";
-import {PullRequestModal} from "./PullRequestModal.jsx";
+import {GoogleWorkspaceManageModal} from "./GoogleWorkspaceManageModal.jsx";
+import {McpServersModal} from "./McpServersModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
-import {PiModelsModal} from "./PiModelsModal.jsx";
-import {SessionModal} from "./SessionModal.jsx";
-import {SessionEditModal} from "./SessionEditModal.jsx";
-import {WorkspaceSubagentModal} from "./WorkspaceSubagentModal.jsx";
-import {WorkspaceSkillModal} from "./WorkspaceSkillModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
-import {GitManagerModal} from "./GitManagerModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
   const {handlers, state} = props;
-  const {files, git, github, google, modals, pi, sessions, workspaces} = handlers;
+  const {github, google, modals, pi, workspaces} = handlers;
   const busy = hasPendingOperations(state.pendingOperations);
-  const editingSession = state.sessions.find((session) => session.id === state.sessionEditModalSessionId);
 
   return (
     <>
-      {editingSession ? (
-        <SessionEditModal
-          busy={busy}
-          error={state.error}
-          session={editingSession}
-          onClose={modals.closeSessionEditModal}
-          onSave={sessions.editSession}
-        />
-      ) : null}
-      {state.sessionModalOpen ? (
-        <SessionModal
-          busy={busy}
-          error={state.error}
-          selectedWorkspace={props.selectedWorkspace}
-          environmentEntries={state.piAuth.environmentEntries}
-          onClose={modals.closeSessionModal}
-          onCreateSession={sessions.createSession}
-        />
-      ) : null}
       {state.workspaceModalOpen ? (
         <WorkspaceModal
           repoPicker={state.repoPicker}
@@ -74,6 +48,18 @@ export function ModalStack(props) {
         />
       ) : null}
       {state.genericEnvironmentModalOpen ? <GenericEnvironmentModal piAuth={state.piAuth} selectedSession={props.selectedSession} onClose={modals.closeGenericEnvironmentModal} onSave={pi.saveGenericEnvironmentKey} onUpdate={pi.updateGenericEnvironmentForm} onEdit={pi.editGenericEnvironmentKey} onDelete={pi.deleteGenericEnvironmentKey} onToggleSelection={pi.updateGenericEnvironmentSelection} /> : null}
+      {state.mcpServersModalOpen ? (
+        <McpServersModal
+          mcpServers={state.mcpServers}
+          onClose={modals.closeMcpServersModal}
+          onDelete={pi.deleteMcpServer}
+          onEdit={pi.editMcpServer}
+          onNew={pi.newMcpServer}
+          onRefresh={pi.refreshMcpServers}
+          onSave={pi.saveMcpServer}
+          onUpdate={pi.updateMcpServerForm}
+        />
+      ) : null}
       {state.googleWorkspaceModalOpen ? (
         <GoogleWorkspaceModal
           googleWorkspace={state.googleWorkspace}
@@ -81,6 +67,17 @@ export function ModalStack(props) {
           onStartConnection={google.startConnection}
           onUpdateAccessLevel={google.updateAccessLevel}
           onUpdateService={google.updateService}
+        />
+      ) : null}
+      {state.googleWorkspaceManageModalOpen ? (
+        <GoogleWorkspaceManageModal
+          googleWorkspace={state.googleWorkspace}
+          onBindConnection={google.bindConnection}
+          onClose={modals.closeGoogleWorkspaceManageModal}
+          onDeleteConnection={google.deleteConnection}
+          onEditConnection={modals.openGoogleWorkspaceModal}
+          onRefresh={google.loadGoogleWorkspace}
+          onUnbindConnection={google.unbindConnection}
         />
       ) : null}
       {state.piAuthManageModalOpen ? (
@@ -91,76 +88,7 @@ export function ModalStack(props) {
           onClose={modals.closePiAuthManageModal}
           onDelete={pi.deletePiAuthProvider}
           onEdit={modals.openAuthModal}
-          onOpenModelsFile={files.openPiModelsFile}
           onSave={pi.saveSessionPiAuthSelection}
-        />
-      ) : null}
-      {state.piModelsModalOpen ? (
-        <PiModelsModal
-          modelState={state.piModels}
-          onClose={modals.closePiModelsModal}
-          onRefresh={sessions.loadPiModels}
-          onSave={sessions.savePiModelScope}
-        />
-      ) : null}
-      {state.workspaceSkillModalOpen ? (
-        <WorkspaceSkillModal
-          selectedSession={props.selectedSession}
-          workspaceSkills={state.workspaceSkills}
-          onCancelWorkspaceSkillEdit={pi.cancelPiSkillEdit}
-          onClose={modals.closeWorkspaceSkillModal}
-          onDeleteWorkspaceSkill={pi.deletePiSkill}
-          onEditWorkspaceSkill={pi.editPiSkill}
-          onSaveWorkspaceSkill={pi.savePiSkill}
-          onUpdateWorkspaceSkillForm={pi.updatePiSkillForm}
-        />
-      ) : null}
-      {state.workspaceSubagentModalOpen ? (
-        <WorkspaceSubagentModal
-          selectedSession={props.selectedSession}
-          workspaceSubagents={state.workspaceSubagents}
-          onCancelWorkspaceSubagentEdit={pi.cancelWorkspaceSubagentEdit}
-          onClose={modals.closeWorkspaceSubagentModal}
-          onSaveWorkspaceSubagent={async () => {
-            await pi.saveWorkspaceSubagent();
-            if (!state.workspaceSubagents?.error) {
-              modals.closeWorkspaceSubagentModal();
-            }
-          }}
-          onUpdateWorkspaceSubagentForm={pi.updateWorkspaceSubagentForm}
-        />
-      ) : null}
-      {state.fileEditor.open ? (
-        <FileEditorDialog
-          editor={state.fileEditor}
-          onClose={files.closeFileEditor}
-          onSave={files.saveFileEditor}
-          onUpdateContent={files.updateFileEditorContent}
-        />
-      ) : null}
-      {state.pullRequestForm.open ? (
-        <PullRequestModal
-          formState={state.pullRequestForm}
-          onClose={git.closePullRequestModal}
-          onSubmit={git.submitPullRequest}
-          onUpdate={git.updatePullRequestForm}
-        />
-      ) : null}
-      {state.gitStatus?.manageOpen ? (
-        <GitManagerModal
-          busy={busy}
-          gitStatus={state.gitStatus}
-          session={props.selectedSession}
-          onCheckoutBranch={git.checkoutGitBranch}
-          onClose={git.closeGitManagerModal}
-          onCommitGit={git.commitGit}
-          onCreateBranch={git.createGitBranch}
-          onIgnoreGitPath={git.ignoreGitPath}
-          onOpenPullRequest={git.openPullRequestModal}
-          onRefreshBranches={git.loadGitBranches}
-          onStageGitPath={git.stageGitPath}
-          onUnstageGitPath={git.unstageGitPath}
-          onUpdateGitCommitMessage={git.updateGitCommitMessage}
         />
       ) : null}
     </>

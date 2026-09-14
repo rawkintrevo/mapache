@@ -9,7 +9,7 @@ const {createWorkspaceAuthService} = require("./workspaceAuth.service");
 const {generationMatchOptions, isStorageGenerationConflict} = require("./workspaceSyncGeneration.helpers");
 const {normalizeRelativeWorkspacePath} = require("./utils");
 
-function createWorkspaceService({admin, config, db, git, storage}) {
+function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
   const archives = createWorkspaceArchiveService({config, git, pathHelpers, storage});
   const auth = createWorkspaceAuthService({admin, config, db});
@@ -45,6 +45,9 @@ function createWorkspaceService({admin, config, db, git, storage}) {
 
   async function syncWorktreeDown() {
     if (!config.bucketName || !config.prefix) return;
+    // Marked runtimes use the immutable workspace-file manifest. The legacy
+    // flat prefix must not repopulate state when a checkpoint is absent.
+    if (config.agentRuntimeEnabled) return;
     const [files] = await storage.bucket(config.bucketName).getFiles({prefix: config.prefix});
     await Promise.all(files.map(async (file) => {
       if (file.name.endsWith("/")) return;
@@ -61,9 +64,44 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     }));
   }
 
+  async function restoreCheckpoint() {
+    if (!config.agentRuntimeEnabled || !checkpointRestore?.restoreCheckpoint) {
+      return {ok: true, skipped: true};
+    }
+    const result = await checkpointRestore.restoreCheckpoint({
+      shouldIgnore: pathHelpers.shouldIgnoreWorkspacePath,
+    });
+    return result;
+  }
+
   async function syncUp(options = {}) {
+    await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
     if (!config.bucketName || !config.prefix) return {conflicts: []};
+    if (config.agentRuntimeEnabled && checkpointPublisher?.publishWorkspaceFiles) {
+      const identity = {
+        ...(typeof checkpointIdentity === "function" ? checkpointIdentity() : {}),
+        generation: config.agentRuntimeGeneration,
+        sessionId: config.sessionId,
+        workspaceId: config.workspaceId,
+      };
+      try {
+        const publication = await checkpointPublisher.publishWorkspaceFiles({
+          ...identity,
+          assertCurrentWriter: options.assertCurrentWriter,
+          shouldIgnore: pathHelpers.shouldIgnoreWorkspacePath,
+          sourceRoot: config.workspaceDir,
+        });
+        return {conflicts: [], ...publication};
+      } catch (error) {
+        try {
+          await checkpointPublisher.recordCheckpointError?.(error.code || "checkpoint_workspace_publish_failed", identity);
+        } catch (_statusError) {
+          // Preserve the publication failure; status persistence is best effort.
+        }
+        throw error;
+      }
+    }
     const {directories, files} = await walkWorkspace(config.workspaceDir);
     const desiredRemotePaths = new Set();
 
@@ -85,9 +123,11 @@ function createWorkspaceService({admin, config, db, git, storage}) {
       return syncFileUpPreservingNewerRemote(localPath, remotePath);
     }));
 
+    await options.assertCurrentWriter?.();
     const reconcileConflicts = await reconcileManagedRemoteWorktree(desiredRemotePaths);
 
     if (options.includeArchives) {
+      await options.assertCurrentWriter?.();
       await archives.syncArchivesUp();
     }
     return {
@@ -180,10 +220,11 @@ function createWorkspaceService({admin, config, db, git, storage}) {
     findArchiveFile: archives.findArchiveFile,
     materializeAuthNow: auth.materializeAuthNow,
     prepareWorkspaceSource,
+    restoreCheckpoint,
+    secretFileInventory: auth.secretFileInventory,
     extractStorageArchive: archives.extractStorageArchive,
     syncArchivesDown: archives.syncArchivesDown,
     syncArchivesUp: archives.syncArchivesUp,
-    syncChromeProfileUp: archives.syncChromeProfileUp,
     syncDown,
     syncUp,
     synchronizeAuth: auth.synchronizeAuth,

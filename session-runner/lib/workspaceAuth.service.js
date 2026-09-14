@@ -10,6 +10,16 @@ function createWorkspaceAuthService({admin, config, db}) {
 
   async function synchronizeAuth(options = {}) {
     if (!config.ownerUid || !harness.auth?.supported) return;
+
+    // The managed Pi runtime has a different credential owner: Firestore is
+    // authoritative and the fixed agent directory is only a materialization
+    // target.  In particular, never read a restored native auth file and copy
+    // it back into Mapache's canonical credential document.
+    if (isManagedAgentRuntime(config)) {
+      if (!options.materialize) return {ok: true, appliedToRunner: false, providerCount: 0, secretFiles: secretFileInventory(config)};
+      return materializeCanonicalAuth();
+    }
+
     const localAuth = await readLocalAuthFile();
 
     if (Object.keys(localAuth).length) {
@@ -30,6 +40,22 @@ function createWorkspaceAuthService({admin, config, db}) {
     };
     await writeLocalAuthFile(mergedAuth);
     console.log(`${harness.id} auth materialized ${Object.keys(mergedAuth).length} provider(s) to ${authFilePath()}`);
+    return {ok: true, appliedToRunner: true, providerCount: Object.keys(mergedAuth).length, secretFiles: secretFileInventory(config)};
+  }
+
+  async function materializeCanonicalAuth(selectionOverride = null) {
+    const data = await readRemoteAuthData();
+    const selection = selectionOverride === null ? await readSessionAuthSelection() : selectionOverride;
+    const auth = buildMaterializedAuth(data, selection);
+
+    // provider-keys.json is an upstream key store.  It can contain a key from
+    // an older restored UI state, so it must not survive into a managed boot
+    // where Mapache's selected credentials are the only native auth source.
+    await clearManagedCredentialShadowFiles();
+    await writeGitHubCliAuth(auth);
+    await writeLocalAuthFile(auth);
+    console.log(`${harness.id} auth materialized ${Object.keys(auth).length} selected provider(s) to ${authFilePath()}`);
+    return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length, secretFiles: secretFileInventory(config)};
   }
 
   async function readSessionAuthSelection() {
@@ -49,14 +75,22 @@ function createWorkspaceAuthService({admin, config, db}) {
 
   async function materializeAuthNow(selection = null) {
     if (!config.ownerUid || !harness.auth?.supported) {
-      return {ok: true, appliedToRunner: false, providerCount: 0};
+      return {ok: true, appliedToRunner: false, providerCount: 0, secretFiles: secretFileInventory(config)};
     }
+    if (isManagedAgentRuntime(config)) return materializeCanonicalAuth(selection);
     const data = await readRemoteAuthData();
     const auth = buildMaterializedAuth(data, selection === null ? await readSessionAuthSelection() : selection);
     await writeGitHubCliAuth(auth);
     await writeLocalAuthFile(auth);
     console.log(`${harness.id} auth materialized ${Object.keys(auth).length} selected provider(s) to ${authFilePath()}`);
-    return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length};
+    return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length, secretFiles: secretFileInventory(config)};
+  }
+
+  async function clearManagedCredentialShadowFiles() {
+    if (!isManagedAgentRuntime(config) || !config.piAgentDir) return;
+    await fs.promises.unlink(path.join(config.piAgentDir, "provider-keys.json")).catch((error) => {
+      if (error && error.code !== "ENOENT") throw error;
+    });
   }
 
   async function readRemoteAuthData() {
@@ -90,7 +124,6 @@ function createWorkspaceAuthService({admin, config, db}) {
     const authPath = authFilePath();
     try {
       const content = await fs.promises.readFile(authPath, "utf8");
-      if (harness.id === "codex") return normalizeAuthProviders(parseCodexAuthFile(content));
       return normalizeAuthProviders(JSON.parse(content));
     } catch (error) {
       if (error && error.code === "ENOENT") return {};
@@ -103,19 +136,6 @@ function createWorkspaceAuthService({admin, config, db}) {
     const authPath = authFilePath();
     const nativeAuth = authFileProviders(auth);
     await fs.promises.mkdir(path.dirname(authPath), {recursive: true});
-    if (harness.id === "codex") {
-      const codexAuth = buildCodexAuthFile(nativeAuth);
-      if (!codexAuth) {
-        await fs.promises.unlink(authPath).catch((error) => {
-          if (error && error.code !== "ENOENT") throw error;
-        });
-        return;
-      }
-      const content = JSON.stringify(codexAuth, null, 2);
-      await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
-      await fs.promises.chmod(authPath, 0o600).catch(() => {});
-      return;
-    }
     const content = JSON.stringify(normalizeAuthProviders(nativeAuth), null, 2);
     await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
     await fs.promises.chmod(authPath, 0o600).catch(() => {});
@@ -148,9 +168,47 @@ function createWorkspaceAuthService({admin, config, db}) {
     normalizeAuthSelection,
     readLocalAuthFile,
     readSessionAuthSelection,
+    secretFileInventory: () => secretFileInventory(config),
     synchronizeAuth,
     writeLocalAuthFile,
   };
+}
+
+function isManagedAgentRuntime(config = {}) {
+  return config.agentRuntimeEnabled === true && resolveHarnessMetadata(config).id === "pi";
+}
+
+/**
+ * Secret-bearing files known to the runner auth/materialization boundary.
+ * The capture helper consumes this inventory later; it deliberately contains
+ * paths and classifications only, never file contents or credential values.
+ */
+function secretFileInventory(config = {}) {
+  const harness = resolveHarnessMetadata(config);
+  const entries = [];
+  const add = (id, localPath, kind, reason) => {
+    if (!localPath) return;
+    entries.push({id, localPath: path.resolve(localPath), kind, reason, capture: "exclude"});
+  };
+
+  if (harness.auth?.supported && typeof harness.auth.storagePath === "function") {
+    add("agent-auth", harness.auth.storagePath(config), "credential", "native harness credentials are rematerialized from Mapache");
+  }
+  if (harness.id === "pi" && config.piAgentDir) {
+    add("pi-provider-keys", path.join(config.piAgentDir, "provider-keys.json"), "credential", "upstream provider key store is not Mapache-owned");
+    add("pi-model-config", path.join(config.piAgentDir, "models.json"), "secret-bearing-config", "custom provider keys or secret headers may be present");
+    add("pi-mcp-oauth", path.join(config.piAgentDir, "mcp-oauth"), "connector-credential", "MCP OAuth state is materialized separately");
+  }
+  add("github-cli-hosts", githubCliHostsPath(config), "credential", "GitHub CLI token is materialized from the Mapache provider");
+
+  if (isManagedAgentRuntime(config) && config.homeDir) {
+    const legacyAuth = path.join(config.homeDir, ".pi", "agent", "auth.json");
+    const nativeAuth = harness.auth?.storagePath?.(config);
+    if (path.resolve(legacyAuth) !== path.resolve(nativeAuth || "")) {
+      add("legacy-pi-auth", legacyAuth, "legacy-credential", "restored home state must never become managed Pi input");
+    }
+  }
+  return entries;
 }
 
 function authFileProviders(auth) {
@@ -211,93 +269,6 @@ function providersForHarness(providers, harness) {
     if (harness.auth.providerKeys.includes(providerKey)) acc[providerKey] = credential;
     return acc;
   }, {});
-}
-
-function parseCodexAuthFile(content) {
-  try {
-    const parsed = JSON.parse(String(content || "{}"));
-    const providers = {};
-    if (parsed.tokens && typeof parsed.tokens === "object") {
-      providers["openai-codex"] = normalizePlainAuthObject({
-        type: "oauth",
-        id: parsed.tokens.id_token || "",
-        access: parsed.tokens.access_token || "",
-        refresh: parsed.tokens.refresh_token || "",
-        accountId: parsed.tokens.account_id || "",
-        lastRefresh: parsed.last_refresh || 0,
-      });
-    }
-    if (parsed.OPENAI_API_KEY) {
-      providers.openai = {type: "api_key", key: String(parsed.OPENAI_API_KEY)};
-    }
-    return providers;
-  } catch (error) {
-    return {};
-  }
-}
-
-function buildCodexAuthFile(auth) {
-  const providers = normalizeAuthProviders(auth);
-  const oauth = normalizeCodexOauthCredential(providers["openai-codex"]);
-  const apiKey = normalizeCodexApiKey(providers.openai);
-  if (!oauth && !apiKey) return null;
-  if (!oauth) {
-    return {
-      auth_mode: "apikey",
-      OPENAI_API_KEY: apiKey,
-    };
-  }
-  return {
-    auth_mode: "chatgpt",
-    OPENAI_API_KEY: apiKey || "",
-    tokens: {
-      id_token: oauth.id,
-      access_token: oauth.access,
-      refresh_token: oauth.refresh,
-      account_id: oauth.accountId,
-    },
-    last_refresh: normalizeCodexLastRefresh(oauth.lastRefresh),
-  };
-}
-
-function normalizeCodexApiKey(credential) {
-  if (!credential || credential.type !== "api_key") return "";
-  return String(credential.key || "").trim();
-}
-
-function normalizeCodexLastRefresh(value) {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
-  return null;
-}
-
-function normalizeCodexOauthCredential(credential) {
-  if (!credential || credential.type !== "oauth") return null;
-  const id = String(credential.id || "").trim();
-  const access = String(credential.access || "").trim();
-  const refresh = String(credential.refresh || "").trim();
-  if (!looksLikeJwt(id) || !access || !refresh) return null;
-  return {
-    id,
-    access,
-    refresh,
-    accountId: String(credential.accountId || "").trim(),
-    lastRefresh: credential.lastRefresh ?? credential.expires ?? null,
-  };
-}
-
-function looksLikeJwt(value) {
-  const parts = String(value || "").trim().split(".");
-  if (parts.length !== 3 || parts.some((part) => !part)) return false;
-  return parts.slice(0, 2).every((part) => {
-    try {
-      const decoded = Buffer.from(part, "base64url").toString("utf8");
-      const parsed = JSON.parse(decoded);
-      return Boolean(parsed) && typeof parsed === "object" && !Array.isArray(parsed);
-    } catch (error) {
-      return false;
-    }
-  });
 }
 
 function normalizeAuthProviders(value) {
@@ -400,13 +371,13 @@ function normalizeAuthKey(value) {
 module.exports = {
   authFileProviders,
   buildGitHubCliHostsYaml,
-  buildCodexAuthFile,
   createWorkspaceAuthService,
   githubCliHostsPath,
+  isManagedAgentRuntime,
   mergeRemoteAuthData,
   normalizeGitHubCliCredential,
   normalizeAuthEntries,
   normalizeAuthProviders,
   normalizeAuthSelection,
-  parseCodexAuthFile,
+  secretFileInventory,
 };

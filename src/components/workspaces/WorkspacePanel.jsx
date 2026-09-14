@@ -1,43 +1,24 @@
 import {SessionDetail} from "../sessions/SessionDetail.jsx";
-import {SessionList} from "../sessions/SessionList.jsx";
+import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 import {WorkspaceHeader} from "./WorkspaceHeader.jsx";
-import {hasPendingOperations} from "../../state/pendingOperations.js";
-import {WorkspaceGoalsPanel} from "../goals/WorkspaceGoalsPanel.jsx";
 
 export function WorkspacePanel({
+  activeCanvas,
   selectedSession,
   selectedWorkspace,
   state,
   onGetSessionAccessUrls,
-  onOpenPiAuthManage,
-  onOpenPiModels,
-  onRetryProvisioningSession,
-  onRestartSession,
-  onCloseSshSessionForward,
-  onCreateSshSessionForward,
-  onSelectSession,
-  onUpdateSshForwardPort,
+  onSelectCanvas,
 }) {
-  const busy = hasPendingOperations(state.pendingOperations);
-
   if (selectedSession) {
     return (
-      <section className="workspace">
+      <section className={`workspace${isMarkedRuntimeSession(selectedSession) ? " workspace--managed-agent" : ""}`}>
         <SessionDetail
-          api={state.api}
-          busy={busy}
+          activeCanvas={activeCanvas}
           session={selectedSession}
-          sshForwards={state.sshForwards}
           workspaceId={state.selectedWorkspaceId}
-          workspaceSessions={state.sessions}
           onGetSessionAccessUrls={onGetSessionAccessUrls}
-          onOpenPiAuthManage={onOpenPiAuthManage}
-          onOpenPiModels={onOpenPiModels}
-          onRetryProvisioningSession={onRetryProvisioningSession}
-          onRestartSession={onRestartSession}
-          onCloseSshSessionForward={onCloseSshSessionForward}
-          onCreateSshSessionForward={onCreateSshSessionForward}
-          onUpdateSshForwardPort={onUpdateSshForwardPort}
+          onSelectCanvas={onSelectCanvas}
         />
       </section>
     );
@@ -47,13 +28,10 @@ export function WorkspacePanel({
     <section className="workspace">
       <WorkspaceHeader workspace={selectedWorkspace} />
       {state.error ? <div className="error">{state.error}</div> : null}
-      <WorkspaceGoalsPanel api={state.api} sessions={state.sessions} workspaceId={state.selectedWorkspaceId} />
-      <SessionList
-        selectedSessionId={state.selectedSessionId}
-        selectedWorkspaceId={state.selectedWorkspaceId}
-        sessions={state.sessions}
-        onSelectSession={onSelectSession}
-      />
+      <div className="workspace-off-state" role="status">
+        <strong>Workspace is off</strong>
+        <span>Press Play in the navigation bar to start its runtime.</span>
+      </div>
     </section>
   );
 }

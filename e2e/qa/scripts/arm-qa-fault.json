@@ -1,0 +1,21 @@
+{
+  "id": "script.armQaFault",
+  "title": "Arm one disposable QA fault",
+  "parameters": {
+    "fault": "short-lived-access",
+    "ttlMs": "3000"
+  },
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions/{{selectedSessionId}}/qa/faults",
+      "body": {"action": "arm", "fault": "{{fault}}", "ttlMs": "{{ttlMs}}"}
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/qa/faults", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The runner acknowledges the requested one-shot fault",
+    "The fault is armed only for the explicitly marked disposable session"
+  ]
+}

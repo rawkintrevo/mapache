@@ -1,0 +1,11 @@
+{
+  "id": "script.openGoogleWorkspaceModal",
+  "title": "Open Google Workspace management from the navbar",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Manage Google Workspace"},
+    {"type": "waitForSnapshotText", "text": "Add Google account", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "The navbar icon opens the selected workspace's Google account management modal"
+  ]
+}

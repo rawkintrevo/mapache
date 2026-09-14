@@ -1,5 +1,6 @@
 .app {
   height: 100vh;
+  height: 100dvh;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -8,21 +9,9 @@
 
 main {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-}
-
-main.drawer-collapsed {
-  grid-template-columns: 58px minmax(0, 1fr) minmax(280px, 360px);
-}
-
-main.right-drawer-collapsed {
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr) 58px;
-}
-
-main.drawer-collapsed.right-drawer-collapsed {
-  grid-template-columns: 58px minmax(0, 1fr) 58px;
 }
 
 .workspace {
@@ -35,32 +24,52 @@ main.drawer-collapsed.right-drawer-collapsed {
   padding: 20px;
 }
 
+.workspace--managed-agent {
+  align-content: stretch;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.workspace--managed-agent .session-detail {
+  display: block;
+  min-height: 0;
+  height: 100%;
+}
+
+.workspace-off-state {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  padding: 28px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.workspace-off-state span {
+  color: var(--muted);
+}
+
 @media (max-width: 900px) {
   .app {
     height: auto;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: visible;
   }
 
   main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     overflow: visible;
-  }
-
-  main.drawer-collapsed {
-    grid-template-columns: 1fr;
-  }
-
-  main.right-drawer-collapsed {
-    grid-template-columns: 1fr;
-  }
-
-  main.drawer-collapsed.right-drawer-collapsed {
-    grid-template-columns: 1fr;
   }
 
   .workspace {
     overflow-y: visible;
+  }
+
+  .workspace--managed-agent {
+    min-height: clamp(360px, 60dvh, 720px);
   }
 }
 

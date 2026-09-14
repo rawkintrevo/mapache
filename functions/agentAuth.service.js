@@ -176,10 +176,10 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   const environmentEntryIds = hasEnvironmentSelection ?
     normalizeEnvironmentEntryIds(payload.environmentEntryIds) :
     normalizeEnvironmentEntryIds(session.environmentEntryIds || session.genericEnvironmentEntryIds || []);
-  if (!["pi", "codex"].includes(harnessId) && !hasEnvironmentSelection) {
+  if (harnessId !== "pi" && !hasEnvironmentSelection) {
     throw httpError(400, "auth_selection_unsupported");
   }
-  const piAuth = ["pi", "codex"].includes(harnessId) ? await getPiAuth(uid, dependencies) : {entries: {}};
+  const piAuth = harnessId === "pi" ? await getPiAuth(uid, dependencies) : {entries: {}};
   const selection = {
     harness: harnessId,
     providers: normalizePiAuthSelection(
@@ -408,11 +408,9 @@ function sessionHarnessId(session = {}) {
   if (terminalKind) return terminalKind;
   const imageKey = String(session.imageKey || "").trim().toLowerCase();
   if (imageKey.startsWith("pi-")) return "pi";
-  if (imageKey.startsWith("codex-")) return "codex";
   const image = String(session.image || "").trim().toLowerCase();
-  if (/session-runner:pi-/.test(image)) return "pi";
-  if (/session-runner:codex-/.test(image)) return "codex";
-  return "shell";
+  if (imageKey === "pi-chrome" || /session-runner:pi-chrome(?:@|$)/.test(image)) return "pi";
+  return "";
 }
 
 async function requireWorkspaceDependency(dependencies, uid, workspaceId) {

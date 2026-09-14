@@ -4,7 +4,7 @@ import {generatedCatalog, renderedCatalog} from "./generate-runner-catalog.mjs";
 
 test("generated catalog contains every shared harness and image", () => {
   const catalog = generatedCatalog();
-  assert.deepEqual(Object.keys(catalog.harnesses), ["shell", "ssh", "pi", "codex"]);
-  assert.ok(catalog.images.some((image) => image.imageKey === "codex-web"));
+  assert.deepEqual(Object.keys(catalog.harnesses), ["pi"]);
+  assert.deepEqual(catalog.images.map((image) => image.imageKey), ["pi-chrome"]);
   assert.match(renderedCatalog(), /"harnesses"/);
 });

@@ -6,13 +6,13 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const {
   admin,
+  auth,
   db,
   storage,
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
   DEFAULT_FUNCTION_REGION,
-  DEFAULT_IMAGE,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
@@ -55,10 +55,6 @@ const {
   SESSION_RESOURCE_ERROR_CODE,
   normalizeSessionResources,
 } = require("./sessionResources.helpers");
-const {
-  findActiveChromeSession,
-  isChromeSession,
-} = require("./chromeReservation.helpers");
 const {createGithubService} = require("./github.service");
 const {createGoogleWorkspaceConnectionsService} = require("./googleWorkspaceConnections.service");
 const {createGoogleWorkspaceOAuthService, callbackPage} = require("./googleWorkspaceOAuth.service");
@@ -66,19 +62,15 @@ const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.ser
 const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
 const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
 const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
-const {createGitSessionService} = require("./gitSession.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
-const {createPiModelsService} = require("./piModels.service");
-const {createPiPackagesService} = require("./piPackages.service");
-const {createGoalsService} = require("./goals.service");
 const {createPreviewService} = require("./preview.service");
+const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
-const {createSshSessionService} = require("./sshSession.service");
-const {createWorkspaceAgentAssetsService} = require("./workspaceAgentAssets.service");
+const {createSessionLogsService} = require("./sessionLogs.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
@@ -90,13 +82,27 @@ const {
 } = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
+const {createWorkspaceSessionReservationService} = require("./workspaceSessionReservation.service");
 const {
   isActiveGithubWorkspaceSession,
-  isShellSession,
 } = require("./sessionLifecycle.helpers");
 
+const workspaceSessionReservationService = createWorkspaceSessionReservationService({admin, db});
+const {
+  markChromeWorkspaceSessionRunning,
+  markChromeWorkspaceSessionStopping,
+  releaseChromeWorkspaceSession,
+  reserveChromeWorkspaceSession,
+} = workspaceSessionReservationService;
+
 const githubService = createGithubService();
-const lifecycleDependencies = {admin, db, requireWorkspace, sessionCollection};
+const lifecycleDependencies = {
+  admin,
+  db,
+  markChromeWorkspaceSessionStopping,
+  requireWorkspace,
+  sessionCollection,
+};
 const sessionLifecycleService = createSessionLifecycleService(lifecycleDependencies);
 const {
   deleteSession,
@@ -108,6 +114,7 @@ const {
   restartSession,
   stopSession,
 } = sessionLifecycleService;
+const sessionLogsService = createSessionLogsService({auth, requireSession});
 const agentAuthService = createAgentAuthService({
   admin,
   db,
@@ -116,31 +123,6 @@ const agentAuthService = createAgentAuthService({
   requireWorkspace,
 });
 const openAiCodexAuthService = createOpenAiCodexAuthService({agentAuthService});
-const piPackagesService = createPiPackagesService({
-  admin,
-  db,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const goalsService = createGoalsService({
-  admin,
-  db,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const piModelsService = createPiModelsService({
-  admin,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const workspaceAgentAssetsService = createWorkspaceAgentAssetsService({
-  requireSession,
-  requireWorkspace,
-  requestRunnerJson,
-});
 const environmentKeysService = createEnvironmentKeysService({admin, db});
 const qaAuthService = createQaAuthService();
 const googleWorkspaceConnectionsService = createGoogleWorkspaceConnectionsService({db});
@@ -176,39 +158,15 @@ const previewService = createPreviewService({
   requireSession,
   storage,
 });
+const qaFaultHarnessService = createQaFaultHarnessService({
+  requestRunnerJson,
+  requireSession,
+});
 const {
   createSessionAccessUrls,
   servePublicPreview,
   shareSessionPreview,
 } = previewService;
-const sshSessionService = createSshSessionService({requestRunnerJson, requireSession});
-const {
-  closeSshSessionForward,
-  createSshSessionForward,
-  listSshSessionFiles,
-  listSshSessionForwards,
-  readSshSessionFile,
-  saveSshSessionFile,
-} = sshSessionService;
-const gitSessionService = createGitSessionService({
-  githubService,
-  requestRunnerJson,
-  requireSession,
-  requireWorkspace,
-});
-const {
-  commitGit,
-  getGitStatusSummary,
-  listGitBranches,
-  checkoutGitBranch,
-  createGitBranch,
-  ignoreGitPath,
-  openPullRequest,
-  pullGit,
-  pushGit,
-  stageGit,
-  unstageGit,
-} = gitSessionService;
 const sessionCreationService = createSessionCreationService({
   admin,
   db,
@@ -245,6 +203,7 @@ const cloudRunService = createCloudRunService({
       session.workspaceId,
       session.mcpConfig,
   ),
+  markChromeWorkspaceSessionRunning,
   releaseWorkspaceSyncWriterLease,
 });
 const {
@@ -259,6 +218,7 @@ Object.assign(lifecycleDependencies, {
   provisionSessionService,
   releaseChromeWorkspaceSession,
   releaseWorkspaceSyncWriterLease,
+  markChromeWorkspaceSessionStopping,
   reserveChromeWorkspaceSession,
   reserveWorkspaceSyncSession,
 });
@@ -272,6 +232,8 @@ const {provisionQueuedSession} = createProvisioningWorker({
 });
 
 const workspaceService = createWorkspaceService({
+  admin,
+  db,
   deleteSessionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
@@ -308,11 +270,8 @@ function googleMcpTokenRefreshUrl() {
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
   environmentKeysService,
-  goalsService,
   openAiCodexAuthService,
-  piModelsService,
-  piPackagesService,
-  workspaceAgentAssetsService,
+  qaFaultHarnessService,
   workspaceService,
   githubService,
   googleWorkspaceService: googleWorkspaceApiService,
@@ -320,7 +279,6 @@ const API_HANDLERS = createApiHandlers({
     userWithUsage,
     listAdminUsers,
     setAdminUserWhitelist,
-    syncWorkspaceFiles,
     listSessions,
     createSession,
     renameSession,
@@ -329,25 +287,20 @@ const API_HANDLERS = createApiHandlers({
     stopSession,
     deleteSession,
     createSessionAccessUrls,
+    listSessionLogs: sessionLogsService.listSessionLogs,
     shareSessionPreview,
-    listSshSessionFiles,
-    readSshSessionFile,
-    saveSshSessionFile,
-    listSshSessionForwards,
-    createSshSessionForward,
-    closeSshSessionForward,
-    getGitStatusSummary,
-    listGitBranches,
-    checkoutGitBranch,
-    createGitBranch,
-    ignoreGitPath,
-    pullGit,
-    stageGit,
-    unstageGit,
-    commitGit,
-    pushGit,
-    openPullRequest,
   },
+});
+
+// Keep migration-only programmatic operations available to checked-in
+// migration scripts without advertising them as deployed Firebase functions.
+// The property is intentionally non-enumerable so the Functions runtime does
+// not treat it as a trigger export.
+Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
+  configurable: false,
+  enumerable: false,
+  value: Object.freeze({restartSession}),
+  writable: false,
 });
 
 exports.api = onRequest({
@@ -503,7 +456,7 @@ async function listSessions(uid, workspaceId) {
 function currentRunnerImageReference(session = {}) {
   try {
     if (session.imageKey) {
-      const resolved = resolveRunnerImage({imageKey: session.imageKey}, DEFAULT_IMAGE);
+      const resolved = resolveRunnerImage({imageKey: session.imageKey});
       if (resolved.image) return resolved.image;
     }
   } catch (error) {
@@ -515,54 +468,8 @@ function currentRunnerImageReference(session = {}) {
   return session.image || "";
 }
 
-async function syncWorkspaceFiles(uid, workspaceId) {
-  await requireWorkspace(uid, workspaceId);
-  const snap = await sessionCollection(workspaceId)
-      .where("status", "==", "running")
-      .get();
-  const cloudSessions = snap.docs
-      .map((doc) => ({id: doc.id, ...doc.data()}))
-      .filter((session) => session.ownerUid === uid && session.serviceUrl && session.sessionType !== "ssh");
-
-  const results = await Promise.all(cloudSessions.map(async (session) => {
-    try {
-      await requestRunnerWorkspaceSyncDown(session);
-      return {sessionId: session.id, ok: true};
-    } catch (error) {
-      logger.warn("runner workspace sync down failed", {
-        workspaceId,
-        sessionId: session.id,
-        error: error.publicMessage || error.message,
-      });
-      return {sessionId: session.id, ok: false, error: error.publicMessage || "runner_workspace_sync_down_failed"};
-    }
-  }));
-
-  return {
-    ok: true,
-    sessionCount: cloudSessions.length,
-    syncedCount: results.filter((result) => result.ok).length,
-    failedCount: results.filter((result) => !result.ok).length,
-    results,
-  };
-}
-
 async function prepareSessionForProvisioning(session = {}) {
-  if (session.sessionType !== "ssh" && session.terminalKind !== "ssh") return session;
-  const secretDocId = session.sshProvisioningSecretDocId || `sshWorkspace_${session.workspaceId}`;
-  const privateSnap = await db.collection("users").doc(session.ownerUid).collection("private").doc(secretDocId).get();
-  if (!privateSnap.exists) throw httpError(409, "ssh_workspace_auth_missing");
-  const secrets = privateSnap.data() || {};
-  return {
-    ...session,
-    sessionEnv: {
-      ...(session.sessionEnv || {}),
-      SSH_AUTH_MODE: secrets.authMode || session.sessionEnv?.SSH_AUTH_MODE || "private-key",
-      SSH_PRIVATE_KEY: secrets.privateKey || "",
-      SSH_CERTIFICATE: secrets.certificate || "",
-      SSH_KNOWN_HOSTS: secrets.knownHosts || "",
-    },
-  };
+  return session;
 }
 
 async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, options = {}) {
@@ -599,7 +506,7 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const activeSession = sessionsSnap.docs.find((doc) => {
       const active = doc.data();
-      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+      return isActiveGithubWorkspaceSession(active);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
@@ -619,56 +526,13 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
   });
 }
 
-async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, options = {}) {
-  const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  return db.runTransaction(async (transaction) => {
-    const workspaceSnap = await transaction.get(workspaceRef);
-    const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
-    const activeChrome = findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
-    if (activeChrome) {
-      throw httpError(409, "This workspace already has an active Chrome session. Stop it before creating another one.");
-    }
-    if (options.githubWorkspace) {
-      const activeGithub = sessionsSnap.docs.find((doc) => {
-        if (doc.id === sessionRef.id) return false;
-        const active = doc.data();
-        return isActiveGithubWorkspaceSession(active) && !isShellSession(active);
-      });
-      if (activeGithub) {
-        throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");
-      }
-    }
-    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-    const lease = resolveSyncWriterLease(
-        workspaceSnap.data(),
-        sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
-        session,
-        sessionRef.id,
-        {
-          eligible: options.syncWriterEligible,
-          now: admin.firestore.FieldValue.serverTimestamp(),
-        },
-    );
-    transaction.update(workspaceRef, {
-      activeChromeSessionId: sessionRef.id,
-      activeChromeSessionState: session.status || "provisioning",
-      activeChromeSessionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...lease.workspaceUpdates,
-    });
-    if (options.create !== false) transaction.set(sessionRef, {...session, ...lease.sessionUpdates});
-    else transaction.update(sessionRef, lease.sessionUpdates);
-    return lease.sessionUpdates;
-  });
-}
-
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session) {
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(sessionCollection(workspaceId));
     const activeSession = snap.docs.find((doc) => {
       if (doc.id === sessionId) return false;
       const active = doc.data();
-      return isActiveGithubWorkspaceSession(active) && !isShellSession(active) && !isShellSession(session);
+      return isActiveGithubWorkspaceSession(active);
     });
     if (activeSession) {
       throw httpError(409, "This GitHub workspace already has an active session. Stop it before restarting this one.");
@@ -689,29 +553,6 @@ function normalizeRequestedSessionResources(payload, options = {}) {
 
 function sessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
-}
-
-async function releaseChromeWorkspaceSession(sessionRef, session, reason) {
-  if (!isChromeSession(session) || !session.workspaceId) return;
-  const workspaceRef = db.collection("workspaces").doc(session.workspaceId);
-  await db.runTransaction(async (transaction) => {
-    const workspaceSnap = await transaction.get(workspaceRef);
-    if (!workspaceSnap.exists || workspaceSnap.data().activeChromeSessionId !== sessionRef.id) return;
-    transaction.update(workspaceRef, {
-      activeChromeSessionId: admin.firestore.FieldValue.delete(),
-      activeChromeSessionState: reason ? `released:${cleanName(reason)}` : "released",
-      activeChromeSessionReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  });
-}
-
-async function requestRunnerWorkspaceSyncDown(session) {
-  return requestRunnerJson(session, "/workspace/sync-down", {
-    method: "POST",
-    unavailableError: "runner_workspace_sync_down_unavailable",
-    failureError: "runner_workspace_sync_down_failed",
-  });
 }
 
 async function requestRunnerJson(session, routePath, options = {}) {

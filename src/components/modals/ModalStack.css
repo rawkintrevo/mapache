@@ -108,6 +108,93 @@
   box-shadow: 0 22px 60px rgba(16, 24, 32, 0.28);
 }
 
+.session-logs-panel {
+  width: min(960px, 100%);
+}
+
+.session-logs-panel .modal-heading > div:first-child {
+  min-width: 0;
+}
+
+.session-logs-panel .modal-heading h2 {
+  margin: 0;
+}
+
+.session-logs-panel__session {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-logs-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.session-logs-panel__runtime-error {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--panel));
+}
+
+.session-logs-panel__runtime-error code {
+  overflow-wrap: anywhere;
+}
+
+.session-logs-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--line);
+  list-style: none;
+}
+
+.session-log-entry {
+  display: grid;
+  grid-template-columns: 155px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 10px;
+  background: var(--panel);
+}
+
+.session-log-entry__meta {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.session-log-entry__meta span {
+  font-weight: 800;
+}
+
+.session-log-entry--error .session-log-entry__meta span,
+.session-log-entry--critical .session-log-entry__meta span,
+.session-log-entry--alert .session-log-entry__meta span,
+.session-log-entry--emergency .session-log-entry__meta span {
+  color: var(--color-danger);
+}
+
+.session-log-entry pre {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--code);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+}
+
 .pull-request-panel {
   width: min(760px, 100%);
 }
@@ -126,6 +213,22 @@
 
 .generic-environment-panel {
   width: min(760px, 100%);
+}
+
+.mcp-servers-panel {
+  width: min(760px, 100%);
+}
+
+.google-workspace-manage-panel {
+  width: min(760px, 100%);
+}
+
+.mcp-servers-toolbar,
+.google-workspace-manage-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .generic-environment-form-actions,
@@ -285,45 +388,6 @@
   justify-content: center;
 }
 
-.pi-models-modal {
-  width: min(720px, 100%);
-}
-
-.pi-models-list {
-  display: grid;
-  gap: 6px;
-  max-height: 48vh;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.pi-model-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-strong);
-}
-
-.pi-model-row input {
-  width: 16px;
-  height: 16px;
-  min-height: 0;
-  margin: 2px 0 0;
-  accent-color: var(--accent);
-}
-
-.pi-model-row span {
-  display: grid;
-  gap: 3px;
-}
-
-.pi-model-row small {
-  color: var(--muted);
-}
-
 @media (max-width: 620px) {
   .modal-backdrop {
     align-items: stretch;
@@ -336,6 +400,10 @@
   }
 
   .workspace-source-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .session-log-entry {
     grid-template-columns: 1fr;
   }
 }

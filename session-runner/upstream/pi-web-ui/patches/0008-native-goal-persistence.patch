@@ -1,0 +1,838 @@
+diff --git a/locales/de.json b/locales/de.json
+index 4d278da409d29118bffcb71e19d48555e6c27449..2c9d1b573685a256502f6b831894f9e940250011 100644
+--- a/locales/de.json
++++ b/locales/de.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "Maximale Zahl der Prüf- und Überarbeitungsrunden; 0 oder leer = unbegrenzt (wird überarbeitet, bis die Prüfung bestanden ist)",
+     "goalBarUnlimitedShort": "Unbegrenzt",
+     "goalBarReviewing": "Wird geprüft…",
++    "goalBarPaused": "Pausiert",
++    "goalBarResume": "Fortsetzen",
+     "goalBarRound": "Runde {n}",
+     "goalBarActive": "Ziel aktiv",
+     "goalBarPassed": "Bestanden",
+diff --git a/locales/es.json b/locales/es.json
+index dbc3be7e3593e9021b124f9ca91f955998069678..3fcc7712e6f750aacb544a0900680f39c992d80d 100644
+--- a/locales/es.json
++++ b/locales/es.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "Rondas máximas de revisión y corrección; 0 o vacío = ilimitado (continúa hasta aprobar)",
+     "goalBarUnlimitedShort": "Ilimitado",
+     "goalBarReviewing": "Revisando…",
++    "goalBarPaused": "En pausa",
++    "goalBarResume": "Reanudar",
+     "goalBarRound": "Ronda {n}",
+     "goalBarActive": "Objetivo activo",
+     "goalBarPassed": "Superado",
+diff --git a/locales/fr.json b/locales/fr.json
+index 1487fb1bff2e77fb6488902fd6e20f2b5f9ef17e..f24229a1e9344ef943946b109ed5905bba2bb5b4 100644
+--- a/locales/fr.json
++++ b/locales/fr.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "Nombre max de tours de révision/reprise ; 0 ou vide = illimité (jusqu'à validation)",
+     "goalBarUnlimitedShort": "Illimité",
+     "goalBarReviewing": "Révision en cours…",
++    "goalBarPaused": "En pause",
++    "goalBarResume": "Reprendre",
+     "goalBarRound": "Tour {n}",
+     "goalBarActive": "Objectif actif",
+     "goalBarPassed": "Validé",
+diff --git a/locales/it.json b/locales/it.json
+index 152a3223d97392a2989419e1f944c45c266e873f..de96620931a6082c7f679fa26f06074c2454582b 100644
+--- a/locales/it.json
++++ b/locales/it.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "Round massimi di revisione-correzione; 0 o vuoto = illimitati (continua a correggere finché non passa)",
+     "goalBarUnlimitedShort": "Illimitati",
+     "goalBarReviewing": "Revisione…",
++    "goalBarPaused": "In pausa",
++    "goalBarResume": "Riprendi",
+     "goalBarRound": "Round {n}",
+     "goalBarActive": "Obiettivo attivo",
+     "goalBarPassed": "Superato",
+diff --git a/locales/ja.json b/locales/ja.json
+index 6e69f9e1e4b13ca2be0d382a66654c566392c1aa..c082d1cfab786c6cadf10d1172a592fce42876d8 100644
+--- a/locales/ja.json
++++ b/locales/ja.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "最大レビュー・修正ラウンド数。0 または空欄＝無制限（通過するまで修正を続けます）",
+     "goalBarUnlimitedShort": "無制限",
+     "goalBarReviewing": "レビュー中…",
++    "goalBarPaused": "一時停止中",
++    "goalBarResume": "再開",
+     "goalBarRound": "第 {n} ラウンド",
+     "goalBarActive": "ゴールが有効です",
+     "goalBarPassed": "合格です",
+diff --git a/locales/ko.json b/locales/ko.json
+index 91b48d9465aaeed5fd772fd44a63801faacdc5f9..621f45c6b9570c624f1940360f23d7c7c47bcaa1 100644
+--- a/locales/ko.json
++++ b/locales/ko.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "검토 후 다시 고치는 최대 라운드 수예요. 0 또는 비워 두면 무제한이에요 (통과할 때까지 계속 수정해요)",
+     "goalBarUnlimitedShort": "무제한",
+     "goalBarReviewing": "검토 중…",
++    "goalBarPaused": "일시중지됨",
++    "goalBarResume": "재개",
+     "goalBarRound": "{n}번째 라운드",
+     "goalBarActive": "목표가 적용 중이에요",
+     "goalBarPassed": "통과했어요",
+diff --git a/locales/pt.json b/locales/pt.json
+index 471e1da9d921fcb91d26ab17f2a58ba343305abe..493872c9eb63c76321d2be29323b6b91a9a38901 100644
+--- a/locales/pt.json
++++ b/locales/pt.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "Máximo de rodadas de revisão/ajuste; 0 ou vazio = sem limite (ajusta até passar)",
+     "goalBarUnlimitedShort": "Sem limite",
+     "goalBarReviewing": "Revisando…",
++    "goalBarPaused": "Pausado",
++    "goalBarResume": "Retomar",
+     "goalBarRound": "Rodada {n}",
+     "goalBarActive": "Objetivo ativo",
+     "goalBarPassed": "Aprovado",
+diff --git a/locales/ru.json b/locales/ru.json
+index 43524adea795792d489b64246d0c1c82f97110ed..4f21aff0b6432c98849661266fa5cd9dbd1df4d3 100644
+--- a/locales/ru.json
++++ b/locales/ru.json
+@@ -686,6 +686,8 @@
+     "goalBarMaxRoundsTip": "Максимальное число раундов проверки и доработки; 0 или пусто = без ограничений (дорабатывать до прохождения)",
+     "goalBarUnlimitedShort": "Без ограничений",
+     "goalBarReviewing": "Проверка…",
++    "goalBarPaused": "Приостановлено",
++    "goalBarResume": "Возобновить",
+     "goalBarRound": "Раунд {n}",
+     "goalBarActive": "Цель активна",
+     "goalBarPassed": "Пройдено",
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 67dc6c6b1cf8a11f600ab0566113e862005c85cc..6706c39ff8b6e882a06afab8f3b5fea7678d6583 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -1851,7 +1851,7 @@ export class ClientSession {
+ 
+ 	/** Wrap a fresh runtime as a new conversation record. */
+ 	private makeConversation(runtime: AgentSessionRuntime, id: string, terminals: TerminalManager): Conversation {
+-		return {
++		const conv: Conversation = {
+ 			id,
+ 			title: conversationTitle(runtime.session),
+ 			isSubagent: false,
+@@ -1883,6 +1883,8 @@ export class ClientSession {
+ 			toolStartTimes: new Map(),
+ 			toolWatchdogs: new Map(),
+ 		};
++		this.goalSvc.restoreGoalStatus(conv);
++		return conv;
+ 	}
+ 
+ 	/** Summaries of conversations currently streaming — captured at shutdown
+@@ -5382,6 +5384,10 @@ export class ClientSession {
+ 		return this.goalSvc.setGoalPrefs(opts);
+ 	}
+ 
++	async resumeGoal(): Promise<void> {
++		return this.goalSvc.resumeGoal();
++	}
++
+ 	async clearGoal(): Promise<void> {
+ 		return this.goalSvc.clearGoal();
+ 	}
+diff --git a/server/client-state.ts b/server/client-state.ts
+index 6dfbbf4726f6ae816a03f00dde8366dec009aad0..26efc04f5b5e0f4e2436c0d3eb86ec612467d8d2 100644
+--- a/server/client-state.ts
++++ b/server/client-state.ts
+@@ -1,7 +1,8 @@
+ /**
+  * client-state — 每浏览器客户端的持久化 UI 状态（<dataDir>/client-state.json）：
+- * 最近项目/工作目录、目标审查偏好、设置面板状态（提示词模式 + 技能/插件开关 +
+- * 视觉桥偏好）、命名预设。文件 I/O 一律 best-effort：持久化故障绝不能
++ * 最近项目/工作目录、目标审查偏好、按会话绑定的 native Goal 显示状态、设置面板
++ * 状态（提示词模式 + 技能/插件开关 + 视觉桥偏好）、命名预设。文件 I/O 一律
++ * best-effort：持久化故障绝不能
+  * 弄崩 server 或阻塞会话。
+  *
+  * 从 agent-service.ts 抽出，行为保持不变。
+@@ -186,6 +187,47 @@ export interface MarkerSettings {
+ 	disabledMarkers: string[];
+ }
+ 
++/**
++ * Persisted display-only state for one native Goal. The key is the upstream
++ * session identity, not a browser client id: session ids survive reconnects,
++ * fresh tabs, and server restarts. Runtime work is deliberately absent — in
++ * particular, no wizard/reviewer queue or abortable job is serialized here.
++ */
++export interface ConversationGoalState {
++	goal: string;
++	reviewModel: string | null;
++	maxRounds: number;
++	locked: boolean;
++	round: number;
++	verdict: "pending" | "pass" | "fail";
++	status: string;
++	statusEn?: string;
++	feedback?: string;
++	savedAt: number;
++}
++
++function normalizeConversationGoal(value: unknown): ConversationGoalState | undefined {
++	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
++	const raw = value as Partial<ConversationGoalState>;
++	if (typeof raw.goal !== "string" || !raw.goal.trim()) return undefined;
++	const maxRounds = Math.round(Number(raw.maxRounds));
++	const round = Math.round(Number(raw.round));
++	const verdict = raw.verdict === "pass" || raw.verdict === "fail" ? raw.verdict : "pending";
++	return {
++		goal: raw.goal.trim().slice(0, 20_000),
++		reviewModel:
++			typeof raw.reviewModel === "string" && raw.reviewModel.trim() ? raw.reviewModel.trim().slice(0, 300) : null,
++		maxRounds: Number.isFinite(maxRounds) && maxRounds > 0 ? Math.min(maxRounds, 50) : 0,
++		locked: raw.locked !== false,
++		round: Number.isFinite(round) && round > 0 ? Math.min(round, 100_000) : 0,
++		verdict,
++		status: typeof raw.status === "string" ? raw.status.slice(0, 2_000) : "",
++		...(typeof raw.statusEn === "string" ? { statusEn: raw.statusEn.slice(0, 2_000) } : {}),
++		...(typeof raw.feedback === "string" ? { feedback: raw.feedback.slice(0, 4_000) } : {}),
++		savedAt: typeof raw.savedAt === "number" && Number.isFinite(raw.savedAt) ? raw.savedAt : Date.now(),
++	};
++}
++
+ export interface ClientState {
+ 	/** Absolute path of the workspace this client last used. */
+ 	lastCwd?: string;
+@@ -199,6 +241,10 @@ export interface ClientState {
+ 		maxRounds: number;
+ 		locked: boolean;
+ 	};
++	/** Display-only native Goal state keyed by upstream session identity. This
++	 * lives under the global pseudo-client entry so a new browser client id can
++	 * restore the same conversation's goal. */
++	conversationGoals?: Record<string, ConversationGoalState>;
+ 	/** Settings-panel state (system prompt mode/text + disabled skills/
+ 	 *  extensions) so toggles survive a reload. */
+ 	settings?: ClientSettings;
+@@ -355,6 +401,38 @@ export class ClientStateStore {
+ 		this.save();
+ 	}
+ 
++	/** Read one conversation's native Goal display state. The identity is an
++	 * upstream session id (or the stable session-file fallback supplied by the
++	 * goal service), never the transient browser client id. */
++	getConversationGoal(identity: string): ConversationGoalState | undefined {
++		const key = identity.trim();
++		if (!key) return undefined;
++		const stored = this.load()[ClientStateStore.GLOBAL_SETTINGS_KEY]?.conversationGoals?.[key];
++		return normalizeConversationGoal(stored);
++	}
++
++	/** Persist only serializable native Goal display state. Runtime execution is
++	 * reconstructed as paused and must be resumed explicitly by the user. */
++	saveConversationGoal(identity: string, goal: ConversationGoalState): void {
++		const key = identity.trim();
++		const normalized = normalizeConversationGoal(goal);
++		if (!key || !normalized) return;
++		const all = this.load();
++		const state = (all[ClientStateStore.GLOBAL_SETTINGS_KEY] ??= { projects: [] });
++		(state.conversationGoals ??= {})[key] = normalized;
++		this.save();
++	}
++
++	/** Remove a completed or explicitly cleared native Goal. */
++	deleteConversationGoal(identity: string): void {
++		const key = identity.trim();
++		if (!key) return;
++		const goals = this.load()[ClientStateStore.GLOBAL_SETTINGS_KEY]?.conversationGoals;
++		if (!goals || !(key in goals)) return;
++		delete goals[key];
++		this.save();
++	}
++
+ 	/** Remember conversations that were still streaming at shutdown (best-
+ 	 *  effort; called during the graceful-shutdown path). */
+ 	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number }[]): void {
+diff --git a/server/dsh/dsh-agent-service.ts b/server/dsh/dsh-agent-service.ts
+index 98912a3b440aec230ab24e868316ffa44386245a..d61840b078c2b4e2987354c8aa3db54817c07899 100644
+--- a/server/dsh/dsh-agent-service.ts
++++ b/server/dsh/dsh-agent-service.ts
+@@ -2915,6 +2915,11 @@ export class DshClientSession {
+ 		this.flushSnapshot();
+ 	}
+ 
++	/** Native pi-web-ui goals use this action to resume a paused persisted goal.
++	 * DSH owns a separate runtime goal protocol and never restores native goal
++	 * records, so the shared dispatch surface intentionally treats this as a no-op. */
++	async resumeGoal(): Promise<void> {}
++
+ 	async startGoalWizard(
+ 		text: string,
+ 		opts?: { wizardModel?: string; maxRounds?: number; locked?: boolean },
+diff --git a/server/goal-service.ts b/server/goal-service.ts
+index 1ae69542c9fb5a2e5efd372b57f235c4b60c06c3..355cc1ec7bf7f4c8035fdc1ebefcf9d2e0fe3043 100644
+--- a/server/goal-service.ts
++++ b/server/goal-service.ts
+@@ -23,7 +23,7 @@ import {
+ 	type AgentSession,
+ } from "@earendil-works/pi-coding-agent";
+ import type { GoalStatus, ServerMessage } from "./protocol.js";
+-import type { ClientStateStore } from "./client-state.js";
++import type { ClientStateStore, ConversationGoalState } from "./client-state.js";
+ import { bilingual, pick, type ServerLang } from "./i18n.js";
+ import { parseModelSpec } from "./attachments.js";
+ import type { WebUIContext } from "./webui-context.js";
+@@ -146,6 +146,7 @@ export class GoalService {
+ 			maxRounds: this.prefs.maxRounds,
+ 			locked: this.prefs.locked,
+ 			reviewing: false,
++			paused: false,
+ 			round: 0,
+ 			status: "",
+ 			verdict: "pending",
+@@ -160,10 +161,81 @@ export class GoalService {
+ 		};
+ 	}
+ 
+-	/** Push the active conversation's goal status to the client (the goal bar
+-	 * restores remembered prefs when nothing is active). */
+-	emitGoalStatus(): void {
+-		const goal = this.host.activeConv().goal;
++	/**
++	 * Return the stable upstream identity for a persisted conversation. The
++	 * in-memory `c1`/`c2` ids are intentionally not used because every browser
++	 * client allocates them afresh. Session ids survive history reopen and runner
++	 * restart; the file path is only a compatibility fallback for older SDK
++	 * sessions that do not expose one.
++	 */
++	private conversationIdentity(conv: GoalConversation): string {
++		const sessionId = typeof conv.session.sessionId === "string" ? conv.session.sessionId.trim() : "";
++		if (sessionId) return `session:${sessionId}`;
++		const sessionFile = typeof conv.session.sessionFile === "string" ? conv.session.sessionFile.trim() : "";
++		return sessionFile ? `file:${sessionFile}` : "";
++	}
++
++	/** Persist only display state. Wizard/reviewer execution state never enters
++	 * the file, so restart cannot accidentally recreate a runnable job. */
++	private persistGoalStatus(conv: GoalConversation): void {
++		const identity = this.conversationIdentity(conv);
++		if (!identity) return;
++		const goal = conv.goal;
++		if (!goal.goal) {
++			this.host.stateStore.deleteConversationGoal(identity);
++			return;
++		}
++		const state: ConversationGoalState = {
++			goal: goal.goal,
++			reviewModel: goal.reviewModel,
++			maxRounds: goal.maxRounds,
++			locked: goal.locked,
++			round: goal.round,
++			verdict: goal.verdict,
++			status: goal.status,
++			...(goal.statusEn ? { statusEn: goal.statusEn } : {}),
++			...(goal.feedback ? { feedback: goal.feedback } : {}),
++			savedAt: Date.now(),
++		};
++		this.host.stateStore.saveConversationGoal(identity, state);
++	}
++
++	/**
++	 * Rehydrate a persisted goal after the upstream session has been opened.
++	 * Only display fields are restored. Any review or wizard that was in flight
++	 * at shutdown is converted to an explicitly-paused goal and cannot trigger
++	 * model work until `resumeGoal` is called.
++	 */
++	restoreGoalStatus(conv: GoalConversation): void {
++		const identity = this.conversationIdentity(conv);
++		if (!identity) return;
++		const saved = this.host.stateStore.getConversationGoal(identity);
++		if (!saved) return;
++		const goal = conv.goal;
++		goal.conversationId = conv.id;
++		goal.goal = saved.goal;
++		goal.reviewModel = saved.reviewModel;
++		goal.maxRounds = saved.maxRounds;
++		goal.locked = saved.locked;
++		goal.reviewing = false;
++		goal.paused = true;
++		goal.round = saved.round;
++		goal.verdict = saved.verdict;
++		goal.status = saved.status || "目标已暂停，点击恢复后继续";
++		goal.statusEn = saved.statusEn || "Goal paused; resume explicitly to continue";
++		goal.feedback = saved.feedback;
++		// Never restore wizard progress or a pending reviewer. The status object is
++		// reconstructed from the normal fresh shape so the UI cannot infer a job.
++		goal.wizard = this.makeGoalStatus().wizard;
++	}
++
++	/** Push a conversation's goal status to the client (the goal bar restores
++	 * remembered prefs when nothing is active). Background conversations still
++	 * persist their state, but must not overwrite the active tab's status. */
++	emitGoalStatus(conv = this.host.activeConv()): void {
++		this.persistGoalStatus(conv);
++		if (conv.id !== this.host.activeConvId()) return;
++		const goal = conv.goal;
+ 		if (!goal.goal && !goal.reviewing && !goal.wizard.active) {
+ 			goal.reviewModel = this.prefs.reviewModel;
+ 			goal.maxRounds = this.prefs.maxRounds;
+@@ -211,6 +283,7 @@ export class GoalService {
+ 		conv.goalGeneration += 1;
+ 		const goal = conv.goal;
+ 		goal.reviewing = false;
++		goal.paused = false;
+ 		goal.conversationId = goalConversationId;
+ 		goal.goal = text;
+ 		// Model & rounds preference semantics ("全局记忆"):
+@@ -236,6 +309,7 @@ export class GoalService {
+ 		// Reset the loop for a freshly-set goal (single-shot goals start at 0).
+ 		goal.round = 0;
+ 		goal.reviewing = false;
++		goal.paused = false;
+ 		goal.verdict = "pending";
+ 		goal.feedback = undefined;
+ 		goal.wizard.active = false;
+@@ -336,6 +410,7 @@ export class GoalService {
+ 		this.wizardAbort = new AbortController();
+ 		this.wizardSession = null;
+ 		const wgoal = wizardConversation.goal;
++		wgoal.paused = false;
+ 		wgoal.wizard.active = true;
+ 		wgoal.wizard.draft = draft;
+ 		wgoal.wizard.model = opts?.wizardModel ?? null;
+@@ -362,7 +437,7 @@ export class GoalService {
+ 		wgoal.wizard.statusEn = "Scoping…";
+ 		wgoal.status = "目标调研中…";
+ 		wgoal.statusEn = "Scoping the goal…";
+-		this.emitGoalStatus();
++		this.emitGoalStatus(wizardConversation);
+ 		// Idle-timeout: cancel the wizard if no question is answered within the
+ 		// window (a stale dialog with no user response must not run forever). A
+ 		// fresh timer is armed for each question; cleared once the run ends.
+@@ -490,7 +565,7 @@ export class GoalService {
+ 					wgoal.wizard.step = qStep;
+ 					wgoal.wizard.status = `调研中：请回答第 ${qStep} 题`;
+ 					wgoal.wizard.statusEn = `Scoping: please answer question ${qStep}`;
+-					this.emitGoalStatus();
++					this.emitGoalStatus(wizardConversation);
+ 					try {
+ 						armIdle();
+ 						const isChoice = !!(params.options && params.options.length > 0);
+@@ -659,7 +734,7 @@ export class GoalService {
+ 			wgoal.wizard.status = "";
+ 			wgoal.wizard.statusEn = "";
+ 			this.wizardSession = null;
+-			this.emitGoalStatus();
++			this.emitGoalStatus(wizardConversation);
+ 		}
+ 
+ 		// Aborted externally (✗ / clear_goal / idle-timeout): do NOT set a goal.
+@@ -734,6 +809,45 @@ export class GoalService {
+ 		}
+ 	}
+ 
++	/** Resume a goal restored from a previous process. This is the only path that
++	 * turns the paused display record back into active execution, and it is
++	 * reached by an explicit Goal-bar click. */
++	async resumeGoal(): Promise<void> {
++		if (!this.goalEnabled()) return;
++		const conv = this.host.activeConv();
++		const goal = conv.goal;
++		if (!goal.goal || !goal.paused || goal.conversationId !== conv.id) return;
++		const text = goal.goal;
++		conv.goalGeneration += 1;
++		goal.paused = false;
++		goal.reviewing = false;
++		goal.conversationId = conv.id;
++		goal.status = "目标已恢复，等待生成…";
++		goal.statusEn = "Goal resumed, waiting to generate…";
++		this.emitGoalStatus(conv);
++		this.host.emit({
++			type: "notice",
++			level: "info",
++			text: `▶️ 已恢复目标：${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`,
++			textEn: `▶️ Goal resumed: ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`,
++		});
++		try {
++			const kick = pick(
++				this.lang(),
++				`【目标已恢复】\n\n${text}\n\n请继续实现这个目标。`,
++				`[Goal resumed]\n\n${text}\n\nContinue implementing this goal.`,
++				"goal.resume.kick",
++				{ text: text },
++			);
++			await conv.session.sendUserMessage(kick, {
++				deliverAs: conv.session.isStreaming ? "steer" : "followUp",
++			});
++		} catch {
++			// Best-effort; the user can still send a normal prompt or click resume again.
++		}
++		this.host.flushSnapshot();
++	}
++
+ 	/** Persist goal/review preference defaults (model, rounds cap, locked) without
+ 	 *  touching the active goal — so changes in the goal bar are remembered across
+ 	 *  reloads. maxRounds 0 = unlimited. Emits goal_status so the UI stays synced. */
+@@ -766,6 +880,7 @@ export class GoalService {
+ 		conv.goalGeneration += 1;
+ 		const goal = conv.goal;
+ 		goal.reviewing = false;
++		goal.paused = false;
+ 		goal.conversationId = null;
+ 		goal.goal = null;
+ 		goal.reviewing = false;
+@@ -811,7 +926,7 @@ export class GoalService {
+ 				g.feedback = undefined;
+ 				g.status = "已手动停止，目标审查已中止";
+ 				g.statusEn = "Stopped manually, goal review aborted";
+-				this.emitGoalStatus();
++				this.emitGoalStatus(conv);
+ 				return {
+ 					text: "⏹ 已手动停止，目标审查已中止（想继续可重新设定目标）",
+ 					textEn: "⏹ Stopped manually, goal review aborted (set a new goal to continue)",
+@@ -826,6 +941,7 @@ export class GoalService {
+ 			g.goal &&
+ 			g.conversationId === conv.id &&
+ 			!g.reviewing &&
++			!g.paused &&
+ 			!conv.wizardRunning &&
+ 			!this.host.isDisposed() &&
+ 			this.goalEnabled()
+@@ -918,7 +1034,7 @@ export class GoalService {
+ 			conv.goal.reviewing = false;
+ 			conv.goal.status = "审查已中止，目标已更新或取消";
+ 			conv.goal.statusEn = "Review aborted, goal updated or cleared";
+-			this.emitGoalStatus();
++			this.emitGoalStatus(conv);
+ 		}
+ 	}
+ 
+@@ -929,7 +1045,15 @@ export class GoalService {
+ 		const mainConv = this.host.getConv(conv.id) ?? conv;
+ 		const mainSession = mainConv.session;
+ 		const g = conv.goal;
+-		if (!g.goal || g.conversationId !== conv.id || g.reviewing || conv.wizardRunning || this.host.isDisposed()) return;
++		if (
++			!g.goal ||
++			g.conversationId !== conv.id ||
++			g.reviewing ||
++			g.paused ||
++			conv.wizardRunning ||
++			this.host.isDisposed()
++		)
++			return;
+ 		const goalGeneration = conv.goalGeneration;
+ 		const reviewGeneration = ++conv.goalReviewGeneration;
+ 		// Narrowed copy — TS control-flow can't narrow `g.goal` (a mutable shared
+@@ -948,7 +1072,7 @@ export class GoalService {
+ 			g.status = `已达最大轮数（${budget}），停止审查`;
+ 			g.statusEn = `Max rounds reached (${budget}), stopping review`;
+ 			g.reviewing = false;
+-			this.emitGoalStatus();
++			this.emitGoalStatus(conv);
+ 			return;
+ 		}
+ 
+@@ -958,7 +1082,7 @@ export class GoalService {
+ 		g.feedback = undefined;
+ 		g.status = `审查中（第 ${g.round} 轮）…`;
+ 		g.statusEn = `Reviewing (round ${g.round})…`;
+-		this.emitGoalStatus();
++		this.emitGoalStatus(conv);
+ 
+ 		// Collect the review inputs.
+ 		let finalText = "";
+@@ -1075,7 +1199,7 @@ export class GoalService {
+ 			this.host.emit({ type: "notice", level: "info", text: "✅ 目标已通过审查", textEn: "✅ Goal passed review" });
+ 			g.conversationId = null;
+ 			g.goal = null; // a passed goal is done and cleared
+-			this.emitGoalStatus();
++			this.emitGoalStatus(conv);
+ 			// Pass = the review result goes straight into the conversation as an
+ 			// ordinary user message (NO separate goal-review card). It both tells the
+ 			// USER the outcome and hands the main agent back out of "goal mode", so a
+@@ -1129,7 +1253,7 @@ export class GoalService {
+ 				g.status = `意见注入失败：${(err as Error).message}`;
+ 				g.statusEn = `Feedback injection failed: ${(err as Error).message}`;
+ 			}
+-			this.emitGoalStatus();
++			this.emitGoalStatus(conv);
+ 			this.host.flushSnapshot();
+ 			return;
+ 		}
+@@ -1168,7 +1292,7 @@ export class GoalService {
+ 		});
+ 		g.conversationId = null;
+ 		g.goal = null; // loop exhausted — clear the active goal
+-		this.emitGoalStatus();
++		this.emitGoalStatus(conv);
+ 		this.host.flushSnapshot();
+ 	}
+ }
+diff --git a/server/index.ts b/server/index.ts
+index 9cb6c6cad4640d3a004bb9f3853572ebadab12f1..a28a88f9b131c859982e0aab019188372736033d 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -771,6 +771,7 @@ export interface DispatchSession {
+ 	saveCommands(commands: CommandDef[]): Promise<void>;
+ 	setGoal(goal: string, opts?: { reviewModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
+ 	clearGoal(): Promise<void>;
++	resumeGoal(): Promise<void>;
+ 	startGoalWizard(text: string, opts?: { wizardModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
+ 	setGoalPrefs(opts?: { reviewModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
+ 	pushSettings(): void;
+@@ -1297,6 +1298,9 @@ wss.on("connection", (ws) => {
+ 			case "clear_goal":
+ 				void cs.clearGoal();
+ 				break;
++			case "resume_goal":
++				void cs.resumeGoal();
++				break;
+ 			case "start_goal_wizard":
+ 				void cs.startGoalWizard(msg.text, {
+ 					wizardModel: msg.wizardModel,
+diff --git a/server/protocol.ts b/server/protocol.ts
+index 536423ee340b1e0046ccf86bb355c7e236baca92..3826a1d67a0a29b3a87049f6e3abbee720ee6ef9 100644
+--- a/server/protocol.ts
++++ b/server/protocol.ts
+@@ -493,6 +493,9 @@ export type ClientMessage =
+ 	 *  a different model for the reviewer. */
+ 	| { type: "set_goal"; goal: string; reviewModel?: string; maxRounds: number; locked: boolean }
+ 	| { type: "clear_goal" }
++	/** Resume a goal restored from a previous process. Reconnect and history
++	 * opening never send this automatically. */
++	| { type: "resume_goal" }
+ 	/** Start the collaborative target wizard: a user requirement goes into an
+ 	 *  ISOLATED wizard session which questions the user (multiple-choice + free
+ 	 *  text bridges) to scope details, then AUTO-SETS the refined goal. `text` is
+@@ -831,6 +834,9 @@ export interface GoalStatus {
+ 	locked: boolean;
+ 	/** True while a review is running right now. */
+ 	reviewing: boolean;
++	/** True when this goal was restored after a process restart and is waiting
++	 * for an explicit resume action. */
++	paused?: boolean;
+ 	/** 1-based round counter for the current goal (review rounds). */
+ 	round: number;
+ 	/** Human-readable status line (e.g. "审查中", "已通过", "本轮不通过"). UI locale at emit time (zh default). */
+diff --git a/tests/unit/goal-persistence.test.ts b/tests/unit/goal-persistence.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..05a908762c384174ad631e8ad7d982f8a8deda0e
+--- /dev/null
++++ b/tests/unit/goal-persistence.test.ts
+@@ -0,0 +1,137 @@
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import type { AgentSession } from "@earendil-works/pi-coding-agent";
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { ClientStateStore, type ConversationGoalState } from "../../server/client-state.js";
++import { GoalService, type GoalConversation, type GoalHost } from "../../server/goal-service.js";
++import type { ServerMessage } from "../../server/protocol.js";
++
++const tempDirs: string[] = [];
++
++afterEach(() => {
++	for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
++});
++
++function makeSavedGoal(): ConversationGoalState {
++	return {
++		goal: "Keep the native goal attached to this conversation",
++		reviewModel: "openai/gpt-5",
++		maxRounds: 3,
++		locked: false,
++		round: 2,
++		verdict: "fail",
++		status: "Needs one more pass",
++		statusEn: "Needs one more pass",
++		feedback: "Preserve the conversation identity.",
++		savedAt: 123,
++	};
++}
++
++function makeHarness(filePath: string, sessionId: string, clientId: string) {
++	const sent: string[] = [];
++	const session = {
++		sessionId,
++		sessionFile: `/var/lib/pi/sessions/${sessionId}.jsonl`,
++		isStreaming: false,
++		sendUserMessage: vi.fn(async (message: string) => {
++			sent.push(message);
++		}),
++	} as unknown as AgentSession;
++	const conv = {
++		id: "c1",
++		cwd: "/workspace",
++		session,
++		wizardRunning: false,
++		goalGeneration: 0,
++		goalReviewGeneration: 0,
++		goal: undefined,
++	} as unknown as GoalConversation;
++	const emitted: ServerMessage[] = [];
++	const flushSnapshot = vi.fn();
++	const host = {
++		clientId,
++		agentDir: "/tmp/agent",
++		stateStore: new ClientStateStore(filePath),
++		webUi: {},
++		emit: (msg: ServerMessage) => emitted.push(msg),
++		flushSnapshot,
++		isDisposed: () => false,
++		quiesceBlocked: () => false,
++		activeConvId: () => conv.id,
++		activeConv: () => conv,
++		getConv: (id: string) => (id === conv.id ? conv : undefined),
++		cwd: () => conv.cwd,
++		reviewSettings: () => ({ reviewPrompt: "", reviewDisabledSkills: [] }),
++		gitDiff: async () => "",
++		goalModeEnabled: () => true,
++	} as unknown as GoalHost;
++	const service = new GoalService(host);
++	conv.goal = service.makeGoalStatus();
++	return { conv, emitted, flushSnapshot, host, sent, service };
++}
++
++describe("native Goal persistence", () => {
++	it("stores display state in the global client-state entry and restores it for a new browser client", () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-persistence-"));
++		tempDirs.push(dir);
++		const filePath = join(dir, "client-state.json");
++		const saved = makeSavedGoal();
++		new ClientStateStore(filePath).saveConversationGoal("session:stable-1", saved);
++
++		const reloaded = new ClientStateStore(filePath);
++		expect(reloaded.getConversationGoal("session:stable-1")).toEqual(saved);
++		expect(reloaded.getConversationGoal("session:other")).toBeUndefined();
++		const disk = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
++		expect(disk.__settings__).toMatchObject({ conversationGoals: { "session:stable-1": saved } });
++	});
++
++	it("restores a goal paused without starting review work, then resumes only on explicit action", async () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-restore-"));
++		tempDirs.push(dir);
++		const filePath = join(dir, "client-state.json");
++		new ClientStateStore(filePath).saveConversationGoal("session:stable-1", makeSavedGoal());
++
++		const { conv, flushSnapshot, sent, service } = makeHarness(filePath, "stable-1", "fresh-browser-client");
++		service.restoreGoalStatus(conv);
++
++		expect(conv.goal).toMatchObject({
++			conversationId: "c1",
++			goal: "Keep the native goal attached to this conversation",
++			reviewModel: "openai/gpt-5",
++			maxRounds: 3,
++			locked: false,
++			round: 2,
++			verdict: "fail",
++			paused: true,
++			reviewing: false,
++			wizard: { active: false, draft: "", step: 0 },
++		});
++
++		// Reconnect/history open must not kick the model or start the reviewer.
++		expect(service.onAgentEnd(conv, false)).toBeNull();
++		expect(sent).toHaveLength(0);
++
++		await service.resumeGoal();
++		expect(conv.goal.paused).toBe(false);
++		expect(sent).toHaveLength(1);
++		expect(sent[0]).toContain("Keep the native goal attached to this conversation");
++		expect(flushSnapshot).toHaveBeenCalled();
++	});
++
++	it("keeps restored state scoped to the stable upstream session identity", () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-scope-"));
++		tempDirs.push(dir);
++		const filePath = join(dir, "client-state.json");
++		new ClientStateStore(filePath).saveConversationGoal("session:stable-1", makeSavedGoal());
++
++		const first = makeHarness(filePath, "stable-1", "client-a");
++		const second = makeHarness(filePath, "stable-2", "client-b");
++		first.service.restoreGoalStatus(first.conv);
++		second.service.restoreGoalStatus(second.conv);
++
++		expect(first.conv.goal.goal).toBe("Keep the native goal attached to this conversation");
++		expect(second.conv.goal.goal).toBeNull();
++		expect(second.conv.goal.paused).toBe(false);
++	});
++});
+diff --git a/web/src/components/GoalBar.tsx b/web/src/components/GoalBar.tsx
+index 01b58f585151ff3bafda3ddb91961574d7ac0d4e..cf03850e2ec6fe4096bd0aab642063be77f01763 100644
+--- a/web/src/components/GoalBar.tsx
++++ b/web/src/components/GoalBar.tsx
+@@ -9,6 +9,7 @@ import { Dropdown, DropdownItem } from "./Dropdown";
+ export type GoalBarMsg =
+ 	| { type: "set_goal"; goal: string; reviewModel?: string; maxRounds: number; locked: boolean }
+ 	| { type: "clear_goal" }
++	| { type: "resume_goal" }
+ 	| { type: "start_goal_wizard"; text: string; wizardModel?: string; maxRounds?: number; locked?: boolean }
+ 	| {
+ 			type: "set_goal_prefs";
+@@ -148,13 +149,17 @@ export const GoalBar = memo(function GoalBar({ goal, models, modelsLoading, acti
+ 
+ 	if (active) {
+ 		return (
+-			<div className={`goalbar goalbar-active ${goal.reviewing ? "reviewing" : ""}`}>
++			<div className={`goalbar goalbar-active ${goal.reviewing ? "reviewing" : ""} ${goal.paused ? "paused" : ""}`}>
+ 				<div className="goalbar-active-row">
+-					<span className="goalbar-icon">{goal.reviewing ? <span className="goalbar-spin">◌</span> : "🎯"}</span>
++					<span className="goalbar-icon">
++						{goal.reviewing ? <span className="goalbar-spin">◌</span> : goal.paused ? "⏸" : "🎯"}
++					</span>
+ 					<span className="goalbar-text" title={goal.goal ?? ""}>
+ 						{goal.goal}
+ 					</span>
+-					{goal.reviewing ? (
++					{goal.paused ? (
++						<span className="goalbar-chip paused">{t("goalBarPaused")}</span>
++					) : goal.reviewing ? (
+ 						<span className="goalbar-chip reviewing">
+ 							{t("goalBarReviewing")} {t("goalBarRound", { n: goal.round })}
+ 						</span>
+@@ -170,6 +175,11 @@ export const GoalBar = memo(function GoalBar({ goal, models, modelsLoading, acti
+ 						</span>
+ 					)}
+ 					<span className="goalbar-detail">{goalDetail}</span>
++					{goal.paused && (
++						<button type="button" className="goalbar-btn" onClick={() => appSend({ type: "resume_goal" })}>
++							{t("goalBarResume")}
++						</button>
++					)}
+ 					<button
+ 						type="button"
+ 						className="goalbar-x"
+diff --git a/web/src/i18n.tsx b/web/src/i18n.tsx
+index 516ff3fd6ccda12aa87d7f142cb9245aed6cf0ce..e2a0f67c56e5b212f32c11ab45acf58236aa8267 100644
+--- a/web/src/i18n.tsx
++++ b/web/src/i18n.tsx
+@@ -782,6 +782,8 @@ export const zh = {
+ 	goalBarUnlimitedShort: "不限",
+ 
+ 	goalBarReviewing: "审查中…",
++	goalBarPaused: "已暂停",
++	goalBarResume: "恢复",
+ 	goalBarRound: "第 {n} 轮",
+ 	goalBarActive: "目标生效中",
+ 	goalBarPassed: "已通过",
+@@ -1867,6 +1869,8 @@ const en: Record<keyof typeof zh, string> = {
+ 	goalBarMaxRoundsTip: "Max review-revision rounds; 0 or empty = unlimited (keep revising until it passes)",
+ 	goalBarUnlimitedShort: "Unlimited",
+ 	goalBarReviewing: "Reviewing…",
++	goalBarPaused: "Paused",
++	goalBarResume: "Resume",
+ 	goalBarRound: "Round {n}",
+ 	goalBarActive: "Goal active",
+ 	goalBarPassed: "Passed",
+diff --git a/web/src/styles.css b/web/src/styles.css
+index 48a586c827f35b77bd7142ffa1e43ec2076c102e..3a60a4127eaa6a490cf962a6a27c0332d63b622d 100644
+--- a/web/src/styles.css
++++ b/web/src/styles.css
+@@ -6686,6 +6686,11 @@ div.chead[role="button"]:focus-visible,
+ 	color: #fff;
+ }
+ 
++.goalbar-chip.paused {
++	background: var(--amber);
++	color: #fff;
++}
++
+ .goalbar-chip.pass {
+ 	background: var(--green);
+ 	color: #fff;

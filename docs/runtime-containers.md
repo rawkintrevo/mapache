@@ -14,65 +14,185 @@ the combined `cpu,cpuacct` mount used by Cloud Run Jobs, and the `memory` contro
 
 ## Runner Images
 
-The default runner image is built from `session-runner/Dockerfile` and published as:
-
-```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
-```
-
-The `pi-basic` runner image is built from `session-runner/Dockerfile.pi-basic` and published as:
-
-```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-basic
-```
-
-The `pi-web` runner image is built from `session-runner/Dockerfile.pi-web` and published as:
-
-```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-web
-```
-
-The `pi-n64` runner image is built from `session-runner/Dockerfile.pi-n64` and published as:
-
-```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-n64
-```
-
-The `codex-basic` runner image is built from `session-runner/Dockerfile.codex-basic` and published as:
-
-```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-basic
-```
-
-The `codex-web` runner image is built from `session-runner/Dockerfile.codex-web` and published as:
-
-```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-web
-```
-
-The Chrome runner images add the same harness families with a persistent headed browser:
+The supported runner image is built from `session-runner/Dockerfile.pi-chrome`
+and published as:
 
 ```text
 us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:codex-chrome
 ```
+
+Release automation also publishes immutable `pi-chrome-<source-commit>` tags.
+Retired image tags and existing Cloud Run services are historical data; this
+cutover does not purge them or make them selectable for new sessions.
 
 Chrome desktop bootstrap waits for Xvfb to accept a real X client connection before launching
 x11vnc or Chromium. x11vnc starts first after that readiness gate, so the loopback VNC listener
 is not delayed by Chromium profile startup. The runner still requires the supervised desktop
 processes, loopback VNC, and CDP to be ready before it opens the session HTTP port. Changes to
-this bootstrap path require rebuilt `pi-chrome` and `codex-chrome` revisions; existing Cloud Run
-services retain their bundled startup behavior until restarted or recreated.
+this bootstrap path require a rebuilt `pi-chrome` revision; existing Cloud Run services retain
+their bundled startup behavior until restarted or recreated.
 
-The frontend image dropdown is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It contains the default shell runner, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-n64`, `pi-chrome`, and `codex-chrome`, each with explicit capability metadata, a stable `imageKey`, and an owning `harnessId`. The `chat` capability is enabled only for `pi-basic`, `pi-web`, and `pi-chrome`; the other images keep Chat disabled. The `goals` capability is currently enabled for those same three Pi images.
+The `pi-chrome` build also packages the pinned pi-web-ui runtime under
+`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` fetches
+commit `46880b3772591beac91c0c1792bdc79a6fe3671f` (package `0.79.0`), verifies
+the source archive and package/license hashes, applies the checked-in patch
+series, runs the upstream typecheck/tests/build, and copies only generated
+runtime files plus `build-info.json` into the image. The build pins Pi SDK
+`0.84.4` and `pi-mcp-adapter` `2.32.1`; it does not download or install anything
+at runner startup. The generated health descriptor is safe for runtime status
+reporting. Existing Cloud Run sessions do not contain this artifact until they
+receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
+for the revision rollout.
 
-Curated non-default runner keys follow the naming convention `<runner-family>-<runner-variant>`. The currently supported families are `pi` and `codex`; the supported variants are `basic`, `web`, `n64`, and `chrome`. The legacy shell runner remains the lone `default` exception with no hyphenated family/variant split. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so forward-compatible keys such as future `family-variant-extra` forms render one tag per non-empty segment without adding a new view-specific mapping.
+The managed-only presentation patch removes the upstream name/logo, version
+controls, and repository link from the embedded header. It adds Chrome beside
+the upstream Chat, Terminal, and Git tabs; that control emits the typed
+`mapache.agent.navigate` bridge message so the exact-origin parent iframe host
+can select the existing persistent Chrome canvas. The standalone upstream UI
+keeps its original branding, release controls, and repository link.
 
-The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` contain the curated server-side image catalog. Session creation accepts `imageKey`, resolves the catalog entry plus its `harnessId`, persists both on the session document, and then provisions Cloud Run. Legacy clients may still submit `image` only when it exactly matches a curated catalog image. Arbitrary user-supplied image URIs are rejected with `invalid_runner_image`.
+The managed pi-web-ui build is compiled with `PI_WEB_BASE_PATH=/agent/`. The
+browser therefore keeps every public asset and application endpoint under the
+embedded prefix while the supervised upstream process continues to listen on
+its internal root at port 8787. Tasks 4–6 own the child process and gateway
+that translate these public paths:
 
-Workspace MCP server config is managed from the right drawer and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. The runner writes a standard `/workspace/.mcp.json` for shared MCP discovery. Pi images bake in `pi-mcp-adapter` with `pi install npm:pi-mcp-adapter`, so Pi loads the shared config through the adapter path. Codex images do not use the Pi adapter; Codex runners write MCP entries into `/workspace/.codex/config.toml`, while the archived `$CODEX_HOME` continues to hold auth, logs, and session-local CLI state.
+| Public path | Internal pi-web-ui path | Owner |
+| --- | --- | --- |
+| `/agent/` and `/agent/assets/*` | `/` and `/assets/*` | HTTP gateway |
+| `/agent/api/*` | `/api/*` | HTTP gateway |
+| `/agent/themes/*`, `/agent/plugins/*`, `/agent/icons/*`, `/agent/manifest.webmanifest` | matching root-relative upstream path | HTTP gateway |
+| `/agent/ws` | `/ws` | WebSocket gateway |
 
-Workspace-bound Google MCP services are injected during Functions provisioning after a server-side refresh. The runner receives an ephemeral `GOOGLE_MCP_ACCESS_TOKEN`; local mode starts `/app/google-workspace-mcp/server.mjs` over stdio and passes enabled services/scopes through non-secret environment values. No Google token is written to `MCP_CONFIG` or workspace files. Pi's `/root/.pi/agent/mcp-oauth` directory has a dedicated hidden archive target so it is excluded from the general home archive. `GET /google/mcp/status` performs local initialize/tools-list readiness evidence and exposes only service state, adapter, and safe account metadata behind the shutdown-token gate. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
+The only source-level root-relative exception is the favicon, which is patched
+to `./favicon.svg`; Vite emits the module and stylesheet assets with the
+`/agent/` base. The existing `appUrl` helper adds the same prefix to API,
+WebSocket, theme, plugin, file-preview, download, locale, and notification
+URLs. The managed build does not register a service worker. On upgrade it
+unregisters only the exact app-scope `/agent/` registration or a worker whose
+script URL is `/agent/sw.js`, leaving any Mapache parent-scope worker alone.
+
+The server-owned workspace marker `agentUiVersion: "pi-web-ui-v1"` is passed to
+the runner as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`. A marked `pi-chrome`
+runner restores the published checkpoint after source/archive preparation and
+before writer admission, credential materialization, and harness startup. It
+then starts exactly one supervised child from
+`/opt/mapache/pi-web-ui/dist/server/index.js`.
+The child is fixed to loopback `127.0.0.1:8787`, runs with `/workspace` as its
+fixed upstream cwd, uses `/var/lib/mapache/agent/pi` for non-secret Pi
+configuration, `/var/lib/mapache/agent/sessions` as the explicit flat
+`PI_CODING_AGENT_SESSION_DIR`, and `/var/lib/mapache/agent/ui` for UI state.
+The upstream project picker and history actions follow existing symlinks and
+reject paths outside those canonical roots; stale client workspace state is
+ignored when it resolves outside `/workspace`. This constrains browser controls
+without claiming a shell sandbox: the ordinary shell/PTY process still shares
+the runner workspace. All browser clients list and open the same workspace
+transcripts, including their SDK-preserved IDs and branches. The runner creates
+a private per-boot token, uses it only for the local `/api/health` check, and
+never includes it in status or logs. Startup is bounded by local health; a
+startup failure or unexpected child exit is reported through runner activity
+with no automatic respawn. Before materialization, the runner acquires a unique
+boot instance ID for the reserved runtime generation in the workspace/session
+coordination documents. Duplicate boots and stale generations remain fenced;
+the runner renews that admission with bounded Firestore transactions and checks
+it before state-changing agent requests and workspace publication. A lost or
+indeterminate coordination read rejects new work and signals the detached
+managed child process group, so physical container liveness is not treated as
+writer admission. Shutdown sends a cooperative group signal and applies the
+existing bounded stop/force-stop policy before final runner persistence, then
+releases the boot ID only through the controlled lifecycle. If an
+already-unavailable runner cannot acknowledge cooperative shutdown, Functions
+deletes the Cloud Run service, clears the reserved authority through the normal
+stopped transition, and records an interrupted-checkpoint warning. This is the
+controlled recovery path for a fenced replacement boot; it does not permit
+heartbeat-only authority takeover or concurrent writers.
+
+Managed agent persistence capture and restore live in
+`session-runner/lib/agentSnapshot.service.js`,
+`session-runner/lib/agentCheckpoint.service.js`, and
+`session-runner/lib/agentCheckpointRestore.service.js`.
+It stages the fixed `/var/lib/mapache/agent/sessions`, `/pi`, and `/ui` roots
+under a private local directory, then writes a manifest with version, workspace /
+session / generation / boot identity, capture time, relative paths, byte lengths,
+SHA-256 checksums, and owner-safe permission bits. The storage namespace is
+`{workspacePrefix}/{internalStorageDir}/agent-snapshots/v1`. Pi settings are allowlisted, known auth/connector material and
+cache/process state are excluded using the auth inventory, and uploads are
+copied only when complete history records reference them. JSON settings must
+parse as an object or array and remain unchanged through acceptance. JSONL capture keeps complete
+records and marks an incomplete trailing append for the next save. Relative
+symlinks are retained without dereferencing when their resolved target remains
+inside the same source root; absolute, escaping, dangling, or secret-targeting
+links fail the capture rather than exposing an outside path. The staging
+manifest is consumed by `session-runner/lib/agentCheckpoint.service.js`, which
+uploads immutable objects below the versioned prefix and publishes a pointer only
+after a generation/boot authority transaction succeeds. A failed or partial
+upload leaves the previous pointer unchanged. Workspace files on the marked
+runtime use the same publication boundary: each sync creates a versioned file
+manifest with content hashes and tombstones, and the committed manifest—not a
+delayed mutable upload or delete—is the authoritative file view. Unmarked
+workspaces retain the legacy flat writer. Protected `/healthz` exposes only the
+safe `lastCheckpointAt` timestamp and normalized `checkpointError` code. On the
+next marked boot, `agentCheckpointRestore.service.js` reads only the published
+pointer, validates the manifest identity, checksum, path, and JSON/JSONL content
+in staging, and atomically installs the workspace and fixed agent roots with
+rollback. Missing pointers leave a new runtime at image/default state; corrupt,
+partial, unsafe, or mixed-generation data fails startup without replacing the
+last local state. Marked workspace sync skips the legacy flat prefix and keeps
+`.git` under its archive owner. Opening restored history is a storage/UI action
+and does not submit a model request until the user explicitly prompts or resumes.
+
+On the marked path, the runner starts one upstream pi-web-ui child and does not
+start a legacy Pi TUI, Mapache Chat bridge, Goals RPC, or managed Goal package.
+Historical unmarked sessions remain readable, but their parent UI no longer
+exposes the retired Mapache Chat/Goals controls.
+
+The marked runner's `/agent` HTTP gateway is owned by
+`session-runner/lib/agentGateway.js`. It strips `/agent` before forwarding to
+the loopback child, authenticates the signed agent audience and current
+generation before any upstream request, and injects only the adapter's private
+health token. Query credentials are removed by a no-referrer bootstrap
+redirect, the access cookie is scoped to `/agent/`, upstream cookies and
+off-origin redirects are discarded, and state-changing requests require the
+runner's exact Origin. The gateway streams request/response bodies and Range
+headers while enforcing the upstream 10 MiB JSON/body limit; `/agent/api/health`
+is not a public authentication bypass. The central noServer upgrade dispatcher
+maps `/agent/ws` to the child's `/ws` and authenticates the signed audience,
+generation, expiry, and exact Origin before opening the child connection. It
+forwards message payloads with bounded backpressure, strips public headers and
+query credentials, injects the private token, closes both sides together, and
+closes live pairs when access expires. Chrome VNC, terminal, shell, and metrics
+upgrades remain separate dispatcher branches.
+
+`PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
+installation, plugin-catalog installation, and provider-credential mutation
+messages. Credential-bearing model probes and saves are also rejected; the
+server omits API keys and secret headers from managed model-config responses
+while preserving existing server-side secrets for metadata-only edits. The
+managed client replaces upstream credential entry points with a Mapache-owned
+explanation, while model selection and non-secret model metadata remain usable.
+The managed server forces `ENGINE=pi` even if a stale `PI_WEB_ENGINE=dsh` value
+is present. Existing installed plugins and ordinary agent settings remain
+available. The build and runtime environment are still owned by the runner
+image and deployment pipeline.
+
+Managed auth is materialized from the canonical Mapache provider document into
+`/var/lib/mapache/agent/pi/auth.json` after workspace restore and before the
+supervised child starts. Restored `$HOME/.pi/agent/auth.json` is never imported
+as managed input, and a stale `/var/lib/mapache/agent/pi/provider-keys.json` is
+removed. `workspaceAuth.service.js` publishes a path-only, capture-excluded
+inventory for native auth, provider keys, `models.json`, Pi MCP OAuth state,
+GitHub CLI hosts, and the legacy restored auth path so the later capture helper
+can exclude every known secret-bearing location.
+
+The frontend image catalog is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It exposes only the supported `pi-chrome` image and Pi harness. Historical shell, SSH, Codex, web, and N64 records may remain in Firestore for readable old sessions and cleanup, but they are not catalog launch targets. New session creation is server-owned and resolves the marked `pi-chrome`/Pi image; legacy Chat and Goals capability flags are no longer advertised.
+
+The supported runner key is `pi-chrome`. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so the supported image renders `pi` and `chrome` tags without adding a view-specific mapping.
+
+The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` resolve the exact `pi-chrome` entry and Pi harness. Client `imageKey` and `image` fields cannot select another image; provisioning and queued-worker paths repeat the canonical identity check and reject unsupported or arbitrary runner records before any Cloud Run request. Historical records remain readable for status and cleanup without becoming launchable.
+
+Workspace MCP server config is managed from the top-navigation MCP dialog and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. The runner writes a standard `/workspace/.mcp.json` for shared MCP discovery. The `pi-chrome` image bakes the exact `pi-mcp-adapter@2.32.1` package and exposes its image-owned `index.ts` entry through `PI_WEB_MCP_ADAPTER_PATH`; managed pi-web sessions pass that one path to the Pi SDK `additionalExtensionPaths` loader. The managed server does not start its legacy `<dataDir>/mcp.json` `McpBridge`, so the adapter is the only MCP transport and each configured server is started once. Its setup/editor, auth actions, project enable/disable, and bearer-token write paths are read-only/refused in managed mode; Mapache remains the owner of workspace config and Google token refresh/materialization.
+
+Workspace-bound Google MCP services are injected during Functions provisioning after a server-side refresh. The runner receives an ephemeral `GOOGLE_MCP_ACCESS_TOKEN`; local mode starts `/app/google-workspace-mcp/server.mjs` over stdio and passes enabled services/scopes through non-secret environment values. No Google token is written to `MCP_CONFIG`, `/workspace/.mcp.json`, or persisted pi-web UI config: the adapter uses the runner's `bearer_env` reference and the local wrapper asks Mapache for a bounded refresh after a 401. Pi's `/root/.pi/agent/mcp-oauth` directory has a dedicated hidden archive target so it is excluded from the general home archive. `GET /google/mcp/status` performs local initialize/tools-list readiness evidence and exposes only service state, adapter, and safe account metadata behind the shutdown-token gate. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
 
 ## Base Environment
 
@@ -85,15 +205,14 @@ FROM node:24-bookworm-slim
 Installed OS packages currently include:
 
 - `bash`
-- `bubblewrap` in Codex images, so the Codex CLI can use its expected local sandbox path inside the already isolated runner
 - `ca-certificates`
 - `curl`
 - `fd-find`, exposed as `fd` with a symlink to Debian's `fdfind` binary
 - `git`
-- `gh` in Pi and Codex images, so agent sessions can use the GitHub CLI for issue, PR, and repository workflow commands without manual installation
+- `gh`, so agent sessions can use the GitHub CLI for issue, PR, and repository workflow commands without manual installation
 - `gzip`
 - `openssh-client`
-- `python3` in every runner variant as the shared Python runtime contract
+- `python3` as the shared Python runtime contract
 - `make`
 - `g++`
 - `ripgrep`
@@ -104,67 +223,55 @@ Installed OS packages currently include:
 
 `make` and `g++` are present because `node-pty` and terminal-adjacent dependencies may require native build support during image construction.
 
-Every runner Dockerfile runs `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` enumerates every supported variant so a missing install or build-time validation fails the regular runner test suite. The explicit command contract is `python3`; Mapache does not currently guarantee a bare `python` alias because repository workflows and tooling use `python3` directly.
+The `pi-chrome` Dockerfile runs `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` verifies the supported image's build contract. The explicit command contract is `python3`; Mapache does not currently guarantee a bare `python` alias because repository workflows and tooling use `python3` directly.
 
-The default image now installs Pi Agents with:
+The supported `pi-chrome` image installs Pi Agents with:
 
 ```bash
 curl -fsSL https://pi.dev/install.sh | sh
 ```
 
-Pi package installs can also require npm, git, search tools, and native build tooling depending on the package. The web extension manager runs package operations inside the active runner rather than on the client device, so it uses the same runtime toolchain that Pi uses in the terminal.
+The images retain npm, git, search tools, and native build tooling for ordinary
+terminal and upstream agent workflows. Mapache does not install or reconcile a
+managed Goal package at build or startup. Native Goals remain inside the
+embedded upstream application and are persisted as part of its UI snapshot.
 
-The Pi basic, web, and Chrome images also preinstall the pinned `pi-goal-x@0.31.2` extension and set `GOAL_BRIDGE_ENABLED=true`, `GOAL_RPC_ENABLED=true`, and `PI_GOAL_X_VERSION=0.31.2`. After home restore, `goalsPackageBootstrap.js` reconciles the pinned package declaration in the restored Pi settings only when the image-owned package directory exists; it never downloads a package during startup. The build applies `patchPiGoalX.js` to route pi-goal-x's terminal-only task confirmation through RPC's standard `confirm` dialog. The runner exposes protected `/goals/capabilities`, `/goals/snapshot`, `/goals/commands`, and `/goals/operations/:operationId` routes. Managed goals use one headless Pi RPC process and relay bounded `select`, `confirm`, `input`, and `editor` requests to the Web UI. The existing PTY is blocked while that managed process is active so two Pi processes cannot write the same session concurrently. RPC process loss requires an explicit resume; durable checkpoints and lease-fenced recovery are not yet implemented.
-
-The `pi-chrome` image additionally pins Pi `0.84.1`, `pi-mcp-adapter@2.32.1`, and the Gate A candidate revision `gate-a-0.1.0`. It contains `piWebFirstAdapter.extension.mjs` and its fail-closed private-IPC client for the disposable web-first feasibility fixture. The candidate can submit an ordinary message to the same TUI Pi process and stream bounded lifecycle/tool summaries, but Pi's public TUI extension API does not expose command expansion, browser answers for native dialogs, reload, or session replacement. Gate A therefore remains closed: this candidate is not enabled as a production web-first path, and the existing RPC plus explicit terminal handoff remains the supported Goals mode. See [Gate A evidence](./plans/web-first/A-adapter-feasibility.md) and [the saved report](../artifacts/web-first/gate-a/results.md).
-The image sets `MAPACHE_RUNNER_INTEGRATION_MODE=legacy` explicitly so an
-existing or recreated session cannot enter the shared owner through ambiguous
-environment state. A disposable canary must set both
-`MAPACHE_RUNNER_INTEGRATION_MODE=web-first` and
-`MAPACHE_WEB_FIRST_ENABLED=true`; the runner still fails closed if the adapter
-handshake does not match the pinned revision/package or reports an incompatible
-extension. The handshake advertises ordinary prompts as the only currently
-tested capability.
-The pi-chrome image also packages the Gate B control slice behind `MAPACHE_WEB_FIRST_ENABLED=false`. When a disposable fixture explicitly enables the flag, `/agent` uses the shared WebSocket upgrade dispatcher, signed browser access, configured origin allowlisting, a 10-second heartbeat/30-second lease, per-tab resumption secrets, control epochs, bounded event replay, and a file-backed operation ledger under the session directory. Terminal, shell, Chat, and agent writes are checked at their receiving boundary. The image keeps this flag false because Gate A has not supplied supported command expansion, browser-answerable dialogs, reload, or session replacement; the existing RPC plus explicit terminal handoff remains the supported production Goals mode.
-
-The same opt-in pi-chrome slice now includes `executionAuthority.js`, `mutationBarrier.js`, `processSupervisor.js`, and `workspaceCheckpoint.service.js`. Authority is acquired only after the existing Firestore sync-writer reservation matches the session, renewed from a confirmed transaction using a monotonic local deadline, and fenced on uncertainty. Authority loss closes runner-owned mutation admission, stops the controlled Pi/shell children and Chrome runtime, disconnects the adapter, and records a fenced runtime state. A replacement runtime refuses to start Pi work when the predecessor authority is active, fenced, or marked recovery-required; it serves only read-only/recovery preparation until an operator resolves the predecessor.
-
-When enabled, the runner creates an initial recovery checkpoint before listening for new work, checkpoints settled agent runs and independent runner-owned file/Git mutations, and replaces the web-first periodic normal worktree upload with checkpoint publication. Checkpoints upload an allowlisted workspace/Git archive, a stable Pi session copy, managed goal state, and operation evidence under immutable epoch/checkpoint paths; the manifest is uploaded last and a transaction advances paired session/workspace recovery pointers only after authority, writer reservation, prior pointer, and revision checks. Restore verifies exact generations, lengths, hashes, and Pi parent/leaf bindings into a staging directory and never overwrites the live workspace. The barrier and publisher do not control arbitrary detached children, browser-side Functions writes, legacy runner processes, or the separate Chrome profile archive; those limitations keep Gate C open. See [Gate C policy](./plans/web-first/C-execution-and-checkpoints.md), [writer inventory](../artifacts/web-first/gate-c/writer-inventory.md), and [checkpoint evidence](../artifacts/web-first/gate-c/results.md).
-
-Codex images install the Codex CLI with the documented standalone installer in non-interactive mode:
-
-```bash
-CODEX_INSTALL_DIR=/usr/local/bin ./install-codex-standalone.sh
-```
-
-As of 2026-06-18, the Dockerfiles pin Codex CLI `0.140.0` and install the published Linux package tarball directly because that release's `codex-package_SHA256SUMS` file is missing the Linux standalone package entry and breaks the hosted `install.sh` flow.
+The image also includes Chromium, noVNC, preview/QA tooling, and the managed
+pi-web-ui runtime used by every newly created session.
 
 ## Runner Server Layout
 
 The container entry point is still `session-runner/server.js`, but it is now a bootstrap/router layer rather than the full runtime implementation. Feature code lives under `session-runner/lib/`:
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
-- `preview.js` owns preview gateway modes, including pi-web static/proxy previews, pi-n64 ROM artifact previews, and the browser log buffer.
-- `workspace.js` composes workspace restore and sync behavior. Path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization lives in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
+- `preview.js` owns static/proxy preview modes and the browser log buffer.
+- `workspace.js` composes workspace restore and sync behavior. Published checkpoint restore lives in `agentCheckpointRestore.service.js`; path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization and secret-file inventory live in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
 - `git.js` composes runner Git behavior. Manual status/stage/commit/pull/push/PR preparation stays in the facade, while automatic Pi branch/commit/push/PR lifecycle lives in `gitAutomation.service.js`. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it. Preview log/SSE collection and static share export similarly live in `previewLog.service.js` and `previewShare.service.js`, leaving `preview.js` as the mode/config facade.
-- `pi.js` composes runner Pi services while keeping the public server contract stable. Package operations live in `piPackage.service.js`; workspace skill CRUD and recursive native/shared/user-root discovery live in `workspaceSkill.service.js`; workspace subagent CRUD lives in `workspaceSubagent.service.js`; seeded skill file creation lives in `piSeededSkills.service.js`; the managed `pi-goal-x` declaration reconciliation lives in `goalsPackageBootstrap.js`; and shared package/skill validation helpers live in `piValidation.helpers.js`.
-- `harnesses/index.js` and `harnesses/metadata.js` resolve the active runner harness and define which auth, MCP, skill, package, and subagent hooks are supported at startup.
-- `workspaceSkillCatalog.js` selects harness-neutral `github`, `web`, and `n64` skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/`; Pi and Codex materialize those same files into their native workspace paths.
-- `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing. The opt-in pi-chrome recovery boundary is split across `executionAuthority.js` (Firestore lease/epoch), `mutationBarrier.js` (checkpoint admission), `processSupervisor.js` (bounded controlled-child termination), and `workspaceCheckpoint.service.js` (immutable payloads, manifest validation, paired publication, staging restore, and orphan cleanup).
+- `pi.js` composes only the startup-owned Pi seeded-skill materializer. Mapache
+  package, skill, subagent, model, Goal, and Chat control services are not
+  included in the runner.
+- `harnesses/index.js` and `harnesses/metadata.js` resolve the active runner
+  harness and define the retained auth/MCP startup contract.
+- `workspaceSkillCatalog.js` selects harness-neutral `github` and `web` skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/` and is materialized into the Pi workspace path.
+- `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
-Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`. The runner now receives `HARNESS_ID` alongside `TERMINAL_KIND` so SSH, shell, Pi, and Codex behavior does not depend on image-name inference alone.
+Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`. The runner receives the fixed Pi harness contract; historical terminal metadata is not used to select a new runner family.
 
 For GitHub-backed Pi sessions, automatic branch preparation resets and cleans the worktree before harness-owned MCP and skill files are materialized. Keep generated `.mcp.json` creation after that destructive Git preparation step; otherwise `git clean -fd` removes the generated MCP configuration before Pi starts and the session reports zero registered servers.
 
 GitHub restart restoration preserves the workspace cache before that cleanup. The `.git` archive is stored with workspace-relative `./.git/**` entries and must be extracted at the workspace root, not inside `/workspace/.git`, or it creates an invalid nested `.git/.git` repository. When a runner resumes the same session automation branch, it keeps that branch and its worktree unchanged. When it must create a new automation branch, it stashes restored tracked and untracked changes before resetting to the selected remote base and reapplies them after creating the branch. A stash conflict fails startup with the stash retained instead of silently replacing cached files.
 
-Every runner Dockerfile packages both `session-runner/lib/` and `session-runner/routes/` with `server.js`. Route modules are required startup dependencies; omitting either directory causes the container to exit before the Cloud Run startup probe can succeed. Changes under either shared directory require rebuilding every affected runner image, and existing session revisions retain their previously bundled files until recreated.
+The `pi-chrome` Dockerfile packages `session-runner/lib/` and `session-runner/routes/` with `server.js`. Route modules are required startup dependencies; omitting either directory causes the container to exit before the Cloud Run startup probe can succeed. Changes under either shared directory require rebuilding `pi-chrome`, and existing session revisions retain their previously bundled files until recreated.
 
 The runner exposes a backend-only `POST /workspace/sync-down` route protected by `SESSION_SHUTDOWN_TOKEN`. Functions calls this route after file-browser uploads or editor saves so newly written Cloud Storage objects materialize into the active `/workspace` filesystem that the terminal process sees. The existing periodic sync loop still uploads local terminal changes back to storage and preserves newer remote objects when it encounters them.
 
-Workspace file browsing uses lazy directory traversal. The Functions `GET /workspaces/{workspaceId}/files` API accepts an optional `path` query parameter and lists only that directory's immediate files and child directories from Cloud Storage using a delimiter. The first load requests the workspace root only; the frontend requests child directories when the user expands them. SSH-backed Dev machine file browsing follows the same contract through the runner `/ssh/files?path=...` route and uses a non-recursive remote `find` limited to the requested directory.
+Workspace files are synchronized and checkpointed through the existing storage
+boundary, but the parent Mapache UI no longer lists or edits them through a
+duplicate file browser. The embedded upstream Agent owns live file browsing and
+Git for marked sessions. Historical unsupported runner records remain available
+for cleanup only; no new SSH file-backed runner can be created.
 
-All runner images copy `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require new revisions of the affected Pi and Codex runner images; existing Cloud Run session revisions retain the catalog bundled in their current image.
+The `pi-chrome` image copies `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require a new `pi-chrome` revision; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
 ## Terminal Runtime
 
@@ -172,7 +279,7 @@ The container runs `session-runner/server.js`.
 
 It starts an Express server on `PORT`, serves the terminal iframe page, and exposes a WebSocket at `/terminal`. The runner keeps one active `node-pty` process per container instance. Browser WebSocket connections attach to that PTY, and closing or recreating the browser iframe detaches only the socket instead of killing the process.
 
-Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/healthz`, and `/capabilities` is gated by short-lived HMAC tokens minted by the authenticated Cloud Functions API. The runner receives a per-session `SESSION_BROWSER_TOKEN_SECRET` environment variable and validates the `mapache_access` query parameter or the HttpOnly `mapache_access` cookie before serving those browser surfaces. The query token is used for the initial iframe load; the cookie lets preview pages load relative assets and lets the terminal WebSocket reconnect without exposing the internal runner management token. Backend-only runner routes such as `/shutdown`, `/git/*`, `/models`, `/pi/skills*`, and `/pi/packages*` continue to use the separate `SESSION_SHUTDOWN_TOKEN` header gate.
+Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/healthz`, and `/capabilities` is gated by short-lived HMAC tokens minted by the authenticated Cloud Functions API. The runner receives a per-session `SESSION_BROWSER_TOKEN_SECRET` environment variable and validates the `mapache_access` query parameter or the HttpOnly `mapache_access` cookie before serving those browser surfaces. The query token is used for the initial iframe load; the cookie lets preview pages load relative assets and lets the terminal WebSocket reconnect without exposing the internal runner management token. Backend-only lifecycle, sync, checkpoint, source-automation, and MCP/auth routes use the separate `SESSION_SHUTDOWN_TOKEN` header gate.
 
 The runner stores a bounded raw-output replay buffer so a newly loaded iframe can redraw recent terminal output after reconnecting. The default replay limit is `1000000` characters and can be changed with `TERMINAL_REPLAY_LIMIT`. Automatic reconnects from the same iframe skip replay to avoid duplicating visible terminal content. If the shell process itself exits, the runner closes connected sockets and the next fresh iframe connection starts a new PTY.
 
@@ -182,7 +289,7 @@ Runner bootstrap is lifecycle-aware. `session-runner/lib/runnerLifecycle.js` cat
 
 The runner reports terminal activity back to the session document in Firestore. WebSocket connects and disconnects update only `activeSocketCount`, `lastConnectedAt`, and `lastDisconnectedAt`; transport reconnects do not count as user activity because Cloud Run can recycle long-lived WebSockets. Terminal input and PTY output update `lastActivityAt` with a short debounce. The scheduled idle reaper bases its timeout on `lastActivityAt`, with session update/creation timestamps as legacy fallbacks, and deliberately ignores connection timestamps.
 
-Cloud runner sessions also expose an authenticated read-only `/metrics` WebSocket. `resourceMetrics.service.js` samples Linux cgroup CPU and memory counters every two seconds while a client is subscribed, and `resourceMetricsWebSocket.js` broadcasts the safe `{type: "metrics", ...}` payload without attaching to the PTY or updating session activity. CPU is normalized against the cgroup CPU limit and memory against the cgroup memory limit. If the container does not expose bounded cgroup memory data, the socket reports `resource_metrics_unavailable`; it never falls back to host-wide memory values. The parent frontend displays these metrics only for Cloud sessions, not SSH-backed sessions, whose runner container is only a proxy for the remote machine.
+Cloud runner sessions also expose an authenticated read-only `/metrics` WebSocket. `resourceMetrics.service.js` samples Linux cgroup CPU and memory counters every two seconds while a client is subscribed, and `resourceMetricsWebSocket.js` broadcasts the safe `{type: "metrics", ...}` payload without attaching to the PTY or updating session activity. CPU is normalized against the cgroup CPU limit and memory against the cgroup memory limit. If the container does not expose bounded cgroup memory data, the socket reports `resource_metrics_unavailable`; it never falls back to host-wide memory values.
 
 ## Chrome Runtime
 
@@ -194,27 +301,17 @@ The browser surface is protected by the same per-session HMAC browser token as t
 
 Chrome profiles are not part of the visible workspace tree or the general home archive. The isolated archive target is `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`; the runner stages and sanitizes it before atomic restore, then serializes periodic and final snapshots. Profile extraction uses GNU-compatible ownership and permission guards, and reports the tar process error ahead of any secondary stream-close error. Cache, crash, download, lock, socket, and other transient paths are excluded. Shell sessions never create, restore, or overwrite this target.
 
-In the opt-in web-first pi-chrome mode, Chrome profile snapshots remain a separate serialized archive and are not included in the workspace checkpoint pair. The profile upload is authority/barrier gated, but it still targets the historical canonical archive object. Do not treat it as proof that browser state or browser-side saves obey the checkpoint publisher; that audit remains a Gate C blocker.
-
-Terminal completion hooks receive an explicit exit reason. Normal process
-completion may run Git automation; a Goals mode switch, authority fence, or
-runner shutdown does not. The lifecycle coordinator stops a live terminal
-before final profile/archive cleanup so a handoff cannot be mistaken for a
-completed Git session.
-
 The Chrome DevTools MCP package is baked into both Chrome images at `chrome-devtools-mcp@1.6.0`. The runner materializes a reserved `chrome-devtools` MCP server with `--browser-url http://127.0.0.1:9222`, disables usage statistics/update checks, and attaches to the existing browser rather than launching another one. Chrome-image QA uses Playwright `connectOverCDP`; it closes only the temporary QA page and writes its normal reports under `$MAPACHE_QA_DIR`.
 
-Both Chrome Dockerfiles run `bin/check-chrome-runtime.js` and `bin/chrome-smoke.js` during image construction. The smoke check is bounded and credential-free: it verifies CDP, loopback VNC, multiple page targets, browser cookie/local-storage interaction, profile file creation, and clean desktop shutdown. Profile archive restore and cross-image Pi-to-Codex handoff remain covered by runner persistence tests and the canary checklist.
+The authenticated `/agent` gateway returns `Referrer-Policy: strict-origin-when-cross-origin` so the embedded pi-web-ui can validate the parent origin for its postMessage access bridge. It still strips `referer`, `origin`, cookies, and access query parameters before forwarding requests to the private upstream UI. Checkpoint restore validates Pi settings as JSON objects while accepting array-shaped UI catalogs such as `ui/subagent-templates.seeded.json`.
 
-For the default shell runner, that process is a login shell:
+The `pi-chrome` Dockerfile runs `bin/check-chrome-runtime.js` and `bin/chrome-smoke.js` during image construction. The smoke check is bounded and credential-free: it verifies CDP, loopback VNC, multiple page targets, browser cookie/local-storage interaction, profile file creation, and clean desktop shutdown. Profile archive restore and restart behavior remain covered by runner persistence tests and the canary checklist.
+
+The supported Pi runner starts its terminal process in Pi resume mode:
 
 ```text
-bash -l
+pi -c
 ```
-
-For SSH-backed sessions, Cloud Functions still provisions the default runner image, but sets `TERMINAL_KIND=ssh` and injects SSH target/auth environment. The runner writes the private key, optional signed user certificate, and optional `known_hosts` content under the runtime home directory with restrictive permissions, then starts an OpenSSH client PTY against the configured target and initial directory. The SSH shell is reconnectable through the existing browser terminal replay path while the Cloud Run runner instance remains active.
-
-SSH file browsing is runner-backed rather than Cloud Storage-backed. The first implementation intentionally scopes list/read/save operations to the configured initial directory on the target machine and relies on the SSH account's OS permissions. SSH port forwarding is also runner-backed: each requested target port starts an `ssh -N -L 127.0.0.1:<local>:127.0.0.1:<remote>` process inside the runner and exposes it only through authenticated `/ssh/forward/<port>/` browser URLs.
 
 For Pi runners, that process is Pi resume mode:
 
@@ -222,7 +319,7 @@ For Pi runners, that process is Pi resume mode:
 pi -c
 ```
 
-Cloud Functions sets `TERMINAL_COMMAND` and JSON-array `TERMINAL_ARGS` when provisioning each session. The default shell runner receives `TERMINAL_COMMAND=bash` and `TERMINAL_ARGS=["-l"]`; `pi-basic`, `pi-web`, and `pi-n64` receive:
+Cloud Functions sets `TERMINAL_COMMAND` and JSON-array `TERMINAL_ARGS` when provisioning each session. The supported `pi-chrome` runner receives:
 
 ```text
 TERMINAL_COMMAND=pi
@@ -231,84 +328,39 @@ TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 
 Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
 
-Pi's `enabledModels` setting is also session-owned even though Pi writes it into the otherwise workspace-home-backed `$PI_CODING_AGENT_DIR/settings.json`. After restoring the home archive and before starting Pi, the runner replaces that one setting from the session document's `piScopedModels` array. A session with no canonical field records an empty scope and removes any `enabledModels` value inherited from another session's home archive, so all authenticated provider catalogs remain available without inheriting another session's Ctrl+P filter. This applies to both genuinely new sessions and legacy sessions that predate the canonical field, because a restored global setting cannot be safely attributed to one of them. Periodic and shutdown sync record a scope saved from Pi's `/scoped-models` screen back to the current session document.
+Pi's native model settings remain part of the restored upstream state. The
+runner may normalize the session-owned `enabledModels` scope while restoring
+legacy Pi state, but it does not expose a Mapache model editor or model API.
+Current model selection and model metadata belong to the upstream Agent UI.
 
-Codex runners receive `TERMINAL_COMMAND=codex` and `TERMINAL_ARGS=[]`. Cloud Functions also sets `CODEX_HOME` to a per-session local path such as `/tmp/mapache-codex/<session-id>`, plus a workspace-scoped archive prefix at `{workspace.storagePrefix}/.mapache-internal/codex-home`. Local process state stays isolated per Cloud session, while Codex auth, logs, sessions, and standalone package metadata persist for later Codex sessions in the same workspace. This state remains separate from repository `.codex/config.toml` files under `/workspace/.codex`, and Codex MCP config now materializes into that workspace file. Codex auth materialization also tracks the current standalone CLI schema: API-key sessions write `auth_mode: "apikey"`, ChatGPT sessions write `auth_mode: "chatgpt"`, and malformed saved OAuth records without a valid JWT `id_token` are omitted instead of being written back into `$CODEX_HOME/auth.json`. On first restore after this change, the runner falls back to the latest historical per-session Codex home archive under `.mapache-internal/sessions/*/codex-home/` when the workspace-scoped archive is not present yet.
-
-Codex images also include the GitHub CLI (`gh`) so terminal sessions can use the same issue, PR, and metadata commands the issue workflow expects.
-
-For connected GitHub workspaces, non-shell Pi sessions also prepare a clean automation branch before the terminal process starts. The runner fetches the selected base branch, resets the restored worktree to that remote branch, removes untracked non-ignored files, checks out a unique branch named `mapache/<session-name-kebab>-<session-id>`, and records that branch on the session document. When the Pi terminal process exits, the runner stages any remaining workspace changes and commits them with a Mapache-authored commit. If the automation branch already has commits and the worktree is clean, the runner pushes those commits without creating an extra commit. It then opens a pull request back to the base branch with the short-lived GitHub App installation token. If there are no changes and no commits ahead of the base branch, the runner records `githubAutomationStatus: "no_changes"` and does not create a commit or PR. Shell sessions and non-connected GitHub workspaces keep the manual Git controls behavior only.
+For connected GitHub workspaces, the runner retains internal source
+reconstruction and the configured GitHub automation branch/PR flow. The
+embedded upstream Agent owns live Git browsing and editing; Mapache does not
+expose a competing parent Git manager or manual Git-control API.
 
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
 
-The terminal page also loads `@xterm/addon-fit` from the runner and fits the xterm viewport to the actual iframe dimensions before sending resize events to the PTY. It inlines the critical xterm helper-textarea, viewport, and screen CSS in the runner HTML as a fallback, and reapplies visual-only helper-textarea styles after render. Keep xterm in charge of helper textarea position, dimensions, and value changes because mobile soft keyboards and composition input depend on that internal state. Avoid returning to hand-estimated character cell sizes; Codex's TUI depends on the browser terminal and PTY agreeing on rows and columns so typed input and long model output stay visible.
+The terminal page also loads `@xterm/addon-fit` from the runner and fits the xterm viewport to the actual iframe dimensions before sending resize events to the PTY. It inlines the critical xterm helper-textarea, viewport, and screen CSS in the runner HTML as a fallback, and reapplies visual-only helper-textarea styles after render. Keep xterm in charge of helper textarea position, dimensions, and value changes because mobile soft keyboards and composition input depend on that internal state. Avoid returning to hand-estimated character cell sizes; the Pi TUI depends on the browser terminal and PTY agreeing on rows and columns so typed input and long model output stay visible.
 
-## Pi Basic Runtime
+## Upstream agent runtime
 
-`session-runner/Dockerfile.pi-basic` starts from the same Pi-oriented base image and package set as the default runner.
+The embedded upstream application owns conversations, prompts, tool calls, live
+files/Git, model selection, skills, extensions, subagents, and native Goals. Pi
+JSONL history is captured and restored as storage state, but the runner does not
+tail it into a second Chat UI or inject prompts through a Mapache Chat socket.
+The only managed child is the upstream pi-web-ui process on the marked path.
 
-The image sets `TERMINAL_COMMAND=pi` and `TERMINAL_ARGS=["-c"]`, so new browser terminal connections open Pi in resume mode instead of a login shell or fresh conversation.
+## Managed pi-chrome runtime
 
-The skills manager targets Pi and Codex sessions. Skill listing and mutations require a running session so the manager can write the same native workspace skill files the active harness discovers at startup:
-
-- Pi: `/workspace/.pi/skills/{skill-name}/SKILL.md`
-- Codex: `/workspace/.agents/skills/{skill-name}/SKILL.md`
-
-The neutral runner endpoints are:
-
-```text
-GET  /skills
-POST /skills
-POST /skills/delete
-```
-
-Legacy `/pi/skills*` aliases remain available so older clients and mixed deploys keep working while frontend, Functions, and runner revisions roll forward.
-
-For blank workspaces, `pi-basic` does not select the `github` profile. For GitHub-backed workspaces, it materializes the shared `mapache-github-issue` skill when the workspace-local Pi copy is missing.
-
-The extension manager targets Pi-capable runners. For v1, package listing and package mutations can require a running session so the manager can operate on the same `/workspace/.pi/settings.json` and package cache directories that Pi uses.
-
-Build and push the image with:
-
-```bash
-gcloud builds submit session-runner \
-  --project pi-agents-cloud \
-  --config session-runner/cloudbuild.pi-basic.yaml
-```
-
-## Pi Chat Runtime Contract
-
-Pi Chat is a best-effort view of completed Pi turns, not a second agent process or a token-streaming protocol. `pi-basic`, `pi-web`, and `pi-chrome` expose `chat: true`; `pi-n64`, Codex, shell, and SSH runtimes do not. The runner discovers the newest per-session JSONL under `PI_SESSION_DIR`, normalizes only `message` entries with `user` or `assistant` roles, and preserves assistant Markdown text exactly. Tool calls, tool results, thinking entries, terminal control sequences, malformed records, and incomplete final lines are excluded.
-
-The `/chat` WebSocket is routed by the shared `noServer` upgrade dispatcher and uses the same browser-access token as Terminal. An authorized prompt is validated and sent through the existing `node-pty` session as one bracketed paste followed by carriage return; no second Pi process or conversation is started. The transcript service replays at most 200 displayable messages from at most 1 MiB of source, emits complete appended lines once, and sends a reset after truncation, file replacement, or active-branch changes. Chat exposes completed turns after they are persisted, so a working state can remain visible until the next assistant message or Terminal fallback is needed.
-
-The frontend owns only session-local transient Chat state. `usePiChat` reconnects and treats replay as authoritative; `PiChatCanvas` keeps one pending user bubble until the matching later user entry arrives, renders assistant GFM without raw HTML, and keeps `Open Terminal` available for approvals, tools, slash commands, and recovery. Existing services must receive a new revision or be recreated after deploying a runner image with Chat support; publishing a new image tag alone does not update an already-running Cloud Run service.
-
-## Codex Basic Runtime
-
-`session-runner/Dockerfile.codex-basic` is the terminal-first Codex runner. It installs the standalone Codex CLI and starts the browser terminal in interactive `codex` mode.
-
-For blank workspaces, `codex-basic` seeds a root `AGENTS.md` when it is missing. For connected GitHub workspaces, it materializes the shared `mapache-github-issue` catalog entry at `.agents/skills/mapache-github-issue/SKILL.md` when that file is missing. Native Pi and Codex files remain separate and never overwrite user-edited workspace files, but Mapache-owned seed content has one canonical source.
-
-Codex startup also imports existing workspace-local Pi skills from `.pi/skills/**` into `.agents/skills/{skill-name}/SKILL.md` when the Codex copy is missing. The import normalizes every copied skill to Codex-compatible YAML frontmatter with `name` and `description`, including legacy Pi skill files that lack frontmatter, and does not overwrite user-edited Codex skills.
-
-Build and push the image with:
-
-```bash
-gcloud builds submit session-runner \
-  --project pi-agents-cloud \
-  --config session-runner/cloudbuild.codex-basic.yaml
-```
-
-## Pi Web Runtime
-
-`session-runner/Dockerfile.pi-web` is the web-development runner. It starts from the same Pi-oriented shape as `pi-basic`, then adds Chromium and globally installed Playwright test tooling for browser QA. The image sets the runner capability contract to:
+`session-runner/Dockerfile.pi-chrome` is the supported managed runner. It combines Pi, Chromium, preview, browser QA, and the embedded pi-web-ui runtime. The image sets the runner capability contract to:
 
 ```json
-{"terminal":true,"preview":true,"previewQa":true,"functions":true,"chat":true}
+{"terminal":true,"preview":true,"previewQa":true,"functions":true}
 ```
 
-The shared runner server still owns the terminal, sync, protected shutdown, Git, skill, and package endpoints. Web behavior is enabled by environment:
+The shared runner server still owns the terminal, sync, protected shutdown,
+checkpoint, Preview, Chrome, and QA endpoints. Web behavior is enabled by
+environment:
 
 - `PREVIEW_ENABLED=true`
 - `PREVIEW_BASE_PATH=/preview`
@@ -332,6 +384,8 @@ When preview is enabled, the runner exposes:
 - `POST /preview/share` for backend-only static preview export to Cloud Storage. This route requires the runner shutdown token and is not available through browser preview access.
 
 The web images now provide a supported browser QA command at `/usr/local/bin/mapache-preview-qa`. The command launches Chromium through Playwright with fixed desktop/mobile viewport defaults, supports basic `goto`, `click`, `fill`, `press`, `waitFor`, and `screenshot` actions from a JSON spec, writes screenshots plus `report.md` and `report.json` under `$MAPACHE_QA_DIR/latest`, and updates `$MAPACHE_QA_DIR/last-run.json` so the runner can report whether the last QA execution passed or failed.
+
+The disposable `pi-web.failure-recovery` case has a deterministic fault harness. It is enabled only when a marked `pi-web-ui-v1` session has both `QA_CASE=pi-web-failure-recovery` and `MAPACHE_QA_FAULT_HARNESS=pi-web-failure-recovery-v1`. The authenticated Functions bridge exposes `GET`/`POST /api/workspaces/{workspaceId}/sessions/{sessionId}/qa/faults`; it proxies to the runner's shutdown-token-protected `GET`/`POST /qa/faults` routes. The harness supports one-shot storage-publication failure, writer revocation, uncertain replacement, and forced process loss/no-auto-resume, plus a bounded short-lived browser-access TTL fixture. One-shot faults are armed and consumed transactionally in the session document, and ordinary or unmarked sessions return unavailable rather than exposing injection controls. Use `e2e/qa/scripts/qa-fault-status.json`, `arm-qa-fault.json`, `revoke-qa-writer.json`, and `force-qa-loss.json` only against the disposable marked session.
 
 `GET /capabilities` includes preview QA capability metadata such as the command path, Chromium executable path, supported viewports, and supported actions. `GET /preview/status` now embeds a `qa` block whose `state` distinguishes `preview_not_running`, `browser_automation_unavailable`, `browser_ready`, and `qa_execution_failed`.
 
@@ -369,86 +423,7 @@ Build and push the image with:
 ```bash
 gcloud builds submit session-runner \
   --project pi-agents-cloud \
-  --config session-runner/cloudbuild.pi-web.yaml
-```
-
-## Codex Web Runtime
-
-`session-runner/Dockerfile.codex-web` is the web-development Codex runner. It has the same Chromium, Playwright, preview gateway, browser log capture, runner-owned browser QA command, and capabilities contract as `pi-web`:
-
-```json
-{"terminal":true,"preview":true,"previewQa":true,"functions":true}
-```
-
-It materializes the shared `web` profile as Codex-native workspace files instead of Pi `.pi` skills. When the target file is missing, startup writes:
-
-- `.agents/skills/mapache-preview-build/SKILL.md`
-- `.agents/skills/mapache-api-hosting/SKILL.md`
-- `.agents/skills/mapache-preview-qa/SKILL.md`
-- `.agents/skills/mapache-github-issue/SKILL.md` for connected GitHub workspaces
-
-As with `codex-basic`, startup imports missing Codex copies of workspace-local Pi skills from `.pi/skills/**` and normalizes frontmatter so Codex accepts the skills on load.
-
-Build and push the image with:
-
-```bash
-gcloud builds submit session-runner \
-  --project pi-agents-cloud \
-  --config session-runner/cloudbuild.codex-web.yaml
-```
-
-## Pi N64 Runtime
-
-`session-runner/Dockerfile.pi-n64` is the Nintendo 64 homebrew runner. It starts from the same Pi-oriented shape as `pi-basic`, then installs the libdragon prebuilt MIPS64 toolchain Debian package, builds libdragon from the `trunk` branch, and installs libdragon and its host tools into `/opt/libdragon`. The image build includes a smoke check that verifies `/opt/libdragon/include/n64.mk`, required libdragon host tools, and a minimal ROM compile through the same `include $(N64_INST)/include/n64.mk` path used by workspace projects. The seeded build skill documents the same Makefile shape: produce a root `.z64` target and then copy it to `/workspace/build/game.z64`, rather than making the primary libdragon target live under `build/`.
-
-The image sets the runner capability contract to:
-
-```json
-{"terminal":true,"preview":true,"previewQa":false,"functions":false,"n64":true,"chat":false}
-```
-
-The shared runner server still owns the terminal, sync, protected shutdown, Git, skill, and package endpoints. N64 behavior is enabled by environment:
-
-- `PREVIEW_ENABLED=true`
-- `PREVIEW_BASE_PATH=/preview`
-- `PREVIEW_STATIC_ROOT=/workspace/build`
-- `PREVIEW_N64_ROM_PATH=/workspace/build/game.z64`
-- `MAPACHE_RUNNER_URL=http://127.0.0.1:8080`
-- `MAPACHE_PREVIEW_URL=http://127.0.0.1:8080/preview/`
-- `N64_INST=/opt/libdragon`
-
-When the runner has the `n64` capability, the preview gateway defaults to `mode: "n64"` if `/workspace/.mapache/preview.json` is missing. In N64 mode:
-
-- `GET /preview/` serves a Mapache-owned EmulatorJS shell. If the ROM exists, the shell loads the ROM from `/preview/rom.z64`; if it does not, the page shows a waiting state with the expected path.
-- `GET /preview/rom.z64` serves the ROM at `PREVIEW_N64_ROM_PATH`.
-- `GET /preview/status` reports `mode: "n64"`, the selected emulator core, whether the ROM exists, its byte size, and the ROM URL.
-- `GET /preview/logs` reports browser console output, window errors, and unhandled rejections from the Mapache-owned emulator shell. The shell posts logs to a token-signed endpoint so log capture does not depend on third-party iframe cookies.
-
-Agents can override the ROM path and emulator core by writing `/workspace/.mapache/preview.json`:
-
-```json
-{
-  "mode": "n64",
-  "rom": "build/custom.z64",
-  "core": "mupen64plus_next"
-}
-```
-
-Only `.z64`, `.n64`, and `.v64` files inside `/workspace` are accepted. The core can be `n64`, `mupen64plus_next`, or `parallel-n64`; the older `parallel_n64` spelling is accepted and normalized to EmulatorJS's documented `parallel-n64` core id. Invalid values fall back to `n64`, which uses EmulatorJS's default N64 core. The browser shell uses EmulatorJS from the stable CDN and keeps `/preview/rom.z64` as the stable ROM artifact URL for downloads and external emulator checks. When the shell is opened with a browser-access token, its ROM, status, and log links include the same signed token so EmulatorJS subresource fetches and browser log capture do not depend on third-party iframe cookies.
-
-On startup, `pi-n64` also seeds two workspace-local Pi skills when they are missing:
-
-- `mapache-n64-build`: explains how to build/package a homebrew ROM to `/workspace/build/game.z64`.
-- `mapache-n64-preview`: explains the N64 browser emulator shell, status endpoint, ROM endpoint, and optional core override.
-
-These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-n64` sessions. Existing user-edited skills with the same names are not overwritten.
-
-Build and push the image with:
-
-```bash
-gcloud builds submit session-runner \
-  --project pi-agents-cloud \
-  --config session-runner/cloudbuild.pi-n64.yaml
+  --config session-runner/cloudbuild.pi-chrome.yaml
 ```
 
 ## Workspace Sync
@@ -466,9 +441,6 @@ The runner can sync files from Cloud Storage before serving the terminal and per
 - `HOME_SYNC_MODE`
 - `HOME_ARCHIVE_NAME`
 - `MCP_CONFIG`
-- `CODEX_HOME`
-- `CODEX_HOME_STORAGE_BUCKET`
-- `CODEX_HOME_STORAGE_PREFIX`
 - `PI_SESSION_DIR`
 - `PI_SESSION_STORAGE_BUCKET`
 - `PI_SESSION_STORAGE_PREFIX`
@@ -511,9 +483,9 @@ The backend passes that policy into the runner with:
 
 Normal upload/download sync now applies base exclusions for archive-backed/internal paths plus any `syncPolicy.exclude` entries. That keeps blank workspace behavior effectively unchanged while letting GitHub workspaces skip extra cached paths during ordinary file sync. Directory marker objects still apply for non-excluded directories.
 
-Provisioned sessions also receive `WORKSPACE_SYNC_ROLE` from the Functions lease controller. `writer` owns the workspace's sync-writer lease; `reader` remains available for terminal and inspection work without taking ownership; `none` is used for SSH or sessions that cannot provision. The runner skips all worktree/archive uploads and deletion reconciliation for `reader` and `none` sessions, while startup restore and explicit `/workspace/sync-down` remain available. Existing sessions without this field use the compatibility default `writer` so their current upload behavior is preserved until they are recreated or restarted. Functions persists the role on the session and the owner/lease ID on the workspace, releases it on stop/delete/provisioning failure, and periodically reconciles stale owners.
+Provisioned sessions also receive `WORKSPACE_SYNC_ROLE` from the Functions lease controller. `writer` owns the workspace's sync-writer lease; `reader` remains available for terminal and inspection work without taking ownership; `none` is used for sessions that cannot provision. The runner skips all worktree/archive uploads and deletion reconciliation for `reader` and `none` sessions, while startup restore and explicit `/workspace/sync-down` remain available. Existing sessions without this field use the compatibility default `writer` so their current upload behavior is preserved until they are recreated or restarted. Functions persists the role on the session and the owner/lease ID on the workspace, releases it on stop/delete/provisioning failure, and periodically reconciles stale owners.
 
-Workspace records also carry an app-owned `homePolicy` field. New workspaces default to a persistent `$HOME` rooted at `/root`, archived under `{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz`. The workspace owns this materialized home tree; sessions receive a resolved copy on creation and restore/archive that same tree through `HOME_STORAGE_BUCKET`, `HOME_STORAGE_PREFIX`, `HOME_SYNC_MODE`, and `HOME_ARCHIVE_NAME`. The archive is runtime state, not workspace content: Files API routes and sidebar listings hide `.mapache-internal/` objects.
+Workspace records also carry an app-owned `homePolicy` field. New workspaces default to a persistent `$HOME` rooted at `/root`, archived under `{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz`. The workspace owns this materialized home tree; sessions receive a resolved copy on creation and restore/archive that same tree through `HOME_STORAGE_BUCKET`, `HOME_STORAGE_PREFIX`, `HOME_SYNC_MODE`, and `HOME_ARCHIVE_NAME`. The archive is runtime state, not ordinary upstream workspace content; internal `.mapache-internal/` objects remain hidden from user-facing file surfaces.
 
 As of 2026-06-19, new writes use canonical `.mapache-internal` and `.mapache-directory` names. The backend and runner still read the historical `.mapahce-internal` and `.mapahce-directory` paths so existing workspaces, archive objects, and empty-directory markers continue restoring correctly. Client file APIs, sync filters, and Git-path validation must treat both spellings as hidden internal/runtime state.
 
@@ -521,44 +493,55 @@ Workspace and session records may also carry non-secret env maps. During Cloud R
 
 Generic environment keys are different from those non-secret maps: only entry IDs are stored on workspace/session records, while their values remain in the owner's private Firestore collection. `functions/cloudRun.service.js` resolves selected values at provisioning or restart time and injects them into the new Cloud Run revision. Existing services need a restart or reprovision to receive changed selections or values; no runner image change is required.
 
-The browser sidebar lists workspace files from Cloud Storage through the Cloud Functions API, not directly from a running session container. `GET /api/workspaces/{workspaceId}/files` validates workspace ownership and lists objects under the workspace `storagePrefix`, so the Files section reflects the latest synced objects even when no terminal iframe is selected. Running containers still control when local `/workspace` changes are uploaded; by default `session-runner/server.js` syncs regular workspace files every 30 seconds.
-
-The sidebar upload action writes to that same Cloud Storage prefix. Small uploads use Cloud Functions with `POST /api/workspaces/{workspaceId}/file?path={filename}`. Files above the Function body limit use Firebase Storage resumable upload directly from the browser, guarded by Storage Rules under the workspace owner's `/workspaces/{uid}/...` tree. The sidebar download action asks Cloud Functions for a short-lived signed URL for the selected object, then lets the browser download from that URL so binary artifacts do not need to pass through Cloud Functions response bodies, Firebase Storage JavaScript body reads, or the text editor path. This makes browser-uploaded files immediately visible to future sessions and to the Files listing after refresh. During periodic sync-up, the runner compares local file mtimes with Cloud Storage `updated` timestamps; if the Storage object is newer, the runner downloads it into `/workspace` instead of overwriting it. That lets edits made through the sidebar, including `.mapache/preview.json`, converge into a running container while local files created inside a terminal still flow in the opposite direction.
+The parent Mapache shell no longer lists, uploads, downloads, or edits workspace
+files. The embedded upstream Agent reads and writes the live `/workspace` tree;
+the runner's periodic/checkpoint sync and Cloud Storage manifests preserve that
+tree for restart and migration. During sync-up, the runner reconciles local
+changes against the workspace storage policy and retains the existing hidden
+archive/internal-path rules.
 
 This behavior now needs to be read together with workspace source mode:
 
 - For `blank` workspaces, Cloud Storage remains the durable source of truth.
 - For `github` workspaces, Cloud Storage is a cache and resumability layer for the last active local state. GitHub is the durable repository source of truth.
 
-Cloud Storage does not store real directories, so the runner uploads a `.mapache-directory` marker object inside each synced directory. The Files API maps those marker objects to `type: "directory"` entries and filters them out of the displayed file list. The runtime still recognizes the legacy `.mapahce-directory` marker while old objects remain in storage. Existing Cloud Run sessions need a new runner revision before empty directories can appear in the sidebar.
+Cloud Storage does not store real directories, so the runner may retain
+`.mapache-directory` marker objects inside synchronized directories. The
+runtime still recognizes the legacy `.mapahce-directory` marker while old
+objects remain in storage; these markers are not a parent-shell UI contract.
 
 High-cardinality runtime directories are not synced as individual Cloud Storage objects:
 
 - `/workspace/node_modules`
 - `/workspace/.git` for GitHub-backed workspaces
 - `$HOME`
-- `$CODEX_HOME`
 
-The Pi extension manager extends this model to workspace-local Pi package cache directories:
+High-cardinality runtime directories remain archive-backed:
 
-- `/workspace/.pi/npm` archived as `.mapache-internal/archives/workspace-pi-npm.tar.gz`
-- `/workspace/.pi/git` archived as `.mapache-internal/archives/workspace-pi-git.tar.gz`
+- `/workspace/.pi/npm` and `/workspace/.pi/git` when present, under the existing
+  hidden archive prefix.
 
-The portable package declaration file, `/workspace/.pi/settings.json`, remains normal workspace file state. Package install directories are runtime cache state and are archived under `.mapache-internal/archives/` instead of uploaded object-by-object. Normal workspace sync skips `.pi/npm/` and `.pi/git/`, while the Files API and editor routes hide those cache paths and the internal archive objects.
+Upstream and terminal package behavior is not managed by a Mapache web
+extension manager. Runtime cache directories remain hidden/archive-backed and
+ordinary workspace configuration remains available to the upstream Agent.
 
 The runner restores these directories from gzip-compressed tar archives during startup and uploads them as single archive objects on the slower archive sync interval. It also forces an archive upload during the protected shutdown sync before a session service is deleted.
 
-`/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their archives live under `.mapache-internal/archives/` inside the workspace storage prefix, and the Files API hides that internal directory from the sidebar and editor routes.
+`/workspace/node_modules` and `/workspace/.git` remain workspace-scoped. Their
+archives live under `.mapache-internal/archives/` inside the workspace storage
+prefix, and that internal directory is hidden from browser-facing surfaces.
 
-The `$HOME` archive includes Pi auth, settings, shell state, and per-session Pi conversation directories. It excludes npm's mutable `~/.npm` cache and Pi's runtime-managed `$PI_CODING_AGENT_DIR/npm/node_modules` tree so package operations cannot change the home tar while it is being created and baked image packages such as `pi-mcp-adapter` cannot collide with restored package contents before the runner starts listening. Workspace-local package caches remain under `/workspace/.pi/npm` and `/workspace/.pi/git`. Most Pi settings remain workspace-home-backed; `enabledModels` is the exception and is overwritten from session-owned `piScopedModels` before Pi starts. Treat the archive path as sensitive runtime state because it can contain credentials and command history. It lives under the hidden workspace internal prefix, and client file APIs must not expose it.
-
-The `$CODEX_HOME` archive includes Codex CLI auth, sessions, logs, skills, and standalone package metadata for Codex runners. Treat it as sensitive runtime state for the same reason. It is workspace-scoped rather than session-scoped so creating a new `codex-basic` or `codex-web` session in the same workspace can reuse prior Codex authentication. The runner restores a historical per-session Codex archive only as a migration fallback when the workspace-scoped archive is missing, then uploads future changes to the workspace-scoped archive.
+The `$HOME` archive includes Pi auth, settings, shell state, and per-session Pi
+conversation directories. It excludes mutable caches, runtime package trees,
+and other transient state. Treat the archive path as sensitive runtime state
+because it can contain credentials and command history; it lives under the
+hidden workspace internal prefix and is never exposed to the browser.
 
 Each Cloud session uses a unique Pi conversation directory under `$HOME/.pi/agent/mapache-sessions/{sessionId}`. The runner launches Pi with `--session-dir $PI_SESSION_DIR -c` and updates the session document with `piSessionJsonlPath`/`piSessionJsonlRelativePath` after Pi creates the JSONL. The whole-home archive persists those directories, but the session id keeps each Cloud session's thread separate from other sessions in the same workspace.
 
-Pi and Codex provider auth persist in Firestore at `users/{uid}/private/agentAuth`. The `providers` map matches Pi's `$HOME/.pi/agent/auth.json` object shape exactly (`providerKey -> credential object`) for native materialization, while the `entries` map stores named credentials as `entryId -> {providerKey, label, credential}` so users can keep multiple credentials for one provider and choose which one a session should use. The backend API writes web-added API keys and tokens as `{type: "api_key", key: "..."}` and records them as named entries. It also supports OpenAI ChatGPT Plus/Pro Codex subscription login through OpenAI's device-code flow and saves completed OAuth credentials for `openai-codex` as `{type: "oauth", access, refresh, expires, accountId}` entries. The Authentication Center lets users delete named credentials and restart the device-code login directly from an existing OAuth entry. Deletion replaces the complete Firestore `providers` and `entries` map fields so removed nested keys cannot survive merge semantics; when another entry exists for the same provider, the newest remaining credential becomes the provider value. Sessions store `authSelection` (`{harness, providers}`), and runners materialize either the selected entries or all provider values into the harness auth file with `0600` permissions on startup and during periodic sync. The runner receives `OWNER_UID`, and the backend sets `PI_CODING_AGENT_DIR=$HOME/.pi/agent` so Pi resolves auth storage to the materialized home tree. This makes CLI/TUI `/login` additions visible to the web UI after runner sync while letting web-added credentials appear in already-running sessions after the runner sync interval; an active Pi or Codex process may still need a restart or reload to pick up rewritten credentials.
+Pi provider auth persists in Firestore at `users/{uid}/private/agentAuth`. The `providers` map matches Pi's `$HOME/.pi/agent/auth.json` object shape exactly (`providerKey -> credential object`) for native materialization, while the `entries` map stores named credentials as `entryId -> {providerKey, label, credential}` so users can keep multiple credentials for one provider and choose which one a session should use. The backend API writes web-added API keys and tokens as `{type: "api_key", key: "..."}` and records them as named entries. It also supports OpenAI ChatGPT Plus/Pro Codex subscription login through OpenAI's device-code flow and saves completed OAuth credentials for `openai-codex` as `{type: "oauth", access, refresh, expires, accountId}` entries. The Authentication Center lets users delete named credentials and restart the device-code login directly from an existing OAuth entry. Deletion replaces the complete Firestore `providers` and `entries` map fields so removed nested keys cannot survive merge semantics; when another entry exists for the same provider, the newest remaining credential becomes the provider value. Sessions store `authSelection` (`{harness, providers}`), and the runner materializes either the selected entries or all provider values into the Pi auth file with `0600` permissions on startup and during periodic sync. The runner receives `OWNER_UID`, and the backend sets `PI_CODING_AGENT_DIR=$HOME/.pi/agent` so Pi resolves auth storage to the materialized home tree. This makes CLI/TUI `/login` additions visible to the web UI after runner sync while letting web-added credentials appear in already-running sessions after the runner sync interval.
 
-GitHub CLI auth is app-managed rather than archive-managed. Users save a `github-cli` token in the Authentication Center and select it for a Pi or Codex session. The runner materializes that selected token to `$HOME/.config/gh/hosts.yml` with `0600` permissions, and removes that file when no GitHub CLI token is selected for the session. The `$HOME` archive excludes `.config/gh/hosts.yml`, so a manual `gh auth login` inside the terminal is not the durable credential source. This keeps GitHub CLI credentials scoped through the same saved-entry and per-session selection UI as other agent auth, avoids silently persisting terminal-entered tokens in workspace home archives, and lets users rotate or delete the saved token centrally. GitHub App workspace clone, push, and automatic PR flows still use short-lived installation tokens supplied by the backend and do not depend on the user's `gh` token.
+GitHub CLI auth is app-managed rather than archive-managed. Users save a `github-cli` token in the Authentication Center and select it for a Pi session. The runner materializes that selected token to `$HOME/.config/gh/hosts.yml` with `0600` permissions, and removes that file when no GitHub CLI token is selected for the session. The `$HOME` archive excludes `.config/gh/hosts.yml`, so a manual `gh auth login` inside the terminal is not the durable credential source. This keeps GitHub CLI credentials scoped through the same saved-entry and per-session selection UI as other agent auth, avoids silently persisting terminal-entered tokens in workspace home archives, and lets users rotate or delete the saved token centrally. GitHub App workspace clone, push, and automatic PR flows still use short-lived installation tokens supplied by the backend and do not depend on the user's `gh` token.
 
 For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces, and archive upload stores `.git` under the hidden internal archive prefix while skipping obvious transient `*.lock` files where practical. Dedicated startup restore ordering for `.git` remains a later task.
 
@@ -566,7 +549,9 @@ This keeps dependency installs, Git metadata, and Pi Agent state available witho
 
 The detailed GitHub workspace architecture, including one-active-session enforcement and cache semantics, lives in [github-workspaces.md](./github-workspaces.md).
 
-The Pi extension manager architecture, including workspace-local package scope, package catalog metadata, write locations, and active-session behavior, lives in [pi-extension-manager.md](./pi-extension-manager.md).
+The retired Mapache package-manager design is retained only as historical
+context in [pi-extension-manager.md](./pi-extension-manager.md); it is not an
+active API or runtime contract.
 
 ### GitHub Workspace Reconstruction
 
@@ -586,13 +571,27 @@ The current runner implementation now does that reconciliation for GitHub worksp
 
 ## Provisioning
 
-When a session is created, `functions/index.js` validates the request, reserves workspace constraints, writes the session record with `provisioningState: "queued"`, and returns without waiting for Cloud Run readiness. The `provisionQueuedSession` Firestore trigger then provisions the service using the selected curated image. The Cloud Run API request construction, patch/delete flows, service-account resolution, resource limit mapping, and runner environment variable construction live in `functions/cloudRun.service.js`; GitHub account connection workflows live in `functions/githubConnection.service.js`, repository refresh and stored-record fallback normalization live in `functions/githubRepositoryCatalog.service.js`, source metadata composition lives in `functions/github.service.js`, and PR template/branch/creation orchestration lives in `functions/githubPullRequest.service.js`; low-level GitHub App HTTP/JWT, installation-token, pagination, and error mapping live in the injected `functions/githubClient.service.js`; compatible agent credential storage, session auth selection, and runner materialization live in `functions/agentAuth.service.js`; OpenAI Codex device-code/OAuth HTTP exchanges and token normalization live in `functions/openAiCodexAuth.service.js`; package catalog/proxy behavior and source parsing live in `functions/piPackages.service.js`; skill and subagent proxy behavior, capability checks, legacy route fallback, and payload validation live in `functions/workspaceAgentAssets.service.js`; session ownership and Firestore state transitions remain outside those modules. The create-session payload should include `imageKey`; the backend resolves that key through `functions/runnerImages.helpers.js` and stores `imageKey`, the resolved `image` URI, and `terminalKind` on the session. If no image key is present, the backend uses the operator-controlled `SESSION_RUNNER_IMAGE` default. Direct user-provided image URIs are not accepted unless they exactly match a curated catalog image for legacy client compatibility.
+When a session is created, `functions/index.js` validates the request, reserves
+the single workspace runner, writes the session record with
+`provisioningState: "queued"`, and returns without waiting for Cloud Run
+readiness. The `provisionQueuedSession` Firestore trigger provisions the
+server-selected `pi-chrome` image. Cloud Run request construction,
+service-account resolution, resource mapping, and runner environment assembly
+live in `functions/cloudRun.service.js`; credentials, Google/MCP materialization,
+and GitHub source/automation behavior remain in their focused services. The
+create-session payload retains resource/environment fields, but runner
+selection is not client-controlled. New workspace records carry the fixed
+`agentUiVersion` marker; unsupported historical sessions remain readable without
+a start/restart path.
 
 Session creation accepts `operationId` (with `provisioningOperationId` and `idempotencyKey` as compatibility aliases). The backend persists the canonical `provisioningOperationId` and derives the session document id from it, so repeated requests for one operation return the existing session instead of creating a second record. Provisioning also persists `provisioningAttempt`, `provisioningState`, timestamps, the Cloud Run operation name, and a safe retryability/error result. A transaction claims a pending or retryable attempt before the Cloud Run create request; concurrent calls with an active operation either wait on the recorded Cloud Run operation or return without issuing another create request. Completed operations return the stored session result.
 
-The `provisionQueuedSession` Firestore trigger watches `workspaces/{workspaceId}/sessions/{sessionId}` writes but only handles records explicitly marked `status: "provisioning"` and `provisioningState: "queued"`. It loads the owning workspace, materializes SSH credentials from the private workspace record when needed, delegates to the same idempotent Cloud Run provisioning service, and records an actionable failure when worker setup fails. The API response contains the in-progress session; clients follow the session document until the worker writes `running`, `provision_failed`, or another terminal state.
+The `provisionQueuedSession` Firestore trigger watches `workspaces/{workspaceId}/sessions/{sessionId}` writes but only handles records explicitly marked `status: "provisioning"` and `provisioningState: "queued"`. It rejects unsupported historical or forged runner identities before loading any launch material, then loads the owning workspace and delegates to the same idempotent Cloud Run provisioning service. The API response contains the in-progress session; clients follow the session document until the worker writes `running`, `provision_failed`, or another terminal state.
 
-GitHub workspaces still enforce one active Pi/agent session at a time so two agents cannot race on cached Git state. Shell-kind sessions are allowed alongside an active Pi session because they do not attach to the same Pi conversation state. They still share the workspace files and Git checkout, so user edits from the shell can race with agent edits at the normal filesystem and sync layers.
+GitHub workspaces still enforce one active managed agent session at a time so
+two agents cannot race on cached Git state. Historical shell/SSH records may be
+readable alongside it, but new session creation resolves the managed
+pi-chrome/Pi runtime.
 
 Each session service is named with the session id:
 
@@ -637,19 +636,20 @@ gcloud artifacts repositories add-iam-policy-binding pi-agents \
   --role roles/artifactregistry.reader
 ```
 
-Stopping a running session from the sidebar calls the backend stop route for that session. The backend deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped. Restarting a stopped session recreates the per-session Cloud Run service from the stored session and workspace metadata instead of patching the deleted service. The same recreate path is used for older records left in `update_failed` after a restart tried to patch a Cloud Run service that no longer exists. Deleting a session from the sidebar uses the same service deletion path for any still-running service, then removes the session document from Firestore so it no longer appears in the workspace session list. Deleting a workspace runs that same Cloud Run cleanup for every child session before removing the workspace document tree and Cloud Storage objects under the workspace prefix when no other workspace references that prefix.
+The workspace Play/Pause control drives the canonical child session through the backend lifecycle routes. Starting a workspace with no child creates its first per-session Cloud Run service; starting an existing stopped or failed canonical session recreates that service from the stored session and workspace metadata. Pausing a running workspace deletes the per-session Cloud Run service, which terminates the `session-runner` container, then updates the Firestore session record to `stopped` and clears `serviceUrl`. If the Cloud Run service is already gone, the session is still marked stopped. The same recreate path is used for older records left in `update_failed` after a restart tried to patch a Cloud Run service that no longer exists. Sibling session records remain internal compatibility data and are not exposed as separate shell controls. Deleting a workspace runs the same Cloud Run cleanup for every child session before removing the workspace document tree and Cloud Storage objects under the workspace prefix when no other workspace references that prefix.
 
-Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; the backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
+Before deleting a service, the backend calls the runner's protected `POST /shutdown` endpoint when the session has a `serviceUrl` and `shutdownToken`. The runner performs one final workspace sync, including archive-backed directories, and records `shutdownRequestedAt`; its already-admitted writer remains valid while the reservation is in the bounded `stopping`/`deleting` state so this final sync is not fenced by the lifecycle transition. The backend still proceeds with deletion if this best-effort request fails. Older sessions without a shutdown token skip this step.
 
 When a session reaches the stopped path, the backend records an allocated usage interval under `users/{uid}/sessionUsage/{sessionId}` and marks the session with `usageAccountedAt`. The interval uses the session's active runtime multiplied by the configured Cloud Run CPU and memory limits, producing CPU seconds and memory GiB-seconds for the profile page. Resize operations accrue usage through the resize timestamp before changing the session's resource limits, so lifetime totals account for resource changes within a session. Restarting a stopped session accrues the previously stopped interval, clears `usageAccountedAt`, and starts a new active interval so the next stop records cumulative active usage without charging for time spent stopped. Running sessions and older stopped sessions without `usageAccountedAt` are still included dynamically by `/api/me`, so the profile can show lifetime and trailing-30-day usage without enforcing quotas. These counters intentionally do not use Cloud Monitoring utilization or billing-export data.
 
 Usage reads depend on collection group indexes in `firestore.indexes.json`. The profile API queries `workspaces/{workspaceId}/sessions` by `ownerUid` to include running and unaccounted sessions, and admin-wide reporting can query `users/{uid}/sessionUsage` by `ownerUid` or `endedAt` to aggregate across users and trailing windows.
 
-The runner also exposes protected Git endpoints that use the same token gate. `GET /git/status` derives branch, commit, ahead/behind, dirty counts, conflicted state, and changed file entries from Git commands inside `/workspace`. `POST /git/pull` runs a fixed fetch/pull flow for GitHub workspaces and returns updated Git state afterward. `POST /git/stage` and `POST /git/unstage` accept validated workspace-relative paths only, so the backend/UI can stage or unstage changed files without exposing arbitrary command execution. `POST /git/commit` accepts a validated commit message, rejects empty commits, and returns updated Git state plus the committed head SHA. `POST /git/push` pushes the current branch only; it does not stage or commit dirty worktree changes first. It uses a short-lived installation token supplied in the protected request body for connected GitHub App repositories, falling back to runner credentials from `GITHUB_PUSH_TOKEN` and optional `GITHUB_PUSH_USERNAME` for public URL workspaces or explicitly configured services. If Cloud Run rejects a protected runner call before it reaches the app, such as a `429` no-instance response, the backend surfaces `runner_busy_or_unavailable` so the frontend can distinguish runner capacity from Git errors. If no usable credentials are available, the endpoint returns a clear auth-not-configured error instead of logging secrets. For blank workspaces these endpoints return a structured non-Git response instead of pretending Cloud Storage state is a repository.
-
-The skill endpoints follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies skill list/save/delete requests to the runner with its protected token. The runner serializes skill file mutations, writes Markdown under `/workspace/.pi/skills`, and runs normal workspace sync afterward.
-
-Package endpoints follow the same protected-runner pattern. Cloud Functions verifies workspace/session ownership, then proxies package list/install/remove/update requests to the runner with its protected token. The runner serializes package operations and operates on workspace-local Pi settings by default.
+GitHub source reconstruction and internal automation still use protected runner
+services and short-lived installation tokens, but the runner no longer exposes
+manual `/git/*` control routes. Live Git browsing and edits belong to the
+upstream Agent application. Likewise, there are no runner skill, subagent,
+package, or model CRUD routes; upstream settings and terminal workflows own
+those features.
 
 For GitHub workspaces, this final sync is especially important because it is the last chance to persist local working tree changes and refreshed `.git` archive state before the Cloud Run service disappears.
 
@@ -672,7 +672,7 @@ The scheduled Cloud Function `reapIdleSessions` runs every 5 minutes. It scans r
 
 Idle is defined as no terminal I/O or connection lifecycle activity. A long-running command that continues producing output keeps the session active. If the browser is left open without terminal I/O past the timeout, or is closed/disconnected past the timeout, the session service is deleted.
 
-Cloud Run create, resize, and restart templates keep one instance allocated while the session lifecycle is active. The reaper remains the authority that releases those resources: it performs the final best-effort sync, deletes the service, and marks the session stopped. Do not change the minimum instance count back to zero without adding durable PTY recovery and renewable startup credentials for private GitHub workspaces.
+Cloud Run create, resize, and restart templates keep one instance allocated while the session lifecycle is active. Managed pi-web-ui services additionally use instance-based CPU allocation and bypass browser-idle reaping so background agent work can continue without an open request; workspace Pause performs quiesce, final checkpoint, confirmed deletion, and releases the resource. Historical unmarked services retain the idle reaper and their final best-effort sync/delete behavior, but Functions does not launch replacements for them. Do not change the minimum instance count back to zero without adding durable PTY recovery and renewable startup credentials for private GitHub workspaces.
 
 ## Existing Sessions vs New Sessions
 
@@ -685,44 +685,47 @@ gcloud run services update SERVICE_NAME \
   --project pi-agents-cloud
 ```
 
-New sessions use the image key selected in the modal and resolved by the backend. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
+Workspace Play creates a session with the backend-resolved image. Existing sessions keep their current image until the Cloud Run service is updated or the session is recreated.
 
 Existing services created before idle shutdown support do not have `SESSION_SHUTDOWN_TOKEN` in their environment and may not run runner code that reports activity. Recreate or update those Cloud Run services to pick up automatic activity reporting and best-effort final sync on stop.
 
 Existing services created before warm active-session allocation keep `minInstanceCount: 0` until they are restarted, resized, or recreated through the updated Functions deployment. Existing revisions also need a rebuilt runner image before bootstrap failures can transition a stale `running` record to `update_failed`.
 
-The same rule applies to the dedicated runner service account, new GitHub workspace source env vars, sync-policy env vars, home materialization env vars, workspace/session env vars, Pi model/skill endpoints, Pi package manager endpoints, Pi package archive targets, preview environment changes, and terminal defaults. Existing Cloud Run services do not automatically gain `template.serviceAccount`, `WORKSPACE_SOURCE_TYPE`, `GITHUB_*`, `WORKSPACE_SYNC_POLICY_*`, `HOME_STORAGE_*`, `/models`, `/pi/skills*`, `/pi/packages*` runner routes, `.pi/npm`/`.pi/git` archive behavior, or the `pi -c` resume default; they need a new revision or a recreated session service before runner changes that depend on those variables, routes, identities, image `ENV` values, or session fields will take effect.
+The same rule applies to the dedicated runner service account, source/sync/home
+materialization variables, workspace/session variables, preview behavior, and
+terminal defaults. Existing Cloud Run services do not automatically gain the
+new managed `/agent/` gateway, checkpoint contract, image `ENV` values, or
+runtime route set; they need a new revision or recreation before those changes
+take effect.
 
-Existing sessions do not gain Chrome when the catalog or image is updated. A Chrome session must be newly created or explicitly restarted onto `pi-chrome`/`codex-chrome`; existing basic, web, N64, shell, and SSH sessions retain their current runtime and archive behavior.
+Existing sessions do not gain the managed Chrome/Agent runtime when the catalog or image is updated. A session must be newly created or explicitly restarted onto `pi-chrome`; historical sessions retain their current runtime and archive behavior until they are cleaned up.
 
-When `functions/` changes are part of the package manager work, deploy Cloud Functions before handoff unless explicitly skipped:
+When `functions/` changes are part of a runtime/API change, deploy Cloud
+Functions before handoff:
 
 ```bash
 firebase deploy --only functions --project pi-agents-cloud
 ```
 
-Expected package-manager write locations:
-
-- Workspace package declarations: `{workspace.storagePrefix}/.pi/settings.json`
-- Workspace package cache archives: `{workspace.storagePrefix}/.mapache-internal/archives/workspace-pi-npm.tar.gz` and `workspace-pi-git.tar.gz`
-- Workspace-owned home archive: `{workspace.storagePrefix}/.mapache-internal/home/home.tar.gz`
-- Workspace-owned Chrome profile archive: `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz` (Chrome images only)
-- User package catalog: `users/{uid}/piPackageCatalog/{encodedPackageIdentity}`
+The relevant runtime locations remain the workspace-owned home/checkpoint
+prefix, the versioned agent snapshot prefix, the workspace-file manifest
+prefix, and the Chrome profile archive prefix. No package catalog or duplicate
+agent-control API is part of the current deployment.
 
 ## Design Decisions
 
 - Browser terminals should use a real terminal emulator. The app uses xterm.js so terminal programs and shell formatting render correctly.
 - The runner keeps the PTY alive across WebSocket disconnects so frontend re-renders, iframe reloads, and brief network drops do not discard in-progress terminal work.
 - Idle shutdown is controlled by Cloud Functions instead of browser timers so abandoned sessions are cleaned up even after the browser is closed.
-- Runtime image selection is user-facing but backend-enforced. The UI exposes curated image keys, and Cloud Functions rejects arbitrary image URIs from normal session creation. Bring-your-own-image support, if added later, should be a separate permission-gated untrusted-workload path rather than an extension of the normal image selector.
+- Runtime image selection is no longer user-facing for ordinary sessions. Cloud Functions selects and verifies `pi-chrome`; historical catalog entries remain only for readable metadata and cleanup. Bring-your-own-image support, if added later, must be a separate permission-gated untrusted-workload path rather than an extension of normal session creation.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
-- Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing curated runtimes such as `pi-basic` to open a different PTY command.
+- Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing the curated `pi-chrome` runtime to select its managed Pi/Chrome startup contract.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
 - Pi auth/settings may be user-scoped, but Pi conversation JSONLs must be session-scoped. New app sessions start with a fresh Pi conversation; the same app session can resume that conversation from its own archive.
-- Pi `enabledModels` must be session-scoped. A restored home archive must not make a new session inherit another session's scoped-model filter.
+- Native upstream model settings are restored as upstream-owned state; Mapache does not expose a duplicate model editor.
 - GitHub workspaces should archive `/workspace/.git` instead of exposing it through normal file sync. That keeps Git state resumable without treating Cloud Storage as a Git database.
-- Workspace-local Pi skills should remain ordinary workspace Markdown files under `/workspace/.pi/skills`.
-- Workspace-local Pi package install directories should use archive-backed sync while `/workspace/.pi/settings.json` remains normal workspace configuration.
+- Upstream skills and extensions remain configurable through the upstream Agent and terminal; only Mapache-owned runtime guidance is seeded when missing.
+- Runtime package/cache directories, when present, remain archive-backed and hidden from parent-shell file APIs.
 - GitHub workspaces should allow only one active session at a time until the app has an explicit multi-session Git isolation model.
 - Existing sessions are not automatically recycled when the image config changes. This avoids surprising users by restarting active terminals.
 - Chrome is a capability on the Pi/Codex harness, not a new terminal harness; the browser is shared by the user, MCP, and runner QA through authenticated attachments.

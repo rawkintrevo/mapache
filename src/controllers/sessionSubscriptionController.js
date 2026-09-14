@@ -85,10 +85,12 @@ export function createSessionSubscriptionController({
     const previousServiceUrl = previousSession?.serviceUrl || "";
     state.sessions = sessions;
 
-    if (!state.sessions.some((session) => session.id === state.selectedSessionId)) {
+    const workspace = state.workspaces.find((candidate) => candidate.id === workspaceId);
+    const canonicalSession = chooseCanonicalSession(sessions, workspace?.canonicalSessionId);
+    if (state.selectedSessionId !== canonicalSession?.id) {
       dispatch({
         type: APP_ACTIONS.SET_SELECTED_SESSION,
-        sessionId: state.sessions[0] ? state.sessions[0].id : null,
+        sessionId: canonicalSession ? canonicalSession.id : null,
       });
     }
 
@@ -97,11 +99,24 @@ export function createSessionSubscriptionController({
       previousServiceUrl !== (nextSession?.serviceUrl || "");
   }
 
+  function chooseCanonicalSession(sessions, canonicalSessionId = "") {
+    if (!Array.isArray(sessions) || !sessions.length) return null;
+    if (canonicalSessionId) {
+      const canonical = sessions.find((session) => session.id === canonicalSessionId);
+      if (canonical) return canonical;
+    }
+    const active = sessions.find((session) => [
+      "running", "ready", "provisioning", "queued", "restarting", "resizing", "needs_service", "stopping",
+    ].includes(String(session.status || "").toLowerCase()));
+    return active || sessions[0];
+  }
+
   return {
     applySessionSnapshot,
     attach,
     detach,
     getSelectedSession,
     loadSessions,
+    chooseCanonicalSession,
   };
 }

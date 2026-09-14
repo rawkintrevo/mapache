@@ -1,0 +1,1038 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 6706c39..b4cd939 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -684,6 +684,24 @@ const TOOL_WATCHDOG_TIMEOUT_MS = (() => {
+ 	return Number.isFinite(v) && v > 0 ? v : 20 * 60_000;
+ })();
+ 
++/** Cooperative drain budget. Managed runners escalate to process-group
++ * termination when this expires; control never acknowledges a successful
++ * quiesce while a writer is still active. */
++const QUIESCE_TIMEOUT_MS = 5_000;
++
++async function abortSessionBounded(session: AgentSession, timeoutMs: number): Promise<void> {
++	const abort = Promise.resolve()
++		.then(() => session.abort())
++		.catch(() => {});
++	await Promise.race([
++		abort,
++		new Promise<void>((resolve) => {
++			const timer = setTimeout(resolve, Math.max(1, timeoutMs));
++			timer.unref?.();
++		}),
++	]);
++}
++
+ /** Cap on simultaneously open NON-subagent conversations of ONE project (each keeps a full
+  *  runtime alive; conversations of other projects keep their own lists).
+  *  子代理不计入：子代理是 inMemory 后台任务，不参与此上限，既不占位也不被此上限拦截。 */
+@@ -957,7 +975,7 @@ export class ClientSession {
+ 		lastLines = "",
+ 	): void {
+ 		const conv = this.convs.get(conversationId);
+-		if (!conv || this.disposed) return;
++		if (!conv || this.disposed || this.isQuiesced()) return;
+ 		if (!conv.runtime.session.isStreaming) return;
+ 		const seconds = Math.max(1, Math.round(idleMs / 1000));
+ 		void conv.runtime.session
+@@ -982,7 +1000,7 @@ export class ClientSession {
+ 		info: { terminalId: string; command: string; exitCode: number | null },
+ 	): void {
+ 		const conv = [...this.convs.values()].find((c) => c.terminals === terminals);
+-		if (!conv || this.disposed) return;
++		if (!conv || this.disposed || this.isQuiesced()) return;
+ 		let tail = "";
+ 		try {
+ 			const end = terminals.endCursor(info.terminalId);
+@@ -1367,6 +1385,7 @@ export class ClientSession {
+ 	 */
+ 	private subagentHost: SubagentToolHost = {
+ 		spawnSubagent: (prompt, type, cwd, templateName, model, parentId) => {
++			if (this.isQuiesced()) throw new QuiesceRejectedError("子代理启动被服务器排空拒绝");
+ 			// 模板：存在且启用时应用；传了名字但不可用 → 抛错让工具转给 AI。
+ 			const tpl = templateName ? this.subagentTemplates.get(templateName) : undefined;
+ 			if (templateName && (!tpl || !tpl.enabled)) {
+@@ -1386,6 +1405,7 @@ export class ClientSession {
+ 		getSubagent: (convId) => this.getSubagentSnapshot(convId),
+ 		listSubagents: () => this.listSubagentSnapshots(),
+ 		steerSubagent: async (convId, message) => {
++			if (this.isQuiesced()) throw new QuiesceRejectedError("子代理消息被服务器排空拒绝");
+ 			const conv = this.convs.get(convId);
+ 			if (!conv?.session) return;
+ 			await conv.session.sendUserMessage(message, conv.session.isStreaming ? { deliverAs: "steer" } : undefined);
+@@ -1554,6 +1574,7 @@ export class ClientSession {
+ 			emit: (msg) => this.emit(msg),
+ 			flushSnapshot: () => this.flushSnapshot(),
+ 			isDisposed: () => this.disposed,
++			quiesced: () => this.isQuiesced(),
+ 			quiesceBlocked: () => this.quiesceBlocked(),
+ 			// issue #91：目标/审查文案按客户端 UI 语言出中英（英文默认）。
+ 			lang: () => this.getLang(),
+@@ -1562,6 +1583,7 @@ export class ClientSession {
+ 			activeConvId: () => this.activeId,
+ 			activeConv: () => this.conv,
+ 			getConv: (id) => this.convs.get(id),
++			conversations: () => [...this.convs.values()],
+ 			cwd: () => this.cwd,
+ 			reviewSettings: () => this.settingsSvc.reviewPrefs,
+ 			gitDiff: (dir) => this.gitDiff(dir),
+@@ -3523,14 +3545,70 @@ export class ClientSession {
+ 		return n;
+ 	}
+ 
++	/** Tool calls that have started and have not emitted their end event yet. */
++	activeTools(): number {
++		let n = 0;
++		for (const c of this.convs.values()) n += c.toolStartTimes.size;
++		return n;
++	}
++
++	/** Dispatch-side admission check used by terminal routes. */
++	isQuiesceActive(): boolean {
++		return this.isQuiesced();
++	}
++
+ 	/** Messages queued in the SDK (steer + follow-up) — pending work for
+ 	 *  quiesce status. Quiesce refuses to add more, so this only drains. */
+ 	pendingMessages(): number {
+ 		let n = 0;
+-		for (const c of this.convs.values()) n += c.queueFollowUp.length + c.queueSteering.length;
++		for (const c of this.convs.values()) {
++			const local = c.queueFollowUp.length + c.queueSteering.length;
++			let sdk = 0;
++			try {
++				sdk = Number(c.session.pendingMessageCount) || 0;
++			} catch {
++				// Runtime may be replacing the session; the local mirror is enough.
++			}
++			n += Math.max(local, sdk);
++		}
+ 		return n;
+ 	}
+ 
++	/** Cooperatively stop all agent-owned writers. A managed runner escalates to
++	 * the detached process group if this returns with active work remaining. */
++	async quiesce(timeoutMs = QUIESCE_TIMEOUT_MS): Promise<boolean> {
++		const deadline = Date.now() + Math.max(1, timeoutMs);
++		await this.goalSvc.quiesce(Math.max(1, deadline - Date.now()));
++		this.cancelPendingQuestions();
++		for (const abortController of [...this.bashKills]) abortController.abort();
++		await this.bg.killAll().catch(() => []);
++
++		const active = (): Conversation[] =>
++			[...this.convs.values()].filter((conv) => {
++				try {
++					return conv.session.isStreaming || !conv.session.isIdle || conv.toolStartTimes.size > 0;
++				} catch {
++					return true;
++				}
++			});
++		for (const conv of this.convs.values()) {
++			try {
++				conv.session.clearQueue();
++			} catch {
++				// The runtime may be in the middle of replacement.
++			}
++			conv.queueSteering = [];
++			conv.queueFollowUp = [];
++			conv.terminals.killAll();
++		}
++		await Promise.all(active().map((conv) => abortSessionBounded(conv.session, Math.max(1, deadline - Date.now()))));
++		while (Date.now() < deadline && active().length > 0) {
++			await new Promise((resolve) => setTimeout(resolve, Math.min(25, Math.max(1, deadline - Date.now()))));
++		}
++		this.flushSnapshot(true);
++		return active().length === 0 && this.activeTools() === 0 && this.pendingMessages() === 0;
++	}
++
+ 	async prompt(
+ 		text: string,
+ 		attachments?: {
+@@ -3559,6 +3637,9 @@ export class ClientSession {
+ 		// different conversation.
+ 		const conv = this.conv;
+ 		try {
++			// This gate intentionally precedes slash expansion: extension commands
++			// can execute arbitrary code and are therefore new work too.
++			if (this.quiesceBlocked()) return;
+ 			const s = this.session;
+ 			// Native slash commands (see NATIVE_COMMANDS) are executed here and
+ 			// never reach the SDK. Extension / skill / template commands fall
+@@ -3568,10 +3649,6 @@ export class ClientSession {
+ 				this.flushSnapshot();
+ 				return;
+ 			}
+-			// Native commands above are pure config tweaks (no tokens) — allow them
+-			// even while quiesced. Everything that reaches the SDK is NEW work and
+-			// is refused until admission reopens.
+-			if (this.quiesceBlocked()) return;
+ 			// 轨迹用：暂存本轮任务文本，下一轮 agent_start 消费（steer/内部续跑
+ 			// 不经此处，届时 task 缺省，插件回退为「继续执行」）。
+ 			conv.pendingTask = text.trim() ? truncRun(text.trim(), RUN_TASK_CAP) : undefined;
+@@ -5078,7 +5155,12 @@ export class ClientSession {
+ 			// is useless in the picker. Tombstoned entries (explicitly removed by
+ 			// the user) stay hidden even though session files still mention them.
+ 			const projects: ProjectSummary[] = [...map.entries()]
+-				.filter(([path]) => !removedProjects.has(path) && existsSync(path) && (!workspaceRoot || isCanonicalPathWithinRootSync(workspaceRoot, path)))
++				.filter(
++					([path]) =>
++						!removedProjects.has(path) &&
++						existsSync(path) &&
++						(!workspaceRoot || isCanonicalPathWithinRootSync(workspaceRoot, path)),
++				)
+ 				.map(([path, lastUsed]) => ({ path, lastUsed }))
+ 				.sort((a, b) => b.lastUsed - a.lastUsed)
+ 				.slice(0, 20);
+@@ -5519,6 +5601,20 @@ export class ClientSession {
+ 	}
+ }
+ 
++export interface QuiesceResult {
++	ok: boolean;
++	error?: string;
++	pid: number;
++	version: string;
++	cwd: string;
++	quiesced: boolean;
++	quiescedSince?: number;
++	connectedClients: number;
++	activeConversations: number;
++	activeTools: number;
++	pendingMessages: number;
++}
++
+ export class AgentService {
+ 	/** index.ts 注入：SDK 工具执行事件的插件转发钩子，attach 时拷贝到每个新会话。 */
+ 	onToolEvent: ((ev: PluginToolEvent) => void) | undefined = undefined;
+@@ -5541,6 +5637,7 @@ export class AgentService {
+ 	 *  `pi-web-ui server quiesce|unquiesce`. */
+ 	private quiesced = false;
+ 	private quiescedAt = 0;
++	private quiescePromise: Promise<QuiesceResult> | null = null;
+ 	/** Attached browser sockets (reported by index.ts on open/close) — the
+ 	 *  control socket reports real sockets, not cached client-session objects. */
+ 	private socketCount = 0;
+@@ -5565,10 +5662,42 @@ export class AgentService {
+ 		return this.quiesced;
+ 	}
+ 
+-	/** Enter quiesce: stop admitting new work. Existing runs keep going. */
+-	quiesce(): void {
++	/** Enter quiesce, stop admitting new work, and drain existing writers. */
++	quiesce(): Promise<QuiesceResult> {
++		if (this.quiescePromise) return this.quiescePromise;
+ 		this.quiesced = true;
+ 		this.quiescedAt = Date.now();
++		this.quiescePromise = this.quiesceInternal().finally(() => {
++			this.quiescePromise = null;
++		});
++		return this.quiescePromise;
++	}
++
++	private async quiesceInternal(): Promise<QuiesceResult> {
++		const deadline = Date.now() + QUIESCE_TIMEOUT_MS;
++		const pending = [...this.pending.values()];
++		if (pending.length > 0) {
++			await Promise.race([
++				Promise.allSettled(pending),
++				new Promise<void>((resolve) => {
++					const timer = setTimeout(resolve, Math.max(1, deadline - Date.now()));
++					timer.unref?.();
++				}),
++			]);
++		}
++		const clients = [...this.clients.values()];
++		await Promise.all(clients.map((client) => client.quiesce(Math.max(1, deadline - Date.now()))));
++		const drained = () =>
++			this.pending.size === 0 &&
++			this.activeConversations() === 0 &&
++			this.activeTools() === 0 &&
++			this.pendingMessages() === 0;
++		while (Date.now() < deadline && !drained()) {
++			await new Promise((resolve) => setTimeout(resolve, Math.min(25, Math.max(1, deadline - Date.now()))));
++		}
++		return drained()
++			? { ok: true, ...this.serviceStatus() }
++			: { ok: false, error: "quiesce_timeout", ...this.serviceStatus() };
+ 	}
+ 
+ 	/** Leave quiesce: admit new work again. */
+@@ -5596,6 +5725,12 @@ export class AgentService {
+ 		return n;
+ 	}
+ 
++	activeTools(): number {
++		let n = 0;
++		for (const cs of this.clients.values()) n += cs.activeTools();
++		return n;
++	}
++
+ 	/** 插件用：全客户端最近活跃对话的快照（at 最大者即“当前打开的对话”）。 */
+ 	readConversationForPlugins(): PluginConversationSnapshot | null {
+ 		let best: PluginConversationSnapshot | null = null;
+@@ -5627,6 +5762,7 @@ export class AgentService {
+ 		quiescedSince?: number;
+ 		connectedClients: number;
+ 		activeConversations: number;
++		activeTools: number;
+ 		pendingMessages: number;
+ 	} {
+ 		return {
+@@ -5636,6 +5772,7 @@ export class AgentService {
+ 			...this.quiesceInfo(),
+ 			connectedClients: this.socketCount,
+ 			activeConversations: this.activeConversations(),
++			activeTools: this.activeTools(),
+ 			pendingMessages: this.pendingMessages(),
+ 		};
+ 	}
+@@ -5661,7 +5798,8 @@ export class AgentService {
+ 				const saved = this.stateStore.get(clientId);
+ 				if (saved.lastCwd && saved.lastCwd !== this.cwd && managedCwdAllowed(saved.lastCwd)) {
+ 					try {
+-						if (statSync(saved.lastCwd).isDirectory()) cwd = managedWorkspaceRoot() ? realpathSync(saved.lastCwd) : saved.lastCwd;
++						if (statSync(saved.lastCwd).isDirectory())
++							cwd = managedWorkspaceRoot() ? realpathSync(saved.lastCwd) : saved.lastCwd;
+ 					} catch {
+ 						// gone (unmounted drive / deleted) — fall back to the default
+ 					}
+diff --git a/server/control-socket.ts b/server/control-socket.ts
+index 2d548de..f41140e 100644
+--- a/server/control-socket.ts
++++ b/server/control-socket.ts
+@@ -19,16 +19,28 @@
+ import { createServer, createConnection, type Server, type Socket } from "node:net";
+ import { chmodSync, existsSync, rmSync } from "node:fs";
+ import { join } from "node:path";
+-import type { AgentService } from "./agent-service.js";
+-
+ /** 控制 socket 只需服务状态与 quiesce 控制（pi/dsh 引擎都满足）。 */
+-type ControlService = Pick<AgentService, "serviceStatus" | "quiesce" | "unquiesce">;
++type ControlService = {
++	serviceStatus: () => {
++		pid: number;
++		version: string;
++		cwd: string;
++		quiesced: boolean;
++		quiescedSince?: number;
++		connectedClients: number;
++		activeConversations: number;
++		activeTools: number;
++		pendingMessages: number;
++	};
++	quiesce: () => Promise<{ ok: boolean; error?: string }>;
++	unquiesce: () => void;
++};
+ 
+ /** How long a control connection may sit idle before the server closes it. */
+-const CONTROL_IDLE_TIMEOUT_MS = 5_000;
++const CONTROL_IDLE_TIMEOUT_MS = 15_000;
+ 
+ /** How long the CLI waits for a reply before giving up. */
+-const CONTROL_CLIENT_TIMEOUT_MS = 3_000;
++const CONTROL_CLIENT_TIMEOUT_MS = 10_000;
+ 
+ /** Socket path (POSIX) or pipe name (Windows). */
+ export function controlPath(dataDir: string, port: number): string {
+@@ -50,6 +62,7 @@ export interface ControlStatus {
+ 	quiescedSince?: number;
+ 	connectedClients?: number;
+ 	activeConversations?: number;
++	activeTools?: number;
+ 	pendingMessages?: number;
+ }
+ 
+@@ -85,6 +98,7 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+ 
+ 	function handleConnection(sock: Socket): void {
+ 		let buf = "";
++		let processing = Promise.resolve();
+ 		const timer = setTimeout(() => {
+ 			sock.destroy();
+ 		}, CONTROL_IDLE_TIMEOUT_MS);
+@@ -103,24 +117,35 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+ 					sock.write(JSON.stringify({ ok: false, error: "bad json" }) + "\n");
+ 					continue;
+ 				}
+-				let resp: ControlStatus;
+-				switch (req.cmd) {
+-					case "status":
+-						resp = { ok: true, ...service.serviceStatus() };
+-						break;
+-					case "quiesce":
+-						service.quiesce();
+-						resp = { ok: true };
+-						break;
+-					case "unquiesce":
+-						service.unquiesce();
+-						resp = { ok: true };
+-						break;
+-					default:
+-						resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
+-						break;
+-				}
+-				sock.write(JSON.stringify(resp) + "\n");
++				processing = processing
++					.then(async () => {
++						let resp: ControlStatus;
++						switch (req.cmd) {
++							case "status":
++								resp = { ok: true, ...service.serviceStatus() };
++								break;
++							case "quiesce":
++								{
++									const result = await service.quiesce();
++									resp = { ...service.serviceStatus(), ...result };
++								}
++								break;
++							case "unquiesce":
++								service.unquiesce();
++								resp = { ok: true, ...service.serviceStatus() };
++								break;
++							default:
++								resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
++								break;
++						}
++						if (!sock.destroyed) sock.write(JSON.stringify(resp) + "\n");
++					})
++					.catch((error) => {
++						if (!sock.destroyed) {
++							sock.write(JSON.stringify({ ok: false, error: "control_command_failed" }) + "\n");
++						}
++						console.warn(`[control] command failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
++					});
+ 			}
+ 		});
+ 		sock.on("error", () => {
+diff --git a/server/dsh/dsh-agent-service.ts b/server/dsh/dsh-agent-service.ts
+index d61840b..bcedc5d 100644
+--- a/server/dsh/dsh-agent-service.ts
++++ b/server/dsh/dsh-agent-service.ts
+@@ -1284,6 +1284,16 @@ export class DshClientSession {
+ 		return n;
+ 	}
+ 
++	isQuiesceActive(): boolean {
++		return this.isQuiesced?.() ?? false;
++	}
++
++	activeTools(): number {
++		let n = 0;
++		for (const conv of this.convs.values()) n += conv.toolStartTimes.size;
++		return n;
++	}
++
+ 	pendingMessages(): number {
+ 		return 0;
+ 	}
+@@ -3728,9 +3738,10 @@ export class DshAgentService {
+ 		return this.quiesced;
+ 	}
+ 
+-	quiesce(): void {
++	async quiesce(): Promise<{ ok: boolean; error?: string }> {
+ 		this.quiesced = true;
+ 		this.quiescedAt = Date.now();
++		return { ok: true };
+ 	}
+ 
+ 	unquiesce(): void {
+@@ -3754,6 +3765,12 @@ export class DshAgentService {
+ 		return n;
+ 	}
+ 
++	activeTools(): number {
++		let n = 0;
++		for (const cs of this.clients.values()) n += cs.activeTools();
++		return n;
++	}
++
+ 	noteSocketOpen(): void {
+ 		this.socketCount += 1;
+ 	}
+@@ -3770,6 +3787,7 @@ export class DshAgentService {
+ 		quiescedSince?: number;
+ 		connectedClients: number;
+ 		activeConversations: number;
++		activeTools: number;
+ 		pendingMessages: number;
+ 	} {
+ 		return {
+@@ -3779,6 +3797,7 @@ export class DshAgentService {
+ 			...this.quiesceInfo(),
+ 			connectedClients: this.socketCount,
+ 			activeConversations: this.activeConversations(),
++			activeTools: this.activeTools(),
+ 			pendingMessages: this.pendingMessages(),
+ 		};
+ 	}
+diff --git a/server/goal-service.ts b/server/goal-service.ts
+index 355cc1e..85918a5 100644
+--- a/server/goal-service.ts
++++ b/server/goal-service.ts
+@@ -28,6 +28,19 @@ import { bilingual, pick, type ServerLang } from "./i18n.js";
+ import { parseModelSpec } from "./attachments.js";
+ import type { WebUIContext } from "./webui-context.js";
+ 
++async function abortSessionBounded(session: AgentSession, timeoutMs: number): Promise<void> {
++	const abort = Promise.resolve()
++		.then(() => session.abort())
++		.catch(() => {});
++	await Promise.race([
++		abort,
++		new Promise<void>((resolve) => {
++			const timer = setTimeout(resolve, Math.max(1, timeoutMs));
++			timer.unref?.();
++		}),
++	]);
++}
++
+ /** ClientSession 私有 Conversation 中 goal 家族会触碰的字段（结构化子集）。 */
+ export interface GoalConversation {
+ 	id: string;
+@@ -50,11 +63,15 @@ export interface GoalHost {
+ 	emit: (msg: ServerMessage) => void;
+ 	flushSnapshot: () => void;
+ 	isDisposed: () => boolean;
++	/** True while the server is draining existing work for shutdown. */
++	quiesced: () => boolean;
+ 	/** quiesce 排空中拒绝新调研。 */
+ 	quiesceBlocked: () => boolean;
+ 	activeConvId: () => string;
+ 	activeConv: () => GoalConversation;
+ 	getConv: (id: string) => GoalConversation | undefined;
++	/** All in-memory conversations, including background conversations. */
++	conversations: () => GoalConversation[];
+ 	/** 客户端工作目录（wizard 的 in-memory session 用）。 */
+ 	cwd: () => string;
+ 	reviewSettings: () => { reviewPrompt: string; reviewDisabledSkills: string[] };
+@@ -103,6 +120,9 @@ export class GoalService {
+ 	/** True when the wizard was cancelled externally (✗ / clear_goal / timeout) —
+ 	 *  startGoalWizard reads this after the run to avoid setting a goal. */
+ 	private wizardCancelled = false;
++	/** Isolated reviewer sessions are not browser conversations, so keep an
++	 * explicit registry to abort them during service quiesce. */
++	private reviewerSessions = new Set<AgentSession>();
+ 	/** Idle-timeout for the wizard: if no answer arrives within this window (a
+ 	 *  dialog is up but the user doesn't respond), the wizard is auto-cancelled. */
+ 	private static readonly WIZARD_IDLE_TIMEOUT_MS = 5 * 60_000;
+@@ -161,6 +181,51 @@ export class GoalService {
+ 		};
+ 	}
+ 
++	/** Stop goal-owned model work without clearing the persisted/display goal.
++	 * Quiesce deliberately leaves the goal paused so a process restart can show
++	 * the last state, while generation/review tokens invalidate every in-flight
++	 * callback before any result can inject new work. */
++	async quiesce(timeoutMs = 5_000): Promise<void> {
++		const deadline = Date.now() + Math.max(1, timeoutMs);
++		this.wizardCancelled = true;
++		this.host.webUi.cancelPendingDialogs();
++		this.wizardAbort?.abort();
++		const wizard = this.wizardSession;
++		this.wizardSession = null;
++		if (wizard) {
++			await abortSessionBounded(wizard, Math.max(1, deadline - Date.now()));
++			wizard.dispose();
++		}
++		this.wizardAbort = null;
++		this.wizardOwnerId = null;
++
++		const reviewers = [...this.reviewerSessions];
++		await Promise.all(reviewers.map((reviewer) => abortSessionBounded(reviewer, Math.max(1, deadline - Date.now()))));
++		for (const reviewer of reviewers) reviewer.dispose();
++
++		for (const conv of this.host.conversations()) {
++			const goal = conv.goal;
++			conv.goalGeneration += 1;
++			conv.goalReviewGeneration += 1;
++			conv.wizardRunning = false;
++			goal.wizard.active = false;
++			goal.wizard.status = "";
++			goal.wizard.statusEn = "";
++			if (goal.goal) {
++				goal.paused = true;
++				goal.reviewing = false;
++				goal.status = "目标已暂停：服务器正在停止…";
++				goal.statusEn = "Goal paused while the server is stopping…";
++				this.emitGoalStatus(conv);
++			} else if (goal.reviewing) {
++				goal.reviewing = false;
++				goal.status = "审查已暂停：服务器正在停止…";
++				goal.statusEn = "Review paused while the server is stopping…";
++				this.emitGoalStatus(conv);
++			}
++		}
++	}
++
+ 	/**
+ 	 * Return the stable upstream identity for a persisted conversation. The
+ 	 * in-memory `c1`/`c2` ids are intentionally not used because every browser
+@@ -266,6 +331,7 @@ export class GoalService {
+ 			await this.clearGoal();
+ 			return;
+ 		}
++		if (this.host.quiesceBlocked()) return;
+ 		if (!this.goalEnabled()) {
+ 			this.host.emit({
+ 				type: "notice",
+@@ -813,6 +879,7 @@ export class GoalService {
+ 	 * turns the paused display record back into active execution, and it is
+ 	 * reached by an explicit Goal-bar click. */
+ 	async resumeGoal(): Promise<void> {
++		if (this.host.quiesceBlocked()) return;
+ 		if (!this.goalEnabled()) return;
+ 		const conv = this.host.activeConv();
+ 		const goal = conv.goal;
+@@ -916,6 +983,16 @@ export class GoalService {
+ 	 */
+ 	onAgentEnd(conv: GoalConversation, aborted: boolean): { text: string; textEn: string } | null {
+ 		const g = conv.goal;
++		if (this.host.quiesced()) {
++			if (g.goal && g.conversationId === conv.id) {
++				g.paused = true;
++				g.reviewing = false;
++				g.status = "目标已暂停：服务器正在停止…";
++				g.statusEn = "Goal paused while the server is stopping…";
++				this.emitGoalStatus(conv);
++			}
++			return null;
++		}
+ 		if (aborted) {
+ 			if (g.goal && g.conversationId === conv.id) {
+ 				conv.goalGeneration += 1;
+@@ -1018,6 +1095,7 @@ export class GoalService {
+ 	private isCurrentGoalReview(conv: GoalConversation, goalGeneration: number, reviewGeneration: number): boolean {
+ 		return (
+ 			!this.host.isDisposed() &&
++			!this.host.quiesced() &&
+ 			this.host.getConv(conv.id) === conv &&
+ 			conv.goal.conversationId === conv.id &&
+ 			conv.goalGeneration === goalGeneration &&
+@@ -1051,7 +1129,8 @@ export class GoalService {
+ 			g.reviewing ||
+ 			g.paused ||
+ 			conv.wizardRunning ||
+-			this.host.isDisposed()
++			this.host.isDisposed() ||
++			this.host.quiesced()
+ 		)
+ 			return;
+ 		const goalGeneration = conv.goalGeneration;
+@@ -1105,6 +1184,7 @@ export class GoalService {
+ 			"goal.review.incomplete",
+ 		);
+ 
++		let reviewerSession: AgentSession | null = null;
+ 		try {
+ 			const rmSpec = this.resolveReviewModel(g.reviewModel);
+ 			const services = await createAgentSessionServices({
+@@ -1146,6 +1226,9 @@ export class GoalService {
+ 			});
+ 			const reviewCap = g.locked && g.maxRounds > 0 ? g.maxRounds : 0; // 0 = no cap
+ 			const reviewer = srv.session;
++			reviewerSession = reviewer;
++			this.reviewerSessions.add(reviewer);
++			if (!this.isCurrentGoalReview(conv, goalGeneration, reviewGeneration)) return;
+ 			await reviewer.prompt(this.reviewerPrompt(goalText, g.round, reviewCap, finalText, diff, reviewPrompt));
+ 
+ 			// Parse the reviewer's final output (expected to be a JSON object).
+@@ -1160,7 +1243,6 @@ export class GoalService {
+ 				reviewerVerdict = "fail";
+ 				reviewerFeedback = raw.slice(0, 2000);
+ 			}
+-			await srv.session.dispose();
+ 		} catch (err) {
+ 			const reviewErrMsg = (err as Error).message;
+ 			reviewerVerdict = "fail";
+@@ -1171,6 +1253,13 @@ export class GoalService {
+ 				"goal.review.error",
+ 				{ reviewErrMsg: reviewErrMsg },
+ 			);
++		} finally {
++			// The reviewer is isolated from the main conversation. Always remove and
++			// dispose it, including cancellation and quiesce paths.
++			if (reviewerSession) {
++				this.reviewerSessions.delete(reviewerSession);
++				reviewerSession.dispose();
++			}
+ 		}
+ 
+ 		// The user may have switched chats or replaced/cleared the goal while the
+diff --git a/server/index.ts b/server/index.ts
+index ee3f24b..69d5525 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -243,8 +243,11 @@ function safeBuildDescriptor(): {
+ 	piMcpAdapterVersion: string;
+ } | null {
+ 	try {
+-		const value = JSON.parse(readFileSync(join(resolvePkgRoot(), "build-info.json"), "utf8")) as Record<string, unknown>;
+-		const stringValue = (key: string): string => typeof value[key] === "string" ? value[key] as string : "";
++		const value = JSON.parse(readFileSync(join(resolvePkgRoot(), "build-info.json"), "utf8")) as Record<
++			string,
++			unknown
++		>;
++		const stringValue = (key: string): string => (typeof value[key] === "string" ? (value[key] as string) : "");
+ 		const descriptor = {
+ 			upstreamCommit: stringValue("upstreamCommit"),
+ 			packageVersion: stringValue("packageVersion"),
+@@ -258,7 +261,21 @@ function safeBuildDescriptor(): {
+ }
+ 
+ app.get("/api/health", (_req, res) => {
+-	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE, build: safeBuildDescriptor() });
++	const serviceHealth = service.serviceStatus();
++	res.json({
++		ok: true,
++		piVersion: VERSION,
++		cwd: CWD,
++		pid: process.pid,
++		engine: ENGINE,
++		build: safeBuildDescriptor(),
++		activity: {
++			quiesced: serviceHealth.quiesced,
++			activeConversations: serviceHealth.activeConversations,
++			activeTools: serviceHealth.activeTools,
++			pendingMessages: serviceHealth.pendingMessages,
++		},
++	});
+ });
+ 
+ /**
+@@ -767,6 +784,8 @@ export interface DispatchSession {
+ 	cloneProvider(provider: string, reqId: number): Promise<void>;
+ 	getTerminalManager(conversationId?: string): TerminalManagerLike | undefined;
+ 	getTerminalCwd(conversationId?: string): string;
++	/** True while the server is draining; terminal writers must be rejected. */
++	isQuiesceActive(): boolean;
+ 	listCommands(): Promise<void>;
+ 	saveCommands(commands: CommandDef[]): Promise<void>;
+ 	setGoal(goal: string, opts?: { reviewModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
+@@ -820,6 +839,7 @@ export interface DispatchSession {
+ 	deleteSubagentTemplate(name: string): Promise<void>;
+ 	emitNotice(level: "info" | "warning" | "error", text: string, textEn?: string): void;
+ 	activeConversations(): number;
++	activeTools(): number;
+ 	pendingMessages(): number;
+ }
+ 
+@@ -832,7 +852,7 @@ export interface EngineService {
+ 	noteSocketOpen(): void;
+ 	noteSocketClose(): void;
+ 	isQuiesced(): boolean;
+-	quiesce(): void;
++	quiesce(): Promise<{ ok: boolean; error?: string }>;
+ 	unquiesce(): void;
+ 	quiesceInfo(): { quiesced: boolean; quiescedSince?: number };
+ 	serviceStatus(): {
+@@ -843,9 +863,11 @@ export interface EngineService {
+ 		quiescedSince?: number;
+ 		connectedClients: number;
+ 		activeConversations: number;
++		activeTools: number;
+ 		pendingMessages: number;
+ 	};
+ 	activeConversations(): number;
++	activeTools(): number;
+ 	pendingMessages(): number;
+ 	applyPluginAgentTools(): void;
+ 	applyPluginCommandCatalog(): void;
+@@ -1065,6 +1087,16 @@ wss.on("connection", (ws) => {
+ 			send({ type: "notice", level: "error", text: refusal });
+ 			return;
+ 		}
++		const rejectTerminalWrite = (): boolean => {
++			if (!cs.isQuiesceActive()) return false;
++			cs.emitNotice(
++				"error",
++				"服务器正在停止，已拒绝新的终端写入/执行。",
++				"The server is stopping and rejected new terminal input or execution.",
++			);
++			cs.flushSnapshot();
++			return true;
++		};
+ 		switch (msg.type) {
+ 			case "prompt":
+ 				void cs.prompt(msg.text, msg.attachments, msg.queue);
+@@ -1248,6 +1280,7 @@ wss.on("connection", (ws) => {
+ 				void cs.removeProviderKey(msg.provider, msg.keyName);
+ 				break;
+ 			case "terminal_create": {
++				if (rejectTerminalWrite()) break;
+ 				const tm = cs.getTerminalManager(msg.conversationId);
+ 				if (tm)
+ 					tm.create(
+@@ -1262,18 +1295,22 @@ wss.on("connection", (ws) => {
+ 				break;
+ 			}
+ 			case "terminal_input":
++				if (rejectTerminalWrite()) break;
+ 				cs.getTerminalManager(msg.conversationId)?.input(msg.terminalId, msg.data);
+ 				break;
+ 			case "terminal_resize":
++				if (rejectTerminalWrite()) break;
+ 				cs.getTerminalManager(msg.conversationId)?.resize(msg.terminalId, msg.cols, msg.rows);
+ 				break;
+ 			case "terminal_kill":
+ 				cs.getTerminalManager(msg.conversationId)?.kill(msg.terminalId);
+ 				break;
+ 			case "rename_terminal":
++				if (rejectTerminalWrite()) break;
+ 				cs.getTerminalManager(msg.conversationId)?.rename(msg.terminalId, msg.title);
+ 				break;
+ 			case "run_command":
++				if (rejectTerminalWrite()) break;
+ 				cs.getTerminalManager(msg.conversationId)?.runCommand(
+ 					msg.terminalId,
+ 					msg.command,
+@@ -1572,6 +1609,12 @@ async function shutdown(): Promise<void> {
+ 	console.log("\nshutting down…");
+ 	clearInterval(heartbeatTimer);
+ 	stopControl();
++	try {
++		const result = await service.quiesce();
++		if (!result.ok) console.warn(`[shutdown] quiesce did not drain before disposal: ${result.error ?? "quiesce_timeout"}`);
++	} catch (error) {
++		console.warn(`[shutdown] quiesce failed before disposal: ${String((error as Error)?.message ?? error)}`);
++	}
+ 	pluginMgr.dispose();
+ 	mcpBridge?.dispose();
+ 	await service.disposeAll();
+diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
+new file mode 100644
+index 0000000..429d7f7
+--- /dev/null
++++ b/tests/unit/control-socket.test.ts
+@@ -0,0 +1,85 @@
++import { existsSync, mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, describe, expect, it } from "vitest";
++import { sendControlCommand, startControlServer } from "../../server/control-socket.js";
++
++const tempDirs: string[] = [];
++
++afterEach(() => {
++	for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
++});
++
++async function waitForSocket(path: string): Promise<void> {
++	for (let i = 0; i < 100 && !existsSync(path); i++) await new Promise((resolve) => setTimeout(resolve, 5));
++}
++
++describe("local control socket", () => {
++	it.skipIf(process.platform === "win32")("does not acknowledge quiesce until the drain completes", async () => {
++		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-control-"));
++		tempDirs.push(dataDir);
++		let activeConversations = 1;
++		const service = {
++			serviceStatus: () => ({
++				pid: process.pid,
++				version: "test",
++				cwd: "/workspace",
++				quiesced: true,
++				connectedClients: 0,
++				activeConversations,
++				activeTools: activeConversations,
++				pendingMessages: 0,
++			}),
++			quiesce: async () => {
++				await new Promise((resolve) => setTimeout(resolve, 35));
++				activeConversations = 0;
++				return { ok: true };
++			},
++			unquiesce: () => {},
++		};
++		const stop = startControlServer({ service, dataDir, port: 9876 });
++		try {
++			const socketPath = join(dataDir, "pi-web-ui.sock");
++			await waitForSocket(socketPath);
++			const startedAt = Date.now();
++			const response = await sendControlCommand(dataDir, 9876, "quiesce");
++			expect(Date.now() - startedAt).toBeGreaterThanOrEqual(25);
++			expect(response).toMatchObject({ ok: true, activeConversations: 0, activeTools: 0 });
++		} finally {
++			stop();
++		}
++	});
++
++	it.skipIf(process.platform === "win32")(
++		"returns a bounded visible failure when a drain does not finish",
++		async () => {
++			const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-control-timeout-"));
++			tempDirs.push(dataDir);
++			const service = {
++				serviceStatus: () => ({
++					pid: process.pid,
++					version: "test",
++					cwd: "/workspace",
++					quiesced: true,
++					connectedClients: 0,
++					activeConversations: 1,
++					activeTools: 1,
++					pendingMessages: 0,
++				}),
++				quiesce: async () => ({ ok: false, error: "quiesce_timeout" }),
++				unquiesce: () => {},
++			};
++			const stop = startControlServer({ service, dataDir, port: 9877 });
++			try {
++				await waitForSocket(join(dataDir, "pi-web-ui.sock"));
++				expect(await sendControlCommand(dataDir, 9877, "quiesce")).toMatchObject({
++					ok: false,
++					error: "quiesce_timeout",
++					activeConversations: 1,
++				});
++			} finally {
++				stop();
++			}
++		},
++	);
++});
+diff --git a/tests/unit/goal-persistence.test.ts b/tests/unit/goal-persistence.test.ts
+index 05a9087..635a967 100644
+--- a/tests/unit/goal-persistence.test.ts
++++ b/tests/unit/goal-persistence.test.ts
+@@ -53,14 +53,16 @@ function makeHarness(filePath: string, sessionId: string, clientId: string) {
+ 		clientId,
+ 		agentDir: "/tmp/agent",
+ 		stateStore: new ClientStateStore(filePath),
+-		webUi: {},
++		webUi: { cancelPendingDialogs: vi.fn() },
+ 		emit: (msg: ServerMessage) => emitted.push(msg),
+ 		flushSnapshot,
+ 		isDisposed: () => false,
++		quiesced: () => false,
+ 		quiesceBlocked: () => false,
+ 		activeConvId: () => conv.id,
+ 		activeConv: () => conv,
+ 		getConv: (id: string) => (id === conv.id ? conv : undefined),
++		conversations: () => [conv],
+ 		cwd: () => conv.cwd,
+ 		reviewSettings: () => ({ reviewPrompt: "", reviewDisabledSkills: [] }),
+ 		gitDiff: async () => "",
+@@ -134,4 +136,22 @@ describe("native Goal persistence", () => {
+ 		expect(second.conv.goal.goal).toBeNull();
+ 		expect(second.conv.goal.paused).toBe(false);
+ 	});
++
++	it("pauses a native goal and invalidates review work during quiesce", async () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-quiesce-"));
++		tempDirs.push(dir);
++		const harness = makeHarness(join(dir, "client-state.json"), "stable-1", "client-a");
++		await harness.service.setGoal("Finish the drain-safe goal", { autoStart: false });
++
++		await harness.service.quiesce();
++
++		expect(harness.conv.goal).toMatchObject({
++			goal: "Finish the drain-safe goal",
++			paused: true,
++			reviewing: false,
++			statusEn: "Goal paused while the server is stopping…",
++		});
++		expect(harness.conv.goalGeneration).toBe(2);
++		expect(harness.conv.goalReviewGeneration).toBe(1);
++	});
+ });
+diff --git a/tests/unit/quiesce.test.ts b/tests/unit/quiesce.test.ts
+new file mode 100644
+index 0000000..5fccccf
+--- /dev/null
++++ b/tests/unit/quiesce.test.ts
+@@ -0,0 +1,94 @@
++import { performance } from "node:perf_hooks";
++import { describe, expect, it, vi } from "vitest";
++import { ClientSession } from "../../server/agent-service.js";
++
++function delay(ms: number): Promise<void> {
++	return new Promise((resolve) => setTimeout(resolve, ms));
++}
++
++function makeClient(session: Record<string, unknown>, timeoutGoal?: () => Promise<void>) {
++	let idle = false;
++	const conv = {
++		id: "c1",
++		session,
++		runtime: { session },
++		toolStartTimes: new Map(),
++		queueSteering: ["queued steer"],
++		queueFollowUp: ["queued follow-up"],
++		terminals: { killAll: vi.fn() },
++		promptedSinceActive: false,
++		lastActiveAt: 0,
++		lastSdkEventAt: 0,
++		stallNoticed: false,
++		title: "New chat",
++	};
++	Object.defineProperty(session, "isStreaming", { get: () => !idle, configurable: true });
++	Object.defineProperty(session, "isIdle", { get: () => idle, configurable: true });
++	(session as any).abort = async () => {
++		await delay(30);
++		idle = true;
++	};
++	const client = Object.create(ClientSession.prototype) as ClientSession & Record<string, any>;
++	Object.assign(client, {
++		activeId: "c1",
++		convs: new Map([["c1", conv]]),
++		goalSvc: { quiesce: timeoutGoal || (async () => {}) },
++		bashKills: new Set(),
++		bg: { killAll: async () => [] },
++		disposed: false,
++		sinks: new Set(),
++		pendingNotices: [],
++		flushSnapshot: vi.fn(),
++		cancelPendingQuestions: vi.fn(),
++		isQuiesced: () => false,
++	});
++	return { client, conv, session };
++}
++
++describe("agent quiesce", () => {
++	it("waits for a delayed abort before reporting that writers stopped", async () => {
++		const { client, conv, session } = makeClient({
++			clearQueue: vi.fn(),
++			pendingMessageCount: 0,
++			abort: vi.fn(),
++		});
++		const startedAt = performance.now();
++		const drained = await client.quiesce(100);
++
++		expect(drained).toBe(true);
++		expect(performance.now() - startedAt).toBeGreaterThanOrEqual(25);
++		expect(session.clearQueue).toHaveBeenCalledOnce();
++		expect(conv.terminals.killAll).toHaveBeenCalledOnce();
++		expect(client.flushSnapshot).toHaveBeenCalledWith(true);
++	});
++
++	it("returns a bounded failure when an agent refuses to stop", async () => {
++		const { client, session } = makeClient({
++			clearQueue: vi.fn(),
++			pendingMessageCount: 0,
++			abort: vi.fn(() => new Promise<void>(() => {})),
++		});
++		Object.defineProperty(session, "isStreaming", { get: () => true, configurable: true });
++		Object.defineProperty(session, "isIdle", { get: () => false, configurable: true });
++
++		const startedAt = performance.now();
++		const drained = await client.quiesce(30);
++
++		expect(drained).toBe(false);
++		expect(performance.now() - startedAt).toBeLessThan(300);
++	});
++
++	it("rejects a direct prompt before slash or model work can execute", async () => {
++		const prompt = vi.fn(async () => {});
++		const { client, conv } = makeClient({
++			clearQueue: vi.fn(),
++			pendingMessageCount: 0,
++			prompt,
++		});
++		client.isQuiesced = () => true;
++		await client.prompt("/arbitrary-extension-command");
++
++		expect(prompt).not.toHaveBeenCalled();
++		expect(conv.promptedSinceActive).toBe(false);
++	});
++});

@@ -33,11 +33,13 @@ const sessionRef = {
   },
 };
 const workspace = {source: {type: "blank"}, bucket: "bucket", storagePrefix: "workspaces/user-1/workspace-1", mcpConfig: {}};
+let deleteServiceResult = true;
 const lifecycle = createSessionLifecycleService({
   admin,
   deleteSessionService: async (...args) => {
     calls.push({kind: "deleteService", args});
-    return true;
+    if (!deleteServiceResult) currentSession = {...currentSession, status: "stop_failed"};
+    return deleteServiceResult;
   },
   normalizeRequestedSessionResources: () => ({cpu: "2", memory: "2Gi"}),
   patchSessionService: async (...args) => calls.push({kind: "patchService", args}),
@@ -46,7 +48,15 @@ const lifecycle = createSessionLifecycleService({
   requireWorkspace: async () => workspace,
   reserveChromeWorkspaceSession: async (...args) => {
     calls.push({kind: "reserveChrome", args});
-    return {syncWriterRole: "writer", syncWriterLeaseId: "chrome-lease"};
+    const session = args[2] || {};
+    return {
+      syncWriterRole: "writer",
+      syncWriterLeaseId: "chrome-lease",
+      ...(session.agentUiVersion ? {
+        agentRuntimeGeneration: Number(session.agentRuntimeGeneration || 0) + 1,
+        agentRuntimeState: "starting",
+      } : {}),
+    };
   },
   reserveWorkspaceSyncSession: async (...args) => {
     calls.push({kind: "reserveSync", args});
@@ -80,7 +90,13 @@ assert.strictEqual(isIdleSession({
   );
 
   calls.length = 0;
-  currentSession = {ownerUid: "user-1", name: "Old name", status: "running"};
+  currentSession = {
+    ownerUid: "user-1",
+    name: "Old name",
+    status: "running",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
   const renamed = await lifecycle.renameSession("user-1", "workspace-1", "session-1", {name: "  New name  "});
   assert.strictEqual(renamed.name, "New name");
   assert.strictEqual(currentSession.name, "New name");
@@ -101,7 +117,10 @@ assert.strictEqual(isIdleSession({
     ownerUid: "user-1",
     status: "stopped",
     terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     serviceUrl: null,
+    capabilities: {chrome: true},
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
     syncWriterRole: "none",
@@ -113,10 +132,11 @@ assert.strictEqual(isIdleSession({
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(currentSession.status, "provisioning");
-  assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), true);
+  assert.strictEqual(calls.some((call) => call.kind === "reserveChrome"), true);
+  assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), false);
   assert.strictEqual(calls.some((call) => call.kind === "provisionService"), true);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
-  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "workspace-lease");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "chrome-lease");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceType, "blank");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceMode, null);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceRepoUrl, null);
@@ -133,7 +153,7 @@ assert.strictEqual(isIdleSession({
     serviceUrl: null,
     shutdownToken: "token",
     browserAccessTokenSecret: "secret",
-    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, n64: false, chrome: true},
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
     syncWriterRole: "none",
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
@@ -141,16 +161,172 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(calls.some((call) => call.kind === "reserveSync"), false);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterRole, "writer");
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncWriterLeaseId, "chrome-lease");
-  assert.strictEqual(currentSession.capabilities.chat, true);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(currentSession.capabilities, "chat"), false);
 
   calls.length = 0;
-  currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    serviceUrl: "https://runner",
+    shutdownToken: "token",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
   assert.deepStrictEqual(await lifecycle.stopSession("user-1", "workspace-1", "session-1"), {id: "session-1", ...currentSession});
   assert.strictEqual(calls.some((call) => call.kind === "deleteService"), true);
 
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token"};
   assert.deepStrictEqual(await lifecycle.deleteSession("user-1", "workspace-1", "session-1"), {ok: true});
   assert.strictEqual(calls.some((call) => call.kind === "delete"), true);
+
+  deleteServiceResult = false;
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    serviceUrl: "https://runner",
+    shutdownToken: "token",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
+  await assert.rejects(
+      lifecycle.stopSession("user-1", "workspace-1", "session-1"),
+      (error) => error.status === 502 && error.publicMessage === "session_stop_failed",
+  );
+  assert.strictEqual(currentSession.status, "stop_failed");
+  await assert.rejects(
+      lifecycle.restartSession("user-1", "workspace-1", "session-1"),
+      (error) => error.status === 409 && error.publicMessage === "session_stop_failed",
+  );
+  deleteServiceResult = true;
+
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 3,
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    browserAccessTokenSecret: "secret",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await lifecycle.restartSession("user-1", "workspace-1", "session-1");
+  assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+    "deleteService", "reserveChrome", "provisionService",
+  ]);
+  assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
+  assert.strictEqual(currentSession.status, "provisioning");
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].agentRuntimeGeneration, 4);
+
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "stop_failed",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 4,
+    agentRuntimeState: "stopping",
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    browserAccessTokenSecret: "secret",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await lifecycle.restartSession("user-1", "workspace-1", "session-1");
+  assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+    "deleteService", "reserveChrome", "provisionService",
+  ]);
+  assert.strictEqual(currentSession.status, "provisioning");
+
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 4,
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    browserAccessTokenSecret: "secret",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await lifecycle.resizeSession("user-1", "workspace-1", "session-1", {});
+  assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
+    "deleteService", "reserveChrome", "provisionService",
+  ]);
+  assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
+  assert.deepStrictEqual(calls.find((call) => call.kind === "provisionService").args[2].resources, {cpu: "2", memory: "2Gi"});
+
+  deleteServiceResult = false;
+  calls.length = 0;
+  currentSession = {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    agentRuntimeGeneration: 5,
+    terminalKind: "pi",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    serviceName: "projects/p/locations/us-central1/services/session-1",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "token",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
+  };
+  await assert.rejects(
+      lifecycle.restartSession("user-1", "workspace-1", "session-1"),
+      (error) => error.status === 502 && error.publicMessage === "session_stop_failed",
+  );
+  assert.strictEqual(calls.some((call) => call.kind === "provisionService"), false);
+  deleteServiceResult = true;
+
+  let reaperDeleted = 0;
+  const reaperDocs = [
+    {
+      ref: {update: async () => { throw new Error("marked runtime should be bypassed"); }},
+      data: () => ({
+        workspaceId: "workspace-1",
+        agentUiVersion: "pi-web-ui-v1",
+        status: "running",
+        lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+      }),
+    },
+    {
+      ref: {update: async () => {}},
+      data: () => ({
+        workspaceId: "workspace-1",
+        status: "running",
+        lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+      }),
+    },
+  ];
+  const reaper = createSessionLifecycleService({
+    admin,
+    db: {
+      collectionGroup: () => ({
+        where: () => ({get: async () => ({docs: reaperDocs, size: reaperDocs.length})}),
+      }),
+    },
+    deleteSessionService: async () => {
+      reaperDeleted += 1;
+      return true;
+    },
+  });
+  const reaped = await reaper.reapIdleSessions();
+  assert.deepStrictEqual(reaped, {checked: 2, stopped: 1, failed: 0});
+  assert.strictEqual(reaperDeleted, 1);
 
   console.log("session lifecycle service tests passed");
 })().catch((error) => {

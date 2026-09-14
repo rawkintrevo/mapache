@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const test = require("node:test");
 const {createConfig} = require("./config");
 
@@ -63,58 +64,53 @@ test("Chrome runner configuration exposes stable browser contract URLs", () => {
   }
 });
 
-test("runner capability parsing defaults Chat off and preserves explicit Chat support", () => {
+test("runner capability parsing preserves the supported capability contract", () => {
   const previous = process.env.RUNNER_CAPABILITIES;
   try {
-    process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true, chat: true});
-    assert.equal(createConfig().runnerCapabilities.chat, true);
+    process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true, preview: true});
+    assert.equal(createConfig().runnerCapabilities.preview, true);
     process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true});
-    assert.equal(createConfig().runnerCapabilities.chat, false);
+    assert.equal(createConfig().runnerCapabilities.terminal, true);
   } finally {
     if (previous === undefined) delete process.env.RUNNER_CAPABILITIES;
     else process.env.RUNNER_CAPABILITIES = previous;
   }
 });
 
-test("web-first control is opt-in and restricted to the pi Chrome harness", () => {
-  const names = ["MAPACHE_RUNNER_INTEGRATION_MODE", "MAPACHE_WEB_FIRST_ENABLED", "HARNESS_ID", "TERMINAL_KIND", "TERMINAL_COMMAND", "RUNNER_CAPABILITIES"];
+test("marked runners use the managed pi-web-ui state contract while unmarked runners retain Pi paths", () => {
+  const names = [
+    "MAPACHE_AGENT_UI_VERSION",
+    "MAPACHE_AGENT_STATE_ROOT",
+    "MAPACHE_PI_WEB_UI_ROOT",
+    "PI_CODING_AGENT_DIR",
+    "PI_SESSION_DIR",
+  ];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    MAPACHE_AGENT_STATE_ROOT: "/tmp/mapache-agent-state-test",
+    MAPACHE_PI_WEB_UI_ROOT: "/opt/mapache/pi-web-ui-test",
+    PI_CODING_AGENT_DIR: "/restored/pi-agent",
+    PI_SESSION_DIR: "/restored/pi-session",
+  });
   try {
-    Object.assign(process.env, {
-      MAPACHE_WEB_FIRST_ENABLED: "true",
-      HARNESS_ID: "pi",
-      TERMINAL_KIND: "pi",
-      TERMINAL_COMMAND: "pi",
-      RUNNER_CAPABILITIES: JSON.stringify({terminal: true, chrome: true}),
-    });
-    assert.equal(createConfig().integrationMode, "web-first");
-    assert.equal(createConfig().webFirstEnabled, true);
-    process.env.HARNESS_ID = "codex";
-    assert.equal(createConfig().webFirstEnabled, false);
-    process.env.HARNESS_ID = "pi";
-    process.env.RUNNER_CAPABILITIES = JSON.stringify({terminal: true, chrome: false});
-    assert.equal(createConfig().webFirstEnabled, false);
-  } finally {
-    for (const name of names) {
-      if (previous[name] === undefined) delete process.env[name];
-      else process.env[name] = previous[name];
-    }
-  }
-});
+    delete process.env.MAPACHE_AGENT_UI_VERSION;
+    const legacy = createConfig();
+    assert.equal(legacy.agentRuntimeEnabled, false);
+    assert.equal(legacy.piAgentDir, "/restored/pi-agent");
+    assert.equal(legacy.piSessionDir, "/restored/pi-session");
 
-test("an explicit legacy mode keeps the shared web-first owner disabled", () => {
-  const names = ["MAPACHE_RUNNER_INTEGRATION_MODE", "MAPACHE_WEB_FIRST_ENABLED", "HARNESS_ID", "RUNNER_CAPABILITIES"];
-  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
-  try {
-    Object.assign(process.env, {
-      MAPACHE_RUNNER_INTEGRATION_MODE: "legacy",
-      MAPACHE_WEB_FIRST_ENABLED: "true",
-      HARNESS_ID: "pi",
-      RUNNER_CAPABILITIES: JSON.stringify({terminal: true, chrome: true}),
-    });
-    const config = createConfig();
-    assert.equal(config.integrationMode, "legacy");
-    assert.equal(config.webFirstEnabled, false);
+    process.env.MAPACHE_AGENT_UI_VERSION = "pi-web-ui-v1";
+    const managed = createConfig();
+    assert.equal(managed.agentRuntimeEnabled, true);
+    assert.equal(managed.agentUiVersion, "pi-web-ui-v1");
+    assert.equal(managed.piWebUiRoot, "/opt/mapache/pi-web-ui-test");
+    assert.equal(managed.piWebUiHost, "127.0.0.1");
+    assert.equal(managed.piWebUiPort, 8787);
+    assert.equal(managed.piAgentDir, path.join("/tmp/mapache-agent-state-test", "pi"));
+    assert.equal(managed.piSessionDir, path.join("/tmp/mapache-agent-state-test", "sessions"));
+    assert.equal(managed.piWebUiDataDir, path.join("/tmp/mapache-agent-state-test", "ui"));
+    assert.equal(managed.piMcpAdapterVersion, "2.32.1");
+    assert.equal(managed.piMcpAdapterPath, path.join(process.env.HOME || "/root", ".pi", "agent", "npm", "node_modules", "pi-mcp-adapter", "index.ts"));
   } finally {
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];

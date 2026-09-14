@@ -1,99 +1,109 @@
 # Session Runner Architecture
 
-## Purpose
+The session runner is a per-session Cloud Run container. Its entrypoint is
+`session-runner/server.js`, which composes focused services, registers the
+protected HTTP routes, and runs the ordered startup/shutdown lifecycle.
 
-This page maps the runner server modules. Detailed runtime behavior remains in [runtime-containers.md](./runtime-containers.md).
+## Runtime boundaries
 
-## Read When
+- `lib/runnerLifecycle.js`: ordered preparation, runtime admission, startup,
+  quiesce, final checkpoint, and shutdown.
+- `lib/workspace.js`: workspace restore/sync and writer-authority checks.
+- `lib/agentSnapshot.service.js`, `lib/agentCheckpoint.service.js`, and
+  `lib/agentCheckpointRestore.service.js`: immutable history/UI/settings
+  capture, publication, validation, and restore.
+- `lib/piWebUiProcess.js`: one managed upstream pi-web-ui child on the marked
+  path; it does not launch a second Pi TUI or a Mapache chat/Goals process.
+- `lib/agentGateway.js` and `lib/agentWebSocketGateway.js`: signed `/agent/`
+  HTTP/WebSocket forwarding to the private upstream child.
+- `lib/terminal.js` and `lib/shell.js`: terminal and independent shell PTYs.
+- `lib/preview.js`, `lib/browserQa.js`, and `lib/resourceMetrics.js`: Preview,
+  Chrome QA, and read-only metrics surfaces.
+- `lib/workspaceAuth.service.js`, `lib/mcpConfig.service.js`, and
+  `lib/piSeededSkills.service.js`: startup materialization that remains
+  necessary for credentials, MCP, and image-owned runtime skills.
+- `lib/git.js` and `lib/gitAutomation.service.js`: workspace reconstruction and
+  internal GitHub automation. They are not a manual parent Git-control API.
+- `lib/sshSession.js`: retained compatibility SSH terminal/port forwarding.
 
-Read this before changing `session-runner/server.js`, PTY/WebSocket behavior, preview serving, workspace sync, Git commands, Pi skills/packages, or runner validation helpers.
+## Startup and lifecycle
 
-## Canonical Owner
+The runner restores the published generation/boot-scoped checkpoint and
+workspace state, materializes selected credentials and MCP configuration, seeds
+only missing image-owned runtime skills, acquires writer authority, and then
+starts exactly one managed upstream agent child for a marked pi-chrome runtime.
+The upstream child listens on loopback `127.0.0.1:8787`.
 
-- Entrypoint/composition root: `session-runner/server.js`
-- HTTP route registrars: `session-runner/routes/browserPreviewRoutes.js`, `sshRoutes.js`, `workspaceRoutes.js`, `agentRoutes.js`, and `gitRoutes.js`
-- Startup/shutdown coordination: `session-runner/lib/runnerLifecycle.js`
-- Browser QA orchestration: `session-runner/lib/browserQa.js` and `session-runner/bin/mapache-preview-qa.js`
-- Shared config: `session-runner/lib/config.js`
-- Integration mode and owner composition: `session-runner/lib/integrationMode.js`
-- Web-first control/protocol slice: `session-runner/lib/webFirstProtocol.js`, `controlManager.js`, `operationLedger.js`, and `webFirstAgent.js`
-- Web-first execution/recovery slice: `session-runner/lib/executionAuthority.js`, `mutationBarrier.js`, `processSupervisor.js`, and `workspaceCheckpoint.service.js`
-- Cloud Storage/Firestore client identity: `session-runner/lib/services.js`
-- Harness metadata and startup hooks: `session-runner/lib/harnesses/`; managed Pi goal package reconciliation: `session-runner/lib/goalsPackageBootstrap.js`
-- Terminal and PTY: `session-runner/lib/terminal.js`
-- Live resource metrics: `session-runner/lib/resourceMetrics.helpers.js`, `resourceMetrics.service.js`, and `resourceMetricsWebSocket.js`
-- Pi Chat transcript and WebSocket bridge: `session-runner/lib/piChatTranscript.js`, `piChat.service.js`, and `piChatWebSocket.js`
-- Preview gateway facade: `session-runner/lib/preview.js`
-- Preview modes and shared contracts: `session-runner/lib/previewStatic.js`, `previewProxy.js`, `previewN64.js`, and `previewHelpers.js`
-- Preview logging and shared-preview export: `session-runner/lib/previewLog.service.js` and `previewShare.service.js`
-- Workspace restore/sync: `session-runner/lib/workspace.js`
-- Workspace archives: `session-runner/lib/workspaceArchives.service.js`
-- Chrome desktop/profile/access: `session-runner/lib/chromeDesktop.js`, `chromeRuntime.js`, `chromeProfile.service.js`, `chromeProfileSnapshot.service.js`, `browserAccess.js`, and `vncBridge.js`
-- Chrome harness integration: `session-runner/lib/mcpConfig.service.js`, `browserQa.js`, `workspaceSkillCatalog.js`, `seeded-skills/mapache-chrome/`, and `bin/mapache-chrome-status.js`
-- GitHub workspace reconstruction: `session-runner/lib/workspaceGithub.service.js`
-- Harness-backed auth materialization: `session-runner/lib/workspaceAuth.service.js`
-- Git facade and manual endpoints: `session-runner/lib/git.js` and `git*.service.js`
-- GitHub automation lifecycle: `session-runner/lib/gitAutomation.service.js`
-- Pi/package/workspace-skill/subagent endpoints: `session-runner/lib/pi.js`, `piPackage.service.js`, `workspaceSkill.service.js`, `workspaceSubagent.service.js`
-- Harness-neutral seeded skill catalog and profiles: `session-runner/lib/workspaceSkillCatalog.js` and `session-runner/seeded-skills/`
-- Codex workspace guidance and native skill materialization: `session-runner/lib/codex.js`, `session-runner/lib/codexSeededWorkspace.service.js`, and `session-runner/seeded-codex/AGENTS.md`
+The startup sequence fails closed if restore validation, credential/MCP
+materialization, authority acquisition, the pinned adapter, or upstream health
+checks fail. No startup path installs or patches `pi-goal-x`, starts Goals RPC,
+tails a transcript into a second UI, or automatically launches a second Pi TUI.
 
-## Current Behavior
+Quiesce rejects new work and waits for the managed child and writers to stop.
+The runner then captures a final acknowledged checkpoint, closes browser/SSH
+forwards, snapshots Chrome state when applicable, releases authority, and
+exits. A forced loss leaves the last completed published checkpoint available;
+restore never resumes an in-flight model/tool turn automatically.
 
-`server.js` bootstraps Express, constructs the shared services and HTTP/WebSocket servers, delegates route registration to focused modules, and wires the shared upgrade dispatcher. `runnerLifecycle.js` owns the ordered workspace restore, Chrome startup, harness materialization, Git automation setup, snapshot startup, sync-loop startup, and server listen sequence. It also owns shutdown ordering so SSH forwards close before the final profile/archive snapshot and activity update. Startup rejects before the listen step when any preparation step fails. `integrationMode.js` resolves one explicit legacy or web-first interactive owner, defaulting missing session metadata to legacy; server composition rejects a legacy Goals RPC owner alongside the shared web-first owner. The preview facade owns config parsing and mode selection; status aggregation, mode dispatch, preview logs, and shared-preview export are delegated to focused services, while static-file serving, localhost proxying, and N64 shell/ROM rendering live in their respective mode modules. Feature behavior lives under `session-runner/lib/` so route paths and environment contracts stay stable while internals evolve. Harness resolution now happens once at startup through `createRunnerHarnessRegistry()`, which provides ordered hooks for config, auth, MCP, seeded skills, and future harness-specific initialization. Route registrars receive their service dependencies explicitly; they do not create a second server or own startup lifecycle. Pi goal routes are registered by `routes/goalsRoutes.js` and use `goalsProtocol.js` plus the headless `goalsRpc.service.js` process for managed web-driven dialogs. The existing PTY remains the ordinary terminal path and is blocked while a managed goal process is active. An explicitly requested Goals handoff waits for that PTY to exit and skips its normal Git completion hook; terminal reconnects stay blocked during the switch. The opt-in web-first runner slice adds `/agent` to this same upgrade dispatcher. `webFirstAgent.js` owns bounded snapshots/replay, adapter event correlation, and the single-flight operation ledger; `controlManager.js` owns tab bindings, heartbeat leases, control epochs, and handoff barriers. `executionAuthority.js` owns the Firestore-backed writer-reservation check, runtime epoch, confirmed monotonic lease renewal, and recovery-required predecessor rule. `mutationBarrier.js` closes runner-owned writers around checkpoints; `processSupervisor.js` bounds termination of registered Pi/shell children; and `workspaceCheckpoint.service.js` owns immutable payloads, manifest/pointer validation, staging restore, and orphan cleanup. It is enabled only when the explicit mode resolves to web-first on the Pi Chrome harness, and the pi-chrome image keeps that mode disabled until Gate A/C release criteria pass. The adapter handshake reports tested capabilities and package compatibility; unsupported capabilities remain false and never fall back to PTY injection. See [Workspace Goals](./workspace-goals.md), [Gate B evidence](../artifacts/web-first/gate-b/results.md), and [Gate C policy](../artifacts/web-first/gate-c/checkpoint-policy.md) for the current boundary.
+## HTTP and WebSocket routes
 
-The protected `POST /workspace/sync-down` route lets Functions ask a running cloud session to pull workspace files from Cloud Storage into the live workspace directory after browser-side file writes. This keeps the file browser and terminal pointed at the same workspace without waiting for a later runner restart. File listing is intentionally lazy: Cloud Storage-backed listings are directory-scoped through the Functions API, and SSH-backed listings flow through `/ssh/files?path=...` so the runner inspects only the requested remote directory.
+The central `noServer` WebSocket dispatcher in `lib/webSocketUpgrade.js` keeps
+terminal, browser/VNC, metrics, shell, and agent sockets from racing or
+rejecting one another. The marked agent gateway accepts only signed,
+generation-bound access and exact trusted origins. It strips browser bootstrap
+credentials and injects a private upstream token. The parent bridge carries
+only readiness, renewal, and safe status/error messages; it does not implement
+the upstream chat protocol.
 
-The terminal uses `node-pty` and WebSocket replay. `webSocketUpgrade.js` is the single HTTP upgrade dispatcher: terminal, browser, Chat, agent, and resource-metrics WebSocket servers use `noServer` mode, then the dispatcher routes `/terminal`, authenticated `/browser/vnc`, authenticated `/chat`, opt-in authenticated `/agent`, and authenticated `/metrics` requests explicitly. Do not attach a path-scoped `WebSocketServer` directly to the shared HTTP server; its automatic upgrade listener rejects other valid WebSocket paths before their handlers run. When the web-first flag is enabled, terminal, shell, Chat, and `/agent` mutations pass through the control manager at the receiving boundary; raw terminal fallbacks and resize messages cannot bypass ownership. The terminal iframe keeps a per-tab client binding in `sessionStorage`, sends heartbeats, and never submits a prompt automatically after reconnect. The terminal iframe HTML in `terminal.js` also inlines the critical xterm layout rules that visually hide the helper textarea and anchor the viewport/screen, then reapplies visual-only helper-textarea styles after render. Do not force the helper textarea offscreen, zero-size it, or clear its value from wrapper code; xterm's mobile soft-keyboard and composition handling depends on owning that internal state. Pi Chat is a best-effort completed-turn surface: `piChat.service.js` discovers the newest session JSONL, replays at most 200 displayable messages and 1 MiB of source, tails complete appended lines, resets on truncation/replacement/branch changes, and never publishes tools, thinking, malformed entries, or partial lines. In the web-first flag, `piChatWebSocket.js` submits through the structured adapter gateway instead of PTY prompt injection; otherwise it keeps the legacy PTY bridge. Resource metrics are sampled only while `/metrics` clients are connected. The sampler reads container cgroup CPU and memory counters, sends a safe JSON sample about every two seconds, and never writes Firestore activity or terminal state. Preview routes support static, proxy, and N64 ROM modes depending on runner capabilities and workspace preview config. Web-capable images also expose a runner-owned browser QA contract: `browserQa.js` reports dependency health into `/capabilities`, `/preview/status`, and `/preview/qa/status`, while the image-local `mapache-preview-qa` command launches Chromium through Playwright, writes structured reports under `$MAPACHE_QA_DIR`, and updates a shared `last-run.json` state file that status routes can surface. GitHub workspaces restore `.git` through archives or clone fallback, then restore worktree/cache state. Pi package and skill endpoints operate on the same `/workspace/.pi` files that Pi uses in the terminal.
+Runner routes are limited to retained lifecycle and integration boundaries:
 
-Pi and Codex runners select the same harness-neutral `github`, `web`, `n64`, and `mapache-chrome` skill profiles from workspace source mode and runner capabilities. Pi materializes selected catalog entries under `.pi/skills/**`; Codex materializes the same source files under `.agents/skills/**`. Both paths preserve existing user-edited files. Codex also copies missing user-created Pi skills from `.pi/skills/**` into `.agents/skills/**` with Codex-compatible frontmatter.
+- health/status, capabilities, runtime activity, and checkpoint status;
+- terminal, shell, browser/VNC, Preview, metrics, and browser-QA routes;
+- workspace restore/sync and internal source/automation operations;
+- MCP status/materialization and credential materialization;
+- the minimal agent auth-materialization route.
 
-For Chrome images, startup restores the sanitized workspace-owned profile archive before starting Xvfb, openbox, tint2, Chromium, and x11vnc. Chromium binds CDP and x11vnc to `127.0.0.1`; the runner exposes only authenticated `/browser/`, `/browser/status`, `/browser/activity`, and `/browser/vnc` surfaces. Browser access uses a secure, HTTP-only, same-site-none partitioned cookie so noVNC assets remain authorized when the runner is embedded cross-site and unpartitioned third-party cookies are blocked. The noVNC redirect also includes the signed, short-lived browser token in its nested WebSocket path; the existing no-referrer response policy prevents that URL from being sent as a referrer. The Chrome image build patches Debian's noVNC settings adapter to fall back to its page-local settings cache when embedded-frame storage is unavailable, because an uncaught `localStorage` security error otherwise prevents noVNC initialization. `browserQa.js` attaches with Playwright `connectOverCDP`, creates and closes only its own QA page, and leaves the shared browser and user tabs running. Periodic and final profile snapshots are serialized with shutdown and exclude caches, crash data, downloads, lock files, and other transient state.
+The old Chat WebSocket, Mapache Goals routes/RPC, manual file/editor routes,
+manual Git-control routes, package CRUD routes, model editor routes, and
+skills/subagent CRUD routes are not registered. Upstream owns those behaviors
+inside `/agent/`.
 
-Workspace skill CRUD now uses neutral runner routes at `/skills` and `/skills/delete`. `workspaceSkill.service.js` resolves the active harness from `config.harnessId`, returns harness metadata and restart guidance with list/save/delete results, and keeps Pi legacy flat-file deletion support for historical `.pi/skills/{name}.md` entries. `server.js` still serves `/pi/skills*` aliases for rollout compatibility.
+## Persistence and safety
 
-Workspace auth materialization now uses `workspaceAuth.service.js`, which reads user credentials from Firestore, applies the session's `authSelection`, and writes either Pi `auth.json` or Codex `auth.json` depending on the active harness. Runner routes expose the neutral `POST /auth/materialize` endpoint with a `/pi/auth/materialize` alias.
+Agent snapshots use fixed internal roots for flat Pi JSONL sessions, allowlisted
+non-secret Pi settings, upstream UI state, and only uploads referenced by
+captured history. A manifest records generation/boot identity, paths, sizes,
+hashes, and safe permissions. Complete JSONL prefixes may be captured while a
+turn is live, but malformed interior records, traversal, unsafe symlinks, mixed
+generations, and corrupt objects are rejected.
 
-Workspace subagent CRUD now uses neutral runner routes at `/subagents` and `/subagents/delete`. Pi stores Markdown subagents under `.pi/agents/*.md`; Codex stores TOML subagents under `.codex/agents/*.toml`. Chain listing exists at `/subagent-chains`, but chain writes remain intentionally unsupported in V1.
-
-The runner also exposes `/shell` as a signed browser page and WebSocket backed by `lib/shell.js`. It owns one persistent user shell PTY per session, separate from the agent terminal PTY, while sharing the runner workspace and environment. Reconnects replay recent shell output, and SSH sessions use the configured remote login shell. In the opt-in web-first mode, the shell and terminal PTYs are registered with `processSupervisor`; authority loss closes their sockets, stops controlled children, and suppresses terminal completion sync. Independent Git, package, skill, subagent, and workspace sync-down mutations are rejected during an active web-first run and request a checkpoint after completion. Session-scoped model/auth files are authority-gated but remain outside the recovery payload.
+Workspace files and `.git` remain under their existing Cloud Storage/archive
+ownership. Marked workspace-file publication is generation/boot fenced and
+cannot be replaced by stale delayed writers. Credentials, provider-key stores,
+MCP OAuth state, GitHub CLI auth, and other secret-bearing paths are excluded
+from persistent agent snapshots and recreated from Mapache stores.
 
 ## Invariants
 
-- Browser terminal/preview/capability routes require browser-access tokens.
-- The shared HTTP server has exactly one WebSocket upgrade dispatcher; terminal and browser WebSocket servers stay in `noServer` mode so neither can reject the other's path.
-- The `/agent` gateway is a pi-chrome-only opt-in. It requires the browser token plus an allowed `Origin`, and its protocol requires runtime, execution, session-generation, control-epoch, and command identities.
-- Control ownership is per tab binding, not UID or copied client ID. Lease expiry removes input admission; it does not cancel an accepted run. A disconnected or stale connection cannot write terminal data or resize.
-- Operation processing, outcome, and durability are separate fields. `agent_settled` is quiescence evidence only and cannot mark a command successful. A consumed dispatch permit is never automatically replayed.
-- `/metrics` is a browser-token-gated, read-only WebSocket separate from the terminal PTY. It reports only the latest container CPU/RAM sample; the browser retains no server-side history.
-- Resource sampling prefers unified cgroup v2 counters and falls back to Cloud Run's scoped cgroup
-  v1 mounts, including separate Service `cpu`/`cpuacct` roots and combined Job roots.
-- Browser QA artifacts and state must stay under `$MAPACHE_QA_DIR`; status routes read that state instead of scraping terminal output.
-- Backend-only runner routes require the separate shutdown token.
-- Tokens must not be persisted into workspace files, archives, or logs.
-- Runner control-plane Google clients use the Cloud Run metadata identity even when the workspace
-  defines `GOOGLE_APPLICATION_CREDENTIALS`; workspace credentials are for child processes only.
-- High-cardinality caches such as `.git`, `node_modules`, `/root/.pi`, and Pi package code use archive-backed sync rather than normal file listing.
-- Skills are small Markdown workspace files and remain normal sync state.
-- Harness-specific workspace files such as `.codex/config.toml`, `.codex/agents/*.toml`, and `.pi/agents/*.md` remain visible workspace state, not hidden archive state.
-- Web-first authority and checkpoint publication are cooperative runner boundaries. They do not sandbox legacy runners, browser-side Functions writes, arbitrary detached children, or the separate Chrome profile archive; the pi-chrome image remains disabled until those boundaries and the Gate A adapter requirements are proven.
+- There is exactly one admitted managed upstream agent child per marked runner.
+- Browser presence never determines runtime execution state.
+- The runner never exposes shutdown credentials, private upstream tokens, or
+  workspace secrets through browser responses.
+- The shared HTTP server has one upgrade dispatcher; all socket surfaces remain
+  explicit branches.
+- Changes under `session-runner/lib/`, `session-runner/routes/`, or Dockerfiles
+  require rebuilding affected images and recreating/revising existing services.
 
 ## Verification
 
 - `npm --prefix session-runner run lint`
-- `npm --prefix session-runner test` for touched helper/service behavior when feasible.
-- `npm run docs:check` after developer-doc edits.
-- Runtime image changes need a Cloud Build push and note whether existing Cloud Run services require recreation or a new revision.
+- `npm --prefix session-runner test`
+- `npm run docs:check`
+- rebuild the affected image with an explicit `--project pi-agents-cloud`
 
-## Last Verified Assumptions
-
-- 2026-06-17: Runner modules listed above exist under `session-runner/lib/`.
-
-## Related Docs
+## Related docs
 
 - [Runtime containers](./runtime-containers.md)
 - [Runner harnesses](./runner-harnesses.md)
-- [GitHub workspaces](./github-workspaces.md)
-- [Pi skills manager](./pi-skills-manager.md)
-- [Pi extension manager](./pi-extension-manager.md)
-- [Frontend/Functions/runner compatibility matrix](./guides/frontend-functions-runner-compatibility.md)
+- [Backend API architecture](./backend-api-architecture.md)
+- [Workspace Goals](./workspace-goals.md)

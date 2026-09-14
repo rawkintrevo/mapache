@@ -1,0 +1,14 @@
+{
+  "id": "script.selectSessionByName",
+  "title": "Select a session by its recorded QA name",
+  "parameters": {
+    "sessionName": ""
+  },
+  "actions": [
+    {"type": "click", "text": "{{sessionName}}"},
+    {"type": "waitForSnapshotText", "text": "{{sessionName}}", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The requested session is selected before a cleanup or lifecycle action"
+  ]
+}

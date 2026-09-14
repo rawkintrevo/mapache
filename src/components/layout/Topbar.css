@@ -66,6 +66,113 @@ h1 {
   min-width: 0;
 }
 
+.topbar-action-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+}
+
+.topbar-user-menu {
+  position: relative;
+}
+
+.topbar-user-button {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.topbar-user-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--panel-strong);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.topbar-user-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 10px;
+  width: 260px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(16, 24, 32, 0.18);
+}
+
+.topbar-user-profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-user-profile strong,
+.topbar-user-profile span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-user-profile span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.topbar-user-list-group {
+  display: grid;
+  margin: 0 -12px -12px;
+  padding: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.topbar-user-list-group li + li {
+  border-top: 1px solid var(--line);
+}
+
+.topbar-user-list-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.topbar-user-list-item svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.topbar-user-list-item:hover {
+  background: #f4f7fa;
+}
+
+.topbar-user-list-item:disabled {
+  background: var(--panel);
+}
+
 .topbar-link {
   color: var(--color-text-main);
   font-size: 14px;
@@ -93,8 +200,18 @@ h1 {
 
   .topbar-actions {
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .topbar-user-popover {
+    position: fixed;
+    top: auto;
+    right: 14px;
+    bottom: 14px;
+    left: 14px;
+    width: auto;
   }
 
   .topbar-workspace-controls {

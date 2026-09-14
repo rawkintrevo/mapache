@@ -24,12 +24,9 @@ function contentTypeForPreviewPath(filePath) {
     ".png": "image/png",
     ".svg": "image/svg+xml",
     ".txt": "text/plain; charset=utf-8",
-    ".n64": "application/octet-stream",
-    ".v64": "application/octet-stream",
     ".webp": "image/webp",
     ".woff": "font/woff",
     ".woff2": "font/woff2",
-    ".z64": "application/octet-stream",
   };
   return types[extension] || "application/octet-stream";
 }

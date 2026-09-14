@@ -1,8 +1,7 @@
 "use strict";
 
 const catalog = require("./runnerCatalog.json");
-
-const DEFAULT_RUNNER_IMAGE_KEY = "default";
+const {AGENT_IMAGE_KEY} = require("./agentRuntime.helpers");
 
 const HARNESSES = Object.freeze(
     Object.entries(catalog.harnesses || {}).reduce((acc, [id, harness]) => {
@@ -42,11 +41,7 @@ function freezeHarness(harness) {
   return Object.freeze({
     ...harness,
     auth: Object.freeze(harness.auth || {supported: false}),
-    skills: Object.freeze(harness.skills || {supported: false}),
     mcp: Object.freeze(harness.mcp || {supported: false}),
-    subagents: Object.freeze(harness.subagents || {supported: false}),
-    packages: Object.freeze(harness.packages || {supported: false}),
-    goals: Object.freeze(harness.goals || {supported: false}),
   });
 }
 
@@ -56,11 +51,8 @@ function cloneCapabilities(capabilities) {
     preview: Boolean(capabilities && capabilities.preview),
     previewQa: Boolean(capabilities && capabilities.previewQa),
     functions: Boolean(capabilities && capabilities.functions),
-    n64: Boolean(capabilities && capabilities.n64),
     chrome: Boolean(capabilities && capabilities.chrome),
-    chat: Boolean(capabilities && capabilities.chat),
   };
-  if (capabilities && Object.prototype.hasOwnProperty.call(capabilities, "goals")) result.goals = Boolean(capabilities.goals);
   return result;
 }
 
@@ -89,13 +81,13 @@ function resolveSessionHarness(session = {}) {
   const keyMatch = RUNNER_IMAGES[cleanRunnerImageValue(session.imageKey)];
   if (keyMatch) return resolveHarness(keyMatch.harnessId);
 
-  return resolveHarness("shell");
+  return resolveHarness("pi");
 }
 
 function runnerImageCapabilities(image) {
   const normalizedImage = cleanRunnerImageValue(image);
   const runnerImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || RUNNER_IMAGES[normalizedImage];
-  return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({terminal: true});
+  return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({});
 }
 
 function resolveSessionCapabilities(session = {}) {
@@ -109,15 +101,7 @@ function resolveSessionCapabilities(session = {}) {
   }
 
   const capabilities = runnerImageCapabilities(imageValue);
-  const isSshSession = session.sessionType === "ssh" || session.terminalKind === "ssh";
-  if (!isSshSession) return capabilities;
-
-  return {
-    ...capabilities,
-    ...persistedCapabilities,
-    preview: false,
-    chat: false,
-  };
+  return capabilities;
 }
 
 function resolveRunnerImage(payload = {}, defaultImage = "") {
@@ -136,30 +120,23 @@ function resolveRunnerImage(payload = {}, defaultImage = "") {
   }
 
   const configuredDefaultImage = cleanRunnerImageValue(defaultImage);
-  if (!configuredDefaultImage) {
-    return {
-      key: "",
-      imageKey: "",
-      image: "",
-      harnessId: "shell",
-      terminalKind: "shell",
-      capabilities: cloneCapabilities({terminal: true}),
-      canProvision: false,
-    };
-  }
-
   const runnerImage = RUNNER_IMAGES_BY_IMAGE[configuredDefaultImage];
   if (runnerImage) return resolvedRunnerImage(runnerImage);
+  throw invalidRunnerImageError();
+}
 
-  return {
-    key: "configured-default",
-    imageKey: "configured-default",
-    image: configuredDefaultImage,
-    harnessId: "shell",
-    terminalKind: "shell",
-    capabilities: cloneCapabilities({terminal: true}),
-    canProvision: true,
-  };
+/**
+ * Task 32 keeps historical catalog entries readable while making pi-chrome
+ * the only runner that backend provisioning may launch.
+ */
+function isSupportedProvisioningSession(session = {}) {
+  const runnerImage = RUNNER_IMAGES[AGENT_IMAGE_KEY];
+  if (!runnerImage) return false;
+  if (cleanRunnerImageValue(session.imageKey) !== AGENT_IMAGE_KEY) return false;
+  if (cleanRunnerImageValue(session.image) !== runnerImage.image) return false;
+  if (cleanRunnerImageValue(session.harnessId) && cleanRunnerImageValue(session.harnessId) !== "pi") return false;
+  if (cleanRunnerImageValue(session.terminalKind) && cleanRunnerImageValue(session.terminalKind) !== "pi") return false;
+  return true;
 }
 
 function resolvedRunnerImage(runnerImage) {
@@ -185,10 +162,10 @@ function cleanRunnerImageValue(value) {
 }
 
 module.exports = {
-  DEFAULT_RUNNER_IMAGE_KEY,
   HARNESSES,
   RUNNER_IMAGES,
   cloneCapabilities,
+  isSupportedProvisioningSession,
   listRunnerImages,
   resolveHarness,
   resolveRunnerImage,

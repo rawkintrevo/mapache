@@ -28,7 +28,7 @@ export function createWorkspaceController({
   loadSessions,
   loadMcpServers,
   loadGoogleWorkspace = async () => {},
-  loadSelectedSessionPanels,
+  loadSelectedSessionAccess,
   resetWorkspacePanels,
 }) {
   async function refreshWorkspaceList() {
@@ -89,14 +89,25 @@ export function createWorkspaceController({
     }, "Working...", OPERATION_KEYS.WORKSPACE_DELETE);
   }
 
-  async function renameWorkspace(workspaceId, name) {
-    const nextName = String(name || "").trim();
+  async function renameWorkspace(workspaceId, payload) {
+    const nextName = String(typeof payload === "string" ? payload : payload?.name || "").trim();
     if (!workspaceId || !nextName) return false;
+    const currentWorkspace = state.workspaces.find((workspace) => workspace.id === workspaceId);
+    const resources = typeof payload === "object" && payload?.resources ? payload.resources : null;
 
     await runBusy(async () => {
       try {
-        await state.api.renameWorkspace(workspaceId, nextName);
+        await state.api.renameWorkspace(workspaceId, resources ? {name: nextName, resources} : nextName);
+        const canonicalSessionId = currentWorkspace?.canonicalSessionId || state.selectedSessionId;
+        const currentSession = state.sessions.find((session) => session.id === canonicalSessionId);
+        const sessionIsRunning = ["running", "ready"].includes(String(currentSession?.status || "").toLowerCase());
+        if (resources && currentSession && sessionIsRunning && (
+          resources.cpu !== currentSession.resources?.cpu || resources.memory !== currentSession.resources?.memory
+        )) {
+          await state.api.resizeSession(workspaceId, canonicalSessionId, resources);
+        }
         await refreshWorkspaceList();
+        if (currentSession) await loadSessions();
       } catch (error) {
         throw new Error(friendlyWorkspaceError(error));
       }
@@ -114,7 +125,7 @@ export function createWorkspaceController({
       await loadSessions();
       await loadMcpServers();
       await loadGoogleWorkspace();
-      await loadSelectedSessionPanels();
+      await loadSelectedSessionAccess();
     }, "Working...", OPERATION_KEYS.WORKSPACE_SELECT);
   }
 

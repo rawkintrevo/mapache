@@ -5,7 +5,7 @@ export function WorkspaceHeader({workspace}) {
     return (
       <div>
         <h1>Create a workspace</h1>
-        <p className="subtle">A workspace owns the storage prefix shared by its sessions.</p>
+        <p className="subtle">Create a workspace, then press Play to start its runtime.</p>
       </div>
     );
   }
@@ -16,7 +16,7 @@ export function WorkspaceHeader({workspace}) {
         {workspace.name}
         <span className="pill" style={{marginLeft: "10px"}}>{getWorkspaceTag(workspace)}</span>
       </h1>
-      <p className="subtle">{workspaceSourceSummary(workspace)}</p>
+      <p className="subtle">{workspaceSourceSummary(workspace)} · Use Play/Pause in the navigation bar to control the runtime.</p>
     </div>
   );
 }

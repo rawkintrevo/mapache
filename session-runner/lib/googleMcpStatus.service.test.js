@@ -48,7 +48,7 @@ test("keeps hosted compatibility status safe", async () => {
   const previous = process.env.TEST_GOOGLE_TOKEN;
   process.env.TEST_GOOGLE_TOKEN = "fake-token";
   try {
-    const result = await googleMcpStatus({harnessId: "codex", googleMcpConnectionStatus: "connected", mcpConfigRaw: JSON.stringify({mcpServers: {"google-gmail": {url: "https://gmailmcp.googleapis.com/mcp/v1", authMode: "bearer_env", bearerTokenEnv: "TEST_GOOGLE_TOKEN"}}})}, {existsSync: () => false});
+  const result = await googleMcpStatus({harnessId: "pi", googleMcpConnectionStatus: "connected", mcpConfigRaw: JSON.stringify({mcpServers: {"google-gmail": {url: "https://gmailmcp.googleapis.com/mcp/v1", authMode: "bearer_env", bearerTokenEnv: "TEST_GOOGLE_TOKEN"}}})}, {existsSync: () => false});
     assert.equal(result.servers[0].state, "connected");
     assert.equal(JSON.stringify(result).includes("fake-token"), false);
   } finally {
@@ -58,5 +58,5 @@ test("keeps hosted compatibility status safe", async () => {
 });
 
 test("reports empty status without Google configuration", async () => {
-  assert.deepEqual(await googleMcpStatus({harnessId: "codex", mcpConfigRaw: "{}"}), {ok: true, supported: true, servers: []});
+  assert.deepEqual(await googleMcpStatus({harnessId: "pi", mcpConfigRaw: "{}"}), {ok: true, supported: true, servers: []});
 });

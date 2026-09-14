@@ -1,27 +1,12 @@
 "use strict";
 
 const fs = require("fs");
-const crypto = require("node:crypto");
 const path = require("path");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
-const {prepareSshMaterial, sshCommand} = require("./sshSession");
 
-function createTerminalSession({
-  admin,
-  config,
-  activity,
-  onTerminalExit,
-  canStartProcess,
-  controlManager,
-  mutationBarrier,
-  executionAuthority,
-  processSupervisor,
-  webFirstEnabled = false,
-  spawnProcess = spawnTerminal,
-  timers = globalThis,
-}) {
+function createTerminalSession({admin, config, activity, onTerminalExit, canStartProcess, spawnProcess = spawnTerminal, timers = globalThis}) {
   const sockets = new Set();
   let term = null;
   let outputBuffer = "";
@@ -30,97 +15,13 @@ function createTerminalSession({
   let piSessionScanTimer = null;
   let piSessionScanAttempts = 0;
   let publishedPiJsonlPath = "";
-  let releasingForGoal = false;
-  let goalHandoffTerm = null;
-  let fencedTerm = null;
-  let fenced = false;
-  const exitReasons = new WeakMap();
-  const socketContexts = new Map();
 
   return {
     isRunning() {
       return Boolean(term);
     },
-    controlManager,
-    ensureForAgent() {
-      return ensureTerm();
-    },
-    async releaseForGoal() {
-      const current = term;
-      if (!current) return;
-      releasingForGoal = true;
-      goalHandoffTerm = current;
-      exitReasons.set(current, "mode_switch");
-      try {
-        await new Promise((resolve, reject) => {
-          const cleanup = () => {
-            timers.clearTimeout(forceStop);
-            timers.clearTimeout(timeout);
-            subscription.dispose();
-          };
-          // Pi's interactive shutdown can stall in extension cleanup. The user
-          // has explicitly requested interruption, so bound the graceful wait.
-          const forceStop = timers.setTimeout(() => {
-            try { current.kill("SIGKILL"); } catch (error) {
-              cleanup();
-              reject(error);
-            }
-          }, 5000);
-          const timeout = timers.setTimeout(() => {
-            cleanup();
-            const error = new Error("goal_terminal_stop_timeout");
-            error.code = "goal_terminal_stop_timeout";
-            reject(error);
-          }, 10000);
-          const subscription = current.onExit(() => {
-            cleanup();
-            resolve();
-          });
-          try { current.kill("SIGTERM"); } catch (error) {
-            cleanup();
-            reject(error);
-          }
-        });
-      } finally {
-        releasingForGoal = false;
-      }
-    },
-    async shutdown(reason = "shutdown") {
-      const current = term;
-      if (!current) return;
-      exitReasons.set(current, String(reason || "shutdown"));
-      closeSockets();
-      await new Promise((resolve) => {
-        let settled = false;
-        let forceStop;
-        let timeout;
-        let subscription;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          timers.clearTimeout(forceStop);
-          timers.clearTimeout(timeout);
-          subscription?.dispose?.();
-          resolve();
-        };
-        forceStop = timers.setTimeout(() => {
-          try { current.kill("SIGKILL"); } catch { finish(); }
-        }, 5000);
-        timeout = timers.setTimeout(finish, 10000);
-        subscription = current.onExit(finish);
-        try { current.kill("SIGTERM"); } catch { finish(); }
-      });
-    },
     attach(socket, replayOutput) {
       const activeTerm = ensureTerm();
-      if (webFirstEnabled && controlManager) {
-        socketContexts.set(socket, {
-          connectionId: `terminal-${crypto.randomUUID()}`,
-          clientId: "",
-          resumptionSecret: "",
-          bound: false,
-        });
-      }
       sockets.add(socket);
       updateSocketActivity("lastConnectedAt");
       if (replayOutput && outputBuffer) {
@@ -130,151 +31,24 @@ function createTerminalSession({
     },
     detach(socket) {
       sockets.delete(socket);
-      const context = socketContexts.get(socket);
-      if (context) {
-        controlManager.disconnect(context.connectionId);
-        socketContexts.delete(socket);
-      }
       updateSocketActivity("lastDisconnectedAt");
     },
-    handleMessage(raw, socket) {
-      if (webFirstEnabled && controlManager) {
-        handleControlledMessage(socket, raw);
-        return;
-      }
+    handleMessage(raw) {
       handleTerminalMessage(ensureTerm(), raw);
       markTerminalActivity();
     },
     writePrompt(text) {
-      if (webFirstEnabled && controlManager) {
-        assertMutation("terminal_prompt");
-        const error = new Error("web_first_agent_required");
-        error.code = "web_first_agent_required";
-        throw error;
-      }
       const prompt = formatPrompt(text);
       ensureTerm().write(prompt);
       markTerminalActivity();
     },
-    fence(reason = "execution_authority_lost") {
-      fenced = true;
-      const current = term;
-      if (!current) return {fenced: true, reason};
-      fencedTerm = current;
-      exitReasons.set(current, "authority_lost");
-      closeSockets();
-      try { current.kill("SIGTERM"); } catch (error) {
-        activity.appendHistory("system", `terminal fence failed: ${String(error.message || error).slice(0, 256)}`);
-      }
-      return {fenced: true, reason, pid: current.pid || null};
-    },
   };
 
-  function handleControlledMessage(socket, raw) {
-    const context = socketContexts.get(socket);
-    if (!context) return;
-    let message;
-    try {
-      message = JSON.parse(raw.toString());
-    } catch {
-      sendTerminalMessage(socket, {type: "control_error", code: "invalid_message"});
-      return;
-    }
-    if (!message || typeof message !== "object" || Array.isArray(message)) {
-      sendTerminalMessage(socket, {type: "control_error", code: "invalid_message"});
-      return;
-    }
-    try {
-      if (message.type === "control_hello") {
-        const binding = controlManager.bindConnection({
-          clientId: message.clientId,
-          resumptionSecret: message.resumptionSecret,
-          connectionId: context.connectionId,
-          surface: "terminal",
-        });
-        context.clientId = binding.clientId;
-        context.resumptionSecret = binding.resumptionSecret;
-        context.bound = true;
-        sendTerminalMessage(socket, {type: "control_status", ...binding});
-        return;
-      }
-      if (!context.bound) throw terminalControlError("control_hello_required");
-      if (message.type === "control_heartbeat") {
-        sendTerminalMessage(socket, {type: "control_status", ...controlManager.heartbeat({
-          clientId: context.clientId,
-          resumptionSecret: context.resumptionSecret,
-          connectionId: context.connectionId,
-          expectedControlEpoch: message.controlEpoch,
-        })});
-        return;
-      }
-      if (message.type === "control_acquire") {
-        sendTerminalMessage(socket, {type: "control_status", ...controlManager.acquire({
-          clientId: context.clientId,
-          resumptionSecret: context.resumptionSecret,
-          connectionId: context.connectionId,
-          surface: "terminal",
-        })});
-        return;
-      }
-      if (message.type === "control_release") {
-        sendTerminalMessage(socket, {type: "control_status", ...controlManager.releaseControl({
-          clientId: context.clientId,
-          resumptionSecret: context.resumptionSecret,
-          connectionId: context.connectionId,
-        })});
-        return;
-      }
-      if (message.type === "resize") {
-        assertMutation("terminal_resize");
-        controlManager.assertCanWrite({
-          clientId: context.clientId,
-          resumptionSecret: context.resumptionSecret,
-          connectionId: context.connectionId,
-          expectedControlEpoch: message.controlEpoch,
-        });
-        handleTerminalMessage(ensureTerm(), raw);
-        return;
-      }
-      if (message.type === "data") {
-        assertMutation("terminal_input");
-        controlManager.acquire({
-          clientId: context.clientId,
-          resumptionSecret: context.resumptionSecret,
-          connectionId: context.connectionId,
-          surface: "terminal",
-        });
-        controlManager.assertCanWrite({
-          clientId: context.clientId,
-          resumptionSecret: context.resumptionSecret,
-          connectionId: context.connectionId,
-        });
-        handleTerminalMessage(ensureTerm(), raw);
-        markTerminalActivity();
-        return;
-      }
-      throw terminalControlError("invalid_terminal_message");
-    } catch (error) {
-      sendTerminalMessage(socket, {type: "control_error", code: String(error.code || "control_required")});
-    }
-  }
-
   function ensureTerm() {
-    if (webFirstEnabled && executionAuthority) executionAuthority.assertAuthority();
-    if (webFirstEnabled && fenced) {
-      const error = new Error("execution_authority_lost");
-      error.code = "execution_authority_lost";
-      throw error;
-    }
-    if (releasingForGoal) {
-      const error = new Error("goal_rpc_process_active");
-      error.code = "goal_rpc_process_active";
-      throw error;
-    }
     if (term) return term;
     if (typeof canStartProcess === "function" && !canStartProcess()) {
-      const error = new Error("goal_rpc_process_active");
-      error.code = "goal_rpc_process_active";
+      const error = new Error("terminal_unavailable");
+      error.code = "terminal_unavailable";
       throw error;
     }
 
@@ -283,7 +57,6 @@ function createTerminalSession({
     const command = terminalCommand(config);
     term = spawnProcess(command, config);
     const spawnedTerm = term;
-    const unregisterProcess = processSupervisor?.register?.(term, {id: "pi-terminal", label: "pi-terminal"});
 
     activity.appendHistory("system", `opened ${command.display}`);
     schedulePiSessionBindingScan(command);
@@ -296,24 +69,12 @@ function createTerminalSession({
     });
 
     term.onExit(({exitCode: code}) => {
-      const exitReason = exitReasons.get(spawnedTerm) || "completed";
       activity.appendHistory("system", `closed with exit code ${code}`);
       broadcast({type: "exit", exitCode: code});
       closeSockets();
       term = null;
       clearPiSessionBindingScan();
-      unregisterProcess?.();
-      if (fencedTerm === spawnedTerm) {
-        fencedTerm = null;
-        return;
-      }
-      // A mode switch is not session completion: do not commit/push the
-      // workspace or finalize its automation branch during the handoff.
-      if (goalHandoffTerm === spawnedTerm) {
-        goalHandoffTerm = null;
-        return;
-      }
-      Promise.resolve(onTerminalExit ? onTerminalExit({command, exitCode: code, reason: exitReason}) : null)
+      Promise.resolve(onTerminalExit ? onTerminalExit({command, exitCode: code}) : null)
           .catch((error) => {
             const message = error && error.message ? error.message : error;
             console.error("terminal exit hook failed", message);
@@ -322,13 +83,6 @@ function createTerminalSession({
     });
 
     return term;
-  }
-
-  function assertMutation(label) {
-    if (!webFirstEnabled) return true;
-    executionAuthority?.assertAuthority?.();
-    mutationBarrier?.assertOpen?.(label);
-    return true;
   }
 
   function appendToBuffer(data) {
@@ -470,18 +224,7 @@ function sendTerminalMessage(socket, message) {
   socket.send(JSON.stringify(message));
 }
 
-function terminalControlError(code) {
-  const error = new Error(code);
-  error.code = code;
-  return error;
-}
-
 function terminalCommand(config = {}) {
-  if (String(config.harnessId || config.terminalKind || "").trim().toLowerCase() === "ssh") {
-    prepareSshMaterial(config);
-    return sshCommand(config, {tty: true, loginShell: true});
-  }
-
   const command = String(process.env.TERMINAL_COMMAND || "").trim();
   if (command) {
     const args = normalizePiTerminalArgs(command, terminalArgs(), config);
@@ -496,25 +239,20 @@ function normalizePiTerminalArgs(command, args, config = {}) {
   if (!isPiCommand(command)) return args;
 
   const explicitSessionPath = String(config.piSessionJsonlPath || process.env.PI_SESSION_JSONL_PATH || "").trim();
-  let normalized = args;
   if (explicitSessionPath && pathExistsSync(explicitSessionPath) && !hasPiArg(args, ["--session", "--fork", "--no-session"])) {
-    normalized = ["--session", explicitSessionPath, ...stripPiSessionScopeArgs(args)];
-  } else {
-    const existingSessionIndex = args.findIndex((arg) => arg === "--session");
-    if (existingSessionIndex >= 0) {
-      const existingSessionPath = args[existingSessionIndex + 1] || "";
-      if (pathExistsSync(existingSessionPath)) normalized = args;
-      else if (config.piSessionDir) normalized = withPiSessionDir(stripPiSessionScopeArgs(args), config.piSessionDir);
-    }
+    return ["--session", explicitSessionPath, ...stripPiSessionScopeArgs(args)];
   }
-  if (!hasPiArg(normalized, ["--session", "--session-dir", "--fork", "--no-session"]) && config.piSessionDir) {
-    normalized = withPiSessionDir(normalized, config.piSessionDir);
+
+  const existingSessionIndex = args.findIndex((arg) => arg === "--session");
+  if (existingSessionIndex >= 0) {
+    const existingSessionPath = args[existingSessionIndex + 1] || "";
+    if (pathExistsSync(existingSessionPath)) return args;
+    if (config.piSessionDir) return withPiSessionDir(stripPiSessionScopeArgs(args), config.piSessionDir);
   }
-  if (config.webFirstEnabled) {
-    const extensionPath = String(process.env.MAPACHE_PI_WEB_FIRST_EXTENSION || "/app/lib/piWebFirstAdapter.extension.mjs").trim();
-    if (extensionPath && !normalized.includes(extensionPath)) normalized = [...normalized, "-e", extensionPath];
-  }
-  return normalized;
+
+  if (hasPiArg(args, ["--session-dir", "--fork", "--no-session"])) return args;
+  if (!config.piSessionDir) return args;
+  return withPiSessionDir(args, config.piSessionDir);
 }
 
 function withPiSessionDir(args, sessionDir) {
@@ -591,7 +329,6 @@ function terminalArgs() {
 function renderTerminalPage(options = {}) {
   const accessToken = String(options.accessToken || "");
   const socketPath = String(options.socketPath || "/terminal");
-  const webFirstEnabled = Boolean(options.webFirstEnabled);
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -689,12 +426,6 @@ function renderTerminalPage(options = {}) {
       let reconnectTimer = null;
       let replayOnConnect = true;
       let terminalExited = false;
-      const webFirstEnabled = ${JSON.stringify(webFirstEnabled)};
-      const controlStorageKey = "mapache-control:" + location.pathname;
-      const controlClientId = getStoredControlValue("clientId") || createControlId();
-      let controlResumptionSecret = getStoredControlValue("resumptionSecret");
-      let controlReady = false;
-      let controlHeartbeatTimer = null;
 
       term.loadAddon(fitAddon);
       term.open(terminalElement);
@@ -738,67 +469,21 @@ function renderTerminalPage(options = {}) {
         }
       }
 
-      function createControlId() {
-        const id = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function" ?
-          globalThis.crypto.randomUUID() : "client-" + Math.random().toString(36).slice(2);
-        storeControlValue("clientId", id);
-        return id;
-      }
-
-      function getStoredControlValue(name) {
-        if (!webFirstEnabled) return "";
-        try { return sessionStorage.getItem(controlStorageKey + ":" + name) || ""; } catch { return ""; }
-      }
-
-      function storeControlValue(name, value) {
-        if (!webFirstEnabled) return;
-        try { sessionStorage.setItem(controlStorageKey + ":" + name, value); } catch {}
-      }
-
-      function sendControlHello() {
-        if (!webFirstEnabled || !socket || socket.readyState !== WebSocket.OPEN) return;
-        socket.send(JSON.stringify({type: "control_hello", clientId: controlClientId, resumptionSecret: controlResumptionSecret}));
-      }
-
-      function startControlHeartbeat() {
-        if (!webFirstEnabled || controlHeartbeatTimer) return;
-        controlHeartbeatTimer = window.setInterval(() => {
-          if (socket && socket.readyState === WebSocket.OPEN && controlReady) {
-            socket.send(JSON.stringify({type: "control_heartbeat"}));
-          }
-        }, 10000);
-      }
-
       function connectTerminal() {
         const protocol = location.protocol === "https:" ? "wss://" : "ws://";
         const replay = replayOnConnect ? "1" : "0";
         const accessToken = ${JSON.stringify(accessToken)};
         const tokenParam = accessToken ? "&mapache_access=" + encodeURIComponent(accessToken) : "";
-        controlReady = false;
         socket = new WebSocket(protocol + location.host + ${JSON.stringify(socketPath)} + "?replay=" + replay + tokenParam);
         replayOnConnect = false;
 
         socket.addEventListener("open", () => {
-          sendControlHello();
-          startControlHeartbeat();
           resizeTerminal();
         });
 
         socket.addEventListener("message", (event) => {
           const message = JSON.parse(event.data);
           if (message.type === "data") term.write(message.data);
-          if (message.type === "control_status") {
-            controlReady = true;
-            if (message.resumptionSecret) {
-              controlResumptionSecret = message.resumptionSecret;
-              storeControlValue("resumptionSecret", controlResumptionSecret);
-            }
-            resizeTerminal();
-          }
-          if (message.type === "control_error" && message.code === "control_binding_invalid") {
-            controlResumptionSecret = "";
-            try { sessionStorage.removeItem(controlStorageKey + ":resumptionSecret"); } catch {}
-          }
           if (message.type === "exit") {
             terminalExited = true;
             term.write("\\r\\n[process exited with code " + message.exitCode + "]\\r\\n");

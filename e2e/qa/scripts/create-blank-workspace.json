@@ -15,6 +15,6 @@
   ],
   "successSignals": [
     "POST /api/workspaces returns 201",
-    "New workspace appears selected in the left drawer"
+    "New workspace appears selected in the top navigation workspace selector"
   ]
 }

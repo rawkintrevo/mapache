@@ -1,6 +1,6 @@
 import {APP_ACTIONS} from "../state/appStore.js";
 
-export function createModalController({state, dispatch = () => {}, render, loadPiAuth, loadPiModels}) {
+export function createModalController({state, dispatch = () => {}, render, loadGoogleWorkspace, loadMcpServers, loadPiAuth}) {
   function showProfile() {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "profile"});
     state.sessionModalOpen = false;
@@ -50,16 +50,6 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
-  function openWorkspaceSkillModal() {
-    state.workspaceSkillModalOpen = true;
-    render();
-  }
-
-  function closeWorkspaceSkillModal() {
-    state.workspaceSkillModalOpen = false;
-    render();
-  }
-
   function openGoogleWorkspaceModal(connection = null) {
     const enabledServices = Array.isArray(connection?.enabledServices) ? connection.enabledServices : [];
     state.googleWorkspace = {
@@ -70,22 +60,28 @@ export function createModalController({state, dispatch = () => {}, render, loadP
       message: "",
       selectedServices: enabledServices,
     };
+    state.googleWorkspaceReturnToManage = Boolean(state.googleWorkspaceManageModalOpen);
+    state.googleWorkspaceManageModalOpen = false;
     state.googleWorkspaceModalOpen = true;
     render();
   }
 
   function closeGoogleWorkspaceModal() {
     state.googleWorkspaceModalOpen = false;
+    if (state.googleWorkspaceReturnToManage) state.googleWorkspaceManageModalOpen = true;
+    state.googleWorkspaceReturnToManage = false;
     render();
   }
 
-  function openWorkspaceSubagentModal() {
-    state.workspaceSubagentModalOpen = true;
+  function openGoogleWorkspaceManageModal() {
+    if (!state.selectedWorkspaceId) return;
+    state.googleWorkspaceManageModalOpen = true;
+    if (!state.googleWorkspace.loading) void loadGoogleWorkspace?.();
     render();
   }
 
-  function closeWorkspaceSubagentModal() {
-    state.workspaceSubagentModalOpen = false;
+  function closeGoogleWorkspaceManageModal() {
+    state.googleWorkspaceManageModalOpen = false;
     render();
   }
 
@@ -131,43 +127,42 @@ export function createModalController({state, dispatch = () => {}, render, loadP
     render();
   }
 
+  function openMcpServersModal() {
+    if (!state.selectedWorkspaceId) return;
+    state.mcpServersModalOpen = true;
+    if (!state.mcpServers.loading) void loadMcpServers?.();
+    render();
+  }
+
+  function closeMcpServersModal() {
+    state.mcpServersModalOpen = false;
+    render();
+  }
+
   function closePiAuthManageModal() {
     state.piAuthManageModalOpen = false;
     render();
   }
 
-  function openPiModelsModal() {
-    state.piModelsModalOpen = true;
-    void loadPiModels();
-    render();
-  }
-
-  function closePiModelsModal() {
-    state.piModelsModalOpen = false;
-    render();
-  }
-
   return {
     closeAuthModal,
+    closeGoogleWorkspaceManageModal,
     closeGoogleWorkspaceModal,
+    closeMcpServersModal,
     closePiAuthManageModal,
-    closePiModelsModal,
     closeSessionEditModal,
     closeSessionModal,
-    closeWorkspaceSubagentModal,
-    closeWorkspaceSkillModal,
     closeWorkspaceModal,
     closeWorkspaceEditModal,
     openAuthModal,
+    openGoogleWorkspaceManageModal,
     openGoogleWorkspaceModal,
+    openMcpServersModal,
     openPiAuthManageModal,
-    openPiModelsModal,
     openGenericEnvironmentModal,
     openSessionEditModal,
     closeGenericEnvironmentModal,
     openSessionModal,
-    openWorkspaceSubagentModal,
-    openWorkspaceSkillModal,
     openWorkspaceModal,
     openWorkspaceEditModal,
     showProfile,

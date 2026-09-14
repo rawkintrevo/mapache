@@ -18,7 +18,7 @@ function createWorkspacePathHelpers({config}) {
   function shouldIgnoreWorkspacePath(relativePath) {
     const normalizedPath = normalizeRelativeWorkspacePath(relativePath);
     const parts = normalizedPath.split("/").filter(Boolean);
-    if (parts.includes("node_modules") || isInternalStorageDirName(parts[0]) || isWorkspacePiPackageCachePath(parts)) {
+    if (parts[0] === ".git" || parts.includes("node_modules") || isInternalStorageDirName(parts[0]) || isWorkspacePiPackageCachePath(parts)) {
       return true;
     }
     return config.workspaceSyncPolicyExclude.some((pattern) => matchesSyncPolicyPattern(normalizedPath, pattern));

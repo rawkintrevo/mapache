@@ -14,43 +14,18 @@ import {createApiClient} from "./services/api.js";
 import {listenToWorkspaceSessions} from "./services/sessionStore.js";
 import {createInitialState} from "./state/initialState.js";
 import {APP_ACTIONS, createAppStore} from "./state/appStore.js";
-import {createPiPackagesStore} from "./state/piPackagesStore.js";
 import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
-  resetGitStatus as resetGitStatusState,
   resetGoogleWorkspace as resetGoogleWorkspaceState,
   resetMcpServers as resetMcpServersState,
-  resetSshForwards as resetSshForwardsState,
-  resetWorkspaceSubagents as resetWorkspaceSubagentsState,
-  resetWorkspaceSkills as resetWorkspaceSkillsState,
   resetSignedOutState,
 } from "./state/resetters.js";
 import {createAdminController} from "./controllers/adminController.js";
-import {createDrawerController} from "./controllers/drawerController.js";
 import {createModalController} from "./controllers/modalController.js";
 import {createPiPanelsController} from "./controllers/piPanelsController.js";
 import {createSessionSubscriptionController} from "./controllers/sessionSubscriptionController.js";
-import {createWorkspaceFilesController} from "./controllers/workspaceFilesController.js";
 import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
-import {
-  closePullRequestModalState,
-  closeGitManagerModalState,
-  commitGitState,
-  createGitBranchState,
-  checkoutGitBranchState,
-  ignoreGitPathState,
-  loadGitBranchesState,
-  loadGitStatusState,
-  openGitManagerModalState,
-  openPullRequestModalState,
-  pullGitState,
-  pushGitState,
-  runGitFileActionState,
-  submitPullRequestState,
-  updateGitCommitMessageState,
-  updatePullRequestFormState,
-} from "./workflows/git.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -68,11 +43,9 @@ import {
 } from "./workflows/sessionLifecycle.js";
 import {createSessionRequestTracker, isCurrentSessionRequest} from "./utils/sessionRequest.js";
 import {OPERATION_KEYS} from "./utils/operationKeys.js";
-import {loadSelectedSessionPanelsConcurrently} from "./workflows/selectedSessionPanels.js";
 
 const appStore = createAppStore(createInitialState());
 const state = appStore.state;
-const piPackagesStore = createPiPackagesStore(appStore);
 const sessionRequestTracker = createSessionRequestTracker(state);
 
 function dispatch(action) {
@@ -85,20 +58,8 @@ let fatalError = null;
 
 const APP_PATH = "/app";
 
-const drawerController = createDrawerController({state, render});
 const adminController = createAdminController({state, render, dispatch});
-const workspaceFilesController = createWorkspaceFilesController({
-  state,
-  render,
-  runBusy,
-  captureSessionRequest: () => sessionRequestTracker.capture(),
-});
-const piPanelsController = createPiPanelsController({
-  state,
-  render,
-  piPackagesStore,
-  captureSessionRequest: () => sessionRequestTracker.capture(),
-});
+const piPanelsController = createPiPanelsController({state, render});
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
@@ -106,14 +67,15 @@ const sessionSubscriptionController = createSessionSubscriptionController({
   render,
   getFirestoreDb,
   listenToWorkspaceSessions,
-  onSelectedSessionChanged: loadSelectedSessionPanels,
+  onSelectedSessionChanged: loadSelectedSessionAccess,
 });
 const modalController = createModalController({
   state,
   dispatch,
   render,
+  loadGoogleWorkspace: googleWorkspaceController.loadGoogleWorkspace,
+  loadMcpServers: piPanelsController.loadMcpServers,
   loadPiAuth: piPanelsController.loadPiAuth,
-  loadPiModels,
 });
 const workspaceController = createWorkspaceController({
   state,
@@ -123,7 +85,7 @@ const workspaceController = createWorkspaceController({
   loadSessions,
   loadMcpServers: piPanelsController.loadMcpServers,
   loadGoogleWorkspace: googleWorkspaceController.loadGoogleWorkspace,
-  loadSelectedSessionPanels,
+  loadSelectedSessionAccess,
   resetWorkspacePanels: resetWorkspaceScopedPanels,
 });
 const handlers = {
@@ -131,26 +93,6 @@ const handlers = {
   app: {
     refreshAll,
     signOut,
-  },
-  drawer: drawerController,
-  files: workspaceFilesController,
-  git: {
-    closePullRequestModal,
-    closeGitManagerModal,
-    commitGit,
-    createGitBranch,
-    checkoutGitBranch,
-    ignoreGitPath,
-    loadGitBranches,
-    openPullRequestModal,
-    openGitManagerModal,
-    pullGit,
-    pushGit,
-    stageGitPath,
-    submitPullRequest,
-    unstageGitPath,
-    updateGitCommitMessage,
-    updatePullRequestForm,
   },
   github: {
     connectGithub,
@@ -163,23 +105,22 @@ const handlers = {
   modals: modalController,
   pi: piPanelsController,
   sessions: {
-    closeSshSessionForward,
     createSession,
-    createSshSessionForward,
     deleteSession,
     editSession,
     getSessionAccessUrls,
-    loadPiModels,
+    getSessionLogs,
     resizeSession,
     retryProvisioningSession,
     restartSession,
-    savePiModelScope,
     shareSessionPreview,
     selectSession,
     stopSession,
-    updateSshForwardPort,
   },
-  workspaces: workspaceController,
+  workspaces: {
+    ...workspaceController,
+    toggleWorkspace,
+  },
 };
 
 start();
@@ -196,7 +137,7 @@ async function start() {
       });
       if (!user) {
         sessionSubscriptionController.detach();
-        resetSignedOutState(state, {piPackagesStore});
+        resetSignedOutState(state);
         dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
         return;
@@ -246,22 +187,6 @@ async function signInAndOpenApp() {
   openApp();
 }
 
-function resetGitStatus() {
-  resetGitStatusState(state);
-}
-
-function resetPiPackages() {
-  piPanelsController.resetPiPackages();
-}
-
-function resetWorkspaceSkills() {
-  resetWorkspaceSkillsState(state);
-}
-
-function resetWorkspaceSubagents() {
-  resetWorkspaceSubagentsState(state);
-}
-
 function resetMcpServers() {
   resetMcpServersState(state);
 }
@@ -270,19 +195,9 @@ function resetGoogleWorkspace() {
   resetGoogleWorkspaceState(state);
 }
 
-function resetSshForwards() {
-  resetSshForwardsState(state);
-}
-
 function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
-  workspaceFilesController.resetWorkspaceFiles();
-  resetGitStatus();
-  resetPiPackages();
-  resetWorkspaceSkills();
-  resetWorkspaceSubagents();
   if (includeMcp) resetMcpServers();
   resetGoogleWorkspace();
-  resetSshForwards();
 }
 
 async function refreshAll() {
@@ -298,7 +213,6 @@ async function refreshAll() {
     await piPanelsController.loadMcpServers();
     await googleWorkspaceController.loadGoogleWorkspace({silent: true});
     await piPanelsController.loadPiAuth();
-    await workspaceFilesController.loadWorkspaceFiles();
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {
       await adminController.loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
     }
@@ -335,157 +249,48 @@ async function createSession(payload) {
   if (!state.selectedWorkspaceId) return;
   await runBusy(async () => {
     const data = await state.api.createSession(state.selectedWorkspaceId, payload);
+    const selectedWorkspace = state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId);
+    if (selectedWorkspace && !selectedWorkspace.canonicalSessionId) {
+      selectedWorkspace.canonicalSessionId = data.session.id;
+    }
     dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: data.session.id});
     state.sessionModalOpen = false;
-    await loadSelectedSessionPanels();
+    await loadSelectedSessionAccess();
   }, "Working...", OPERATION_KEYS.SESSION_CREATE);
+}
+
+async function toggleWorkspace() {
+  const workspace = state.workspaces.find((candidate) => candidate.id === state.selectedWorkspaceId);
+  if (!workspace) return;
+  const session = sessionSubscriptionController.chooseCanonicalSession(state.sessions, workspace.canonicalSessionId);
+  const status = String(session?.status || "").toLowerCase();
+  if (workspace.source?.type === "ssh" && !["running", "ready"].includes(status)) return;
+  if (["provisioning", "queued", "restarting", "resizing", "needs_service", "stopping", "deleting"].includes(status)) return;
+  if (session && ["running", "ready"].includes(status)) {
+    await stopSession(session.id);
+    return;
+  }
+  if (session) {
+    await restartSession(session.id);
+    return;
+  }
+  await createSession({
+    name: `${workspace.name} runtime`,
+    ...(workspace.resources ? {resources: workspace.resources} : {}),
+  });
 }
 
 async function selectSession(sessionId) {
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
   dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId});
-  await loadSelectedSessionPanels();
+  await loadSelectedSessionAccess();
   render();
 }
 
-async function loadSelectedSessionPanels() {
+async function loadSelectedSessionAccess() {
   const request = sessionRequestTracker.capture();
-  const session = getSelectedSession();
-  workspaceFilesController.resetWorkspaceFiles();
-  if (!session?.serviceUrl) {
-    resetGitStatus();
-    resetPiPackages();
-    resetWorkspaceSkills();
-    resetWorkspaceSubagents();
-    resetSshForwards();
-    await workspaceFilesController.loadWorkspaceFiles("", request);
-    if (!request.isCurrent()) return;
-    render();
-    return;
-  }
-  if (isSshSession(session)) {
-    resetGitStatus();
-    resetPiPackages();
-    resetWorkspaceSkills();
-    resetWorkspaceSubagents();
-    await loadSelectedSessionPanelsConcurrently({
-      files: () => workspaceFilesController.loadWorkspaceFiles("", request),
-      sshForwards: () => loadSshForwards(request),
-    });
-    if (!request.isCurrent()) return;
-    render();
-    return;
-  }
-  await loadSelectedSessionPanelsConcurrently({
-    git: () => loadGitStatus(request),
-    packages: () => piPanelsController.loadPiPackages(request),
-    skills: () => piPanelsController.loadWorkspaceSkills(request),
-    subagents: () => piPanelsController.loadWorkspaceSubagents(request),
-    files: () => workspaceFilesController.loadWorkspaceFiles("", request),
-    sshForwards: () => loadSshForwards(request),
-  });
   if (!request.isCurrent()) return;
   render();
-}
-
-function isSshSession(session) {
-  return session?.sessionType === "ssh" ||
-    session?.terminalKind === "ssh" ||
-    Boolean(session?.capabilities?.ssh);
-}
-
-async function loadGitStatus(request = sessionRequestTracker.capture()) {
-  await loadGitStatusState({state, getSelectedSession, resetGitStatus, render, request});
-}
-
-async function loadGitBranches(request = sessionRequestTracker.capture()) {
-  await loadGitBranchesState({state, render, request});
-}
-
-async function pullGit() {
-  await runBusy(() => pullGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PULL);
-}
-
-async function stageGitPath(path) {
-  await runGitFileAction(path, "stage", "Staging file...", (workspaceId, sessionId) => (
-    state.api.stageGit(workspaceId, sessionId, [path])
-  ));
-}
-
-async function unstageGitPath(path) {
-  await runGitFileAction(path, "unstage", "Unstaging file...", (workspaceId, sessionId) => (
-    state.api.unstageGit(workspaceId, sessionId, [path])
-  ));
-}
-
-async function runGitFileAction(path, action, actionMessage, requestAction) {
-  await runBusy(() => runGitFileActionState({
-    state,
-    path,
-    action,
-    actionMessage,
-    requestAction,
-    loadGitStatus,
-    render,
-  }), "Working...", action === "stage" ? OPERATION_KEYS.GIT_STAGE : OPERATION_KEYS.GIT_UNSTAGE);
-}
-
-function updateGitCommitMessage(message) {
-  updateGitCommitMessageState(state, message);
-}
-
-async function commitGit() {
-  await runBusy(() => commitGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_COMMIT);
-}
-
-async function pushGit() {
-  await runBusy(() => pushGitState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PUSH);
-}
-
-function openPullRequestModal() {
-  openPullRequestModalState(state);
-  render();
-}
-
-function closePullRequestModal() {
-  closePullRequestModalState(state);
-  render();
-}
-
-async function openGitManagerModal() {
-  openGitManagerModalState(state);
-  render();
-  await loadGitBranches();
-}
-
-function closeGitManagerModal() {
-  closeGitManagerModalState(state);
-  render();
-}
-
-async function checkoutGitBranch(branch) {
-  await runBusy(() => checkoutGitBranchState({state, branch, loadGitStatus, loadGitBranches, render}), "Working...", OPERATION_KEYS.GIT_BRANCH);
-}
-
-async function createGitBranch(branch) {
-  await runBusy(() => createGitBranchState({state, branch, loadGitStatus, loadGitBranches, render}), "Working...", OPERATION_KEYS.GIT_BRANCH);
-}
-
-async function ignoreGitPath(path) {
-  await runBusy(() => ignoreGitPathState({state, path, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_IGNORE);
-}
-
-function updatePullRequestForm(patch) {
-  updatePullRequestFormState(state, patch);
-  render();
-}
-
-async function submitPullRequest() {
-  await runBusy(() => submitPullRequestState({state, loadGitStatus, render}), "Working...", OPERATION_KEYS.GIT_PULL_REQUEST);
-}
-
-function getSelectedSession() {
-  return sessionSubscriptionController.getSelectedSession();
 }
 
 async function resizeSession(sessionId, payload) {
@@ -525,7 +330,7 @@ async function deleteSession(sessionId) {
 
   await runBusy(async () => {
     await deleteSessionState(state, sessionId, dispatch);
-    await loadSelectedSessionPanels();
+    await loadSelectedSessionAccess();
   }, "Working...", OPERATION_KEYS.SESSION_DELETE);
 }
 
@@ -533,91 +338,13 @@ async function getSessionAccessUrls(workspaceId, sessionId) {
   return state.api.getSessionAccessUrls(workspaceId, sessionId);
 }
 
-async function loadPiModels() {
-  const session = getSelectedSession();
-  if (!state.api || !session?.id || !state.selectedWorkspaceId) return;
-  state.piModels = {...state.piModels, loading: true, error: ""};
-  render();
-  try {
-    const data = await state.api.getPiModels(state.selectedWorkspaceId, session.id);
-    state.piModels = {
-      ...state.piModels,
-      loading: false,
-      error: "",
-      models: data.models || [],
-      scopedModels: data.scopedModels || [],
-    };
-  } catch (error) {
-    state.piModels = {...state.piModels, loading: false, error: friendlyGlobalError(error)};
-  }
-  render();
+async function getSessionLogs(workspaceId, sessionId) {
+  return state.api.getSessionLogs(workspaceId, sessionId);
 }
 
-async function savePiModelScope(scopedModels) {
-  const session = getSelectedSession();
-  if (!state.api || !session?.id || !state.selectedWorkspaceId) return;
-  state.piModels = {...state.piModels, saving: true, error: ""};
-  render();
-  try {
-    const data = await state.api.savePiModelScope(state.selectedWorkspaceId, session.id, scopedModels);
-    const saved = data.scopedModels || [];
-    state.piModels = {...state.piModels, saving: false, scopedModels: saved};
-    state.sessions = state.sessions.map((item) => item.id === session.id ? {...item, piScopedModels: saved} : item);
-    state.piModelsModalOpen = false;
-  } catch (error) {
-    state.piModels = {...state.piModels, saving: false, error: friendlyGlobalError(error)};
-  }
-  render();
-}
 
 async function shareSessionPreview(workspaceId, sessionId) {
   return state.api.shareSessionPreview(workspaceId, sessionId);
-}
-
-function updateSshForwardPort(port) {
-  state.sshForwards.port = port;
-  render();
-}
-
-async function loadSshForwards(request = sessionRequestTracker.capture()) {
-  if (!isCurrentSessionRequest(request)) return;
-  const session = getSelectedSession();
-  if (!session || (session.sessionType !== "ssh" && session.terminalKind !== "ssh") || !session.serviceUrl) {
-    resetSshForwards();
-    return;
-  }
-  state.sshForwards.loading = true;
-  state.sshForwards.error = "";
-  render();
-  try {
-    const data = await state.api.getSshSessionForwards(state.selectedWorkspaceId, session.id);
-    if (!isCurrentSessionRequest(request)) return;
-    state.sshForwards.forwards = data.forwards || [];
-  } catch (error) {
-    if (!isCurrentSessionRequest(request)) return;
-    state.sshForwards.error = error.message || "ssh_forwards_unavailable";
-  } finally {
-    if (isCurrentSessionRequest(request)) state.sshForwards.loading = false;
-  }
-}
-
-async function createSshSessionForward() {
-  const session = getSelectedSession();
-  if (!session || !state.sshForwards.port) return;
-  await runBusy(async () => {
-    await state.api.createSshSessionForward(state.selectedWorkspaceId, session.id, state.sshForwards.port);
-    state.sshForwards.port = "";
-    await loadSshForwards();
-  }, "Working...", OPERATION_KEYS.SSH_FORWARD_CREATE);
-}
-
-async function closeSshSessionForward(port) {
-  const session = getSelectedSession();
-  if (!session) return;
-  await runBusy(async () => {
-    await state.api.closeSshSessionForward(state.selectedWorkspaceId, session.id, port);
-    await loadSshForwards();
-  }, "Working...", OPERATION_KEYS.SSH_FORWARD_CLOSE);
 }
 
 async function runBusy(task, message = "Working...", operationKey = "global") {

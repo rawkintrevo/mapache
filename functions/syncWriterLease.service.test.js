@@ -54,22 +54,42 @@ function createFakeFirestore(workspace, sessions) {
 
 (async () => {
   const workspace = {
+    agentRuntimeBootInstanceId: "boot-writer",
+    agentRuntimeGeneration: 1,
+    agentRuntimeSessionId: "writer",
+    agentUiVersion: "pi-web-ui-v1",
     syncWriterSessionId: "writer",
     syncWriterLeaseId: "lease-1",
   };
   const sessions = {
-    writer: {status: "running", sessionType: "cloud", syncWriterRole: "writer"},
+    writer: {
+      agentRuntimeBootInstanceId: "boot-writer",
+      agentRuntimeGeneration: 1,
+      agentUiVersion: "pi-web-ui-v1",
+      status: "running",
+      sessionType: "cloud",
+      syncWriterRole: "writer",
+    },
     reader: {status: "running", sessionType: "cloud", syncWriterRole: "reader"},
   };
   const service = createSyncWriterLeaseService({db: createFakeFirestore(workspace, sessions)});
   const released = await service.releaseWorkspaceSyncWriterLease(
       {id: "writer"},
-      {id: "writer", workspaceId: "workspace-1"},
+      {
+        agentRuntimeBootInstanceId: "boot-writer",
+        agentRuntimeGeneration: 1,
+        agentUiVersion: "pi-web-ui-v1",
+        id: "writer",
+        workspaceId: "workspace-1",
+      },
       "manual",
   );
   assert.strictEqual(released, true);
   assert.strictEqual(workspace.syncWriterSessionId, "reader");
+  assert.strictEqual(workspace.agentRuntimeBootInstanceId, null);
+  assert.strictEqual(workspace.agentRuntimeAuthorityState, "released");
   assert.strictEqual(sessions.writer.syncWriterRole, "none");
+  assert.strictEqual(sessions.writer.agentRuntimeBootInstanceId, null);
   assert.strictEqual(sessions.reader.syncWriterRole, "writer");
   delete sessions.writer;
   assert.strictEqual(await service.releaseWorkspaceSyncWriterLease(

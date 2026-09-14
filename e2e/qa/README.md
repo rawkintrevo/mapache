@@ -47,32 +47,49 @@ Common action types inside scripts:
 
 Keep manifests deterministic. Do not put secrets in case or script files.
 
+Managed pi-web cases use `cases/pi-web-marked-workspace-setup.json`. Before
+running one, an operator must create a disposable workspace, record its exact
+owner/workspace IDs, mark only that workspace with the server-owned
+`agentUiVersion=pi-web-ui-v1`, and provide the workspace name as the case
+parameter. The browser case does not mark workspaces and does not select by a
+production display name. If the marker, provider, browser, Cloud Run service,
+or named fault harness is unavailable, record the case as blocked.
+
+The failure-recovery harness is available only on a disposable session created
+with `QA_CASE=pi-web-failure-recovery` and
+`MAPACHE_QA_FAULT_HARNESS=pi-web-failure-recovery-v1`. Its controls are the
+session-scoped `qa-fault-status`, `arm-qa-fault`, `revoke-qa-writer`, and
+`force-qa-loss` scripts. They are not general runner controls and must never be
+used against the HubSpot source or an unmarked workspace.
+
 Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted execution. Do not assume a standalone local headless Chrome or Playwright launch is available in every sandboxed environment.
 
 ## Initial Case Catalog
 
-- `cases/workspace-goals-start.json`: Start from an open Pi terminal, explicitly hand off, and answer consecutive native goal questions.
 - `cases/login.json`: QA custom-token login and signed-in shell.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
-- `cases/navigation-drawers.json`: Left drawer, drawer sections, inspector, refresh.
+- `cases/navigation-topbar.json`: Workspace, connection, account, and refresh controls in the top navigation.
 - `cases/global-action-indicator.json`: Busy indicator during global refresh.
 - `cases/profile.json`: Profile and runner usage view.
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.
 - `cases/workspace-create-delete.json`: Blank workspace creation and deletion.
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
-- `cases/workspace-files-editor.json`: Workspace file create/edit/download URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
-- `cases/session-sidebar-entry-point.json`: Single create-session action in the left sidebar.
-- `cases/session-create-all-runners.json`: Blank workspace plus `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome` session creation.
+- `cases/session-create-all-runners.json`: Blank workspace plus the supported `pi-chrome` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
+- `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable pi-chrome workspace.
+- `cases/pi-web-functional.json`: Managed Agent turns, read-only MCP/auth probes, native history, shell coexistence, Chrome/Preview, and native Goal assertions.
+- `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
-- `cases/mcp-servers-crud.json`: Right-drawer MCP server save path for selected workspaces.
+- `cases/mcp-servers-crud.json`: Navbar MCP server modal save path for selected workspaces.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
-- `cases/skills-crud.json`: Workspace-local Pi skill create/edit/delete.
-- `cases/skills-crud-codex.json`: Workspace-local Codex skill create/edit/delete.
-- `cases/extensions-package-crud.json`: Pi package install/update/remove.
-- `cases/git-status.json`: Git status panel for GitHub-backed sessions.
-- `cases/git-change-pr-flow.json`: Git stage/commit/push/open PR.
-- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke.
+- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path and navbar connection controls.
+
+Parent-level Files, Git, Skills, Subagents, Extensions, Models, Chat, and Mapache Goals cases are intentionally absent. Upstream Agent owns the live workspace, Git, model, history, skill, and native Goal surfaces; Mapache retains only lifecycle, authentication, MCP, Google Workspace, and migration/persistence boundaries.
+
+Migration-specific checks live in `migration/hubspot-import-checks.md` and use
+the Task 24 importer against a restricted immutable backup and isolated target.
+They are not browser steps and never authorize a HubSpot CRM write or a source
+prefix mutation.

@@ -12,7 +12,7 @@ This page documents the workspace-scoped Google account workflow added for issue
 - Running-session access-token broker: `functions/googleMcpTokenBroker.service.js` and the `googleMcpToken` Function export in `functions/index.js`
 - Authenticated API handlers and route registration: `functions/googleWorkspaceApi.service.js`, `functions/apiRouteManifest.js`, `functions/apiRoutes.helpers.js`, and `functions/apiDispatch.helpers.js`
 - Cloud Run environment and MCP injection: `functions/googleWorkspaceProvisioning.service.js` and `functions/cloudRun.service.js`
-- Frontend state, controller, workflow, inspector, and connection modal: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/workflows/googleWorkspace.js`, `src/components/inspector/GoogleWorkspacePanel.jsx`, and `src/components/modals/GoogleWorkspaceModal.jsx`
+- Frontend state, controller, workflow, navbar management modal, and connection editor: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/controllers/modalController.js`, `src/workflows/googleWorkspace.js`, `src/components/layout/Topbar.jsx`, `src/components/modals/GoogleWorkspaceManageModal.jsx`, and `src/components/modals/GoogleWorkspaceModal.jsx`
 - Runner status and persistence: `session-runner/lib/googleMcpStatus.service.js` and `session-runner/lib/workspaceArchives.service.js`
 
 The UI panel is included in the [UI component index](./ui-components.md). The browser QA scenario is `e2e/qa/cases/google-workspace-connections.json`; it enables the browser-only OAuth test double and never uses a real Google account.
@@ -27,7 +27,20 @@ users/{uid}/private/googleConnections/entries/{connectionId}
 
 The record contains non-secret metadata such as the Google subject, email, display name, status, selected scopes, and timestamps. Scope metadata accepts HTTPS Google API scopes plus the exact standard OpenID Connect scope names `openid`, `email`, and `profile`; other non-URL scope values are rejected. The non-secret OAuth client reference accepts the bounded dotted identifier format used by Google client IDs, including the `.apps.googleusercontent.com` suffix. The encrypted refresh token is stored in the same private record and is never returned by the API. The connection ID is deterministic for a user and Google subject, so reconnecting the same account updates the existing record instead of creating duplicates.
 
-The inspector presents saved Google accounts as the complete Google Workspace summary. A checked account is enabled for the selected workspace; its toggle removes that workspace binding. An unplugged account is disabled for the selected workspace; its toggle restores the binding using the account's already-authorized services. Add and edit actions open `GoogleWorkspaceModal`, where the user chooses Workspace services and read-only or read/write access before starting Google authorization. Deleting an account remains a user-global operation with an affected-workspace confirmation. Binding changes affect newly created or restarted sessions because a running session keeps the Google MCP configuration provisioned at startup.
+The `Manage Google Workspace` icon in the top navigation opens
+`GoogleWorkspaceManageModal`, which presents saved Google accounts as the
+complete Google Workspace summary for the selected workspace. Its accessible
+label and mouseover title follow the same icon-button convention as MCP server
+management. A checked account is enabled for the selected workspace; its
+toggle removes that workspace binding. An unplugged account is disabled for
+the selected workspace; its toggle restores the binding using the account's
+already-authorized services. Add and edit actions transition to
+`GoogleWorkspaceModal`, where the user chooses Workspace services and
+read-only or read/write access before starting Google authorization; closing
+the editor returns to account management. Deleting an account remains a
+user-global operation with an affected-workspace confirmation. Binding changes
+affect newly created or restarted sessions because a running session keeps the
+Google MCP configuration provisioned at startup.
 
 Workspace documents store only the binding:
 
@@ -79,13 +92,13 @@ If refresh returns `invalid_grant`, the connection is marked `reconnect_required
 
 The local REST client retries a Google request once after a 401. It calls the dedicated token-broker Function with the workspace ID, session ID, provisioned connection ID, and the existing per-session shutdown credential. The broker verifies that the session exists, is running, owns that shutdown credential, and is still bound to the same Google connection before Functions decrypts the saved refresh token. Successful responses contain only a new short-lived access token, use `Cache-Control: no-store`, and are cached only in the MCP process. Concurrent 401 responses share one in-process refresh request, and a second 401 is returned without another retry. The broker never returns or provisions the Google refresh token, OAuth client secret, or encryption key.
 
-Pi and Codex render the normalized MCP config through their native adapters. Pi OAuth material is archived separately under the hidden workspace prefix:
+Pi renders the normalized MCP config through the pinned `pi-mcp-adapter@2.32.1`, discovered once through the SDK extension loader, and reads the runner-materialized `/workspace/.mcp.json`; its legacy MCP bridge and connection editor are disabled. Google uses a `bearer_env` entry, so the adapter sees only the environment-variable name and the local wrapper keeps the refreshed access token in process memory. No access token is copied into persisted UI state or MCP config. Pi OAuth material is archived separately under the hidden workspace prefix:
 
 ```text
 {workspaceStoragePrefix}/.mapache-internal/pi-mcp-oauth/mcp-oauth.tar.gz
 ```
 
-The general home archive excludes that directory so it cannot be duplicated across archive targets. Codex MCP configuration is workspace-local at `/workspace/.codex/config.toml`; Codex CLI state remains in its workspace-scoped `CODEX_HOME` archive. Runner `GET /google/mcp/status` reports only enabled services, adapter, safe account metadata, and evidence-backed state. For local mode, the runner performs a local MCP initialize/tools-list readiness probe without calling Google user-data APIs; it reports `configured`, `connected`, `expired`, `reconnect_required`, or `local_server_failed` as appropriate. It never reports tokens, credential file contents, commands, or archive paths.
+The general home archive excludes that directory so it cannot be duplicated across archive targets. Runner `GET /google/mcp/status` reports only enabled services, adapter, safe account metadata, and evidence-backed state. For local mode, the runner performs a local MCP initialize/tools-list readiness probe without calling Google user-data APIs; it reports `configured`, `connected`, `expired`, `reconnect_required`, or `local_server_failed` as appropriate. It never reports tokens, credential file contents, commands, or archive paths.
 
 ## API surface
 

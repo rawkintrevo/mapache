@@ -15,9 +15,8 @@ function previewConfig(workspaceDir) {
     previewEnabled: true,
     previewInjectLogger: false,
     previewLogLimit: 10,
-    previewN64RomPath: path.join(workspaceDir, "build", "game.z64"),
     previewStaticRoot: path.join(workspaceDir, "build"),
-    runnerCapabilities: {preview: true, n64: false},
+    runnerCapabilities: {preview: true},
     workspaceDir,
   };
 }
@@ -104,25 +103,11 @@ test("status includes browser QA readiness when the service is provided", async 
   assert.equal(preview.capabilityStatus().qa.command, "mapache-preview-qa");
 });
 
-test("preview facade selects configured N64 and proxy modes", async () => {
+test("preview facade selects configured proxy mode", async () => {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-preview-"));
-  const config = {
-    ...previewConfig(workspaceDir),
-    runnerCapabilities: {preview: true, n64: true},
-  };
+  const config = previewConfig(workspaceDir);
   await fs.mkdir(path.dirname(config.previewConfigPath), {recursive: true});
-  await fs.mkdir(path.dirname(config.previewN64RomPath), {recursive: true});
-  await fs.writeFile(config.previewN64RomPath, Buffer.alloc(128));
   const preview = createPreviewService(config);
-
-  await fs.writeFile(config.previewConfigPath, JSON.stringify({
-    core: "parallel_n64",
-    mode: "n64",
-  }));
-  const n64Status = await preview.status();
-  assert.equal(n64Status.mode, "n64");
-  assert.equal(n64Status.ready, true);
-  assert.equal(n64Status.n64.emulatorCore, "parallel-n64");
 
   await fs.writeFile(config.previewConfigPath, JSON.stringify({
     mode: "proxy",

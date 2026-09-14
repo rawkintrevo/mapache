@@ -1,15 +1,18 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const test = require("node:test");
 const {
   authFileProviders,
-  buildCodexAuthFile,
   buildGitHubCliHostsYaml,
   createWorkspaceAuthService,
   githubCliHostsPath,
   mergeRemoteAuthData,
   normalizeGitHubCliCredential,
+  secretFileInventory,
 } = require("./workspaceAuth.service");
 
 test("mergeRemoteAuthData normalizes canonical agent auth", () => {
@@ -110,44 +113,6 @@ test("readSessionAuthSelection ignores removed legacy piAuthSelection", async ()
   assert.strictEqual(await service.readSessionAuthSelection(), null);
 });
 
-test("buildCodexAuthFile matches current Codex api key auth mode", () => {
-  assert.deepStrictEqual(buildCodexAuthFile({
-    openai: {type: "api_key", key: "sk-test"},
-  }), {
-    auth_mode: "apikey",
-    OPENAI_API_KEY: "sk-test",
-  });
-});
-
-test("buildCodexAuthFile drops malformed Codex oauth credentials", () => {
-  assert.strictEqual(buildCodexAuthFile({
-    "openai-codex": {
-      type: "oauth",
-      id: "",
-      access: "access-token",
-      refresh: "refresh-token",
-      accountId: "acct_123",
-    },
-  }), null);
-});
-
-test("buildCodexAuthFile preserves valid Codex oauth credentials", () => {
-  const auth = buildCodexAuthFile({
-    "openai-codex": {
-      type: "oauth",
-      id: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature",
-      access: "access-token",
-      refresh: "refresh-token",
-      accountId: "acct_123",
-      expires: 1760000000000,
-    },
-  });
-  assert.equal(auth.auth_mode, "chatgpt");
-  assert.equal(auth.tokens.id_token, "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature");
-  assert.equal(auth.tokens.account_id, "acct_123");
-  assert.equal(auth.last_refresh, "2025-10-09T08:53:20.000Z");
-});
-
 test("github cli api key credentials materialize as gh hosts.yml", () => {
   assert.deepStrictEqual(normalizeGitHubCliCredential({
     type: "api_key",
@@ -177,4 +142,87 @@ test("github cli credentials are not written into native agent auth files", () =
   }), {
     openai: {type: "api_key", key: "sk-test"},
   });
+});
+
+test("managed Pi materialization ignores restored auth and replaces the fixed agent file", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-managed-auth-"));
+  const piAgentDir = path.join(root, "state", "pi");
+  const legacyAgentDir = path.join(root, "home", ".pi", "agent");
+  fs.mkdirSync(piAgentDir, {recursive: true});
+  fs.mkdirSync(legacyAgentDir, {recursive: true});
+  fs.writeFileSync(path.join(piAgentDir, "auth.json"), JSON.stringify({openai: {type: "api_key", key: "restored-secret"}}));
+  fs.writeFileSync(path.join(piAgentDir, "provider-keys.json"), JSON.stringify({openai: {keys: [{name: "old", apiKey: "old-secret"}]}}));
+  fs.writeFileSync(path.join(legacyAgentDir, "auth.json"), JSON.stringify({openai: {type: "api_key", key: "legacy-secret"}}));
+
+  let remoteWrites = 0;
+  const remoteData = {
+    providers: {openai: {type: "api_key", key: "canonical-secret"}},
+    entries: {
+      "entry-openai": {
+        id: "entry-openai",
+        providerKey: "openai",
+        credential: {type: "api_key", key: "canonical-secret"},
+      },
+    },
+  };
+  const service = createWorkspaceAuthService({
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-timestamp"}}},
+    config: {
+      agentRuntimeEnabled: true,
+      agentStateRoot: path.join(root, "state"),
+      harnessId: "pi",
+      homeDir: path.join(root, "home"),
+      ownerUid: "user-1",
+      piAgentDir,
+      workspaceDir: path.join(root, "workspace"),
+    },
+    db: {
+      collection(name) {
+        if (name === "users") {
+          return {doc: () => ({collection: () => ({doc: () => ({
+            get: async () => ({exists: true, data: () => remoteData}),
+            set: async () => { remoteWrites += 1; },
+          })})})};
+        }
+        if (name === "workspaces") {
+          return {doc: () => ({collection: () => ({doc: () => ({
+            get: async () => ({exists: false, data: () => ({})}),
+          })})})};
+        }
+        throw new Error(`unexpected collection ${name}`);
+      },
+    },
+  });
+
+  try {
+    const result = await service.synchronizeAuth({materialize: true});
+    const written = JSON.parse(await fs.promises.readFile(path.join(piAgentDir, "auth.json"), "utf8"));
+    assert.equal(written.openai.key, "canonical-secret");
+    assert.equal(remoteWrites, 0);
+    assert.equal(fs.existsSync(path.join(piAgentDir, "provider-keys.json")), false);
+    assert.equal(JSON.stringify(result).includes("canonical-secret"), false);
+    assert.deepStrictEqual(result.secretFiles.map((entry) => entry.id), [
+      "agent-auth",
+      "pi-provider-keys",
+      "pi-model-config",
+      "pi-mcp-oauth",
+      "github-cli-hosts",
+      "legacy-pi-auth",
+    ]);
+    assert.equal(fs.existsSync(path.join(legacyAgentDir, "auth.json")), true);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("secretFileInventory exposes classifications without credential values", () => {
+  const inventory = secretFileInventory({
+    agentRuntimeEnabled: true,
+    harnessId: "pi",
+    homeDir: "/root",
+    piAgentDir: "/var/lib/mapache/agent/pi",
+  });
+  assert.equal(inventory.some((entry) => entry.id === "agent-auth" && entry.capture === "exclude"), true);
+  assert.equal(inventory.some((entry) => entry.id === "pi-model-config" && entry.kind === "secret-bearing-config"), true);
+  assert.equal(JSON.stringify(inventory).includes("canonical-secret"), false);
 });

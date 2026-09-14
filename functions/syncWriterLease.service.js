@@ -8,6 +8,7 @@ const {
   isSyncWriterEligible,
   resolveSyncWriterLease,
 } = require("./syncWriterLease.helpers");
+const {runtimeAuthorityReleaseUpdates} = require("./runtimeReservation.helpers");
 
 function createSyncWriterLeaseService(dependencies = {}) {
   const firestore = dependencies.db || db;
@@ -41,8 +42,17 @@ async function releaseWorkspaceSyncWriterLease(sessionRef, session = {}, reason,
       syncWriterLeaseId: null,
       syncWriterLeaseUpdatedAt: null,
     };
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const runtimeRelease = runtimeAuthorityReleaseUpdates(
+        workspace,
+        {...session, id: sessionId},
+        now,
+    );
+    const workspaceRuntimeUpdates = runtimeRelease.workspaceUpdates;
+    const sessionReleaseUpdates = {...update, ...runtimeRelease.sessionUpdates};
     if (workspace.syncWriterSessionId !== sessionId) {
-      if (releasingSession) transaction.update(sessionRef, update);
+      if (Object.keys(workspaceRuntimeUpdates).length) transaction.update(workspaceRef, workspaceRuntimeUpdates);
+      if (releasingSession) transaction.update(sessionRef, sessionReleaseUpdates);
       return false;
     }
 
@@ -51,6 +61,7 @@ async function releaseWorkspaceSyncWriterLease(sessionRef, session = {}, reason,
         .map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}))
         .filter(isActiveSyncWriterSession);
     const replacement = candidates[0] || null;
+    let workspaceUpdates = {...workspaceRuntimeUpdates};
     if (replacement) {
       const lease = resolveSyncWriterLease(
           {...workspace, syncWriterSessionId: null, syncWriterLeaseId: null},
@@ -59,15 +70,16 @@ async function releaseWorkspaceSyncWriterLease(sessionRef, session = {}, reason,
           replacement.id,
           {eligible: true, now: admin.firestore.FieldValue.serverTimestamp()},
       );
-      transaction.update(workspaceRef, lease.workspaceUpdates);
+      Object.assign(workspaceUpdates, lease.workspaceUpdates);
       transaction.update(replacement.ref, {
         ...lease.sessionUpdates,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
-      transaction.update(workspaceRef, clearWorkspaceSyncWriterLease(admin.firestore.FieldValue.serverTimestamp()));
+      Object.assign(workspaceUpdates, clearWorkspaceSyncWriterLease(admin.firestore.FieldValue.serverTimestamp()));
     }
-    if (releasingSession) transaction.update(sessionRef, update);
+    if (Object.keys(workspaceUpdates).length) transaction.update(workspaceRef, workspaceUpdates);
+    if (releasingSession) transaction.update(sessionRef, sessionReleaseUpdates);
     return Boolean(replacement);
   }).catch((error) => {
     logger.warn("workspace sync-writer lease release failed", {

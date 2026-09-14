@@ -3,11 +3,8 @@
 function createWorkspaceSyncCoordinator({
   syncUp: performSyncUp,
   syncDown: performSyncDown,
-  syncChromeProfileUp: performChromeProfileUp,
   syncWriterRole = "writer",
-  mutationBarrier,
-  executionAuthority,
-  webFirstEnabled = false,
+  writerAuthority,
   logger = console,
 }) {
   let active = null;
@@ -15,7 +12,6 @@ function createWorkspaceSyncCoordinator({
   let pendingDown = null;
   let sequence = 0;
   let uploadSkipLogged = false;
-  let fenced = false;
 
   function enqueue(kind, options = {}) {
     const pending = kind === "up" ? pendingUp : pendingDown;
@@ -51,10 +47,21 @@ function createWorkspaceSyncCoordinator({
     else pendingDown = null;
     active = request;
     try {
-      assertRunnerMutation(request.kind === "up" ? "workspace_sync_up" : "workspace_sync_down");
+      if (request.kind === "up") {
+        const admission = requestWriterAdmission();
+        if (admission) await admission;
+      }
       const result = request.kind === "up" ?
-        await withBarrier("workspace_sync_up", () => performSyncUp({includeArchives: request.includeArchives})) :
-        await withBarrier("workspace_sync_down", () => performSyncDown());
+        await performSyncUp({
+          assertCurrentWriter: typeof writerAuthority?.assertCurrentWriter === "function" ?
+            writerAuthority.assertCurrentWriter : undefined,
+          includeArchives: request.includeArchives,
+        }) :
+        await performSyncDown();
+      if (request.kind === "up") {
+        const admission = requestWriterAdmission();
+        if (admission) await admission;
+      }
       request.resolve(result);
     } catch (error) {
       request.reject(error);
@@ -73,7 +80,6 @@ function createWorkspaceSyncCoordinator({
   }
 
   function syncUp(options = {}) {
-    assertRunnerMutation("workspace_sync_up");
     if (syncWriterRole !== "writer") {
       if (!uploadSkipLogged) {
         logger.log(`workspace sync up skipped: sync-writer role is ${syncWriterRole}`);
@@ -88,62 +94,23 @@ function createWorkspaceSyncCoordinator({
     return enqueue("up", options);
   }
 
+  function assertCurrentWriter() {
+    return requestWriterAdmission() || Promise.resolve(true);
+  }
+
+  function requestWriterAdmission() {
+    if (syncWriterRole !== "writer" || typeof writerAuthority?.assertCurrentWriter !== "function") {
+      return null;
+    }
+    return writerAuthority.assertCurrentWriter();
+  }
+
   return {
-    fence(reason = "execution_authority_lost") {
-      fenced = true;
-      const error = syncError(String(reason || "execution_authority_lost"));
-      for (const request of [pendingUp, pendingDown]) {
-        if (!request) continue;
-        request.reject(error);
-      }
-      pendingUp = null;
-      pendingDown = null;
-    },
+    assertCurrentWriter,
     flush,
-    syncChromeProfileUp: () => {
-      assertRunnerMutation("chrome_profile_sync");
-      if (syncWriterRole !== "writer") {
-        if (!uploadSkipLogged) {
-          logger.log(`workspace sync up skipped: sync-writer role is ${syncWriterRole}`);
-          uploadSkipLogged = true;
-        }
-        return Promise.resolve({skipped: "sync_writer_lease", role: syncWriterRole});
-      }
-      if (typeof performChromeProfileUp !== "function") {
-        return Promise.resolve({skipped: true, reason: "chrome_profile_archive_unavailable"});
-      }
-      return withBarrier("chrome_profile_sync", () => performChromeProfileUp());
-    },
-    syncDown: () => {
-      assertRunnerMutation("workspace_sync_down");
-      return enqueue("down");
-    },
+    syncDown: () => enqueue("down"),
     syncUp,
   };
-
-  function assertRunnerMutation(label) {
-    if (!webFirstEnabled) return true;
-    if (fenced) throw syncError("execution_authority_lost");
-    executionAuthority?.assertAuthority?.();
-    mutationBarrier?.assertOpen?.(label);
-    return true;
-  }
-
-  async function withBarrier(label, operation) {
-    if (!webFirstEnabled || !mutationBarrier) return operation();
-    const token = mutationBarrier.enter(label);
-    try {
-      return await operation();
-    } finally {
-      mutationBarrier.leave(token);
-    }
-  }
-}
-
-function syncError(code) {
-  const error = new Error(code);
-  error.code = code;
-  return error;
 }
 
 module.exports = {createWorkspaceSyncCoordinator};

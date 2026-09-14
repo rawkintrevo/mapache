@@ -92,7 +92,7 @@ test("seeds default runtime skills from Markdown files", async (t) => {
   assert.match(previewSkill, /\/workspace\/build\/index\.html/);
 });
 
-test("default runtime skill catalog selects common, preview, and n64 file-backed seeds", async () => {
+test("default runtime skill catalog selects common and preview file-backed seeds", async () => {
   assert.deepEqual(defaultRuntimeSkills({runnerCapabilities: {}, workspaceSourceMode: "blank"}), []);
 
   const commonSkills = defaultRuntimeSkills({runnerCapabilities: {}, workspaceSourceMode: "github"});
@@ -116,17 +116,8 @@ test("default runtime skill catalog selects common, preview, and n64 file-backed
     "mapache-api-hosting",
     "mapache-preview-qa",
   ]);
-  assert.deepEqual(defaultRuntimeSkills({
-    runnerCapabilities: {n64: true},
-    workspaceSourceMode: "github",
-  }).map((skill) => skill.name), [
-    "mapache-github-issue",
-    "mapache-n64-build",
-    "mapache-n64-preview",
-  ]);
-
   const contents = await Promise.all(defaultRuntimeSkills({
-    runnerCapabilities: {n64: true},
+    runnerCapabilities: {preview: true},
     workspaceSourceMode: "github",
   }).map(resolveSeededSkillContent));
   assert.ok(contents.every((content) => content.startsWith("---\nname: ")));

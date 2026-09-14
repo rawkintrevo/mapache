@@ -9,7 +9,6 @@ const INACTIVE_STATUSES = new Set([
 
 function isSyncWriterEligible(session = {}, options = {}) {
   if (options.eligible === false) return false;
-  if (session.sessionType === "ssh" || session.terminalKind === "ssh") return false;
   if (options.eligible === true) return true;
   return !INACTIVE_STATUSES.has(String(session.status || "").trim());
 }

@@ -27,7 +27,6 @@ function createLifecycleHarness(events, overrides = {}) {
       materializeConfig: async () => events.push("activeHarness.materializeConfig"),
       materializeMcp: async () => events.push("activeHarness.materializeMcp"),
       materializeSkills: async () => events.push("activeHarness.materializeSkills"),
-      materializeSubagents: async () => events.push("activeHarness.materializeSubagents"),
     },
     admin: overrides.admin || {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
     chromeProfile: overrides.chromeProfile || service("restore", "chromeProfile.restore"),
@@ -41,11 +40,12 @@ function createLifecycleHarness(events, overrides = {}) {
       start: async () => events.push("chromeRuntime.start"),
       stop: async () => events.push("chromeRuntime.stop"),
     },
+    checkpointScheduler: overrides.checkpointScheduler,
     config,
     git: overrides.git || service("prepareGithubAutomationBranch", "git.prepareGithubAutomationBranch"),
     listen: overrides.listen || (() => events.push("server.listen")),
     logger: overrides.logger || {error: () => {}, log: () => {}},
-    piChat: overrides.piChat,
+    piWebUi: overrides.piWebUi,
     resourceMetrics: overrides.resourceMetrics,
     piModelScope: overrides.piModelScope || {
       persist: async () => events.push("piModelScope.persist"),
@@ -55,11 +55,11 @@ function createLifecycleHarness(events, overrides = {}) {
       events.push("syncLoop.start");
       return {unref: () => {}};
     }),
-    sshSession: overrides.sshSession || {closeAll: () => events.push("sshSession.closeAll")},
     workspace: overrides.workspace || {
       ensureWorkspace: async () => events.push("workspace.ensureWorkspace"),
       prepareWorkspaceSource: async () => events.push("workspace.prepareWorkspaceSource"),
     },
+    workspaceAuthority: overrides.workspaceAuthority,
     workspaceSync: overrides.workspaceSync || {syncUp: async () => events.push("workspaceSync.syncUp")},
   });
 }
@@ -81,7 +81,6 @@ test("startup runs ordered preparation before snapshots, sync, and listen", asyn
     "git.prepareGithubAutomationBranch",
     "activeHarness.materializeMcp",
     "activeHarness.materializeSkills",
-    "activeHarness.materializeSubagents",
     "chromeProfileSnapshots.start",
     "syncLoop.start",
     "server.listen",
@@ -108,19 +107,120 @@ test("startup failure prevents later lifecycle steps and listen", async () => {
   ]);
 });
 
-test("shutdown closes forwards before final profile snapshot and activity update", async () => {
+test("managed startup launches pi-web-ui after materialization and stops it first", async () => {
   const events = [];
   const lifecycle = createLifecycleHarness(events, {
-    piChat: {close: () => events.push("piChat.close")},
+    config: {agentRuntimeEnabled: true},
+    piWebUi: {
+      start: async () => events.push("piWebUi.start"),
+      quiesce: async () => events.push("piWebUi.quiesce"),
+      stop: async () => events.push("piWebUi.stop"),
+    },
+    workspaceAuthority: {
+      acquire: async () => events.push("workspaceAuthority.acquire"),
+      isCurrentWriter: () => true,
+      release: async (reason) => events.push(`workspaceAuthority.release:${reason}`),
+    },
+    workspace: {
+      ensureWorkspace: async () => events.push("workspace.ensureWorkspace"),
+      prepareWorkspaceSource: async () => events.push("workspace.prepareWorkspaceSource"),
+      restoreCheckpoint: async () => events.push("workspace.restoreCheckpoint"),
+    },
+  });
+
+  await lifecycle.start();
+  assert.equal(events.indexOf("workspace.restoreCheckpoint") < events.indexOf("workspaceAuthority.acquire"), true);
+  assert.equal(events.indexOf("workspaceAuthority.acquire") < events.indexOf("activeHarness.materializeConfig"), true);
+  assert.equal(events.indexOf("piWebUi.start") > events.indexOf("activeHarness.materializeSkills"), true);
+  assert.equal(events.indexOf("piWebUi.start") < events.indexOf("chromeProfileSnapshots.start"), true);
+  await lifecycle.shutdown();
+  assert.equal(events.indexOf("piWebUi.quiesce") < events.indexOf("piWebUi.stop"), true);
+  assert.equal(events.at(-1), "workspaceAuthority.release:shutdown");
+});
+
+test("managed shutdown escalates after cooperative quiesce fails", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    config: {agentRuntimeEnabled: true},
+    logger: {error: () => {}, log: () => {}, warn: () => events.push("logger.warn")},
+    piWebUi: {
+      quiesce: async () => {
+        events.push("piWebUi.quiesce");
+        throw new Error("pi_web_ui_quiesce_timeout");
+      },
+      stop: async () => events.push("piWebUi.stop"),
+    },
+  });
+
+  await lifecycle.shutdown();
+
+  assert.deepEqual(events.slice(0, 3), ["piWebUi.quiesce", "logger.warn", "piWebUi.stop"]);
+});
+
+test("managed shutdown finalizes the checkpoint scheduler after writers stop", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    checkpointScheduler: {
+      start: () => events.push("checkpointScheduler.start"),
+      stop: () => events.push("checkpointScheduler.stop"),
+      finalize: async () => events.push("checkpointScheduler.finalize"),
+    },
+    chromeProfileSnapshots: {
+      enabled: () => false,
+      finalize: async () => events.push("chromeProfileSnapshots.finalize"),
+      start: () => events.push("chromeProfileSnapshots.start"),
+      stop: async () => events.push("chromeProfileSnapshots.stop"),
+    },
+    config: {agentRuntimeEnabled: true},
+    piWebUi: {
+      start: async () => events.push("piWebUi.start"),
+      quiesce: async () => events.push("piWebUi.quiesce"),
+      stop: async () => events.push("piWebUi.stop"),
+    },
+  });
+
+  await lifecycle.start();
+  await lifecycle.shutdown();
+
+  assert.equal(events.indexOf("checkpointScheduler.start") < events.indexOf("server.listen"), true);
+  assert.equal(events.indexOf("checkpointScheduler.stop") < events.indexOf("piWebUi.quiesce"), true);
+  assert.equal(events.indexOf("piWebUi.stop") < events.indexOf("checkpointScheduler.finalize"), true);
+  assert.equal(events.indexOf("checkpointScheduler.finalize") < events.indexOf("activity.updateSessionActivity"), true);
+});
+
+test("checkpoint failure prevents shutdown acknowledgement", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    checkpointScheduler: {
+      start: () => {},
+      stop: () => events.push("checkpointScheduler.stop"),
+      finalize: async () => {
+        events.push("checkpointScheduler.finalize");
+        throw Object.assign(new Error("checkpoint storage failed"), {code: "checkpoint_storage_failed"});
+      },
+    },
+    chromeProfileSnapshots: {
+      enabled: () => false,
+      finalize: async () => {},
+      start: () => {},
+      stop: async () => {},
+    },
+  });
+
+  await assert.rejects(() => lifecycle.shutdown(), (error) => error.code === "checkpoint_storage_failed");
+  assert.equal(events.includes("activity.updateSessionActivity"), false);
+});
+
+test("shutdown closes runtime resources before final profile snapshot and activity update", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
     resourceMetrics: {close: () => events.push("resourceMetrics.close")},
   });
 
   await lifecycle.shutdown();
 
   assert.deepEqual(events, [
-    "piChat.close",
     "resourceMetrics.close",
-    "sshSession.closeAll",
     "chromeRuntime.stop",
     "piModelScope.persist",
     "chromeProfileSnapshots.stop",
@@ -143,7 +243,6 @@ test("shutdown syncs archives directly for non-Chrome runners", async () => {
   await lifecycle.shutdown();
 
   assert.deepEqual(events, [
-    "sshSession.closeAll",
     "chromeRuntime.stop",
     "piModelScope.persist",
     "workspaceSync.syncUp",

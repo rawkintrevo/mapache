@@ -1,7 +1,7 @@
 {
   "id": "mcp.servers-crud",
-  "title": "Manage workspace MCP servers from the right drawer",
-  "description": "Create a blank workspace, add an MCP server from the right drawer, verify the workspace MCP API persisted it, and clean up the workspace.",
+  "title": "Manage workspace MCP servers from the navbar",
+  "description": "Create a blank workspace, add an MCP server from the navbar modal, verify the workspace MCP API persisted it, and clean up the workspace.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/mcp.servers-crud",
   "steps": [
@@ -13,7 +13,7 @@
         "workspaceEnv": "QA_CASE=mcp-servers-crud"
       }
     },
-    {"useScript": "scripts/expand-inspector.json"},
+    {"type": "click", "role": "button", "name": "Manage MCP servers"},
     {"assert": "snapshot-text", "expected": "MCP Servers"},
     {
       "useScript": "scripts/save-mcp-server.json",

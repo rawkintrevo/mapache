@@ -1,0 +1,12 @@
+{
+  "id": "script.qaFaultStatus",
+  "title": "Read the disposable QA fault harness status",
+  "actions": [
+    {"type": "apiRequest", "method": "GET", "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions/{{selectedSessionId}}/qa/faults"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/qa/faults", "method": "GET", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The named pi-web failure-recovery harness reports its supported faults",
+    "The response body is not copied into QA artifacts"
+  ]
+}

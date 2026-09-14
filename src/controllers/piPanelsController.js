@@ -12,29 +12,6 @@ import {
   updatePiAuthFormState,
 } from "../workflows/piAuth.js";
 import {
-  installPiPackageState,
-  loadPiPackagesState,
-  removePiPackageState,
-  updatePiInstallSourceState,
-  updatePiPackageState,
-} from "../workflows/piPackages.js";
-import {
-  cancelWorkspaceSkillEditState,
-  deleteWorkspaceSkillState,
-  editWorkspaceSkillState,
-  loadWorkspaceSkillsState,
-  saveWorkspaceSkillState,
-  updateWorkspaceSkillFormState,
-} from "../workflows/piSkills.js";
-import {
-  cancelWorkspaceSubagentEditState,
-  deleteWorkspaceSubagentState,
-  editWorkspaceSubagentState,
-  loadWorkspaceSubagentsState,
-  saveWorkspaceSubagentState,
-  updateWorkspaceSubagentFormState,
-} from "../workflows/subagents.js";
-import {
   deleteMcpServerState,
   editMcpServerFormState,
   loadMcpServersState,
@@ -45,59 +22,23 @@ import {
 import {
   resetMcpServers as resetMcpServersState,
   resetPiAuth as resetPiAuthState,
-  resetWorkspaceSubagents as resetWorkspaceSubagentsState,
-  resetWorkspaceSkills as resetWorkspaceSkillsState,
 } from "../state/resetters.js";
-import {sessionSkillHarness} from "../utils/sessionSkills.js";
-import {sessionSubagentHarness} from "../utils/sessionHarnesses.js";
 
-export function createPiPanelsController({state, render, piPackagesStore, captureSessionRequest = () => undefined}) {
-  function resetPiPackages() {
-    piPackagesStore.reset();
-  }
-
+export function createPiPanelsController({state, render}) {
   function resetPiAuth() {
     resetPiAuthState(state);
-  }
-
-  function resetWorkspaceSkills() {
-    resetWorkspaceSkillsState(state);
-  }
-
-  function resetWorkspaceSubagents() {
-    resetWorkspaceSubagentsState(state);
   }
 
   function resetMcpServers() {
     resetMcpServersState(state);
   }
 
-  async function loadPiPackages(request = captureSessionRequest()) {
-    await loadPiPackagesState({state, piPackagesStore, request});
-  }
-
-  async function loadWorkspaceSkills(request = captureSessionRequest()) {
-    await loadWorkspaceSkillsState({state, render, request});
-  }
-
   async function loadPiAuth(options = {}) {
     await loadPiAuthState({state, render, options});
   }
 
-  async function loadWorkspaceSubagents(request = captureSessionRequest()) {
-    await loadWorkspaceSubagentsState({state, render, request});
-  }
-
   async function loadMcpServers() {
     await loadMcpServersState({state, render});
-  }
-
-  async function refreshPiPackages() {
-    await loadPiPackages();
-  }
-
-  async function refreshWorkspaceSkills() {
-    await loadWorkspaceSkills();
   }
 
   async function refreshPiAuth() {
@@ -110,10 +51,6 @@ export function createPiPanelsController({state, render, piPackagesStore, captur
   async function deleteGenericEnvironmentKey(id) { await deleteGenericEnvironmentKeyState({state, entryId: id, render}); }
   async function updateGenericEnvironmentSelection(id, selected) {
     await updateGenericEnvironmentSelectionState({state, entryId: id, selected, render});
-  }
-
-  async function refreshWorkspaceSubagents() {
-    await loadWorkspaceSubagents();
   }
 
   async function refreshMcpServers() {
@@ -147,66 +84,6 @@ export function createPiPanelsController({state, render, piPackagesStore, captur
     await deleteMcpServerState({state, name: serverName, loadMcpServers, render});
   }
 
-  function updateWorkspaceSkillForm(patch) {
-    updateWorkspaceSkillFormState(state, patch);
-    render();
-  }
-
-  function editWorkspaceSkill(skill) {
-    editWorkspaceSkillState(state, skill);
-    render();
-  }
-
-  function cancelWorkspaceSkillEdit() {
-    cancelWorkspaceSkillEditState(state);
-    render();
-  }
-
-  async function saveWorkspaceSkill() {
-    return saveWorkspaceSkillState({state, loadWorkspaceSkills, render});
-  }
-
-  async function deleteWorkspaceSkill(name) {
-    const skillName = String(name || "").trim();
-    if (!skillName) return;
-    const session = state.sessions.find((item) => item.id === state.selectedSessionId) || null;
-    const harness = sessionSkillHarness(session);
-    const path = harness ? `${harness.relativeSkillsPath}/${skillName}/SKILL.md` : `<skill-path>`;
-    const ok = window.confirm(`Delete skill ${skillName}? This removes ${path} from the workspace.`);
-    if (!ok) return;
-    await deleteWorkspaceSkillState({state, name: skillName, loadWorkspaceSkills, render});
-  }
-
-  function updateWorkspaceSubagentForm(patch) {
-    updateWorkspaceSubagentFormState(state, patch);
-    render();
-  }
-
-  function editWorkspaceSubagent(subagent) {
-    editWorkspaceSubagentState(state, subagent);
-    render();
-  }
-
-  function cancelWorkspaceSubagentEdit() {
-    cancelWorkspaceSubagentEditState(state);
-    render();
-  }
-
-  async function saveWorkspaceSubagent() {
-    await saveWorkspaceSubagentState({state, loadWorkspaceSubagents, render});
-  }
-
-  async function deleteWorkspaceSubagent(name) {
-    const subagentName = String(name || "").trim();
-    if (!subagentName) return;
-    const session = state.sessions.find((item) => item.id === state.selectedSessionId) || null;
-    const harness = sessionSubagentHarness(session);
-    const path = harness ? `${harness.relativePath}/${subagentName}${harness.id === "codex" ? ".toml" : ".md"}` : "<subagent-path>";
-    const ok = window.confirm(`Delete subagent ${subagentName}? This removes ${path} from the workspace.`);
-    if (!ok) return;
-    await deleteWorkspaceSubagentState({state, name: subagentName, loadWorkspaceSubagents, render});
-  }
-
   function updatePiAuthForm(patch) {
     updatePiAuthFormState(state, patch);
     render();
@@ -238,45 +115,12 @@ export function createPiPanelsController({state, render, piPackagesStore, captur
     await saveSessionPiAuthSelectionState({state, session, selection, render});
   }
 
-  function updatePiInstallSource(source) {
-    updatePiInstallSourceState(state, source, piPackagesStore);
-  }
-
-  function newPiPackage() {
-    updatePiInstallSourceState(state, "", piPackagesStore);
-  }
-
-  async function installPiPackage(source) {
-    return installPiPackageState({state, piPackagesStore, source, loadPiPackages});
-  }
-
-  async function removePiPackage(source) {
-    await removePiPackageState({state, piPackagesStore, source, loadPiPackages});
-  }
-
-  async function updatePiPackage(source = "") {
-    await updatePiPackageState({state, piPackagesStore, source, loadPiPackages});
-  }
-
   return {
-    cancelPiSkillEdit: cancelWorkspaceSkillEdit,
-    cancelWorkspaceSkillEdit,
     deletePiAuthProvider,
-    deletePiSkill: deleteWorkspaceSkill,
-    deleteWorkspaceSubagent,
-    deleteWorkspaceSkill,
-    editPiSkill: editWorkspaceSkill,
-    editWorkspaceSubagent,
-    editWorkspaceSkill,
-    installPiPackage,
     deleteMcpServer,
     editMcpServer,
     loadMcpServers,
     loadPiAuth,
-    loadPiPackages,
-    loadPiSkills: loadWorkspaceSkills,
-    loadWorkspaceSubagents,
-    loadWorkspaceSkills,
     refreshPiAuth,
     updateGenericEnvironmentForm,
     updateGenericEnvironmentSelection,
@@ -285,32 +129,13 @@ export function createPiPanelsController({state, render, piPackagesStore, captur
     deleteGenericEnvironmentKey,
     refreshMcpServers,
     newMcpServer,
-    newPiPackage,
-    refreshPiPackages,
-    refreshPiSkills: refreshWorkspaceSkills,
-    refreshWorkspaceSubagents,
-    refreshWorkspaceSkills,
-    removePiPackage,
     resetPiAuth,
     resetMcpServers,
-    resetPiPackages,
-    resetPiSkills: resetWorkspaceSkills,
-    resetWorkspaceSubagents,
-    resetWorkspaceSkills,
     savePiAuthProvider,
     saveMcpServer,
-    savePiSkill: saveWorkspaceSkill,
-    saveWorkspaceSubagent,
-    saveWorkspaceSkill,
     saveSessionPiAuthSelection,
     startOpenAiCodexDeviceLogin,
     updatePiAuthForm,
     updateMcpServerForm,
-    updatePiInstallSource,
-    updatePiPackage,
-    updatePiSkillForm: updateWorkspaceSkillForm,
-    updateWorkspaceSubagentForm,
-    updateWorkspaceSkillForm,
-    cancelWorkspaceSubagentEdit,
   };
 }

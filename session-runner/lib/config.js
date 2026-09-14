@@ -14,7 +14,6 @@ const {
   INTERNAL_STORAGE_DIR,
   LEGACY_INTERNAL_STORAGE_DIR,
 } = require("./runtimePaths");
-const {resolveIntegrationMode} = require("./integrationMode");
 
 function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
@@ -30,8 +29,10 @@ function normalizePreviewBasePath(value) {
   return clean === "/" ? "/preview" : clean;
 }
 
+const PI_MCP_ADAPTER_VERSION = "2.32.1";
+
 function parseRunnerCapabilities() {
-  const fallback = {terminal: true, preview: false, previewQa: false, functions: false, n64: false, chrome: false, chat: false, goals: false};
+  const fallback = {terminal: true, preview: true, previewQa: true, functions: true, chrome: true};
   try {
     const parsed = JSON.parse(process.env.RUNNER_CAPABILITIES || "{}");
     return Object.fromEntries(Object.keys(fallback).map((key) => [
@@ -48,44 +49,48 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
   const piHomeDir = path.join(homeDir, ".pi");
-  const piAgentDir = normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
+  const agentUiVersion = normalizeEnvString(process.env.MAPACHE_AGENT_UI_VERSION);
+  const agentRuntimeEnabled = agentUiVersion === "pi-web-ui-v1";
+  const agentStateRoot = path.resolve(process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
+  const piWebUiRoot = path.resolve(process.env.MAPACHE_PI_WEB_UI_ROOT || "/opt/mapache/pi-web-ui");
+  const piWebUiDataDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
+  const piWebUiPiDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
+  const piWebUiSessionDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
+  const piMcpAdapterPath = normalizeEnvString(process.env.PI_WEB_MCP_ADAPTER_PATH) ||
+    path.join(piHomeDir, "agent", "npm", "node_modules", "pi-mcp-adapter", "index.ts");
+  const piAgentDir = agentRuntimeEnabled ? piWebUiPiDir :
+    normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
   const bucketName = process.env.STORAGE_BUCKET || "";
   const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
   const homeStorageBucketName = process.env.HOME_STORAGE_BUCKET || bucketName;
   const homeStoragePrefix = normalizePrefix(process.env.HOME_STORAGE_PREFIX || "");
   const homeSyncMode = normalizeEnvString(process.env.HOME_SYNC_MODE) || "persistent";
   const homeArchiveName = normalizeEnvString(process.env.HOME_ARCHIVE_NAME) || "home.tar.gz";
-  const piSessionDir = normalizeEnvString(process.env.PI_SESSION_DIR) ||
-    path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
+  const piSessionDir = agentRuntimeEnabled ? piWebUiSessionDir :
+    normalizeEnvString(process.env.PI_SESSION_DIR) || path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
   const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
   const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
-  const codexHomeDir = path.resolve(process.env.CODEX_HOME || path.join("/tmp", "mapache-codex", process.env.SESSION_ID || "session"));
-  const codexHomeStorageBucketName = process.env.CODEX_HOME_STORAGE_BUCKET || bucketName;
-  const codexHomeStoragePrefix = normalizePrefix(process.env.CODEX_HOME_STORAGE_PREFIX || "");
-  const codexConfigPath = path.resolve(process.env.CODEX_CONFIG_PATH || path.join(workspaceDir, ".codex", "config.toml"));
-  const harnessId = normalizeEnvString(process.env.HARNESS_ID) || normalizeEnvString(process.env.TERMINAL_KIND) || "shell";
+  const harnessId = "pi";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
   const workspaceSyncRole = normalizeWorkspaceSyncRole(process.env.WORKSPACE_SYNC_ROLE);
   const workspaceSyncPolicyMode = normalizeEnvString(process.env.WORKSPACE_SYNC_POLICY_MODE) || "blank";
   const workspaceSyncPolicyExclude = parseSyncPolicyExclude(process.env.WORKSPACE_SYNC_POLICY_EXCLUDE);
+  const qaFaultHarness = normalizeEnvString(process.env.MAPACHE_QA_FAULT_HARNESS);
+  const qaCase = normalizeEnvString(process.env.QA_CASE);
   const runnerCapabilities = parseRunnerCapabilities();
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
-  const runnerHarness = normalizeEnvString(process.env.HARNESS_ID || process.env.TERMINAL_KIND ||
-    (normalizeEnvString(process.env.TERMINAL_COMMAND) === "pi" ? "pi" : "")).toLowerCase();
-  const integration = resolveIntegrationMode({
-    requestedMode: process.env.MAPACHE_RUNNER_INTEGRATION_MODE,
-    webFirstFlag: envFlag(process.env.MAPACHE_WEB_FIRST_ENABLED),
-    harnessId: runnerHarness,
-    chromeEnabled,
-  });
-  const webFirstEnabled = integration.mode === "web-first";
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
-  const sshConfigDir = path.join(homeDir, ".mapache", "ssh");
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
+    agentAccessAudience: "agent",
+    agentRuntimeEnabled,
+    agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
+    workspaceAuthorityRenewalIntervalMs: positiveNumber(process.env.MAPACHE_WORKSPACE_AUTHORITY_RENEWAL_INTERVAL_MS, 5000),
+    agentStateRoot,
+    agentUiVersion,
     archiveStorageDir: `${INTERNAL_STORAGE_DIR}/archives`,
     archiveSyncIntervalMs: Number(process.env.ARCHIVE_SYNC_INTERVAL_MS || 300000),
     resourceMetricsIntervalMs: positiveNumber(process.env.RESOURCE_METRICS_INTERVAL_MS, 2000),
@@ -104,16 +109,6 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     browserStatusUrl: chromeEnabled ?
       normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/status` : "",
     browserStatusCommand: chromeEnabled ? normalizeEnvString(process.env.MAPACHE_BROWSER_STATUS_COMMAND) || "mapache-chrome-status" : "",
-    checkpointBarrierTimeoutMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_CHECKPOINT_BARRIER_TIMEOUT_MS, 15000) : 0,
-    checkpointOrphanGraceMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_CHECKPOINT_ORPHAN_GRACE_MS, 86400000) : 0,
-    webFirstAdapterSocket: webFirstEnabled ? normalizeEnvString(process.env.MAPACHE_PI_WEB_FIRST_SOCKET) || "/tmp/mapache-pi-web-first.sock" : "",
-    webFirstAdapterTimeoutMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_ADAPTER_TIMEOUT_MS, 5000) : 0,
-    webFirstAllowedOrigins: parseOriginList(process.env.MAPACHE_WEB_FIRST_ALLOWED_ORIGINS),
-    webFirstEnabled,
-    webFirstHeartbeatMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_HEARTBEAT_MS, 10_000) : 0,
-    webFirstLeaseMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_LEASE_MS, 30_000) : 0,
-    webFirstRenewIntervalMs: webFirstEnabled ? positiveNumber(process.env.MAPACHE_WEB_FIRST_RENEW_INTERVAL_MS, 10_000) : 0,
-    webFirstOperationLedgerPath: webFirstEnabled ? path.join(piSessionDir, ".mapache-operation-ledger.json") : "",
     chromeCdpHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_CDP_HOST) || "127.0.0.1" : "",
     chromeCdpPort: chromeEnabled ? positiveNumber(process.env.CHROME_CDP_PORT, 9222) : 0,
     chromeDisplay: chromeEnabled ? normalizeEnvString(process.env.CHROME_DISPLAY) || ":99" : "",
@@ -130,10 +125,6 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     chromeVncHost: chromeEnabled ? normalizeEnvString(process.env.CHROME_VNC_HOST) || "127.0.0.1" : "",
     chromeVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_VNC_PORT, 5900) : 0,
     bucketName,
-    codexConfigPath,
-    codexHomeDir,
-    codexHomeStorageBucketName,
-    codexHomeStoragePrefix,
     directoryMarkerFile: DIRECTORY_MARKER_FILE,
     githubCloneToken: normalizeEnvString(process.env.GITHUB_CLONE_TOKEN),
     githubCloneUsername: normalizeEnvString(process.env.GITHUB_CLONE_USERNAME) || "x-access-token",
@@ -148,11 +139,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     googleMcpAccountName: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_NAME),
     googleMcpConnectionStatus: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_STATUS),
     googleMcpEnabledServices: normalizeEnvString(process.env.GOOGLE_MCP_ENABLED_SERVICES),
-    goalPackageVersion: normalizeEnvString(process.env.PI_GOAL_X_VERSION),
     harnessId,
-    integrationMode: integration.mode,
-    integrationModeReason: integration.reason,
-    integrationModeRequested: integration.requested,
     homeArchiveName,
     homeDir,
     homeStorageBucketName,
@@ -166,8 +153,27 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     ownerUid: process.env.OWNER_UID || "",
     piAgentDir,
     piHomeDir,
+    piMcpAdapterPath,
+    piMcpAdapterVersion: PI_MCP_ADAPTER_VERSION,
     piSessionDir,
     piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
+    piWebUiDataDir,
+    piWebUiHealthIntervalMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_HEALTH_INTERVAL_MS, 100),
+    piWebUiHost: "127.0.0.1",
+    piWebUiPiDir,
+    piWebUiPort: 8787,
+    piWebUiRoot,
+    piWebUiSessionDir,
+    qaCase,
+    qaFaultHarness,
+    agentActivityPollIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_ACTIVITY_POLL_INTERVAL_MS, 1000),
+    agentCompletedTurnDebounceMs: positiveNumber(process.env.MAPACHE_AGENT_COMPLETED_TURN_DEBOUNCE_MS, 1000),
+    agentSnapshotIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_SNAPSHOT_INTERVAL_MS, 60000),
+    manualSaveBudgetMs: positiveNumber(process.env.MAPACHE_MANUAL_SAVE_BUDGET_MS, 120000),
+    sigtermSaveBudgetMs: positiveNumber(process.env.MAPACHE_SIGTERM_SAVE_BUDGET_MS, 8000),
+    piWebUiQuiesceTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_QUIESCE_TIMEOUT_MS, 5000),
+    piWebUiStartupTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STARTUP_TIMEOUT_MS, 30000),
+    piWebUiStopTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STOP_TIMEOUT_MS, 5000),
     piSessionStorageBucket,
     piSessionStoragePrefix,
     port: Number(process.env.PORT || 8080),
@@ -177,31 +183,15 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     previewEnabled,
     previewInjectLogger: previewEnabled && envFlag(process.env.PREVIEW_INJECT_LOGGER, true),
     previewLogLimit: positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500),
-    previewN64RomPath: path.resolve(process.env.PREVIEW_N64_ROM_PATH || path.join(workspaceDir, "build", "game.z64")),
     previewStaticRoot: path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
     runnerCapabilities,
     sessionBrowserTokenSecret: normalizeEnvString(process.env.SESSION_BROWSER_TOKEN_SECRET),
     sessionId: process.env.SESSION_ID || "",
     sessionName: normalizeEnvString(process.env.SESSION_NAME) || "Terminal session",
     shutdownToken: process.env.SESSION_SHUTDOWN_TOKEN || "",
-    sshAuthMode: normalizeEnvString(process.env.SSH_AUTH_MODE) === "certificate" ? "certificate" : "private-key",
-    sshCertificate: normalizeEnvString(process.env.SSH_CERTIFICATE),
-    sshCertificatePath: path.join(sshConfigDir, "id_user-cert.pub"),
-    sshConfigDir,
-    sshHost: normalizeEnvString(process.env.SSH_TARGET_HOST),
-    sshInitialDirectory: normalizeEnvString(process.env.SSH_INITIAL_DIRECTORY) || "~",
-    sshKnownHosts: normalizeEnvString(process.env.SSH_KNOWN_HOSTS),
-    sshKnownHostsPath: path.join(sshConfigDir, "known_hosts"),
-    sshMaxFileBytes: positiveNumber(process.env.SSH_MAX_FILE_BYTES, 1024 * 1024),
-    sshPort: positiveNumber(process.env.SSH_TARGET_PORT, 22),
-    sshPrivateKey: normalizeEnvString(process.env.SSH_PRIVATE_KEY),
-    sshPrivateKeyPath: path.join(sshConfigDir, "id_user"),
-    sshShell: normalizeEnvString(process.env.SSH_SHELL) || "bash",
-    sshStrictHostKeyChecking: envFlag(process.env.SSH_STRICT_HOST_KEY_CHECKING, true),
-    sshUsername: normalizeEnvString(process.env.SSH_TARGET_USERNAME),
     syncIntervalMs: Number(process.env.SYNC_INTERVAL_MS || 30000),
     terminalReplayLimit: positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000),
-    terminalKind: normalizeEnvString(process.env.TERMINAL_KIND) || "pi",
+    terminalKind: "pi",
     workspaceDir,
     workspaceGoogleApplicationCredentials: normalizeEnvString(workspaceGoogleApplicationCredentials),
     workspaceId: process.env.WORKSPACE_ID || "",
@@ -212,22 +202,10 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   };
 }
 
-function parseOriginList(value) {
-  return [...new Set(String(value || "").split(",").map((item) => item.trim()).filter((item) => {
-    try {
-      const origin = new URL(item).origin;
-      return origin !== "null";
-    } catch {
-      return false;
-    }
-  }).map((item) => new URL(item).origin))];
-}
-
 module.exports = {
   createConfig,
   normalizePreviewBasePath,
   normalizeWorkspaceSourceMode,
   normalizeWorkspaceSyncRole,
-  parseOriginList,
   parseRunnerCapabilities,
 };

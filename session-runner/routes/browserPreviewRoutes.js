@@ -4,36 +4,44 @@ function registerBrowserRoutes({
   app,
   admin,
   browserVncWebSocketPath,
+  checkpointPublisher,
   chromeRuntime,
   config,
   activity,
+  piWebUi,
   expressStatic,
   preview,
   requireBrowserAccess,
   requireBrowserOrRunnerAccess,
   renderTerminalPage,
-  webFirstEnabled = false,
 }) {
   app.get("/", requireBrowserAccess, (req, res) => {
-    res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken, webFirstEnabled}));
+    res.type("html").send(renderTerminalPage({accessToken: req.mapacheAccessToken}));
   });
 
   app.get("/shell", requireBrowserAccess, (req, res) => {
     res.type("html").send(renderTerminalPage({
       accessToken: req.mapacheAccessToken,
       socketPath: "/shell",
-      webFirstEnabled,
     }));
   });
 
-  app.get("/healthz", requireBrowserAccess, (req, res) => {
-    res.json({
+  app.get("/healthz", requireBrowserAccess, async (req, res) => {
+    const checkpoint = await checkpointPublisher?.status?.() || {};
+    const health = {
       ok: true,
       workspaceId: config.workspaceId,
       sessionId: config.sessionId,
       bucketName: config.bucketName,
       prefix: config.prefix,
-    });
+      lastCheckpointAt: checkpoint.lastCheckpointAt || null,
+      checkpointError: checkpoint.checkpointError || null,
+    };
+    if (piWebUi) {
+      health.agentRuntime = piWebUi.status?.() || null;
+      health.agentActivity = await piWebUi.activity?.() || null;
+    }
+    res.json(health);
   });
 
   app.get("/capabilities", requireBrowserAccess, (req, res) => {

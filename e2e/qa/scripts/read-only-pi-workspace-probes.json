@@ -1,0 +1,20 @@
+{
+  "id": "script.readOnlyPiWorkspaceProbes",
+  "title": "Read existing Pi auth, MCP, and session configuration without changing it",
+  "requires": {
+    "credentials": "Use only already configured QA provider metadata; never save or paste a credential in this case",
+    "mcp": "The workspace may contain an existing read-only MCP configuration; this probe does not create or mutate one"
+  },
+  "actions": [
+    {"type": "apiRequest", "method": "GET", "path": "/api/pi-auth"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/pi-auth", "method": "GET", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "apiRequest", "method": "GET", "path": "/api/workspaces/{{selectedWorkspaceId}}/mcp"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/mcp", "method": "GET", "expectedStatus": 200, "timeoutMs": 10000},
+    {"type": "apiRequest", "method": "GET", "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions", "method": "GET", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Only GET requests are issued for credentials, workspace MCP configuration, and session listing",
+    "All three read requests return 200 without exposing response bodies in artifacts"
+  ]
+}

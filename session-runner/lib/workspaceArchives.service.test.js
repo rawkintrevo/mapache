@@ -10,7 +10,6 @@ const test = require("node:test");
 const {
   chromeProfileArchiveExcludePatterns,
   chromeProfileArchiveRemotePath,
-  codexHomeArchiveRemotePath,
   createArchiveSyncTargets,
   createWorkspaceArchiveService,
   homeArchiveRemotePath,
@@ -23,9 +22,6 @@ function baseConfig(overrides = {}) {
     archiveStorageDir: ".mapache-internal/archives",
     bucketName: "workspace-bucket",
     homeArchiveName: "home.tar.gz",
-    codexHomeDir: "/tmp/codex-home/session-1",
-    codexHomeStorageBucketName: "codex-bucket",
-    codexHomeStoragePrefix: "users/u/workspaces/w/.mapache-internal/codex-home",
     homeDir: "/root",
     homeStorageBucketName: "home-bucket",
     homeStoragePrefix: "users/u/workspaces/w/.mapache-internal/home",
@@ -59,7 +55,6 @@ test("selects default archive targets for blank workspaces", () => {
     "workspace-pi-git",
     "home",
     "pi-mcp-oauth",
-    "codex-home",
   ]);
   assert.equal(targets.find((target) => target.name === "workspace-node-modules").remotePath,
       "users/u/workspaces/w/.mapache-internal/archives/workspace-node_modules.tar.gz");
@@ -92,19 +87,6 @@ test("selects default archive targets for blank workspaces", () => {
     "./.pi/agent/mcp-oauth/*",
   ]);
   assert.equal(targets.find((target) => target.name === "home").restoreOnStartup, true);
-  assert.equal(targets.find((target) => target.name === "codex-home").localPath, "/tmp/codex-home/session-1");
-  assert.equal(targets.find((target) => target.name === "codex-home").bucketName, "codex-bucket");
-  assert.equal(targets.find((target) => target.name === "codex-home").remotePath,
-      "users/u/workspaces/w/.mapache-internal/codex-home/codex-home.tar.gz");
-  assert.deepEqual(targets.find((target) => target.name === "codex-home").fallbackArchives, [{
-    bucketName: "codex-bucket",
-    remotePath: "users/u/workspaces/w/.mapahce-internal/codex-home/codex-home.tar.gz",
-  }]);
-  assert.deepEqual(targets.find((target) => target.name === "codex-home").fallbackArchivePrefixes, [
-    "users/u/workspaces/w/.mapache-internal/sessions/",
-    "users/u/workspaces/w/.mapahce-internal/sessions/",
-  ]);
-  assert.equal(targets.find((target) => target.name === "codex-home").restoreOnStartup, true);
   assert.equal(targets.find((target) => target.name === "pi-mcp-oauth").localPath, "/root/.pi/agent/mcp-oauth");
   assert.equal(targets.find((target) => target.name === "pi-mcp-oauth").remotePath,
       "users/u/workspaces/w/.mapache-internal/pi-mcp-oauth/mcp-oauth.tar.gz");
@@ -175,48 +157,6 @@ test("namespaces Pi MCP OAuth archives by workspace", () => {
   const second = baseConfig({prefix: "users/u/workspaces/two"});
   assert.notEqual(piMcpOAuthArchiveRemotePath(first), piMcpOAuthArchiveRemotePath(second));
   assert.match(piMcpOAuthArchiveRemotePath(first), /users\/u\/workspaces\/one\/.mapache-internal\/pi-mcp-oauth/);
-});
-
-test("builds codex home archive path from workspace-owned codex prefix", () => {
-  assert.equal(codexHomeArchiveRemotePath(baseConfig()),
-      "users/u/workspaces/w/.mapache-internal/codex-home/codex-home.tar.gz");
-});
-
-test("finds latest historical per-session codex archive as migration fallback", async () => {
-  const config = baseConfig();
-  const oldArchive = fakeFile(
-      "users/u/workspaces/w/.mapache-internal/sessions/old/codex-home/codex-home.tar.gz",
-      "2026-06-01T00:00:00.000Z",
-  );
-  const latestArchive = fakeFile(
-      "users/u/workspaces/w/.mapache-internal/sessions/latest/codex-home/codex-home.tar.gz",
-      "2026-06-02T00:00:00.000Z",
-  );
-  const unrelatedArchive = fakeFile(
-      "users/u/workspaces/w/.mapache-internal/sessions/latest/pi-session/pi-session.tar.gz",
-      "2026-06-03T00:00:00.000Z",
-  );
-  const storage = fakeStorage({
-    "users/u/workspaces/w/.mapache-internal/codex-home/codex-home.tar.gz": fakeFile(
-        "users/u/workspaces/w/.mapache-internal/codex-home/codex-home.tar.gz",
-        "2026-06-03T00:00:00.000Z",
-        {exists: false},
-    ),
-    "users/u/workspaces/w/.mapahce-internal/codex-home/codex-home.tar.gz": fakeFile(
-        "users/u/workspaces/w/.mapahce-internal/codex-home/codex-home.tar.gz",
-        "2026-06-03T00:00:00.000Z",
-        {exists: false},
-    ),
-  }, [oldArchive, latestArchive, unrelatedArchive]);
-  const archives = createWorkspaceArchiveService({
-    config,
-    git: git(false),
-    pathHelpers: {shouldIgnoreInternalWorkspacePath: () => false},
-    storage,
-  });
-
-  const target = archives.archiveSyncTargets.find((target) => target.name === "codex-home");
-  assert.equal(await archives.findArchiveFile(target), latestArchive);
 });
 
 test("profile extraction reports the tar failure instead of a premature stream close", async () => {

@@ -2,7 +2,7 @@
 
 const {listHarnessMetadata, resolveHarnessMetadata} = require("./metadata");
 
-function createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace}) {
+function createRunnerHarnessRegistry({config, mcpConfig, pi, workspace}) {
   function resolveHarness(source = config) {
     const metadata = resolveHarnessMetadata(source);
     return {
@@ -19,15 +19,8 @@ function createRunnerHarnessRegistry({codex, config, mcpConfig, pi, workspace}) 
         return mcpConfig.materializeMcpConfig(metadata);
       },
       async materializeSkills() {
-        if (metadata.id === "pi") {
-          await pi.seedDefaultRuntimeSkills();
-        } else if (metadata.id === "codex") {
-          await codex.seedDefaultWorkspaceFiles();
-        }
+        await pi.seedDefaultRuntimeSkills();
         return {ok: true};
-      },
-      async materializeSubagents() {
-        return {ok: true, skipped: true};
       },
     };
   }

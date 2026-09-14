@@ -12,7 +12,7 @@ Locations:
 
 - `functions/*.helpers.test.js` for backend helper modules.
 - Frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
-- Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. The Goals protocol and baked-package bootstrap follow this pattern.
+- Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. Native upstream persistence and managed-agent boundary helpers follow this pattern.
 
 Default commands:
 
@@ -51,11 +51,11 @@ Candidate flows:
 - Session create/open/stop/delete with terminal access-token validation.
 - GitHub workspace clone/resume/status/push behavior.
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
-- Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi-to-Codex handoff.
-- Skills and Extensions drawer smoke paths against a controlled runner fixture.
-- Workspace Goals draft creation, Pi capability gating, lifecycle command delivery, and operation recovery against a controlled runner fixture. The opt-in `e2e/qa/cases/workspace-goals-start.json` case covers the selected-session Start path, readable goal titles, explicit terminal handoff, and two consecutive answers through the native RPC adapter.
+- Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi provider handoff.
+- Native upstream Goal persistence and explicit paused/resume behavior inside the embedded Agent surface.
+- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, and deterministic failure-recovery assertions.
 
-Unless a task explicitly targets N64 behavior, routine browser QA should skip `pi-n64`. Standard session-creation validation should focus on `default`, `pi-basic`, `codex-basic`, `pi-web`, `codex-web`, `pi-chrome`, and `codex-chrome`.
+Routine browser QA and standard session-creation validation focus on the supported `pi-chrome` runner. Historical runner records may be inspected for cleanup, but retired runner families are not launch targets.
 
 E2E tests should not run in normal PR workflows until they are reliable, bounded, and credential-light. Run them manually before risky deploys and in scheduled workflows once automation exists.
 
@@ -87,7 +87,7 @@ It runs:
 4. Frontend smoke tests.
 5. Full Vite app and Docusaurus community build.
 
-Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. N64 image builds, live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
+Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
 ## Slower Checks
 
@@ -98,7 +98,33 @@ Run slower checks when a change touches the related subsystem:
 - Frontend workspace/session UI: frontend smoke tests once added, plus Playwright E2E for critical flows.
 - Session sizing: `functions/sessionResources.helpers.test.js`, `src/utils/sessionResources.test.js`, `SessionResourceSelector.test.jsx`, `SessionModal.test.jsx`, `SessionEditModal.test.jsx`, and the opt-in `e2e/qa/cases/session-resource-sizing.json` case cover catalog parity, preset/custom inference, estimate formatting, invalid pairs, create/edit payloads, resize payloads, and compact summaries.
 - Deployment, service accounts, Cloud Run provisioning, or Firebase rules: staging deploy or scheduled workflow with explicit `--project pi-agents-cloud` flags.
-- N64 runtime behavior: explicit N64 container build/smoke workflow only, never the default root check.
+- Managed pi-web-ui runtime changes: build the local `pi-chrome` image, then run the opt-in
+  `session-runner/lib/piWebUi.localVertical.test.js` suite with
+  `MAPACHE_RUN_PI_WEB_UI_VERTICAL=1`. The suite uses a deterministic local model and MCP
+  fixture through the real pi-web-ui server, gateway, WebSocket, terminal, Goal, checkpoint,
+  and restart paths; it does not require paid model or cloud credentials. This is local
+  integration coverage, not hosted/browser QA.
+- One-off HubSpot export changes: `node --test scripts/hubspotPiWebExport.test.mjs`.
+  These fixtures stay local and verify restricted inventory matching, dry-run defaults,
+  quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary
+  bytes, selected history, attachment references, and immutable manifest metadata.
+- One-off HubSpot import changes: `node --test scripts/migrations/pi-web-ui-hubspot/import.test.mjs`.
+  These fixtures build a checksummed export, verify manifest/path/symlink safety, import
+  the flat session layout through the actual pinned Pi SDK list/open APIs, preserve
+  branches and bytes, record the intentional `pi-goal-x` settings cleanup, protect new
+  target work, and prove repeat/verify-only behavior without model execution.
+- Hosted pi-web QA manifests: use `e2e/qa/cases/pi-web-marked-workspace-setup.json`
+  followed by the functional, history/resource, or failure-recovery case. These
+  cases are opt-in and blocked when the explicitly marked disposable workspace,
+  existing provider, read-only connector, browser, cloud service, or named
+  deterministic fault harness is unavailable. The failure-recovery harness is
+  enabled only for a session carrying `QA_CASE=pi-web-failure-recovery` and
+  `MAPACHE_QA_FAULT_HARNESS=pi-web-failure-recovery-v1`; its checked-in scripts
+  arm and consume faults through the authenticated session API. Short-lived
+  access fixtures renew on a bounded proportional schedule so the embedded
+  Agent iframe can settle before its next refresh. Migration instructions are in
+  `e2e/qa/migration/hubspot-import-checks.md`; they never authorize a live
+  HubSpot source write or CRM mutation.
 
 ## LLM-Assisted Regression Suite
 
@@ -121,7 +147,7 @@ Some sandboxed hosts still cannot launch a standalone local Chrome or Chromium C
 
 Chrome-image QA attaches to the runner-owned headed browser through CDP. It must verify that QA actions are visible in noVNC, that the shared browser and user tabs remain open after the run, and that reports stay under `$MAPACHE_QA_DIR` without cookies, response bodies, credentials, or profile paths. The checked-in `mapache-chrome` skill and `mapache-chrome-status` command are the supported diagnostics; QA must not launch a second Chromium instance.
 
-The initial QA catalog covers signed-in shell and empty states, navigation drawers, profile usage, blank and GitHub workspace creation, workspace files and editor behavior, session creation/lifecycle, Authentication Center, Pi auth selection, workspace skills for Pi and Codex sessions, Extensions, Git status, Git commit/push/PR flows, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
+The initial QA catalog covers signed-in shell and empty states, top-navigation workspace and account controls, profile usage, blank and GitHub workspace creation, workspace Play/Pause lifecycle, auth and MCP dialogs, Pi auth selection, Google connections, embedded Agent/Chrome/Preview surfaces, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
 
 Guardrails:
 

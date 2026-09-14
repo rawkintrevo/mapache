@@ -9,7 +9,7 @@ This runner already owns one persistent headed Chrome session. Attach to it thro
 
 Before browser work, run `mapache-chrome-status`. It checks the loopback DevTools endpoint and reports only readiness and version information.
 
-Use the browser tools for navigation, clicks, form entry, screenshots, console inspection, and network debugging. Browser state such as cookies, history, and local storage belongs to the workspace and persists across Pi Chrome and Codex Chrome sessions.
+Use the browser tools for navigation, clicks, form entry, screenshots, console inspection, and network debugging. Browser state such as cookies, history, and local storage belongs to the workspace and persists across Pi Chrome sessions.
 
 The browser canvas URL is signed and user-facing. The local DevTools URL is for the runner-side MCP connection only. Never print, export, or request browser cookies, profile archives, access tokens, or the values of `SESSION_*` secrets.
 

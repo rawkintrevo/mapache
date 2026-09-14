@@ -37,6 +37,14 @@
   border: 1px solid #1f2937;
 }
 
+.canvas-shell--managed-agent {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+
 .provisioning-status {
   display: grid;
   gap: 3px;
@@ -83,13 +91,89 @@
   border-color: color-mix(in srgb, #f59e0b 55%, var(--line));
 }
 
-.session-restart-button--stale {
-  border-color: #d97706;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+.session-runtime-status {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
 }
 
-.canvas-shell iframe,
-.terminal-placeholder {
+.session-runtime-status--success {
+  border-color: color-mix(in srgb, #22c55e 45%, var(--line));
+}
+
+.session-runtime-status--warning {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--line));
+}
+
+.session-runtime-status--danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+}
+
+.session-runtime-status__summary,
+.session-runtime-status__error,
+.session-runtime-status__access {
+  display: grid;
+  gap: 3px;
+}
+
+.session-runtime-status__summary strong,
+.session-runtime-status__error strong,
+.session-runtime-status__access strong {
+  color: var(--text);
+}
+
+.session-runtime-status__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+}
+
+.session-runtime-status__details div {
+  display: grid;
+  gap: 2px;
+}
+
+.session-runtime-status__details dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.session-runtime-status__details dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.session-runtime-status__error,
+.session-runtime-status__access {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.session-runtime-status__error strong {
+  color: var(--danger);
+}
+
+.session-runtime-status__error code,
+.session-runtime-status__access code {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.session-runtime-status__access .button {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.canvas-shell:not(.canvas-shell--managed-agent) iframe,
+.canvas-shell:not(.canvas-shell--managed-agent) .terminal-placeholder {
   width: 100%;
   height: min(62vh, 720px);
   min-height: 360px;
@@ -99,6 +183,19 @@
 .canvas-panel {
   height: min(62vh, 720px);
   min-height: 360px;
+}
+
+.canvas-shell--managed-agent .canvas-panel,
+.canvas-shell--managed-agent .browser-canvas {
+  height: 100%;
+  min-height: 0;
+}
+
+.canvas-shell--managed-agent .terminal-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
 }
 
 .canvas-panel[hidden] {
@@ -148,6 +245,48 @@
   border: 0;
 }
 
+.pi-web-ui-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.pi-web-ui-canvas__frame-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.pi-web-ui-canvas__frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+}
+
+.pi-web-ui-canvas__status {
+  position: absolute;
+  inset: 12px 12px auto;
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pi-web-ui-canvas__status strong {
+  color: var(--text);
+}
+
+.pi-web-ui-canvas__status code {
+  color: var(--danger);
+}
+
 .terminal-placeholder {
   display: grid;
   place-items: center;
@@ -158,16 +297,6 @@
 
 .terminal-placeholder code {
   color: #7dd3fc;
-}
-
-.ssh-forward-panel {
-  display: grid;
-  gap: 8px;
-}
-
-.ssh-forward-list {
-  display: grid;
-  gap: 8px;
 }
 
 .preview-share-error {
@@ -215,4 +344,5 @@
     align-items: stretch;
     flex-direction: column;
   }
+
 }

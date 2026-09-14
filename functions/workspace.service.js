@@ -7,58 +7,59 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
-  DIRECTORY_MARKER_FILES,
   INTERNAL_STORAGE_DIR,
-  MAX_WORKSPACE_TEXT_FILE_BYTES,
-  MAX_WORKSPACE_UPLOAD_BYTES,
 } = require("./backendConfig");
 const {
-  cleanContentType,
   cleanName,
-  contentTypeForPath,
   httpError,
   normalizeStoragePrefix,
-  safeContentDispositionFilename,
+  serialize,
   slugify,
   sortByUpdatedAtDesc,
+  timestampMillis,
   toClientDoc,
   userPath,
-  workspaceUploadBuffer,
 } = require("./backendUtils.helpers");
 const {normalizeEnvMap} = require("./env.helpers");
 const {
   normalizeMcpConfigPayload,
   normalizeStoredMcpConfig,
 } = require("./mcpConfig.helpers");
-const {
-  isDirectoryMarkerFileName,
-  isInternalStorageDirName,
-} = require("./runtimePaths.helpers");
-const {normalizeSshSessionPayload} = require("./sshSession.helpers");
+const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
+const {normalizeSessionResources} = require("./sessionResources.helpers");
+
+const ACTIVE_SESSION_STATUSES = new Set([
+  "running",
+  "ready",
+  "provisioning",
+  "queued",
+  "restarting",
+  "resizing",
+  "needs_service",
+  "stopping",
+]);
 
 function createWorkspaceService(dependencies = {}) {
   return {
     createWorkspace: (uid, payload) => createWorkspace(uid, payload, dependencies),
-    createWorkspaceDirectory,
-    createWorkspaceFile,
-    createWorkspaceFileDownloadUrl,
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
-    listWorkspaceFiles,
-    listWorkspaces,
-    readWorkspaceFile,
+    listWorkspaces: (uid) => listWorkspaces(uid, dependencies),
     renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
-    saveWorkspaceFile,
-    uploadWorkspaceFile,
   };
 }
 
-async function listWorkspaces(uid) {
-  const snap = await db.collection("workspaces")
+async function listWorkspaces(uid, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const snap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
-  return snap.docs.map(toClientDoc).sort(sortByUpdatedAtDesc);
+  const workspaces = await Promise.all(snap.docs.map((doc) =>
+    ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
+  ));
+  return workspaces.map(serialize).sort(sortByUpdatedAtDesc);
 }
 
 async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
@@ -67,16 +68,46 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
   const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
   const workspaceSnap = await workspaceRef.get();
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  const workspace = workspaceSnap.data() || {};
+  let workspace = workspaceSnap.data() || {};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
 
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_workspace_name");
-  await workspaceRef.update({
+  const update = {
     name,
     updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (payload && Object.prototype.hasOwnProperty.call(payload, "resources")) {
+    try {
+      update.resources = normalizeSessionResources(payload.resources || {});
+    } catch (error) {
+      if (error && error.code === "invalid_session_resources") {
+        throw httpError(400, error.code, error);
+      }
+      throw error;
+    }
+    workspace = await ensureCanonicalSession(uid, workspaceSnap, {
+      db: workspaceDb,
+      admin: workspaceAdmin,
+    });
+    await updateCanonicalSessionResources(workspaceRef, workspace, update.resources, workspaceAdmin);
+  }
+  await workspaceRef.update(update);
   return toClientDoc(await workspaceRef.get());
+}
+
+async function updateCanonicalSessionResources(workspaceRef, workspace, resources, workspaceAdmin) {
+  const canonicalSessionId = workspace.canonicalSessionId;
+  if (!canonicalSessionId || typeof workspaceRef.collection !== "function") return;
+  const sessionRef = workspaceRef.collection("sessions").doc(canonicalSessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) return;
+  const status = String(sessionSnap.data()?.status || "").toLowerCase();
+  if (["running", "ready"].includes(status)) return;
+  await sessionRef.update({
+    resources,
+    updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
 async function getWorkspaceMcpConfig(uid, workspaceId) {
@@ -123,9 +154,6 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
   }
 
   await deleteWorkspaceStorageIfUnshared(uid, workspace);
-  await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${workspaceId}`).delete().catch((error) => {
-    logger.warn("ssh workspace auth cleanup failed", {workspaceId, error: error.message});
-  });
   if (typeof db.recursiveDelete === "function") {
     await db.recursiveDelete(workspaceRef);
   } else {
@@ -138,27 +166,32 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
 }
 
 async function createWorkspace(uid, payload, dependencies = {}) {
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  payload = payload || {};
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const now = workspaceAdmin.firestore.FieldValue.serverTimestamp();
   const name = cleanName(payload.name || "Default workspace");
   const bucket = cleanName(payload.bucket || DEFAULT_BUCKET);
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
+  let resources;
+  try {
+    resources = normalizeSessionResources(payload.resources || payload);
+  } catch (error) {
+    if (error && error.code === "invalid_session_resources") {
+      throw httpError(400, error.code, error);
+    }
+    throw error;
+  }
   const storagePrefix = `workspaces/${uid}/${slugify(name)}`;
-  const sourceSecrets = source.secrets || null;
   const publicSource = {...source};
-  delete publicSource.secrets;
   const doc = {
     ownerUid: uid,
+    agentUiVersion: AGENT_UI_VERSION,
     userPath: userPath(uid),
     name,
     bucket,
     source: publicSource.type === "blank" ? {
       type: "blank",
-      status: "ready",
-      statusMessage: null,
-      resolvedBranch: null,
-      resolvedCommit: null,
-    } : publicSource.type === "ssh" ? {
-      ...publicSource,
       status: "ready",
       statusMessage: null,
       resolvedBranch: null,
@@ -178,22 +211,14 @@ async function createWorkspace(uid, payload, dependencies = {}) {
       reservedNameErrorCode: "reserved_workspace_env_name",
     }),
     environmentEntryIds: Array.isArray(payload.environmentEntryIds) ? [...new Set(payload.environmentEntryIds.map((id) => String(id || "").trim()).filter(Boolean))] : [],
+    resources,
+    canonicalSessionId: null,
     mcpConfig: normalizeMcpConfigPayload(payload.mcpConfig || {}),
     storagePrefix,
     createdAt: now,
     updatedAt: now,
   };
-  const ref = await db.collection("workspaces").add(doc);
-  if (sourceSecrets) {
-    await db.collection("users").doc(uid).collection("private").doc(`sshWorkspace_${ref.id}`).set({
-      ownerUid: uid,
-      workspaceId: ref.id,
-      type: sourceSecrets.authMode === "certificate" ? "openssh-user-certificate" : "private-key",
-      ...sourceSecrets,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
+  const ref = await workspaceDb.collection("workspaces").add(doc);
   const snap = await ref.get();
   return toClientDoc(snap);
 }
@@ -228,13 +253,7 @@ async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) 
     return {type: "blank"};
   }
   if (type === "ssh" || type === "dev-machine" || type === "dev-machine-backed") {
-    const normalized = normalizeSshSessionPayload({sshTarget: source.sshTarget || source.target || source});
-    return {
-      type: "ssh",
-      mode: "dev-machine",
-      target: normalized.public,
-      secrets: normalized.secrets,
-    };
+    throw httpError(400, "unsupported_workspace_source_type");
   }
   if (type !== "github") {
     throw httpError(400, "unsupported_workspace_source_type");
@@ -400,159 +419,6 @@ async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
   await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
 }
 
-async function listWorkspaceFiles(uid, workspaceId, directoryPath = "") {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  if (!bucketName || !prefix) return {files: [], truncated: false};
-
-  const cleanDirectoryPath = normalizeWorkspaceDirectoryPath(directoryPath);
-  const basePrefix = `${prefix}/`;
-  const queryPrefix = cleanDirectoryPath ? `${basePrefix}${cleanDirectoryPath}/` : basePrefix;
-  const [files, nextQuery, response] = await admin.storage().bucket(bucketName).getFiles({
-    autoPaginate: false,
-    delimiter: "/",
-    maxResults: 500,
-    prefix: queryPrefix,
-  });
-  const directoryRows = (response && response.prefixes || [])
-      .map((storagePrefix) => storagePrefixToClientDirectory(storagePrefix, basePrefix))
-      .filter(Boolean);
-  const fileRows = files
-      .map((file) => storageFileToClientFile(file, basePrefix))
-      .filter(Boolean);
-  const byPath = new Map();
-  for (const entry of [...directoryRows, ...fileRows]) {
-    byPath.set(`${entry.type}:${entry.path}`, entry);
-  }
-
-  return {
-    files: Array.from(byPath.values())
-        .sort((left, right) => left.path.localeCompare(right.path)),
-    path: cleanDirectoryPath,
-    truncated: Boolean(nextQuery),
-  };
-}
-
-async function readWorkspaceFile(uid, workspaceId, path) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const [exists] = await file.exists();
-  if (!exists) throw httpError(404, "file_not_found");
-
-  const [metadata] = await file.getMetadata();
-  const size = Number(metadata.size || 0);
-  if (size > MAX_WORKSPACE_TEXT_FILE_BYTES) throw httpError(413, "file_too_large");
-
-  const [buffer] = await file.download();
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    content: buffer.toString("utf8"),
-    contentType: metadata.contentType || "text/plain",
-    size,
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function saveWorkspaceFile(uid, workspaceId, path, payload) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const content = String(payload.content ?? "");
-  if (Buffer.byteLength(content, "utf8") > MAX_WORKSPACE_TEXT_FILE_BYTES) {
-    throw httpError(413, "file_too_large");
-  }
-
-  await file.save(content, {
-    contentType: contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function uploadWorkspaceFile(uid, workspaceId, path, req) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const buffer = workspaceUploadBuffer(req);
-  if (!buffer.length) throw httpError(400, "empty_file_upload");
-  if (buffer.length > MAX_WORKSPACE_UPLOAD_BYTES) throw httpError(413, "file_too_large");
-
-  await file.save(buffer, {
-    contentType: cleanContentType(req.get("content-type")) || contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${file.name.slice(0, -relativePath.length)}`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceFile(uid, workspaceId, payload = {}) {
-  const {bucket, file, prefix, relativePath} = await workspaceEntryStorageFile(
-      uid,
-      workspaceId,
-      payload.path,
-  );
-  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
-  await file.save("", {
-    contentType: contentTypeForPath(relativePath),
-    resumable: false,
-  });
-
-  const [metadata] = await file.getMetadata();
-  return {
-    file: storageFileToClientFile(file, `${prefix}/`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceDirectory(uid, workspaceId, payload = {}) {
-  const {bucket, prefix, relativePath} = await workspaceEntryStorageFile(
-      uid,
-      workspaceId,
-      payload.path,
-  );
-  await assertWorkspacePathAvailable(bucket, prefix, relativePath);
-  const markerRelativePath = `${relativePath}/${DIRECTORY_MARKER_FILES[0]}`;
-  const markerFile = bucket.file(`${prefix}/${markerRelativePath}`);
-  await markerFile.save("", {
-    contentType: "application/x-mapache-directory",
-    resumable: false,
-  });
-
-  const [metadata] = await markerFile.getMetadata();
-  return {
-    file: storageFileToClientFile(markerFile, `${prefix}/`),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function createWorkspaceFileDownloadUrl(uid, workspaceId, path) {
-  const {file, relativePath} = await workspaceStorageFile(uid, workspaceId, path);
-  const [exists] = await file.exists();
-  if (!exists) throw httpError(404, "file_not_found");
-
-  const expiresAtMs = Date.now() + 10 * 60 * 1000;
-  const filename = relativePath.split("/").pop() || "download";
-  const [url] = await file.getSignedUrl({
-    action: "read",
-    expires: expiresAtMs,
-    responseDisposition: `attachment; filename="${safeContentDispositionFilename(filename)}"`,
-    version: "v4",
-  });
-
-  return {
-    ok: true,
-    expiresAt: new Date(expiresAtMs).toISOString(),
-    filename,
-    url,
-  };
-}
-
 async function requireWorkspace(uid, workspaceId) {
   const snap = await db.collection("workspaces").doc(workspaceId).get();
   if (!snap.exists) throw httpError(404, "workspace_not_found");
@@ -561,135 +427,54 @@ async function requireWorkspace(uid, workspaceId) {
   return {id: snap.id, ...data};
 }
 
+async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
+  const workspace = {id: workspaceDoc.id, ...workspaceDoc.data()};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const sessionsRef = workspaceDb.collection("workspaces").doc(workspace.id).collection("sessions");
+  const sessionsSnap = await sessionsRef.get();
+  const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
+  let canonical = workspace.canonicalSessionId ?
+    sessions.find((session) => session.id === workspace.canonicalSessionId) : null;
+  if (!canonical && sessions.length) {
+    canonical = [...sessions].sort((left, right) => {
+      const leftActive = ACTIVE_SESSION_STATUSES.has(String(left.status || "").toLowerCase()) ? 1 : 0;
+      const rightActive = ACTIVE_SESSION_STATUSES.has(String(right.status || "").toLowerCase()) ? 1 : 0;
+      if (leftActive !== rightActive) return rightActive - leftActive;
+      return timestampMillis(right.updatedAt) - timestampMillis(left.updatedAt) || String(left.id).localeCompare(String(right.id));
+    })[0];
+  }
+
+  if (canonical && workspace.canonicalSessionId !== canonical.id) {
+    await workspaceDoc.ref.update({
+      canonicalSessionId: canonical.id,
+      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+    });
+    workspace.canonicalSessionId = canonical.id;
+  } else if (!canonical && workspace.canonicalSessionId) {
+    await workspaceDoc.ref.update({
+      canonicalSessionId: null,
+      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+    });
+    workspace.canonicalSessionId = null;
+  }
+
+  return workspace;
+}
+
 function workspaceSessionCollection(workspaceId) {
   return db.collection("workspaces").doc(workspaceId).collection("sessions");
 }
 
-function storageFileToClientFile(file, queryPrefix) {
-  const relativePath = file.name.slice(queryPrefix.length).replace(/^\/+/, "");
-  if (!relativePath || relativePath.endsWith("/")) return null;
-  if (isHiddenWorkspaceFilePath(relativePath)) {
-    return null;
-  }
-  const directoryPath = workspaceDirectoryPathFromMarker(relativePath);
-  if (directoryPath) {
-    return {
-      path: directoryPath,
-      name: directoryPath.split("/").pop(),
-      type: "directory",
-      size: 0,
-      updatedAt: "",
-    };
-  }
-  const metadata = file.metadata || {};
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    type: "file",
-    size: Number(metadata.size || 0),
-    updatedAt: metadata.updated || metadata.timeCreated || "",
-  };
-}
-
-async function workspaceStorageFile(uid, workspaceId, path) {
-  const workspace = await requireWorkspace(uid, workspaceId);
-  const bucketName = workspace.bucket || DEFAULT_BUCKET;
-  const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
-  const relativePath = normalizeWorkspaceFilePath(path);
-  if (!bucketName || !prefix) throw httpError(400, "workspace_storage_not_configured");
-  return {
-    bucket: admin.storage().bucket(bucketName),
-    file: admin.storage().bucket(bucketName).file(`${prefix}/${relativePath}`),
-    prefix,
-    relativePath,
-  };
-}
-
-async function workspaceEntryStorageFile(uid, workspaceId, path) {
-  if (!String(path || "").trim()) throw httpError(400, "empty_file_name");
-  return workspaceStorageFile(uid, workspaceId, path);
-}
-
-async function assertWorkspacePathAvailable(bucket, prefix, relativePath) {
-  const pathParts = relativePath.split("/");
-  for (let index = 1; index < pathParts.length; index += 1) {
-    const [parentFileExists] = await bucket.file(`${prefix}/${pathParts.slice(0, index).join("/")}`).exists();
-    if (parentFileExists) throw httpError(409, "workspace_path_conflict");
-  }
-
-  const [targetExists] = await bucket.file(`${prefix}/${relativePath}`).exists();
-  if (targetExists) throw httpError(409, "workspace_path_conflict");
-
-  const [children] = await bucket.getFiles({
-    autoPaginate: false,
-    maxResults: 1,
-    prefix: `${prefix}/${relativePath}/`,
-  });
-  if (children.length) throw httpError(409, "workspace_path_conflict");
-}
-
-function normalizeWorkspaceFilePath(value) {
-  const path = String(value || "").replace(/^\/+|\/+$/g, "");
-  const parts = path.split("/").filter(Boolean);
-  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
-    throw httpError(400, "invalid_file_path");
-  }
-  if (parts.some((part) => isDirectoryMarkerFileName(part))) {
-    throw httpError(400, "invalid_file_path");
-  }
-  if (isHiddenWorkspaceFilePath(parts.join("/"))) {
-    throw httpError(400, "invalid_file_path");
-  }
-  return parts.join("/");
-}
-
-function normalizeWorkspaceDirectoryPath(value) {
-  const path = String(value || "").replace(/^\/+|\/+$/g, "");
-  if (!path) return "";
-  return normalizeWorkspaceFilePath(path);
-}
-
-function isHiddenWorkspaceFilePath(relativePath) {
-  const parts = String(relativePath || "").split("/").filter(Boolean);
-  if (isInternalStorageDirName(parts[0])) return true;
-  return parts[0] === ".pi" && (parts[1] === "npm" || parts[1] === "git");
-}
-
-function storagePrefixToClientDirectory(storagePrefix, basePrefix) {
-  const relativePath = String(storagePrefix || "")
-      .slice(basePrefix.length)
-      .replace(/\/+$/g, "");
-  if (!relativePath || isHiddenWorkspaceFilePath(relativePath)) return null;
-  return {
-    path: relativePath,
-    name: relativePath.split("/").pop(),
-    type: "directory",
-    size: 0,
-    updatedAt: "",
-  };
-}
-
-function workspaceDirectoryPathFromMarker(relativePath) {
-  for (const marker of DIRECTORY_MARKER_FILES) {
-    if (relativePath.endsWith(`/${marker}`)) {
-      return relativePath.slice(0, -(`/${marker}`).length) || "";
-    }
-  }
-  return "";
-}
-
 module.exports = {
   createWorkspaceService,
-  createWorkspaceDirectory,
-  createWorkspaceFile,
   deleteWorkspaceStorageIfUnshared,
-  isHiddenWorkspaceFilePath,
-  listWorkspaceFiles,
+  ensureCanonicalSession,
   listWorkspaces,
   getWorkspaceMcpConfig,
   normalizePublicGitHubRepoUrl,
-  normalizeWorkspaceDirectoryPath,
-  normalizeWorkspaceFilePath,
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSourcePayload,
   normalizeWorkspaceSyncPolicy,
@@ -697,7 +482,4 @@ module.exports = {
   requireWorkspace,
   renameWorkspace,
   saveWorkspaceMcpConfig,
-  storagePrefixToClientDirectory,
-  storageFileToClientFile,
-  workspaceStorageFile,
 };

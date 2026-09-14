@@ -2,6 +2,7 @@
 
 const assert = require("assert");
 const {createSessionCreationService} = require("./sessionCreation.service");
+const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 const serverTimestamp = () => "SERVER_TIMESTAMP";
 const admin = {firestore: {FieldValue: {serverTimestamp}}};
@@ -30,21 +31,18 @@ const dependencies = {
     reservations.push({kind: "reserveSync", args});
     storedSession = {...args[2], syncWriterRole: "writer"};
   },
-  resolveHarness: (harnessId) => ({terminalKind: harnessId === "codex" ? "codex" : harnessId === "ssh" ? "ssh" : "shell"}),
-  resolveRunnerImage: (payload) => payload.imageKey === "chrome" ? {
-    key: "chrome",
-    image: "gcr.io/example/chrome",
-    harnessId: "pi",
-    terminalKind: "pi",
-    capabilities: {terminal: true, preview: true, chrome: true},
-    canProvision: true,
-  } : {
-    key: "default",
-    image: "gcr.io/example/default",
-    harnessId: "shell",
-    terminalKind: "shell",
-    capabilities: {terminal: true, preview: true},
-    canProvision: true,
+  resolveHarness: () => ({terminalKind: "pi"}),
+  resolveRunnerImage: (payload) => {
+    if (payload.imageKey !== "pi-chrome") throw Object.assign(new Error("invalid_runner_image"), {code: "invalid_runner_image"});
+    return {
+      key: payload.imageKey,
+      imageKey: payload.imageKey,
+      image: "gcr.io/example/chrome",
+      harnessId: "pi",
+      terminalKind: "pi",
+      capabilities: {terminal: true, preview: true, chrome: true},
+      canProvision: true,
+    };
   },
   requireWorkspace: async (uid, workspaceId) => ({
     ownerUid: uid,
@@ -78,7 +76,27 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(blank.status, "provisioning");
   assert.strictEqual(blank.provisioningState, "queued");
   assert.ok(blank.serviceId.length < 50);
-  assert.strictEqual(reservations[0].kind, "reserveSync");
+  assert.strictEqual(reservations[0].kind, "reserveChrome");
+  await assert.rejects(
+      createWithWorkspace({
+        ownerUid: "user-1",
+        bucket: "bucket",
+        storagePrefix: "workspaces/user-1/blank",
+        source: {type: "blank"},
+        mcpConfig: {},
+      }, {operationId: "forged-image-key", imageKey: "codex-web"}),
+      (error) => error.status === 400 && error.publicMessage === "invalid_runner_image",
+  );
+  await assert.rejects(
+      createWithWorkspace({
+        ownerUid: "user-1",
+        bucket: "bucket",
+        storagePrefix: "workspaces/user-1/blank",
+        source: {type: "blank"},
+        mcpConfig: {},
+      }, {operationId: "forged-image-uri", image: "docker.io/attacker/runner:latest"}),
+      (error) => error.status === 400 && error.publicMessage === "invalid_runner_image",
+  );
 
   const github = await createWithWorkspace({
     ownerUid: "user-1",
@@ -90,7 +108,7 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(github.sourceType, "github");
   assert.strictEqual(github.sourceMode, "connected");
   assert.strictEqual(github.sourceInstallationId, "42");
-  assert.strictEqual(reservations[0].kind, "reserveGithub");
+  assert.strictEqual(reservations[0].kind, "reserveChrome");
 
   const chrome = await createWithWorkspace({
     ownerUid: "user-1",
@@ -98,33 +116,32 @@ async function createWithWorkspace(workspace, payload) {
     storagePrefix: "workspaces/user-1/chrome",
     source: {type: "blank"},
     mcpConfig: {},
-  }, {operationId: "chrome-1", imageKey: "chrome"});
+  }, {operationId: "chrome-1", imageKey: "pi-chrome"});
   assert.strictEqual(chrome.capabilities.chrome, true);
   assert.strictEqual(reservations[0].kind, "reserveChrome");
   assert.strictEqual(reservations[0].args[3].syncWriterEligible, true);
 
-  const ssh = await createWithWorkspace({
+  const marked = await createWithWorkspace({
     ownerUid: "user-1",
+    agentUiVersion: AGENT_UI_VERSION,
     bucket: "bucket",
-    storagePrefix: "workspaces/user-1/ssh",
+    storagePrefix: "workspaces/user-1/marked",
     source: {type: "blank"},
     mcpConfig: {},
-  }, {
-    operationId: "ssh-1",
-    type: "ssh",
-    sshTarget: {
-      host: "dev.example.com",
-      port: 22,
-      username: "developer",
-      privateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----",
-      knownHosts: "dev.example.com ssh-ed25519 AAAAhost",
-    },
-  });
-  assert.strictEqual(ssh.sessionType, "ssh");
-  assert.strictEqual(ssh.terminalKind, "ssh");
-  assert.strictEqual(ssh.capabilities.sshFiles, true);
-  assert.strictEqual(ssh.sessionEnv.SSH_TARGET_HOST, "dev.example.com");
-  assert.strictEqual(reservations[0].kind, "reserveSync");
+  }, {operationId: "marked-1", imageKey: "pi-chrome", agentUiVersion: "browser-chosen-version"});
+  assert.strictEqual(marked.agentUiVersion, AGENT_UI_VERSION);
+  assert.strictEqual(marked.imageKey, "pi-chrome");
+  assert.strictEqual(marked.harnessId, "pi");
+  assert.strictEqual(marked.capabilities.chrome, true);
+  await assert.rejects(
+      createWithWorkspace({
+        ownerUid: "user-1",
+        agentUiVersion: AGENT_UI_VERSION,
+        source: {type: "blank"},
+        mcpConfig: {},
+      }, {operationId: "marked-unsupported-1", type: "ssh"}),
+      (error) => error.status === 400 && error.publicMessage === "unsupported_session_type",
+  );
 
   console.log("session creation service tests passed");
 })().catch((error) => {

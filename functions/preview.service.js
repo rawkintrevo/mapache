@@ -4,6 +4,12 @@ const crypto = require("crypto");
 const path = require("path");
 const logger = require("firebase-functions/logger");
 const {cleanName, httpError} = require("./backendUtils.helpers");
+const {
+  AGENT_AUDIENCE,
+  explicitRuntimeGeneration,
+  isCompatibleAgentSession,
+} = require("./agentRuntime.helpers");
+const {qaFaultAccessTtlMs} = require("./qaFaultHarness.helpers");
 
 function createPreviewService(dependencies = {}) {
   return {
@@ -16,31 +22,32 @@ function createPreviewService(dependencies = {}) {
 }
 
 async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies = {}) {
-  const {sessionSnap} = await dependencies.requireSession(uid, workspaceId, sessionId);
+  const {sessionSnap, workspace} = await dependencies.requireSession(uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
   if (!session.serviceUrl) throw httpError(409, "session_not_running");
   if (!session.browserAccessTokenSecret) {
     throw httpError(409, "session_requires_restart_for_browser_access");
   }
 
-  const expiresAtMs = Date.now() + dependencies.browserAccessTtlMs;
+  const expiresAtMs = Date.now() + qaFaultAccessTtlMs(session, dependencies.browserAccessTtlMs);
   const token = signSessionBrowserAccessToken(session, expiresAtMs);
   const baseUrl = session.serviceUrl.replace(/\/+$/, "");
   const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
   const previewUrl = appendQuery(`${baseUrl}/preview/`, "mapache_access", token);
-  const sshForwardBaseUrl = appendQuery(`${baseUrl}/ssh/forward`, "mapache_access", token);
   const browserUrl = session.capabilities && session.capabilities.chrome ?
     appendQuery(`${baseUrl}/browser/`, "mapache_access", token) : null;
   const browserStatusUrl = session.capabilities && session.capabilities.chrome ?
     appendQuery(`${baseUrl}/browser/status`, "mapache_access", token) : null;
+  const agentUrl = isCompatibleAgentSession(workspace, session) ?
+    appendQuery(`${baseUrl}/agent/`, "mapache_access", signSessionAgentAccessToken(session, expiresAtMs)) : null;
   return {
     ok: true,
     expiresAt: new Date(expiresAtMs).toISOString(),
     terminalUrl,
     previewUrl,
-    sshForwardBaseUrl,
     browserUrl,
     browserStatusUrl,
+    ...(agentUrl ? {agentUrl} : {}),
   };
 }
 
@@ -160,6 +167,22 @@ function signSessionBrowserAccessToken(session, expiresAtMs) {
   return `${payload}.${signature}`;
 }
 
+function signSessionAgentAccessToken(session, expiresAtMs) {
+  const generation = explicitRuntimeGeneration(session.agentRuntimeGeneration);
+  if (!generation) return "";
+  const payload = Buffer.from(JSON.stringify({
+    aud: AGENT_AUDIENCE,
+    exp: Math.floor(expiresAtMs / 1000),
+    gen: generation,
+    sid: session.runnerSessionId || session.id || "",
+  })).toString("base64url");
+  const signature = crypto
+      .createHmac("sha256", session.browserAccessTokenSecret)
+      .update(payload)
+      .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
 function appendQuery(url, key, value) {
   const parsed = new URL(url);
   parsed.searchParams.set(key, value);
@@ -216,5 +239,6 @@ module.exports = {
   createPreviewService,
   publicPreviewContentType,
   publicPreviewPath,
+  signSessionAgentAccessToken,
   shouldServePublicPreviewIndexFallback,
 };

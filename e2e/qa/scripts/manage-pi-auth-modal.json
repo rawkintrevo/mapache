@@ -2,7 +2,6 @@
   "id": "script.managePiAuthModal",
   "title": "Open and save Manage Pi Auth selections",
   "actions": [
-    {"useScript": "scripts/expand-inspector.json"},
     {"type": "click", "role": "button", "name": "Manage Pi Auth"},
     {"type": "waitForSnapshotText", "text": "Manage Pi Auth", "timeoutMs": 5000},
     {"type": "click", "role": "button", "name": "Save"},

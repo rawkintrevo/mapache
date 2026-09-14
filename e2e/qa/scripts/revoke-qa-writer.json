@@ -1,0 +1,17 @@
+{
+  "id": "script.revokeQaWriter",
+  "title": "Consume the disposable writer-revocation fault",
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{selectedWorkspaceId}}/sessions/{{selectedSessionId}}/qa/faults",
+      "body": {"action": "revoke-writer"}
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/qa/faults", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The runner acknowledges writer revocation",
+    "Subsequent writes are fenced by the runner authority boundary"
+  ]
+}
