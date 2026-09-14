@@ -3,20 +3,16 @@ import {useEffect, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
-import {ResourceUtilization} from "./ResourceUtilization.jsx";
 import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
 import {ManagedAgentSurface} from "./ManagedAgentSurface.jsx";
 import {getSessionImageFreshness, isMarkedRuntimeSession, isSessionResizePending} from "./sessionPresentation.js";
-import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {deriveShellUrl} from "../../utils/shell.js";
-import {useResourceMetrics} from "./useResourceMetrics.js";
-import {useSessionAccessUrls} from "./useSessionAccessUrls.js";
 
 export function SessionDetail({
   activeCanvas: controlledActiveCanvas,
   session,
   workspaceId,
-  onGetSessionAccessUrls,
+  access,
   onSelectCanvas,
 }) {
   const [localActiveCanvas, setLocalActiveCanvas] = useState(() => (
@@ -28,32 +24,18 @@ export function SessionDetail({
   const setActiveCanvas = onSelectCanvas || setLocalActiveCanvas;
   const capabilities = session.capabilities || {};
   const hasRunnerUrl = Boolean(session.serviceUrl);
-  const {
-    accessUrls,
-    error: accessError,
-    refreshAfterConnectionFailure,
-    refresh: refreshAccess,
-  } = useSessionAccessUrls({
-    enabled: hasRunnerUrl,
-    workspaceId,
-    sessionId: session.id,
-    serviceUrl: session.serviceUrl || "",
-    loadAccessUrls: onGetSessionAccessUrls,
-  });
+  const accessUrls = access?.accessUrls || null;
+  const accessError = access?.error || "";
+  const refreshAfterConnectionFailure = access?.refreshAfterConnectionFailure;
+  const refreshAccess = access?.refresh;
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
   const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const hasAgent = Boolean(hasRunnerUrl && accessUrls?.agentUrl);
-  const metricsSocketUrl = deriveResourceMetricsSocketUrl(accessUrls?.terminalUrl);
   const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
   const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
   const imageFreshness = getSessionImageFreshness(session);
-  const metrics = useResourceMetrics({
-    enabled: Boolean(!isManagedAgentSurface && session.status === "running" && hasRunnerUrl && metricsSocketUrl),
-    sessionId: session.id,
-    socketUrl: metricsSocketUrl || "",
-  });
 
   useEffect(() => {
     setActiveCanvas(isManagedAgentSurface ? "agent" : "terminal");
@@ -111,9 +93,6 @@ export function SessionDetail({
             </Button>
           ) : null}
           </div>
-        ) : null}
-        {metricsSocketUrl && session.status === "running" ? (
-          <ResourceUtilization sample={metrics.sample} connectionState={metrics.connectionState} />
         ) : null}
       </div> : null}
       {!isManagedAgentSurface && isProvisioning ? (

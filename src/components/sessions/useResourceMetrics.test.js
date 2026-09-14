@@ -97,6 +97,22 @@ describe("useResourceMetrics", () => {
     expect(sockets).toHaveLength(2);
   });
 
+  test("clears the last sample while reconnecting", () => {
+    const {result} = renderHook(() => useResourceMetrics({
+      enabled: true,
+      sessionId: "session-1",
+      socketUrl: "ws://runner/metrics",
+    }));
+    const socket = sockets[0];
+    act(() => {
+      socket.open();
+      socket.serverMessage(sample);
+      socket.disconnect();
+    });
+    expect(result.current.sample).toBeNull();
+    expect(result.current.connectionState).toBe("reconnecting");
+  });
+
   test("cleans up stale sockets when the session changes", () => {
     const {result, rerender, unmount} = renderHook(
         (props) => useResourceMetrics(props),

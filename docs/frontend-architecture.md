@@ -29,10 +29,13 @@ are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
 The signed-in shell has no left drawer. Its top navigation contains workspace
-Play/Pause lifecycle control beside the workspace selector, marked-runtime
-Agent and Logs icons, compact actions for Pi auth, generic environment keys,
-workspace MCP servers, and Google Workspace, plus an avatar icon for the user
-menu. Google Workspace account management opens in a modal from its topbar
+Play/Pause lifecycle control beside the workspace selector, followed by the
+selected canonical cloud runtime's live CPU and memory meters, then
+marked-runtime Agent and Logs icons, compact actions for Pi auth, generic
+environment keys, workspace MCP servers, and Google Workspace, plus an avatar
+icon for the user menu. The meters remain mounted across Agent, Chrome, Logs,
+profile, and admin surfaces; they are read-only and show unavailable or
+reconnecting state instead of stale readings. Google Workspace account management opens in a modal from its topbar
 icon; the shell no longer reserves either sidebar column. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
@@ -79,10 +82,15 @@ provider secrets. MCP and Google controls remain Mapache-owned because they
 configure external connections and token materialization rather than upstream
 agent preferences.
 
-`loadSelectedSessionAccess` in `src/main.js` remains narrow and is keyed by the
-workspace's canonical runtime. Workspace Play/Pause delegates to the retained
-session lifecycle API internally; users do not select, create, rename, resize,
-restart, stop, or delete sibling sessions from the Mapache shell. Compute size
+`AppShell` owns one `useSessionAccessUrls` and one `useResourceMetrics` instance
+for the selected workspace's canonical non-SSH runtime. The signed terminal
+access URL derives the authenticated `/metrics` socket URL; changing workspace,
+session, or signed URL tears down the prior socket and ignores late events.
+Metrics are enabled only for running runtimes and do not attach to the PTY or
+update activity. `loadSelectedSessionAccess` in `src/main.js` remains narrow and
+is keyed by the workspace's canonical runtime. Workspace Play/Pause delegates to
+the retained session lifecycle API internally; users do not select, create,
+rename, resize, restart, stop, or delete sibling sessions from the Mapache shell. Compute size
 is edited from the workspace edit modal and stored on the workspace. The API
 resize call also recovers marked runtimes in `provision_failed`, `update_failed`,
 or `stop_failed` when resource settings are saved, even if their recorded size

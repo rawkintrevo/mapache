@@ -5,6 +5,9 @@ import {hasPendingOperations, getPendingOperationMessage} from "../../state/pend
 import {GlobalActionIndicator} from "./GlobalActionIndicator.jsx";
 import {Topbar} from "./Topbar.jsx";
 import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
+import {useResourceMetrics} from "../sessions/useResourceMetrics.js";
+import {useSessionAccessUrls} from "../sessions/useSessionAccessUrls.js";
+import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 import {SessionLogsModal} from "../modals/SessionLogsModal.jsx";
 
 const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: page}) => ({default: page})));
@@ -17,16 +20,31 @@ export function AppShell(props) {
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
-  const selectedSession = state.sessions.find(
-    (session) => session.id === selectedWorkspace?.canonicalSessionId,
+  const selectedSession = selectedWorkspace ? state.sessions.find(
+    (session) => session.id === selectedWorkspace.canonicalSessionId,
   ) || state.sessions.find(
     (session) => session.id === state.selectedSessionId,
-  ) || state.sessions[0];
+  ) || state.sessions[0] : null;
   const [activeCanvas, setActiveCanvas] = useState(() => (
     isMarkedRuntimeSession(selectedSession) ? "agent" : "terminal"
   ));
   const [logsOpen, setLogsOpen] = useState(false);
   const selectedSessionIsManaged = isMarkedRuntimeSession(selectedSession);
+  const selectedWorkspaceIsSsh = selectedWorkspace?.source?.type === "ssh";
+  const hasRunnerUrl = Boolean(selectedSession?.serviceUrl);
+  const access = useSessionAccessUrls({
+    enabled: Boolean(selectedSession && hasRunnerUrl && !selectedWorkspaceIsSsh && ["running", "ready"].includes(selectedSession.status)),
+    workspaceId: selectedWorkspace?.id || "",
+    sessionId: selectedSession?.id || "",
+    serviceUrl: selectedSession?.serviceUrl || "",
+    loadAccessUrls: sessions.getSessionAccessUrls,
+  });
+  const metricsSocketUrl = deriveResourceMetricsSocketUrl(access.accessUrls?.terminalUrl);
+  const metrics = useResourceMetrics({
+    enabled: Boolean(selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" && metricsSocketUrl),
+    sessionId: selectedSession?.id || "",
+    socketUrl: metricsSocketUrl || "",
+  });
 
   useEffect(() => {
     setActiveCanvas(selectedSessionIsManaged ? "agent" : "terminal");
@@ -63,6 +81,7 @@ export function AppShell(props) {
         onShowProfile={modals.showProfile}
         onSignOut={app.signOut}
         onToggleWorkspace={workspaces.toggleWorkspace}
+        resourceMetrics={selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />
       <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
       <main>
@@ -93,7 +112,7 @@ export function AppShell(props) {
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}
-            onGetSessionAccessUrls={sessions.getSessionAccessUrls}
+            access={access}
             onSelectCanvas={setActiveCanvas}
           />
         )}

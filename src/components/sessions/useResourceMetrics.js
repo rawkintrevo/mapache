@@ -63,6 +63,7 @@ export function useResourceMetrics({enabled = false, sessionId = "", socketUrl =
       connectedSocket.addEventListener("close", () => {
         if (!isCurrent(connectedSocket)) return;
         socket = null;
+        setState((current) => ({...current, sample: null}));
         if (!deliberate) scheduleReconnect();
       });
       connectedSocket.addEventListener("error", () => {});
@@ -77,7 +78,7 @@ export function useResourceMetrics({enabled = false, sessionId = "", socketUrl =
         return;
       }
       if (message?.type === "metrics_unavailable" && message.code === "resource_metrics_unavailable") {
-        setState((current) => ({...current, connectionState: "unavailable", error: message.code}));
+        setState((current) => ({...current, sample: null, connectionState: "unavailable", error: message.code}));
         return;
       }
       if (!isValidSample(message)) {

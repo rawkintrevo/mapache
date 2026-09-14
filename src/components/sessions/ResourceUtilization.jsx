@@ -1,20 +1,24 @@
 import "./ResourceUtilization.css";
 
-export function ResourceUtilization({sample = null, connectionState = "idle"}) {
+export function ResourceUtilization({sample = null, connectionState = "idle", navbar = false}) {
   const unavailable = connectionState === "unavailable";
+  const stale = sample && connectionState !== "connected";
+  const status = connectionState === "reconnecting" ? "Reconnecting" : null;
+  const visibleSample = stale ? null : sample;
   return (
-    <div aria-label="Resource utilization" className={`resource-utilization resource-utilization--${connectionState}`}>
+    <div aria-label="Resource utilization" className={`resource-utilization${navbar ? " resource-utilization--navbar" : ""} resource-utilization--${connectionState}`}>
+      {status ? <span className="resource-utilization__status" role="status">{status}</span> : null}
       <ResourceMeter
         label="CPU"
-        percent={sample?.cpu?.percent}
-        value={sample ? `${formatPercent(sample.cpu.percent)}%` : unavailable ? "Unavailable" : "—"}
-        detail={sample ? `${formatPercent(sample.cpu.percent)} percent of ${formatCores(sample.cpu.limitCores)} available CPU` : "CPU utilization unavailable"}
+        percent={visibleSample?.cpu?.percent}
+        value={visibleSample ? `${formatPercent(visibleSample.cpu.percent)}%` : unavailable ? "Unavailable" : status || "—"}
+        detail={visibleSample ? `${formatPercent(visibleSample.cpu.percent)} percent of ${formatCores(visibleSample.cpu.limitCores)} available CPU` : "CPU utilization unavailable"}
       />
       <ResourceMeter
         label="RAM"
-        percent={sample?.memory?.percent}
-        value={sample ? `${formatBytes(sample.memory.usedBytes)}/${formatBytes(sample.memory.limitBytes)}` : unavailable ? "Unavailable" : "—"}
-        detail={sample ? `${formatBytes(sample.memory.usedBytes)} of ${formatBytes(sample.memory.limitBytes)}, ${formatPercent(sample.memory.percent)} percent utilized` : "RAM utilization unavailable"}
+        percent={visibleSample?.memory?.percent}
+        value={visibleSample ? `${formatBytes(visibleSample.memory.usedBytes)}/${formatBytes(visibleSample.memory.limitBytes)}` : unavailable ? "Unavailable" : status || "—"}
+        detail={visibleSample ? `${formatBytes(visibleSample.memory.usedBytes)} of ${formatBytes(visibleSample.memory.limitBytes)}, ${formatPercent(visibleSample.memory.percent)} percent utilized` : "RAM utilization unavailable"}
       />
     </div>
   );

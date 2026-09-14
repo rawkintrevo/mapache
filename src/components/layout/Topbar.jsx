@@ -6,6 +6,7 @@ import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
+import {ResourceUtilization} from "../sessions/ResourceUtilization.jsx";
 
 export function Topbar({
   activeCanvas,
@@ -26,6 +27,7 @@ export function Topbar({
   onShowProfile,
   onSignOut,
   onToggleWorkspace,
+  resourceMetrics,
 }) {
   const busy = hasPendingOperations(state.pendingOperations);
   const selectedWorkspace = state.workspaces.find(
@@ -118,6 +120,13 @@ export function Topbar({
           <Trash2 aria-hidden="true" />
         </Button>
       </div>
+      {resourceMetrics ? (
+        <ResourceUtilization
+          connectionState={resourceMetrics.connectionState}
+          navbar
+          sample={resourceMetrics.sample}
+        />
+      ) : null}
       <div className="topbar-actions">
         {showWorkspaceTools ? (
           <>
