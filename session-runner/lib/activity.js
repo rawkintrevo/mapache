@@ -4,8 +4,10 @@ const {compactErrorMessage} = require("./utils");
 
 const LIVE_RUNTIME_STATUSES = new Set(["running", "restarting", "resizing"]);
 
-function createActivityService({admin, db, config}) {
+function createActivityService({admin, db, config, isCurrentRuntime}) {
   const {workspaceId, sessionId} = config;
+  let activityTimer = null;
+  let pendingActivity = false;
 
   function sessionRef() {
     return db.collection("workspaces")
@@ -33,9 +35,22 @@ function createActivityService({admin, db, config}) {
 
   async function updateSessionActivity(updates) {
     if (!workspaceId || !sessionId) return;
+    if (typeof isCurrentRuntime === "function" && !isCurrentRuntime()) return;
     await sessionRef()
         .update(updates)
         .catch((error) => console.error("session activity write failed", error));
+  }
+
+  function markMeaningfulActivity() {
+    if (activityTimer) clearTimeout(activityTimer);
+    pendingActivity = true;
+    activityTimer = setTimeout(() => {
+      activityTimer = null;
+      if (!pendingActivity) return;
+      pendingActivity = false;
+      void updateSessionActivity({lastActivityAt: admin.firestore.FieldValue.serverTimestamp()});
+    }, config.activityWriteDebounceMs);
+    activityTimer.unref?.();
   }
 
   async function markRuntimeStartupFailure(error) {
@@ -97,6 +112,7 @@ function createActivityService({admin, db, config}) {
   return {
     appendHistory,
     markRuntimeStartupFailure,
+    markMeaningfulActivity,
     updatePiSessionBinding,
     updateSessionActivity,
     updateWorkspaceSourceState,

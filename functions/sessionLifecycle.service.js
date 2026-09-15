@@ -582,13 +582,18 @@ function isIdleSession(session, now) {
       positiveNumber(session.idleTimeoutMinutes, DEFAULT_IDLE_TIMEOUT_MINUTES),
       DEFAULT_IDLE_TIMEOUT_MINUTES,
   );
+  const marked = isMarkedRuntimeSession(session);
+  // Metadata writes and transport diagnostics are not work. Marked runners use
+  // the activity signal exclusively, while old records retain the timestamp
+  // fallback until they receive a runner revision that reports it.
   const idleSince = latestTimestampMillis(
       session.lastActivityAt,
-      session.updatedAt,
-      session.createdAt,
+      ...(marked ? [] : [session.updatedAt, session.createdAt]),
   );
-  if (!idleSince) return false;
-  return now - idleSince >= idleTimeoutMinutes * 60 * 1000;
+  const runtimeStartedAt = latestTimestampMillis(session.runtimeStartedAt);
+  const baseline = runtimeStartedAt && idleSince ? Math.max(runtimeStartedAt, idleSince) : runtimeStartedAt || idleSince;
+  if (!baseline) return false;
+  return now - baseline >= idleTimeoutMinutes * 60 * 1000;
 }
 
 module.exports = {createSessionLifecycleService, isIdleSession};

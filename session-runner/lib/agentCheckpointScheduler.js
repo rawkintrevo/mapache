@@ -16,6 +16,7 @@ const DEFAULT_MANUAL_SAVE_BUDGET_MS = 120_000;
  * single lifecycle owner for periodic, completed-turn, and final saves.
  */
 function createAgentCheckpointScheduler({
+  activity,
   agentSnapshot,
   checkpointIdentity,
   checkpointPublisher,
@@ -132,6 +133,7 @@ function createAgentCheckpointScheduler({
       }
       if (count > completedTurnsSeen) {
         completedTurnsSeen = count;
+        activity?.markMeaningfulActivity?.();
         noteCompletedTurn();
       }
     }).catch((error) => {

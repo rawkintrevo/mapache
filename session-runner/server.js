@@ -69,7 +69,6 @@ const wss = new WebSocketServer({noServer: true});
 const browserWss = new WebSocketServer({noServer: true});
 const shellWss = new WebSocketServer({noServer: true});
 const agentWss = new WebSocketServer({noServer: true, maxPayload: 256 * 1024 * 1024});
-const activity = createActivityService({admin, db, config});
 const browserQa = createBrowserQaService(config);
 const chromeRuntime = createChromeRuntime(config, {
   desktop: createChromeDesktopService(config),
@@ -84,6 +83,7 @@ const workspaceAuthority = createWorkspaceAuthority({
   db,
   onLost: () => piWebUi?.stop?.(),
 });
+const activity = createActivityService({admin, db, config, isCurrentRuntime: workspaceAuthority.isCurrentWriter});
 const qaFaultHarness = createQaFaultHarness({
   config,
   db,
@@ -140,6 +140,7 @@ piWebUi = createPiWebUiProcess(config, {
 });
 const agentSnapshot = createAgentSnapshotService({config});
 const checkpointScheduler = createAgentCheckpointScheduler({
+  activity,
   agentSnapshot,
   checkpointIdentity,
   checkpointPublisher,
@@ -150,6 +151,7 @@ const checkpointScheduler = createAgentCheckpointScheduler({
 });
 const agentGateway = createAgentGateway({
   accessVerifier: agentAccess,
+  activity,
   enabled: config.agentRuntimeEnabled,
   getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
   assertCurrentWriter: workspaceAuthority.assertCurrentWriter,
@@ -158,6 +160,7 @@ const agentGateway = createAgentGateway({
 });
 const agentWebSocket = createAgentWebSocketGateway({
   accessVerifier: agentAccess,
+  activity,
   clientWss: agentWss,
   enabled: config.agentRuntimeEnabled,
   getUpstreamHeaders: () => piWebUi.upstreamHeaders(),
