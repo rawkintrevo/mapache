@@ -74,7 +74,6 @@ const chromeRuntime = createChromeRuntime(config, {
   desktop: createChromeDesktopService(config),
 });
 const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
-const git = createGitService({config, activity});
 const preview = createPreviewService(config, {browserQa});
 let piWebUi = null;
 const workspaceAuthority = createWorkspaceAuthority({
@@ -84,6 +83,7 @@ const workspaceAuthority = createWorkspaceAuthority({
   onLost: () => piWebUi?.stop?.(),
 });
 const activity = createActivityService({admin, db, config, isCurrentRuntime: workspaceAuthority.isCurrentWriter});
+const git = createGitService({config, activity});
 const qaFaultHarness = createQaFaultHarness({
   config,
   db,
