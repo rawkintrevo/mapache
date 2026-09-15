@@ -86,7 +86,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
 - `cases/mcp-servers-crud.json`: Navbar MCP server modal save path for selected workspaces.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
-- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path and navbar connection controls.
+- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path, lazy runtime Logs, and navbar connection controls.
 
 Parent-level Files, Git, Skills, Subagents, Extensions, Models, Chat, and Mapache Goals cases are intentionally absent. Upstream Agent owns the live workspace, Git, model, history, skill, and native Goal surfaces; Mapache retains only lifecycle, authentication, MCP, Google Workspace, and migration/persistence boundaries.
 

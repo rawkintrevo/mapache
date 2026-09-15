@@ -1,0 +1,16 @@
+{
+  "id": "script.openSessionLogs",
+  "title": "Open runtime Logs from the top navigation",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Logs"},
+    {"type": "waitForSnapshotText", "text": "Logs", "timeoutMs": 10000},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/logs", "method": "GET", "expectedStatus": 200, "timeoutMs": 30000}
+  ],
+  "successSignals": [
+    "The lazy Logs surface resolves to its dialog",
+    "GET /api/workspaces/{workspaceId}/sessions/{sessionId}/logs returns 200"
+  ],
+  "requires": {
+    "session": "Selected running managed session"
+  }
+}
