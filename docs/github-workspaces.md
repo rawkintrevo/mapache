@@ -287,6 +287,21 @@ That sync should:
 
 This gives the app a reasonable recovery path for uncommitted file edits while still letting Git own repository semantics.
 
+## Manual Agent Git Workflow
+
+For user-requested issue creation, branching, pushing, and pull requests, use the
+checked-in [Mapache Git skill](../.agents/skills/mapache-git/SKILL.md). Its helper
+maps the runner's `GITHUB_AUTOMATION_TOKEN` to `GH_TOKEN` for GitHub CLI calls and
+uses invocation-local `gh auth git-credential` for HTTPS Git operations, without
+persisting credentials. The skill complements the implementation and QA policy
+in [Issue Workflow](../.agents/skills/issue-workflow/SKILL.md).
+
+When unrelated edits exist, the manual workflow uses a separate worktree from a
+fetched base rather than switching or stashing the shared workspace. This does
+not disable exit automation in the original worktree: changes still present on
+that session's automation branch remain subject to its normal exit lifecycle.
+Manual PR creation should be verified immediately, not delegated to agent exit.
+
 ## Git Control Surface
 
 The eventual Git UI should wrap common commands, not reinterpret them.
