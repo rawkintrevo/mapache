@@ -21,6 +21,7 @@ function createAgentWebSocketGateway({
   upstreamHost = DEFAULT_UPSTREAM_HOST,
   upstreamPort = DEFAULT_UPSTREAM_PORT,
   queueLimitBytes = DEFAULT_QUEUE_LIMIT_BYTES,
+  activity,
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
   isCurrentWriter,
@@ -98,6 +99,7 @@ function createAgentWebSocketGateway({
     const toClient = createQueue(null, () => client, () => closePair(1011, "agent_proxy_error"));
 
     client.on("message", (data, isBinary) => {
+      if (isMeaningfulAgentPayload(data)) activity?.markMeaningfulActivity?.();
       if (!safeWriterStatus()) {
         closePair(1011, "writer_authority_lost");
         return;
@@ -142,6 +144,7 @@ function createAgentWebSocketGateway({
       toUpstream.flush();
     });
     upstream.on("message", (data, isBinary) => {
+      if (isMeaningfulAgentPayload(data)) activity?.markMeaningfulActivity?.();
       if (!safeWriterStatus()) {
         closePair(1011, "writer_authority_lost");
         return;
@@ -245,6 +248,17 @@ function createAgentWebSocketGateway({
     } catch (error) {
       return false;
     }
+  }
+}
+
+function isMeaningfulAgentPayload(data) {
+  if (!data || (typeof data.byteLength === "number" && data.byteLength === 0)) return false;
+  try {
+    const value = JSON.parse(Buffer.isBuffer(data) ? data.toString("utf8") : String(data));
+    const type = String(value?.type || value?.event || value?.kind || "").toLowerCase();
+    return !["ping", "pong", "keepalive", "heartbeat", "connected", "status"].includes(type);
+  } catch (error) {
+    return true;
   }
 }
 

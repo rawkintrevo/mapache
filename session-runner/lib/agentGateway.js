@@ -44,6 +44,7 @@ function createAgentGateway({
   requestLimitBytes = DEFAULT_REQUEST_LIMIT_BYTES,
   requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   secureCookie = true,
+  activity,
   upstreamHost = DEFAULT_UPSTREAM_HOST,
   upstreamPort = DEFAULT_UPSTREAM_PORT,
   assertCurrentWriter,
@@ -140,6 +141,9 @@ function createAgentGateway({
         return;
       }
       const responseHeaders = filteredResponseHeaders(upstreamResponse.headers);
+      if (isStateChanging(req.method) && upstreamResponse.statusCode >= 200 && upstreamResponse.statusCode < 400) {
+        activity?.markMeaningfulActivity?.();
+      }
       if (locationResult.location) responseHeaders.location = locationResult.location;
       responseHeaders["referrer-policy"] = EMBEDDED_AGENT_REFERRER_POLICY;
       responseHeaders["x-content-type-options"] = "nosniff";

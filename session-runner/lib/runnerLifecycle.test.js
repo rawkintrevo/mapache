@@ -73,6 +73,7 @@ test("startup runs ordered preparation before snapshots, sync, and listen", asyn
   assert.deepEqual(events, [
     "workspace.ensureWorkspace",
     "workspace.prepareWorkspaceSource",
+    "activity.updateSessionActivity",
     "piModelScope.restore",
     "chromeProfile.restore",
     "chromeRuntime.start",
@@ -185,7 +186,7 @@ test("managed shutdown finalizes the checkpoint scheduler after writers stop", a
   assert.equal(events.indexOf("checkpointScheduler.start") < events.indexOf("server.listen"), true);
   assert.equal(events.indexOf("checkpointScheduler.stop") < events.indexOf("piWebUi.quiesce"), true);
   assert.equal(events.indexOf("piWebUi.stop") < events.indexOf("checkpointScheduler.finalize"), true);
-  assert.equal(events.indexOf("checkpointScheduler.finalize") < events.indexOf("activity.updateSessionActivity"), true);
+  assert.equal(events.indexOf("checkpointScheduler.finalize") < events.lastIndexOf("activity.updateSessionActivity"), true);
 });
 
 test("checkpoint failure prevents shutdown acknowledgement", async () => {
