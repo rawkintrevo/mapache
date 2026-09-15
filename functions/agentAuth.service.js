@@ -60,17 +60,20 @@ async function getPiAuth(uid, dependencies = {}) {
 async function savePiAuthProvider(uid, provider, payload, dependencies = {}) {
   const providerKey = normalizePiAuthProviderKey(provider);
   const apiKey = normalizePiAuthApiKey(payload && payload.key);
+  const credential = providerKey === "github-cli" ?
+    await resolveGithubCliCredential(apiKey, dependencies) :
+    {type: "api_key", key: apiKey};
   if (payload && payload.entryId) {
     await updatePiAuthCredential(
         uid,
         payload.entryId,
         providerKey,
-        {type: "api_key", key: apiKey},
+        credential,
         payload.label,
         dependencies,
     );
   } else {
-    await savePiAuthCredential(uid, providerKey, {type: "api_key", key: apiKey}, payload && payload.label, dependencies);
+    await savePiAuthCredential(uid, providerKey, credential, payload && payload.label, dependencies);
   }
   return getPiAuth(uid, dependencies);
 }
@@ -179,13 +182,19 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   if (harnessId !== "pi" && !hasEnvironmentSelection) {
     throw httpError(400, "auth_selection_unsupported");
   }
-  const piAuth = harnessId === "pi" ? await getPiAuth(uid, dependencies) : {entries: {}};
+  let piAuth = harnessId === "pi" ? await getPiAuth(uid, dependencies) : {entries: {}};
+  let selectedProviders = normalizePiAuthSelection(
+      payload && payload.selection && payload.selection.providers ? payload.selection.providers : payload && payload.selection,
+      piAuth.entries,
+  );
+  if (harnessId === "pi") {
+    const enriched = await enrichSelectedGithubCliCredential(uid, selectedProviders, piAuth, dependencies);
+    piAuth = enriched.piAuth;
+    selectedProviders = enriched.selectedProviders;
+  }
   const selection = {
     harness: harnessId,
-    providers: normalizePiAuthSelection(
-        payload && payload.selection && payload.selection.providers ? payload.selection.providers : payload && payload.selection,
-        piAuth.entries,
-    ),
+    providers: normalizePiAuthSelection(selectedProviders, piAuth.entries),
   };
   await sessionSnap.ref.set({
     authSelection: selection,
@@ -203,6 +212,54 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
     materialized = await requestRunnerAuthMaterialize(session, {selection, environmentEntryIds}, dependencies);
   }
   return {ok: true, selection, materialized};
+}
+
+async function enrichSelectedGithubCliCredential(uid, selectedProviders, piAuth, dependencies = {}) {
+  const entryId = selectedProviders && selectedProviders["github-cli"];
+  const entry = entryId && piAuth.entries && piAuth.entries[entryId];
+  const credential = entry && entry.credential;
+  if (!credential || credential.user) return {piAuth, selectedProviders};
+
+  const enrichedCredential = await resolveGithubCliCredential(credential.key, dependencies);
+  if (entryId === "legacy-github-cli") {
+    await savePiAuthCredential(uid, "github-cli", enrichedCredential, entry.label, dependencies);
+    const refreshed = await getPiAuth(uid, dependencies);
+    const replacement = Object.values(refreshed.entries)
+        .filter((item) => item.providerKey === "github-cli" && item.credential && item.credential.user)
+        .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0];
+    return {
+      piAuth: refreshed,
+      selectedProviders: replacement ? {...selectedProviders, "github-cli": replacement.id} : selectedProviders,
+    };
+  }
+
+  await updatePiAuthCredential(uid, entryId, "github-cli", enrichedCredential, entry.label, dependencies);
+  return {piAuth: await getPiAuth(uid, dependencies), selectedProviders};
+}
+
+async function resolveGithubCliCredential(apiKey, dependencies = {}) {
+  if (!dependencies.githubClient || typeof dependencies.githubClient.requestGithubJson !== "function") {
+    throw new Error("GitHub CLI auth requires a githubClient dependency.");
+  }
+  let profile;
+  try {
+    profile = await dependencies.githubClient.requestGithubJson("https://api.github.com/user", apiKey, {
+      failureError: "github_cli_token_verification_failed",
+    });
+  } catch (error) {
+    throw httpError(502, "github_cli_token_verification_failed", error);
+  }
+  const user = String(profile && profile.login || "").trim();
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(user)) {
+    throw httpError(502, "github_cli_token_verification_failed");
+  }
+  return {
+    type: "api_key",
+    key: apiKey,
+    host: "github.com",
+    user,
+    gitProtocol: "https",
+  };
 }
 
 async function requestRunnerAuthMaterialize(session, body, dependencies = {}) {
@@ -439,6 +496,7 @@ module.exports = {
   normalizePlainObject,
   removePiAuthEntry,
   removePiAuthProvider,
+  resolveGithubCliCredential,
   sessionHarnessId,
   writePiAuthMaps,
 };

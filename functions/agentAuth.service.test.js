@@ -13,6 +13,7 @@ const {
   normalizePlainObject,
   removePiAuthEntry,
   removePiAuthProvider,
+  resolveGithubCliCredential,
   writePiAuthMaps,
 } = require("./agentAuth.service");
 
@@ -129,6 +130,29 @@ function createFakeDependencies() {
 }
 
 (async () => {
+  assert.deepStrictEqual(await resolveGithubCliCredential("github_pat_test", {
+    githubClient: {
+      requestGithubJson: async (url, token, options) => {
+        assert.strictEqual(url, "https://api.github.com/user");
+        assert.strictEqual(token, "github_pat_test");
+        assert.deepStrictEqual(options, {failureError: "github_cli_token_verification_failed"});
+        return {login: "octocat"};
+      },
+    },
+  }), {
+    type: "api_key",
+    key: "github_pat_test",
+    host: "github.com",
+    user: "octocat",
+    gitProtocol: "https",
+  });
+  await assert.rejects(
+      () => resolveGithubCliCredential("github_pat_bad", {
+        githubClient: {requestGithubJson: async () => ({login: ""})},
+      }),
+      (error) => publicMessage(error) === "github_cli_token_verification_failed",
+  );
+
   const fake = createFakeDependencies();
   const calls = [];
   const service = createAgentAuthService({
@@ -185,6 +209,57 @@ function createFakeDependencies() {
       (error) => error.status === 400 && publicMessage(error) === "auth_selection_unsupported",
   );
   await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {selection: {}, environmentEntryIds: []});
+
+  const githubFake = createFakeDependencies();
+  const githubMaterializations = [];
+  const githubService = createAgentAuthService({
+    ...githubFake,
+    githubClient: {requestGithubJson: async () => ({login: "octocat"})},
+    requireWorkspace: async () => ({}),
+    requireSession: async (uid, workspaceId, sessionId) => ({sessionSnap: githubFake.sessions.get(`${uid}/${workspaceId}/${sessionId}`)}),
+    requestRunnerJson: async (session, routePath, options) => {
+      githubMaterializations.push({session, routePath, options});
+      return {ok: true, appliedToRunner: true};
+    },
+  });
+  const savedGithubAuth = await githubService.savePiAuthProvider("uid-2", "github-cli", {
+    label: "GitHub",
+    key: "github_pat_test",
+  });
+  const githubEntryId = Object.keys(savedGithubAuth.entries)[0];
+  assert.deepStrictEqual(savedGithubAuth.entries[githubEntryId].credential, {
+    type: "api_key",
+    key: "github_pat_test",
+    host: "github.com",
+    user: "octocat",
+    gitProtocol: "https",
+  });
+
+  const oldCredential = {type: "api_key", key: "github_pat_old"};
+  githubFake.documents.set("uid-2/private/agentAuth", {
+    providers: {"github-cli": oldCredential},
+    entries: {
+      "github-old": {
+        id: "github-old",
+        providerKey: "github-cli",
+        label: "Old GitHub",
+        credential: oldCredential,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    },
+  });
+  let githubSessionData = {harnessId: "pi", serviceUrl: "https://runner", shutdownToken: "token"};
+  githubFake.sessions.set("uid-2/workspace-2/session-2", {
+    data: () => githubSessionData,
+    ref: {set: async (data) => { githubSessionData = {...githubSessionData, ...data}; }},
+  });
+  const migratedSelection = await githubService.saveSessionPiAuthSelection("uid-2", "workspace-2", "session-2", {
+    selection: {"github-cli": "github-old"},
+  });
+  assert.deepStrictEqual(migratedSelection.selection.providers, {"github-cli": "github-old"});
+  assert.strictEqual((await githubService.getPiAuth("uid-2")).entries["github-old"].credential.user, "octocat");
+  assert.strictEqual(githubMaterializations.at(-1).routePath, "/auth/materialize");
+  assert.deepStrictEqual(githubMaterializations.at(-1).options.body.selection.providers, {"github-cli": "github-old"});
   console.log("agent auth service tests passed");
 })().catch((error) => {
   console.error(error);

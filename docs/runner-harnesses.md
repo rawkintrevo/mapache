@@ -39,6 +39,13 @@ the upstream child starts. Generic environment values, Google tokens, MCP
 OAuth, and GitHub CLI credentials are likewise resolved/materialized server-side
 and excluded from agent snapshots.
 
+When a GitHub CLI token is saved, Functions verifies it through GitHub's
+authenticated-user endpoint and stores the resolved login with the private
+credential. Selecting an older GitHub CLI entry that lacks a login performs the
+same verification and backfills the entry before asking the live runner to
+materialize `$HOME/.config/gh/hosts.yml`. This keeps existing runner revisions
+compatible while ensuring `gh` receives both the token and active username.
+
 The frontend exposes top-navigation dialogs for saved authentication, generic environment keys, and MCP, plus
 Google Workspace and GitHub connector workflows. Upstream owns model metadata,
 model selection, skills, extensions, subagents, files, Git, and native Goals.

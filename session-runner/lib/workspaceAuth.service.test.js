@@ -127,10 +127,12 @@ test("github cli api key credentials materialize as gh hosts.yml", () => {
     host: "github.com",
     oauthToken: "ghp_test",
     gitProtocol: "https",
+    user: "octocat",
   }), [
     "github.com:",
     "    oauth_token: \"ghp_test\"",
     "    git_protocol: \"https\"",
+    "    user: \"octocat\"",
   ].join("\n"));
   assert.equal(githubCliHostsPath({homeDir: "/root"}), "/root/.config/gh/hosts.yml");
 });

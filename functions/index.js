@@ -136,6 +136,7 @@ const sessionLogsService = createSessionLogsService({auth, requireSession});
 const agentAuthService = createAgentAuthService({
   admin,
   db,
+  githubClient: githubService.githubClient,
   requestRunnerJson,
   requireSession,
   requireWorkspace,
