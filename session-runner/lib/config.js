@@ -129,6 +129,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     githubCloneToken: normalizeEnvString(process.env.GITHUB_CLONE_TOKEN),
     githubCloneUsername: normalizeEnvString(process.env.GITHUB_CLONE_USERNAME) || "x-access-token",
     githubAutomationToken: normalizeEnvString(process.env.GITHUB_AUTOMATION_TOKEN),
+    githubAutomationTokenExpiresAt: normalizeEnvString(process.env.GITHUB_AUTOMATION_TOKEN_EXPIRES_AT),
+    githubAutomationTokenRefreshUrl: normalizeEnvString(process.env.GITHUB_AUTOMATION_TOKEN_REFRESH_URL),
     githubAutomationUsername: normalizeEnvString(process.env.GITHUB_AUTOMATION_USERNAME) || "x-access-token",
     githubRepoUrl: normalizeEnvString(process.env.GITHUB_REPO_URL),
     githubRepoOwner: normalizeEnvString(process.env.GITHUB_REPO_OWNER),

@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const {normalizeEnvString} = require("./utils");
 
-function createGitAuthService({config}) {
+function createGitAuthService({config, tokenProvider}) {
   async function withGitAskPassAuth({token, username, userEnvName, tokenEnvName, askPassFilePrefix}, task) {
     if (!token) {
       throw new Error("github_auth_not_configured");
@@ -44,6 +44,13 @@ function createGitAuthService({config}) {
   }
 
   async function withGithubAutomationAuth(task) {
+    if (tokenProvider) return tokenProvider.withRetry((token) => withGitAskPassAuth({
+      token,
+      username: config.githubAutomationUsername,
+      userEnvName: "GITHUB_AUTOMATION_USERNAME",
+      tokenEnvName: "GITHUB_AUTOMATION_TOKEN",
+      askPassFilePrefix: "mapahce-git-automation-askpass",
+    }, task));
     return withGitAskPassAuth({
       token: config.githubAutomationToken,
       username: config.githubAutomationUsername,

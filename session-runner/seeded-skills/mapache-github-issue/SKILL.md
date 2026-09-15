@@ -13,7 +13,9 @@ When working on Mapache itself, edit `session-runner/seeded-skills/mapache-githu
 
 - The current workspace should be a GitHub repository.
 - Repository metadata is available as $GITHUB_REPO_OWNER and $GITHUB_REPO_NAME in connected GitHub workspaces.
-- A short-lived GitHub App token may be available as $GITHUB_AUTOMATION_TOKEN.
+- Connected sessions provide renewable GitHub authentication through `mapache-gh` and
+  `mapache-git-credential`; `$GITHUB_AUTOMATION_TOKEN` is only a startup compatibility
+  value and must not be used as a long-lived agent contract.
 - If the token is absent, public repositories can still use unauthenticated GitHub API requests.
 - The runner may already be on a clean mapache/* branch for this session.
 - Connected GitHub workspaces may start on a fresh mapache/* automation branch whose base branch was fetched immediately before the agent started.
@@ -38,38 +40,35 @@ if [ -z "$OWNER" ] || [ -z "$REPO" ]; then
   OWNER="${OWNER_REPO%%/*}"
   REPO="${OWNER_REPO#*/}"
 fi
-AUTH_HEADER=()
-if [ -n "$GITHUB_AUTOMATION_TOKEN" ]; then
-  AUTH_HEADER=(-H "Authorization: Bearer $GITHUB_AUTOMATION_TOKEN")
-fi
-curl -fsSL "${AUTH_HEADER[@]}" \
-  -H "Accept: application/vnd.github+json" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  "https://api.github.com/repos/$OWNER/$REPO/issues/$ISSUE_NUMBER" \
-  > "/tmp/mapache-issue-$ISSUE_NUMBER.json"
-curl -fsSL "${AUTH_HEADER[@]}" \
-  -H "Accept: application/vnd.github+json" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  "https://api.github.com/repos/$OWNER/$REPO/issues/$ISSUE_NUMBER/comments?per_page=100" \
-  > "/tmp/mapache-issue-$ISSUE_NUMBER-comments.json"
+mapache-gh api "repos/$OWNER/$REPO/issues/$ISSUE_NUMBER" > "/tmp/mapache-issue-$ISSUE_NUMBER.json"
+mapache-gh api "repos/$OWNER/$REPO/issues/$ISSUE_NUMBER/comments" --paginate > "/tmp/mapache-issue-$ISSUE_NUMBER-comments.json"
 ```
 
 Follow pagination when comments exceed the first page; the GitHub CLI option below can read all pages.
 
 ## GitHub CLI Authentication (Optional)
 
-The REST and temporary `GIT_ASKPASS` recipes in this skill remain supported. For issue/PR creation, the installed `gh` CLI is convenient, but it does not automatically read `GITHUB_AUTOMATION_TOKEN`. Bare `gh` may ask for login even though the runner has repository access.
+For connected repositories, use `mapache-gh` for every authenticated GitHub CLI
+operation. It obtains a current session-scoped token without exposing it to the
+agent. Prefer `mapache-gh api` over authenticated `curl`. Git fetch and push use
+the configured `mapache-git-credential` helper. Public repositories may use the
+ordinary anonymous commands.
+
+If `mapache-gh` or the credential helper reports an authentication, permission,
+rate-limit, or repository error, report that stable error and stop. Do not try SSH
+keys, credential files, browser login, personal tokens, raw bearer headers, or
+force-push as fallbacks.
+
+The installed `gh` CLI is still available for public repositories, but bare `gh`
+does not renew connected-session credentials.
 
 Define this function in each shell invocation that needs it (shell state may not persist between tool calls):
 
 ```bash
-mapache_gh() {
-  if [ -n "${GITHUB_AUTOMATION_TOKEN:-}" ]; then
-    GH_TOKEN="$GITHUB_AUTOMATION_TOKEN" GH_PROMPT_DISABLED=1 gh "$@"
-  else
-    GH_PROMPT_DISABLED=1 gh "$@"
-  fi
-}
+mapache_gh() { mapache-gh "$@"; }
+
+# In a connected session the equivalent supported command is:
+mapache-gh api "repos/$OWNER/$REPO"
 
 # OWNER and REPO come from repository resolution above.
 mapache_gh api "repos/$OWNER/$REPO" --jq '{full_name,default_branch}'
@@ -122,22 +121,8 @@ Before editing, make sure the base branch is current. Prefer the selected upstre
 Use this shell shape:
 
 ```bash
-ASKPASS_FILE=""
-if [ -n "$GITHUB_AUTOMATION_TOKEN" ]; then
-  ASKPASS_FILE="$(mktemp)"
-  chmod 700 "$ASKPASS_FILE"
-  cat > "$ASKPASS_FILE" <<'MAPACHE_ASKPASS'
-#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\n' "${GITHUB_AUTOMATION_USERNAME:-x-access-token}" ;;
-  *Password*) printf '%s\n' "$GITHUB_AUTOMATION_TOKEN" ;;
-  *) printf '\n' ;;
-esac
-MAPACHE_ASKPASS
-  export GIT_ASKPASS="$ASKPASS_FILE"
-  export GIT_TERMINAL_PROMPT=0
-  trap 'rm -f "$ASKPASS_FILE"' EXIT
-fi
+export GIT_TERMINAL_PROMPT=0
+git config credential.helper /usr/local/bin/mapache-git-credential
 
 BASE_BRANCH="$GITHUB_REQUESTED_BRANCH"
 if [ -z "$BASE_BRANCH" ]; then
@@ -200,7 +185,7 @@ Only use this section when the user explicitly asks for manual branching/publish
 1. Keep the current automation branch unless the user requested another branch. If creating one, use a descriptive name, inspect local and remote collisions, and never overwrite an existing branch. Start from the prepared task state. If unrelated changes/commits prevent a clean task branch, ask how to isolate them; a separate worktree is an option, not the default connected-session flow.
 2. Record the original branch. Switching the original workspace away from its session automation branch causes exit automation to skip (`skipped_branch_changed`). A separate worktree leaves the original automation branch active; it does not prevent the runner from later staging/publishing changes there. Do not terminate Pi to trigger publishing or switch branches merely to manipulate that lifecycle.
 3. Verify the intended base (`BASE_BRANCH` from preparation), current branch, scoped staged diff, and commit range. Stage named paths and commit; do not include unrelated edits, generated runtime files, or credentials. If a legitimate source file is ignored, inspect `git check-ignore -v path` before adding a narrow exception rather than force-adding ignored content.
-4. Authenticate the push with the temporary `GIT_ASKPASS` setup in **Prepare The Repository**, recreated in the same shell as the push. Alternatively, the following invocation-local GitHub CLI credential helper was verified with the runner token and a credential-free HTTPS GitHub origin:
+4. Authenticate the push with the installed `mapache-git-credential` helper. For GitHub CLI writes, use `mapache-gh`:
 
 ```bash
 BRANCH="$(git branch --show-current)"
@@ -208,9 +193,7 @@ if [ -z "$BRANCH" ] || [ -z "${BASE_BRANCH:-}" ] || [ "$BRANCH" = "$BASE_BRANCH"
   echo "Stop: verify a non-base branch and BASE_BRANCH before publishing." >&2
   exit 1
 fi
-GH_TOKEN="${GITHUB_AUTOMATION_TOKEN:-${GH_TOKEN:-}}" GIT_TERMINAL_PROMPT=0 \
-  git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
-  push --set-upstream origin "$BRANCH"
+GIT_TERMINAL_PROMPT=0 git push --set-upstream origin "$BRANCH"
 ```
 
 5. Define `mapache_gh` again if using a new shell. Check for an existing PR before creating one:

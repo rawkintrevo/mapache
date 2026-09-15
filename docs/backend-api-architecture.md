@@ -114,6 +114,12 @@ server-side during provisioning. GitHub installation tokens are short-lived and
 are used for source clone or internal automation without being written to
 workspace files, logs, or persisted session metadata.
 
+The `githubAutomationToken` HTTPS Function is a bounded credential broker. It
+accepts only a running session's workspace/session IDs and shutdown token,
+rechecks the workspace's connected installation and repository against the
+owner's current GitHub App connection, and returns only a short-lived token and
+expiry with `Cache-Control: no-store`.
+
 ## Invariants
 
 - Functions, not the browser, chooses the runner image and enforces lifecycle
