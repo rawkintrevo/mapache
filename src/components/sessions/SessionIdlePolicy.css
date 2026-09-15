@@ -1,53 +1,122 @@
 .session-idle-policy {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.8rem 1rem;
-  border: 1px solid var(--border-color, #d9dee8);
-  border-radius: 0.65rem;
-  background: var(--surface-muted, #f7f8fb);
-  color: var(--text-color, #1f2937);
-}
-
-.session-idle-policy__main {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.session-idle-policy strong,
-.session-idle-policy p,
-.session-idle-policy small {
-  display: block;
-  margin: 0;
-}
-
-.session-idle-policy p,
-.session-idle-policy small {
-  color: var(--muted-text-color, #667085);
-  font-size: 0.85rem;
-  line-height: 1.4;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
 .session-idle-policy__toggle {
   display: inline-flex;
   align-items: center;
-  flex: 0 0 auto;
-  gap: 0.45rem;
-  font-size: 0.85rem;
+  gap: 8px;
+  color: var(--color-text-main);
+  cursor: pointer;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .session-idle-policy__toggle input {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--accent-color, #2563eb);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-@media (max-width: 640px) {
-  .session-idle-policy__main {
-    align-items: flex-start;
-    flex-direction: column;
+.session-idle-policy__track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-border);
+  transition: background 160ms ease;
+}
+
+.session-idle-policy__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--color-bg-panel);
+  box-shadow: 0 1px 3px rgba(16, 24, 32, 0.25);
+  transition: transform 160ms ease;
+}
+
+.session-idle-policy__toggle input:checked + .session-idle-policy__track {
+  background: var(--color-accent);
+}
+
+.session-idle-policy__toggle input:checked + .session-idle-policy__track .session-idle-policy__thumb {
+  transform: translateX(14px);
+}
+
+.session-idle-policy__toggle input:focus-visible + .session-idle-policy__track {
+  outline: 3px solid rgba(20, 125, 100, 0.28);
+  outline-offset: 2px;
+}
+
+.session-idle-policy__toggle input:disabled + .session-idle-policy__track {
+  opacity: 0.55;
+}
+
+.session-idle-policy__toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.session-idle-policy__info {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.session-idle-policy__info:hover {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-main);
+}
+
+.session-idle-policy__info:focus-visible {
+  outline: 3px solid rgba(20, 125, 100, 0.28);
+  outline-offset: 1px;
+}
+
+.session-idle-policy__info svg {
+  width: 16px;
+  height: 16px;
+}
+
+.session-idle-policy__popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  width: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-panel);
+  box-shadow: 0 12px 32px rgba(16, 24, 32, 0.16);
+  color: var(--color-text-main);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@media (max-width: 620px) {
+  .session-idle-policy__popover {
+    right: auto;
+    left: 0;
   }
 }

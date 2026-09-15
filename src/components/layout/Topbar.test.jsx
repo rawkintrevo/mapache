@@ -1,4 +1,4 @@
-import {render, screen} from "@testing-library/react";
+import {render, screen, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {Topbar} from "./Topbar.jsx";
@@ -16,6 +16,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
   const onOpenGenericEnvironment = vi.fn();
   const onOpenGoogleWorkspace = vi.fn();
   const onOpenMcpServers = vi.fn();
+  const onSetSessionLongRunning = vi.fn();
   render(
     <Topbar
       state={state}
@@ -33,11 +34,19 @@ function renderTopbar(session = null, resourceMetrics = null) {
       onShowLogs={vi.fn()}
       onShowProfile={vi.fn()}
       onSignOut={vi.fn()}
+      onSetSessionLongRunning={onSetSessionLongRunning}
       onToggleWorkspace={onToggleWorkspace}
       resourceMetrics={resourceMetrics}
     />,
   );
-  return {onOpenGenericEnvironment, onOpenGoogleWorkspace, onOpenMcpServers, onOpenPiAuthManage, onToggleWorkspace};
+  return {
+    onOpenGenericEnvironment,
+    onOpenGoogleWorkspace,
+    onOpenMcpServers,
+    onOpenPiAuthManage,
+    onSetSessionLongRunning,
+    onToggleWorkspace,
+  };
 }
 
 describe("Topbar workspace lifecycle", () => {
@@ -102,4 +111,31 @@ test("renders live resource meters between workspace controls and actions", () =
   expect(utilization).toHaveClass("resource-utilization--navbar");
   expect(screen.getByText("43%")).toBeInTheDocument();
   expect(screen.getByText("1 GiB/2 GiB")).toBeInTheDocument();
+});
+
+test("moves the managed runtime lifetime switch into the navbar", async () => {
+  const user = userEvent.setup();
+  const {onSetSessionLongRunning} = renderTopbar({
+    id: "session-1",
+    status: "running",
+    agentUiVersion: "pi-web-ui-v1",
+    idleTimeoutMinutes: 60,
+    longRunning: false,
+  });
+
+  const lifetime = screen.getByRole("group", {name: "Runtime lifetime"});
+  const toggle = within(lifetime).getByRole("switch", {name: "Keep running"});
+  expect(toggle).not.toBeChecked();
+  await user.click(toggle);
+  expect(onSetSessionLongRunning).toHaveBeenCalledWith("session-1", true);
+
+  await user.click(within(lifetime).getByRole("button", {name: "About Keep running"}));
+  expect(within(lifetime).getByRole("tooltip")).toHaveTextContent(
+      "On keeps background work active. Off pauses after 60 min idle.",
+  );
+});
+
+test("does not show the runtime lifetime switch for historical sessions", () => {
+  renderTopbar({id: "session-1", status: "running"});
+  expect(screen.queryByRole("group", {name: "Runtime lifetime"})).not.toBeInTheDocument();
 });

@@ -1,4 +1,6 @@
 import "./SessionIdlePolicy.css";
+import {CircleHelp} from "lucide-react";
+import {useEffect, useId, useRef, useState} from "react";
 
 function idleTimeoutMinutes(session = {}) {
   const value = Number(session.idleTimeoutMinutes);
@@ -6,33 +8,61 @@ function idleTimeoutMinutes(session = {}) {
 }
 
 export function SessionIdlePolicy({disabled = false, onChange, session = {}}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const descriptionId = useId();
   const longRunning = session.longRunning === true;
   const timeout = idleTimeoutMinutes(session);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    function closeOnOutsideClick(event) {
+      if (!containerRef.current?.contains(event.target)) setOpen(false);
+    }
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
   return (
-    <section aria-label="Automatic pause policy" className="session-idle-policy">
-      <div className="session-idle-policy__main">
-        <div>
-          <strong>Runtime lifetime</strong>
-          <p id="session-idle-policy-description">
-            {longRunning ?
-              "Long-running is on. Automatic pause is disabled so background agent work can continue." :
-              `Long-running is off. Automatically pauses after ${timeout} minutes without activity.`}
-          </p>
+    <div aria-label="Runtime lifetime" className="session-idle-policy" ref={containerRef} role="group">
+      <label className="session-idle-policy__toggle">
+        <input
+          aria-describedby={open ? descriptionId : undefined}
+          aria-label="Keep running"
+          checked={longRunning}
+          disabled={disabled || typeof onChange !== "function"}
+          role="switch"
+          type="checkbox"
+          onChange={(event) => onChange?.(event.target.checked)}
+        />
+        <span aria-hidden="true" className="session-idle-policy__track">
+          <span className="session-idle-policy__thumb" />
+        </span>
+        <span>Keep running</span>
+      </label>
+      <button
+        aria-controls={descriptionId}
+        aria-expanded={open}
+        aria-label="About Keep running"
+        className="session-idle-policy__info"
+        title="About Keep running"
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <CircleHelp aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="session-idle-policy__popover" id={descriptionId} role="tooltip">
+          On keeps background work active. Off pauses after {timeout} min idle.
         </div>
-        <label className="session-idle-policy__toggle">
-          <input
-            aria-describedby="session-idle-policy-description"
-            aria-label="Long-running"
-            checked={longRunning}
-            disabled={disabled || typeof onChange !== "function"}
-            type="checkbox"
-            onChange={(event) => onChange?.(event.target.checked)}
-          />
-          <span>Long-running</span>
-        </label>
-      </div>
-      <small>Manual Pause remains available in either state.</small>
-    </section>
+      ) : null}
+    </div>
   );
 }

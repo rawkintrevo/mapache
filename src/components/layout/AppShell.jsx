@@ -80,6 +80,7 @@ export function AppShell(props) {
         onShowLogs={() => setLogsOpen(true)}
         onShowProfile={modals.showProfile}
         onSignOut={app.signOut}
+        onSetSessionLongRunning={sessions.setSessionLongRunning}
         onToggleWorkspace={workspaces.toggleWorkspace}
         resourceMetrics={selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />
@@ -109,8 +110,6 @@ export function AppShell(props) {
         ) : (
         <WorkspacePanel
             activeCanvas={activeCanvas}
-            busy={busy}
-            onSetSessionLongRunning={sessions.setSessionLongRunning}
             selectedSession={selectedSession}
             selectedWorkspace={selectedWorkspace}
             state={state}

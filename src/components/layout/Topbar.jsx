@@ -7,6 +7,7 @@ import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} 
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 import {ResourceUtilization} from "../sessions/ResourceUtilization.jsx";
+import {SessionIdlePolicy} from "../sessions/SessionIdlePolicy.jsx";
 
 export function Topbar({
   activeCanvas,
@@ -26,6 +27,7 @@ export function Topbar({
   onShowLogs,
   onShowProfile,
   onSignOut,
+  onSetSessionLongRunning,
   onToggleWorkspace,
   resourceMetrics,
 }) {
@@ -125,6 +127,13 @@ export function Topbar({
           connectionState={resourceMetrics.connectionState}
           navbar
           sample={resourceMetrics.sample}
+        />
+      ) : null}
+      {showWorkspaceTools ? (
+        <SessionIdlePolicy
+          disabled={busy}
+          onChange={(enabled) => onSetSessionLongRunning?.(canonicalSession.id, enabled)}
+          session={canonicalSession}
         />
       ) : null}
       <div className="topbar-actions">

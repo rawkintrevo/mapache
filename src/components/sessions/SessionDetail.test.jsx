@@ -1,4 +1,4 @@
-import {render, screen, within} from "@testing-library/react";
+import {render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {SessionDetail} from "./SessionDetail.jsx";
@@ -25,7 +25,6 @@ function renderDetail(overrides = {}, options = {}) {
   return render(
       <SessionDetail
         access={{accessUrls, error: "", refresh: vi.fn(), refreshAfterConnectionFailure: vi.fn()}}
-        busy={options.busy || false}
         isGithubWorkspace={false}
         metrics={{sample: null, connectionState: "connecting"}}
         session={currentSession}
@@ -33,7 +32,6 @@ function renderDetail(overrides = {}, options = {}) {
         onGetSessionAccessUrls={vi.fn().mockResolvedValue(accessUrls)}
         onResizeSession={vi.fn()}
         onRetryProvisioningSession={options.onRetryProvisioningSession}
-        onSetSessionLongRunning={options.onSetSessionLongRunning}
         onRestartSession={options.onRestartSession || vi.fn()}
         onStopSession={options.onStopSession}
       />,
@@ -213,34 +211,14 @@ describe("SessionDetail Chrome workflow", () => {
   });
 });
 
-test("shows the persisted automatic pause policy and updates Long-running", async () => {
-  const user = userEvent.setup();
-  const onSetSessionLongRunning = vi.fn();
-  renderDetail({
-    agentUiVersion: "pi-web-ui-v1",
-    idleTimeoutMinutes: 60,
-    longRunning: false,
-  }, {onSetSessionLongRunning});
-
-  const policy = await screen.findByRole("region", {name: "Automatic pause policy"});
-  expect(policy).toHaveTextContent("Automatically pauses after 60 minutes without activity.");
-  const toggle = within(policy).getByRole("checkbox", {name: "Long-running"});
-  expect(toggle).not.toBeChecked();
-  await user.click(toggle);
-  expect(onSetSessionLongRunning).toHaveBeenCalledWith("session-1", true);
-});
-
-test("communicates that Long-running bypasses automatic pause", () => {
+test("does not place runtime lifetime controls above the managed agent surface", () => {
   renderDetail({
     agentUiVersion: "pi-web-ui-v1",
     idleTimeoutMinutes: 60,
     longRunning: true,
   });
 
-  const policy = screen.getByRole("region", {name: "Automatic pause policy"});
-  expect(policy).toHaveTextContent("Automatic pause is disabled");
-  expect(policy).toHaveTextContent("Manual Pause remains available in either state.");
-  expect(screen.getByRole("checkbox", {name: "Long-running"})).toBeChecked();
+  expect(screen.queryByRole("group", {name: "Runtime lifetime"})).not.toBeInTheDocument();
 });
 
 test("shows resize progress on the managed agent surface", () => {

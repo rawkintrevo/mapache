@@ -4,8 +4,6 @@ import {WorkspaceHeader} from "./WorkspaceHeader.jsx";
 
 export function WorkspacePanel({
   activeCanvas,
-  busy,
-  onSetSessionLongRunning,
   selectedSession,
   selectedWorkspace,
   state,
@@ -18,8 +16,6 @@ export function WorkspacePanel({
         <SessionDetail
           activeCanvas={activeCanvas}
           access={access}
-          busy={busy}
-          onSetSessionLongRunning={onSetSessionLongRunning}
           session={selectedSession}
           workspaceId={state.selectedWorkspaceId}
           onSelectCanvas={onSelectCanvas}

@@ -36,7 +36,10 @@ environment keys, workspace MCP servers, and Google Workspace, plus an avatar
 icon for the user menu. The meters remain mounted across Agent, Chrome, Logs,
 profile, and admin surfaces; they are read-only and show unavailable or
 reconnecting state instead of stale readings. Google Workspace account management opens in a modal from its topbar
-icon; the shell no longer reserves either sidebar column. GitHub
+icon. Marked runtimes also show a compact **Keep running** switch in the top
+navigation; its help popover summarizes the stored idle timeout, and changing
+it persists the explicit Long-running policy through
+`setSessionLongRunningState`. The shell no longer reserves either sidebar column. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
 
@@ -53,11 +56,8 @@ surface. The embedded Agent iframe communicates through the signed `/agent/`
 gateway and the same exact-origin bridge. Persistent Chrome keeps its signed
 access URL. A shell iframe remains
 available as a separate terminal surface; historical SSH sessions retain only
-their compatibility terminal and port-forward behavior. `SessionIdlePolicy` is
-shown for marked runtimes and persists the explicit Long-running switch through
-`setSessionLongRunningState`; it displays the stored idle timeout and explains
-that enabling the switch bypasses automatic pause while manual Pause remains
-available.
+their compatibility terminal and port-forward behavior. The managed agent
+canvas does not reserve a separate row for runtime-lifetime controls.
 
 The managed center surface owns the full available shell width and height instead of applying
 the legacy terminal canvas viewport cap. Its iframe and intermediate wrappers
