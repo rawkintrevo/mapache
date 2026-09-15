@@ -241,6 +241,14 @@ pi-web-ui runtime used by every newly created session.
 
 ## Runner Server Layout
 
+`server.js` must construct workspace authority before activity tracking, then
+construct Git and other activity consumers. Reading `activity` before its
+initialization crashes Node before the HTTP listener opens and surfaces as a
+Cloud Run port-8080 startup failure. `lib/serverBootstrap.test.js` executes the
+entrypoint with external services stubbed to catch this wiring regression.
+Fixes require rebuilding `pi-chrome`; existing services need a new revision
+through restart or recreation.
+
 The container entry point is still `session-runner/server.js`, but it is now a bootstrap/router layer rather than the full runtime implementation. Feature code lives under `session-runner/lib/`:
 
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
