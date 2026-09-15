@@ -1,4 +1,6 @@
-export function Button({
+import {forwardRef} from "react";
+
+export const Button = forwardRef(function Button({
   children,
   className = "",
   icon = false,
@@ -8,7 +10,7 @@ export function Button({
   type = "button",
   variant = "primary",
   ...props
-}) {
+}, ref) {
   const buttonClassName = [
     "button",
     `button--${variant}`,
@@ -18,8 +20,8 @@ export function Button({
   ].filter(Boolean).join(" ");
 
   return (
-    <button className={buttonClassName} title={title || tooltip || undefined} type={type} {...props}>
+    <button className={buttonClassName} ref={ref} title={title || tooltip || undefined} type={type} {...props}>
       {children}
     </button>
   );
-}
+});

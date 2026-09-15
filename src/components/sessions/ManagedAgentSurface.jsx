@@ -12,11 +12,12 @@ export function ManagedAgentSurface({
   onAccessRefreshNeeded,
   onSelectCanvas,
   session,
+  unavailableMessage,
 }) {
   const handleOpenChrome = useCallback(() => onSelectCanvas?.("chrome"), [onSelectCanvas]);
 
   return (
-    <div className="canvas-shell canvas-shell--managed-agent">
+    <div className={`canvas-shell canvas-shell--managed-agent${unavailableMessage ? " canvas-shell--status" : ""}`}>
       {activeCanvas === "agent" ? (
         hasAgent ? (
           <div className="canvas-panel">
@@ -30,13 +31,14 @@ export function ManagedAgentSurface({
             />
           </div>
         ) : (
-          <div className="terminal-placeholder">
-            <p>
-              Agent access is not ready.
-              <br />
-              <code>{accessError || session.lastError || session.status}</code>
-            </p>
-          </div>
+          unavailableMessage ? (
+            <div className="terminal-placeholder runtime-status-card" role="status">
+              <strong>{unavailableMessage}</strong>
+              <span>{unavailableMessage.includes("historical") ? "This runtime cannot be started." : "Press Play in the navigation bar to start the runtime."}</span>
+            </div>
+          ) : (
+            <div className="terminal-placeholder"><p>Agent access is not ready.<br /><code>{accessError || session.lastError || session.status}</code></p></div>
+          )
         )
       ) : null}
       {activeCanvas === "chrome" && capabilities.chrome ? (

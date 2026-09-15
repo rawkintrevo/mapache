@@ -41,10 +41,14 @@ main {
   display: grid;
   gap: 8px;
   max-width: 520px;
-  padding: 28px;
-  border: 1px dashed var(--line);
+  padding: 20px;
+  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
+}
+
+.workspace-off-state strong {
+  color: var(--text);
 }
 
 .workspace-off-state span {
@@ -76,5 +80,9 @@ main {
 @media (max-width: 620px) {
   .workspace {
     padding: 14px;
+  }
+
+  .workspace--managed-agent {
+    padding: 0;
   }
 }

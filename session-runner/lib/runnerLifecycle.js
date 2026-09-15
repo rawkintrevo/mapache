@@ -38,6 +38,10 @@ function createRunnerLifecycleCoordinator({
       await workspace.prepareWorkspaceSource();
       await workspace.restoreCheckpoint?.();
       await authority.acquire();
+      await activity.updateSessionActivity({
+        runtimeStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       await piModelScope.restore();
       await chromeProfile.restore();
       await chromeRuntime.start();

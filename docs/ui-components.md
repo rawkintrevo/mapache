@@ -6,8 +6,9 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Keep running, Agent, and Logs controls, auth/connection actions, user menu, refresh, and documentation links. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Keep running, Agent, and Logs controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
 | `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, refresh, and sign-out actions. |
+| `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible responsive menu for workspace, connection, runtime, and documentation actions. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | Workspace name and source summary. |

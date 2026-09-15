@@ -79,6 +79,26 @@ assert.strictEqual(isIdleSession({
   lastActivityAt: now - 59 * minute,
   lastConnectedAt: now - 61 * minute,
 }, now), false);
+assert.strictEqual(isIdleSession({
+  agentUiVersion: "pi-web-ui-v1",
+  idleTimeoutMinutes: 60,
+  lastActivityAt: now - 30 * minute,
+  updatedAt: now - 2 * 60 * minute,
+}, now), false);
+assert.strictEqual(isIdleSession({
+  agentUiVersion: "pi-web-ui-v1",
+  idleTimeoutMinutes: 60,
+  lastActivityAt: now - 2 * 60 * minute,
+  runtimeStartedAt: now - 10 * minute,
+  updatedAt: now - minute,
+}, now), false);
+assert.strictEqual(isIdleSession({
+  agentUiVersion: "pi-web-ui-v1",
+  idleTimeoutMinutes: 60,
+  lastActivityAt: now - 2 * 60 * minute,
+  runtimeStartedAt: now - 90 * minute,
+  updatedAt: now - minute,
+}, now), true);
 
 (async () => {
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token", resources: {cpu: "1"}};
