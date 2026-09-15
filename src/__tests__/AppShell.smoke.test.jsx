@@ -165,19 +165,30 @@ describe("frontend shell ownership", () => {
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
   });
 
-  test("keeps Agent and Logs in the top navigation without a duplicate Chrome control", async () => {
+  test("keeps managed runtime controls in the top navigation without duplicate canvas controls", async () => {
     const user = userEvent.setup();
-    const managedSession = {...session, agentUiVersion: "pi-web-ui-v1"};
+    const managedSession = {
+      ...session,
+      agentUiVersion: "pi-web-ui-v1",
+      idleTimeoutMinutes: 60,
+      longRunning: false,
+    };
     const {handlers} = renderShell({sessions: [managedSession], selectedSessionId: managedSession.id});
+    const topbar = screen.getByRole("banner");
 
-    expect(await screen.findByRole("button", {name: "Agent"})).toHaveAttribute("aria-pressed", "true");
+    expect(await within(topbar).findByRole("button", {name: "Agent"})).toHaveAttribute("aria-pressed", "true");
+    expect(within(topbar).getByRole("switch", {name: "Keep running"})).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", {name: "Long-running"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Persistent Chrome"})).not.toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Logs"})).toBeInTheDocument();
+    expect(within(topbar).getByRole("button", {name: "Logs"})).toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Preview"})).not.toBeInTheDocument();
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
     expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", {name: "Logs"}));
+    await user.click(within(topbar).getByRole("switch", {name: "Keep running"}));
+    expect(handlers.sessions.setSessionLongRunning).toHaveBeenCalledWith(managedSession.id, true);
+
+    await user.click(within(topbar).getByRole("button", {name: "Logs"}));
     expect(await screen.findByRole("dialog", {name: "Logs"})).toBeInTheDocument();
     expect(await screen.findByText("workspace_runtime_authority_denied")).toBeInTheDocument();
     expect(handlers.sessions.getSessionLogs).toHaveBeenCalledWith(workspace.id, managedSession.id);
