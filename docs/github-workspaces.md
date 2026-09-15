@@ -287,6 +287,30 @@ That sync should:
 
 This gives the app a reasonable recovery path for uncommitted file edits while still letting Git own repository semantics.
 
+## Manual Agent Git Workflow
+
+The canonical agent workflow is the seeded
+[Mapache GitHub issue skill](../session-runner/seeded-skills/mapache-github-issue/SKILL.md).
+Maintain that source, not the installed `.pi/skills/mapache-github-issue/SKILL.md`.
+The normal flow prepares the base, works on the session's `mapache/*` branch,
+and ends with a local commit; runner exit automation handles publishing. Do not
+replace it with a mandatory issue branch or return-to-main cleanup policy.
+
+The same skill documents issue creation and user-requested manual branch/push/PR
+operations. GitHub CLI calls can map `GITHUB_AUTOMATION_TOKEN` to `GH_TOKEN`;
+HTTPS Git can use temporary askpass or invocation-local `gh auth git-credential`,
+without persisting the token. Manual PR creation is verified immediately.
+An explicitly chosen separate worktree does not disable exit automation in the
+original workspace.
+
+The source is packaged in the runner image and selected by
+`session-runner/lib/workspaceSkillCatalog.js`. Current materialization writes
+missing skill files only; it does not refresh existing workspace copies. Shipping
+seed changes requires a runner image rebuild and a new Cloud Run revision or
+recreated session to use that image. Existing installed copies additionally need
+an explicit refresh; an image update alone does not replace them. No Functions
+deploy is required for a skill-content-only change.
+
 ## Git Control Surface
 
 The eventual Git UI should wrap common commands, not reinterpret them.
