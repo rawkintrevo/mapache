@@ -9,6 +9,7 @@
     "generate:runner-catalog": "node scripts/generate-runner-catalog.mjs",
     "test:frontend": "vitest run",
     "build:main": "vite build",
+    "analyze:bundle": "vite build --sourcemap && node scripts/analyze-vite-bundle.mjs",
     "build:community": "cd community && npm run build",
     "move:community": "mkdir -p dist/community && cp -r community/build/* dist/community/",
     "build": "npm run build:main && npm run build:community && npm run move:community",

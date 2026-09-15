@@ -8,11 +8,11 @@ import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 import {useResourceMetrics} from "../sessions/useResourceMetrics.js";
 import {useSessionAccessUrls} from "../sessions/useSessionAccessUrls.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
-import {SessionLogsModal} from "../modals/SessionLogsModal.jsx";
 
 const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: page}) => ({default: page})));
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
 const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({ProfilePage: page}) => ({default: page})));
+const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
 
 export function AppShell(props) {
   const {handlers, state} = props;
@@ -124,12 +124,14 @@ export function AppShell(props) {
         </Suspense>
       ) : null}
       {logsOpen && selectedSession && selectedWorkspace ? (
-        <SessionLogsModal
-          session={selectedSession}
-          workspaceId={selectedWorkspace.id}
-          onClose={() => setLogsOpen(false)}
-          onLoadLogs={sessions.getSessionLogs}
-        />
+        <Suspense fallback={<LazySurfaceFallback label="Loading logs..." />}>
+          <SessionLogsModal
+            session={selectedSession}
+            workspaceId={selectedWorkspace.id}
+            onClose={() => setLogsOpen(false)}
+            onLoadLogs={sessions.getSessionLogs}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

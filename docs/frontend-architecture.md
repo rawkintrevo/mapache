@@ -19,6 +19,7 @@ Mapache owns the surrounding workspace/session shell and account connections.
   `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
   `src/workflows/githubConnection.js`
 - Component inventory: [UI components](./ui-components.md)
+- Bundle measurement and lazy-boundary rationale: [Frontend bundle analysis](./frontend-bundle-analysis.md)
 
 ## Current behavior
 
@@ -85,6 +86,8 @@ manager, skills manager, subagent manager, or extensions panel. Files, Git,
 model selection, skills, extensions, subagents, and native Goals belong to the
 embedded upstream application when that application is available.
 
+The landing, admin, profile, modal-stack, and runtime Logs surfaces are lazy-loaded because they are route- or action-specific. The workspace/session path remains eager so terminal and stateful Agent/Chrome canvases can mount without an extra feature request. Bundle measurements and the warning rationale are recorded in [Frontend bundle analysis](./frontend-bundle-analysis.md).
+
 `Topbar` owns the entry points for `PiAuthManageModal`,
 `GenericEnvironmentModal`, `McpServersModal`, and
 `GoogleWorkspaceManageModal`. `PiAuthManageModal` manages only saved
@@ -140,6 +143,7 @@ runtime status. The browser does not hold a request open for shutdown/startup.
 ## Related docs
 
 - [UI components](./ui-components.md)
+- [Frontend bundle analysis](./frontend-bundle-analysis.md)
 - [Backend API architecture](./backend-api-architecture.md)
 - [Runner harnesses](./runner-harnesses.md)
 - [Runtime containers](./runtime-containers.md)
