@@ -81,7 +81,7 @@ async function listFiles(client, input, extra) {
     ...extra,
     pageSize: boundedPageSize(input.pageSize),
     fields: FILE_FIELDS,
-  }))}`), {maxItems: boundedItemLimit(input.maxItems)});
+  }))}`), {itemsKey: "files", maxItems: boundedItemLimit(input.maxItems)});
   return {files: result.items.map(compactFile), pages: result.pages, truncated: result.truncated, nextPageToken: result.nextPageToken};
 }
 

@@ -1,10 +1,33 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {buildFileQuery, escapeDriveQueryValue, registerDriveReadTools, searchFiles} from "./drive.mjs";
+import {buildFileQuery, escapeDriveQueryValue, listRecentFiles, registerDriveReadTools, searchFiles} from "./drive.mjs";
+import {createGoogleRestClient} from "./restClient.mjs";
 
 function fakeServer() {
   const tools = new Map();
   return {tools, registerTool(name, config, handler) {tools.set(name, {config, handler});}};
+}
+
+for (const [name, list] of Object.entries({searchFiles, listRecentFiles})) {
+  test(`${name} preserves Drive files across real REST pagination`, async () => {
+    const requests = [];
+    const files = [{id: "file-1", name: "First"}, {id: "file-2", name: "Second"}];
+    const client = createGoogleRestClient({
+      env: {GOOGLE_MCP_ACCESS_TOKEN: "test-token"},
+      fetchImpl: async (url) => {
+        const params = new URL(url).searchParams;
+        requests.push(params);
+        return new Response(JSON.stringify(params.get("pageToken") ?
+          {files: [files[1]]} : {files: [files[0]], nextPageToken: "page-2"}));
+      },
+    });
+
+    assert.deepEqual(await list(client, {pageSize: 1, maxItems: 2}), {
+      files, pages: 2, truncated: false, nextPageToken: null,
+    });
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].get("pageToken"), "page-2");
+  });
 }
 
 test("registers Drive discovery tools only with drive read scope", () => {

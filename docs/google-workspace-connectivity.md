@@ -65,6 +65,8 @@ The catalog exposes Gmail, Drive, Docs, Sheets, Slides, and Calendar. Chat and P
 
 The local Gmail search and draft-list tools map the Gmail API's `threads` and `drafts` response collections explicitly into the shared paginator. Keep those service-specific collection keys when changing pagination; the shared client defaults to an `items` collection, and using that default for Gmail silently produces empty connector results even when Google returned matches.
 
+Drive search and recent-file listing likewise pass `itemsKey: "files"` to the shared paginator because Drive v3 returns its collection under `files`. The regression tests use the real REST client with synthetic multi-page responses so a missing collection mapping cannot be hidden by a mocked paginator. The local health tool and runner readiness probe do not test Google file access, so they can pass despite a response-mapping bug. Deploying this fix requires rebuilding and publishing `pi-chrome`; existing workspaces need a restart through the normal lifecycle to receive the corrected runner revision. Reauthorizing the Google account alone does not update runner code.
+
 Drive read access includes a unified `drive_read_file` tool. It returns ordinary textual files as bounded UTF-8, exports Google Docs and Slides as plain text, exports Google Sheets as CSV, and preserves a bounded base64 fallback for binary files. Native export uses the existing Drive read-only scope, so users who enabled Drive can inspect native content without separately enabling the Docs, Sheets, or Slides service. The legacy `drive_download_file` tool remains available for callers that explicitly need base64 bytes and continues to reject Google-native files.
 
 The required Functions configuration is:
