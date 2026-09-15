@@ -39,6 +39,7 @@ This page classifies every file under `docs/` and `adrs/` as of 2026-06-17 and r
 | `docs/prior_task_lists/workspace-local-pi-extension-manager.md` | Historical archive | Prior Pi extension manager task list. |
 | `adrs/adr-0001-github-app-ownership-and-permissions.md` | Historical decision archive | Accepted ADR indexed from `docs/decisions.md`. |
 | `adrs/adr-0002-pr-creation-and-branch-naming-policy.md` | Historical decision archive | Accepted ADR indexed from `docs/decisions.md`. |
+| `adrs/adr-0003-default-agent-implementation-workflow.md` | Historical decision archive | Accepted ADR indexed from `docs/decisions.md`. |
 
 ## Link Findings
 

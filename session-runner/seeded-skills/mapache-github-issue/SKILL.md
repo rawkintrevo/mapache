@@ -1,9 +1,9 @@
 ---
 name: mapache-github-issue
-description: Work from or create GitHub issues with repository context, labels, clarification, and the Mapache automation-branch flow. Includes authenticated issue creation and user-requested manual branching, push, and pull requests.
+description: Use the default issue, working-branch, commit, and pull-request workflow for GitHub implementation requests, including issue creation, authenticated publication, and explicit hotfix/direct-main handling.
 ---
 
-Use this skill when the user gives a GitHub issue number, such as "work on issue 42" or "fix #42", asks you to create GitHub issues, or explicitly requests a branch or pull request for repository work. An issue-only request does not authorize implementation or publishing.
+Use this skill for every actionable implementation request in a GitHub repository, when the user gives an issue number such as "work on issue 42" or "fix #42", asks you to create GitHub issues, or explicitly requests a branch or pull request. An issue-only request does not authorize implementation or publishing. Explanations, investigations, and reviews do not create an issue unless the user also authorizes implementation.
 
 ## Maintainer Source
 
@@ -20,12 +20,26 @@ When working on Mapache itself, edit `session-runner/seeded-skills/mapache-githu
 - The runner may already be on a clean mapache/* branch for this session.
 - Connected GitHub workspaces may start on a fresh mapache/* automation branch whose base branch was fetched immediately before the agent started.
 
-## Read The Issue
+## Choose The Workflow
 
-1. For implementation from an existing issue, extract exactly one issue number from the user's request. If there is no clear issue number, ask for it. For issue creation or a standalone branch/PR request, do not require an existing issue number.
-2. Resolve the repository:
+Use the normal issue/branch/PR workflow unless the user explicitly describes the implementation as a `hotfix` or explicitly instructs you to work `directly on main`. Do not infer the exception from urgency, task size, or the word "fix" alone.
+
+For the normal workflow:
+
+1. Reuse a supplied issue after reading it and all comments.
+2. If no issue is supplied, inspect the relevant code/docs, search for duplicates, clarify ambiguous scope, and create a scoped issue before editing.
+3. Keep the runner-created `mapache/*` automation branch when present. Otherwise create a collision-free working branch from the updated default branch according to repository policy.
+4. Implement, test, document, and commit the scoped work.
+5. Ensure the branch is pushed and a pull request is opened. On the active connected-session automation branch, runner exit automation may perform publication; when that automation is unavailable or the user requests immediate manual publication, follow the manual publication section.
+
+For the explicit hotfix/direct-main exception, follow **Hotfix Or Direct Main** instead. Do not create an issue, working branch, or pull request unless separately requested.
+
+## Read Or Create The Issue
+
+1. Resolve the repository:
    - Prefer $GITHUB_REPO_OWNER and $GITHUB_REPO_NAME.
-   - If either is missing, inspect git remote get-url origin and parse github.com/owner/repo.
+   - If either is missing, inspect `git remote get-url origin` and parse `github.com/owner/repo`.
+2. Extract exactly one issue number when the user supplied one. If there is no issue number for an authorized normal implementation request, create an issue by following **Create Issues**; do not ask the user to provide a pre-existing number.
 3. Fetch issue JSON and comments before planning.
 
 Use this shell shape, replacing ISSUE_NUMBER:
@@ -83,7 +97,7 @@ mapache_gh api "repos/$OWNER/$REPO/issues/$ISSUE_NUMBER/comments" --paginate
 
 ## Create Issues
 
-When creating issues, inspect the relevant code and docs first so the title, body, labels, and acceptance criteria match the repository. Ask before creating an issue if the scope, owner, expected behavior, or product decision is unclear.
+For an authorized normal implementation request without an issue number, create the issue before editing. Inspect the relevant code and docs first so the title, body, labels, and acceptance criteria match the repository. Search open and closed issues for duplicates. Ask before creating the issue only when the scope, owner, expected behavior, or product decision is unclear.
 
 Apply labels in two groups:
 
@@ -114,7 +128,7 @@ Add `--label` only for verified existing labels. Record the returned issue URL/n
 
 ## Prepare The Repository
 
-Before editing, inspect `git status --short`, the current branch, and existing commits. Preserve unrelated work; do not stage or discard it. The normal connected-session flow uses the runner-created `mapache/*` branch: do not replace it with an issue-numbered branch or switch to `main` just to start or finish a task.
+Before editing, inspect `git status --short`, the current branch, and existing commits. Preserve unrelated work; do not stage or discard it. The normal connected-session flow uses the runner-created `mapache/*` branch: do not replace it with an issue-numbered branch or switch to `main` just to start or finish a normal task. The automation branch satisfies the separate-working-branch requirement.
 
 Before editing, make sure the base branch is current. Prefer the selected upstream branch, then `main`, then `master`.
 
@@ -175,12 +189,24 @@ If the issue is actionable without clarification, proceed without asking.
 - Update docs when the change affects architecture, workflow, runtime behavior, deployment assumptions, or recorded decisions.
 - Before finishing, run the smallest meaningful verification commands available in the repo.
 - End with a local Git commit containing the completed changes. Stage intentionally with `git add`, verify `git status --short`, and commit with a concise issue-focused message.
-- In connected Mapache GitHub workspaces on a `mapache/*` automation branch, do not push or open the pull request manually unless the user asks. The runner will push the branch and open the pull request when the Pi process exits.
-- In the final response, mention the issue number, summarize the changes, list verification, and call out any unresolved decisions.
+- In connected Mapache GitHub workspaces on the active `mapache/*` automation branch, runner exit automation may push the branch and open the pull request. State clearly when publication is pending session exit. If exit automation is unavailable or the user requests immediate publication, publish manually and verify the PR.
+- In the final response, mention the issue number, branch, commit, pull-request state, verification, and unresolved decisions.
 
-## User-Requested Manual Branch and Pull Request
+## Hotfix Or Direct Main
 
-Only use this section when the user explicitly asks for manual branching/publishing. Otherwise finish with the local commit on the session automation branch and let the runner publish on Pi exit, as above.
+Use this exception only when the user explicitly calls the implementation a `hotfix` or explicitly instructs you to work `directly on main`.
+
+1. Inspect the worktree and preserve unrelated work. Stop if unrelated changes prevent a safe switch.
+2. Fetch the canonical remote, switch to `main`, and update it with a fast-forward-only pull.
+3. Implement and run the same documentation and verification required for normal work.
+4. Commit the scoped files directly on `main` and push `main` to the canonical remote.
+5. Do not create an issue, branch, or pull request unless the user separately asks for one.
+6. Treat branch protection or a rejected non-fast-forward push as a blocker. Never force-push or bypass repository protections.
+7. In a connected session, switching away from the session automation branch intentionally causes runner exit PR automation to skip; report that expected state.
+
+## Manual Branch and Pull Request
+
+Use this section when exit automation is unavailable, the user requests immediate manual publication, or the workflow otherwise requires manual branch/push/PR operations. Normal work must still end with a verified pull request.
 
 1. Keep the current automation branch unless the user requested another branch. If creating one, use a descriptive name, inspect local and remote collisions, and never overwrite an existing branch. Start from the prepared task state. If unrelated changes/commits prevent a clean task branch, ask how to isolate them; a separate worktree is an option, not the default connected-session flow.
 2. Record the original branch. Switching the original workspace away from its session automation branch causes exit automation to skip (`skipped_branch_changed`). A separate worktree leaves the original automation branch active; it does not prevent the runner from later staging/publishing changes there. Do not terminate Pi to trigger publishing or switch branches merely to manipulate that lifecycle.
