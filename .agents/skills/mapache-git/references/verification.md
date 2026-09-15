@@ -14,6 +14,9 @@ Branch: `343-mapache-git-skill`, based on fetched `origin/main`.
 
 7. Initial staging failed because `.gitignore` ignores new `.agents/skills/*` directories. Added a narrow `mapache-git` exception, preserving the existing allowlist pattern rather than force-adding ignored content.
 
+8. Scoped commit and authenticated `git push --set-upstream` succeeded. Duplicate-PR lookup returned no matches; explicit `gh pr create --base main --head 343-mapache-git-skill --body-file ...` created [PR #344](https://github.com/rawkintrevo/mapache/pull/344).
+9. `gh pr view` confirmed the PR was `OPEN` with base `main`, the intended head branch, and the task commit. `git ls-remote` matched local `HEAD`; the isolated worktree was clean. These notes were then committed and pushed as a follow-up to test updating the same PR rather than creating another.
+
 ## Repeatable local checks
 
 From the repository root:
