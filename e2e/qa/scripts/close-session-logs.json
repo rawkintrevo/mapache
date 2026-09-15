@@ -1,0 +1,14 @@
+{
+  "id": "script.closeSessionLogs",
+  "title": "Close runtime Logs",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Close logs"},
+    {"type": "waitForSnapshotNotText", "text": "Loading logs...", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "The Logs dialog closes and returns to the existing runtime canvas"
+  ],
+  "requires": {
+    "sessionLogs": "Runtime Logs dialog is open"
+  }
+}
