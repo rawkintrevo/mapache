@@ -645,7 +645,10 @@ When a session reaches the stopped path, the backend records an allocated usage 
 Usage reads depend on collection group indexes in `firestore.indexes.json`. The profile API queries `workspaces/{workspaceId}/sessions` by `ownerUid` to include running and unaccounted sessions, and admin-wide reporting can query `users/{uid}/sessionUsage` by `ownerUid` or `endedAt` to aggregate across users and trailing windows.
 
 GitHub source reconstruction and internal automation still use protected runner
-services and short-lived installation tokens, but the runner no longer exposes
+services and short-lived installation tokens. The in-memory token provider renews
+through the Functions broker, and the image-owned `mapache-gh` and
+`mapache-git-credential` commands scope credentials to the selected repository;
+the runner no longer exposes
 manual `/git/*` control routes. Live Git browsing and edits belong to the
 upstream Agent application. Likewise, there are no runner skill, subagent,
 package, or model CRUD routes; upstream settings and terminal workflows own

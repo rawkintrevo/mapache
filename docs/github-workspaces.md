@@ -182,7 +182,7 @@ Expected UX:
 4. The backend validates and normalizes the source payload.
 5. The workspace document is created with explicit source metadata.
 
-The public GitHub URL flow remains the lowest-common-denominator fallback. Connected repository selection now persists installation-scoped source metadata, and private connected repos can clone during session startup by using a short-lived GitHub App installation token minted by the backend for runner startup only.
+The public GitHub URL flow remains the lowest-common-denominator fallback. Connected repository selection now persists installation-scoped source metadata, and private connected repos clone during session startup with a short-lived GitHub App token. Long-lived automation renews through the Functions-owned `githubAutomationToken` broker, which revalidates the running session, owner, installation, and repository before minting.
 
 ## Session Creation Flow
 
@@ -214,7 +214,7 @@ The enforcement point should live in the backend. The frontend can show a better
 
 ## Git Controls UI
 
-GitHub-backed live work now exposes repository browsing and edits through the upstream Agent application. The full-width Mapache shell has no left drawer and does not duplicate a Git manager or session controls. Connected GitHub App repositories still push through short-lived installation-scoped credentials minted by the backend and passed to the runner for that single action; public URL workspaces still need runner-provided push credentials. Pull request creation is limited to connected GitHub App repositories for the same reason.
+GitHub-backed live work now exposes repository browsing and edits through the upstream Agent application. The full-width Mapache shell has no left drawer and does not duplicate a Git manager or session controls. Connected GitHub App repositories push and create PRs through the in-memory runner token provider and its `mapache-git-credential`/`mapache-gh` wrappers; public URL workspaces retain anonymous read behavior and user-provided push credentials.
 
 For connected GitHub workspaces, Pi sessions also have an automatic branch/PR lifecycle. During runner startup, after repository/cache restore and before Pi starts, the runner uses the GitHub App installation token to fetch the selected base branch, reset the worktree to that remote branch, and create a unique `mapache/<session-name-kebab>-<session-id>` branch. This prevents the agent from working directly on the source branch while still starting from the latest base state. When the Pi terminal exits, the runner stages any remaining changes and commits them, or reuses commits already made on the automation branch. It then pushes the branch and opens a pull request. If the session exits without file changes or commits ahead of the base branch, no commit or PR is created. When Cloud Run rejects one of these protected runner requests before it reaches the container, such as a `429` no-instance response, the backend surfaces `runner_busy_or_unavailable` instead of the generic `runner_request_failed` code so the UI can distinguish runner capacity from Git/auth errors. Shell sessions remain manual so users can inspect or intervene without triggering automatic PR creation.
 
@@ -235,7 +235,7 @@ For GitHub workspaces:
 
 - If a cached `.git` archive exists in internal storage, restore it to `/workspace/.git`.
 - Otherwise clone the repository and check out the requested commit or branch.
-- For private connected repos, the backend supplies a short-lived installation token to the runner for clone auth only; the runner must not write that token into normal workspace files or persist it in Cloud Storage.
+- For private connected repos, the backend supplies a short-lived installation token for clone auth and a broker URL/expiry for later renewal; the runner must not write tokens into normal workspace files or persist them in Cloud Storage.
 
 The archive contains workspace-relative `.git` entries, so extraction runs from `/workspace`; extracting from `/workspace/.git` would create `.git/.git` and incorrectly force clone fallback. Restart also treats the workspace document as authoritative for source type and sync policy, replacing stale session snapshots before provisioning. This allows an explicitly blank workspace to remain blank even when an older stopped session still carries GitHub metadata.
 

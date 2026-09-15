@@ -8,6 +8,7 @@ const {
   createGithubAutomationPullRequest,
 } = require("./gitPullRequest.service");
 const {createGithubAutomationService} = require("./gitAutomation.service");
+const {createGithubTokenProvider} = require("./githubTokenProvider.service");
 const {parseGitPorcelainStatus} = require("./gitStatus.helpers");
 const {
   normalizeGitActionPaths,
@@ -19,13 +20,14 @@ const {
 const {compactErrorMessage} = require("./utils");
 
 function createGitService({config, activity}) {
+  const tokenProvider = createGithubTokenProvider({config});
   const runGitCommand = createGitCommandRunner({config});
   const {
     withGitCloneAuth,
     withGitPushAuth,
     withGitPushPayloadAuth,
     withGithubAutomationAuth,
-  } = createGitAuthService({config});
+  } = createGitAuthService({config, tokenProvider});
   const automation = createGithubAutomationService({
     activity,
     buildAutomationCommitMessage,
@@ -34,6 +36,7 @@ function createGitService({config, activity}) {
     createGithubAutomationPullRequest,
     runGitCommand,
     withGithubAutomationAuth,
+    getGithubAutomationToken: tokenProvider.getToken,
   });
 
   function isGithubWorkspace() {

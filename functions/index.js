@@ -62,6 +62,7 @@ const {createGoogleOAuthStateService} = require("./googleWorkspaceOAuthState.ser
 const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service");
 const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
 const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
+const {createGithubAutomationTokenBrokerService} = require("./githubAutomationTokenBroker.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
@@ -96,7 +97,18 @@ const {
   reserveChromeWorkspaceSession,
 } = workspaceSessionReservationService;
 
-const githubService = createGithubService();
+function githubAutomationTokenRefreshUrl() {
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
+  return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/githubAutomationToken`;
+}
+const githubService = createGithubService({tokenRefreshUrl: githubAutomationTokenRefreshUrl()});
+const githubAutomationTokenBrokerService = createGithubAutomationTokenBrokerService({
+  db,
+  githubClient: githubService.githubClient,
+  githubConnection: githubService.githubConnection,
+  sessionCollection,
+});
 const lifecycleDependencies = {
   admin,
   db,
@@ -383,6 +395,24 @@ exports.googleMcpToken = onRequest({
   } catch (error) {
     const status = error.status || 500;
     logger.warn("Google MCP access-token refresh failed", {
+      status,
+      error: error.publicMessage || "internal_error",
+    });
+    res.status(status).json({error: error.publicMessage || "internal_error"});
+  }
+});
+
+exports.githubAutomationToken = onRequest({
+  cors: false,
+  timeoutSeconds: 30,
+  secrets: [GITHUB_APP_ID_SECRET, GITHUB_APP_PRIVATE_KEY_SECRET],
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.status(200).json(await githubAutomationTokenBrokerService.refreshAccessToken(req));
+  } catch (error) {
+    const status = error.status || 500;
+    logger.warn("GitHub automation-token refresh failed", {
       status,
       error: error.publicMessage || "internal_error",
     });

@@ -27,9 +27,11 @@ COPY seeded-skills ./seeded-skills
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 RUN node /app/lib/patchPiMcpAdapter.js
 
-RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js \
+RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js /app/bin/mapache-gh.js /app/bin/mapache-git-credential.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
   && ln -sf /app/bin/mapache-chrome-status.js /usr/local/bin/mapache-chrome-status \
+  && ln -sf /app/bin/mapache-gh.js /usr/local/bin/mapache-gh \
+  && ln -sf /app/bin/mapache-git-credential.js /usr/local/bin/mapache-git-credential \
   && node /app/bin/patch-novnc-webutil.js \
   && node /app/bin/check-chrome-runtime.js \
   && node /app/bin/chrome-smoke.js

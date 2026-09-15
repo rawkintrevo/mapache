@@ -29,7 +29,7 @@ function buildAutomationPullRequestBody({sessionName, exitCode, baseCommit}) {
   ].filter((line) => line !== "").join("\n");
 }
 
-async function createGithubAutomationPullRequest({config, title, body, head, base}) {
+async function createGithubAutomationPullRequest({config, title, body, head, base, token}) {
   if (!base) {
     throw new Error("github_automation_missing_base_branch");
   }
@@ -39,7 +39,7 @@ async function createGithubAutomationPullRequest({config, title, body, head, bas
         method: "POST",
         headers: {
           "accept": "application/vnd.github+json",
-          "authorization": `Bearer ${config.githubAutomationToken}`,
+          "authorization": `Bearer ${token || config.githubAutomationToken}`,
           "content-type": "application/json",
           "user-agent": "mapahce-session-runner",
           "x-github-api-version": "2022-11-28",

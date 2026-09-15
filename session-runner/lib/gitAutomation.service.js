@@ -25,6 +25,7 @@ function createGithubAutomationService({
   createGithubAutomationPullRequest = defaultCreateGithubAutomationPullRequest,
   runGitCommand,
   withGithubAutomationAuth,
+  getGithubAutomationToken = async () => config.githubAutomationToken,
 }) {
   let automationBranch = "";
   let automationBaseBranch = "";
@@ -34,7 +35,8 @@ function createGithubAutomationService({
   function shouldAutomateGithubPullRequest() {
     return config.workspaceSourceMode === "github" &&
       config.harnessId === "pi" &&
-      Boolean(config.githubAutomationToken && config.githubRepoOwner && config.githubRepoName);
+      Boolean(getGithubAutomationToken && (config.githubAutomationToken || config.githubAutomationTokenRefreshUrl) &&
+        config.githubRepoOwner && config.githubRepoName);
   }
 
   async function prepareGithubAutomationBranch() {
@@ -161,20 +163,20 @@ function createGithubAutomationService({
       }
 
       const message = await buildAutomationPullRequestTitle();
-      await withGithubAutomationAuth((env) => (
-        runGitCommand(["push", "--set-upstream", "origin", `HEAD:${automationBranch}`], {env})
-      ));
-
-      const pullRequest = await createGithubAutomationPullRequest({
-        config,
-        title: message,
-        body: buildAutomationPullRequestBody({
-          sessionName: config.sessionName,
-          exitCode,
-          baseCommit: automationBaseCommit,
-        }),
-        head: automationBranch,
-        base: automationBaseBranch,
+      const pullRequest = await withGithubAutomationAuth(async (env) => {
+        await runGitCommand(["push", "--set-upstream", "origin", `HEAD:${automationBranch}`], {env});
+        return createGithubAutomationPullRequest({
+          config,
+          token: env.GITHUB_AUTOMATION_TOKEN,
+          title: message,
+          body: buildAutomationPullRequestBody({
+            sessionName: config.sessionName,
+            exitCode,
+            baseCommit: automationBaseCommit,
+          }),
+          head: automationBranch,
+          base: automationBaseBranch,
+        });
       });
       automationPullRequest = pullRequest;
       await activity.updateSessionActivity({

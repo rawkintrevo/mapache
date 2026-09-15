@@ -50,7 +50,9 @@ function createGithubService(dependencies = {}) {
     githubClient,
   });
   return {
-    buildGithubAuthEnv: (session) => buildGithubAuthEnv(session, githubClient),
+    githubClient,
+    githubConnection,
+    buildGithubAuthEnv: (session) => buildGithubAuthEnv(session, githubClient, dependencies.tokenRefreshUrl),
     createGithubConnectUrl: githubConnection.createGithubConnectUrl,
     createGithubInstallationToken: githubClient.createGithubInstallationToken,
     disconnectGithub: githubConnection.disconnectGithub,
@@ -129,7 +131,7 @@ async function normalizeConnectedGithubSourcePayload(uid, source, options = {}, 
   };
 }
 
-async function buildGithubAuthEnv(session, githubClient) {
+async function buildGithubAuthEnv(session, githubClient, tokenRefreshUrl = "") {
   if (cleanName(session.sourceType) !== "github") {
     return [];
   }
@@ -147,6 +149,8 @@ async function buildGithubAuthEnv(session, githubClient) {
   const env = [
     {name: "GITHUB_AUTOMATION_USERNAME", value: "x-access-token"},
     {name: "GITHUB_AUTOMATION_TOKEN", value: tokenResponse.token},
+    {name: "GITHUB_AUTOMATION_TOKEN_EXPIRES_AT", value: tokenResponse.expiresAt || ""},
+    {name: "GITHUB_AUTOMATION_TOKEN_REFRESH_URL", value: tokenRefreshUrl},
   ];
 
   if (cleanName(session.sourceVisibility) === "private") {
