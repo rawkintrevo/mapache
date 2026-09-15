@@ -7,6 +7,7 @@ import {SessionIdlePolicy} from "./SessionIdlePolicy.jsx";
 import {SessionRuntimeStatus} from "./SessionRuntimeStatus.jsx";
 import {ManagedAgentSurface} from "./ManagedAgentSurface.jsx";
 import {getSessionImageFreshness, isMarkedRuntimeSession, isSessionResizePending} from "./sessionPresentation.js";
+import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {deriveShellUrl} from "../../utils/shell.js";
 
 export function SessionDetail({
@@ -39,6 +40,13 @@ export function SessionDetail({
   const isProvisioning = session.status === "provisioning";
   const isProvisioningFailure = session.status === "provision_failed";
   const imageFreshness = getSessionImageFreshness(session);
+  const isHistoricalRuntime = !hasRunnerUrl && (
+    session.sourceType === "ssh" ||
+    (Boolean(session.imageKey || session.image) && normalizeSessionImageKey(session) !== "pi-chrome")
+  );
+  const unavailableMessage = isHistoricalRuntime ? "This historical runtime is unavailable" :
+    (!hasRunnerUrl && ["stopped", "inactive", "needs_image"].includes(String(session.status).toLowerCase()) ? "Workspace is stopped" : "");
+  const isInactiveRuntime = Boolean(unavailableMessage);
 
   useEffect(() => {
     setActiveCanvas(isManagedAgentSurface ? "agent" : "terminal");
@@ -134,9 +142,17 @@ export function SessionDetail({
           onAccessRefreshNeeded={refreshAfterConnectionFailure}
           onSelectCanvas={setActiveCanvas}
           session={session}
+          unavailableMessage={unavailableMessage}
         />
       ) : <>
-      <div className="canvas-shell">
+      {isInactiveRuntime ? (
+        <div className="canvas-shell runtime-status-shell">
+          <div className="terminal-placeholder runtime-status-card" role="status">
+            <strong>{unavailableMessage}</strong>
+            <span>{isHistoricalRuntime ? "This runtime cannot be started." : "Press Play in the navigation bar to start the runtime."}</span>
+          </div>
+        </div>
+      ) : <div className="canvas-shell">
         {hasTerminal ? (
           <div className="canvas-panel" hidden={activeCanvas !== "terminal"}>
             <iframe
@@ -178,7 +194,7 @@ export function SessionDetail({
             </div>
           )
         ) : null}
-      </div>
+      </div>}
       <div className="toolbar">
         <div className="session-actions">
           <Button

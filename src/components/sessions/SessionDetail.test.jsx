@@ -243,6 +243,18 @@ test("communicates that Long-running bypasses automatic pause", () => {
   expect(screen.getByRole("checkbox", {name: "Long-running"})).toBeChecked();
 });
 
+test("uses a compact stopped status for an unavailable managed runtime", () => {
+  renderDetail({agentUiVersion: "pi-web-ui-v1", status: "stopped", serviceUrl: null});
+  expect(screen.getByRole("status")).toHaveTextContent("Workspace is stopped");
+  expect(screen.getByRole("status")).toHaveTextContent("Press Play in the navigation bar");
+});
+
+test("explains that historical runtimes cannot be started", () => {
+  renderDetail({agentUiVersion: "pi-web-ui-v1", status: "stopped", serviceUrl: null, imageKey: "pi-basic"});
+  expect(screen.getByRole("status")).toHaveTextContent("historical runtime is unavailable");
+  expect(screen.getByRole("status")).toHaveTextContent("cannot be started");
+});
+
 test("shows resize progress on the managed agent surface", () => {
   renderDetail({agentUiVersion: "pi-web-ui-v1", resizeOperationState: "queued", serviceUrl: null});
   expect(screen.getByRole("status")).toHaveTextContent("Resizing runtime");

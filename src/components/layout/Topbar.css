@@ -25,6 +25,14 @@
   min-width: 0;
 }
 
+.topbar-workspace-secondary,
+.topbar-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .topbar-workspace-select {
   width: min(100%, 320px);
   min-width: 160px;
@@ -64,6 +72,65 @@ h1 {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.topbar-more-menu {
+  position: relative;
+  display: none;
+}
+
+.topbar-more-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  width: min(280px, calc(100vw - 28px));
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(16, 24, 32, 0.18);
+}
+
+.topbar-more-item,
+.topbar-more-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+.topbar-more-item:hover,
+.topbar-more-link:hover {
+  background: #f4f7fa;
+}
+
+.topbar-more-item svg,
+.topbar-more-link svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.topbar-more-item--destructive {
+  color: var(--danger);
+}
+
+.topbar-more-divider {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--line);
 }
 
 .topbar-action-divider {
@@ -191,36 +258,39 @@ h1 {
   border-radius: 4px;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 1024px) {
   .topbar {
-    align-items: stretch;
-    flex-direction: column;
-    padding: 14px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand actions" "workspace workspace" "metrics metrics";
+    align-items: center;
+    padding: 10px 16px;
   }
 
-  .topbar-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    width: 100%;
-  }
-
-  .topbar-user-popover {
-    position: fixed;
-    top: auto;
-    right: 14px;
-    bottom: 14px;
-    left: 14px;
-    width: auto;
-  }
-
+  .brand { grid-area: brand; }
+  .resource-utilization--navbar { grid-area: metrics; }
   .topbar-workspace-controls {
+    grid-area: workspace;
     justify-content: flex-start;
     width: 100%;
   }
+  .topbar-workspace-select { flex: 1; width: auto; min-width: 0; }
+  .topbar-actions { grid-area: actions; justify-content: flex-end; }
+  .topbar-secondary-actions,
+  .topbar-workspace-secondary,
+  .topbar-link,
+  .topbar-refresh-button { display: none; }
+  .topbar-more-menu { display: block; }
+  .topbar-more-trigger,
+  .topbar-actions > .button,
+  .topbar-user-button,
+  .topbar-workspace-controls > .button { width: 44px; height: 44px; min-height: 44px; }
+  .topbar-workspace-controls { gap: 8px; }
+  .topbar-workspace-controls > .topbar-workspace-select { min-height: 44px; }
+  .topbar-user-popover { position: fixed; top: 68px; right: 16px; width: min(280px, calc(100vw - 32px)); }
+}
 
-  .topbar-workspace-select {
-    flex: 1;
-    width: auto;
-  }
+@media (max-width: 620px) {
+  .topbar { padding: 8px 12px; }
+  .topbar-user-popover { top: 60px; right: 12px; width: calc(100vw - 24px); }
 }

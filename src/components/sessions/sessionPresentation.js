@@ -32,7 +32,7 @@ function trimSessionStatus(status) {
 }
 
 export function isMarkedRuntimeSession(session = {}) {
-  return session.agentUiVersion === MARKED_RUNTIME_VERSION;
+  return session?.agentUiVersion === MARKED_RUNTIME_VERSION;
 }
 
 export function isSessionResizePending(session = {}) {

@@ -33,7 +33,11 @@ Play/Pause lifecycle control beside the workspace selector, followed by the
 selected canonical cloud runtime's live CPU and memory meters, then
 marked-runtime Agent and Logs icons, compact actions for Pi auth, generic
 environment keys, workspace MCP servers, and Google Workspace, plus an avatar
-icon for the user menu. The meters remain mounted across Agent, Chrome, Logs,
+icon for the user menu. At tablet and phone widths the shell becomes a two-row
+header: brand/avatar/More on the first row and a shrinkable workspace selector
+plus lifecycle control on the second. Secondary workspace, connection,
+documentation, and marked-runtime actions are available from the keyboard-accessible
+labeled More menu. The meters remain mounted across Agent, Chrome, Logs,
 profile, and admin surfaces; they are read-only and show unavailable or
 reconnecting state instead of stale readings. Google Workspace account management opens in a modal from its topbar
 icon; the shell no longer reserves either sidebar column. GitHub
@@ -65,6 +69,9 @@ must preserve a `min-height: 0` / `height: 100%` chain so the upstream UI fills
 the desktop viewport without exposing the canvas background below it. The
 outer app uses the dynamic viewport unit when supported, and narrow layouts
 retain a bounded minimum managed-surface height while the top navigation stacks.
+Managed-agent embedding remains edge-to-edge at narrow widths; stopped and
+unsupported historical runtimes use compact status cards rather than oversized
+empty canvases.
 
 The embedded Agent bridge sends access only for the child readiness handshake or
 when the signed access URL actually changes. Listener re-registration, parent
