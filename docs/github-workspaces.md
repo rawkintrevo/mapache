@@ -292,12 +292,23 @@ This gives the app a reasonable recovery path for uncommitted file edits while s
 The canonical agent workflow is the seeded
 [Mapache GitHub issue skill](../session-runner/seeded-skills/mapache-github-issue/SKILL.md).
 Maintain that source, not the installed `.pi/skills/mapache-github-issue/SKILL.md`.
-The normal flow prepares the base, works on the session's `mapache/*` branch,
-and ends with a local commit; runner exit automation handles publishing. Do not
-replace it with a mandatory issue branch or return-to-main cleanup policy.
+The default flow for every actionable implementation request reuses a supplied
+issue or creates a scoped issue before editing, works on the session's
+`mapache/*` branch, verifies the change, and ends with a local commit. Runner exit
+automation pushes that branch and opens the pull request. The automation branch
+is the required separate working branch; do not replace it with an issue-numbered
+branch or impose return-to-main cleanup that would disable exit automation.
 
-The same skill documents issue creation and user-requested manual branch/push/PR
-operations. GitHub CLI calls can map `GITHUB_AUTOMATION_TOKEN` to `GH_TOKEN`;
+An explicit `hotfix` description or explicit request to work `directly on main`
+bypasses issue, working-branch, and PR creation. In that exception the agent
+fast-forward-updates `main`, implements and tests there, commits, and pushes
+`main` directly. Urgency or the word "fix" alone does not activate the exception,
+and branch protection must never be bypassed. This policy is recorded in
+[ADR-0003](../adrs/adr-0003-default-agent-implementation-workflow.md).
+
+The same skill documents issue creation and manual branch/push/PR operations
+when exit automation is unavailable or immediate publication is requested.
+GitHub CLI calls can map `GITHUB_AUTOMATION_TOKEN` to `GH_TOKEN`;
 HTTPS Git can use temporary askpass or invocation-local `gh auth git-credential`,
 without persisting the token. Manual PR creation is verified immediately.
 An explicitly chosen separate worktree does not disable exit automation in the

@@ -1,15 +1,17 @@
 ---
 name: issue-workflow
-description: "Use when the user provides a GitHub issue number and wants Codex to complete the whole implementation workflow: update local main from remote, read the issue and comments, create an issue-named branch, implement and test the change, compose and run QA for frontend changes, commit, push, open a pull request, return to main, and comment or label the issue when blocked or waiting on user action."
+description: "Use for actionable GitHub implementation requests: create or reuse an issue, prepare a separate working branch, implement and test, commit, push, open a pull request, and handle explicit hotfix/direct-main exceptions."
 ---
 
 # Issue Workflow
 
-Use this skill to turn a GitHub issue number into a branch, tested implementation, pushed commits, and a pull request.
+Use this skill to turn an actionable implementation request into an issue, separate working branch, tested commit, and pull request. Reuse a supplied issue; otherwise search for duplicates and create a scoped issue before editing.
+
+An explicit `hotfix` description or explicit instruction to work `directly on main` uses **Hotfix Or Direct Main** instead. Do not infer that exception from urgency, task size, or the word "fix" alone.
 
 ## Prerequisites
 
-1. Identify the issue number from the user request. If the issue number is missing, ask for it.
+1. Identify an issue number supplied by the user. If none is supplied for an authorized implementation, inspect relevant context, clarify ambiguity, search open and closed issues, and create a scoped issue before editing. Do not create issues for explanation, investigation, review, or issue-only requests without implementation authorization.
 2. Use the GitHub plugin/app when available for issue, comment, PR, and label operations. Use `gh` as a fallback when the plugin cannot provide the needed action.
 3. Before non-trivial implementation work in this repo, follow the local developer-wiki skill or `AGENTS.md` instructions.
 4. Preserve unrelated worktree changes. Do not reset, checkout, or overwrite files unless they are clearly part of this issue or the user explicitly approves.
@@ -24,9 +26,9 @@ Use this skill to turn a GitHub issue number into a branch, tested implementatio
 
 ## Branch Naming
 
-1. Derive a short kebab-case description from the issue title, using lowercase letters, digits, and hyphens.
-2. Create a local branch named `<issue-number>-<kebab-case-desc>`, for example `35-admin-panel`.
-3. If the exact branch already exists, inspect it and continue there only if it is clearly for the same issue. Otherwise choose a unique suffix such as `35-admin-panel-2`.
+1. In a connected Mapache session already on its runner-created `mapache/*` automation branch, keep that branch; it satisfies the separate-branch requirement and preserves exit automation.
+2. Otherwise derive a short kebab-case description from the issue title and create a branch following repository policy. For Mapache, use `mapache/<kebab-case-desc>`.
+3. If the exact branch already exists locally or remotely, stop and ask for a different description unless repository policy explicitly defines another collision strategy.
 
 ## Implementation
 
@@ -61,7 +63,7 @@ If completing the issue requires something only the user can do, such as changin
    - The exact action the user must take.
    - How to resume after the action is done.
 4. Stop after reporting the branch, commit, and issue comment.
-5. Follow **Return To Main** before the final response.
+5. Follow **Final Branch State** before the final response.
 
 ## Blocked Handling
 
@@ -79,7 +81,19 @@ When blocked:
    - The next decision or access needed.
 4. Add the `blocked` label to the issue.
 5. Stop and report the block clearly to the user.
-6. Follow **Return To Main** before the final response.
+6. Follow **Final Branch State** before the final response.
+
+## Hotfix Or Direct Main
+
+Use this exception only when the user explicitly calls the implementation a `hotfix` or explicitly instructs you to work `directly on main`.
+
+1. Preserve unrelated work and stop if it prevents a safe checkout.
+2. Fetch the canonical remote, check out `main`, and run `git pull --ff-only`.
+3. Implement, document, and test with the same quality requirements as normal work.
+4. Commit the scoped files directly on `main` and push `main`.
+5. Do not create an issue, branch, or pull request unless separately requested.
+6. Never force-push or bypass branch protection; report a rejected push as blocked.
+7. Report the commit, checks, push outcome, deployment outcome, and final branch.
 
 ## Completion
 
@@ -96,15 +110,14 @@ When implementation is complete and checks pass:
    - Any known limitations or follow-up work.
 6. If a QA screenshot was produced and upload support is available, embed or attach it in the PR rather than merely mentioning it.
 
-## Return To Main
+## Final Branch State
 
 Before the final response after completion, user-action pause, or blocked bailout:
 
-1. Ensure useful issue-related changes have been committed and pushed, or intentionally left uncommitted only when the workflow is blocked before a meaningful commit can be made.
+1. Ensure useful issue-related changes have been committed and pushed, or intentionally left uncommitted only when blocked before a meaningful commit can be made.
 2. Inspect `git status --short`.
-3. Switch back to `main`.
-4. If local changes or untracked files would block switching to `main`, do not stash, reset, delete, or overwrite them automatically. Stop, report the current branch and blocking paths, and tell the user what must be resolved before the branch can be switched.
-5. After switching, leave the working tree on `main`; do not pull or otherwise change `main` during cleanup unless the user requested it.
+3. In a connected Mapache session, preserve the session automation branch so runner exit automation remains enabled. Do not switch to `main` merely for cleanup.
+4. Outside a runner-managed automation branch, return to `main` after publishing when safe. If local changes would block switching, do not stash, reset, delete, or overwrite them automatically; report the branch and blocking paths.
 
 ## Final Response
 
@@ -114,5 +127,5 @@ End with:
 2. PR link, or issue comment link if blocked or waiting on user action.
 3. Commit hash.
 4. Tests and QA run, including screenshot paths when applicable.
-5. Final local branch state, including whether cleanup returned to `main`.
+5. Final local branch state, including whether the runner automation branch was preserved or cleanup returned to `main`.
 6. Any remaining user action or residual risk.

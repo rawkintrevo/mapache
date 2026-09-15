@@ -14,6 +14,7 @@ Read this when changing GitHub App permissions, repository scope, PR behavior, b
 | --- | --- | --- |
 | [ADR-0001: GitHub App Ownership, Permissions, and Repository Scope](../adrs/adr-0001-github-app-ownership-and-permissions.md) | Accepted | GitHub App owner, permission set, and all-repositories installation scope. |
 | [ADR-0002: PR Creation and Branch Naming Policy](../adrs/adr-0002-pr-creation-and-branch-naming-policy.md) | Accepted | Working branch requirement, `mapache/<short-desc>` naming, PR defaults, and default-branch-only first implementation. |
+| [ADR-0003: Default Agent Implementation Workflow](../adrs/adr-0003-default-agent-implementation-workflow.md) | Accepted | Issue creation, automation-branch implementation, commit/PR completion, and explicit hotfix/direct-main exception. |
 
 ## Related Docs
 
