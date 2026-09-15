@@ -45,6 +45,11 @@
   border-radius: 0;
 }
 
+.canvas-shell--managed-agent.canvas-shell--status {
+  height: auto;
+  min-height: 0;
+}
+
 .provisioning-status {
   display: grid;
   gap: 3px;
@@ -293,6 +298,31 @@
   padding: 24px;
   color: var(--code-text);
   text-align: center;
+}
+
+.runtime-status-shell {
+  min-height: 0;
+  height: auto;
+}
+
+.runtime-status-card {
+  align-content: center;
+  justify-items: start;
+  gap: 6px;
+  min-height: 140px;
+  padding: 20px;
+  background: var(--panel-strong);
+  color: var(--code-text);
+  text-align: left;
+}
+
+.runtime-status-card strong {
+  color: white;
+  font-size: 16px;
+}
+
+.runtime-status-card span {
+  color: #cbd5e1;
 }
 
 .terminal-placeholder code {

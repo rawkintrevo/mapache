@@ -2,6 +2,7 @@ import "./Topbar.css";
 import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
+import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
@@ -86,39 +87,41 @@ export function Topbar({
         >
           {workspaceOn ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
         </Button>
-        <Button
-          aria-label="Create workspace"
-          disabled={busy}
-          icon
-          title="Create workspace"
-          tooltip="Create workspace"
-          variant="secondary"
-          onClick={onOpenWorkspaceModal}
-        >
-          <Plus aria-hidden="true" />
-        </Button>
-        <Button
-          aria-label={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
-          disabled={busy || !selectedWorkspace}
-          icon
-          title={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
-          tooltip={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
-          variant="secondary"
-          onClick={onOpenWorkspaceEditModal}
-        >
-          <Pencil aria-hidden="true" />
-        </Button>
-        <Button
-          aria-label={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
-          disabled={busy || !selectedWorkspace}
-          icon
-          title={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
-          tooltip={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
-          variant="secondary"
-          onClick={() => onDeleteWorkspace(selectedWorkspace?.id)}
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
+        <div className="topbar-workspace-secondary">
+          <Button
+            aria-label="Create workspace"
+            disabled={busy}
+            icon
+            title="Create workspace"
+            tooltip="Create workspace"
+            variant="secondary"
+            onClick={onOpenWorkspaceModal}
+          >
+            <Plus aria-hidden="true" />
+          </Button>
+          <Button
+            aria-label={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
+            disabled={busy || !selectedWorkspace}
+            icon
+            title={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
+            tooltip={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
+            variant="secondary"
+            onClick={onOpenWorkspaceEditModal}
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+          <Button
+            aria-label={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
+            disabled={busy || !selectedWorkspace}
+            icon
+            title={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
+            tooltip={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
+            variant="secondary"
+            onClick={() => onDeleteWorkspace(selectedWorkspace?.id)}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       {resourceMetrics ? (
         <ResourceUtilization
@@ -128,6 +131,7 @@ export function Topbar({
         />
       ) : null}
       <div className="topbar-actions">
+        <div className="topbar-secondary-actions">
         {showWorkspaceTools ? (
           <>
             <Button
@@ -206,8 +210,27 @@ export function Topbar({
         </Button>
         <a className="topbar-link" href="/community/blog">Blog</a>
         <a className="topbar-link" href="/community/docs/intro/">Docs</a>
+        </div>
+        <TopbarMoreMenu
+          activeCanvas={activeCanvas}
+          disabled={busy}
+          onRefresh={onRefresh}
+          onSelectCanvas={onSelectCanvas}
+          onShowLogs={onShowLogs}
+          showWorkspaceTools={showWorkspaceTools}
+          managePiAuthLabel={managePiAuthLabel}
+          onDeleteWorkspace={onDeleteWorkspace}
+          onOpenGenericEnvironment={onOpenGenericEnvironment}
+          onOpenGoogleWorkspace={onOpenGoogleWorkspace}
+          onOpenMcpServers={onOpenMcpServers}
+          onOpenPiAuthManage={showManagePiAuth ? onOpenPiAuthManage : null}
+          onOpenWorkspaceEditModal={onOpenWorkspaceEditModal}
+          onOpenWorkspaceModal={onOpenWorkspaceModal}
+          selectedWorkspace={selectedWorkspace}
+        />
         <Button
           aria-label="Refresh app state"
+          className="topbar-refresh-button"
           disabled={busy}
           icon
           title={busy ? "Working..." : "Refresh"}

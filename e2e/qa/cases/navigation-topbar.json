@@ -10,6 +10,7 @@
     {"assert": "button-present", "name": "Manage Pi Auth"},
     {"assert": "button-present", "name": "Manage MCP servers"},
     {"assert": "button-present", "name": "Manage Google Workspace"},
+    {"assert": "button-present", "name": "More workspace actions"},
     {"assert": "button-present", "nameIncludes": "Open user menu for"},
     {"useScript": "scripts/refresh-app-state.json"},
     {"capture": "screenshot", "fileName": "topbar.png"}
