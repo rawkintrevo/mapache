@@ -91,6 +91,13 @@ assert.strictEqual(isIdleSession({
   lastActivityAt: now - 2 * 60 * minute,
   runtimeStartedAt: now - 10 * minute,
   updatedAt: now - minute,
+}, now), false);
+assert.strictEqual(isIdleSession({
+  agentUiVersion: "pi-web-ui-v1",
+  idleTimeoutMinutes: 60,
+  lastActivityAt: now - 2 * 60 * minute,
+  runtimeStartedAt: now - 90 * minute,
+  updatedAt: now - minute,
 }, now), true);
 
 (async () => {
