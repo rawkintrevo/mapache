@@ -163,17 +163,19 @@ query credentials, injects the private token, closes both sides together, and
 closes live pairs when access expires. Chrome VNC, terminal, shell, and metrics
 upgrades remain separate dispatcher branches.
 
-`PI_WEB_MANAGED=1` makes the upstream server refuse self-update, runtime
-installation, plugin-catalog installation, and provider-credential mutation
-messages. Credential-bearing model probes and saves are also rejected; the
-server omits API keys and secret headers from managed model-config responses
-while preserving existing server-side secrets for metadata-only edits. The
-managed client replaces upstream credential entry points with a Mapache-owned
-explanation, while model selection and non-secret model metadata remain usable.
-The managed server forces `ENGINE=pi` even if a stale `PI_WEB_ENGINE=dsh` value
-is present. Existing installed plugins and ordinary agent settings remain
-available. The build and runtime environment are still owned by the runner
-image and deployment pipeline.
+`PI_WEB_MANAGED=1` preserves Mapache's credential boundary while allowing
+user-initiated self-update, runtime installation, and plugin-catalog operations
+through the authenticated upstream UI. Credential-bearing model probes and
+saves are still rejected; the server omits API keys and secret headers from
+managed model-config responses while preserving existing server-side secrets
+for metadata-only edits. The managed client replaces upstream credential entry
+points with a Mapache-owned explanation, while model selection and non-secret
+model metadata remain usable. The managed server forces `ENGINE=pi` even if a
+stale `PI_WEB_ENGINE=dsh` value is present. Existing installed plugins and
+ordinary agent settings remain available. The build and runtime environment
+are still owned by the runner image and deployment pipeline, so an image
+redeployment can replace runtime changes; workspace-local plugin/catalog and UI
+state are captured by the managed agent snapshot.
 
 Managed auth is materialized from the canonical Mapache provider document into
 `/var/lib/mapache/agent/pi/auth.json` after workspace restore and before the
