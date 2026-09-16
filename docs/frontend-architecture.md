@@ -55,8 +55,9 @@ Logs are icon actions in the top navigation; Logs opens an owner-scoped modal wi
 runtime's Cloud Run entries and current recorded error. The managed upstream
 header places Chrome beside Chat, Terminal, and Git and uses the bounded
 postMessage bridge to ask `PiWebUiCanvas` to select the parent-owned persistent
-browser canvas. That managed header also omits the upstream name/logo, release
-version controls, and repository link. Preview is not a workspace navigation
+browser canvas. The managed header omits the upstream name/logo but retains
+release/version controls and the repository link so authenticated users can
+manage supported runtime updates. Preview is not a workspace navigation
 surface. The embedded Agent iframe communicates through the signed `/agent/`
 gateway and the same exact-origin bridge. Persistent Chrome keeps its signed
 access URL. A shell iframe remains
