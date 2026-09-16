@@ -56,8 +56,11 @@ runtime's Cloud Run entries and current recorded error. The managed upstream
 header places Chrome beside Chat, Terminal, and Git and uses the bounded
 postMessage bridge to ask `PiWebUiCanvas` to select the parent-owned persistent
 browser canvas. The managed header omits the upstream name/logo but retains
-release/version controls and the repository link so authenticated users can
-manage supported runtime updates. Preview is not a workspace navigation
+release/version controls and the repository link. Embedded Settings also shows
+the upstream UI-plugin catalog and its add/install/update/remove controls in
+managed sessions. These exposed update controls are not yet a durable managed
+runtime updater: issue #356 still owns package/theme management and replacement
+of the image-owned Pi and pi-web-ui artifacts. Preview is not a workspace navigation
 surface. The embedded Agent iframe communicates through the signed `/agent/`
 gateway and the same exact-origin bridge. Persistent Chrome keeps its signed
 access URL. A shell iframe remains

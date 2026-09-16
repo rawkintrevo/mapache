@@ -91,8 +91,30 @@ index 74e32df..d94fd66 100644
  					<div className="setup-failed">
  						<div className="setup-done">{t("installFailed")}</div>
  						<pre className="setup-detail">{installResult.detail}</pre>
+diff --git a/web/src/components/SettingsModal.tsx b/web/src/components/SettingsModal.tsx
+index ef5f92c..4a37089 100644
+--- a/web/src/components/SettingsModal.tsx
++++ b/web/src/components/SettingsModal.tsx
+@@ -1607,16 +1607,7 @@ export function SettingsModal({ chat, terminal, onSwitchToTerminal, onClose }: S
+ 						)}
+ 
+ 						{/* ---- 插件市场（可一键安装的插件列表） ------------------------ */}
+-						{/* A managed instance installs software through its deploy, not
+-						    through this page: the market would only offer an action the
+-						    server refuses (server/managed.ts). Plugins already installed
+-						    keep working and stay listed above. */}
+-						{tab === "plugins" && managed && (
+-							<div className="set-section">
+-								<div className="set-note">{t("updatesManaged")}</div>
+-							</div>
+-						)}
+-						{tab === "plugins" && !managed && (
++						{tab === "plugins" && (
+ 							<div className="set-section">
+ 								<div className="set-section-title">
+ 									<FiPackage className="set-section-icon" />
 diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
-index cd5f722..a7ff39b 100644
+index cd5f722..10eada4 100644
 --- a/web/src/components/TopBar.tsx
 +++ b/web/src/components/TopBar.tsx
 @@ -493,10 +493,7 @@ export function TopBar({
@@ -121,16 +143,17 @@ index cd5f722..a7ff39b 100644
  							className="chip github"
  							href="https://github.com/xing-shuyin/pi-web-ui"
  							target="_blank"
-@@ -567,7 +562,7 @@ export function TopBar({
- 						open={moreOpen}
- 						onOpenChange={(v) => {
- 							setMoreOpen(v);
--							if (v && !managed) {
-+							if (v) {
- 								appSend({ type: "check_update" });
- 								appSend({ type: "check_updates_all" });
- 							}
-@@ -630,9 +625,7 @@ export function TopBar({
+@@ -539,8 +534,7 @@ export function TopBar({
+ 							title={t("githubRepo")}
+ 						>
+ 							<FiGithub />
+-						</a>
+-					)}
++					</a>
+ 				</div>
+ 
+ 				<button
+@@ -630,9 +624,7 @@ export function TopBar({
  								{locale === "zh" ? th.name : (th.nameEn ?? th.name)}
  							</DropdownItem>
  						))}
@@ -141,3 +164,12 @@ index cd5f722..a7ff39b 100644
  								{renderUpdateBody()}
  								{renderAllUpdatesBody()}
  								<a
+@@ -643,8 +635,6 @@ export function TopBar({
+ 								>
+ 									<FiGithub /> {t("githubRepo")}
+ 								</a>
+-							</>
+-						)}
+ 					</Dropdown>
+ 				</div>
+ 			</div>
