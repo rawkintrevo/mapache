@@ -97,6 +97,26 @@ queries only the session's recorded Cloud Run service name. Responses are
 bounded to timestamp, severity, and message fields; request query strings and
 broader Logging metadata are not exposed to the browser.
 
+## Scheduled automation data boundary
+
+Scheduled automation definitions live at
+`workspaces/{workspaceId}/automations/{automationId}` and owner-wide run records
+live at `automationRuns/{runId}`. `functions/automationValidation.helpers.js`
+owns the bounded DTOs and validation rules: names are at most 120 characters,
+prompts at most 32,768 characters, cron and IANA timezone strings at most 100
+characters, and definition revisions and workspace automation concurrency are
+positive safe integers. Definitions default to disabled with
+`allowParallelWithMain: true`; runs carry an immutable prompt/definition
+snapshot and use the `queued` → `provisioning` → `running` → `stopping` →
+terminal state contract from `functions/automationState.helpers.js`.
+
+`functions/runtimePaths.helpers.js` normalizes missing `runtimeKind` to `main`
+and provides the deterministic `auto-{runId}` automation session identity. The
+Firestore rules expose definitions and runs only to the owning user and deny
+client writes; automation concurrency settings are backend-owned workspace
+fields. The corresponding due-definition, owner-history, queue, and cleanup
+query shapes are declared in `firestore.indexes.json`.
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi
