@@ -120,6 +120,14 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
     const snapshot = await transaction.get(runRef);
     if (!snapshot.exists) return {action: "skip", reason: "run_not_found"};
     const run = {runId, ...snapshot.data()};
+    const workspaceRef = dependencies.db.collection("workspaces").doc(run.workspaceId);
+    const workspaceSnap = await transaction.get(workspaceRef);
+    const workspace = workspaceSnap.exists ? workspaceSnap.data() || {} : {};
+    if (!workspaceSnap.exists || workspace.deleted === true || ["deleting", "deleted"].includes(
+        String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+    )) {
+      return {action: "skip", reason: "workspace_unavailable"};
+    }
     if (String(run.status || "").trim().toLowerCase() !== "provisioning") {
       return {action: "skip", reason: `status_${String(run.status || "unknown").trim().toLowerCase()}`};
     }

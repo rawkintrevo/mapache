@@ -1,6 +1,4 @@
 "use strict";
-const {assertNoActiveResize} = require("./sessionResize.service");
-
 const logger = require("firebase-functions/logger");
 const {
   admin,
@@ -59,7 +57,7 @@ async function listWorkspaces(uid, dependencies = {}) {
   const snap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
-  const workspaces = await Promise.all(snap.docs.map((doc) =>
+  const workspaces = await Promise.all(snap.docs.filter((doc) => !isWorkspaceDeleted(doc.data() || {})).map((doc) =>
     ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
   ));
   return workspaces.map(serializeWorkspaceForClient).sort(sortByUpdatedAtDesc);
@@ -73,6 +71,7 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
   let workspace = workspaceSnap.data() || {};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(workspace);
 
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_workspace_name");
@@ -125,6 +124,7 @@ async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
   const workspace = workspaceSnap.data() || {};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(workspace);
 
   const mcpConfig = normalizeMcpConfigPayload(payload);
   await workspaceRef.update({
@@ -135,47 +135,10 @@ async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
 }
 
 async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
-  const workspaceDb = dependencies.db || db;
-  const workspaceAdmin = dependencies.admin || admin;
-  const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
-  const workspaceSnap = await workspaceRef.get();
-  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  const workspace = {id: workspaceSnap.id, ...workspaceSnap.data()};
-  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-
-  const sessionSnap = await workspaceRef.collection("sessions").get();
-  for (const sessionDoc of sessionSnap.docs) assertNoActiveResize(sessionDoc.data() || {});
-  for (const sessionDoc of sessionSnap.docs) {
-    const session = sessionDoc.data() || {};
-    if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
-    await sessionDoc.ref.update({
-      status: "deleting",
-      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-    });
-    const serviceDeleted = await dependencies.deleteSessionService(
-        sessionDoc.ref,
-        session,
-        {reason: "workspace_deleted"},
-    );
-    if (!serviceDeleted) throw httpError(502, "workspace_delete_failed");
+  if (typeof dependencies.workspaceAutomationDeletionService?.deleteWorkspace === "function") {
+    return dependencies.workspaceAutomationDeletionService.deleteWorkspace(uid, workspaceId);
   }
-
-  await deleteWorkspaceStorageIfUnshared(uid, workspace, {
-    admin: workspaceAdmin,
-    db: workspaceDb,
-  });
-  if (typeof dependencies.deleteWorkspaceSharedStorage === "function") {
-    await dependencies.deleteWorkspaceSharedStorage(uid, workspaceId, {reason: "workspace_deleted"});
-  }
-  if (typeof workspaceDb.recursiveDelete === "function") {
-    await workspaceDb.recursiveDelete(workspaceRef);
-  } else {
-    for (const sessionDoc of sessionSnap.docs) {
-      await sessionDoc.ref.delete();
-    }
-    await workspaceRef.delete();
-  }
-  return {ok: true};
+  throw httpError(503, "workspace_deletion_unavailable");
 }
 
 async function createWorkspace(uid, payload, dependencies = {}) {
@@ -452,7 +415,18 @@ async function requireWorkspace(uid, workspaceId) {
   if (!snap.exists) throw httpError(404, "workspace_not_found");
   const data = snap.data();
   if (data.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(data);
   return {id: snap.id, ...data};
+}
+
+function isWorkspaceDeleted(workspace = {}) {
+  return workspace.deleted === true || ["deleting", "deleted"].includes(
+      String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+  );
+}
+
+function assertWorkspaceMutable(workspace = {}) {
+  if (isWorkspaceDeleted(workspace)) throw httpError(409, "workspace_deleted");
 }
 
 async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
@@ -511,4 +485,5 @@ module.exports = {
   requireWorkspace,
   renameWorkspace,
   saveWorkspaceMcpConfig,
+  isWorkspaceDeleted,
 };

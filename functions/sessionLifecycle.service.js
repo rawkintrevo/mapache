@@ -47,6 +47,8 @@ const {
 function createSessionLifecycleService(dependencies = {}) {
   return {
     deleteSession: (uid, workspaceId, sessionId) => deleteSession(uid, workspaceId, sessionId, dependencies),
+    deleteSessionForWorkspace: (sessionRef, session, options = {}) =>
+      deleteSessionForWorkspace(sessionRef, session, options, dependencies),
     markSessionStopped: (sessionRef, session, reason) => markSessionStopped(sessionRef, session, reason, dependencies),
     reapIdleSessions: () => reapIdleSessions(dependencies),
     requireSession: (uid, workspaceId, sessionId) => requireSession(uid, workspaceId, sessionId, dependencies),
@@ -404,6 +406,15 @@ async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
   assertMainSession(session);
+  await deleteSessionForWorkspace(sessionRef, session, {reason: "deleted"}, dependencies);
+  return {ok: true};
+}
+
+// Workspace deletion has already tombstoned the workspace, so it cannot use
+// the user-facing requireSession/requireWorkspace path. It still uses the
+// same lifecycle owner and Cloud Run deletion contract as a normal delete.
+async function deleteSessionForWorkspace(sessionRef, session, options = {}, dependencies = {}) {
+  assertMainSession(session);
   assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "deleting", {
     ...runtimeSessionStateUpdate(session, "stopping"),
@@ -412,12 +423,15 @@ async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }
-  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason: "deleted"});
-  if (!serviceDeleted) {
-    throw httpError(502, "session_delete_failed");
-  }
+  const deletion = await dependencies.deleteSessionService(sessionRef, session, {
+    reason: options.reason || "deleted",
+    returnDetails: true,
+    recoveryWarning: options.recoveryWarning,
+  });
+  const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
+  if (details.serviceAbsent !== true) throw httpError(502, "session_delete_failed");
   await sessionRef.delete();
-  return {ok: true};
+  return {ok: true, ...details};
 }
 
 async function markSessionStopped(sessionRef, session, reason, dependencies = {}) {
@@ -659,4 +673,4 @@ function isIdleSession(session, now) {
   return now - baseline >= idleTimeoutMinutes * 60 * 1000;
 }
 
-module.exports = {createSessionLifecycleService, isIdleSession};
+module.exports = {createSessionLifecycleService, deleteSessionForWorkspace, isIdleSession};

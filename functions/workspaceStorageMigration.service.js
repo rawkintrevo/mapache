@@ -87,6 +87,7 @@ async function reserveMigration(uid, workspaceId, dependencies) {
     if (!workspaceSnap.exists) throw migrationError("workspace_not_found", 404);
     workspace = workspaceSnap.data() || {};
     assertOwner(workspace, uid);
+    assertWorkspaceAvailable(workspace);
     const sessions = await readSessions(transaction, workspaceRef, dependencies);
     assertPaused(sessions);
 
@@ -138,6 +139,7 @@ async function completeMigration(uid, workspaceId, payload = {}, dependencies = 
     if (!workspaceSnap.exists) throw migrationError("workspace_not_found", 404);
     const workspace = workspaceSnap.data() || {};
     assertOwner(workspace, uid);
+    assertWorkspaceAvailable(workspace);
     assertPaused(await readSessions(transaction, workspaceRef, dependencies));
     const migration = workspace.sharedStorageMigration || {};
     if (migration.operationId !== result.operationId) throw migrationError("workspace_storage_migration_conflict", 409);
@@ -197,6 +199,7 @@ async function failMigration(uid, workspaceId, payload = {}, dependencies = {}) 
     if (!workspaceSnap.exists) throw migrationError("workspace_not_found", 404);
     const workspace = workspaceSnap.data() || {};
     assertOwner(workspace, uid);
+    assertWorkspaceAvailable(workspace);
     const migration = workspace.sharedStorageMigration || {};
     if (!operationId || migration.operationId !== operationId) throw migrationError("workspace_storage_migration_conflict", 409);
     const now = serverTimestamp(dependencies.admin);
@@ -267,6 +270,12 @@ function assertPaused(sessions) {
 
 function assertOwner(workspace, uid) {
   if (workspace.ownerUid !== uid) throw migrationError("workspace_forbidden", 403);
+}
+
+function assertWorkspaceAvailable(workspace) {
+  if (workspace.deleted === true || ["deleting", "deleted"].includes(
+      String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+  )) throw migrationError("workspace_deleted", 409);
 }
 
 function assertMigrationIdentity(workspace, operationId) {

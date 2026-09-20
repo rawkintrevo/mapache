@@ -65,10 +65,16 @@ object. Destination hashes are revalidated on resume, foreign changes fail close
 and the generation-ready marker is published last. A caller must perform the
 Firestore descriptor/pointer cutover; an interrupted unpublished generation can be
 cleaned only through its owned control manifest.
-Normal run completion never deletes a workspace bucket. Workspace deletion first
-confirms that all runner services are absent, deletes live objects and then the
-bucket, and reports the seven-day recovery window; soft-deleted objects remain
-recoverable and continue to incur storage charges until retention expires.
+Normal run completion never deletes a workspace bucket. Workspace deletion is
+owned by the Functions-side `workspaceDeletionOperations/{workspaceId}`
+operation: it tombstones the workspace first, fences checkpoint publication
+and late automation admission, confirms every main and automation service is
+absent, removes the runner IAM member, then deletes live objects and the
+bucket. The operation removes published and unpublished tree generations,
+private run artifacts, and automation records while preserving the user's
+allocated usage ledger. It reports the seven-day `recoverableUntil` window and
+known retained live bytes when available; soft-deleted objects remain
+recoverable and can continue to incur storage charges until retention expires.
 
 Admitted automation runs use the same trusted mount and pinned `pi-chrome` image
 as other supported sessions, but receive a separate `auto-{runId}` session and

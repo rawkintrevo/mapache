@@ -39,6 +39,14 @@ firebase deploy --only functions --project pi-agents-cloud
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
 ```
 
+Workspace deletion is a Functions-only control-plane change. Deploy it with
+`firebase deploy --only functions --project pi-agents-cloud`; keep the
+`appConfig/automations.enabled` feature flag false until the complete
+automation rollout is ready. The deletion operation retains the workspace
+tombstone and its `workspaceDeletionOperations/{workspaceId}` recovery
+evidence, so a failed Cloud Run or bucket operation can be resumed by the
+backend without deleting unrelated storage resources.
+
 The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash

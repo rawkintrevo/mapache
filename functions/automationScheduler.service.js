@@ -78,6 +78,12 @@ async function processDefinition(definition, tickDate, dependencies = {}) {
     const workspaceSnap = await transaction.get(workspaceRef);
     if (!workspaceSnap.exists) return;
     const workspace = workspaceSnap.data() || {};
+    if (workspace.deleted === true || ["deleting", "deleted"].includes(
+        String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+    )) {
+      result = {ignored: true, workspaceUnavailable: true};
+      return;
+    }
     const schedule = tickSchedule(current, tickDate);
     if (!schedule.nextFuture) return;
 

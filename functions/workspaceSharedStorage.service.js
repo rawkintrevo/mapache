@@ -151,14 +151,15 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
   const db = dependencies.db || defaultDb;
   const auth = dependencies.auth || defaultAuth;
   const storage = dependencies.storage || defaultStorage;
+  const now = dependencies.now || (() => new Date());
   const bucketAccess = dependencies.bucketAccessService || createWorkspaceBucketAccessService({
     db,
     projectId: dependencies.projectId || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "",
     storage,
   });
 
-  async function loadWorkspace(uid, workspaceId) {
-    if (typeof dependencies.requireWorkspace === "function") {
+  async function loadWorkspace(uid, workspaceId, options = {}) {
+    if (typeof dependencies.requireWorkspace === "function" && options.allowDeleting !== true) {
       return dependencies.requireWorkspace(uid, workspaceId);
     }
     const workspaceRef = db.collection("workspaces").doc(workspaceId);
@@ -166,6 +167,7 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const workspace = {id: workspaceSnap.id, ...workspaceSnap.data()};
     if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+    if (options.allowDeleting !== true && isWorkspaceDeleted(workspace)) throw httpError(409, "workspace_deleted");
     return workspace;
   }
 
@@ -358,7 +360,7 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     if (options.reason !== "workspace_deleted") {
       throw storageError("workspace_bucket_delete_requires_workspace_deletion", 400);
     }
-    const workspace = await loadWorkspace(uid, workspaceId);
+    const workspace = await loadWorkspace(uid, workspaceId, {allowDeleting: options.allowDeleting === true});
     const sessions = await listSessions(workspaceId);
     assertWorkspacePaused(sessions);
     const identity = workspace.sharedStorage || {};
@@ -377,10 +379,18 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     };
     const bucket = storage.bucket(binding.bucketName);
     const metadata = await readBucket(bucket);
-    if (!metadata) return {deleted: false, bucketName: binding.bucketName, retainedRecovery: null};
+    if (!metadata) return {deleted: false, bucketDeleted: true, bucketName: binding.bucketName, retainedRecovery: null};
     assertSharedBucketContract(metadata, binding);
 
     try {
+      try {
+        if (typeof bucketAccess.removeRunnerObjectAccess === "function") {
+          await bucketAccess.removeRunnerObjectAccess(binding);
+        }
+      } catch (error) {
+        throw storageError("workspace_bucket_iam_failed", 502, {cause: error});
+      }
+      const retainedBytes = await bucketLiveBytes(bucket);
       if (typeof bucket.deleteFiles === "function") {
         await bucket.deleteFiles({force: true});
       } else if (typeof bucket.getFiles === "function") {
@@ -388,16 +398,20 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
         await Promise.all(files.map((file) => file.delete()));
       }
       await bucket.delete();
+      const recoverableUntil = new Date(new Date(now()).getTime() + SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS * 1000).toISOString();
       return {
         deleted: true,
         bucketName: binding.bucketName,
         retainedRecovery: {
           softDeleteRetentionSeconds: SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS,
+          recoverableUntil,
+          retainedBytes,
+          retainedBytesKnown: retainedBytes !== null,
           note: "Deleted live objects remain recoverable under Cloud Storage soft delete and continue to incur storage charges until retention expires.",
         },
       };
     } catch (error) {
-      if (isNotFound(error)) return {deleted: false, bucketName: binding.bucketName, retainedRecovery: null};
+      if (isNotFound(error)) return {deleted: false, bucketDeleted: true, bucketName: binding.bucketName, retainedRecovery: null};
       throw normalizeStorageFailure(error);
     }
   }
@@ -408,6 +422,30 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     prepareWorkspaceSharedStorage,
     publicStorageState,
   };
+}
+
+function isWorkspaceDeleted(workspace = {}) {
+  return workspace.deleted === true || ["deleting", "deleted"].includes(
+      String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+  );
+}
+
+async function bucketLiveBytes(bucket) {
+  if (!bucket || typeof bucket.getFiles !== "function") return null;
+  try {
+    const [files] = await bucket.getFiles();
+    let total = 0;
+    for (const file of files || []) {
+      const size = Number(file?.metadata?.size ?? file?.size);
+      if (!Number.isFinite(size) || size < 0) return null;
+      total += size;
+    }
+    return total;
+  } catch (_error) {
+    // A size read is advisory. Deletion can still safely resume, but callers
+    // must not present an unknown byte count as zero retained cost.
+    return null;
+  }
 }
 
 module.exports = {

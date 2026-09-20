@@ -224,6 +224,23 @@ test("commitCheckpoint rejects a writer revoked after upload", async (t) => {
   assert.equal(store.workspace.agentRuntimeCheckpoint, undefined);
 });
 
+test("commitCheckpoint rejects a pending upload after workspace tombstoning", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-agent-checkpoint-test-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root);
+  const store = admittedStore();
+  const capture = await makeCapture(t, config);
+  const uploaded = await uploadCapture({admin, capture, config, db: store.db, storage: createStorage()});
+  store.workspace.deleted = true;
+  store.workspace.lifecycle = "deleting";
+
+  const service = createAgentCheckpointService({admin, config, db: store.db, storage: createStorage()});
+  await assert.rejects(
+      service.commitCheckpoint(uploaded),
+      (error) => error.code === "checkpoint_workspace_deleted",
+  );
+});
+
 test("automation checkpoints update only the run session pointer", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-agent-checkpoint-test-"));
   t.after(() => fs.rm(root, {recursive: true, force: true}));

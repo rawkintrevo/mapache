@@ -652,6 +652,11 @@ function validateIdentity({bootInstanceId, generation, sessionId, workspaceId}) 
 }
 
 function assertCurrentAuthority(workspace, session, identity) {
+  if (workspace.deleted === true || ["deleting", "deleted"].includes(
+      String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+  )) {
+    throw checkpointError("checkpoint_workspace_deleted", "Workspace deletion has revoked checkpoint publication");
+  }
   if (workspace.agentUiVersion !== "pi-web-ui-v1" || session.agentUiVersion !== "pi-web-ui-v1") {
     throw checkpointError("checkpoint_writer_not_current", "Checkpoint writer is not a managed runtime");
   }

@@ -57,8 +57,10 @@ const {
 } = require("./userUsage.service");
 const {
   createWorkspaceService,
+  deleteWorkspaceStorageIfUnshared,
   requireWorkspace,
 } = require("./workspace.service");
+const {createWorkspaceAutomationDeletionService} = require("./workspaceAutomationDeletion.service");
 const {createWorkspaceSharedStorageService} = require("./workspaceSharedStorage.service");
 const {createWorkspaceStorageMigrationService} = require("./workspaceStorageMigration.service");
 const {
@@ -335,11 +337,22 @@ const workspaceStorageMigrationService = createWorkspaceStorageMigrationService(
   sharedStorageService: workspaceSharedStorageService,
   storage,
 });
+const workspaceAutomationDeletionService = createWorkspaceAutomationDeletionService({
+  admin,
+  automationCleanupService,
+  db,
+  deleteLegacyStorage: (uid, workspace, options) => deleteWorkspaceStorageIfUnshared(uid, workspace, {admin, db, ...options}),
+  deleteSessionForWorkspace: sessionLifecycleService.deleteSessionForWorkspace,
+  deleteSessionService,
+  deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
+  sessionCollection,
+});
 const workspaceService = createWorkspaceService({
   admin,
   db,
   deleteSessionService,
   deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
+  workspaceAutomationDeletionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
   workspaceStorageMigrationService,

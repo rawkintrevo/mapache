@@ -209,6 +209,24 @@ and `canStop`/`canRestart` metadata; storage object references and runner
 credentials are never returned. Event pages continue to read the immutable
 artifact objects after the compute service has been deleted.
 
+`functions/workspaceAutomationDeletion.service.js` owns resumable workspace
+deletion. The first transaction writes `deleted=true`, `lifecycle=deleting`,
+and a durable `workspaceDeletionOperations/{workspaceId}` record, so ordinary
+workspace reads, schedule ticks, admission, provisioning, migration cutover,
+and runner checkpoint publication are fenced immediately. The operation
+cancels queued runs, sends active automation runs through the existing cleanup
+owner, deletes every main and automation service only after Cloud Run absence
+is confirmed, then removes the workspace's legacy prefix, shared bucket IAM
+binding, live bucket objects, shared bucket, definitions, audit records, and
+global run index. The workspace document remains as a deleted tombstone and
+the usage ledger is not part of recursive cleanup.
+
+Retries resume the same operation and backend-owned resource inventory. A
+failed service deletion blocks storage cleanup. Successful bucket deletion
+records `recoverableUntil`, known retained live bytes when Cloud Storage can
+report them, soft-delete retention, and cleanup evidence; soft-deleted bytes
+remain potentially billable until the seven-day policy expires.
+
 `functions/automationProvisioning.service.js` is the dedicated consumer for
 admitted `provisioning` runs. It claims the run idempotently, creates the
 deterministic `auto-{runId}` session and `mpauto-{runId-hash}` Cloud Run

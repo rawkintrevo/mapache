@@ -400,6 +400,11 @@ function createAutomationExecutionService({
     const workspace = workspaceSnap.data() || {};
     const session = sessionSnap.data() || {};
     const run = {runId: runSnap.id || config.automationRunId, ...runSnap.data()};
+    if (workspace.deleted === true || ["deleting", "deleted"].includes(
+        String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+    )) {
+      throw automationError("automation_workspace_deleted");
+    }
     const runStatus = String(run.status || "").trim().toLowerCase();
     if (run.runId !== config.automationRunId || run.workspaceId !== config.workspaceId || run.sessionId !== refs.sessionRef.id ||
         session.workspaceId !== config.workspaceId || session.ownerUid !== run.ownerUid || run.ownerUid !== config.ownerUid ||
