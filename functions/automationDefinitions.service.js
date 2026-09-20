@@ -23,28 +23,20 @@ const AUTOMATION_MUTABLE_FIELD_SET = new Set([
 function createAutomationDefinitionsService(dependencies = {}) {
   const firestore = dependencies.db || defaultDb;
   const firestoreAdmin = dependencies.admin || defaultAdmin;
+  const shared = {
+    firestore,
+    firestoreAdmin,
+    requireWorkspace: dependencies.requireWorkspace,
+    wakeQueue: dependencies.wakeAutomationQueue || dependencies.wakeQueue,
+  };
   return {
-    createAutomation: (uid, workspaceId, payload) => createAutomation(uid, workspaceId, payload, {
-      firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace,
-    }),
-    deleteAutomation: (uid, workspaceId, automationId, payload) => deleteAutomation(
-        uid, workspaceId, automationId, payload, {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace},
-    ),
-    getAutomation: (uid, workspaceId, automationId) => getAutomation(
-        uid, workspaceId, automationId, {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace},
-    ),
-    getAutomationSettings: (uid, workspaceId) => getAutomationSettings(
-        uid, workspaceId, {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace},
-    ),
-    listAutomations: (uid, workspaceId) => listAutomations(
-        uid, workspaceId, {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace},
-    ),
-    updateAutomation: (uid, workspaceId, automationId, payload) => updateAutomation(
-        uid, workspaceId, automationId, payload, {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace},
-    ),
-    updateAutomationSettings: (uid, workspaceId, payload) => updateAutomationSettings(
-        uid, workspaceId, payload, {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace},
-    ),
+    createAutomation: (uid, workspaceId, payload) => createAutomation(uid, workspaceId, payload, shared),
+    deleteAutomation: (uid, workspaceId, automationId, payload) => deleteAutomation(uid, workspaceId, automationId, payload, shared),
+    getAutomation: (uid, workspaceId, automationId) => getAutomation(uid, workspaceId, automationId, shared),
+    getAutomationSettings: (uid, workspaceId) => getAutomationSettings(uid, workspaceId, shared),
+    listAutomations: (uid, workspaceId) => listAutomations(uid, workspaceId, shared),
+    updateAutomation: (uid, workspaceId, automationId, payload) => updateAutomation(uid, workspaceId, automationId, payload, shared),
+    updateAutomationSettings: (uid, workspaceId, payload) => updateAutomationSettings(uid, workspaceId, payload, shared),
   };
 }
 
@@ -105,6 +97,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
   const patch = normalizeAutomationMutation(mutationPayload, {partial: true});
   const now = serverTimestamp(dependencies.firestoreAdmin);
   const pendingRuns = queuedRunQuery(dependencies.firestore, workspaceId);
+  let disabling = false;
   await dependencies.firestore.runTransaction(async (transaction) => {
     const [snap, queuedRuns] = await Promise.all([
       transaction.get(ref),
@@ -116,7 +109,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
     if (current.deleted === true) throw httpError(409, "automation_deleted");
     const merged = normalizedDefinition({...current, ...patch}, workspace);
     assertCanEnable(merged, workspace);
-    const disabling = current.enabled === true && merged.enabled === false;
+    disabling = current.enabled === true && merged.enabled === false;
     const updates = {
       ...merged,
       revision: expectedRevision + 1,
@@ -131,6 +124,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
       now,
     }, dependencies.firestoreAdmin);
   });
+  if (disabling && typeof dependencies.wakeQueue === "function") await dependencies.wakeQueue(workspaceId);
   return toAutomationDto(await ref.get());
 }
 
@@ -165,6 +159,7 @@ async function deleteAutomation(uid, workspaceId, automationId, payload = {}, de
       now,
     }, dependencies.firestoreAdmin);
   });
+  if (typeof dependencies.wakeQueue === "function") await dependencies.wakeQueue(workspaceId);
   return {ok: true};
 }
 
@@ -194,6 +189,7 @@ async function updateAutomationSettings(uid, workspaceId, payload = {}, dependen
       createdAt: now,
     });
   });
+  if (typeof dependencies.wakeQueue === "function") await dependencies.wakeQueue(workspaceId);
   return normalized;
 }
 

@@ -1,6 +1,7 @@
 "use strict";
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
+const {assertMainAdmissionAllowed} = require("./automationAdmission.service");
 const {cleanName, httpError} = require("./backendUtils.helpers");
 const {findActiveChromeSession, isChromeSession} = require("./chromeReservation.helpers");
 const {isActiveGithubWorkspaceSession} = require("./sessionLifecycle.helpers");
@@ -71,6 +72,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
     }
 
     const automationRuntime = isAutomationRuntime(session);
+    if (!automationRuntime) assertMainAdmissionAllowed(workspace);
 
     if (options.singleRunner && !automationRuntime) {
       const activeRunner = sessions.find((candidate) =>
@@ -114,6 +116,9 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       activeChromeSessionId: sessionRef.id,
       activeChromeSessionState: session.status || "provisioning",
       activeChromeSessionUpdatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
+      automationMainAdmissionSessionId: sessionRef.id,
+      automationMainAdmissionState: session.status || "provisioning",
+      automationMainAdmissionUpdatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
       updatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
       ...lease.workspaceUpdates,
       ...runtime.workspaceUpdates,
@@ -131,7 +136,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
 }
 
 async function releaseChromeWorkspaceSession(sessionRef, session, reason, dependencies = {}) {
-  if ((!isChromeSession(session) && !isAutomationRuntime(session)) || !session.workspaceId) return;
+  if (!session.workspaceId) return;
   const firestore = dependencies.firestore || defaultDb;
   const firestoreAdmin = dependencies.firestoreAdmin || defaultAdmin;
   const workspaceRef = firestore.collection("workspaces").doc(session.workspaceId);
@@ -139,7 +144,10 @@ async function releaseChromeWorkspaceSession(sessionRef, session, reason, depend
     const workspaceSnap = await transaction.get(workspaceRef);
     if (!workspaceSnap.exists) return;
     const automationRuntime = isAutomationRuntime(session);
-    if (!automationRuntime && workspaceSnap.data().activeChromeSessionId !== sessionRef.id) return;
+    const workspace = workspaceSnap.data() || {};
+    const ownsChromeReservation = workspace.activeChromeSessionId === sessionRef.id;
+    const ownsMainAdmission = workspace.automationMainAdmissionSessionId === sessionRef.id;
+    if (!automationRuntime && !ownsChromeReservation && !ownsMainAdmission) return;
     const now = firestoreAdmin.firestore.FieldValue.serverTimestamp();
     const reasonState = reason === "provision_failed" || reason === "needs_image" ? "failed" : "stopped";
     if (automationRuntime) {
@@ -149,11 +157,18 @@ async function releaseChromeWorkspaceSession(sessionRef, session, reason, depend
       return;
     }
     transaction.update(workspaceRef, {
-      activeChromeSessionId: firestoreAdmin.firestore.FieldValue.delete(),
-      activeChromeSessionState: reason ? `released:${cleanName(reason)}` : "released",
-      activeChromeSessionReleasedAt: now,
+      ...(ownsChromeReservation ? {
+        activeChromeSessionId: firestoreAdmin.firestore.FieldValue.delete(),
+        activeChromeSessionState: reason ? `released:${cleanName(reason)}` : "released",
+        activeChromeSessionReleasedAt: now,
+      } : {}),
+      ...(ownsMainAdmission ? {
+        automationMainAdmissionSessionId: firestoreAdmin.firestore.FieldValue.delete(),
+        automationMainAdmissionState: "released",
+        automationMainAdmissionUpdatedAt: now,
+      } : {}),
       updatedAt: now,
-      ...runtimeStateUpdate(workspaceSnap.data(), {...session, id: sessionRef.id}, reasonState, now, {release: true}),
+      ...runtimeStateUpdate(workspace, {...session, id: sessionRef.id}, reasonState, now, {release: true}),
     });
     const sessionRuntimeUpdates = runtimeAuthoritySessionReleaseUpdates(session, now);
     if (Object.keys(sessionRuntimeUpdates).length) transaction.update(sessionRef, sessionRuntimeUpdates);
@@ -169,7 +184,7 @@ async function markChromeWorkspaceSessionStopping(sessionRef, session, dependenc
 }
 
 async function updateChromeWorkspaceRuntimeState(sessionRef, session, state, dependencies = {}) {
-  if ((!isChromeSession(session) && !isAutomationRuntime(session)) || !session.workspaceId) return false;
+  if (!session.workspaceId) return false;
   const firestore = dependencies.firestore || defaultDb;
   const firestoreAdmin = dependencies.firestoreAdmin || defaultAdmin;
   const workspaceRef = firestore.collection("workspaces").doc(session.workspaceId);
@@ -183,7 +198,14 @@ async function updateChromeWorkspaceRuntimeState(sessionRef, session, state, dep
       ));
       return true;
     }
-    const updates = runtimeStateUpdate(workspaceSnap.data(), {...session, id: sessionRef.id}, state, now);
+    const workspace = workspaceSnap.data() || {};
+    const updates = {
+      ...runtimeStateUpdate(workspace, {...session, id: sessionRef.id}, state, now),
+      ...(workspace.automationMainAdmissionSessionId === sessionRef.id ? {
+        automationMainAdmissionState: state,
+        automationMainAdmissionUpdatedAt: now,
+      } : {}),
+    };
     if (!Object.keys(updates).length) return false;
     transaction.update(workspaceRef, updates);
     return true;

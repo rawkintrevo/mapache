@@ -41,6 +41,7 @@ const {
 } = require("./admin.service");
 const {requireUser, updateUserTimezone} = require("./auth.service");
 const {previewAutomationSchedule} = require("./automationSchedule.helpers");
+const {createAutomationAdmissionService} = require("./automationAdmission.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationRunsService} = require("./automationRuns.service");
 const {
@@ -94,6 +95,12 @@ const {
   isActiveGithubWorkspaceSession,
 } = require("./sessionLifecycle.helpers");
 
+const automationAdmissionService = createAutomationAdmissionService({admin, db});
+const {
+  assertMainAdmissionAllowed,
+  wakeQueue: wakeAutomationQueue,
+} = automationAdmissionService;
+
 const workspaceSessionReservationService = createWorkspaceSessionReservationService({admin, db});
 const {
   markChromeWorkspaceSessionRunning,
@@ -116,11 +123,13 @@ const githubAutomationTokenBrokerService = createGithubAutomationTokenBrokerServ
 });
 const lifecycleDependencies = {
   admin,
+  assertMainAdmissionAllowed,
   db,
   markChromeWorkspaceSessionStopping,
   normalizeRequestedSessionResources,
   requireWorkspace,
   sessionCollection,
+  wakeAutomationQueue,
 };
 const sessionLifecycleService = createSessionLifecycleService(lifecycleDependencies);
 const {
@@ -274,11 +283,13 @@ const automationDefinitionsService = createAutomationDefinitionsService({
   admin,
   db,
   requireWorkspace,
+  wakeAutomationQueue,
 });
 const automationRunsService = createAutomationRunsService({
   admin,
   db,
   requireWorkspace,
+  wakeAutomationQueue,
 });
 const googleWorkspaceApiService = createGoogleWorkspaceApiService({
   connectionsService: googleWorkspaceConnectionsService,

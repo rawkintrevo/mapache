@@ -96,6 +96,7 @@ async function resizeSession(uid, workspaceId, sessionId, payload, dependencies 
   const {sessionRef, sessionSnap, workspace} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
   assertMainSession(session);
+  assertMainAdmissionAllowed(workspace, dependencies);
   assertSupportedSessionLaunch(session);
   const resources = dependencies.normalizeRequestedSessionResources(payload, {defaultResources: null});
   if (isMarkedRuntimeSession(session)) {
@@ -123,6 +124,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   let session = sessionSnap.data();
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
   assertMainSession(session);
+  assertMainAdmissionAllowed(workspace, dependencies);
   assertNoActiveResize(session);
   if (session.resizeOperationState === "failed") {
     await sessionRef.update({resizeOperationState: null, resizeOperationError: null});
@@ -446,16 +448,26 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
       const workspaceSnap = await transaction.get(workspaceRef);
       if (usageRecord) transaction.set(usageRecord.ref, usageRecord.data, {merge: true});
       transaction.update(sessionRef, stopped);
-      if (workspaceSnap.exists && workspaceSnap.data().activeChromeSessionId === sessionRef.id) {
+      const workspace = workspaceSnap.exists ? workspaceSnap.data() : {};
+      if (workspaceSnap.exists && (workspace.activeChromeSessionId === sessionRef.id ||
+        workspace.automationMainAdmissionSessionId === sessionRef.id)) {
         transaction.update(workspaceRef, {
-          activeChromeSessionId: dependencies.admin.firestore.FieldValue.delete(),
-          activeChromeSessionState: "released",
-          activeChromeSessionReleasedAt: stoppedAt,
+          ...(workspace.activeChromeSessionId === sessionRef.id ? {
+            activeChromeSessionId: dependencies.admin.firestore.FieldValue.delete(),
+            activeChromeSessionState: "released",
+            activeChromeSessionReleasedAt: stoppedAt,
+          } : {}),
+          ...(workspace.automationMainAdmissionSessionId === sessionRef.id ? {
+            automationMainAdmissionSessionId: dependencies.admin.firestore.FieldValue.delete(),
+            automationMainAdmissionState: "stopped",
+            automationMainAdmissionUpdatedAt: stoppedAt,
+          } : {}),
           updatedAt: stoppedAt,
-          ...runtimeStateUpdate(workspaceSnap.data(), {...session, id: sessionRef.id}, "stopped", stoppedAt, {release: true}),
+          ...runtimeStateUpdate(workspace, {...session, id: sessionRef.id}, "stopped", stoppedAt, {release: true}),
         });
       }
     });
+    await wakeAutomationQueue(session, dependencies);
     return;
   }
   if (usageRecord) {
@@ -464,9 +476,13 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
     batch.set(usageRecord.ref, usageRecord.data, {merge: true});
     batch.update(sessionRef, stopped);
     await batch.commit();
+    await releaseMainAdmissionReservation(sessionRef, session, reason, dependencies);
+    await wakeAutomationQueue(session, dependencies);
     return;
   }
   await sessionRef.update(stopped);
+  await releaseMainAdmissionReservation(sessionRef, session, reason, dependencies);
+  await wakeAutomationQueue(session, dependencies);
 }
 
 async function reapIdleSessions(dependencies = {}) {
@@ -544,6 +560,28 @@ async function reapIdleSessions(dependencies = {}) {
 
 function assertMainSession(session = {}) {
   if (isAutomationRuntime(session)) throw httpError(409, "automation_session_controlled");
+}
+
+function assertMainAdmissionAllowed(workspace = {}, dependencies = {}) {
+  if (typeof dependencies.assertMainAdmissionAllowed !== "function") return true;
+  return dependencies.assertMainAdmissionAllowed(workspace);
+}
+
+async function wakeAutomationQueue(session = {}, dependencies = {}) {
+  if (!session.workspaceId || typeof dependencies.wakeAutomationQueue !== "function") return;
+  try {
+    await dependencies.wakeAutomationQueue(session.workspaceId);
+  } catch (error) {
+    logger.warn("Automation queue wake failed after main session stop", {
+      workspaceId: session.workspaceId,
+      error: error.message || String(error),
+    });
+  }
+}
+
+async function releaseMainAdmissionReservation(sessionRef, session, reason, dependencies = {}) {
+  if (isChromeSession(session) || typeof dependencies.releaseChromeWorkspaceSession !== "function") return;
+  await dependencies.releaseChromeWorkspaceSession(sessionRef, session, reason);
 }
 
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies) {

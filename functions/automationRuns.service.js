@@ -22,7 +22,12 @@ const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
 function createAutomationRunsService(dependencies = {}) {
   const firestore = dependencies.db || defaultDb;
   const firestoreAdmin = dependencies.admin || defaultAdmin;
-  const shared = {firestore, firestoreAdmin, requireWorkspace: dependencies.requireWorkspace};
+  const shared = {
+    firestore,
+    firestoreAdmin,
+    requireWorkspace: dependencies.requireWorkspace,
+    wakeQueue: dependencies.wakeAutomationQueue || dependencies.wakeQueue,
+  };
   return {
     enqueueRun: (input) => enqueueRun(input, shared),
     restartRun: (actor, runId, options = {}) => restartRun(actor, runId, options, shared),
@@ -158,6 +163,12 @@ async function enqueueRun(input = {}, dependencies = {}) {
     response = toRunDto({id: runId, data: () => queued});
   });
 
+  if (response?.status === "queued" && typeof dependencies.wakeQueue === "function") {
+    await dependencies.wakeQueue(workspaceId);
+    const latest = await runRef.get();
+    if (latest.exists) response = toRunDto(latest);
+  }
+
   return response;
 }
 
@@ -212,6 +223,9 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
     }
     response = toRunDto({id: normalizedRunId, data: () => ({...run, status: "canceled", cleanupState: "complete", cancellationReason: "user_canceled"})});
   });
+  if (response?.status === "canceled" && typeof dependencies.wakeQueue === "function") {
+    await dependencies.wakeQueue(run.workspaceId);
+  }
   return response;
 }
 

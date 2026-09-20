@@ -158,6 +158,19 @@ saved snapshot, even after the definition is tombstoned. `POST
 /api/automation-runs/{runId}/cancel` atomically cancels only queued work and
 clears `pendingRunId` when it still points at that run. Credentials and files
 remain current at launch rather than being copied into the run snapshot.
+`functions/automationAdmission.service.js` owns the next transaction boundary:
+it counts provisioning/running/stopping runs plus terminal runs whose cleanup is
+still pending, applies the workspace concurrency limit, and admits the oldest
+eligible `(createdAt, runId)` candidate. A queued `allowParallelWithMain: false`
+candidate is skipped while the main session is not confirmed stopped, so a later
+parallel candidate can proceed without head-of-line blocking. Admission records
+`automationActiveRunIds` and, for an exclusive run,
+`automationMainExclusionRunId` on the workspace; main start/play/restart/resize
+paths reject that reservation with `automation_requires_main_paused`, while a
+pending queue alone never blocks main use. Only confirmed service cleanup can
+release the slot, and that release wakes the queue. Enqueue, cancellation,
+concurrency-setting changes, and confirmed main-stop completion use the same
+idempotent queue wake path.
 
 ## Persistence and connections
 
