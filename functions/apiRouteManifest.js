@@ -6,7 +6,8 @@
 const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["githubCallback", ["GET"]],
   ["googleCallback", ["GET"]],
-  ["me", ["GET"]],
+  ["me", ["GET", "PATCH"]],
+  ["automationSchedulePreview", ["POST"]],
   ["adminUsers", ["GET"]],
   ["adminUserWhitelist", ["POST"]],
   ["qaCustomToken", ["POST"]],

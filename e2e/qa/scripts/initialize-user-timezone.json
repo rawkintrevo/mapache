@@ -1,0 +1,24 @@
+{
+  "id": "script.initializeUserTimezone",
+  "title": "Persist the authenticated user's timezone",
+  "description": "Exercise the owner-authenticated timezone profile update with a deterministic valid timezone.",
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "PATCH",
+      "path": "/api/me",
+      "body": {"timezone": "UTC"}
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/api/me",
+      "method": "PATCH",
+      "expectedStatus": 200,
+      "timeoutMs": 10000
+    }
+  ],
+  "successSignals": [
+    "The authenticated profile accepts the IANA timezone",
+    "The response is owner-scoped and does not expose credentials"
+  ]
+}
