@@ -13,6 +13,7 @@ const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: 
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
 const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({ProfilePage: page}) => ({default: page})));
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
+const AutomationsPanel = lazy(() => import("../automations/AutomationsPanel.jsx").then(({AutomationsPanel: panel}) => ({default: panel})));
 const RunHistoryPage = lazy(() => import("../automations/RunHistoryPage.jsx").then(({RunHistoryPage: page}) => ({default: page})));
 
 export function AppShell(props) {
@@ -78,6 +79,7 @@ export function AppShell(props) {
         onSelectCanvas={setActiveCanvas}
         onSelectWorkspace={workspaces.selectWorkspace}
         onShowAdmin={admin.showAdmin}
+        onShowAutomations={app.showAutomations}
         onShowAutomationHistory={app.showAutomationsHistory}
         onShowLogs={() => setLogsOpen(true)}
         onShowProfile={modals.showProfile}
@@ -120,6 +122,24 @@ export function AppShell(props) {
               onSelectRun={(runId) => automations.selectRun(runId, {global: true})}
               onSetFilters={automations.setGlobalHistoryFilters}
               onStopRun={automations.stopGlobalRun}
+            />
+          </Suspense>
+        ) : state.activePage === "automations" ? (
+          <Suspense fallback={<LazySurfaceFallback label="Loading automations..." />}>
+            <AutomationsPanel
+              onCreateDefinition={automations.createDefinition}
+              onDeleteDefinition={automations.deleteDefinition}
+              onLoadHistory={automations.loadHistory}
+              onLoadWorkspace={automations.loadWorkspace}
+              onOpenHistory={app.showAutomationsHistory}
+              onPrepareStorage={automations.prepareStorage}
+              onPreviewSchedule={automations.previewSchedule}
+              onRefresh={app.refreshAll}
+              onRunNow={automations.runNow}
+              onShowWorkspace={app.showWorkspace}
+              onUpdateDefinition={automations.updateDefinition}
+              onUpdateSettings={automations.updateSettings}
+              state={state}
             />
           </Suspense>
         ) : (

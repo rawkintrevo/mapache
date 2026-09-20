@@ -25,6 +25,7 @@ export function Topbar({
   onSelectCanvas,
   onSelectWorkspace,
   onShowAdmin,
+  onShowAutomations,
   onShowAutomationHistory,
   onShowLogs,
   onShowProfile,
@@ -173,6 +174,18 @@ export function Topbar({
           </>
         ) : null}
         <Button
+          aria-label="Automations"
+          aria-pressed={state.activePage === "automations"}
+          disabled={!selectedWorkspace}
+          icon
+          title="Automations"
+          tooltip="Automations"
+          variant={state.activePage === "automations" ? "primary" : "secondary"}
+          onClick={onShowAutomations}
+        >
+          <Blocks aria-hidden="true" />
+        </Button>
+        <Button
           aria-label="Run history"
           aria-pressed={state.activePage === "automation-history"}
           icon
@@ -238,6 +251,7 @@ export function Topbar({
           disabled={busy}
           onRefresh={onRefresh}
           onSelectCanvas={onSelectCanvas}
+          onShowAutomations={onShowAutomations}
           onShowLogs={onShowLogs}
           onShowAutomationHistory={onShowAutomationHistory}
           showWorkspaceTools={showWorkspaceTools}

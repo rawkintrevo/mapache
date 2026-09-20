@@ -126,6 +126,23 @@ Run slower checks when a change touches the related subsystem:
   `e2e/qa/migration/hubspot-import-checks.md`; they never authorize a live
   HubSpot source write or CRM mutation.
 
+### Shared workspace storage live harness
+
+Run `node scripts/automation-storage-live-harness.mjs run --project
+pi-agents-cloud --storage-rate-usd-per-gib-month CURRENT_US_CENTRAL_STANDARD_RATE`
+with credentials that can create/delete disposable Cloud Run services and
+buckets. The harness creates two gen2 Cloud Run fixture runners using the
+native `shared-gcsfuse-v1` mount, checks cross-runner visibility,
+overwrite/delete/rename, symlink behavior, Git with private metadata,
+package/script execution, concurrent same-file outcomes, anonymous bucket
+denial, retention policy, and private-state boundaries, then tears down live
+resources. It writes sanitized machine-readable checks under
+`artifacts/automation-storage/`; soft-deleted bytes remain billed for the
+configured seven-day window after cleanup. Supply the current
+[Cloud Storage pricing](https://cloud.google.com/storage/pricing) rate at run
+time rather than relying on a stale hard-coded price. `--keep` is an explicit
+debugging exception and leaves services/buckets for manual cleanup.
+
 ## LLM-Assisted Regression Suite
 
 LLM-assisted regression checks are useful for broad UI and workflow review, but they must be deterministic enough to produce actionable failures.

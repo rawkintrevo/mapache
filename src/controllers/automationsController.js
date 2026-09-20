@@ -83,6 +83,7 @@ export function createAutomationsController({
   function setWorkspace(workspaceId = state.selectedWorkspaceId) {
     const nextWorkspaceId = workspaceId || null;
     if (state.automations.selectedWorkspaceId === nextWorkspaceId && contextUserId === (state.user?.uid || "")) {
+      if (nextWorkspaceId) updateStorageState(nextWorkspaceId);
       ensurePolling();
       return;
     }

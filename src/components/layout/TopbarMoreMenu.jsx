@@ -14,6 +14,7 @@ export function TopbarMoreMenu({
   onOpenWorkspaceModal,
   onRefresh,
   onSelectCanvas,
+  onShowAutomations,
   onShowLogs,
   onShowAutomationHistory,
   selectedWorkspace,
@@ -71,6 +72,7 @@ export function TopbarMoreMenu({
             <MenuItem icon={<ScrollText aria-hidden="true" />} label="Logs" onClick={onShowLogs} close={close} />
             <div className="topbar-more-divider" role="separator" />
           </> : null}
+          <MenuItem disabled={!selectedWorkspace} icon={<Blocks aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} />
           <MenuItem icon={<History aria-hidden="true" />} label="Run history" onClick={onShowAutomationHistory} close={close} />
           <div className="topbar-more-divider" role="separator" />
           <MenuItem firstItemRef={firstItemRef} icon={<Plus aria-hidden="true" />} label="Create workspace" onClick={onOpenWorkspaceModal} close={close} />

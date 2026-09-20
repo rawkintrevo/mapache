@@ -39,7 +39,7 @@ the schedule preview API remains server-authoritative.
 The signed-in shell has no left drawer. Its top navigation contains workspace
 Play/Pause lifecycle control beside the workspace selector, followed by the
 selected canonical cloud runtime's live CPU and memory meters, then
-marked-runtime Agent and Logs icons, compact actions for Pi auth, generic
+marked-runtime Agent and Logs icons, workspace Automations, and compact actions for Pi auth, generic
 environment keys, workspace MCP servers, and Google Workspace, plus an avatar
 icon for the user menu. At tablet and phone widths the shell becomes a two-row
 header: brand/avatar/More on the first row and a shrinkable workspace selector
@@ -54,6 +54,16 @@ it persists the explicit Long-running policy through
 `setSessionLongRunningState`. The shell no longer reserves either sidebar column. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
+
+Workspace **Automations** is a lazy, workspace-scoped surface opened from the
+topbar or responsive More menu. Opening it never starts a runner. The panel owns
+definition selection/editing, storage preparation status, max-concurrency edits,
+enable/disable, Run now, delete confirmation, and links from active/queued run
+reasons to global history. Storage readiness gates enabling and execution while
+still allowing disabled workflow drafts to be saved; preparation never stops the
+main workspace automatically. The panel delegates requests and revision fencing
+to `automationsController` and returns to the workspace surface without changing
+the selected runtime.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders

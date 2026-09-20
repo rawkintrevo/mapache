@@ -1,0 +1,149 @@
+.automations-panel {
+  display: grid;
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 90rem;
+  padding: 1.5rem;
+}
+
+.automations-panel__header,
+.automation-definition-card__heading,
+.automation-definition__title {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.automations-panel__header h2,
+.automation-definition-card h3,
+.automation-definition__title h4,
+.automation-storage-card h3 {
+  margin: 0;
+}
+
+.automations-panel__header-actions,
+.automation-definition__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.automation-storage-card,
+.automation-settings-card,
+.automation-definition-card {
+  background: var(--panel, #fff);
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .55rem;
+  padding: 1rem;
+}
+
+.automation-storage-card {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.automation-storage-card--error {
+  border-color: #b42318;
+}
+
+.automation-settings-card form {
+  align-items: end;
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: minmax(12rem, 18rem) auto 1fr;
+}
+
+.automation-settings-card label {
+  display: grid;
+  gap: .35rem;
+}
+
+.automation-settings-card input {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .4rem;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 2.4rem;
+  padding: .45rem .55rem;
+  width: 100%;
+}
+
+.automation-settings-card p {
+  margin: 0;
+}
+
+.automation-definition-list {
+  display: grid;
+  gap: .75rem;
+  margin-top: 1rem;
+}
+
+.automation-definition {
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: .45rem;
+  display: grid;
+  gap: .65rem;
+  padding: .9rem;
+}
+
+.automation-definition__title {
+  justify-content: flex-start;
+}
+
+.automation-definition__main p {
+  align-items: center;
+  display: flex;
+  gap: .35rem;
+  margin: .45rem 0 0;
+}
+
+.automation-definition__actions {
+  justify-content: flex-end;
+}
+
+.automation-definition__history-link {
+  background: none;
+  border: 0;
+  color: var(--link-color, #1d4ed8);
+  cursor: pointer;
+  font: inherit;
+  justify-self: start;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.automations-panel--empty {
+  align-content: center;
+  justify-items: center;
+  min-height: 20rem;
+  text-align: center;
+}
+
+.automations-panel--empty h2,
+.automations-panel--empty p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .automations-panel {
+    padding: 1rem;
+  }
+
+  .automations-panel__header,
+  .automation-storage-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .automations-panel__header-actions,
+  .automation-definition__actions {
+    justify-content: flex-start;
+  }
+
+  .automation-settings-card form {
+    grid-template-columns: 1fr;
+  }
+}

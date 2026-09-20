@@ -96,8 +96,10 @@ const handlers = {
   admin: adminController,
   app: {
     refreshAll,
+    showAutomations,
     signOut,
     showAutomationsHistory,
+    showWorkspace,
   },
   github: {
     connectGithub,
@@ -205,6 +207,16 @@ async function showAutomationsHistory() {
   const alreadyOpen = state.activePage === "automation-history";
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automation-history"});
   if (alreadyOpen) await automationsController.loadGlobalHistory();
+}
+
+async function showAutomations() {
+  if (!state.selectedWorkspaceId) return;
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automations"});
+  await automationsController.loadWorkspace(state.selectedWorkspaceId);
+}
+
+function showWorkspace() {
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
 }
 
 async function signInAndOpenApp() {

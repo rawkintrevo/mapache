@@ -78,6 +78,7 @@ export function AutomationEditor({
   preview = null,
   previewError = "",
   previewLoading = false,
+  storageReady = true,
   userTimezone = "",
 }) {
   const form = draft || createAutomationDraft({userTimezone});
@@ -92,7 +93,7 @@ export function AutomationEditor({
       onChange?.({...form, validationErrors: errors});
       return;
     }
-    onSave?.(automationPayload(form));
+    onSave?.(automationPayload({...form, enabled: storageReady && form.enabled === true}));
   };
 
   return (
@@ -118,9 +119,10 @@ export function AutomationEditor({
           {errors.prompt ? <span className="field-error" id="automation-prompt-error">{errors.prompt}</span> : null}
         </label>
         <div className="automation-editor__switches">
-          <label className="automation-editor__switch"><input checked={form.enabled === true} disabled={busy} type="checkbox" onChange={(event) => update({enabled: event.target.checked})} /> Enabled</label>
+          <label className="automation-editor__switch"><input checked={form.enabled === true && storageReady} disabled={busy || !storageReady} type="checkbox" onChange={(event) => update({enabled: event.target.checked})} /> Enabled</label>
           <label className="automation-editor__switch"><input checked={form.allowParallelWithMain !== false} disabled={busy} type="checkbox" onChange={(event) => update({allowParallelWithMain: event.target.checked})} /> Allow running while main workspace is active</label>
         </div>
+        {!storageReady ? <p className="automation-editor__storage-warning" role="status">Prepare shared workspace storage before enabling or running automations. Disabled workflows can still be saved.</p> : null}
         <ScheduleControls
           cron={form.cron || ""}
           mode={form.scheduleMode || inferScheduleMode(form.cron)}
@@ -138,7 +140,7 @@ export function AutomationEditor({
         {form.enabled === true && !hasModel ? (
           <div className="automation-editor__model-warning" role="status">
             <strong>Choose a model in main Agent settings before enabling this automation.</strong>
-            <Button disabled={busy} variant="secondary" onClick={onOpenModelSettings}>Open Agent settings</Button>
+            {onOpenModelSettings ? <Button disabled={busy} variant="secondary" onClick={onOpenModelSettings}>Open Agent settings</Button> : null}
           </div>
         ) : null}
         <div className="automation-editor__actions">
