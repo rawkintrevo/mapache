@@ -51,6 +51,22 @@ Record the resulting Artifact Registry digest and verify the `pi-chrome` tag bef
 
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account, `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events, and `roles/logging.viewer` so the authenticated session Logs modal can read the selected runner's Cloud Run entries. Restore the project-level bindings with:
 
+Scheduled automation workspace buckets keep this same identity boundary. The
+control plane, running as the mandated `mapache-api` identity, applies an
+idempotent bucket-level `roles/storage.objectUser` binding for
+`mapache-runner`; it never grants the runner project-wide storage access or
+bucket administration. Before changing IAM, the backend verifies the explicit
+project, bucket name, workspace/owner labels, uniform bucket-level access, and
+public-access-prevention metadata. Existing unrelated IAM bindings are
+preserved and stale-etag updates retry with a bounded compare-and-set loop.
+
+One shared runner service identity can still read any other bucket to which
+that identity has been granted. Per-workspace IAM is not advertised as a raw
+GCS tenant sandbox; API and agent-tool ownership checks remain the enforced
+workspace boundary. Use explicit project flags for any manual IAM inspection or
+repair, for example `gcloud storage buckets get-iam-policy gs://BUCKET
+--project=pi-agents-cloud`.
+
 ```bash
 gcloud projects add-iam-policy-binding pi-agents-cloud \
   --member serviceAccount:mapache-api@pi-agents-cloud.iam.gserviceaccount.com \
