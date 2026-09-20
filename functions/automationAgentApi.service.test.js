@@ -76,6 +76,9 @@ function setup() {
       listEvents: async (...args) => record(["events", ...args], {events: []}),
       listRuns: async (...args) => record(["runs", ...args], {runs: []}),
     },
+    previewAutomationSchedule: (body) => ({
+      occurrences: [{local: "2026-09-21T09:00", utc: "2026-09-21T14:00:00.000Z", timezone: body.timezone}],
+    }),
     runsService: {
       cancelQueuedRun: async (...args) => record(["cancel", ...args], {runId: args[1]}),
       enqueueRun: async (...args) => record(["enqueue", ...args], {runId: "run-new"}),
@@ -133,4 +136,13 @@ test("agent API revokes a still-unexpired token when the boot changes", async ()
       () => service.handleRequest(request(token, "GET"), {resource: "definitions", action: "list"}),
       (error) => error.status === 401 && error.publicMessage === "automation_agent_unauthorized",
   );
+});
+
+test("agent API previews schedules without accepting a workspace parameter", async () => {
+  const {auth, service} = setup();
+  const token = await tokenFor(auth);
+  const result = await service.handleRequest(request(token, "POST", {
+    cron: "0 9 * * *", timezone: "America/Chicago", workspaceId: "workspace-2",
+  }), {resource: "schedule", action: "preview"});
+  assert.deepEqual(result.body.occurrences[0].timezone, "America/Chicago");
 });

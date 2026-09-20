@@ -384,6 +384,7 @@ const automationAgentApiService = createAutomationAgentApiService({
   db,
   definitionsService: automationDefinitionsService,
   historyService: automationHistoryService,
+  previewAutomationSchedule,
   runsService: automationRunsService,
   sessionCollection,
 });
@@ -487,7 +488,7 @@ exports.api = onRequest({
 
     const route = apiRouteRequest(req.path);
 
-    if (route.name === "automationAgent") {
+    if (route.name === "automationAgent" || route.name === "automationAgentSchedulePreview") {
       const result = await automationAgentApiService.handleRequest(req, route);
       res.status(result.status || 200).json(result.body);
       return;

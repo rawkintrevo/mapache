@@ -5,6 +5,8 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const {
+  AUTOMATION_MCP_SERVER_NAME,
+  AUTOMATION_MCP_SERVER_PATH,
   CHROME_DEVTOOLS_MCP_PACKAGE,
   createMcpConfigService,
   parseMcpConfig,
@@ -30,6 +32,25 @@ assert.deepStrictEqual(chromeMcp.mcpServers["chrome-devtools"], {
 });
 assert.deepStrictEqual(chromeMcp.mcpServers.demo, {command: "node"});
 assert.deepStrictEqual(runnerMcpConfig({chromeEnabled: false, mcpConfigRaw: "{}"}), {mcpServers: {}});
+
+const automationMcp = runnerMcpConfig({
+  runtimeKind: "automation",
+  automationAgentSocketPath: "/var/lib/mapache/runtimes/run-1/automation-agent.sock",
+  chromeEnabled: false,
+  mcpConfigRaw: JSON.stringify({mcpServers: {demo: {command: "node"}}}),
+});
+assert.deepStrictEqual(automationMcp.mcpServers["mapache-automations"], {
+  command: "node",
+  args: [AUTOMATION_MCP_SERVER_PATH],
+  env: {MAPACHE_AUTOMATION_AGENT_SOCKET: "/var/lib/mapache/runtimes/run-1/automation-agent.sock"},
+});
+const collisionMcp = runnerMcpConfig({
+  automationAgentSocketPath: "/tmp/automation.sock",
+  chromeEnabled: false,
+  mcpConfigRaw: JSON.stringify({mcpServers: {[AUTOMATION_MCP_SERVER_NAME]: {command: "user-server"}}}),
+});
+assert.equal(collisionMcp.mcpServers[AUTOMATION_MCP_SERVER_NAME].command, "user-server");
+assert.equal(collisionMcp.mcpServers[`${AUTOMATION_MCP_SERVER_NAME}-2`].command, "node");
 
 assert.deepStrictEqual(piMcpConfig({
   mcpServers: {

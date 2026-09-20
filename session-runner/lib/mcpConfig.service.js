@@ -6,6 +6,8 @@ const path = require("path");
 const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 
 const CHROME_DEVTOOLS_MCP_PACKAGE = "chrome-devtools-mcp@1.6.0";
+const AUTOMATION_MCP_SERVER_NAME = "mapache-automations";
+const AUTOMATION_MCP_SERVER_PATH = "/app/automation-mcp/server.mjs";
 
 function parseMcpConfig(value) {
   try {
@@ -44,10 +46,19 @@ function mcpConfigPath(config = {}) {
 
 function runnerMcpConfig(config = {}) {
   const parsed = parseMcpConfig(config.mcpConfigRaw);
-  if (!config.chromeEnabled && !config.runnerCapabilities?.chrome) return parsed;
+  const mcpServers = {...parsed.mcpServers};
+  if (config.automationAgentSocketPath) {
+    const name = uniqueManagedServerName(mcpServers, AUTOMATION_MCP_SERVER_NAME);
+    mcpServers[name] = {
+      command: "node",
+      args: [AUTOMATION_MCP_SERVER_PATH],
+      env: {MAPACHE_AUTOMATION_AGENT_SOCKET: config.automationAgentSocketPath},
+    };
+  }
+  if (!config.chromeEnabled && !config.runnerCapabilities?.chrome) return {mcpServers};
   return {
     mcpServers: {
-      ...parsed.mcpServers,
+      ...mcpServers,
       "chrome-devtools": {
         command: "chrome-devtools-mcp",
         args: ["--browser-url", config.browserCdpUrl || "http://127.0.0.1:9222", "--no-usage-statistics"],
@@ -55,6 +66,15 @@ function runnerMcpConfig(config = {}) {
       },
     },
   };
+}
+
+function uniqueManagedServerName(servers, baseName) {
+  if (!Object.prototype.hasOwnProperty.call(servers, baseName)) return baseName;
+  for (let suffix = 2; suffix < 1000; suffix++) {
+    const candidate = `${baseName}-${suffix}`;
+    if (!Object.prototype.hasOwnProperty.call(servers, candidate)) return candidate;
+  }
+  throw new Error("automation_mcp_server_name_unavailable");
 }
 
 function piMcpConfig(mcpConfig = {}) {
@@ -96,6 +116,8 @@ async function writeJsonFile(filePath, value, config = {}) {
 }
 
 module.exports = {
+  AUTOMATION_MCP_SERVER_NAME,
+  AUTOMATION_MCP_SERVER_PATH,
   CHROME_DEVTOOLS_MCP_PACKAGE,
   createMcpConfigService,
   mcpConfigPath,
@@ -103,4 +125,5 @@ module.exports = {
   piMcpConfig,
   piMcpServer,
   runnerMcpConfig,
+  uniqueManagedServerName,
 };

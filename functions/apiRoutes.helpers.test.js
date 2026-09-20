@@ -82,6 +82,9 @@ assertRoute("/api/agent/automation-runs", {name: "automationAgent", resource: "r
 assertRoute("/api/agent/automation-runs/run-1/events", {
   name: "automationAgent", resource: "events", action: "list", runId: "run-1",
 });
+assertRoute("/api/agent/automation-schedule-preview", {
+  name: "automationAgentSchedulePreview", resource: "schedule", action: "preview",
+});
 assertRoute("/api/workspaces/workspace-1/automation-storage/prepare", {
   name: "automationStoragePrepare",
   workspaceId: "workspace-1",

@@ -323,6 +323,16 @@ Workspace MCP server config is managed from the top-navigation MCP dialog and st
 
 Workspace-bound Google MCP services are injected during Functions provisioning after a server-side refresh. The runner receives an ephemeral `GOOGLE_MCP_ACCESS_TOKEN`; local mode starts `/app/google-workspace-mcp/server.mjs` over stdio and passes enabled services/scopes through non-secret environment values. No Google token is written to `MCP_CONFIG`, `/workspace/.mcp.json`, or persisted pi-web UI config: the adapter uses the runner's `bearer_env` reference and the local wrapper asks Mapache for a bounded refresh after a 401. Pi's legacy `/root/.pi/agent/mcp-oauth` directory has a dedicated hidden archive target, while private automation OAuth state is local-only and namespaced with the run. `GET /google/mcp/status` performs local initialize/tools-list readiness evidence and exposes only service state, adapter, and safe account metadata behind the shutdown-token gate. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
 
+Automation runtimes additionally materialize the image-owned
+`/app/automation-mcp/server.mjs` as one managed MCP entry. It talks only to
+the runner's mode-0600 `MAPACHE_AUTOMATION_AGENT_SOCKET`; the child never
+receives the bearer token or `SESSION_SHUTDOWN_TOKEN`. The broker derives the
+current workspace from the admitted automation session and revalidates that
+session on every request. The managed entry is added without replacing user
+MCP entries; a collision uses a deterministic alternate server name. The
+server and `mapache-automations` guidance skill are baked into the `pi-chrome`
+image, so startup performs no npm download.
+
 ## Base Environment
 
 The image uses:

@@ -106,6 +106,9 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automations") {
     return {name: "automationAgent", resource: "definitions", action: "list"};
   }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automation-schedule-preview") {
+    return {name: "automationAgentSchedulePreview", resource: "schedule", action: "preview"};
+  }
   if (parts.length === 3 && parts[0] === "agent" && parts[1] === "automations") {
     return {name: "automationAgent", resource: "definition", action: "detail", automationId: parts[2]};
   }

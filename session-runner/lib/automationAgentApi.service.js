@@ -137,7 +137,7 @@ function createAutomationAgentApiService(config = {}, dependencies = {}) {
   async function handleLocalRequest(request, response) {
     try {
       const pathname = String(request.url || "");
-      if (!/^\/api\/agent\/(automations|automation-settings|automation-runs)(?:[/?]|$)/.test(pathname)) {
+      if (!/^\/api\/agent\/(automations|automation-settings|automation-runs|automation-schedule-preview)(?:[/?]|$)/.test(pathname)) {
         writeJson(response, 404, {error: "not_found"});
         return;
       }

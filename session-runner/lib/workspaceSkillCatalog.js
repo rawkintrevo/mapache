@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("path");
+const {isAutomationRuntime} = require("./runtimePaths");
 
 const SEEDED_SKILLS_DIR = path.join(__dirname, "..", "seeded-skills");
 
@@ -16,6 +17,9 @@ const WORKSPACE_SKILL_PROFILES = Object.freeze({
     "mapache-api-hosting",
     "mapache-preview-qa",
   ]),
+  automations: Object.freeze([
+    "mapache-automations",
+  ]),
 });
 
 function defaultWorkspaceSkillProfileIds(config = {}) {
@@ -25,6 +29,7 @@ function defaultWorkspaceSkillProfileIds(config = {}) {
   if (config.workspaceSourceMode === "github") profileIds.push("github");
   if (capabilities.chrome) profileIds.push("chrome");
   if (capabilities.preview) profileIds.push("web");
+  if (isAutomationRuntime(config)) profileIds.push("automations");
 
   return profileIds;
 }

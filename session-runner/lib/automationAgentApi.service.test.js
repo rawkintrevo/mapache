@@ -60,3 +60,20 @@ test("runner adapter rejects arbitrary local paths before making a remote reques
   assert.equal(service.socketPath, "/tmp/mapache-test-automation-agent.sock");
   assert.equal(calls, 0);
 });
+
+test("runner adapter permits only the bounded schedule preview agent path", async () => {
+  let calls = 0;
+  const service = createAutomationAgentApiService({
+    automationAgentApiUrl: "https://functions.example",
+    automationAgentTokenUrl: "https://functions.example/token",
+    shutdownToken: "runner-secret",
+    workspaceId: "workspace-1",
+    sessionId: "session-1",
+  }, {fetch: async (url) => {
+    calls += 1;
+    if (url.endsWith("/token")) return response(200, {accessToken: token(Math.floor(Date.now() / 1000) + 300)});
+    return response(200, {occurrences: []});
+  }});
+  assert.deepEqual(await service.call("/api/agent/automation-schedule-preview"), {occurrences: []});
+  assert.equal(calls, 2);
+});

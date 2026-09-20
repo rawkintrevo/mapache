@@ -129,13 +129,17 @@ local to the run until their dedicated persistence work is applied. Persistent
 agent snapshots continue to allowlist safe settings/transcripts and exclude
 auth, tokens, connector state, locks, sockets, and cache databases.
 
-The marked Pi runtime also exposes a local mode-0600 control socket inside that
-private root. The runner uses it for quiesce/activity and for the browserless
-automation conversation controls (`startAutomation`, `automationStatus`, and
-`cancelAutomation`). Automation creates one fresh persistent conversation per
-run, keeps its reducer state private to the runner, rejects a second run, and
-uses the existing session abort path for cancellation; these controls are not
-Mapache Chat/Goals routes and are not forwarded through the public gateway.
+The marked Pi runtime also exposes local mode-0600 sockets inside that private
+root. The runner uses one for quiesce/activity and browserless conversation
+controls (`startAutomation`, `automationStatus`, and `cancelAutomation`), and
+automation runtimes expose a second runner-owned HTTP Unix socket to the
+image-owned `mapache-automations` MCP server. That MCP server exposes only the
+bounded current-workspace automation API; the runner keeps bearer-token minting
+and refresh outside the child process. Automation creates one fresh persistent
+conversation per run, keeps its reducer state private to the runner, rejects a
+second run, and uses the existing session abort path for cancellation. These
+controls are not Mapache Chat/Goals routes and are not forwarded through the
+public browser gateway.
 
 Checkpoint publication selects the workspace pointer for main runtimes and the
 run-session pointer for automation runtimes. Both paths require the current
@@ -150,6 +154,8 @@ for ordinary cleanup.
 ## Invariants
 
 - There is exactly one admitted managed upstream agent child per marked runner.
+- Automation runtimes materialize exactly one image-owned automation MCP
+  server, preserving user MCP entries and choosing a non-colliding server name.
 - Browser presence never determines runtime execution state.
 - The runner never exposes shutdown credentials, private upstream tokens, or
   workspace secrets through browser responses.

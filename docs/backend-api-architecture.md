@@ -145,7 +145,10 @@ The authenticated profile route accepts `PATCH /api/me` with only an IANA
 `timezone` field. `POST /api/automation-schedule-preview` validates a numeric
 five-field cron expression and returns the next five `{utc, local, timezone}`
 occurrences using server time; the client cannot supply `nextRunAt` or preview
-time. The schedule matcher preserves standard day-of-month/day-of-week OR
+time. Automation runners use the equivalent
+`POST /api/agent/automation-schedule-preview` broker route, which derives the
+workspace from the admitted session rather than accepting a workspace ID. The
+schedule matcher preserves standard day-of-month/day-of-week OR
 semantics, skips nonexistent DST minutes, and de-duplicates repeated local
 minutes to the first occurrence.
 

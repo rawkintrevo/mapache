@@ -72,6 +72,12 @@ async function handleRequest(request = {}, route = {}, dependencies = {}) {
         )};
       }
       break;
+    case "schedule:preview":
+      requireMethod(request, "POST");
+      if (typeof dependencies.previewAutomationSchedule !== "function") {
+        throw httpError(503, "automation_schedule_preview_unavailable");
+      }
+      return {body: dependencies.previewAutomationSchedule(body)};
     case "runs:list":
       requireMethod(request, "GET");
       return {body: await history.listRuns(claims.ownerUid, {...query, workspaceId: claims.workspaceId})};
