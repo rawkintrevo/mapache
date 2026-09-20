@@ -26,6 +26,7 @@ import {createPiPanelsController} from "./controllers/piPanelsController.js";
 import {createSessionSubscriptionController} from "./controllers/sessionSubscriptionController.js";
 import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
+import {createAutomationsController} from "./controllers/automationsController.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -63,6 +64,7 @@ const APP_PATH = "/app";
 const adminController = createAdminController({state, render, dispatch});
 const piPanelsController = createPiPanelsController({state, render});
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
+const automationsController = createAutomationsController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -120,8 +122,14 @@ const handlers = {
     selectSession,
     stopSession,
   },
+  automations: automationsController,
   workspaces: {
     ...workspaceController,
+    selectWorkspace: async (workspaceId) => {
+      const result = await workspaceController.selectWorkspace(workspaceId);
+      automationsController.setWorkspace(workspaceId);
+      return result;
+    },
     toggleWorkspace,
   },
 };
@@ -138,8 +146,10 @@ async function start() {
         user,
         api: user ? createApiClient(() => user.getIdToken()) : null,
       });
+      automationsController.setIdentity(user?.uid || "");
       if (!user) {
         sessionSubscriptionController.detach();
+        automationsController.clear();
         resetSignedOutState(state);
         dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
@@ -172,7 +182,12 @@ function render() {
   }));
 }
 
-appStore.subscribe(() => render());
+appStore.subscribe((_nextState, action) => {
+  if (action?.type === APP_ACTIONS.SET_SELECTED_WORKSPACE) {
+    automationsController.setWorkspace(state.selectedWorkspaceId);
+  }
+  render();
+});
 
 function isAppPath(pathname = window.location.pathname) {
   return pathname === APP_PATH || pathname.startsWith(`${APP_PATH}/`);
@@ -216,6 +231,7 @@ async function refreshAll() {
       dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     }
     await workspaceController.refreshWorkspaceList();
+    automationsController.setWorkspace(state.selectedWorkspaceId);
     await loadSessions();
     await piPanelsController.loadMcpServers();
     await googleWorkspaceController.loadGoogleWorkspace({silent: true});

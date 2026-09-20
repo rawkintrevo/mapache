@@ -195,8 +195,11 @@ async function releaseAfterCleanup(runId, options = {}, dependencies = {}) {
 }
 
 function assertMainAdmissionAllowed(workspace = {}) {
-  if (String(workspace[AUTOMATION_EXCLUSION_FIELD] || "").trim()) {
-    throw httpError(409, "automation_requires_main_paused");
+  const exclusionRunId = String(workspace[AUTOMATION_EXCLUSION_FIELD] || "").trim();
+  if (exclusionRunId) {
+    const error = httpError(409, "automation_requires_main_paused");
+    error.runId = exclusionRunId;
+    throw error;
   }
   return true;
 }

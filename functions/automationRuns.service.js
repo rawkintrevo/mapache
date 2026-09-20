@@ -117,7 +117,11 @@ async function enqueueRun(input = {}, dependencies = {}) {
     const pending = pendingRunSnap?.exists ? pendingRunSnap.data() || {} : null;
     const pendingIsActive = pending && ACTIVE_STATUSES.has(String(pending.status || "").toLowerCase());
     if (pendingIsActive) {
-      if (trigger !== "cron") throw httpError(409, "pending_run_exists");
+      if (trigger !== "cron") {
+        const error = httpError(409, "pending_run_exists");
+        error.pendingRunId = pendingRunId;
+        throw error;
+      }
       const skipped = createRun({
         actorUid,
         automationId,

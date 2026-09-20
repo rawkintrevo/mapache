@@ -525,7 +525,14 @@ exports.api = onRequest({
   } catch (error) {
     logger.error("api request failed", error);
     const status = error.status || 500;
-    res.status(status).json({error: error.publicMessage || "internal_error"});
+    const body = {error: error.publicMessage || "internal_error"};
+    if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(String(error.pendingRunId || ""))) {
+      body.pendingRunId = String(error.pendingRunId);
+    }
+    if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(String(error.runId || ""))) {
+      body.runId = String(error.runId);
+    }
+    res.status(status).json(body);
   }
 });
 

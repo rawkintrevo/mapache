@@ -11,6 +11,8 @@ Mapache owns the surrounding workspace/session shell and account connections.
   `src/state/initialState.js`
 - Workspace selection, resource settings, and lifecycle: `src/controllers/workspaceController.js`
 - Canonical runtime subscription/selection: `src/controllers/sessionSubscriptionController.js`
+- Automation API/state/polling: `src/services/automationsApi.js` and
+  `src/controllers/automationsController.js`
 - API client: `src/services/api.js`
 - React root and shell: `src/App.jsx`, `src/components/layout/`,
   `src/components/drawers/`, and `src/components/workspaces/`
@@ -129,6 +131,19 @@ session subscription follows `resizeOperationState`; queued/running operations
 show **Resizing** and disable the workspace lifecycle button. Terminal failure
 shows `resizeOperationError`, and successful completion restores the normal
 runtime status. The browser does not hold a request open for shutdown/startup.
+
+Automation definitions, settings, storage preparation, schedule preview, manual
+enqueue, owner-wide history, run events, stop, cancel, and restart use the
+dedicated `automationsApi` facade over the shared HTTP client. The controller
+stores workspace-scoped definitions and revision state, storage readiness,
+concurrency settings, history filters/cursors, the selected run, and bounded
+event pages in `state.automations`. Each response is fenced by user, selected
+workspace, and controller epoch before it can mutate state. Manual run/restart
+actions retain one `Idempotency-Key` across a failed retry and rotate it after
+success; revision conflicts refresh the definition and leave a visible conflict
+marker. Active/queued history polls every five seconds only while the document
+is visible, and no Firestore history listener is created. Pending-run and
+main-paused responses retain their server-provided run IDs for UI links.
 
 ## Invariants
 
