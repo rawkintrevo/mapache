@@ -121,7 +121,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
       ...merged,
       revision: expectedRevision + 1,
       updatedAt: now,
-      ...(disabling ? {nextRunAt: null} : {}),
+      ...(disabling ? {nextRunAt: null, pendingRunId: null} : {}),
     };
     transaction.update(ref, updates);
     if (disabling) cancelQueuedRuns(transaction, queuedRuns.docs, automationId, now, "definition_disabled");
@@ -154,6 +154,7 @@ async function deleteAutomation(uid, workspaceId, automationId, payload = {}, de
       deletedAt: now,
       enabled: false,
       nextRunAt: null,
+      pendingRunId: null,
       revision: expectedRevision + 1,
       updatedAt: now,
     });

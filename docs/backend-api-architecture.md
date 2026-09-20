@@ -144,6 +144,21 @@ ready; enabling requires a saved model selection and ready shared storage.
 Workspace concurrency changes only the admission limit, so lowering it never
 stops active allocations.
 
+`functions/automationRuns.service.js` owns immutable run admission. Manual
+requests use UUIDs; cron requests use a SHA-256 ID derived from the automation
+and local schedule minute. A transaction captures the current definition
+revision, prompt, timezone, model reference, parallelism policy, and resource
+snapshot, then sets the definition's `pendingRunId` without calling Cloud Run.
+The same transaction handles cron queue-full skips, pending-run rejection for
+manual/restart requests, owner/workspace/storage checks, and scoped
+Idempotency-Key digests. `POST /api/workspaces/{workspaceId}/automations/{automationId}/run`
+accepts disabled definitions but not tombstones; terminal historical runs can
+be restarted through `POST /api/automation-runs/{runId}/restart` using their
+saved snapshot, even after the definition is tombstoned. `POST
+/api/automation-runs/{runId}/cancel` atomically cancels only queued work and
+clears `pendingRunId` when it still points at that run. Credentials and files
+remain current at launch rather than being copied into the run snapshot.
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi

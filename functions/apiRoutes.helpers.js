@@ -76,8 +76,17 @@ function routeRequest(path) {
   if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "automations") {
     return {name: "automation", workspaceId: parts[1], automationId: parts[3]};
   }
+  if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "automations" && parts[4] === "run") {
+    return {name: "automationRun", workspaceId: parts[1], automationId: parts[3]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "automation-settings") {
     return {name: "automationSettings", workspaceId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "restart") {
+    return {name: "automationRunRestart", runId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "cancel") {
+    return {name: "automationRunCancel", runId: parts[1]};
   }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
     return {name: "workspaceMcp", workspaceId: parts[1]};
