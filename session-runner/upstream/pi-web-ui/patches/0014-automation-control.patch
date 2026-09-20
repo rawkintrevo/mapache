@@ -1,0 +1,501 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 27951e5..4ba595b 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -72,6 +72,12 @@ import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
+ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
+ import { isManaged, managedMcpAdapterPath } from "./managed.js";
+ import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
++import {
++	createAutomationRunState,
++	reduceAutomationRunState,
++	type AutomationRunEvent,
++	type AutomationRunState,
++} from "./automation-run-state.js";
+ 
+ import {
+ 	applyHeadTail,
+@@ -908,6 +914,9 @@ export class ClientSession {
+ 	/** index.ts 注入：把运行轨迹事件转发给插件（PluginManager.emitRunEvent，
+ 	 *  轨迹视图插件靠它聚合时间线）。未设置时不做任何事。 */
+ 	onRunEvent: ((ev: PluginRunEvent) => void) | undefined = undefined;
++	/** Browserless automation hook. It is intentionally separate from the plugin
++	 * hooks so an unattended run never becomes visible through the browser UI. */
++	onAutomationEvent: ((conversationId: string, event: AgentSessionEvent) => void) | undefined = undefined;
+ 	/** index.ts 注入：当前打开对话变了（切历史会话/切 running 对话/新对话）时
+ 	 *  通知插件（PluginManager.emitConversationChanged）——轨迹视图靠它重拉。 */
+ 	onConversationChanged: (() => void) | undefined = undefined;
+@@ -937,6 +946,10 @@ export class ClientSession {
+ 		return this.conv.session;
+ 	}
+ 
++	getActiveConversationId(): string {
++		return this.activeId;
++	}
++
+ 	/** PTYs are owned by individual conversations; this getter targets the active one
+ 	 * for compatibility with the existing terminal-panel dispatch path. */
+ 	get terminals(): TerminalManager {
+@@ -1643,6 +1656,48 @@ export class ClientSession {
+ 		return cs;
+ 	}
+ 
++	/** Create a fresh, persistent conversation for an automation run. It never
++	 * resumes the browser client's latest conversation and has no attached sink. */
++	static async createAutomation(
++		clientId: string,
++		cwd: string,
++		stateStore: ClientStateStore,
++		modelRef?: string,
++	): Promise<ClientSession> {
++		const agentDir = process.env.PI_CODING_AGENT_DIR ?? getAgentDir();
++		const cs = new ClientSession(clientId, cwd, agentDir, stateStore);
++		const conversationId = cs.nextConversationId();
++		const terminals = cs.makeTerminalManager(conversationId, cwd);
++		const runtime = await createAgentSessionRuntime(cs.makeRuntimeFactory(terminals, undefined, conversationId), {
++			cwd,
++			agentDir,
++			// Automation always gets a new transcript, while the explicit flat
++			// session root keeps the run private to this runner.
++			sessionManager: SessionManager.create(cwd, piSessionsRoot()),
++		});
++		cs.sharedModelRuntime = runtime.services.modelRuntime;
++		const conv = cs.makeConversation(runtime, conversationId, terminals);
++		cs.convs.set(conv.id, conv);
++		cs.activeId = conv.id;
++		for (const d of runtime.diagnostics) {
++			if (d.type !== "info") {
++				cs.pendingNotices.push({ type: "notice", level: d.type, text: d.message, textEn: d.message });
++			}
++		}
++		await cs.bindSession();
++		if (modelRef) await cs.selectAutomationModel(modelRef, cwd);
++		return cs;
++	}
++
++	private async selectAutomationModel(modelRef: string, cwd: string): Promise<void> {
++		const slash = modelRef.indexOf("/");
++		if (slash <= 0 || slash === modelRef.length - 1) throw new Error("automation_model_invalid");
++		const model = this.sharedModelRuntime?.getModel(modelRef.slice(0, slash), modelRef.slice(slash + 1));
++		if (!model) throw new Error("automation_model_unavailable");
++		await this.restoreKeyForModel(modelRef, cwd);
++		await this.session.setModel(model);
++	}
++
+ 	/**
+ 	 * Factory for cwd-bound runtimes. All conversations share ONE ModelRuntime
+ 	 * (the model choice is client-wide), so later conversations reuse the
+@@ -2153,6 +2208,11 @@ export class ClientSession {
+ 		// Any SDK event proves the run is alive — feeds the stall watchdog below.
+ 		conv.lastSdkEventAt = Date.now();
+ 		conv.stallNoticed = false;
++		try {
++			this.onAutomationEvent?.(conv.id, event);
++		} catch (error) {
++			console.error(`[agent-service] automation event hook failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
++		}
+ 		switch (event.type) {
+ 			case "bash_execution_update": {
+ 				if (event.id) {
+@@ -5623,6 +5683,35 @@ export interface QuiesceResult {
+ 	pendingMessages: number;
+ }
+ 
++export interface AutomationControlResponse {
++	ok: boolean;
++	runId?: string;
++	conversationId?: string;
++	status?: "submitted" | "running" | "succeeded" | "failed" | "canceled" | "interaction_required";
++	state?: AutomationRunState;
++	error?: string;
++}
++
++interface AutomationHandle {
++	runId: string;
++	client: ClientSession;
++	conversationId: string;
++	state: AutomationRunState;
++	startPromise: Promise<void> | null;
++	disposePromise: Promise<void> | null;
++}
++
++function automationError(error: unknown): string {
++	const message = String((error as Error)?.message ?? error ?? "automation_failed")
++		.replace(/\s+/g, " ")
++		.trim();
++	return message.slice(0, 160) || "automation_failed";
++}
++
++function automationStatus(state: AutomationRunState): AutomationControlResponse["status"] {
++	return state.terminal ?? (state.submitted ? "running" : "submitted");
++}
++
+ export class AgentService {
+ 	/** index.ts 注入：SDK 工具执行事件的插件转发钩子，attach 时拷贝到每个新会话。 */
+ 	onToolEvent: ((ev: PluginToolEvent) => void) | undefined = undefined;
+@@ -5651,6 +5740,9 @@ export class AgentService {
+ 	private socketCount = 0;
+ 	private pending = new Map<string, Promise<ClientSession>>();
+ 	private stateStore: ClientStateStore;
++	/** One private automation conversation per embedded runner. Keep the handle
++	 * after terminal completion so duplicate requests remain deterministic. */
++	private automation: AutomationHandle | null = null;
+ 	/** Set by index.ts: called when /pi-web-ui:quit is invoked. */
+ 	onQuit: (() => boolean) | undefined = undefined;
+ 	/** 任意客户端成功切换工作区后触发（新绝对路径）。index.ts 接到
+@@ -5695,6 +5787,7 @@ export class AgentService {
+ 		}
+ 		const clients = [...this.clients.values()];
+ 		await Promise.all(clients.map((client) => client.quiesce(Math.max(1, deadline - Date.now()))));
++		if (this.automation) await this.automation.client.quiesce(Math.max(1, deadline - Date.now()));
+ 		const drained = () =>
+ 			this.pending.size === 0 &&
+ 			this.activeConversations() === 0 &&
+@@ -5723,6 +5816,7 @@ export class AgentService {
+ 	activeConversations(): number {
+ 		let n = 0;
+ 		for (const cs of this.clients.values()) n += cs.activeConversations();
++		if (this.automation) n += this.automation.client.activeConversations();
+ 		return n;
+ 	}
+ 
+@@ -5730,12 +5824,14 @@ export class AgentService {
+ 	pendingMessages(): number {
+ 		let n = 0;
+ 		for (const cs of this.clients.values()) n += cs.pendingMessages();
++		if (this.automation) n += this.automation.client.pendingMessages();
+ 		return n;
+ 	}
+ 
+ 	activeTools(): number {
+ 		let n = 0;
+ 		for (const cs of this.clients.values()) n += cs.activeTools();
++		if (this.automation) n += this.automation.client.activeTools();
+ 		return n;
+ 	}
+ 
+@@ -5793,6 +5889,173 @@ export class AgentService {
+ 		};
+ 	}
+ 
++	private automationResponse(handle: AutomationHandle): AutomationControlResponse {
++		return {
++			ok: true,
++			runId: handle.runId,
++			conversationId: handle.conversationId,
++			status: automationStatus(handle.state),
++			state: handle.state,
++		};
++	}
++
++	private reduceAutomationEvent(handle: AutomationHandle, event: AutomationRunEvent): void {
++		if (this.automation !== handle) return;
++		handle.state = reduceAutomationRunState(handle.state, event);
++		if (handle.state.terminal && !handle.disposePromise) {
++			// Let the SDK subscription finish its normal bookkeeping before closing
++			// the browserless client and its private runtime.
++			queueMicrotask(() => {
++				if (this.automation === handle && !handle.disposePromise) {
++					handle.disposePromise = handle.client.dispose().catch(() => {});
++				}
++			});
++		}
++	}
++
++	private handleAutomationEvent(handle: AutomationHandle, conversationId: string, event: AgentSessionEvent): void {
++		if (this.automation !== handle || conversationId !== handle.conversationId) return;
++		const base = { runId: handle.runId, conversationId };
++		const toolEvent = event as {
++			toolCallId?: string;
++			toolName?: string;
++			isError?: boolean;
++			willRetry?: boolean;
++			messages?: unknown[];
++		};
++		if (event.type === "tool_execution_start" && toolEvent.toolCallId) {
++			const taskId = toolEvent.toolCallId;
++			const toolName = toolEvent.toolName ?? "tool";
++			const kind = toolName === "subagent_spawn" || toolName === "delegate_task"
++				? "subagent_start"
++				: toolName.includes("background")
++					? "background_task_start"
++					: "tool_start";
++			this.reduceAutomationEvent(handle, { ...base, type: kind, taskId, eventId: `start:${taskId}` } as AutomationRunEvent);
++			if (toolName === ASK_USER_QUESTION_TOOL_NAME) {
++				this.reduceAutomationEvent(handle, {
++					...base,
++					type: "input_requested",
++					requestId: taskId,
++					eventId: `input:${taskId}`,
++				});
++				// No browser can answer this request. Resolve the existing question
++				// bridge after the tool has had a chance to register its Promise.
++				setTimeout(() => {
++					if (this.automation === handle && !handle.state.terminal) handle.client.cancelPendingQuestions();
++				}, 0).unref?.();
++			}
++			return;
++		}
++		if (event.type === "tool_execution_end" && toolEvent.toolCallId) {
++			const taskId = toolEvent.toolCallId;
++			const toolName = toolEvent.toolName ?? "tool";
++			const kind = toolName === "subagent_spawn" || toolName === "delegate_task"
++				? "subagent_end"
++				: toolName.includes("background")
++					? "background_task_end"
++					: "tool_end";
++			this.reduceAutomationEvent(handle, {
++				...base,
++				type: kind,
++				taskId,
++				isError: toolEvent.isError,
++				eventId: `end:${taskId}`,
++			} as AutomationRunEvent);
++			if (toolName === ASK_USER_QUESTION_TOOL_NAME) {
++				this.reduceAutomationEvent(handle, {
++					...base,
++					type: "input_canceled",
++					requestId: taskId,
++					eventId: `input-end:${taskId}`,
++				});
++			}
++			return;
++		}
++		if (event.type === "auto_retry_start") {
++			this.reduceAutomationEvent(handle, {
++				...base,
++				type: "model_end",
++				error: String((event as { errorMessage?: unknown }).errorMessage ?? "model_retry"),
++				retryable: true,
++				eventId: `retry:${(event as { attempt?: number }).attempt ?? 0}`,
++			});
++			return;
++		}
++		if (event.type === "agent_end") {
++			const messages = toolEvent.messages ?? [];
++			const lastAssistant = [...messages].reverse().find((message) => {
++				return (message as { role?: unknown })?.role === "assistant";
++			}) as { stopReason?: unknown; errorMessage?: unknown } | undefined;
++			const stopReason = String(lastAssistant?.stopReason ?? "");
++			const isError = stopReason === "error" || stopReason === "aborted" || Boolean(lastAssistant?.errorMessage);
++			this.reduceAutomationEvent(handle, {
++				...base,
++				type: "agent_end",
++				result: isError ? "error" : "success",
++				error: isError ? String(lastAssistant?.errorMessage ?? stopReason) : undefined,
++				willRetry: toolEvent.willRetry,
++				eventId: `agent-end:${handle.runId}:${handle.state.seenEventIds.length}`,
++			});
++		}
++	}
++
++	async startAutomation(input: { runId: string; prompt: string; modelRef?: string }): Promise<AutomationControlResponse> {
++		const runId = String(input?.runId ?? "").trim();
++		const prompt = String(input?.prompt ?? "");
++		if (!runId) return { ok: false, error: "automation_run_id_required" };
++		if (!prompt.trim()) return { ok: false, error: "automation_prompt_required" };
++		if (this.automation) {
++			return this.automation.runId === runId
++				? this.automationResponse(this.automation)
++				: { ok: false, error: "automation_run_busy" };
++		}
++		if (this.quiesced) return { ok: false, error: "server_quiesced" };
++		let client: ClientSession;
++		try {
++			client = await ClientSession.createAutomation(`automation:${runId}`, this.cwd, this.stateStore, input.modelRef);
++		} catch (error) {
++			return { ok: false, error: `automation_start_failed:${automationError(error)}` };
++		}
++		const conversationId = client.getActiveConversationId();
++		const handle: AutomationHandle = {
++			runId,
++			client,
++			conversationId,
++			state: createAutomationRunState(runId),
++			startPromise: null,
++			disposePromise: null,
++		};
++		this.automation = handle;
++		client.onAutomationEvent = (id, event) => this.handleAutomationEvent(handle, id, event);
++		this.reduceAutomationEvent(handle, { type: "started", runId, conversationId, eventId: "started" });
++		handle.startPromise = client.prompt(prompt).catch(() => {});
++		return this.automationResponse(handle);
++	}
++
++	automationStatus(runId: string): AutomationControlResponse {
++		if (!this.automation || this.automation.runId !== String(runId ?? "").trim()) {
++			return { ok: false, error: "automation_run_not_found" };
++		}
++		return this.automationResponse(this.automation);
++	}
++
++	async cancelAutomation(runId: string): Promise<AutomationControlResponse> {
++		const handle = this.automation;
++		if (!handle || handle.runId !== String(runId ?? "").trim()) return { ok: false, error: "automation_run_not_found" };
++		if (!handle.state.terminal) {
++			this.reduceAutomationEvent(handle, {
++				type: "canceled",
++				runId: handle.runId,
++				conversationId: handle.conversationId,
++				error: "canceled",
++				eventId: `canceled:${handle.runId}`,
++			});
++			await handle.client.quiesce();
++		}
++		return this.automationResponse(handle);
++	}
++
+ 	/** Get or create the session for a client, racing attach calls safely. */
+ 	async attach(clientId: string, send: (msg: ServerMessage) => void): Promise<ClientSession> {
+ 		let cs = this.clients.get(clientId);
+@@ -5925,5 +6188,8 @@ export class AgentService {
+ 		const all = [...this.clients.values()];
+ 		this.clients.clear();
+ 		await Promise.all(all.map((cs) => cs.dispose()));
++		const automation = this.automation;
++		this.automation = null;
++		if (automation) await automation.client.dispose().catch(() => {});
+ 	}
+ }
+diff --git a/server/control-socket.ts b/server/control-socket.ts
+index 4cd3d86..c4f13f9 100644
+--- a/server/control-socket.ts
++++ b/server/control-socket.ts
+@@ -11,6 +11,9 @@
+  *   → {"cmd":"status"}        ← {"ok":true, ...serviceStatus}
+  *   → {"cmd":"quiesce"}       ← {"ok":true}
+  *   → {"cmd":"unquiesce"}     ← {"ok":true}
++ *   → {"cmd":"startAutomation",...} ← private run admission/status
++ *   → {"cmd":"automationStatus",...} ← private run state
++ *   → {"cmd":"cancelAutomation",...} ← private run cancellation
+  *   → anything else           ← {"ok":false,"error":"..."}
+  *
+  * Idle connections are closed after a short timeout so a stuck CLI never
+@@ -35,6 +38,9 @@ type ControlService = {
+ 	};
+ 	quiesce: () => Promise<{ ok: boolean; error?: string }>;
+ 	unquiesce: () => void;
++	startAutomation?: (input: { runId: string; prompt: string; modelRef?: string }) => Promise<ControlStatus>;
++	automationStatus?: (runId: string) => ControlStatus;
++	cancelAutomation?: (runId: string) => Promise<ControlStatus>;
+ };
+ 
+ /** How long a control connection may sit idle before the server closes it. */
+@@ -49,10 +55,14 @@ export function controlPath(dataDir: string, port: number): string {
+ }
+ 
+ export interface ControlCommand {
+-	cmd: "status" | "quiesce" | "unquiesce";
++	cmd: "status" | "quiesce" | "unquiesce" | "startAutomation" | "automationStatus" | "cancelAutomation";
++	runId?: string;
++	prompt?: string;
++	modelRef?: string;
+ }
+ 
+ export interface ControlStatus {
++	[key: string]: unknown;
+ 	ok: boolean;
+ 	error?: string;
+ 	/** serviceStatus fields, present on "status". */
+@@ -136,6 +146,25 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+ 								service.unquiesce();
+ 								resp = { ok: true, ...service.serviceStatus() };
+ 								break;
++							case "startAutomation":
++								if (!service.startAutomation) {
++									resp = { ok: false, error: "automation_unsupported" };
++								} else {
++									resp = await service.startAutomation({ runId: req.runId ?? "", prompt: req.prompt ?? "", modelRef: req.modelRef });
++								}
++								break;
++							case "automationStatus":
++								resp = service.automationStatus
++									? service.automationStatus(req.runId ?? "")
++									: { ok: false, error: "automation_unsupported" };
++								break;
++							case "cancelAutomation":
++								if (!service.cancelAutomation) {
++									resp = { ok: false, error: "automation_unsupported" };
++								} else {
++									resp = await service.cancelAutomation(req.runId ?? "");
++								}
++								break;
+ 							default:
+ 								resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
+ 								break;
+@@ -190,6 +219,7 @@ export function sendControlCommand(
+ 	dataDir: string,
+ 	port: number,
+ 	cmd: ControlCommand["cmd"],
++	payload: Omit<ControlCommand, "cmd"> = {},
+ ): Promise<ControlStatus | null> {
+ 	const path = controlPath(dataDir, port);
+ 	return new Promise((resolve) => {
+@@ -205,7 +235,7 @@ export function sendControlCommand(
+ 		const timer = setTimeout(() => finish(null), CONTROL_CLIENT_TIMEOUT_MS);
+ 		let buf = "";
+ 		sock.on("connect", () => {
+-			sock.write(JSON.stringify({ cmd }) + "\n");
++			sock.write(JSON.stringify({ cmd, ...payload }) + "\n");
+ 		});
+ 		sock.on("data", (chunk) => {
+ 			buf += chunk.toString("utf8");
+diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
+index 429d7f7..d9b86bd 100644
+--- a/tests/unit/control-socket.test.ts
++++ b/tests/unit/control-socket.test.ts
+@@ -82,4 +82,54 @@ describe("local control socket", () => {
+ 			}
+ 		},
+ 	);
++
++	it.skipIf(process.platform === "win32")("routes private automation commands without an HTTP endpoint", async () => {
++		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-automation-control-"));
++		tempDirs.push(dataDir);
++		const calls: Array<{ command: string; value?: unknown }> = [];
++		const service = {
++			serviceStatus: () => ({
++				pid: process.pid,
++				version: "test",
++				cwd: "/workspace",
++				quiesced: false,
++				connectedClients: 0,
++				activeConversations: 0,
++				activeTools: 0,
++				pendingMessages: 0,
++			}),
++			quiesce: async () => ({ ok: true }),
++			unquiesce: () => {},
++			startAutomation: async (input: { runId: string; prompt: string; modelRef?: string }) => {
++				calls.push({ command: "start", value: input });
++				return { ok: true, runId: input.runId, conversationId: "c1", status: "running" };
++			},
++			automationStatus: (runId: string) => {
++				calls.push({ command: "status", value: runId });
++				return { ok: true, runId, conversationId: "c1", status: "running" };
++			},
++			cancelAutomation: async (runId: string) => {
++				calls.push({ command: "cancel", value: runId });
++				return { ok: true, runId, conversationId: "c1", status: "canceled" };
++			},
++		};
++		const stop = startControlServer({ service, dataDir, port: 9878 });
++		try {
++			await waitForSocket(join(dataDir, "pi-web-ui.sock"));
++			expect(await sendControlCommand(dataDir, 9878, "startAutomation", { runId: "run-1", prompt: "hello", modelRef: "openai/gpt-5" })).toMatchObject({
++				ok: true,
++				runId: "run-1",
++				status: "running",
++			});
++			expect(await sendControlCommand(dataDir, 9878, "automationStatus", { runId: "run-1" })).toMatchObject({ ok: true, status: "running" });
++			expect(await sendControlCommand(dataDir, 9878, "cancelAutomation", { runId: "run-1" })).toMatchObject({ ok: true, status: "canceled" });
++			expect(calls).toEqual([
++				{ command: "start", value: { runId: "run-1", prompt: "hello", modelRef: "openai/gpt-5" } },
++				{ command: "status", value: "run-1" },
++				{ command: "cancel", value: "run-1" },
++			]);
++		} finally {
++			stop();
++		}
++	});
+ });

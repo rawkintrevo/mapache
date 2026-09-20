@@ -58,6 +58,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     health,
     quiesce,
     activity,
+    startAutomation,
+    automationStatus,
+    cancelAutomation,
     upstreamHeaders() {
       return privateToken ? {"x-pi-token": privateToken} : {};
     },
@@ -213,6 +216,33 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     return safe || {ok: false, error: "pi_web_ui_activity_invalid"};
   }
 
+  /** Start or re-acknowledge the one browserless automation conversation. */
+  async function startAutomation(input = {}) {
+    if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
+    const response = await controlRequest("startAutomation", quiesceTimeoutMs, {
+      runId: input.runId,
+      prompt: input.prompt,
+      modelRef: input.modelRef,
+    });
+    if (!response) throw publicError("pi_web_ui_automation_unavailable");
+    return response;
+  }
+
+  /** Read the private automation run state without exposing a public HTTP route. */
+  async function automationStatus(runId) {
+    if (!enabled || !child) return {ok: false, error: "pi_web_ui_not_ready"};
+    const response = await controlRequest("automationStatus", quiesceTimeoutMs, {runId});
+    return response || {ok: false, error: "pi_web_ui_automation_unavailable"};
+  }
+
+  /** Cancel the private automation run through the upstream quiesce/abort path. */
+  async function cancelAutomation(runId) {
+    if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
+    const response = await controlRequest("cancelAutomation", quiesceTimeoutMs, {runId});
+    if (!response) throw publicError("pi_web_ui_automation_unavailable");
+    return response;
+  }
+
   async function waitForHealthy() {
     const deadline = now() + startupTimeoutMs;
     const maxAttempts = Math.max(1, Math.ceil(startupTimeoutMs / Math.max(1, healthIntervalMs)) + 1);
@@ -357,7 +387,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     };
   }
 
-  function controlRequest(command, timeoutMs) {
+  function controlRequest(command, timeoutMs, payload = {}) {
     const controlPath = config.piWebUiControlPath || controlSocketPath(config);
     return new Promise((resolve) => {
       let socket;
@@ -378,7 +408,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
         finish(null);
         return;
       }
-      socket.on("connect", () => socket.write(JSON.stringify({cmd: command}) + "\n"));
+      socket.on("connect", () => socket.write(JSON.stringify({cmd: command, ...payload}) + "\n"));
       socket.on("data", (chunk) => {
         buffer += chunk.toString("utf8");
         const newline = buffer.indexOf("\n");

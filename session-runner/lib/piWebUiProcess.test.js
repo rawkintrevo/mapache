@@ -130,6 +130,7 @@ test("quiesces through the local control socket and reports activity without a b
   const {root, config} = await fixture();
   const child = fakeChild();
   const commands = [];
+  const requests = [];
   try {
     const managed = createPiWebUiProcess(config, {
       fetch: healthyFetch({
@@ -145,9 +146,16 @@ test("quiesces through the local control socket and reports activity without a b
         socket.destroy = () => {};
         socket.write = (line) => {
           const request = JSON.parse(String(line));
+          requests.push(request);
           commands.push(request.cmd);
           const body = request.cmd === "quiesce"
             ? {ok: true, quiesced: true, activeConversations: 0, activeTools: 0, pendingMessages: 0}
+            : request.cmd === "startAutomation"
+              ? {ok: true, runId: request.runId, conversationId: "c1", status: "running"}
+              : request.cmd === "automationStatus"
+                ? {ok: true, runId: request.runId, conversationId: "c1", status: "running"}
+                : request.cmd === "cancelAutomation"
+                  ? {ok: true, runId: request.runId, conversationId: "c1", status: "canceled"}
             : {ok: true, quiesced: false, connectedClients: 0, activeConversations: 1, activeTools: 1, pendingMessages: 0};
           setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")), 5);
         };
@@ -159,7 +167,18 @@ test("quiesces through the local control socket and reports activity without a b
     await managed.start();
     await assert.doesNotReject(() => managed.quiesce());
     const activity = await managed.activity();
-    assert.deepEqual(commands, ["quiesce", "status"]);
+    const started = await managed.startAutomation({runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"});
+    const automation = await managed.automationStatus("run-1");
+    const canceled = await managed.cancelAutomation("run-1");
+    assert.deepEqual(commands, ["quiesce", "status", "startAutomation", "automationStatus", "cancelAutomation"]);
+    assert.deepEqual(requests.slice(2), [
+      {cmd: "startAutomation", runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"},
+      {cmd: "automationStatus", runId: "run-1"},
+      {cmd: "cancelAutomation", runId: "run-1"},
+    ]);
+    assert.deepEqual(started, {ok: true, runId: "run-1", conversationId: "c1", status: "running"});
+    assert.deepEqual(automation, {ok: true, runId: "run-1", conversationId: "c1", status: "running"});
+    assert.deepEqual(canceled, {ok: true, runId: "run-1", conversationId: "c1", status: "canceled"});
     assert.deepEqual(activity, {
       ok: true,
       quiesced: false,

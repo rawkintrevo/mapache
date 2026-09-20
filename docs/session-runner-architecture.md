@@ -107,6 +107,14 @@ local to the run until their dedicated persistence work is applied. Persistent
 agent snapshots continue to allowlist safe settings/transcripts and exclude
 auth, tokens, connector state, locks, sockets, and cache databases.
 
+The marked Pi runtime also exposes a local mode-0600 control socket inside that
+private root. The runner uses it for quiesce/activity and for the browserless
+automation conversation controls (`startAutomation`, `automationStatus`, and
+`cancelAutomation`). Automation creates one fresh persistent conversation per
+run, keeps its reducer state private to the runner, rejects a second run, and
+uses the existing session abort path for cancellation; these controls are not
+Mapache Chat/Goals routes and are not forwarded through the public gateway.
+
 Checkpoint publication selects the workspace pointer for main runtimes and the
 run-session pointer for automation runtimes. Both paths require the current
 session/generation/boot identity and admitted authority before publishing.
