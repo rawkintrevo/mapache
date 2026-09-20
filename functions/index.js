@@ -41,6 +41,7 @@ const {
 } = require("./admin.service");
 const {requireUser, updateUserTimezone} = require("./auth.service");
 const {previewAutomationSchedule} = require("./automationSchedule.helpers");
+const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {
   userWithUsage,
 } = require("./userUsage.service");
@@ -259,6 +260,11 @@ const workspaceService = createWorkspaceService({
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
 });
+const automationDefinitionsService = createAutomationDefinitionsService({
+  admin,
+  db,
+  requireWorkspace,
+});
 const googleWorkspaceApiService = createGoogleWorkspaceApiService({
   connectionsService: googleWorkspaceConnectionsService,
   db,
@@ -290,6 +296,7 @@ function googleMcpTokenRefreshUrl() {
 
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
+  automationDefinitionsService,
   environmentKeysService,
   openAiCodexAuthService,
   qaFaultHarnessService,

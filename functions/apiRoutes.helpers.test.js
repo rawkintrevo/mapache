@@ -53,6 +53,19 @@ assertRoute("/api/workspaces/workspace-1/mcp", {
   name: "workspaceMcp",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/automations", {
+  name: "automations",
+  workspaceId: "workspace-1",
+});
+assertRoute("/api/workspaces/workspace-1/automations/automation-1", {
+  name: "automation",
+  workspaceId: "workspace-1",
+  automationId: "automation-1",
+});
+assertRoute("/api/workspaces/workspace-1/automation-settings", {
+  name: "automationSettings",
+  workspaceId: "workspace-1",
+});
 assertRoute("/api/workspaces/workspace-1/sessions", {
   name: "sessions",
   workspaceId: "workspace-1",
