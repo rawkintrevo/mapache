@@ -17,6 +17,7 @@ function accessError(code, details = {}) {
 
 function normalizeWorkspaceBucketBinding(binding = {}, options = {}) {
   const projectId = String(binding.projectId || options.projectId || "").trim();
+  const projectNumber = String(binding.projectNumber || options.projectNumber || "").trim();
   const bucketName = String(binding.bucketName || "").trim();
   const workspaceId = String(binding.workspaceId || "").trim();
   const ownerUid = String(binding.ownerUid || "").trim();
@@ -27,7 +28,7 @@ function normalizeWorkspaceBucketBinding(binding = {}, options = {}) {
     throw accessError("invalid_workspace_bucket_name");
   }
   if (!workspaceId || !ownerUid) throw accessError("invalid_workspace_bucket_binding");
-  return {projectId, bucketName, workspaceId, ownerUid};
+  return {projectId, projectNumber, bucketName, workspaceId, ownerUid};
 }
 
 function expectedBucketLabels(binding) {
@@ -41,8 +42,11 @@ function assertBucketMetadata(metadata = {}, binding, options = {}) {
   if (metadata.name && metadata.name !== binding.bucketName) {
     throw accessError("workspace_bucket_binding_mismatch");
   }
-  const project = String(metadata.project || metadata.projectId || options.projectId || "").trim();
-  if (project && project !== binding.projectId) throw accessError("workspace_bucket_project_mismatch");
+  const project = String(metadata.project || metadata.projectId || metadata.projectNumber || "").trim();
+  const expectedProjects = [binding.projectId, binding.projectNumber].filter(Boolean);
+  if (project && expectedProjects.length && !expectedProjects.includes(project)) {
+    throw accessError("workspace_bucket_project_mismatch");
+  }
   const labels = metadata.labels || {};
   const expectedLabels = expectedBucketLabels(binding);
   for (const [key, value] of Object.entries(expectedLabels)) {

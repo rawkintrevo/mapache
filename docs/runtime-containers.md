@@ -12,6 +12,33 @@ Live resource metrics support both unified cgroup v2 files and Cloud Run's cgrou
 The sampler handles the separately scoped `cpu` and `cpuacct` mounts used by Cloud Run Services,
 the combined `cpu,cpuacct` mount used by Cloud Run Jobs, and the `memory` controller in both.
 
+## Shared workspace buckets
+
+Prepared shared-mode workspaces use one private Cloud Storage bucket in `us-central1`.
+The Functions control plane derives the bucket name as
+`mpw-<project-number>-<first-24-hex-sha256(workspaceId)>`, persists that exact identity
+on the workspace, and never accepts a browser-provided bucket name. Creation is
+idempotent and reconciles the existing bucket before applying the existing
+`mapache-runner@pi-agents-cloud.iam.gserviceaccount.com` object binding.
+
+The bucket contract is fixed at creation: Standard storage class, hierarchical
+namespace enabled, uniform bucket-level access, public access prevention enforced,
+Object Versioning disabled, and an explicit 604800-second (seven-day) Cloud Storage
+soft-delete policy. A bucket with a different project, owner labels, region, HNS
+setting, retention policy, public-access setting, or versioning setting is rejected;
+the control plane does not silently adopt a foreign or incompatible bucket. Firestore
+stores only normalized lifecycle state (`legacy`, `preparing`, `migrating`, `ready`,
+or `error`) and normalized error codes to callers; the bucket identity remains private.
+
+Preparation is explicit and requires the workspace to be paused, so a disabled
+automation definition does not allocate storage by itself. The shared bucket is not
+mounted by this preparation step: later migration publishes a verified
+`trees/{storageGeneration}/` prefix before a runner receives it as `/workspace`.
+Normal run completion never deletes a workspace bucket. Workspace deletion first
+confirms that all runner services are absent, deletes live objects and then the
+bucket, and reports the seven-day recovery window; soft-deleted objects remain
+recoverable and continue to incur storage charges until retention expires.
+
 ## Runner Images
 
 The supported runner image is built from `session-runner/Dockerfile.pi-chrome`
