@@ -46,6 +46,7 @@ const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
+const {createAutomationArtifactsService} = require("./lib/automationArtifacts.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
@@ -139,8 +140,10 @@ piWebUi = createPiWebUiProcess(config, {
   onExit: ({error}) => activity.markRuntimeStartupFailure(error),
 });
 const agentSnapshot = createAgentSnapshotService({config});
+const automationArtifacts = createAutomationArtifactsService({admin, config, db, storage});
 const checkpointScheduler = createAgentCheckpointScheduler({
   activity,
+  automationArtifacts,
   agentSnapshot,
   checkpointIdentity,
   checkpointPublisher,

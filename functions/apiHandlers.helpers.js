@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({agentAuthService, automationDefinitionsService = {}, automationRunsService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({agentAuthService, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -23,6 +23,9 @@ function createApiHandlers({agentAuthService, automationDefinitionsService = {},
     enqueueAutomationRun: automationRunsService.enqueueRun,
     restartAutomationRun: automationRunsService.restartRun,
     cancelAutomationRun: automationRunsService.cancelQueuedRun,
+    listAutomationRuns: automationHistoryService.listRuns,
+    getAutomationRun: automationHistoryService.getRun,
+    listAutomationRunEvents: automationHistoryService.listEvents,
     saveSessionPiAuthSelection: agentAuthService.saveSessionPiAuthSelection,
     getSessionQaFaults: qaFaultHarnessService?.getStatus || (async () => { throw new Error("QA fault harness service is unavailable"); }),
     armSessionQaFault: qaFaultHarnessService?.arm || (async () => { throw new Error("QA fault harness service is unavailable"); }),

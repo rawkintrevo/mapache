@@ -43,6 +43,7 @@ const {requireUser, updateUserTimezone} = require("./auth.service");
 const {previewAutomationSchedule} = require("./automationSchedule.helpers");
 const {createAutomationAdmissionService} = require("./automationAdmission.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
+const {createAutomationHistoryService} = require("./automationHistory.service");
 const {createAutomationRunsService} = require("./automationRuns.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
@@ -297,6 +298,7 @@ const automationRunsService = createAutomationRunsService({
   requireWorkspace,
   wakeAutomationQueue,
 });
+const automationHistoryService = createAutomationHistoryService({db, storage});
 const googleWorkspaceApiService = createGoogleWorkspaceApiService({
   connectionsService: googleWorkspaceConnectionsService,
   db,
@@ -329,6 +331,7 @@ function googleMcpTokenRefreshUrl() {
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
   automationDefinitionsService,
+  automationHistoryService,
   automationRunsService,
   environmentKeysService,
   openAiCodexAuthService,

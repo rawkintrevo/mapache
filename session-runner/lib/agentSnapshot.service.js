@@ -172,6 +172,10 @@ async function captureAgentSnapshot({
       manifestPath,
       stagingDir: destination,
       storagePrefix,
+      // The complete records are already parsed while validating transcript
+      // JSONL. Automation artifact capture reuses them so a live trailing
+      // append is never published as a malformed record.
+      transcriptRecords: records,
     };
   } catch (error) {
     if (ownsStaging) await fsImpl.promises.rm(destination, {recursive: true, force: true}).catch(() => {});

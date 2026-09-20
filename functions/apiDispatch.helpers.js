@@ -46,6 +46,9 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["PATCH", "automationSettings", jsonResult(({handlers, req, route, user}) => handlers.updateAutomationSettings(user.uid, route.workspaceId, req.body || {}))],
   ]),
   automationRuns: Object.freeze([
+    ["GET", "automationRuns", jsonResult(({handlers, req, user}) => handlers.listAutomationRuns(user.uid, req.query || {}))],
+    ["GET", "automationRunDetail", namedJsonResult("run", ({handlers, route, user}) => handlers.getAutomationRun(user.uid, route.runId))],
+    ["GET", "automationRunEvents", jsonResult(({handlers, req, route, user}) => handlers.listAutomationRunEvents(user.uid, route.runId, req.query || {}))],
     ["POST", "automationRunRestart", createdNamedJsonResult("run", ({handlers, req, route, user}) => handlers.restartAutomationRun(
       user, route.runId, {idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey},
     ))],

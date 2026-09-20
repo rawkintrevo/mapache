@@ -116,6 +116,52 @@ test("debounces completed turns into one agent capture and publishes it", async 
   ]);
 });
 
+test("automation checkpoint captures transcript and status artifacts before its checkpoint", async () => {
+  const events = [];
+  const {scheduler} = harness({
+    config: {
+      agentRuntimeEnabled: true,
+      runtimeKind: "automation",
+      automationRunId: "run-1",
+      workspaceId: "workspace-1",
+      sessionId: "auto-run-1",
+      agentRuntimeGeneration: 4,
+    },
+    checkpointIdentity: () => ({bootInstanceId: "boot-1", generation: 4}),
+    agentSnapshot: {capture: async () => ({stagingDir: "", transcriptRecords: [
+      {message: {role: "assistant", content: [{type: "text", text: "done"}]}},
+    ]})},
+    automationArtifacts: {
+      enabled: () => true,
+      capture: async (input) => {
+        events.push({type: "artifacts", input});
+      },
+    },
+    checkpointPublisher: {
+      uploadCapture: async () => {
+        events.push({type: "upload"});
+        return {};
+      },
+      commitCheckpoint: async () => events.push({type: "commit"}),
+    },
+    piWebUi: {
+      automationStatus: async () => ({
+        ok: true,
+        runId: "run-1",
+        conversationId: "conversation-1",
+        status: "succeeded",
+        state: {terminal: "succeeded", finalResult: "success"},
+      }),
+    },
+  });
+
+  await scheduler.finalize({timeoutMs: 500});
+  assert.deepEqual(events.map((event) => event.type), ["artifacts", "upload", "commit"]);
+  assert.equal(events[0].input.summary.finalText, "done");
+  assert.equal(events[0].input.events[0].status, "succeeded");
+  assert.equal(events[0].input.transcript.length, 1);
+});
+
 test("returns a visible bounded failure when the final save cannot finish", async () => {
   const {scheduler} = harness({
     workspaceSync: {

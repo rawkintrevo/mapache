@@ -101,6 +101,81 @@
       "collectionGroup": "automationRuns",
       "queryScope": "COLLECTION",
       "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "automationId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "workspaceId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "workspaceId", "order": "ASCENDING"},
+        {"fieldPath": "automationId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "workspaceId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "automationId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "workspaceId", "order": "ASCENDING"},
+        {"fieldPath": "automationId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
         {"fieldPath": "workspaceId", "order": "ASCENDING"},
         {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "ASCENDING"}

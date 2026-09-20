@@ -182,6 +182,16 @@ history record. A pending workflow run produces skipped queue-full history;
 the scheduler never calls a provider or replays a missed backlog. The flag is
 off by default, so re-enabling it does not backfill old schedule ticks.
 
+Automation execution artifacts are independent of the compute lifecycle.
+`session-runner/lib/automationArtifacts.service.js` writes sanitized, immutable
+versioned JSONL event/transcript chunks and a final summary below the private
+workspace path `automation-runs/{runId}`. It publishes a Firestore pointer only
+after every object is complete and the workspace, session, generation, and boot
+identity still match; partial or stale captures therefore leave the previous
+good pointer intact. `functions/automationHistory.service.js` exposes
+owner-scoped run and artifact history readers with opaque cursors, checksum and
+namespace validation, and bounded pages (200 records or 1 MiB for events).
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi
