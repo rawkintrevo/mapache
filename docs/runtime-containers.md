@@ -31,8 +31,11 @@ stores only normalized lifecycle state (`legacy`, `preparing`, `migrating`, `rea
 or `error`) and normalized error codes to callers; the bucket identity remains private.
 
 Preparation is explicit and requires the workspace to be paused, so a disabled
-automation definition does not allocate storage by itself. The shared bucket is not
-mounted by this preparation step: later migration publishes a verified
+automation definition does not allocate storage by itself. `POST
+/api/workspaces/{workspaceId}/automation-storage/prepare` acquires an idempotent
+migration reservation and returns `202` while the scoped maintenance importer
+uploads and verifies a fresh generation. The shared bucket is not mounted by
+preparation: later migration publishes a verified
 `trees/{storageGeneration}/` prefix before a runner receives it as `/workspace`.
 When that trusted bucket/generation descriptor is present, Cloud Run provisioning
 uses the shared template helper to add a gen2 `gcsfuse.run.googleapis.com` CSI

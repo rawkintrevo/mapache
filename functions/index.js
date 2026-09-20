@@ -54,6 +54,7 @@ const {
   requireWorkspace,
 } = require("./workspace.service");
 const {createWorkspaceSharedStorageService} = require("./workspaceSharedStorage.service");
+const {createWorkspaceStorageMigrationService} = require("./workspaceStorageMigration.service");
 const {
   createCloudRunService,
   runnerServiceAccountValue,
@@ -278,6 +279,14 @@ const workspaceSharedStorageService = createWorkspaceSharedStorageService({
   requireWorkspace,
   storage,
 });
+const workspaceStorageMigrationService = createWorkspaceStorageMigrationService({
+  admin,
+  db,
+  requireWorkspace,
+  sessionCollection,
+  sharedStorageService: workspaceSharedStorageService,
+  storage,
+});
 const workspaceService = createWorkspaceService({
   admin,
   db,
@@ -285,6 +294,7 @@ const workspaceService = createWorkspaceService({
   deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
+  workspaceStorageMigrationService,
 });
 const automationDefinitionsService = createAutomationDefinitionsService({
   admin,
@@ -368,6 +378,8 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
   enumerable: false,
   value: Object.freeze({
     prepareWorkspaceSharedStorage: workspaceSharedStorageService.prepareWorkspaceSharedStorage,
+    prepareWorkspaceStorageMigration: workspaceStorageMigrationService.prepare,
+    completeWorkspaceStorageMigration: workspaceStorageMigrationService.complete,
     restartSession,
   }),
   writable: false,

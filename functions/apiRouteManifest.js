@@ -17,6 +17,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["automationRuns", ["GET"]],
   ["automationRunDetail", ["GET"]],
   ["automationRunEvents", ["GET"]],
+  ["automationStoragePrepare", ["POST"]],
   ["adminUsers", ["GET"]],
   ["adminUserWhitelist", ["POST"]],
   ["qaCustomToken", ["POST"]],

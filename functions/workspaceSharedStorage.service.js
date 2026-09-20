@@ -326,6 +326,34 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     }
   }
 
+  // Migration owns the Firestore cutover. This helper only creates/verifies
+  // the destination bucket and grants the runner principal access, leaving the
+  // legacy workspace pointer authoritative until the importer verifies it.
+  async function ensureWorkspaceSharedStorage(uid, workspaceId) {
+    const workspace = await loadWorkspace(uid, workspaceId);
+    const sessions = await listSessions(workspaceId);
+    assertWorkspacePaused(sessions);
+    const project = workspace.sharedStorage?.projectId && normalizeProjectNumber(workspace.sharedStorage?.projectNumber) ? {
+      projectId: workspace.sharedStorage.projectId,
+      projectNumber: normalizeProjectNumber(workspace.sharedStorage.projectNumber),
+    } : await resolveProjectIdentity();
+    const identity = identityFor(workspace, workspaceId, project);
+    const binding = {
+      projectId: identity.projectId,
+      projectNumber: identity.projectNumber,
+      bucketName: identity.bucketName,
+      workspaceId,
+      ownerUid: uid,
+    };
+    await ensureBucket(binding);
+    try {
+      await bucketAccess.ensureRunnerObjectAccess(binding);
+    } catch (error) {
+      throw storageError("workspace_bucket_iam_failed", 502, {cause: error});
+    }
+    return identity;
+  }
+
   async function deleteWorkspaceSharedStorage(uid, workspaceId, options = {}) {
     if (options.reason !== "workspace_deleted") {
       throw storageError("workspace_bucket_delete_requires_workspace_deletion", 400);
@@ -376,6 +404,7 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
 
   return {
     deleteWorkspaceSharedStorage,
+    ensureWorkspaceSharedStorage,
     prepareWorkspaceSharedStorage,
     publicStorageState,
   };

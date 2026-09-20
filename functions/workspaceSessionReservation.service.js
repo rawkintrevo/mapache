@@ -10,6 +10,7 @@ const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
 const {
   resolveRuntimeReservation,
   runtimeAuthoritySessionReleaseUpdates,
+  assertWorkspaceStorageMigrationAllowed,
   runtimeSessionAuthorityStateUpdate,
   runtimeStateUpdate,
 } = require("./runtimeReservation.helpers");
@@ -54,6 +55,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
 
     const workspace = workspaceSnap.data() || {};
+    assertWorkspaceStorageMigrationAllowed(workspace);
     const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
     const existing = sessions.find((candidate) => candidate.id === sessionRef.id) || null;
     if (existing && existing.ownerUid && session.ownerUid && existing.ownerUid !== session.ownerUid) {

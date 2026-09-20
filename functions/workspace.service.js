@@ -47,6 +47,7 @@ function createWorkspaceService(dependencies = {}) {
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
     listWorkspaces: (uid) => listWorkspaces(uid, dependencies),
+    prepareWorkspaceStorageMigration: (uid, workspaceId) => dependencies.workspaceStorageMigrationService.prepare(uid, workspaceId),
     renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
   };

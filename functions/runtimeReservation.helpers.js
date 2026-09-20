@@ -1,6 +1,7 @@
 "use strict";
 
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
+const {httpError} = require("./backendUtils.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
 
 const ACTIVE_RUNTIME_SESSION_STATUSES = new Set([
@@ -14,6 +15,18 @@ function isMarkedRuntimeWorkspace(workspace = {}) {
 
 function isMarkedRuntimeSession(session = {}) {
   return session.agentUiVersion === AGENT_UI_VERSION;
+}
+
+function isWorkspaceStorageMigrationActive(workspace = {}) {
+  const state = String(workspace.sharedStorageMigration?.state || workspace.sharedStorageState || "")
+      .trim().toLowerCase();
+  return Boolean(workspace.sharedStorageMigration?.operationId) && ["preparing", "migrating"].includes(state);
+}
+
+function assertWorkspaceStorageMigrationAllowed(workspace = {}) {
+  if (isWorkspaceStorageMigrationActive(workspace)) {
+    throw httpError(409, "workspace_storage_migration_active");
+  }
 }
 
 function isActiveMarkedRuntimeSession(session = {}) {
@@ -186,6 +199,8 @@ module.exports = {
   isActiveMarkedRuntimeSession,
   isMarkedRuntimeSession,
   isMarkedRuntimeWorkspace,
+  isWorkspaceStorageMigrationActive,
+  assertWorkspaceStorageMigrationAllowed,
   nextRuntimeGeneration,
   positiveRuntimeGeneration,
   resolveRuntimeReservation,

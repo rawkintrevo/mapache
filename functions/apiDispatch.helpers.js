@@ -18,6 +18,10 @@ function acceptedNamedJsonResult(name, handler) {
   return async (context) => ({status: 202, body: {[name]: await handler(context)}});
 }
 
+function acceptedJsonResult(handler) {
+  return async (context) => ({status: 202, body: await handler(context)});
+}
+
 function createdNamedJsonResult(name, handler) {
   return async (context) => ({status: 201, body: {[name]: await handler(context)}});
 }
@@ -53,6 +57,10 @@ const ROUTE_DISPATCHERS = Object.freeze({
       user, route.runId, {idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey},
     ))],
     ["POST", "automationRunCancel", jsonResult(({handlers, route, user}) => handlers.cancelAutomationRun(user, route.runId))],
+  ]),
+  workspaceStorage: Object.freeze([
+    ["POST", "automationStoragePrepare", acceptedJsonResult(({handlers, route, user}) =>
+      handlers.prepareWorkspaceStorageMigration(user.uid, route.workspaceId))],
   ]),
   admin: Object.freeze([
     ["GET", "adminUsers", jsonResult(({handlers, req, user}) => handlers.listAdminUsers(user, req.query || {}))],

@@ -182,6 +182,16 @@ history record. A pending workflow run produces skipped queue-full history;
 the scheduler never calls a provider or replays a missed backlog. The flag is
 off by default, so re-enabling it does not backfill old schedule ticks.
 
+`functions/workspaceStorageMigration.service.js` owns the paused-workspace
+GCS FUSE cutover. `POST /api/workspaces/{workspaceId}/automation-storage/prepare`
+acquires an idempotent migration reservation, rejects new main/automation
+admissions while it is active, and returns a short-lived import descriptor with
+HTTP 202. The maintenance importer uploads a fresh tree generation and verifies
+its hashes and ready marker; only a transaction that rechecks paused sessions,
+operation identity, and the verified marker publishes `sharedStorage.state=ready`
+and `shared-gcsfuse-v1`. Failures retain the legacy checkpoint/prefix as the
+authority and expose a safe error/progress state.
+
 Automation execution artifacts are independent of the compute lifecycle.
 `session-runner/lib/automationArtifacts.service.js` writes sanitized, immutable
 versioned JSONL event/transcript chunks and a final summary below the private

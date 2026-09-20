@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError, serialize} = require("./backendUtils.helpers");
+const {assertWorkspaceStorageMigrationAllowed} = require("./runtimeReservation.helpers");
 const {
   AUTOMATION_RUN_STATUSES,
   buildAutomationRun,
@@ -68,6 +69,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
       await transaction.get(firestore.collection("automationRuns").doc(pendingRunId)) : null;
 
     const workspace = assertWorkspace(workspaceSnap, actorUid, workspaceId);
+    assertWorkspaceStorageMigrationAllowed(workspace);
     assertStorageReady(workspace);
     const definition = definitionSnap.exists ? definitionSnap.data() || {} : null;
     let sourceRun = null;
