@@ -39,7 +39,8 @@ const {
   listAdminUsers,
   setAdminUserWhitelist,
 } = require("./admin.service");
-const {requireUser} = require("./auth.service");
+const {requireUser, updateUserTimezone} = require("./auth.service");
+const {previewAutomationSchedule} = require("./automationSchedule.helpers");
 const {
   userWithUsage,
 } = require("./userUsage.service");
@@ -296,6 +297,8 @@ const API_HANDLERS = createApiHandlers({
   googleWorkspaceService: googleWorkspaceApiService,
   operations: {
     userWithUsage,
+    updateUserTimezone,
+    previewAutomationSchedule,
     listAdminUsers,
     setAdminUserWhitelist,
     listSessions,

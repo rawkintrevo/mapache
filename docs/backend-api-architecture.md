@@ -117,6 +117,14 @@ client writes; automation concurrency settings are backend-owned workspace
 fields. The corresponding due-definition, owner-history, queue, and cleanup
 query shapes are declared in `firestore.indexes.json`.
 
+The authenticated profile route accepts `PATCH /api/me` with only an IANA
+`timezone` field. `POST /api/automation-schedule-preview` validates a numeric
+five-field cron expression and returns the next five `{utc, local, timezone}`
+occurrences using server time; the client cannot supply `nextRunAt` or preview
+time. The schedule matcher preserves standard day-of-month/day-of-week OR
+semantics, skips nonexistent DST minutes, and de-duplicates repeated local
+minutes to the first occurrence.
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi

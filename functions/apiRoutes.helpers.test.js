@@ -14,6 +14,7 @@ function assertRoute(path, expected) {
 
 assertRoute("/api/me", {name: "me"});
 assertRoute("/me", {name: "me"});
+assertRoute("/api/automation-schedule-preview", {name: "automationSchedulePreview"});
 assertRoute("/api/admin/users", {name: "adminUsers"});
 assertRoute("/api/admin/users/uid-1/whitelist", {
   name: "adminUserWhitelist",

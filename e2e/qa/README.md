@@ -67,6 +67,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 ## Initial Case Catalog
 
 - `cases/login.json`: QA custom-token login and signed-in shell.
+- `cases/auth-timezone.json`: Authenticated profile timezone persistence and shell health.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-topbar.json`: Workspace, connection, account, and refresh controls in the top navigation.
 - `cases/global-action-indicator.json`: Busy indicator during global refresh.
