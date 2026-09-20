@@ -50,6 +50,18 @@ startup does not clone or restore a worktree, and periodic/final sync does not
 upload, delete, or restore legacy worktree and Git archives. Private transcript,
 Chrome, auth, and runtime cache/checkpoint roots remain outside the mount. The
 legacy runner path is unchanged when no trusted descriptor is present.
+The maintenance importer in `session-runner/maintenance/shared-workspace-import.js`
+validates a local published workspace staging root before touching Cloud Storage. It
+uploads files, supported relative symlinks, empty-directory markers, and original
+mode metadata under a fresh `trees/{operationId}/` prefix using create-only
+generation preconditions. Private `.git` metadata is archived separately as the
+immutable shared-workspace Git seed; it is never written below the mounted tree.
+The resumable control manifest lives under `.mapache-internal/shared-workspace-imports/`
+outside the tree, records object generations and hashes, and is updated after each
+object. Destination hashes are revalidated on resume, foreign changes fail closed,
+and the generation-ready marker is published last. A caller must perform the
+Firestore descriptor/pointer cutover; an interrupted unpublished generation can be
+cleaned only through its owned control manifest.
 Normal run completion never deletes a workspace bucket. Workspace deletion first
 confirms that all runner services are absent, deletes live objects and then the
 bucket, and reports the seven-day recovery window; soft-deleted objects remain
