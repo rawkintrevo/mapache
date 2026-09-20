@@ -143,6 +143,24 @@ configured seven-day window after cleanup. Supply the current
 time rather than relying on a stale hard-coded price. `--keep` is an explicit
 debugging exception and leaves services/buckets for manual cleanup.
 
+### Automation lifecycle harness
+
+Run `node scripts/automation-lifecycle-harness.mjs run --project
+pi-agents-cloud` for deterministic lifecycle evidence. It exercises cron
+admission, immutable snapshots, main-session exclusion, concurrency, stop and
+restart paths, duplicate/lost callbacks, and final Cloud Run cleanup. The
+optional `--live --runner-url URL` mode adds a disposable runner health probe;
+it does not enable the product flag or mutate production definitions.
+
+### Automation browser management QA
+
+The opt-in `e2e/qa/cases/automation-management.json` case covers workspace
+navigation, storage preparation gating, disabled definition save, schedule and
+timezone controls, concurrency, global history navigation, and cleanup. Run it
+through the Chrome DevTools-assisted QA workflow after providing an authorized
+disposable backend and QA account. Browser execution is intentionally outside
+the default PR check.
+
 ## LLM-Assisted Regression Suite
 
 LLM-assisted regression checks are useful for broad UI and workflow review, but they must be deterministic enough to produce actionable failures.

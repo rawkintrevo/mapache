@@ -86,6 +86,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
 - `cases/mcp-servers-crud.json`: Navbar MCP server modal save path for selected workspaces.
+- `cases/automation-management.json`: Workspace automation CRUD, disabled-save, storage gating, schedule/timezone, concurrency, global-history navigation, and cleanup.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
 - `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path, lazy runtime Logs, and navbar connection controls.
 

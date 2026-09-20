@@ -25,6 +25,7 @@ Cloud Run provisioning contract.
   `functions/github.service.js`
 - Runner image contract: `functions/runnerCatalog.json` and
   `functions/runnerCatalog.helpers.js`
+- Scheduled automation lifecycle and release contract: [Scheduled Automations](./automations.md)
 
 ## Current API boundary
 

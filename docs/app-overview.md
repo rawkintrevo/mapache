@@ -14,6 +14,14 @@ Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud runner s
 
 The selected-workspace view is Agent-first for the workspace's canonical marked runtime. Agent and Logs are icon actions in the top navigation; Logs opens the runtime log modal, while the managed embedded header places Chrome beside Chat, Terminal, and Git and asks the parent shell to open the persistent browser canvas. Preview is not a workspace navigation surface. The workspace is either on or off; Play/Pause in the top navigation controls that runtime. Historical sessions remain readable with their retained terminal/shell/SSH compatibility surfaces, but the parent shell no longer duplicates upstream files, Git, models, skills, extensions, subagents, Chat, or Goals. The shell has no left or right sidebar. The top navigation opens Mapache-owned authentication, generic-environment, MCP, and Google Workspace dialogs and provides the avatar-triggered user menu, while the embedded app owns agent settings. Managed runtimes expose a persisted Long-running switch: it is off by default and enables browser-independent work to continue past the idle timeout; manual Pause remains available in either state.
 
+The workspace Automations surface manages revisioned scheduled definitions,
+manual Run now, concurrency, and owner-scoped history. It is lazy and
+workspace-specific; it never starts a runtime when opened. Shared GCS FUSE
+storage must be explicitly prepared while the main workspace is paused before a
+definition can be enabled or run. The complete lifecycle, storage contract,
+cost/recovery model, and gated release procedure are in
+[Scheduled Automations](./automations.md).
+
 Admin users are identified by `isAdmin: true` on their `users/{uid}` Firestore document. They get an Admin page from the top-navigation user menu for paginated user visibility, allowlist toggles, and per-user runner cost summaries.
 
 ## Workspace Modes
@@ -30,6 +38,7 @@ The detailed model for GitHub-backed workspaces lives in [github-workspaces.md](
 - Firestore stores user profiles, workspaces, sessions, usage ledgers, GitHub connection metadata, and versioned runtime pointers.
 - Cloud Storage stores blank workspace files, cached GitHub worktrees, and archive-backed runtime state.
 - Cloud Run runs per-session terminal containers from curated runner images.
+- Scheduled automation runs use separate labeled Cloud Run services and the workspace's prepared shared GCS FUSE tree; the feature remains gated until canary release.
 
 ## Ownership Model
 
