@@ -109,7 +109,9 @@ async function resizeSession(uid, workspaceId, sessionId, payload, dependencies 
     resources,
     updatedAt: resizedAt,
   }));
-  await dependencies.patchSessionService(sessionRef, {...session, resources});
+  await dependencies.patchSessionService(sessionRef, {...session, resources}, {
+    trustedStorageDescriptor: workspace.sharedStorage,
+  });
   return toClientDoc(await sessionRef.get());
 }
 
@@ -220,7 +222,10 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
         await dependencies.prepareSessionForProvisioning(restartedSession),
     );
   } else {
-    await dependencies.patchSessionService(sessionRef, restartedSession, {restart: true});
+    await dependencies.patchSessionService(sessionRef, restartedSession, {
+      restart: true,
+      trustedStorageDescriptor: workspace.sharedStorage,
+    });
   }
 
   return toClientDoc(await sessionRef.get());

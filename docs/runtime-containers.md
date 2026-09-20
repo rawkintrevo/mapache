@@ -34,6 +34,13 @@ Preparation is explicit and requires the workspace to be paused, so a disabled
 automation definition does not allocate storage by itself. The shared bucket is not
 mounted by this preparation step: later migration publishes a verified
 `trees/{storageGeneration}/` prefix before a runner receives it as `/workspace`.
+When that trusted bucket/generation descriptor is present, Cloud Run provisioning
+uses the shared template helper to add a gen2 `gcsfuse.run.googleapis.com` CSI
+volume at `/workspace`. The mount is writable but scoped to the exact tree
+generation and disables the GCS FUSE metadata/type caches, file/negative caches,
+and noisy logging; legacy sessions without the descriptor keep their existing
+template. The descriptor is backend-owned, so session/client bucket fields and
+private archive storage cannot select the mounted bucket.
 Normal run completion never deletes a workspace bucket. Workspace deletion first
 confirms that all runner services are absent, deletes live objects and then the
 bucket, and reports the seven-day recovery window; soft-deleted objects remain

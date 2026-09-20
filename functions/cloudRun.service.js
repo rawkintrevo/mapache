@@ -38,6 +38,7 @@ const {
   runtimeSessionStateUpdate,
 } = require("./runtimeReservation.helpers");
 const {consumeQaFault} = require("./qaFaultHarness.helpers");
+const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helpers");
 
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
 
@@ -325,11 +326,14 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = await buildCloudRunPatch(session, options, dependencies);
-    const updateMask = options.restart ?
+    const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+    const sharedMask = Object.keys(sharedTemplate).length > 0 ?
+      ",template.volumes,template.executionEnvironment" : "";
+    const updateMask = (options.restart ?
       "template.containers,template.serviceAccount" :
       isMarkedRuntimeSession(session) ?
         "template.containers.resources,template.serviceAccount" :
-        "template.containers.resources.limits,template.serviceAccount";
+        "template.containers.resources.limits,template.serviceAccount") + sharedMask;
     const response = await client.request({
       url: `${url}?updateMask=${encodeURIComponent(updateMask)}`,
       method: "PATCH",
@@ -414,47 +418,68 @@ async function markSessionStopped(dependencies, sessionRef, session, reason) {
 }
 
 async function buildCloudRunService(workspace, session, dependencies = {}) {
+  const sharedTemplate = sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
+  const container = {
+    image: session.image,
+    ports: [{containerPort: 8080}],
+    resources: runtimeResourceRequirements(session),
+    env: [
+      ...await sessionRunnerEnv({
+        ...session,
+        workspaceId: workspace.id,
+        workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
+        workspaceStoragePrefix: workspace.storagePrefix,
+      }, {}, dependencies),
+    ],
+    ...(sharedTemplate.containers?.[0] || {}),
+  };
   return {
     template: {
+      ...sharedTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
         minInstanceCount: 1,
         maxInstanceCount: 1,
       },
-      containers: [{
-        image: session.image,
-        ports: [{containerPort: 8080}],
-        resources: runtimeResourceRequirements(session),
-        env: [
-          ...await sessionRunnerEnv({
-            ...session,
-            workspaceId: workspace.id,
-            workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
-            workspaceStoragePrefix: workspace.storagePrefix,
-          }, {}, dependencies),
-        ],
-      }],
+      containers: [container],
     },
   };
 }
 
 async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
+  const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+  const container = {
+    image: session.image,
+    resources: runtimeResourceRequirements(session),
+    env: options.restart ? await sessionRunnerEnv(session, {
+      restartNonce: Date.now().toString(),
+    }, dependencies) : undefined,
+    ...(sharedTemplate.containers?.[0] || {}),
+  };
   return {
     template: {
+      ...sharedTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
         minInstanceCount: 1,
         maxInstanceCount: 1,
       },
-      containers: [{
-        image: session.image,
-        resources: runtimeResourceRequirements(session),
-        env: options.restart ? await sessionRunnerEnv(session, {
-          restartNonce: Date.now().toString(),
-        }, dependencies) : undefined,
-      }],
+      containers: [container],
     },
   };
+}
+
+function sharedWorkspaceTemplateFor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  // A legacy workspace has no migration descriptor and keeps its old template.
+  // An incomplete or non-ready descriptor is not mountable; client/session
+  // bucket fields are never consulted here.
+  if (descriptor.state && String(descriptor.state).trim().toLowerCase() !== "ready") return {};
+  if (!descriptor.bucketName || !descriptor.storageGeneration) return {};
+  return buildSharedWorkspaceTemplate({
+    bucketName: descriptor.bucketName,
+    storageGeneration: descriptor.storageGeneration,
+  });
 }
 
 function runnerServiceAccountValue(options = {}) {

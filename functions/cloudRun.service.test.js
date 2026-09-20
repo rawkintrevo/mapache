@@ -315,6 +315,28 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
 
+  const sharedService = await buildCloudRunService({
+    id: "workspace-1",
+    bucket: "legacy-archive-bucket",
+    storagePrefix: "workspaces/uid-1/demo",
+    sharedStorage: {
+      state: "ready",
+      bucketName: "mpw-1234567890-workspace1",
+      storageGeneration: "42",
+    },
+  }, {
+    ownerUid: "uid-1",
+    runnerSessionId: "shared-session",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  });
+  assert.equal(sharedService.template.executionEnvironment, "EXECUTION_ENVIRONMENT_GEN2");
+  assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
+  assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.mountOptions.includes("trees/42"), true);
+  assert.deepStrictEqual(sharedService.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
+
   const patch = await buildCloudRunPatch({
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
@@ -327,6 +349,20 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
   assert.strictEqual(patch.template.containers[0].resources.cpuIdle, undefined);
+
+  const sharedPatch = await buildCloudRunPatch({
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }, {
+    trustedStorageDescriptor: {
+      bucketName: "mpw-1234567890-workspace1",
+      storageGeneration: "42",
+    },
+  });
+  assert.equal(sharedPatch.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
+  assert.deepStrictEqual(sharedPatch.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
 
   const markedPatch = await buildCloudRunPatch({
     agentUiVersion: "pi-web-ui-v1",
