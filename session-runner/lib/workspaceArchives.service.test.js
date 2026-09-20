@@ -131,6 +131,23 @@ test("disables home archive restore for ephemeral home mode", () => {
   assert.equal(homeTarget.restoreOnStartup, false);
 });
 
+test("private runtimes do not publish credential, Chrome, or Git archives to shared storage", () => {
+  const config = baseConfig({
+    chromeEnabled: true,
+    chromeProfileDir: "/var/lib/mapache/runtimes/run-1/chrome/profile",
+    homeDir: "/var/lib/mapache/runtimes/run-1/home",
+    homeSyncMode: "ephemeral",
+    isPrivateRuntime: true,
+    piAgentDir: "/var/lib/mapache/runtimes/run-1/agent-state/pi",
+  });
+  const targets = createArchiveSyncTargets({config, git: git(true)});
+  assert.equal(chromeProfileArchiveRemotePath(config), "");
+  assert.equal(piMcpOAuthArchiveRemotePath(config), "");
+  assert.equal(targets.some((target) => target.name === "workspace-git"), false);
+  assert.equal(targets.find((target) => target.name === "chrome-profile").remotePath, "");
+  assert.equal(targets.find((target) => target.name === "pi-mcp-oauth").remotePath, "");
+});
+
 test("does not add Pi npm excludes when Pi agent dir is outside home", () => {
   const targets = createArchiveSyncTargets({
     config: baseConfig({piAgentDir: "/tmp/pi-agent"}),

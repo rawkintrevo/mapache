@@ -47,12 +47,12 @@ function legacyArchiveRemotePaths(config, remotePath) {
 }
 
 function chromeProfileArchiveRemotePath(config) {
-  if (!config.prefix || !config.chromeEnabled) return "";
+  if (!config.prefix || !config.chromeEnabled || config.isPrivateRuntime) return "";
   return `${config.prefix}/.mapache-internal/chrome/chrome-profile.tar.gz`.replace(/\/+/g, "/");
 }
 
 function piMcpOAuthArchiveRemotePath(config) {
-  if (!config.prefix || !config.piAgentDir) return "";
+  if (!config.prefix || !config.piAgentDir || config.isPrivateRuntime) return "";
   return `${config.prefix}/${config.internalStorageDir || ".mapache-internal"}/pi-mcp-oauth/mcp-oauth.tar.gz`;
 }
 
@@ -124,7 +124,7 @@ function createArchiveSyncTargets({config, git}) {
     });
   }
 
-  if (git.isGithubWorkspace()) {
+  if (git.isGithubWorkspace() && !config.isPrivateRuntime) {
     targets.push({
       name: "workspace-git",
       mode: "workspaceGit",

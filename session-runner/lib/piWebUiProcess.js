@@ -6,6 +6,7 @@ const {randomBytes} = require("node:crypto");
 const {spawn: defaultSpawn} = require("node:child_process");
 const {createConnection: defaultControlConnect} = require("node:net");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
+const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 
 const DEFAULT_HEALTH_INTERVAL_MS = 100;
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000;
@@ -102,6 +103,18 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     const adapterCheck = validatePiMcpAdapter(fsImpl, adapterPath, config.piMcpAdapterVersion || "2.32.1");
     if (adapterCheck !== "ok") throw publicError(adapterCheck);
 
+    if (config.isPrivateRuntime) {
+      try {
+        await Promise.all([
+          ensurePrivateRuntimeDirectory(config.privateRuntimeRoot || path.dirname(config.homeDir), {fsImpl}),
+          ensurePrivateRuntimeDirectory(config.piWebUiDataDir, {fsImpl}),
+          ensurePrivateRuntimeDirectory(config.piWebUiPiDir, {fsImpl}),
+          ensurePrivateRuntimeDirectory(config.piWebUiSessionDir, {fsImpl}),
+        ]);
+      } catch (error) {
+        throw publicError(error.code || "private_runtime_unavailable");
+      }
+    }
     await fsImpl.promises.mkdir(config.piWebUiDataDir, {recursive: true, mode: 0o700});
     await fsImpl.promises.mkdir(config.piWebUiPiDir, {recursive: true, mode: 0o700});
     await fsImpl.promises.mkdir(config.piWebUiSessionDir, {recursive: true, mode: 0o700});
@@ -110,7 +123,11 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     privateToken = makePrivateToken(randomBytesImpl);
     let next;
     try {
-      next = spawnImpl(process.execPath, [entry], {
+      const args = [entry];
+      if (config.isPrivateRuntime && config.piMcpConfigPath) {
+        args.push("--mcp-config", config.piMcpConfigPath);
+      }
+      next = spawnImpl(process.execPath, args, {
         cwd: config.workspaceDir,
         detached: true,
         env: childEnvironment(privateToken),
@@ -332,6 +349,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       PI_WEB_ENGINE: "pi",
       PI_WEB_HOST: config.piWebUiHost || "127.0.0.1",
       PI_WEB_MANAGED: "1",
+      PI_WEB_MCP_CONFIG: config.piMcpConfigPath || "",
       PI_WEB_MCP_ADAPTER_PATH: config.piMcpAdapterPath || environment.PI_WEB_MCP_ADAPTER_PATH || "",
       PI_WEB_PKG_ROOT: config.piWebUiRoot,
       PI_WEB_PORT: String(config.piWebUiPort || 8787),

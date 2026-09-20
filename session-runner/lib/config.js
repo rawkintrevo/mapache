@@ -15,6 +15,13 @@ const {
   LEGACY_INTERNAL_STORAGE_DIR,
 } = require("./runtimePaths");
 const {isAutomationRuntime, normalizeRuntimeKind} = require("./runtimePaths");
+const {
+  DEFAULT_PRIVATE_RUNTIME_ROOT,
+  isPrivateRuntimeStorageMode,
+  normalizeRuntimeIdentity,
+  normalizeRuntimeStorageMode,
+  privateRuntimePaths,
+} = require("./runtimeStorage.helpers");
 
 function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
@@ -51,29 +58,46 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
   const automationRunId = isAutomationRuntime(runtimeKind) ?
     String(process.env.MAPACHE_AUTOMATION_RUN_ID || process.env.AUTOMATION_RUN_ID || "").trim() : "";
-  const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
+  const runtimeStorageMode = normalizeRuntimeStorageMode(
+      process.env.MAPACHE_RUNTIME_STORAGE_MODE || process.env.RUNTIME_STORAGE_MODE,
+  );
+  const runtimeIdentity = normalizeRuntimeIdentity(
+      process.env.MAPACHE_RUNTIME_ID || process.env.RUN_ID || process.env.SESSION_ID,
+  );
+  const privatePaths = isPrivateRuntimeStorageMode(runtimeStorageMode) ? privateRuntimePaths({
+    identity: runtimeIdentity,
+    root: process.env.MAPACHE_RUNTIME_ROOT || DEFAULT_PRIVATE_RUNTIME_ROOT,
+    runtimeRoot: process.env.MAPACHE_RUNTIME_ROOT && process.env.MAPACHE_RUNTIME_ID ? process.env.MAPACHE_RUNTIME_ROOT : "",
+  }) : null;
+  const legacyHomeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
+  const homeDir = privatePaths?.homeDir || legacyHomeDir;
   const piHomeDir = path.join(homeDir, ".pi");
   const agentUiVersion = normalizeEnvString(process.env.MAPACHE_AGENT_UI_VERSION);
   const agentRuntimeEnabled = agentUiVersion === "pi-web-ui-v1";
-  const agentStateRoot = path.resolve(process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
+  const agentStateRoot = path.resolve(privatePaths?.agentStateRoot || process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
   const piWebUiRoot = path.resolve(process.env.MAPACHE_PI_WEB_UI_ROOT || "/opt/mapache/pi-web-ui");
-  const piWebUiDataDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
-  const piWebUiPiDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
-  const piWebUiSessionDir = path.resolve(process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
+  const piWebUiDataDir = path.resolve(privatePaths?.piWebUiDataDir || process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
+  const piWebUiPiDir = path.resolve(privatePaths?.piAgentDir || process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
+  const piWebUiSessionDir = path.resolve(privatePaths?.piSessionDir || process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
+  const adapterHomeDir = isPrivateRuntimeStorageMode(runtimeStorageMode) ?
+    path.resolve(process.env.MAPACHE_IMAGE_HOME_DIR || "/root") : legacyHomeDir;
   const piMcpAdapterPath = normalizeEnvString(process.env.PI_WEB_MCP_ADAPTER_PATH) ||
-    path.join(piHomeDir, "agent", "npm", "node_modules", "pi-mcp-adapter", "index.ts");
-  const piAgentDir = agentRuntimeEnabled ? piWebUiPiDir :
-    normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent");
+    path.join(adapterHomeDir, ".pi", "agent", "npm", "node_modules", "pi-mcp-adapter", "index.ts");
+  const piAgentDir = privatePaths?.piAgentDir || (agentRuntimeEnabled ? piWebUiPiDir :
+    normalizeEnvString(process.env.PI_CODING_AGENT_DIR) || path.join(piHomeDir, "agent"));
   const bucketName = process.env.STORAGE_BUCKET || "";
   const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
   const homeStorageBucketName = process.env.HOME_STORAGE_BUCKET || bucketName;
   const homeStoragePrefix = normalizePrefix(process.env.HOME_STORAGE_PREFIX || "");
-  const homeSyncMode = normalizeEnvString(process.env.HOME_SYNC_MODE) || "persistent";
+  const homeSyncMode = isPrivateRuntimeStorageMode(runtimeStorageMode) ? "ephemeral" :
+    normalizeEnvString(process.env.HOME_SYNC_MODE) || "persistent";
   const homeArchiveName = normalizeEnvString(process.env.HOME_ARCHIVE_NAME) || "home.tar.gz";
-  const piSessionDir = agentRuntimeEnabled ? piWebUiSessionDir :
-    normalizeEnvString(process.env.PI_SESSION_DIR) || path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session");
-  const piSessionStorageBucket = process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
-  const piSessionStoragePrefix = normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
+  const piSessionDir = privatePaths?.piSessionDir || (agentRuntimeEnabled ? piWebUiSessionDir :
+    normalizeEnvString(process.env.PI_SESSION_DIR) || path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session"));
+  const piSessionStorageBucket = isPrivateRuntimeStorageMode(runtimeStorageMode) ? "" :
+    process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
+  const piSessionStoragePrefix = isPrivateRuntimeStorageMode(runtimeStorageMode) ? "" :
+    normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
   const harnessId = "pi";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
   const workspaceSyncRole = normalizeWorkspaceSyncRole(process.env.WORKSPACE_SYNC_ROLE);
@@ -85,7 +109,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
-  const browserQaDir = path.resolve(process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
+  const browserQaDir = path.resolve(privatePaths?.browserQaDir || process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
+  const piMcpConfigPath = privatePaths?.piMcpConfigPath || path.join(workspaceDir, ".mcp.json");
+  const piWebUiControlPath = privatePaths?.piWebUiControlPath || normalizeEnvString(process.env.PI_WEB_UI_CONTROL_PATH);
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
@@ -121,7 +147,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     chromeDesktopRestartBackoffMs: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_BACKOFF_MS, 250) : 0,
     chromeDesktopRestartMaxAttempts: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_MAX_ATTEMPTS, 3) : 0,
     chromeNoVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_NOVNC_PORT, 6080) : 0,
-    chromeProfileDir: chromeEnabled ? path.resolve(process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
+    chromeProfileDir: chromeEnabled ? path.resolve(privatePaths?.chromeProfileDir || process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
     chromeStartupTimeoutMs: chromeEnabled ? positiveNumber(process.env.CHROME_STARTUP_TIMEOUT_MS, 30000) : 0,
     chromeViewport: chromeEnabled ? {
       width: positiveNumber(process.env.CHROME_VIEWPORT_WIDTH, 1440),
@@ -153,12 +179,14 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     homeStoragePrefix,
     homeSyncMode,
     internalStorageDir: INTERNAL_STORAGE_DIR,
+    isPrivateRuntime: isPrivateRuntimeStorageMode(runtimeStorageMode),
     legacyArchiveStorageDirs: [`${LEGACY_INTERNAL_STORAGE_DIR}/archives`],
     legacyDirectoryMarkerFiles: [LEGACY_DIRECTORY_MARKER_FILE],
     legacyInternalStorageDirs: [LEGACY_INTERNAL_STORAGE_DIR],
     mcpConfigRaw: process.env.MCP_CONFIG || "",
     ownerUid: process.env.OWNER_UID || "",
     piAgentDir,
+    piMcpConfigPath,
     piHomeDir,
     piMcpAdapterPath,
     piMcpAdapterVersion: PI_MCP_ADAPTER_VERSION,
@@ -171,6 +199,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piWebUiPort: 8787,
     piWebUiRoot,
     piWebUiSessionDir,
+    piWebUiControlPath,
     qaCase,
     qaFaultHarness,
     agentActivityPollIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_ACTIVITY_POLL_INTERVAL_MS, 1000),
@@ -184,6 +213,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piSessionStorageBucket,
     piSessionStoragePrefix,
     port: Number(process.env.PORT || 8080),
+    privateGitDir: privatePaths?.privateGitDir || "",
+    privateRuntimeRoot: privatePaths?.runtimeRoot || "",
     prefix,
     previewBasePath,
     previewConfigPath: path.join(workspaceDir, ".mapache", "preview.json"),
@@ -207,6 +238,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     workspaceSyncRole,
     workspaceSyncPolicyExclude,
     workspaceSyncPolicyMode,
+    runtimeIdentity,
+    runtimeStorageMode,
   };
 }
 

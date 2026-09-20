@@ -69,6 +69,8 @@ test("captures complete history, safe settings, UI state, and referenced uploads
   await fs.writeFile(path.join(config.piAgentDir, "settings.lock"), "lock");
   await fs.writeFile(path.join(config.piWebUiDataDir, "client-state.json"), JSON.stringify({settings: {locale: "en"}}));
   await fs.writeFile(path.join(config.piWebUiDataDir, "auth.json"), JSON.stringify({token: "secret"}));
+  await fs.writeFile(path.join(config.piWebUiDataDir, "token.json"), JSON.stringify({token: "secret"}));
+  await fs.writeFile(path.join(config.piWebUiDataDir, "History.sqlite"), "secret-db");
   await fs.writeFile(path.join(config.piWebUiDataDir, "runtime.pid"), "123");
   await fs.mkdir(path.join(config.piWebUiDataDir, "cache"), {recursive: true});
   await fs.writeFile(path.join(config.piWebUiDataDir, "cache", "stale.json"), "{}");
@@ -112,6 +114,8 @@ test("captures complete history, safe settings, UI state, and referenced uploads
   assert.equal(entry(result, "pi/auth.json"), undefined);
   assert.equal(entry(result, "pi/models.json"), undefined);
   assert.equal(entry(result, "ui/auth.json"), undefined);
+  assert.equal(entry(result, "ui/token.json"), undefined);
+  assert.equal(entry(result, "ui/History.sqlite"), undefined);
   assert.equal(entry(result, "ui/runtime.pid"), undefined);
   assert.equal(entry(result, "ui/cache/stale.json"), undefined);
   assert.equal(JSON.parse(await fs.readFile(result.manifestPath, "utf8")).bootInstanceId, "boot-a");

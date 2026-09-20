@@ -1,6 +1,5 @@
 "use strict";
 
-const path = require("path");
 const pty = require("node-pty");
 const {WebSocket} = require("ws");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
@@ -99,7 +98,7 @@ function spawnShell(command, config) {
       ...createWorkspaceProcessEnvironment(config),
       MAPACHE_RUNNER_URL: `http://127.0.0.1:${config.port}`,
       MAPACHE_PREVIEW_URL: `http://127.0.0.1:${config.port}${config.previewBasePath}/`,
-      MAPACHE_QA_DIR: path.join(config.workspaceDir, ".mapache", "qa"),
+      MAPACHE_QA_DIR: config.browserQaDir,
       TERM: "xterm-256color",
     },
   });

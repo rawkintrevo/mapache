@@ -217,6 +217,51 @@ test("managed Pi materialization ignores restored auth and replaces the fixed ag
   }
 });
 
+test("private automation materialization resolves canonical credentials instead of restoring local secrets", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-private-auth-"));
+  const piAgentDir = path.join(root, "agent");
+  fs.mkdirSync(piAgentDir, {recursive: true});
+  fs.writeFileSync(path.join(piAgentDir, "auth.json"), JSON.stringify({openai: {type: "api_key", key: "stale-secret"}}));
+  let remoteWrites = 0;
+  const service = createWorkspaceAuthService({
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-timestamp"}}},
+    config: {
+      isPrivateRuntime: true,
+      harnessId: "pi",
+      homeDir: path.join(root, "home"),
+      ownerUid: "user-1",
+      piAgentDir,
+      piMcpConfigPath: path.join(piAgentDir, "mcp.json"),
+      workspaceDir: path.join(root, "workspace"),
+    },
+    db: {
+      collection(name) {
+        if (name === "users") {
+          return {doc: () => ({collection: () => ({doc: () => ({
+            get: async () => ({exists: true, data: () => ({providers: {openai: {type: "api_key", key: "fresh-secret"}}})}),
+            set: async () => { remoteWrites += 1; },
+          })})})};
+        }
+        if (name === "workspaces") {
+          return {doc: () => ({collection: () => ({doc: () => ({
+            get: async () => ({exists: false, data: () => ({})}),
+          })})})};
+        }
+        throw new Error(`unexpected collection ${name}`);
+      },
+    },
+  });
+
+  try {
+    await service.synchronizeAuth({materialize: true});
+    const written = JSON.parse(await fs.promises.readFile(path.join(piAgentDir, "auth.json"), "utf8"));
+    assert.equal(written.openai.key, "fresh-secret");
+    assert.equal(remoteWrites, 0);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
 test("secretFileInventory exposes classifications without credential values", () => {
   const inventory = secretFileInventory({
     agentRuntimeEnabled: true,
