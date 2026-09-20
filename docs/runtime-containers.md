@@ -76,6 +76,58 @@ allocated usage ledger. It reports the seven-day `recoverableUntil` window and
 known retained live bytes when available; soft-deleted objects remain
 recoverable and can continue to incur storage charges until retention expires.
 
+### Workspace storage recovery
+
+The seven-day soft-delete window is the only supported workspace storage recovery
+mechanism. Object Versioning remains disabled, there are no daily full-bucket
+copies, and there is no standing recovery service. Soft-deleted overwritten or
+deleted objects continue to count as billed retained bytes until their
+`recoverableUntil` time; expired generations are not recoverable.
+
+Recovery is an operator maintenance operation, not an automatic rollback. All
+workspace runners must be stopped before an operator acquires the workspace's
+`workspaceStorageRecoveryReservations/{workspaceId}` reservation. The Functions
+service rechecks ownership, workspace availability, and the paused-session
+condition for every inventory, restore, tree recovery, and publish operation.
+The reservation is intentionally held until the operator verifies the result and
+releases it.
+
+Use the checked-in script with the explicit production project and owner/workspace
+identifiers:
+
+```bash
+node scripts/workspace-storage-recovery.mjs check \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID
+node scripts/workspace-storage-recovery.mjs reserve \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID
+node scripts/workspace-storage-recovery.mjs list \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID
+node scripts/workspace-storage-recovery.mjs restore \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID --object-path PATH --generation GENERATION \
+  --confirm workspace-storage-recovery
+node scripts/workspace-storage-recovery.mjs recover-tree \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID --manifest MANIFEST.json \
+  --confirm workspace-storage-recovery
+node scripts/workspace-storage-recovery.mjs release \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID --confirm workspace-storage-recovery
+```
+
+Single-object recovery requires an exact object path and soft-deleted generation;
+the GCS restore creates a new live generation. Whole-tree recovery consumes a
+recorded version-1 manifest containing the source workspace/bucket identity and
+each object's path, generation, and optional MD5/CRC32C/SHA-256/size evidence.
+It restores selected generations into a new `recovery-trees/{reservationId}/`
+prefix, verifies copied objects, writes the ready marker and control manifest,
+and only then publishes the separate `sharedStorageRecovery` pointer. The live
+`sharedStorage` pointer is never changed by this operation, so a failed or
+partial tree recovery leaves the active workspace unchanged. An operator must
+explicitly validate the recorded hashes/content and perform any later cutover.
+The pre-migration checkpoint remains separate from this recovery pointer.
+
 Admitted automation runs use the same trusted mount and pinned `pi-chrome` image
 as other supported sessions, but receive a separate `auto-{runId}` session and
 `mpauto-{runId-hash}` Cloud Run service. The service carries hashed owner,

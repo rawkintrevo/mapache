@@ -47,6 +47,27 @@ tombstone and its `workspaceDeletionOperations/{workspaceId}` recovery
 evidence, so a failed Cloud Run or bucket operation can be resumed by the
 backend without deleting unrelated storage resources.
 
+Workspace storage recovery is an operator-only Functions service and checked-in
+maintenance script. Before using it, stop every runner for the workspace and
+run the retention diagnostic with `--project pi-agents-cloud`; a policy drift,
+foreign bucket, enabled Object Versioning, or non-seven-day soft-delete policy
+is a hard failure. The script requires an owner UID, workspace ID, and explicit
+maintenance reservation for all inventory or mutation commands. Restore and
+whole-tree recovery also require `--confirm workspace-storage-recovery`.
+
+The recovery feature is deliberately disabled from normal workspace and
+automation workflows until its release. Do not add a scheduled full-bucket
+backup, enable Object Versioning, or deploy a rollback hook as part of this
+runbook. The operator must verify the returned generation and content/hash
+evidence, retain the recovery pointer as a separate checkpoint, and release the
+reservation only after verification. Functions changes for this disabled
+operator surface are validated in CI; production deployment is a release-time
+step using the explicit project flag:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+```
+
 The automation agent credential broker requires the Functions secret
 `AUTOMATION_AGENT_TOKEN_SECRET`; set it with
 `firebase functions:secrets:set AUTOMATION_AGENT_TOKEN_SECRET --project pi-agents-cloud`
