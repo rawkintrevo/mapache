@@ -155,6 +155,15 @@ timezone during profile bootstrap); editing always preserves the stored timezone
 The form intentionally remains mountable without workspace navigation: the
 automation management surface owns routing and placement in a later slice.
 
+Global run history is a separate controller scope from the selected-workspace
+automation slice. `RunHistoryPage` can load owner-wide runs when no workspace is
+selected, preserving filters and cursor state while `RunDetailsPanel` loads a
+single snapshot and paged archived events. History actions use the existing
+server-owned Stop/Restart endpoints; archived prompt and transcript content is
+rendered through `react-markdown` without raw HTML or a live runner session.
+Entering history disables runtime access URL and resource-metrics attachment so
+the page cannot boot or reconnect the main runtime merely to inspect a past run.
+
 ## Invariants
 
 - The browser cannot select an image or runtime UI version; Functions resolves

@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, Bot, History, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
@@ -25,6 +25,7 @@ export function Topbar({
   onSelectCanvas,
   onSelectWorkspace,
   onShowAdmin,
+  onShowAutomationHistory,
   onShowLogs,
   onShowProfile,
   onSignOut,
@@ -171,6 +172,18 @@ export function Topbar({
             <span aria-hidden="true" className="topbar-action-divider" />
           </>
         ) : null}
+        <Button
+          aria-label="Run history"
+          aria-pressed={state.activePage === "automation-history"}
+          icon
+          title="Run history"
+          tooltip="Run history"
+          variant={state.activePage === "automation-history" ? "primary" : "secondary"}
+          onClick={onShowAutomationHistory}
+        >
+          <History aria-hidden="true" />
+        </Button>
+        <span aria-hidden="true" className="topbar-action-divider" />
         {showManagePiAuth ? (
           <Button
             aria-label={managePiAuthLabel}
@@ -226,6 +239,7 @@ export function Topbar({
           onRefresh={onRefresh}
           onSelectCanvas={onSelectCanvas}
           onShowLogs={onShowLogs}
+          onShowAutomationHistory={onShowAutomationHistory}
           showWorkspaceTools={showWorkspaceTools}
           managePiAuthLabel={managePiAuthLabel}
           onDeleteWorkspace={onDeleteWorkspace}

@@ -35,12 +35,15 @@ export function createAutomationsController({
     dispose,
     getSettings,
     getState: () => state.automations,
+    loadGlobalHistory,
+    loadGlobalRun,
     loadDefinitions,
     listDefinitions: loadDefinitions,
     listEvents: loadEvents,
     listHistory: loadHistory,
     loadDefinition,
     loadNextHistoryPage,
+    loadNextGlobalHistoryPage,
     loadRun,
     loadWorkspace,
     prepareStorage,
@@ -51,11 +54,14 @@ export function createAutomationsController({
     selectRun,
     selectDefinition,
     setHistoryFilters,
+    setGlobalHistoryFilters,
     setIdentity,
     setWorkspace,
     stopRun,
+    stopGlobalRun,
     updateDefinition,
     updateSettings,
+    restartGlobalRun,
   };
 
   function getAutomationApi() {
@@ -272,9 +278,47 @@ export function createAutomationsController({
     }
   }
 
+  async function loadGlobalHistory(options = {}) {
+    ensurePolling();
+    const context = capture(null, "global");
+    const currentHistory = state.automations.globalHistory;
+    const filters = {...currentHistory.filters, ...(options.filters || {})};
+    const requestedCursor = options.cursor === undefined ? (options.append ? currentHistory.nextCursor : "") : options.cursor;
+    const query = {...filters, ...(requestedCursor ? {cursor: requestedCursor} : {})};
+    currentHistory.loading = true;
+    currentHistory.error = "";
+    if (!options.silent) render();
+    try {
+      const data = await getAutomationApi().listHistory(query);
+      if (!isCurrent(context)) return null;
+      currentHistory.filters = filters;
+      currentHistory.cursor = requestedCursor || "";
+      currentHistory.nextCursor = data?.nextCursor || "";
+      currentHistory.runs = options.append ? [...currentHistory.runs, ...(data?.runs || [])] : (data?.runs || []);
+      currentHistory.error = "";
+      return data;
+    } catch (error) {
+      if (isCurrent(context)) {
+        currentHistory.error = error.message || "Could not load automation history.";
+        handleError(error);
+      }
+      return null;
+    } finally {
+      if (isCurrent(context)) {
+        currentHistory.loading = false;
+        render();
+      }
+    }
+  }
+
   async function loadNextHistoryPage() {
     if (!state.automations.history.nextCursor) return null;
     return loadHistory({append: true});
+  }
+
+  async function loadNextGlobalHistoryPage() {
+    if (!state.automations.globalHistory.nextCursor) return null;
+    return loadGlobalHistory({append: true});
   }
 
   async function setHistoryFilters(filters = {}) {
@@ -284,13 +328,21 @@ export function createAutomationsController({
     return loadHistory({filters, cursor: ""});
   }
 
-  async function selectRun(runId) {
+  async function setGlobalHistoryFilters(filters = {}) {
+    state.automations.globalHistory.filters = {...filters};
+    state.automations.globalHistory.cursor = "";
+    state.automations.globalHistory.nextCursor = "";
+    return loadGlobalHistory({filters, cursor: ""});
+  }
+
+  async function selectRun(runId, options = {}) {
     state.automations.selectedRunId = runId || "";
+    state.automations.selectedRunScope = options.global ? "global" : "workspace";
     state.automations.selectedRun = null;
     state.automations.events = [];
     state.automations.eventsNextCursor = "";
     render();
-    return runId ? loadRun(runId) : null;
+    return runId ? (options.global ? loadGlobalRun(runId) : loadRun(runId, options.workspaceId || state.selectedWorkspaceId)) : null;
   }
 
   async function loadRun(runId, workspaceId = state.selectedWorkspaceId) {
@@ -316,15 +368,55 @@ export function createAutomationsController({
     }
   }
 
+  async function loadGlobalRun(runId) {
+    const context = capture(null, "global");
+    if (!runId) return null;
+    const runContext = {...context, runId};
+    try {
+      const [runData, eventData] = await Promise.all([
+        getAutomationApi().getRun(runId),
+        getAutomationApi().listEvents(runId),
+      ]);
+      if (!isCurrent(runContext) || state.automations.selectedRunId !== runId) return null;
+      state.automations.selectedRun = runData?.run || null;
+      state.automations.events = eventData?.events || [];
+      state.automations.eventsNextCursor = eventData?.nextCursor || "";
+      updatePollingState();
+      render();
+      return state.automations.selectedRun;
+    } catch (error) {
+      if (isCurrent(runContext)) handleError(error);
+      return null;
+    }
+  }
+
   async function loadEvents(runId = state.automations.selectedRunId, options = {}) {
+    if (state.automations.selectedRunScope === "global") return loadGlobalEvents(runId, options);
     const context = capture(state.selectedWorkspaceId);
     if (!context.workspaceId || !runId) return null;
-    const cursor = options.cursor === undefined ? "" : options.cursor;
+    const cursor = options.cursor === undefined ? (options.append ? state.automations.eventsNextCursor : "") : options.cursor;
     try {
       const data = await getAutomationApi().listEvents(runId, cursor ? {cursor} : {});
       if (!isCurrent({...context, runId}) || state.automations.selectedRunId !== runId) return null;
       state.automations.events = options.append ?
         [...state.automations.events, ...(data?.events || [])] : (data?.events || []);
+      state.automations.eventsNextCursor = data?.nextCursor || "";
+      render();
+      return data;
+    } catch (error) {
+      if (isCurrent(context)) handleError(error);
+      return null;
+    }
+  }
+
+  async function loadGlobalEvents(runId = state.automations.selectedRunId, options = {}) {
+    const context = capture(null, "global");
+    if (!context.userId || !runId) return null;
+    const cursor = options.cursor === undefined ? (options.append ? state.automations.eventsNextCursor : "") : options.cursor;
+    try {
+      const data = await getAutomationApi().listEvents(runId, cursor ? {cursor} : {});
+      if (!isCurrent({...context, runId}) || state.automations.selectedRunId !== runId) return null;
+      state.automations.events = options.append ? [...state.automations.events, ...(data?.events || [])] : (data?.events || []);
       state.automations.eventsNextCursor = data?.nextCursor || "";
       render();
       return data;
@@ -344,12 +436,20 @@ export function createAutomationsController({
     return runAction("stop", runId, workspaceId, (client, _context) => client.stopRun(runId));
   }
 
+  async function stopGlobalRun(runId) {
+    return globalRunAction("stop", runId, (client) => client.stopRun(runId));
+  }
+
   async function cancelRun(runId, workspaceId = state.selectedWorkspaceId) {
     return runAction("cancel", runId, workspaceId, (client, _context) => client.cancelRun(runId));
   }
 
   async function restartRun(runId, workspaceId = state.selectedWorkspaceId) {
     return runAction("restart", runId, workspaceId, (client, _context, key) => client.restartRun(runId, key));
+  }
+
+  async function restartGlobalRun(runId) {
+    return globalRunAction("restart", runId, (client, _context, key) => client.restartRun(runId, key));
   }
 
   async function runAction(action, resourceId, workspaceId, task) {
@@ -367,6 +467,21 @@ export function createAutomationsController({
       state.automations.requiresMainPausedRunId = "";
       if (action === "run" && result.run?.id) state.automations.selectedRunId = result.run.id;
       await loadHistory({silent: true});
+    }
+    return result;
+  }
+
+  async function globalRunAction(action, resourceId, task) {
+    const context = capture(null, "global");
+    if (!context.userId || !resourceId) return null;
+    const keyName = `${contextUserId}:global:${action}:${resourceId}`;
+    const key = action === "restart" ? getActionKey(keyName) : "";
+    const result = await perform(context, action, (client) => task(client, context, key), {runId: resourceId});
+    if (result && key) actionKeys.delete(keyName);
+    if (result && isCurrent(context)) {
+      state.automations.selectedRun = result.run || result;
+      if (action === "restart" && result.run?.id) state.automations.selectedRunId = result.run.id;
+      await loadGlobalHistory({silent: true});
     }
     return result;
   }
@@ -448,15 +563,21 @@ export function createAutomationsController({
     state.automations.storageReady = storageState === "ready";
   }
 
-  function capture(workspaceId) {
+  function capture(workspaceId, scope = "workspace") {
     return {
       epoch: contextEpoch,
       userId: contextUserId || state.user?.uid || "",
       workspaceId: workspaceId || null,
+      scope,
     };
   }
 
   function isCurrent(context) {
+    if (context.scope === "global") {
+      return context.epoch === contextEpoch &&
+        context.userId === (state.user?.uid || contextUserId) &&
+        (!context.runId || context.runId === state.automations.selectedRunId);
+    }
     return context.epoch === contextEpoch &&
       context.userId === (state.user?.uid || contextUserId) &&
       context.workspaceId === (state.selectedWorkspaceId || null) &&
@@ -497,11 +618,15 @@ export function createAutomationsController({
   }
 
   async function pollActiveRuns() {
-    if (!isDocumentVisible() || !state.automations.selectedWorkspaceId || state.automations.history.loading) return null;
-    const active = state.automations.history.runs.some((run) => ACTIVE_RUN_STATUSES.has(String(run.status || "").toLowerCase())) ||
-      ACTIVE_RUN_STATUSES.has(String(state.automations.selectedRun?.status || "").toLowerCase());
-    if (!active) return null;
-    return loadHistory({silent: true});
+    if (!isDocumentVisible()) return null;
+    const globalActive = state.automations.globalHistory.runs.some((run) => ACTIVE_RUN_STATUSES.has(String(run.status || "").toLowerCase()));
+    const workspaceActive = state.automations.selectedWorkspaceId && !state.automations.history.loading && (
+      state.automations.history.runs.some((run) => ACTIVE_RUN_STATUSES.has(String(run.status || "").toLowerCase())) ||
+      ACTIVE_RUN_STATUSES.has(String(state.automations.selectedRun?.status || "").toLowerCase())
+    );
+    if (globalActive) await loadGlobalHistory({silent: true});
+    if (workspaceActive) return loadHistory({silent: true});
+    return null;
   }
 
   function handleVisibilityChange() {

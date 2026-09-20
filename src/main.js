@@ -97,6 +97,7 @@ const handlers = {
   app: {
     refreshAll,
     signOut,
+    showAutomationsHistory,
   },
   github: {
     connectGithub,
@@ -198,6 +199,12 @@ function openApp() {
     window.history.pushState({}, "", APP_PATH);
   }
   render();
+}
+
+async function showAutomationsHistory() {
+  const alreadyOpen = state.activePage === "automation-history";
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automation-history"});
+  if (alreadyOpen) await automationsController.loadGlobalHistory();
 }
 
 async function signInAndOpenApp() {

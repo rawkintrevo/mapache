@@ -68,6 +68,30 @@ describe("automationsController", () => {
     expect(fixture.state.automations.maxConcurrency).toBe(2);
   });
 
+  test("loads global history and run details without requiring a selected workspace", async () => {
+    const fixture = createFixture({api: {
+      listHistory: vi.fn().mockResolvedValue({runs: [{id: "run-global", status: "succeeded"}], nextCursor: "next"}),
+      getRun: vi.fn().mockResolvedValue({run: {id: "run-global", status: "succeeded"}}),
+      listEvents: vi.fn().mockResolvedValue({events: [{kind: "transcript"}], nextCursor: ""}),
+      stopRun: vi.fn().mockResolvedValue({id: "run-global", status: "canceled"}),
+      restartRun: vi.fn().mockResolvedValue({run: {id: "run-restarted", status: "queued"}}),
+    }});
+    fixture.state.selectedWorkspaceId = null;
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+
+    await controller.loadGlobalHistory();
+    expect(fixture.api.listHistory).toHaveBeenCalledWith({});
+    expect(fixture.state.automations.globalHistory.runs).toEqual([{id: "run-global", status: "succeeded"}]);
+    await controller.selectRun("run-global", {global: true});
+    expect(fixture.api.getRun).toHaveBeenCalledWith("run-global");
+    expect(fixture.state.automations.selectedRunScope).toBe("global");
+    expect(fixture.state.automations.events).toEqual([{kind: "transcript"}]);
+    await controller.stopGlobalRun("run-global");
+    expect(fixture.api.stopRun).toHaveBeenCalledWith("run-global");
+    await controller.restartGlobalRun("run-global");
+    expect(fixture.api.restartRun).toHaveBeenCalledWith("run-global", expect.any(String));
+  });
+
   test("ignores a response from a workspace that is no longer selected", async () => {
     const pending = deferred();
     const fixture = createFixture({api: {listDefinitions: vi.fn().mockReturnValue(pending.promise)}});

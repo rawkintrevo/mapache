@@ -13,10 +13,11 @@ const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: 
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
 const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({ProfilePage: page}) => ({default: page})));
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
+const RunHistoryPage = lazy(() => import("../automations/RunHistoryPage.jsx").then(({RunHistoryPage: page}) => ({default: page})));
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, github, modals, sessions, workspaces} = handlers;
+  const {admin, app, automations, github, modals, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -33,7 +34,7 @@ export function AppShell(props) {
   const selectedWorkspaceIsSsh = selectedWorkspace?.source?.type === "ssh";
   const hasRunnerUrl = Boolean(selectedSession?.serviceUrl);
   const access = useSessionAccessUrls({
-    enabled: Boolean(selectedSession && hasRunnerUrl && !selectedWorkspaceIsSsh && ["running", "ready"].includes(selectedSession.status)),
+    enabled: state.activePage === "workspace" && Boolean(selectedSession && hasRunnerUrl && !selectedWorkspaceIsSsh && ["running", "ready"].includes(selectedSession.status)),
     workspaceId: selectedWorkspace?.id || "",
     sessionId: selectedSession?.id || "",
     serviceUrl: selectedSession?.serviceUrl || "",
@@ -41,7 +42,7 @@ export function AppShell(props) {
   });
   const metricsSocketUrl = deriveResourceMetricsSocketUrl(access.accessUrls?.terminalUrl);
   const metrics = useResourceMetrics({
-    enabled: Boolean(selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" && metricsSocketUrl),
+    enabled: state.activePage === "workspace" && Boolean(selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" && metricsSocketUrl),
     sessionId: selectedSession?.id || "",
     socketUrl: metricsSocketUrl || "",
   });
@@ -77,12 +78,13 @@ export function AppShell(props) {
         onSelectCanvas={setActiveCanvas}
         onSelectWorkspace={workspaces.selectWorkspace}
         onShowAdmin={admin.showAdmin}
+        onShowAutomationHistory={app.showAutomationsHistory}
         onShowLogs={() => setLogsOpen(true)}
         onShowProfile={modals.showProfile}
         onSignOut={app.signOut}
         onSetSessionLongRunning={sessions.setSessionLongRunning}
         onToggleWorkspace={workspaces.toggleWorkspace}
-        resourceMetrics={selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
+        resourceMetrics={state.activePage === "workspace" && selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />
       <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
       <main>
@@ -105,6 +107,19 @@ export function AppShell(props) {
               onRefresh={app.refreshAll}
               onRefreshGithubRepositories={github.refreshGithubRepositories}
               onSignOut={app.signOut}
+            />
+          </Suspense>
+        ) : state.activePage === "automation-history" ? (
+          <Suspense fallback={<LazySurfaceFallback label="Loading run history..." />}>
+            <RunHistoryPage
+              state={state}
+              onLoadEvents={automations.listEvents}
+              onLoadHistory={automations.loadGlobalHistory}
+              onLoadNextPage={automations.loadNextGlobalHistoryPage}
+              onRestartRun={automations.restartGlobalRun}
+              onSelectRun={(runId) => automations.selectRun(runId, {global: true})}
+              onSetFilters={automations.setGlobalHistoryFilters}
+              onStopRun={automations.stopGlobalRun}
             />
           </Suspense>
         ) : (
