@@ -29,6 +29,13 @@ const ROUTE_DISPATCHERS = Object.freeze({
   ]),
   automation: Object.freeze([
     ["POST", "automationSchedulePreview", jsonResult(({handlers, req}) => handlers.previewAutomationSchedule(req.body || {}))],
+    ["GET", "automations", namedJsonResult("automations", ({handlers, route, user}) => handlers.listAutomations(user.uid, route.workspaceId))],
+    ["POST", "automations", createdNamedJsonResult("automation", ({handlers, req, route, user}) => handlers.createAutomation(user.uid, route.workspaceId, req.body || {}))],
+    ["GET", "automation", namedJsonResult("automation", ({handlers, route, user}) => handlers.getAutomation(user.uid, route.workspaceId, route.automationId))],
+    ["PATCH", "automation", namedJsonResult("automation", ({handlers, req, route, user}) => handlers.updateAutomation(user.uid, route.workspaceId, route.automationId, req.body || {}))],
+    ["DELETE", "automation", jsonResult(({handlers, req, route, user}) => handlers.deleteAutomation(user.uid, route.workspaceId, route.automationId, req.body || {}))],
+    ["GET", "automationSettings", jsonResult(({handlers, route, user}) => handlers.getAutomationSettings(user.uid, route.workspaceId))],
+    ["PATCH", "automationSettings", jsonResult(({handlers, req, route, user}) => handlers.updateAutomationSettings(user.uid, route.workspaceId, req.body || {}))],
   ]),
   admin: Object.freeze([
     ["GET", "adminUsers", jsonResult(({handlers, req, user}) => handlers.listAdminUsers(user, req.query || {}))],

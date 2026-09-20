@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({agentAuthService, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({agentAuthService, automationDefinitionsService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -13,6 +13,13 @@ function createApiHandlers({agentAuthService, environmentKeysService, openAiCode
     deleteGenericEnvironmentKey: environmentKeysService.deleteGenericEnvironmentKey,
     startOpenAiCodexDeviceCode: openAiCodexAuthService.startOpenAiCodexDeviceCode,
     completeOpenAiCodexDeviceCode: openAiCodexAuthService.completeOpenAiCodexDeviceCode,
+    listAutomations: automationDefinitionsService.listAutomations,
+    createAutomation: automationDefinitionsService.createAutomation,
+    getAutomation: automationDefinitionsService.getAutomation,
+    updateAutomation: automationDefinitionsService.updateAutomation,
+    deleteAutomation: automationDefinitionsService.deleteAutomation,
+    getAutomationSettings: automationDefinitionsService.getAutomationSettings,
+    updateAutomationSettings: automationDefinitionsService.updateAutomationSettings,
     saveSessionPiAuthSelection: agentAuthService.saveSessionPiAuthSelection,
     getSessionQaFaults: qaFaultHarnessService?.getStatus || (async () => { throw new Error("QA fault harness service is unavailable"); }),
     armSessionQaFault: qaFaultHarnessService?.arm || (async () => { throw new Error("QA fault harness service is unavailable"); }),

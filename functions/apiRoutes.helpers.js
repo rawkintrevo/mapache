@@ -70,6 +70,15 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "workspaces") {
     return {name: "workspace", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "automations") {
+    return {name: "automations", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "automations") {
+    return {name: "automation", workspaceId: parts[1], automationId: parts[3]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "automation-settings") {
+    return {name: "automationSettings", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
     return {name: "workspaceMcp", workspaceId: parts[1]};
   }

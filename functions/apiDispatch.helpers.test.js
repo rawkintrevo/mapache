@@ -107,6 +107,22 @@ function createTestApiHandlers() {
   });
   assert.deepStrictEqual(await collectDispatch({
     method: "POST",
+    route: {name: "automations", workspaceId: "workspace-1"},
+    body: {name: "Daily", prompt: "Report", cron: "0 10 * * *"},
+  }), {
+    status: 201,
+    payload: {automation: {handler: "createAutomation", args: ["user-1", "workspace-1", {name: "Daily", prompt: "Report", cron: "0 10 * * *"}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "automation", workspaceId: "workspace-1", automationId: "automation-1"},
+    body: {expectedRevision: 1, enabled: false},
+  }), {
+    status: 200,
+    payload: {automation: {handler: "updateAutomation", args: ["user-1", "workspace-1", "automation-1", {expectedRevision: 1, enabled: false}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
     route: {name: "sessions", workspaceId: "workspace-1"},
     body: {name: "Session"},
   }), {

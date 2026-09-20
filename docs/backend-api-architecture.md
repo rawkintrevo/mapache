@@ -133,6 +133,17 @@ time. The schedule matcher preserves standard day-of-month/day-of-week OR
 semantics, skips nonexistent DST minutes, and de-duplicates repeated local
 minutes to the first occurrence.
 
+`functions/automationDefinitions.service.js` owns the workspace-scoped
+definition/settings API. Definition DTOs contain only workflow fields and
+model/provider IDs; ownership is checked through the workspace owner, edits
+and deletes require the current revision, and edits append field-name-only
+audit records. Deletion is a tombstone: ordinary lists exclude it, queued
+runs are canceled transactionally, and provisioning/running/stopping history
+is left untouched. Disabled definitions can be saved before shared storage is
+ready; enabling requires a saved model selection and ready shared storage.
+Workspace concurrency changes only the admission limit, so lowering it never
+stops active allocations.
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi
