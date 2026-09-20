@@ -156,6 +156,8 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(automation.id, "auto-run-123");
   assert.strictEqual(automation.runtimeKind, "automation");
   assert.strictEqual(automation.automationRunId, "run-123");
+  assert.match(automation.serviceId, /^mpauto-[a-f0-9]{40}$/);
+  assert.strictEqual(automation.longRunning, true);
   assert.strictEqual(reservations[0].args[3].singleRunner, false);
 
   console.log("session creation service tests passed");

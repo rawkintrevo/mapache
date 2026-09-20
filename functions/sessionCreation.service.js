@@ -39,6 +39,7 @@ const {
 } = require("./agentRuntime.helpers");
 const {
   initialProvisioningMetadata,
+  automationCloudRunServiceId,
   normalizeProvisioningOperationId,
   provisioningSessionId,
   resolveCloudRunServiceId,
@@ -102,7 +103,8 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
       payload.idleTimeoutMinutes,
       DEFAULT_IDLE_TIMEOUT_MINUTES,
   );
-  const serviceId = resolveCloudRunServiceId(sessionRef.id);
+  const serviceId = runtimeKind === "automation" ?
+    automationCloudRunServiceId(automationRunId) : resolveCloudRunServiceId(sessionRef.id);
   let runnerImage;
   try {
     runnerImage = dependencies.resolveRunnerImage({imageKey: AGENT_IMAGE_KEY});
@@ -168,7 +170,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
-    longRunning: false,
+    longRunning: runtimeKind === "automation" ? true : false,
     lastActivityAt: now,
     lastConnectedAt: null,
     lastDisconnectedAt: null,

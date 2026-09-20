@@ -202,6 +202,20 @@ good pointer intact. `functions/automationHistory.service.js` exposes
 owner-scoped run and artifact history readers with opaque cursors, checksum and
 namespace validation, and bounded pages (200 records or 1 MiB for events).
 
+`functions/automationProvisioning.service.js` is the dedicated consumer for
+admitted `provisioning` runs. It claims the run idempotently, creates the
+deterministic `auto-{runId}` session and `mpauto-{runId-hash}` Cloud Run
+service, and leaves `canonicalSessionId` and main-runtime reservations alone.
+The ordinary queued-session worker skips automation sessions; run/session
+Firestore workers reconcile duplicate deliveries and response loss against the
+same session operation. Cloud Run creation reuses the trusted `pi-chrome`,
+runner service account, fresh credential/MCP resolution, and ready shared GCS
+FUSE descriptor, while automation labels fence owner/workspace/run identity.
+Provisioning operations have a 15-minute infrastructure deadline rather than
+an execution-duration cap. A failure records a stable error and desired
+`failed` outcome with `cleanupState=pending`, retaining the concurrency slot
+until the later cleanup path confirms service absence.
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi

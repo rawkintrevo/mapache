@@ -70,6 +70,16 @@ confirms that all runner services are absent, deletes live objects and then the
 bucket, and reports the seven-day recovery window; soft-deleted objects remain
 recoverable and continue to incur storage charges until retention expires.
 
+Admitted automation runs use the same trusted mount and pinned `pi-chrome` image
+as other supported sessions, but receive a separate `auto-{runId}` session and
+`mpauto-{runId-hash}` Cloud Run service. The service carries hashed owner,
+workspace, and run labels; an existing service is adopted only when all labels
+match the current run. Automation provisioning resolves connector credentials
+at launch and keeps prompts and tokens out of service metadata and logs. The
+run/session workers are idempotent across duplicate Firestore deliveries and
+Cloud Run response loss; provisioning failure leaves cleanup responsible for
+confirming service absence and releasing the run reservation.
+
 ## Runner Images
 
 The supported runner image is built from `session-runner/Dockerfile.pi-chrome`

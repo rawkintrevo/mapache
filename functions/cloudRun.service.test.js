@@ -2,8 +2,10 @@
 
 const assert = require("assert");
 const {
+  assertCloudRunServiceIdentity,
   buildCloudRunPatch,
   buildCloudRunService,
+  cloudRunServiceLabels,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,
@@ -345,6 +347,28 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_GENERATION, "42");
   assert.equal(sharedServiceEnv.STORAGE_BUCKET, "mpw-1234567890-workspace1");
   assert.equal(sharedServiceEnv.MAPACHE_RUNTIME_STORAGE_MODE, "private");
+
+  const automationSession = {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runtimeKind: "automation",
+    automationRunId: "run-123",
+    runnerSessionId: "auto-run-123",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "2", memory: "2Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: false, chrome: true},
+  };
+  const automationService = await buildCloudRunService({
+    id: "workspace-1",
+    sharedStorage: {state: "ready", bucketName: "mpw-1234567890-workspace1", storageGeneration: "42"},
+  }, automationSession);
+  assert.deepStrictEqual(automationService.labels, cloudRunServiceLabels(automationSession));
+  assert.equal(automationService.labels["mapache-runtime-kind"], "automation");
+  assert.doesNotThrow(() => assertCloudRunServiceIdentity({labels: automationService.labels}, automationSession));
+  assert.throws(() => assertCloudRunServiceIdentity({labels: {...automationService.labels, "mapache-workspace": "wrong"}}, automationSession),
+      /cloud_run_service_identity_mismatch/);
 
   const patch = await buildCloudRunPatch({
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",

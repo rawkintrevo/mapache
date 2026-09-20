@@ -23,6 +23,10 @@ function cloudRunServiceId(sessionId) {
   return `session-${crypto.createHash("sha256").update(String(sessionId || "")).digest("hex").slice(0, 40)}`;
 }
 
+function automationCloudRunServiceId(runId) {
+  return `mpauto-${crypto.createHash("sha256").update(String(runId || "")).digest("hex").slice(0, 40)}`;
+}
+
 function isValidCloudRunServiceId(value) {
   const serviceId = String(value || "");
   return serviceId.length > 0 && serviceId.length < 50 && /^[a-z][a-z0-9-]*[a-z0-9]$/.test(serviceId);
@@ -60,6 +64,7 @@ function isRetryableProvisioningError(error) {
 }
 
 module.exports = {
+  automationCloudRunServiceId,
   cloudRunServiceId,
   initialProvisioningMetadata,
   isRetryableProvisioningError,

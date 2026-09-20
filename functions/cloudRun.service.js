@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const logger = require("firebase-functions/logger");
 const {
   admin,
@@ -43,6 +44,7 @@ const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helper
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
 const SHARED_WORKSPACE_STORAGE_MODE = "shared-gcsfuse-v1";
 const SHARED_WORKSPACE_READY_MARKER = ".mapache-internal/workspace-ready.json";
+const AUTOMATION_CLOUD_RUN_OPERATION_TIMEOUT_MS = 15 * 60 * 1000;
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -80,9 +82,10 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       operationName = claim.operationName || operationName;
     }
 
+    const operationOptions = provisioningOperationOptions(claimedSession, dependencies);
     client = await (dependencies.auth || auth).getClient();
     if (claim && claim.action === "poll") {
-      await waitForOperation(client, {name: operationName}, dependencies);
+      await waitForOperation(client, {name: operationName}, operationOptions);
     } else {
       const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${claimedSession.serviceId}`;
       const body = await buildCloudRunService(workspace, claimedSession, dependencies);
@@ -95,10 +98,11 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
-      await waitForOperation(client, response.data, dependencies);
+      await waitForOperation(client, response.data, operationOptions);
     }
     await setPublicInvoker(client, serviceName);
     const service = await getCloudRunService(client, serviceName);
+    assertCloudRunServiceIdentity(service, claimedSession);
     const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
       ...runtimeSessionStateUpdate(claimedSession, "running"),
@@ -113,7 +117,12 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     let provisioningError = error;
     if (client && isGoogleAlreadyExists(error)) {
       try {
-        const service = await waitForCloudRunServiceReady(client, serviceName, dependencies);
+        const service = await waitForCloudRunServiceReady(
+            client,
+            serviceName,
+            provisioningOperationOptions(claimedSession, dependencies),
+        );
+        assertCloudRunServiceIdentity(service, claimedSession);
         await setPublicInvoker(client, serviceName);
         const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
         await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
@@ -131,9 +140,10 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       }
     }
     if (client && isCloudRunOperationTimeout(error)) {
-      const service = await reconcileProvisioningTimeout(client, serviceName);
+      const service = await reconcileProvisioningTimeout(client, serviceName, claimedSession);
       if (service) {
         try {
+          assertCloudRunServiceIdentity(service, claimedSession);
           await setPublicInvoker(client, serviceName);
           const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
           await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
@@ -153,7 +163,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     }
     await sessionRef.update(sessionStatusUpdate(claimedSession, "provision_failed", {
       ...runtimeSessionStateUpdate(claimedSession, "failed"),
-      lastError: publicGoogleError(provisioningError),
+      lastError: provisioningErrorForSession(claimedSession, provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...provisioningFailureUpdates(claimedSession, operationName, provisioningError),
     }, {reconciliationReason: "cloud_run_provisioning_failed"}));
@@ -258,15 +268,19 @@ function provisioningFailureUpdates(session, operationName, error) {
     provisioningCloudRunOperationName: operationName || session.provisioningCloudRunOperationName || null,
     provisioningAttemptCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
     provisioningRetryable: isRetryableProvisioningError(error),
-    provisioningLastError: publicGoogleError(error),
+    provisioningLastError: provisioningErrorForSession(session, error),
   };
 }
 
-async function reconcileProvisioningTimeout(client, serviceName) {
+async function reconcileProvisioningTimeout(client, serviceName, session = {}) {
   try {
     const service = await getCloudRunService(client, serviceName);
-    if (isCloudRunServiceReady(service)) return service;
+    if (isCloudRunServiceReady(service)) {
+      assertCloudRunServiceIdentity(service, session);
+      return service;
+    }
   } catch (error) {
+    if (error && error.code === "cloud_run_service_identity_mismatch") throw error;
     if (!isGoogleNotFound(error)) {
       logger.warn("Cloud Run provisioning reconciliation failed", publicGoogleError(error));
     }
@@ -438,6 +452,9 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
     ...(sharedTemplate.containers?.[0] || {}),
   };
   return {
+    ...(Object.keys(cloudRunServiceLabels(session)).length ? {
+      labels: cloudRunServiceLabels(session),
+    } : {}),
     template: {
       ...sharedTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
@@ -485,6 +502,54 @@ function sharedWorkspaceTemplateFor(descriptor) {
     bucketName: descriptor.bucketName,
     storageGeneration: descriptor.storageGeneration,
   });
+}
+
+function cloudRunServiceLabels(session = {}) {
+  if (!isAutomationRuntime(session)) return {};
+  return {
+    "mapache-runtime-kind": "automation",
+    "mapache-automation-run": automationLabelValue(session.automationRunId || session.runId),
+    "mapache-workspace": automationLabelValue(session.workspaceId),
+    "mapache-owner": automationLabelValue(session.ownerUid),
+  };
+}
+
+function automationLabelValue(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex").slice(0, 40);
+}
+
+function assertCloudRunServiceIdentity(service = {}, session = {}) {
+  if (!isAutomationRuntime(session)) return true;
+  const labels = service.labels || service.metadata?.labels || {};
+  const expected = cloudRunServiceLabels(session);
+  if (!Object.entries(expected).every(([key, value]) => labels[key] === value)) {
+    const error = new Error("cloud_run_service_identity_mismatch");
+    error.code = "cloud_run_service_identity_mismatch";
+    throw error;
+  }
+  return true;
+}
+
+function provisioningOperationOptions(session, dependencies = {}) {
+  if (!isAutomationRuntime(session)) return dependencies;
+  return {
+    ...dependencies,
+    operationTimeoutMs: positiveOperationNumber(
+        dependencies.automationOperationTimeoutMs,
+        positiveOperationNumber(dependencies.operationTimeoutMs, AUTOMATION_CLOUD_RUN_OPERATION_TIMEOUT_MS),
+    ),
+  };
+}
+
+function provisioningErrorForSession(session, error) {
+  if (!isAutomationRuntime(session)) return publicGoogleError(error);
+  if (error && error.code === "cloud_run_service_identity_mismatch") return error.code;
+  if (error && error.code === "cloud_run_operation_timeout") return error.code;
+  const message = String(error && error.message || "").toLowerCase();
+  if (/quota|resource exhausted/.test(message)) return "cloud_run_quota_exceeded";
+  if (/permission|unauthenticated|forbidden/.test(message)) return "cloud_run_permission_denied";
+  if (error && /^[a-z][a-z0-9_]{2,127}$/.test(String(error.code || ""))) return error.code;
+  return "automation_provisioning_failed";
 }
 
 function trustedWorkspaceRuntimeFields(descriptor) {
@@ -926,8 +991,10 @@ function runtimeResourceRequirements(session = {}) {
 }
 
 module.exports = {
+  assertCloudRunServiceIdentity,
   buildCloudRunPatch,
   buildCloudRunService,
+  cloudRunServiceLabels,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,

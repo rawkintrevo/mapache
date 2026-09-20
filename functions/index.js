@@ -44,6 +44,10 @@ const {previewAutomationSchedule} = require("./automationSchedule.helpers");
 const {createAutomationAdmissionService} = require("./automationAdmission.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationHistoryService} = require("./automationHistory.service");
+const {
+  AUTOMATION_PROVISIONING_TIMEOUT_MS,
+  createAutomationProvisioningService,
+} = require("./automationProvisioning.service");
 const {createAutomationRunsService} = require("./automationRuns.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
@@ -246,6 +250,7 @@ const cloudRunService = createCloudRunService({
   ),
   markChromeWorkspaceSessionRunning,
   releaseWorkspaceSyncWriterLease,
+  automationOperationTimeoutMs: AUTOMATION_PROVISIONING_TIMEOUT_MS,
 });
 const {
   deleteSessionService,
@@ -271,6 +276,22 @@ const {provisionQueuedSession} = createProvisioningWorker({
   releaseChromeWorkspaceSession,
   releaseWorkspaceSyncWriterLease,
 });
+const automationProvisioningService = createAutomationProvisioningService({
+  admin,
+  createSession,
+  db,
+  featureEnabled: async () => {
+    const snap = await db.collection("appConfig").doc("automations").get();
+    return Boolean(snap.exists && snap.data()?.enabled === true);
+  },
+  provisionSessionService,
+  requireWorkspace,
+  sessionCollection,
+});
+const {
+  handleAutomationRunEvent,
+  handleAutomationSessionEvent,
+} = automationProvisioningService;
 
 const workspaceSharedStorageService = createWorkspaceSharedStorageService({
   admin,
@@ -494,6 +515,32 @@ exports.provisionQueuedSession = onDocumentWritten({
     GOOGLE_OAUTH_ENCRYPTION_KEY,
   ],
 }, provisionQueuedSession);
+
+exports.provisionAutomationRun = onDocumentWritten({
+  document: "automationRuns/{runId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, handleAutomationRunEvent);
+
+exports.reconcileAutomationSessionProvisioning = onDocumentWritten({
+  document: "workspaces/{workspaceId}/sessions/{sessionId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, handleAutomationSessionEvent);
 
 exports.dispatchAutomationSchedules = onSchedule("every 1 minutes", async (event) => {
   const result = await runAutomationScheduleTick(event);
