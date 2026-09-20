@@ -7,6 +7,12 @@ function encodePathQuery(value) {
 export function createApiClient(getToken) {
   const api = {
     getMe: () => request(getToken, "/api/me"),
+    updateUserTimezone: (timezone) => request(getToken, "/api/me", {method: "PATCH", body: {timezone}}),
+    previewAutomationSchedule: (cron, timezone) => request(
+        getToken,
+        "/api/automation-schedule-preview",
+        {method: "POST", body: {cron, timezone}},
+    ),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
       params.set("pageSize", String(pageSize));

@@ -6,6 +6,9 @@ const {ROUTE_METHODS} = require("./apiRouteManifest");
 function routeRequest(path) {
   const parts = String(path || "").replace(/^\/api\/?/, "/").split("/").filter(Boolean);
   if (parts.length === 1 && parts[0] === "me") return {name: "me"};
+  if (parts.length === 1 && parts[0] === "automation-schedule-preview") {
+    return {name: "automationSchedulePreview"};
+  }
   if (parts.length === 2 && parts[0] === "admin" && parts[1] === "users") {
     return {name: "adminUsers"};
   }

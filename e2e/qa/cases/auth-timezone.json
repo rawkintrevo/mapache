@@ -1,0 +1,19 @@
+{
+  "id": "auth.timezone",
+  "title": "Persist and reuse the user timezone",
+  "description": "Sign in, persist a valid timezone through the authenticated profile API, and verify the signed-in shell remains healthy.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.timezone",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/initialize-user-timezone.json"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/me", "method": "PATCH", "expectedStatus": 200},
+    {"assert": "snapshot-text", "expected": "Mapache Tools"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"capture": "screenshot", "fileName": "timezone-profile.png"}
+  ],
+  "cleanup": [
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaLogin", "mapache.qaSecret"]}
+  ]
+}

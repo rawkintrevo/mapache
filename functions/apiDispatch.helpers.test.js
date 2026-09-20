@@ -90,6 +90,22 @@ function createTestApiHandlers() {
     payload: {workspaces: {handler: "listWorkspaces", args: ["user-1"]}},
   });
   assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "me"},
+    body: {timezone: "UTC"},
+  }), {
+    status: 200,
+    payload: {user: {handler: "updateUserTimezone", args: ["user-1", {timezone: "UTC"}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "automationSchedulePreview"},
+    body: {cron: "0 10 * * *", timezone: "UTC"},
+  }), {
+    status: 200,
+    payload: {handler: "previewAutomationSchedule", args: [{cron: "0 10 * * *", timezone: "UTC"}]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "sessions", workspaceId: "workspace-1"},
     body: {name: "Session"},

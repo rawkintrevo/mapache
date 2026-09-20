@@ -44,6 +44,7 @@ import {
 } from "./workflows/sessionLifecycle.js";
 import {createSessionRequestTracker, isCurrentSessionRequest} from "./utils/sessionRequest.js";
 import {OPERATION_KEYS} from "./utils/operationKeys.js";
+import {ensureUserTimezone} from "./utils/userTimezone.js";
 
 const appStore = createAppStore(createInitialState());
 const state = appStore.state;
@@ -205,7 +206,11 @@ function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
 async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
-    dispatch({type: APP_ACTIONS.SET_PROFILE, profile: me.user || null});
+    const profile = await ensureUserTimezone({
+      profile: me.user || null,
+      updateTimezone: state.api.updateUserTimezone,
+    });
+    dispatch({type: APP_ACTIONS.SET_PROFILE, profile});
     await loadGithubConnectionState({state, render, silent: true});
     if (state.activePage === "admin" && state.profile?.isAdmin !== true) {
       dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});

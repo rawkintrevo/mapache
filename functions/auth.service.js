@@ -15,6 +15,7 @@ const {
   httpError,
   toClientDoc,
 } = require("./backendUtils.helpers");
+const {validateAutomationScheduleTimezone} = require("./automationSchedule.helpers");
 
 const APP_ACCESS_CONFIG_REF = db.collection("appConfig").doc("access");
 
@@ -76,6 +77,31 @@ async function upsertUser(token) {
   return toClientDoc(await ref.get());
 }
 
+async function updateUserTimezone(uid, payload = {}, dependencies = {}) {
+  const profileDb = dependencies.db || db;
+  const profileAdmin = dependencies.admin || admin;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw httpError(400, "invalid_user_timezone");
+  }
+  if (Object.keys(payload).some((key) => key !== "timezone")) {
+    throw httpError(400, "invalid_user_timezone");
+  }
+  let timezone;
+  try {
+    timezone = validateAutomationScheduleTimezone(payload.timezone);
+  } catch (error) {
+    throw httpError(400, error.code || "invalid_user_timezone", error);
+  }
+  const ref = profileDb.collection("users").doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) throw httpError(404, "user_not_found");
+  await ref.update({
+    timezone,
+    updatedAt: profileAdmin.firestore.FieldValue.serverTimestamp(),
+  });
+  return toClientDoc(await ref.get());
+}
+
 function providerIdsFromToken(token) {
   const firebase = token.firebase || {};
   const ids = Object.keys(firebase.identities || {}).filter((id) => id !== "email");
@@ -89,5 +115,6 @@ module.exports = {
   getAppAllowListConfig,
   providerIdsFromToken,
   requireUser,
+  updateUserTimezone,
   upsertUser,
 };

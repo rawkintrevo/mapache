@@ -25,6 +25,10 @@ function createdNamedJsonResult(name, handler) {
 const ROUTE_DISPATCHERS = Object.freeze({
   profile: Object.freeze([
     ["GET", "me", namedJsonResult("user", ({handlers, user}) => handlers.userWithUsage(user))],
+    ["PATCH", "me", namedJsonResult("user", ({handlers, req, user}) => handlers.updateUserTimezone(user.uid, req.body || {}))],
+  ]),
+  automation: Object.freeze([
+    ["POST", "automationSchedulePreview", jsonResult(({handlers, req}) => handlers.previewAutomationSchedule(req.body || {}))],
   ]),
   admin: Object.freeze([
     ["GET", "adminUsers", jsonResult(({handlers, req, user}) => handlers.listAdminUsers(user, req.query || {}))],

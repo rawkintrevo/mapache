@@ -29,6 +29,11 @@ React. The subscription resolves the workspace's canonical runtime; access URLs
 are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
+On the first authenticated refresh, `src/utils/userTimezone.js` initializes a
+missing profile timezone from the browser's IANA timezone (falling back to
+`UTC`) through `PATCH /api/me`. Existing saved timezones are never overwritten;
+the schedule preview API remains server-authoritative.
+
 The signed-in shell has no left drawer. Its top navigation contains workspace
 Play/Pause lifecycle control beside the workspace selector, followed by the
 selected canonical cloud runtime's live CPU and memory meters, then
