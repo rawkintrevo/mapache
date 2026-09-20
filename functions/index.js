@@ -83,6 +83,7 @@ const {
   getSessionImageFreshness,
 } = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
+const {isMainRuntime} = require("./runtimePaths.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
 const {createWorkspaceSessionReservationService} = require("./workspaceSessionReservation.service");
 const {
@@ -493,7 +494,7 @@ async function listSessions(uid, workspaceId) {
   const snap = await sessionCollection(workspaceId)
       .orderBy("updatedAt", "desc")
       .get();
-  return Promise.all(snap.docs.map(async (doc) => {
+  return Promise.all(snap.docs.filter((doc) => isMainRuntime(doc.data() || {})).map(async (doc) => {
     const session = toClientDoc(doc);
     const currentDigest = await getCurrentRunnerImageDigestForSession(session);
     return {

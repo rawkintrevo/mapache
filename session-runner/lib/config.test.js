@@ -118,3 +118,26 @@ test("marked runners use the managed pi-web-ui state contract while unmarked run
     }
   }
 });
+
+test("automation runtime config keeps identity scoped to its session", () => {
+  const names = ["MAPACHE_RUNTIME_KIND", "MAPACHE_AUTOMATION_RUN_ID", "MAPACHE_AGENT_UI_VERSION", "MAPACHE_AGENT_RUNTIME_GENERATION", "SESSION_ID"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    MAPACHE_RUNTIME_KIND: "automation",
+    MAPACHE_AUTOMATION_RUN_ID: "run-123",
+    MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
+    MAPACHE_AGENT_RUNTIME_GENERATION: "4",
+    SESSION_ID: "auto-run-123",
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.runtimeKind, "automation");
+    assert.equal(config.automationRunId, "run-123");
+    assert.equal(config.sessionId, "auto-run-123");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

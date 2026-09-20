@@ -26,7 +26,12 @@ const {
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {sessionSourceMetadata} = require("./github.service");
 const {normalizeEnvMap} = require("./env.helpers");
-const {canonicalizeInternalStoragePath} = require("./runtimePaths.helpers");
+const {
+  automationSessionId,
+  canonicalizeInternalStoragePath,
+  isAutomationRuntime,
+  normalizeRuntimeKind,
+} = require("./runtimePaths.helpers");
 const {
   AGENT_IMAGE_KEY,
   isMarkedAgentWorkspace,
@@ -48,10 +53,21 @@ function createSessionCreationService(dependencies = {}) {
 async function createSession(uid, workspaceId, payload, dependencies = {}) {
   payload = payload || {};
   const workspace = await dependencies.requireWorkspace(uid, workspaceId);
+  const runtimeKind = normalizeRuntimeKind(payload.runtimeKind);
+  const automationRunId = runtimeKind === "automation" ? cleanName(payload.automationRunId || payload.runId) : "";
+  if (runtimeKind === "automation" && !automationRunId) throw httpError(400, "invalid_automation_run_id");
+  let runtimeSessionId = "";
+  if (runtimeKind === "automation") {
+    try {
+      runtimeSessionId = automationSessionId(automationRunId);
+    } catch (error) {
+      throw httpError(400, error.code || "invalid_automation_run_id", error);
+    }
+  }
   let provisioningOperationId;
   try {
     provisioningOperationId = normalizeProvisioningOperationId(
-        payload.operationId || payload.provisioningOperationId || payload.idempotencyKey,
+        payload.operationId || payload.provisioningOperationId || payload.idempotencyKey || automationRunId,
     );
   } catch (error) {
     if (error && error.code === "invalid_provisioning_operation_id") {
@@ -60,7 +76,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     throw error;
   }
   const sessionCollectionRef = dependencies.sessionCollection(workspaceId);
-  const sessionRef = sessionCollectionRef.doc(provisioningSessionId(provisioningOperationId));
+  const sessionRef = sessionCollectionRef.doc(runtimeSessionId || provisioningSessionId(provisioningOperationId));
   const existingSessionSnap = await sessionRef.get();
   if (existingSessionSnap.exists) {
     const existingSession = existingSessionSnap.data() || {};
@@ -112,6 +128,10 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     userPath: userPath(uid),
     workspaceId,
     runnerSessionId: sessionRef.id,
+    ...(runtimeKind === "automation" ? {
+      runtimeKind,
+      automationRunId,
+    } : {}),
     workspaceStoragePrefix: workspace.storagePrefix,
     piSessionDir: piSessionDir(sessionRef.id),
     piSessionStorageBucket: workspace.bucket || DEFAULT_BUCKET,
@@ -171,14 +191,14 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     githubWorkspace: isGithubWorkspace(workspace),
     newRuntime: markedAgentWorkspace,
     runtimeOperationId: provisioningOperationId,
-    singleRunner: true,
+    singleRunner: !isAutomationRuntime(session),
     syncWriterEligible,
   });
 
   if (dependencies.db && typeof dependencies.db.collection === "function") {
     const workspaceRef = dependencies.db.collection("workspaces").doc(workspaceId);
     const latestWorkspaceSnap = await workspaceRef.get();
-    if (latestWorkspaceSnap.exists && !latestWorkspaceSnap.data().canonicalSessionId) {
+    if (latestWorkspaceSnap.exists && !latestWorkspaceSnap.data().canonicalSessionId && !isAutomationRuntime(session)) {
       await workspaceRef.update({
         canonicalSessionId: sessionRef.id,
         updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),

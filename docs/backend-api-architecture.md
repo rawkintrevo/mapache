@@ -88,6 +88,14 @@ worker repeats the pi-chrome identity check before creating a per-session Cloud
 Run service. Historical unsupported records remain readable but cannot be
 converted into newly launched unsupported runners.
 
+Automation sessions are a separate runtime identity: each run uses the
+deterministic `auto-{runId}` session ID and stores its generation, boot, writer
+authority, and checkpoint pointer on that session document. Automation sessions
+do not become the workspace canonical session, do not claim the workspace
+singleton runtime or sync-writer lease, and are excluded from the main session
+listing, user lifecycle controls, and idle reaper. Missing `runtimeKind`
+continues to mean `main` for legacy sessions.
+
 Agent access is a short-lived signed URL/cookie flow with an `agent` audience,
 session identity, and current runtime generation. The runner gateway, not the
 browser, validates the token before forwarding to upstream. Browser, terminal,

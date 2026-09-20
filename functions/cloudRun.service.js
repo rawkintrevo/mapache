@@ -494,6 +494,8 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     }),
     ...trustedRuntimeEnv(googleMcpRuntime.env),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
+    {name: "MAPACHE_RUNTIME_KIND", value: session.runtimeKind || "main"},
+    {name: "MAPACHE_AUTOMATION_RUN_ID", value: session.automationRunId || ""},
     {name: "HOME", value: homeDir},
     {name: "MAPACHE_HOME_DIR", value: homeDir},
     {name: "OWNER_UID", value: session.ownerUid || ""},

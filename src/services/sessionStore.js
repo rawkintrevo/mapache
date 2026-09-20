@@ -14,10 +14,12 @@ export function listenToWorkspaceSessions(db, workspaceId, onSessions, onError) 
   return onSnapshot(
       sessionsQuery,
       (snapshot) => {
-        onSessions(snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...serializeFirestoreValue(doc.data()),
-        })));
+        onSessions(snapshot.docs
+            .map((doc) => ({
+              id: doc.id,
+              ...serializeFirestoreValue(doc.data()),
+            }))
+            .filter((session) => String(session.runtimeKind || "").trim().toLowerCase() !== "automation"));
       },
       (error) => {
         if (onError) onError(error);

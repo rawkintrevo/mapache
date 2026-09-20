@@ -14,6 +14,14 @@ const INTERNAL_STORAGE_DIRS = [
   LEGACY_INTERNAL_STORAGE_DIR,
 ];
 
+function normalizeRuntimeKind(value) {
+  return String(value || "").trim().toLowerCase() === "automation" ? "automation" : "main";
+}
+
+function isAutomationRuntime(value = {}) {
+  return normalizeRuntimeKind(value.runtimeKind || value) === "automation";
+}
+
 function isDirectoryMarkerFileName(value) {
   return DIRECTORY_MARKER_FILES.includes(String(value || ""));
 }
@@ -41,7 +49,9 @@ module.exports = {
   INTERNAL_STORAGE_DIRS,
   LEGACY_DIRECTORY_MARKER_FILE,
   LEGACY_INTERNAL_STORAGE_DIR,
+  isAutomationRuntime,
   isDirectoryMarkerFileName,
   isInternalStorageDirName,
   legacyInternalStoragePathVariants,
+  normalizeRuntimeKind,
 };

@@ -27,6 +27,7 @@ const {
   normalizeStoredMcpConfig,
 } = require("./mcpConfig.helpers");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
+const {isMainRuntime} = require("./runtimePaths.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 
 const ACTIVE_SESSION_STATUSES = new Set([
@@ -439,10 +440,11 @@ async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
   const sessionsRef = workspaceDb.collection("workspaces").doc(workspace.id).collection("sessions");
   const sessionsSnap = await sessionsRef.get();
   const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
+  const mainSessions = sessions.filter(isMainRuntime);
   let canonical = workspace.canonicalSessionId ?
-    sessions.find((session) => session.id === workspace.canonicalSessionId) : null;
-  if (!canonical && sessions.length) {
-    canonical = [...sessions].sort((left, right) => {
+    mainSessions.find((session) => session.id === workspace.canonicalSessionId) : null;
+  if (!canonical && mainSessions.length) {
+    canonical = [...mainSessions].sort((left, right) => {
       const leftActive = ACTIVE_SESSION_STATUSES.has(String(left.status || "").toLowerCase()) ? 1 : 0;
       const rightActive = ACTIVE_SESSION_STATUSES.has(String(right.status || "").toLowerCase()) ? 1 : 0;
       if (leftActive !== rightActive) return rightActive - leftActive;

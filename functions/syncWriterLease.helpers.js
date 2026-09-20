@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const {isAutomationRuntime, isMainRuntime} = require("./runtimePaths.helpers");
 
 const INACTIVE_STATUSES = new Set([
   "stopped", "needs_image", "provision_failed", "update_failed", "stop_failed",
@@ -8,16 +9,27 @@ const INACTIVE_STATUSES = new Set([
 ]);
 
 function isSyncWriterEligible(session = {}, options = {}) {
+  if (isAutomationRuntime(session)) return false;
   if (options.eligible === false) return false;
   if (options.eligible === true) return true;
   return !INACTIVE_STATUSES.has(String(session.status || "").trim());
 }
 
 function isActiveSyncWriterSession(session = {}) {
-  return isSyncWriterEligible(session) && Boolean(session.id);
+  return isMainRuntime(session) && isSyncWriterEligible(session) && Boolean(session.id);
 }
 
 function resolveSyncWriterLease(workspace = {}, sessions = [], session = {}, sessionId, options = {}) {
+  if (isAutomationRuntime(session)) {
+    return {
+      sessionUpdates: {
+        syncWriterRole: "none",
+        syncWriterLeaseId: null,
+        syncWriterLeaseUpdatedAt: null,
+      },
+      workspaceUpdates: {},
+    };
+  }
   const eligible = isSyncWriterEligible(session, options);
   const currentOwnerId = String(workspace.syncWriterSessionId || "").trim();
   const owner = sessions.find((candidate) => candidate.id === currentOwnerId);

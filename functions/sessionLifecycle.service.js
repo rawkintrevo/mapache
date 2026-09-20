@@ -16,6 +16,7 @@ const {
   toClientDoc,
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
 const {assertNoActiveResize} = require("./sessionResize.service");
 const {sessionSourceMetadata} = require("./github.service");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
@@ -67,7 +68,8 @@ async function requireSession(uid, workspaceId, sessionId, dependencies = {}) {
 }
 
 async function renameSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
-  const {sessionRef} = await requireSession(uid, workspaceId, sessionId, dependencies);
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
+  assertMainSession(sessionSnap.data());
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_session_name");
   await sessionRef.update({
@@ -80,6 +82,7 @@ async function renameSession(uid, workspaceId, sessionId, payload, dependencies 
 async function setSessionLongRunning(uid, workspaceId, sessionId, payload, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
   if (!isMarkedRuntimeSession(session)) throw httpError(409, "long_running_unavailable");
   if (!payload || typeof payload.enabled !== "boolean") throw httpError(400, "invalid_long_running");
   await sessionRef.update({
@@ -92,6 +95,7 @@ async function setSessionLongRunning(uid, workspaceId, sessionId, payload, depen
 async function resizeSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
   const {sessionRef, sessionSnap, workspace} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
   assertSupportedSessionLaunch(session);
   const resources = dependencies.normalizeRequestedSessionResources(payload, {defaultResources: null});
   if (isMarkedRuntimeSession(session)) {
@@ -116,6 +120,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   let session = sessionSnap.data();
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  assertMainSession(session);
   assertNoActiveResize(session);
   if (session.resizeOperationState === "failed") {
     await sessionRef.update({resizeOperationState: null, resizeOperationError: null});
@@ -373,6 +378,7 @@ function assertRuntimeRecreationAllowed(session) {
 async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
   assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "stopping", {
     ...runtimeSessionStateUpdate(session, "stopping"),
@@ -389,6 +395,7 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
 async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
   assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "deleting", {
     ...runtimeSessionStateUpdate(session, "stopping"),
@@ -464,6 +471,7 @@ async function reapIdleSessions(dependencies = {}) {
   const now = Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const session = doc.data();
+    if (isAutomationRuntime(session)) return {bypassed: true, bypassReason: "automation_runtime"};
     if (isMarkedRuntimeSession(session) && session.longRunning === true) {
       return {bypassed: true, bypassReason: "long_running"};
     }
@@ -527,6 +535,10 @@ async function reapIdleSessions(dependencies = {}) {
     stopped,
     failed: failed.length,
   };
+}
+
+function assertMainSession(session = {}) {
+  if (isAutomationRuntime(session)) throw httpError(409, "automation_session_controlled");
 }
 
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies) {

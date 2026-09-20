@@ -7,6 +7,10 @@ const path = require("node:path");
 const {agentSnapshotStoragePrefix, parseCompleteJsonl} = require("./agentSnapshot.service");
 const {CHECKPOINT_VERSION, WORKSPACE_FILE_NAMESPACE, validateRelativePath} = require("./agentCheckpoint.service");
 
+function isAutomationRuntime(config = {}) {
+  return String(config.runtimeKind || "").trim().toLowerCase() === "automation";
+}
+
 const AGENT_FILE_ROOTS = Object.freeze([
   {prefix: "sessions", kind: "pi-transcript", configKey: "piSessionDir"},
   {prefix: "pi", kind: "pi-setting", configKey: "piAgentDir"},
@@ -401,9 +405,10 @@ async function readPublishedPointers({config, db}) {
   }
   const workspaceRef = db.collection("workspaces").doc(config.workspaceId);
   if (typeof workspaceRef.get !== "function") throw restoreError("checkpoint_coordination_unavailable", "Checkpoint workspace reads are not configured");
+  const authorityRef = isAutomationRuntime(config) ? workspaceRef.collection("sessions").doc(config.sessionId) : workspaceRef;
   let snapshot;
   try {
-    snapshot = await workspaceRef.get();
+    snapshot = await authorityRef.get();
   } catch (error) {
     throw restoreError("checkpoint_coordination_unavailable", "Checkpoint authority could not be read", error);
   }

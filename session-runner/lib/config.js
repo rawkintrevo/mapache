@@ -14,6 +14,7 @@ const {
   INTERNAL_STORAGE_DIR,
   LEGACY_INTERNAL_STORAGE_DIR,
 } = require("./runtimePaths");
+const {isAutomationRuntime, normalizeRuntimeKind} = require("./runtimePaths");
 
 function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
@@ -47,6 +48,9 @@ function parseRunnerCapabilities() {
 
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
+  const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
+  const automationRunId = isAutomationRuntime(runtimeKind) ?
+    String(process.env.MAPACHE_AUTOMATION_RUN_ID || process.env.AUTOMATION_RUN_ID || "").trim() : "";
   const homeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
   const piHomeDir = path.join(homeDir, ".pi");
   const agentUiVersion = normalizeEnvString(process.env.MAPACHE_AGENT_UI_VERSION);
@@ -88,6 +92,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     agentAccessAudience: "agent",
     agentRuntimeEnabled,
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
+    automationRunId,
     workspaceAuthorityRenewalIntervalMs: positiveNumber(process.env.MAPACHE_WORKSPACE_AUTHORITY_RENEWAL_INTERVAL_MS, 5000),
     agentStateRoot,
     agentUiVersion,
@@ -187,6 +192,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     previewLogLimit: positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500),
     previewStaticRoot: path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
     runnerCapabilities,
+    runtimeKind,
     sessionBrowserTokenSecret: normalizeEnvString(process.env.SESSION_BROWSER_TOKEN_SECRET),
     sessionId: process.env.SESSION_ID || "",
     sessionName: normalizeEnvString(process.env.SESSION_NAME) || "Terminal session",

@@ -224,6 +224,26 @@ test("commitCheckpoint rejects a writer revoked after upload", async (t) => {
   assert.equal(store.workspace.agentRuntimeCheckpoint, undefined);
 });
 
+test("automation checkpoints update only the run session pointer", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-agent-checkpoint-test-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root, {runtimeKind: "automation", automationRunId: "run-1", sessionId: "session-1"});
+  const store = admittedStore();
+  store.workspace.agentRuntimeCheckpoint = {captureId: "main-pointer"};
+  Object.assign(store.session, {
+    runtimeKind: "automation",
+    automationRunId: "run-1",
+    agentRuntimeSessionId: "session-1",
+  });
+  const capture = await makeCapture(t, config);
+  const uploaded = await uploadCapture({admin, capture, config, db: store.db, storage: createStorage()});
+  const result = await createAgentCheckpointService({admin, config, db: store.db, storage: createStorage()}).commitCheckpoint(uploaded);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(store.workspace.agentRuntimeCheckpoint, {captureId: "main-pointer"});
+  assert.equal(store.session.agentRuntimeCheckpoint.captureId, "capture-local");
+});
+
 test("publishWorkspaceFiles commits tombstones and stale delayed writers cannot delete newer files", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-agent-checkpoint-test-"));
   t.after(() => fs.rm(root, {recursive: true, force: true}));

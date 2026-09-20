@@ -73,6 +73,24 @@ describe("sessionSubscriptionController", () => {
     expect(fixture.onSelectedSessionChanged).toHaveBeenCalledTimes(3);
   });
 
+  test("keeps automation sessions out of the main session view and canonical selection", async () => {
+    const fixture = createFixture();
+    const load = fixture.controller.loadSessions();
+    const listener = fixture.listeners.get("workspace-1");
+    listener.onSessions([
+      {id: "auto-run-1", runtimeKind: "automation", status: "running"},
+      {id: "main-session", status: "stopped"},
+    ]);
+    await load;
+
+    expect(fixture.state.sessions).toEqual([{id: "main-session", status: "stopped"}]);
+    expect(fixture.state.selectedSessionId).toBe("main-session");
+    expect(fixture.controller.chooseCanonicalSession([
+      {id: "auto-run-2", runtimeKind: "automation", status: "running"},
+      {id: "main-session", status: "stopped"},
+    ])).toEqual({id: "main-session", status: "stopped"});
+  });
+
   test("ignores errors from a detached workspace listener", async () => {
     const fixture = createFixture();
     const firstLoad = fixture.controller.loadSessions();

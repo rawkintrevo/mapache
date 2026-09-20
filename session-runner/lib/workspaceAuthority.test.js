@@ -68,6 +68,10 @@ function config(sessionId, generation) {
   };
 }
 
+function automationConfig(sessionId, generation, runId) {
+  return {...config(sessionId, generation), runtimeKind: "automation", automationRunId: runId};
+}
+
 function initialStore() {
   const workspace = {
     agentUiVersion: "pi-web-ui-v1",
@@ -179,4 +183,39 @@ test("keeps the admitted writer usable for the bounded final save during stoppin
   await authority.acquire();
   await authority.assertCurrentWriter();
   assert.equal(authority.isCurrentWriter(), true);
+});
+
+test("automation authority is session-scoped and rejects a duplicate boot without touching workspace authority", async () => {
+  const store = createStore({agentUiVersion: "pi-web-ui-v1"}, {
+    "auto-run-1": {
+      agentUiVersion: "pi-web-ui-v1",
+      runtimeKind: "automation",
+      automationRunId: "run-1",
+      agentRuntimeSessionId: "auto-run-1",
+      agentRuntimeGeneration: 1,
+      agentRuntimeState: "starting",
+      status: "provisioning",
+    },
+  });
+  const first = createWorkspaceAuthority({
+    admin,
+    config: automationConfig("auto-run-1", 1, "run-1"),
+    db: store.db,
+    instanceId: "boot-a",
+  });
+  const duplicate = createWorkspaceAuthority({
+    admin,
+    config: automationConfig("auto-run-1", 1, "run-1"),
+    db: store.db,
+    instanceId: "boot-b",
+  });
+
+  await first.acquire();
+  assert.equal(store.workspace.agentRuntimeBootInstanceId, undefined);
+  assert.equal(store.sessions["auto-run-1"].agentRuntimeBootInstanceId, "boot-a");
+  await assert.rejects(() => duplicate.acquire(), (error) => error.code === "workspace_runtime_authority_denied");
+  await first.assertCurrentWriter();
+  await first.release("test");
+  assert.equal(store.workspace.agentRuntimeBootInstanceId, undefined);
+  assert.equal(store.sessions["auto-run-1"].agentRuntimeBootInstanceId, null);
 });

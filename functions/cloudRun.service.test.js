@@ -161,6 +161,16 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_UI_VERSION, "pi-web-ui-v1");
   assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_RUNTIME_GENERATION, "7");
 
+  const automationEnv = envMap(await sessionRunnerEnv({
+    automationRunId: "run-123",
+    runtimeKind: "automation",
+    runnerSessionId: "auto-run-123",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }));
+  assert.strictEqual(automationEnv.MAPACHE_RUNTIME_KIND, "automation");
+  assert.strictEqual(automationEnv.MAPACHE_AUTOMATION_RUN_ID, "run-123");
+
   const previewEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",
     workspaceId: "workspace-1",

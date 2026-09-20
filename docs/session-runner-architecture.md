@@ -39,6 +39,14 @@ materialization, authority acquisition, the pinned adapter, or upstream health
 checks fail. No startup path installs or patches `pi-goal-x`, starts Goals RPC,
 tails a transcript into a second UI, or automatically launches a second Pi TUI.
 
+The main runtime uses the workspace and session documents as a paired authority
+record. An automation runtime uses only its deterministic run session for
+generation, boot admission, heartbeat, and writer fencing, so multiple
+automation runs can coexist without replacing the main workspace identity or
+each other. Automation checkpoint and workspace-file pointers are committed on
+that session document; a stale or duplicate boot is rejected before agent or
+shared-file writes.
+
 Quiesce rejects new work and waits for the managed child and writers to stop.
 The runner then captures a final acknowledged checkpoint, closes browser/SSH
 forwards, snapshots Chrome state when applicable, releases authority, and
@@ -82,6 +90,10 @@ ownership. Marked workspace-file publication is generation/boot fenced and
 cannot be replaced by stale delayed writers. Credentials, provider-key stores,
 MCP OAuth state, GitHub CLI auth, and other secret-bearing paths are excluded
 from persistent agent snapshots and recreated from Mapache stores.
+
+Checkpoint publication selects the workspace pointer for main runtimes and the
+run-session pointer for automation runtimes. Both paths require the current
+session/generation/boot identity and admitted authority before publishing.
 
 ## Invariants
 

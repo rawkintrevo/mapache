@@ -143,6 +143,8 @@ async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
   const sessions = [
     {id: "stopped", status: "stopped", updatedAt: "2026-09-13T12:00:00Z"},
     {id: "running", status: "running", updatedAt: "2026-09-13T11:00:00Z"},
+    {id: "auto-run-a", runtimeKind: "automation", status: "running", updatedAt: "2026-09-14T12:00:00Z"},
+    {id: "auto-run-b", runtimeKind: "automation", status: "running", updatedAt: "2026-09-15T12:00:00Z"},
   ];
   const dependencies = {
     admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
