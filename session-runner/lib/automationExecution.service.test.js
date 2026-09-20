@@ -232,3 +232,26 @@ test("a persisted claim from a lost boot is recovered as interrupted without sub
   assert.equal(db.data.get("automationRuns/run-1").status, "interrupted");
   assert.equal(db.data.get("automationRuns/run-1").executionErrorCode, "automation_execution_already_claimed");
 });
+
+test("runner shutdown cooperatively cancels submitted work and honors a committed stop", async () => {
+  let canceled = 0;
+  const {db, service} = setup({
+    adapter: {
+      automationStatus: async () => ({ok: true, runId: "run-1", status: "running"}),
+      startAutomation: async () => ({ok: true, runId: "run-1", status: "running"}),
+      cancelAutomation: async () => {
+        canceled += 1;
+        return {ok: true, runId: "run-1", status: "canceled"};
+      },
+    },
+  });
+
+  await service.start();
+  db.data.get("automationRuns/run-1").status = "stopping";
+  db.data.get("automationRuns/run-1").desiredOutcome = "canceled";
+  db.data.get("automationRuns/run-1").cancellationRequestedAt = "STOP_REQUESTED";
+  await service.stop({cancel: true});
+  assert.equal(canceled, 1);
+  assert.equal(db.data.get("automationRuns/run-1").status, "canceled");
+  assert.equal(db.data.get("automationRuns/run-1").desiredOutcome, "canceled");
+});

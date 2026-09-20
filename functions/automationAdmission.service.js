@@ -164,7 +164,8 @@ async function releaseAfterCleanup(runId, options = {}, dependencies = {}) {
     if (!runSnap.exists) return;
     const run = runSnap.data() || {};
     workspaceId = String(run.workspaceId || "").trim();
-    if (!workspaceId || !isTerminalAutomationStatus(run.status) || normalize(run.cleanupState) !== "complete") return;
+    if (!workspaceId || !isTerminalAutomationStatus(run.status) ||
+        !["complete", "error"].includes(normalize(run.cleanupState))) return;
     const workspaceRef = firestore.collection("workspaces").doc(workspaceId);
     const workspaceSnap = await transaction.get(workspaceRef);
     if (!workspaceSnap.exists) return;
@@ -203,7 +204,7 @@ function assertMainAdmissionAllowed(workspace = {}) {
 function isReservedAutomationRun(run = {}) {
   if (isAutomationRuntime(run)) return false;
   return isActiveAutomationStatus(run.status) ||
-    (isTerminalAutomationStatus(run.status) && normalize(run.cleanupState) === "pending");
+    (isTerminalAutomationStatus(run.status) && ["pending", "error"].includes(normalize(run.cleanupState)));
 }
 
 function runAllowsParallelWithMain(run = {}) {

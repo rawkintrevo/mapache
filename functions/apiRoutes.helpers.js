@@ -91,6 +91,9 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "cancel") {
     return {name: "automationRunCancel", runId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "stop") {
+    return {name: "automationRunStop", runId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "events") {
     return {name: "automationRunEvents", runId: parts[1]};
   }

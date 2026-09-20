@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({agentAuthService, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({agentAuthService, automationCleanupService = {}, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -23,6 +23,7 @@ function createApiHandlers({agentAuthService, automationDefinitionsService = {},
     enqueueAutomationRun: automationRunsService.enqueueRun,
     restartAutomationRun: automationRunsService.restartRun,
     cancelAutomationRun: automationRunsService.cancelQueuedRun,
+    stopAutomationRun: automationCleanupService.stopRun,
     listAutomationRuns: automationHistoryService.listRuns,
     getAutomationRun: automationHistoryService.getRun,
     listAutomationRunEvents: automationHistoryService.listEvents,

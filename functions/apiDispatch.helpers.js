@@ -57,6 +57,7 @@ const ROUTE_DISPATCHERS = Object.freeze({
       user, route.runId, {idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey},
     ))],
     ["POST", "automationRunCancel", jsonResult(({handlers, route, user}) => handlers.cancelAutomationRun(user, route.runId))],
+    ["POST", "automationRunStop", jsonResult(({handlers, route, user}) => handlers.stopAutomationRun(user, route.runId))],
   ]),
   workspaceStorage: Object.freeze([
     ["POST", "automationStoragePrepare", acceptedJsonResult(({handlers, route, user}) =>

@@ -85,7 +85,7 @@ function createRunnerLifecycleCoordinator({
 
   async function shutdownInternal({reason, budgetMs}) {
     const deadline = now() + Math.max(1, Number(budgetMs) || 120_000);
-    automationExecution?.stop?.();
+    await automationExecution?.stop?.({cancel: true});
     checkpointScheduler?.stop?.();
     try {
       if (config.agentRuntimeEnabled) {

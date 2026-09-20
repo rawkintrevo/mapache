@@ -216,6 +216,18 @@ an execution-duration cap. A failure records a stable error and desired
 `failed` outcome with `cleanupState=pending`, retaining the concurrency slot
 until the later cleanup path confirms service absence.
 
+`POST /api/automation-runs/{runId}/stop` is the owner-authorized cancellation
+boundary. Queued runs are canceled in their admission transaction; admitted
+runs move to `stopping` with `desiredOutcome=canceled`, then the cleanup worker
+uses the same run-scoped shutdown path as normal completion. Stop and completion
+are serialized by the run transaction, so a committed cancellation wins until
+a terminal outcome has already been committed. Cleanup deletes only the
+deterministic automation Cloud Run service, confirms absence, finalizes the
+run, releases exactly one concurrency reservation, and wakes the queue. A
+failed deletion leaves the run stopping or terminal with `cleanupState=error`
+and retains its slot for a later retry. Forced or incomplete checkpoint saves
+surface `persistenceState=partial` and never claim that all files were saved.
+
 An admitted automation runner resolves its assignment from the owner-bound run
 record only after its session boot has been admitted. The runner claims
 `executionStartedAt` exactly once before invoking the private pi-web-ui

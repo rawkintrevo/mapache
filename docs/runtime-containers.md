@@ -194,6 +194,14 @@ stopped transition, and records an interrupted-checkpoint warning. This is the
 controlled recovery path for a fenced replacement boot; it does not permit
 heartbeat-only authority takeover or concurrent writers.
 
+For an automation runtime, the protected shutdown request first sends a
+run-scoped cancellation through the private pi-web-ui control socket, then
+awaits the same bounded agent quiesce and checkpoint/artifact finalization used
+by ordinary runner shutdown. The Functions cleanup worker deletes only the
+deterministic `mpauto-{runId-hash}` service after that request, confirms the
+service is absent, and only then releases the automation slot. A timeout or
+unclosed writer is retained as interrupted/partial persistence evidence.
+
 Managed agent persistence capture and restore live in
 `session-runner/lib/agentSnapshot.service.js`,
 `session-runner/lib/agentCheckpoint.service.js`, and

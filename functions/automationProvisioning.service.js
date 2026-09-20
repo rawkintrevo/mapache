@@ -74,7 +74,8 @@ async function provisionAutomationRun(runId, dependencies = {}) {
     assertSharedStorageReady(workspace);
     const session = await ensureAutomationSession(run, workspace, dependencies);
     sessionRef = dependencies.sessionCollection(run.workspaceId).doc(session.id);
-    await attachSessionToRun(runRef, run, session, dependencies);
+    const attached = await attachSessionToRun(runRef, run, session, dependencies);
+    if (!attached) return {skipped: "run_stopping", runId: normalizedRunId, sessionId: session.id};
 
     const currentSessionSnap = await sessionRef.get();
     const currentSession = currentSessionSnap.exists ?
@@ -179,11 +180,11 @@ async function ensureAutomationSession(run, workspace, dependencies = {}) {
 
 async function attachSessionToRun(runRef, run, session, dependencies = {}) {
   const now = (dependencies.admin || defaultAdmin).firestore.FieldValue.serverTimestamp();
-  await dependencies.db.runTransaction(async (transaction) => {
+  return dependencies.db.runTransaction(async (transaction) => {
     const currentSnap = await transaction.get(runRef);
-    if (!currentSnap.exists) return;
+    if (!currentSnap.exists) return false;
     const current = currentSnap.data() || {};
-    if (isTerminalAutomationStatus(current.status)) return;
+    if (isTerminalAutomationStatus(current.status) || current.status === "stopping" || current.desiredOutcome === "canceled") return false;
     transaction.update(runRef, {
       sessionId: session.id,
       provisioningState: "provisioning",
@@ -195,6 +196,7 @@ async function attachSessionToRun(runRef, run, session, dependencies = {}) {
       },
       updatedAt: now,
     });
+    return true;
   });
 }
 

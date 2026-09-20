@@ -52,6 +52,15 @@ claim and submission cannot replay an unattended prompt. Terminal outcomes are
 normalized to stable Firestore codes and leave `cleanupState: "pending"` for
 the existing cleanup path.
 
+When the protected runner shutdown route is used for an automation assignment,
+the runner first asks pi-web-ui to cancel the run through its private control
+socket, waits for that bounded response, and then quiesces the managed agent
+and finalizes the normal checkpoint/artifact pipeline. A cancellation already
+committed by Functions is preserved if the upstream reports success during the
+race. If the cooperative request or final persistence cannot be acknowledged,
+the control plane deletes the deterministic run service and records partial
+checkpoint evidence rather than reporting a complete save.
+
 The main runtime uses the workspace and session documents as a paired authority
 record. An automation runtime uses only its deterministic run session for
 generation, boot admission, heartbeat, and writer fencing, so multiple

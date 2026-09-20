@@ -154,9 +154,24 @@ function createAutomationExecutionService({
     return status();
   }
 
-  function stop() {
+  async function stop({cancel = false} = {}) {
     stopped = true;
     clearPollTimer();
+    if (cancel && execution && !execution.terminal) {
+      try {
+        if (execution.submitted && typeof piWebUi?.cancelAutomation === "function") {
+          await bounded(
+              Promise.resolve(piWebUi.cancelAutomation(execution.runId)),
+              statusTimeoutMs,
+              "automation_cancel_timeout",
+          );
+        }
+        await writeOutcome("canceled", "automation_canceled");
+      } catch (error) {
+        await writeOutcome("canceled", normalizeFailureCode(error?.code, "automation_cancel_failed"))
+            .catch((writeError) => logger.warn?.("automation cancellation write failed", safeError(writeError)));
+      }
+    }
     return status();
   }
 
@@ -172,6 +187,9 @@ function createAutomationExecutionService({
       const assignment = validateAssignment({authority, workspaceSnap, sessionSnap, runSnap, refs});
       if (assignment.runStatus === "succeeded" || AUTOMATION_TERMINAL_STATUSES.has(assignment.runStatus)) {
         return {action: "skip", reason: `status_${assignment.runStatus}`};
+      }
+      if (assignment.runStatus === "stopping" || assignment.desiredOutcome === "canceled") {
+        return {action: "skip", reason: "cancellation_requested"};
       }
       if (!AUTOMATION_ACTIVE_RUN_STATUSES.has(assignment.runStatus)) {
         throw automationError("automation_assignment_not_active");
@@ -244,27 +262,30 @@ function createAutomationExecutionService({
       const run = runSnap.data() || {};
       const currentStatus = String(run.status || "").trim().toLowerCase();
       if (AUTOMATION_TERMINAL_STATUSES.has(currentStatus)) return false;
+      const cancellationCommitted = run.desiredOutcome === "canceled" ||
+        (currentStatus === "stopping" && run.cancellationRequestedAt);
+      const effectiveStatus = cancellationCommitted ? "canceled" : status;
       const normalizedError = errorCode ? normalizeFailureCode(errorCode, "automation_execution_failed") : null;
       const conversationId = cleanId(response?.conversationId) || execution.conversationId;
       const runUpdates = {
         cleanupState: "pending",
-        desiredOutcome: status === "succeeded" ? "succeeded" : status,
+        desiredOutcome: effectiveStatus,
         endedAt: timestamp,
         executionEndedAt: timestamp,
         executionHeartbeatAt: timestamp,
-        executionOutcome: status,
-        executionState: status,
+        executionOutcome: effectiveStatus,
+        executionState: effectiveStatus,
         ...(conversationId ? {conversationId, executionConversationId: conversationId} : {}),
         ...(normalizedError ? {executionErrorCode: normalizedError, lastError: normalizedError} : {}),
-        status,
+        status: effectiveStatus,
         updatedAt: timestamp,
       };
       transaction.update(refs.runRef, runUpdates);
       transaction.update(refs.sessionRef, {
         automationExecutionEndedAt: timestamp,
         automationExecutionHeartbeatAt: timestamp,
-        automationExecutionOutcome: status,
-        automationExecutionState: status,
+        automationExecutionOutcome: effectiveStatus,
+        automationExecutionState: effectiveStatus,
         ...(conversationId ? {automationConversationId: conversationId} : {}),
         ...(normalizedError ? {automationExecutionErrorCode: normalizedError} : {}),
         updatedAt: timestamp,
@@ -401,6 +422,7 @@ function createAutomationExecutionService({
       prompt,
       runId: run.runId,
       runStatus,
+      desiredOutcome: run.desiredOutcome || null,
       executionStartedAt: run.executionStartedAt || null,
     };
   }

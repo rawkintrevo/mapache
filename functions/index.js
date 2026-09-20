@@ -42,6 +42,7 @@ const {
 const {requireUser, updateUserTimezone} = require("./auth.service");
 const {previewAutomationSchedule} = require("./automationSchedule.helpers");
 const {createAutomationAdmissionService} = require("./automationAdmission.service");
+const {createAutomationCleanupService} = require("./automationCleanup.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationHistoryService} = require("./automationHistory.service");
 const {
@@ -293,6 +294,18 @@ const {
   handleAutomationSessionEvent,
 } = automationProvisioningService;
 
+const automationCleanupService = createAutomationCleanupService({
+  admin,
+  db,
+  deleteSessionService,
+  releaseAutomationSlot: automationAdmissionService.releaseAutomationSlot,
+  sessionCollection,
+  wakeQueue: wakeAutomationQueue,
+});
+const {
+  handleAutomationRunEvent: handleAutomationCleanupEvent,
+} = automationCleanupService;
+
 const workspaceSharedStorageService = createWorkspaceSharedStorageService({
   admin,
   auth,
@@ -361,6 +374,7 @@ function googleMcpTokenRefreshUrl() {
 
 const API_HANDLERS = createApiHandlers({
   agentAuthService,
+  automationCleanupService,
   automationDefinitionsService,
   automationHistoryService,
   automationRunsService,
@@ -528,6 +542,19 @@ exports.provisionAutomationRun = onDocumentWritten({
     GOOGLE_OAUTH_ENCRYPTION_KEY,
   ],
 }, handleAutomationRunEvent);
+
+exports.cleanupAutomationRun = onDocumentWritten({
+  document: "automationRuns/{runId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, handleAutomationCleanupEvent);
 
 exports.reconcileAutomationSessionProvisioning = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",

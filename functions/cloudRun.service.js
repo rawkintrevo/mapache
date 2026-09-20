@@ -19,6 +19,7 @@ const {
 } = require("./backendConfig");
 const {
   cleanName,
+  cloudRunServiceName,
   defaultPreviewStaticRoot,
   httpError,
   isGoogleAlreadyExists,
@@ -34,6 +35,7 @@ const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {agentRuntimeEnvironment} = require("./agentRuntime.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
+const {automationCloudRunServiceId} = require("./provisioning.helpers");
 const {
   isMarkedRuntimeSession,
   runtimeSessionStateUpdate,
@@ -380,13 +382,15 @@ async function markChromeWorkspaceSessionRunning(sessionRef, session, dependenci
 }
 
 async function deleteSessionService(sessionRef, session, options = {}, dependencies = {}) {
-  if (!session.serviceName) {
-    await markSessionStopped(dependencies, sessionRef, session, options.reason);
-    return true;
+  const serviceName = deletionServiceName(session);
+  if (!serviceName) {
+    await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
+    return deletionResult(options, {serviceAbsent: true, shutdownAcknowledged: true, skipped: true});
   }
 
+  let shutdownResult = {ok: true, skipped: true};
   try {
-    const shutdownResult = await requestRunnerShutdown(session, {
+    shutdownResult = await requestRunnerShutdown(session, {
       requireAcknowledgement: false,
       timeoutMs: dependencies.shutdownTimeoutMs,
     });
@@ -399,22 +403,30 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       throw error;
     }
     const client = await (dependencies.auth || auth).getClient();
-    const url = `https://run.googleapis.com/v2/${session.serviceName}`;
+    const url = `https://run.googleapis.com/v2/${serviceName}`;
     const response = await client.request({url, method: "DELETE"});
     await waitForOperation(client, response.data, dependencies);
-    const deletionConfirmed = await waitForCloudRunServiceDeleted(client, session.serviceName, dependencies);
-    await markSessionStopped(dependencies, sessionRef, session, options.reason);
+    const deletionConfirmed = await waitForCloudRunServiceDeleted(client, serviceName, dependencies);
+    await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
     if (deletionConfirmed === "absent" && (options.recoveryWarning || !shutdownResult.ok)) {
       await recordInterruptedRuntimeWarning(sessionRef);
     }
-    return true;
+    return deletionResult(options, {
+      serviceAbsent: true,
+      shutdownAcknowledged: shutdownResult.ok !== false,
+      persistenceWarning: options.recoveryWarning || shutdownResult.ok === false,
+    });
   } catch (error) {
     if (isGoogleNotFound(error)) {
-      await markSessionStopped(dependencies, sessionRef, session, options.reason);
-      if (options.recoveryWarning) {
+      await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
+      if (options.recoveryWarning || shutdownResult.ok === false) {
         await recordInterruptedRuntimeWarning(sessionRef);
       }
-      return true;
+      return deletionResult(options, {
+        serviceAbsent: true,
+        shutdownAcknowledged: shutdownResult.ok !== false,
+        persistenceWarning: options.recoveryWarning || shutdownResult.ok === false,
+      });
     }
 
     const failureState = options.reason === "manual" || options.reason === "idle_timeout" ? "stop_failed" : "delete_failed";
@@ -422,8 +434,29 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {reconciliationReason: failureState === "stop_failed" ? "cloud_run_stop_failed" : "cloud_run_delete_failed"}));
-    return false;
+    return deletionResult(options, {
+      serviceAbsent: false,
+      shutdownAcknowledged: shutdownResult.ok !== false,
+      errorCode: cleanName(error.code || "cloud_run_delete_failed"),
+    });
   }
+}
+
+function deletionServiceName(session = {}) {
+  if (isAutomationRuntime(session)) {
+    const runId = String(session.automationRunId || session.runId || "").trim();
+    if (runId) return cloudRunServiceName(session.region || DEFAULT_REGION, automationCloudRunServiceId(runId));
+  }
+  return String(session.serviceName || "").trim();
+}
+
+function deletionResult(options, result) {
+  return options.returnDetails === true ? result : result.serviceAbsent === true;
+}
+
+async function markSessionStoppedIfNeeded(dependencies, sessionRef, session, options = {}) {
+  if (options.skipSessionState === true) return;
+  await markSessionStopped(dependencies, sessionRef, session, options.reason);
 }
 
 async function markSessionStopped(dependencies, sessionRef, session, reason) {
