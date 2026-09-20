@@ -49,6 +49,7 @@ const {
   createWorkspaceService,
   requireWorkspace,
 } = require("./workspace.service");
+const {createWorkspaceSharedStorageService} = require("./workspaceSharedStorage.service");
 const {
   createCloudRunService,
   runnerServiceAccountValue,
@@ -253,10 +254,18 @@ const {provisionQueuedSession} = createProvisioningWorker({
   releaseWorkspaceSyncWriterLease,
 });
 
+const workspaceSharedStorageService = createWorkspaceSharedStorageService({
+  admin,
+  auth,
+  db,
+  requireWorkspace,
+  storage,
+});
 const workspaceService = createWorkspaceService({
   admin,
   db,
   deleteSessionService,
+  deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
 });
@@ -330,7 +339,10 @@ const API_HANDLERS = createApiHandlers({
 Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
   configurable: false,
   enumerable: false,
-  value: Object.freeze({restartSession}),
+  value: Object.freeze({
+    prepareWorkspaceSharedStorage: workspaceSharedStorageService.prepareWorkspaceSharedStorage,
+    restartSession,
+  }),
   writable: false,
 });
 

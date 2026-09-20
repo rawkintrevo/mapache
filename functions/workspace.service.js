@@ -61,7 +61,7 @@ async function listWorkspaces(uid, dependencies = {}) {
   const workspaces = await Promise.all(snap.docs.map((doc) =>
     ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
   ));
-  return workspaces.map(serialize).sort(sortByUpdatedAtDesc);
+  return workspaces.map(serializeWorkspaceForClient).sort(sortByUpdatedAtDesc);
 }
 
 async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
@@ -95,7 +95,7 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
     await updateCanonicalSessionResources(workspaceRef, workspace, update.resources, workspaceAdmin);
   }
   await workspaceRef.update(update);
-  return toClientDoc(await workspaceRef.get());
+  return serializeWorkspaceForClient(toClientDoc(await workspaceRef.get()));
 }
 
 async function updateCanonicalSessionResources(workspaceRef, workspace, resources, workspaceAdmin) {
@@ -134,20 +134,22 @@ async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
 }
 
 async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
-  const workspaceRef = db.collection("workspaces").doc(workspaceId);
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
   const workspaceSnap = await workspaceRef.get();
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
   const workspace = {id: workspaceSnap.id, ...workspaceSnap.data()};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
 
-  const sessionSnap = await workspaceSessionCollection(workspaceId).get();
+  const sessionSnap = await workspaceRef.collection("sessions").get();
   for (const sessionDoc of sessionSnap.docs) assertNoActiveResize(sessionDoc.data() || {});
   for (const sessionDoc of sessionSnap.docs) {
     const session = sessionDoc.data() || {};
     if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
     await sessionDoc.ref.update({
       status: "deleting",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
     });
     const serviceDeleted = await dependencies.deleteSessionService(
         sessionDoc.ref,
@@ -157,9 +159,15 @@ async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
     if (!serviceDeleted) throw httpError(502, "workspace_delete_failed");
   }
 
-  await deleteWorkspaceStorageIfUnshared(uid, workspace);
-  if (typeof db.recursiveDelete === "function") {
-    await db.recursiveDelete(workspaceRef);
+  await deleteWorkspaceStorageIfUnshared(uid, workspace, {
+    admin: workspaceAdmin,
+    db: workspaceDb,
+  });
+  if (typeof dependencies.deleteWorkspaceSharedStorage === "function") {
+    await dependencies.deleteWorkspaceSharedStorage(uid, workspaceId, {reason: "workspace_deleted"});
+  }
+  if (typeof workspaceDb.recursiveDelete === "function") {
+    await workspaceDb.recursiveDelete(workspaceRef);
   } else {
     for (const sessionDoc of sessionSnap.docs) {
       await sessionDoc.ref.delete();
@@ -402,12 +410,14 @@ function parsePublicGitHubRepoUrl(value) {
   };
 }
 
-async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
+async function deleteWorkspaceStorageIfUnshared(uid, workspace, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
   const bucketName = workspace.bucket || DEFAULT_BUCKET;
   const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
   if (!bucketName || !prefix) return;
 
-  const sameOwnerSnap = await db.collection("workspaces")
+  const sameOwnerSnap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
   const shared = sameOwnerSnap.docs.some((doc) => {
@@ -420,7 +430,20 @@ async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
     return;
   }
 
-  await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
+  await workspaceAdmin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
+}
+
+function serializeWorkspaceForClient(value) {
+  const serialized = serialize(value);
+  if (!serialized || typeof serialized !== "object" || Array.isArray(serialized)) return serialized;
+  if (serialized.sharedStorage) {
+    serialized.sharedStorage = {
+      state: serialized.sharedStorage.state || serialized.sharedStorageState || "legacy",
+      errorCode: serialized.sharedStorage.errorCode || serialized.sharedStorageErrorCode || null,
+    };
+  }
+  delete serialized.sharedStorageOperationId;
+  return serialized;
 }
 
 async function requireWorkspace(uid, workspaceId) {
