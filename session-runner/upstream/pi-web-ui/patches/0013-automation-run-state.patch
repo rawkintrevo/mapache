@@ -1,0 +1,314 @@
+diff --git a/server/automation-run-state.ts b/server/automation-run-state.ts
+new file mode 100644
+index 0000000..9abd748
+--- /dev/null
++++ b/server/automation-run-state.ts
+@@ -0,0 +1,207 @@
++/**
++ * Pure completion-state reducer for one unattended automation conversation.
++ *
++ * This module deliberately knows nothing about sockets, sessions, timers, or
++ * process lifetime. The caller owns event delivery and invokes the reducer
++ * with the run's persisted state. Only a final, non-retry agent result can
++ * produce success; log silence and aggregate turn counters are not signals.
++ */
++
++export type AutomationTerminal = "succeeded" | "failed" | "canceled" | "interaction_required";
++
++export interface AutomationRunState {
++	runId: string;
++	conversationId: string | null;
++	submitted: boolean;
++	agentEnded: boolean;
++	modelEnded: boolean;
++	toolIds: string[];
++	subagentIds: string[];
++	backgroundTaskIds: string[];
++	inputRequestIds: string[];
++	interactionRequired: boolean;
++	finalResult: "success" | "error" | null;
++	finalError: string | null;
++	terminal: AutomationTerminal | null;
++	seenEventIds: string[];
++}
++
++type BaseEvent = {
++	runId: string;
++	conversationId: string;
++	eventId?: string;
++};
++
++export type AutomationRunEvent =
++	| (BaseEvent & { type: "started" })
++	| (BaseEvent & { type: "model_end"; error?: string; retryable?: boolean })
++	| (BaseEvent & { type: "agent_end"; result?: "success" | "error"; error?: string; willRetry?: boolean })
++	| (BaseEvent & { type: "tool_start"; taskId: string })
++	| (BaseEvent & { type: "tool_end"; taskId: string; isError?: boolean; error?: string })
++	| (BaseEvent & { type: "subagent_start"; taskId: string })
++	| (BaseEvent & { type: "subagent_end"; taskId: string; isError?: boolean; error?: string })
++	| (BaseEvent & { type: "background_task_start"; taskId: string })
++	| (BaseEvent & { type: "background_task_end"; taskId: string; isError?: boolean; error?: string })
++	| (BaseEvent & { type: "error"; source?: "model" | "tool" | "subagent" | "background"; error: string; retryable?: boolean })
++	| (BaseEvent & { type: "input_requested"; requestId: string })
++	| (BaseEvent & { type: "input_canceled"; requestId: string })
++	| (BaseEvent & { type: "canceled"; error?: string });
++
++function unique(values: string[]): string[] {
++	return [...new Set(values)];
++}
++
++function cleanId(value: unknown): string {
++	return String(value ?? "").trim();
++}
++
++function cleanError(value: unknown): string | null {
++	const error = String(value ?? "").trim();
++	return error || null;
++}
++
++function pendingWork(state: AutomationRunState): boolean {
++	return state.toolIds.length > 0 ||
++		state.subagentIds.length > 0 ||
++		state.backgroundTaskIds.length > 0;
++}
++
++function settle(state: AutomationRunState): AutomationRunState {
++	if (state.terminal || pendingWork(state) || !state.agentEnded) return state;
++	if (state.interactionRequired) {
++		return { ...state, terminal: "interaction_required" };
++	}
++	if (state.finalResult === "error") {
++		return { ...state, terminal: "failed" };
++	}
++	if (state.finalResult === "success") {
++		return { ...state, terminal: "succeeded" };
++	}
++	return state;
++}
++
++export function createAutomationRunState(runId: string): AutomationRunState {
++	const normalizedRunId = cleanId(runId);
++	if (!normalizedRunId) throw new Error("automation_run_id_required");
++	return {
++		runId: normalizedRunId,
++		conversationId: null,
++		submitted: false,
++		agentEnded: false,
++		modelEnded: false,
++		toolIds: [],
++		subagentIds: [],
++		backgroundTaskIds: [],
++		inputRequestIds: [],
++		interactionRequired: false,
++		finalResult: null,
++		finalError: null,
++		terminal: null,
++		seenEventIds: [],
++	};
++}
++
++function owned(state: AutomationRunState, event: AutomationRunEvent): boolean {
++	if (event.runId !== state.runId) return false;
++	if (!state.conversationId) return event.type === "started";
++	return event.conversationId === state.conversationId;
++}
++
++function markSeen(state: AutomationRunState, eventId: string | undefined): AutomationRunState {
++	const id = cleanId(eventId);
++	return id && !state.seenEventIds.includes(id) ? {
++		...state,
++		seenEventIds: [...state.seenEventIds, id],
++	} : state;
++}
++
++function remove(values: string[], value: string): string[] {
++	return values.filter((candidate) => candidate !== value);
++}
++
++export function reduceAutomationRunState(
++	previous: AutomationRunState,
++	event: AutomationRunEvent,
++): AutomationRunState {
++	if (!owned(previous, event)) return previous;
++	const eventId = cleanId(event.eventId);
++	if (eventId && previous.seenEventIds.includes(eventId)) return previous;
++	let state = markSeen(previous, event.eventId);
++
++	if (event.type === "started") {
++		if (state.conversationId && state.conversationId !== event.conversationId) return previous;
++		return {
++			...state,
++			conversationId: event.conversationId,
++			submitted: true,
++		};
++	}
++	if (state.terminal) return state;
++
++	switch (event.type) {
++		case "tool_start":
++			if (event.taskId) state = {...state, toolIds: unique([...state.toolIds, event.taskId])};
++			break;
++		case "tool_end":
++			state = {...state, toolIds: remove(state.toolIds, event.taskId)};
++			break;
++		case "subagent_start":
++			if (event.taskId) state = {...state, subagentIds: unique([...state.subagentIds, event.taskId])};
++			break;
++		case "subagent_end":
++			state = {...state, subagentIds: remove(state.subagentIds, event.taskId)};
++			break;
++		case "background_task_start":
++			if (event.taskId) state = {...state, backgroundTaskIds: unique([...state.backgroundTaskIds, event.taskId])};
++			break;
++		case "background_task_end":
++			state = {...state, backgroundTaskIds: remove(state.backgroundTaskIds, event.taskId)};
++			break;
++		case "input_requested":
++			if (event.requestId) {
++				state = {
++					...state,
++					inputRequestIds: unique([...state.inputRequestIds, event.requestId]),
++					interactionRequired: true,
++				};
++			}
++			break;
++		case "input_canceled":
++			state = {...state, inputRequestIds: remove(state.inputRequestIds, event.requestId)};
++			break;
++		case "canceled":
++			return {
++				...state,
++				finalResult: "error",
++				finalError: cleanError(event.error) || "canceled",
++				terminal: "canceled",
++			};
++		case "model_end":
++			state = {
++				...state,
++				modelEnded: true,
++				...(event.retryable ? {} : event.error ? {finalError: cleanError(event.error)} : {}),
++			};
++			break;
++		case "error":
++			if (event.source === "model" && !event.retryable) {
++				state = {...state, finalResult: "error", finalError: cleanError(event.error)};
++			}
++			break;
++		case "agent_end":
++			if (!event.willRetry) {
++				state = {
++					...state,
++					agentEnded: true,
++					finalResult: event.result || (event.error ? "error" : "success"),
++					finalError: cleanError(event.error) || state.finalError,
++				};
++			}
++			break;
++	}
++	return settle(state);
++}
++
++export function isAutomationRunTerminal(state: AutomationRunState): boolean {
++	return state.terminal !== null;
++}
+diff --git a/server/automation-run-state.test.ts b/server/automation-run-state.test.ts
+new file mode 100644
+index 0000000..73a070d
+--- /dev/null
++++ b/server/automation-run-state.test.ts
+@@ -0,0 +1,95 @@
++import assert from "node:assert/strict";
++import {test} from "vitest";
++import {
++	createAutomationRunState,
++	isAutomationRunTerminal,
++	reduceAutomationRunState,
++	type AutomationRunEvent,
++} from "./automation-run-state.js";
++
++function apply(state: ReturnType<typeof createAutomationRunState>, ...events: AutomationRunEvent[]) {
++	return events.reduce(reduceAutomationRunState, state);
++}
++
++function event(type: AutomationRunEvent["type"], fields: Record<string, unknown> = {}): AutomationRunEvent {
++	return {type, runId: "run-1", conversationId: "conversation-1", ...fields} as AutomationRunEvent;
++}
++
++test("requires final non-retry agent end and drains tools, subagents, and background tasks", () => {
++	let state = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("tool_start", {taskId: "tool-1"}),
++		event("subagent_start", {taskId: "subagent-1"}),
++		event("background_task_start", {taskId: "background-1"}),
++		event("agent_end", {result: "success"}),
++	);
++	assert.equal(state.agentEnded, true);
++	assert.equal(state.terminal, null);
++	state = apply(
++		state,
++		event("tool_end", {taskId: "tool-1", isError: true}),
++		event("subagent_end", {taskId: "subagent-1"}),
++		event("background_task_end", {taskId: "background-1"}),
++	);
++	assert.equal(state.terminal, "succeeded");
++	assert.equal(isAutomationRunTerminal(state), true);
++});
++
++test("duplicate task and event IDs are idempotent", () => {
++	let state = apply(
++		createAutomationRunState("run-1"),
++		event("started", {eventId: "start-1"}),
++		event("started", {eventId: "start-1"}),
++		event("tool_start", {taskId: "tool-1", eventId: "tool-start-1"}),
++		event("tool_start", {taskId: "tool-1", eventId: "tool-start-2"}),
++	);
++	assert.deepEqual(state.toolIds, ["tool-1"]);
++	state = apply(state, event("tool_end", {taskId: "tool-1", eventId: "tool-end-1"}), event("tool_end", {taskId: "tool-1", eventId: "tool-end-1"}));
++	assert.deepEqual(state.toolIds, []);
++});
++
++test("wrong run or conversation cannot affect state", () => {
++	let state = apply(createAutomationRunState("run-1"), event("started"));
++	const wrongRun = {...event("agent_end", {result: "success"}), runId: "run-2"} as AutomationRunEvent;
++	const wrongConversation = {...event("agent_end", {result: "success"}), conversationId: "conversation-2"} as AutomationRunEvent;
++	state = reduceAutomationRunState(state, wrongRun);
++	state = reduceAutomationRunState(state, wrongConversation);
++	assert.equal(state.agentEnded, false);
++	assert.equal(state.terminal, null);
++});
++
++test("retrying agent end is not final, while a model error is terminal only when final", () => {
++	let state = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "error", error: "temporary", willRetry: true}),
++	);
++	assert.equal(state.agentEnded, false);
++	assert.equal(state.terminal, null);
++	state = apply(state, event("model_end", {error: "provider down", retryable: false}), event("agent_end", {result: "error", error: "provider down"}));
++	assert.equal(state.terminal, "failed");
++});
++
++test("tool failures do not fail a final successful agent result", () => {
++	const state = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("tool_start", {taskId: "tool-1"}),
++		event("tool_end", {taskId: "tool-1", isError: true, error: "recoverable"}),
++		event("agent_end", {result: "success"}),
++	);
++	assert.equal(state.finalError, null);
++	assert.equal(state.terminal, "succeeded");
++});
++
++test("input request becomes interaction_required, but cancellation wins before terminal commit", () => {
++	let state = apply(createAutomationRunState("run-1"), event("started"), event("input_requested", {requestId: "question-1"}));
++	assert.equal(state.interactionRequired, true);
++	assert.equal(state.terminal, null);
++	state = reduceAutomationRunState(state, event("canceled", {error: "runner stopped"}));
++	assert.equal(state.terminal, "canceled");
++
++	state = apply(createAutomationRunState("run-1"), event("started"), event("input_requested", {requestId: "question-1"}), event("agent_end", {result: "success"}));
++	assert.equal(state.terminal, "interaction_required");
++});

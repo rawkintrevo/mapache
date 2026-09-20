@@ -44,6 +44,16 @@ reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
 
+The pinned patch series also contains `server/automation-run-state.ts`, a pure
+reducer for one unattended automation run. It scopes events to the run and
+conversation, deduplicates event and task IDs, requires a final non-retry agent
+result plus drained tool/subagent/background work, and distinguishes
+`interaction_required`, failure, cancellation, and success. It never infers
+completion from log silence or aggregate turn counters and does not create
+sockets, sessions, or API clients; the later automation subscription layer
+owns event delivery. Changes to this reducer require the same upstream build
+and a rebuilt `pi-chrome` revision.
+
 The managed-only presentation patch removes the upstream name/logo, version
 controls, and repository link from the embedded header. It adds Chrome beside
 the upstream Chat, Terminal, and Git tabs; that control emits the typed

@@ -50,6 +50,7 @@
     "patches/0009-runtime-quiesce-control.patch",
     "patches/0010-completed-turn-counter.patch",
     "patches/0011-managed-navigation-and-chrome.patch",
-    "patches/0012-managed-capabilities.patch"
+    "patches/0012-managed-capabilities.patch",
+    "patches/0013-automation-run-state.patch"
   ]
 }
