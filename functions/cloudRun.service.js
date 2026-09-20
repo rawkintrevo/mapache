@@ -11,6 +11,7 @@ const {
   DEFAULT_BUCKET,
   DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
   DEFAULT_CPU,
+  DEFAULT_FUNCTION_REGION,
   DEFAULT_MEMORY,
   DEFAULT_REGION,
   DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS,
@@ -673,6 +674,8 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "TERMINAL_KIND", value: terminalKind},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
+    {name: "MAPACHE_AUTOMATION_AGENT_TOKEN_URL", value: automationAgentFunctionUrl("automationAgentToken")},
+    {name: "MAPACHE_AUTOMATION_AGENT_API_URL", value: automationAgentFunctionUrl("api")},
     ...agentRuntimeEnvironment(session),
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_ROLE", value: cleanName(session.syncWriterRole || "writer") || "writer"},
@@ -738,6 +741,12 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   }
 
   return env.filter(Boolean);
+}
+
+function automationAgentFunctionUrl(name) {
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
+  return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/${name}`;
 }
 
 function trustedRuntimeEnv(value) {

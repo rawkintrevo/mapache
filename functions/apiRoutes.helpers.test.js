@@ -70,6 +70,18 @@ assertRoute("/api/workspaces/workspace-1/automations/automation-1/run", {
 assertRoute("/api/automation-runs", {name: "automationRuns"});
 assertRoute("/api/automation-runs/run-1", {name: "automationRunDetail", runId: "run-1"});
 assertRoute("/api/automation-runs/run-1/events", {name: "automationRunEvents", runId: "run-1"});
+assertRoute("/api/agent/automations", {name: "automationAgent", resource: "definitions", action: "list"});
+assertRoute("/api/agent/automations/automation-1", {
+  name: "automationAgent", resource: "definition", action: "detail", automationId: "automation-1",
+});
+assertRoute("/api/agent/automations/automation-1/run", {
+  name: "automationAgent", resource: "run", action: "enqueue", automationId: "automation-1",
+});
+assertRoute("/api/agent/automation-settings", {name: "automationAgent", resource: "settings", action: "detail"});
+assertRoute("/api/agent/automation-runs", {name: "automationAgent", resource: "runs", action: "list"});
+assertRoute("/api/agent/automation-runs/run-1/events", {
+  name: "automationAgent", resource: "events", action: "list", runId: "run-1",
+});
 assertRoute("/api/workspaces/workspace-1/automation-storage/prepare", {
   name: "automationStoragePrepare",
   workspaceId: "workspace-1",

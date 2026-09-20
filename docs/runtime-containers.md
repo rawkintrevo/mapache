@@ -306,6 +306,12 @@ output, and Git metadata are namespaced by `sessionId`/`runId` below
 `/var/lib/mapache/runtimes/{identity}`. Private roots reject symlinked
 ancestors before materialization, and private home/session archive targets are
 disabled; the shared `/workspace` mount remains the user worktree only.
+The runner also owns a 0600 `automation-agent.sock` Unix socket in that private
+runtime root for the managed MCP process. Its adapter keeps the five-minute
+automation API token in memory, refreshes it with the runner-only shutdown
+credential, and forwards only workspace-scoped automation requests. The child
+receives the socket path, not `SESSION_SHUTDOWN_TOKEN` or the broker signing
+secret; the socket is removed during runner shutdown.
 
 The frontend image catalog is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It exposes only the supported `pi-chrome` image and Pi harness. Historical shell, SSH, Codex, web, and N64 records may remain in Firestore for readable old sessions and cleanup, but they are not catalog launch targets. New session creation is server-owned and resolves the marked `pi-chrome`/Pi image; legacy Chat and Goals capability flags are no longer advertised.
 

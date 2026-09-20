@@ -219,3 +219,23 @@ test("automation settings use default one and preserve active allocations when l
   });
   assert.equal(db.data.get("workspaces/workspace-1").automationMaxConcurrency, 1);
 });
+
+test("agent definition mutations retain the controlling session in the audit trail", async () => {
+  const {db, service} = createHarness();
+  const created = await service.createAutomation("user-1", "workspace-1", {
+    name: "Agent-created",
+    prompt: "Run the bounded task",
+    cron: "0 10 * * *",
+  }, {actorType: "agent", sessionId: "automation-session-1"});
+  const auditPath = [...db.data.keys()].find((path) => path.includes(`/automations/${created.id}/audit/`));
+  assert.equal(db.data.get(auditPath).actorType, "agent");
+  assert.equal(db.data.get(auditPath).sessionId, "automation-session-1");
+
+  await service.updateAutomationSettings("user-1", "workspace-1", {automationMaxConcurrency: 2}, {
+    actorType: "agent",
+    sessionId: "automation-session-1",
+  });
+  const settingsAudit = [...db.data.entries()].find(([path]) => path.includes("/automationAudit/"));
+  assert.equal(settingsAudit?.[1].actorType, "agent");
+  assert.equal(settingsAudit?.[1].sessionId, "automation-session-1");
+});

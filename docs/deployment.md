@@ -47,6 +47,24 @@ tombstone and its `workspaceDeletionOperations/{workspaceId}` recovery
 evidence, so a failed Cloud Run or bucket operation can be resumed by the
 backend without deleting unrelated storage resources.
 
+The automation agent credential broker requires the Functions secret
+`AUTOMATION_AGENT_TOKEN_SECRET`; set it with
+`firebase functions:secrets:set AUTOMATION_AGENT_TOKEN_SECRET --project pi-agents-cloud`
+before deploying the Functions revision. The broker/API feature remains behind
+the existing `appConfig/automations.enabled` rollout flag. Because the runner
+adds the private Unix adapter and removes the shutdown credential from the
+managed child environment, rebuild and publish `pi-chrome`, then restart or
+recreate automation runners after deploying Functions:
+
+```bash
+gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+Do not enable the automation feature as part of this implementation; a later
+rollout must verify broker expiry/refresh, boot revocation, and sibling-workspace
+isolation first.
+
 The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash

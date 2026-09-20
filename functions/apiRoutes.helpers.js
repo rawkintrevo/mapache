@@ -103,6 +103,31 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "automation-runs") {
     return {name: "automationRunDetail", runId: parts[1]};
   }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automations") {
+    return {name: "automationAgent", resource: "definitions", action: "list"};
+  }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "automations") {
+    return {name: "automationAgent", resource: "definition", action: "detail", automationId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "automations" && parts[3] === "run") {
+    return {name: "automationAgent", resource: "run", action: "enqueue", automationId: parts[2]};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automation-settings") {
+    return {name: "automationAgent", resource: "settings", action: "detail"};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automation-runs") {
+    return {name: "automationAgent", resource: "runs", action: "list"};
+  }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "automation-runs") {
+    return {name: "automationAgent", resource: "run", action: "detail", runId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "automation-runs" && parts[3] === "events") {
+    return {name: "automationAgent", resource: "events", action: "list", runId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "automation-runs" &&
+      ["cancel", "restart", "stop"].includes(parts[3])) {
+    return {name: "automationAgent", resource: "run", action: parts[3], runId: parts[2]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
     return {name: "workspaceMcp", workspaceId: parts[1]};
   }

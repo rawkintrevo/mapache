@@ -30,13 +30,25 @@ function createAutomationDefinitionsService(dependencies = {}) {
     wakeQueue: dependencies.wakeAutomationQueue || dependencies.wakeQueue,
   };
   return {
-    createAutomation: (uid, workspaceId, payload) => createAutomation(uid, workspaceId, payload, shared),
-    deleteAutomation: (uid, workspaceId, automationId, payload) => deleteAutomation(uid, workspaceId, automationId, payload, shared),
+    createAutomation: (uid, workspaceId, payload, actorContext) => createAutomation(uid, workspaceId, payload, {
+      ...shared,
+      actorContext,
+    }),
+    deleteAutomation: (uid, workspaceId, automationId, payload, actorContext) => deleteAutomation(uid, workspaceId, automationId, payload, {
+      ...shared,
+      actorContext,
+    }),
     getAutomation: (uid, workspaceId, automationId) => getAutomation(uid, workspaceId, automationId, shared),
     getAutomationSettings: (uid, workspaceId) => getAutomationSettings(uid, workspaceId, shared),
     listAutomations: (uid, workspaceId) => listAutomations(uid, workspaceId, shared),
-    updateAutomation: (uid, workspaceId, automationId, payload) => updateAutomation(uid, workspaceId, automationId, payload, shared),
-    updateAutomationSettings: (uid, workspaceId, payload) => updateAutomationSettings(uid, workspaceId, payload, shared),
+    updateAutomation: (uid, workspaceId, automationId, payload, actorContext) => updateAutomation(uid, workspaceId, automationId, payload, {
+      ...shared,
+      actorContext,
+    }),
+    updateAutomationSettings: (uid, workspaceId, payload, actorContext) => updateAutomationSettings(uid, workspaceId, payload, {
+      ...shared,
+      actorContext,
+    }),
   };
 }
 
@@ -83,6 +95,7 @@ async function createAutomation(uid, workspaceId, payload = {}, dependencies = {
       actorUid: uid,
       changedFields: Object.keys(normalized).filter((field) => AUTOMATION_MUTABLE_FIELD_SET.has(field)),
       now,
+      actorContext: dependencies.actorContext,
     }, dependencies.firestoreAdmin);
   });
   return toAutomationDto(await ref.get());
@@ -122,6 +135,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
       actorUid: uid,
       changedFields: Object.keys(patch),
       now,
+      actorContext: dependencies.actorContext,
     }, dependencies.firestoreAdmin);
   });
   if (disabling && typeof dependencies.wakeQueue === "function") await dependencies.wakeQueue(workspaceId);
@@ -157,6 +171,7 @@ async function deleteAutomation(uid, workspaceId, automationId, payload = {}, de
       actorUid: uid,
       changedFields: ["deleted", "enabled", "nextRunAt"],
       now,
+      actorContext: dependencies.actorContext,
     }, dependencies.firestoreAdmin);
   });
   if (typeof dependencies.wakeQueue === "function") await dependencies.wakeQueue(workspaceId);
@@ -182,8 +197,9 @@ async function updateAutomationSettings(uid, workspaceId, payload = {}, dependen
     });
     const auditRef = workspaceRef.collection("automationAudit").doc();
     transaction.set(auditRef, {
-      actorType: "user",
+      actorType: dependencies.actorContext?.actorType || "user",
       actorUid: uid,
+      ...(dependencies.actorContext?.sessionId ? {sessionId: dependencies.actorContext.sessionId} : {}),
       changedFields: ["automationMaxConcurrency"],
       timestamp: now,
       createdAt: now,
@@ -293,11 +309,12 @@ function cancelQueuedRuns(transaction, docs, automationId, now, reason) {
   });
 }
 
-function writeAudit(transaction, automationRef, {actorUid, changedFields, now}, firestoreAdmin) {
+function writeAudit(transaction, automationRef, {actorUid, changedFields, now, actorContext}, firestoreAdmin) {
   const auditRef = automationRef.collection("audit").doc();
   transaction.set(auditRef, {
-    actorType: "user",
+    actorType: actorContext?.actorType || "user",
     actorUid,
+    ...(actorContext?.sessionId ? {sessionId: actorContext.sessionId} : {}),
     changedFields: [...new Set(changedFields)].sort(),
     timestamp: now,
     createdAt: now,

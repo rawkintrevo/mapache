@@ -48,6 +48,7 @@ const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
 const {createAutomationArtifactsService} = require("./lib/automationArtifacts.service");
 const {createAutomationExecutionService} = require("./lib/automationExecution.service");
+const {createAutomationAgentApiService} = require("./lib/automationAgentApi.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
@@ -121,6 +122,7 @@ const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const piModelScope = createPiModelScopeService({admin, config, db});
 const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
+const automationAgentApi = createAutomationAgentApiService(config);
 const harnesses = createRunnerHarnessRegistry({config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
 const terminalSession = createTerminalSession({
@@ -192,6 +194,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
   admin,
+  automationAgentApi,
   automationExecution,
   chromeProfile,
   chromeProfileSnapshots,

@@ -13,6 +13,7 @@ const {
 const {
   DEFAULT_BUCKET,
   DEFAULT_FUNCTION_REGION,
+  AUTOMATION_AGENT_TOKEN_SECRET,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
@@ -79,6 +80,8 @@ const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service"
 const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
 const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
 const {createGithubAutomationTokenBrokerService} = require("./githubAutomationTokenBroker.service");
+const {createAutomationAgentAuthService} = require("./automationAgentAuth.service");
+const {createAutomationAgentApiService} = require("./automationAgentApi.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
@@ -370,6 +373,20 @@ const automationRunsService = createAutomationRunsService({
   wakeAutomationQueue,
 });
 const automationHistoryService = createAutomationHistoryService({db, storage});
+const automationAgentAuthService = createAutomationAgentAuthService({
+  db,
+  secret: () => secretValue(AUTOMATION_AGENT_TOKEN_SECRET),
+  sessionCollection,
+});
+const automationAgentApiService = createAutomationAgentApiService({
+  authService: automationAgentAuthService,
+  cleanupService: automationCleanupService,
+  db,
+  definitionsService: automationDefinitionsService,
+  historyService: automationHistoryService,
+  runsService: automationRunsService,
+  sessionCollection,
+});
 const googleWorkspaceApiService = createGoogleWorkspaceApiService({
   connectionsService: googleWorkspaceConnectionsService,
   db,
@@ -458,6 +475,7 @@ exports.api = onRequest({
     GOOGLE_OAUTH_CLIENT_SECRET,
     GOOGLE_OAUTH_STATE_SECRET,
     GOOGLE_OAUTH_ENCRYPTION_KEY,
+    AUTOMATION_AGENT_TOKEN_SECRET,
     QA_LOGIN_SECRET,
   ],
 }, async (req, res) => {
@@ -468,6 +486,12 @@ exports.api = onRequest({
     }
 
     const route = apiRouteRequest(req.path);
+
+    if (route.name === "automationAgent") {
+      const result = await automationAgentApiService.handleRequest(req, route);
+      res.status(result.status || 200).json(result.body);
+      return;
+    }
 
     if (req.method === "GET" && route.name === "githubCallback") {
       await githubService.handleGithubCallback(req, res);
@@ -538,6 +562,24 @@ exports.githubAutomationToken = onRequest({
   } catch (error) {
     const status = error.status || 500;
     logger.warn("GitHub automation-token refresh failed", {
+      status,
+      error: error.publicMessage || "internal_error",
+    });
+    res.status(status).json({error: error.publicMessage || "internal_error"});
+  }
+});
+
+exports.automationAgentToken = onRequest({
+  cors: false,
+  timeoutSeconds: 30,
+  secrets: [AUTOMATION_AGENT_TOKEN_SECRET],
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.status(200).json(await automationAgentAuthService.mintToken(req));
+  } catch (error) {
+    const status = error.status || 500;
+    logger.warn("Automation agent token request failed", {
       status,
       error: error.publicMessage || "internal_error",
     });

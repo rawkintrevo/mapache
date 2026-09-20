@@ -120,12 +120,18 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const privateGitDir = workspaceStorageMode === SHARED_WORKSPACE_STORAGE_MODE && !isAutomationRuntime(runtimeKind) ?
     path.resolve(normalizeEnvString(process.env.MAPACHE_PRIVATE_GIT_DIR) || "/var/lib/mapache/git/repository") :
     privatePaths?.privateGitDir || "";
+  const automationAgentSocketPath = runtimeKind === "automation" ?
+    (normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_SOCKET) ||
+      path.join(privatePaths?.runtimeRoot || "/tmp", "automation-agent.sock")) : "";
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
     agentAccessAudience: "agent",
     agentRuntimeEnabled,
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
+    automationAgentApiUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_API_URL),
+    automationAgentSocketPath,
+    automationAgentTokenUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_TOKEN_URL),
     automationRunId,
     workspaceAuthorityRenewalIntervalMs: positiveNumber(process.env.MAPACHE_WORKSPACE_AUTHORITY_RENEWAL_INTERVAL_MS, 5000),
     agentStateRoot,

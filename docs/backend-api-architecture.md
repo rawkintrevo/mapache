@@ -14,6 +14,8 @@ Cloud Run provisioning contract.
   `functions/sessionLifecycle.service.js`, and `functions/cloudRun.service.js`
 - Owner-scoped Cloud Run log reads: `functions/sessionLogs.service.js`
 - Signed browser/agent access and preview publication: `functions/preview.service.js`
+- Automation agent credentials and workspace API: `functions/automationAgentAuth.service.js`
+  and `functions/automationAgentApi.service.js`
 - Credentials and environment keys: `functions/agentAuth.service.js`,
   `functions/environmentKeys.service.js`, and
   `functions/openAiCodexAuth.service.js`
@@ -104,6 +106,20 @@ The authenticated session Logs route verifies workspace/session ownership and
 queries only the session's recorded Cloud Run service name. Responses are
 bounded to timestamp, severity, and message fields; request query strings and
 broader Logging metadata are not exposed to the browser.
+
+Automation runners have a separate five-minute HMAC credential broker. The
+protected `automationAgentToken` Function accepts only a live admitted
+automation session's workspace/session IDs plus that runner's shutdown
+credential, then signs `ownerUid`, `workspaceId`, `sessionId`, generation, and
+boot-instance identity for the `automation-api` audience. The signing secret is
+Functions-owned and is never sent to Cloud Run. `/api/agent/automations` and
+`/api/agent/automation-runs` re-read the workspace and session on every request,
+so changing the owner, workspace, generation, boot, or admitted state revokes a
+token before its expiry. The adapter forces the token workspace onto history
+filters and resolves run IDs server-side before stop/restart/event operations;
+it delegates definition, settings, enqueue, history, and cleanup behavior to
+the existing services. Agent definition/settings audit records carry
+`actorType: "agent"` and the controlling automation `sessionId`.
 
 ## Scheduled automation data boundary
 

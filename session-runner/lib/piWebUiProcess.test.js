@@ -65,9 +65,10 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
   const child = fakeChild();
   const spawnCalls = [];
   const logs = [];
+  config.automationAgentSocketPath = "/var/lib/mapache/runtimes/run-1/automation-agent.sock";
   try {
     const process = createPiWebUiProcess(config, {
-      env: {PATH: "/usr/bin", GOOGLE_APPLICATION_CREDENTIALS: "/secret"},
+      env: {PATH: "/usr/bin", GOOGLE_APPLICATION_CREDENTIALS: "/secret", SESSION_SHUTDOWN_TOKEN: "runner-secret"},
       fetch: healthyFetch(),
       logger: {error: (message) => logs.push(message)},
       randomBytes: () => Buffer.alloc(32, 7),
@@ -91,6 +92,8 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(spawnCalls[0].options.env.PI_WEB_ENGINE, "pi");
     assert.equal(spawnCalls[0].options.env.PI_WEB_TOKEN.length > 20, true);
     assert.equal(spawnCalls[0].options.env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
+    assert.equal(spawnCalls[0].options.env.SESSION_SHUTDOWN_TOKEN, undefined);
+    assert.equal(spawnCalls[0].options.env.MAPACHE_AUTOMATION_AGENT_SOCKET, config.automationAgentSocketPath);
     assert.equal(JSON.stringify(ready).includes(spawnCalls[0].options.env.PI_WEB_TOKEN), false);
     assert.equal(logs.some((entry) => String(entry).includes(spawnCalls[0].options.env.PI_WEB_TOKEN)), false);
 
