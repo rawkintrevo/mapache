@@ -416,6 +416,55 @@ assert.strictEqual(isIdleSession({
   });
   assert.strictEqual(reaperDeleted, 2);
 
+  const automationReaperDoc = {
+    id: "auto-run-1",
+    ref: {update: async () => { throw new Error("admitted automation should be bypassed"); }},
+    data: () => ({
+      ownerUid: "user-1",
+      workspaceId: "workspace-1",
+      runtimeKind: "automation",
+      automationRunId: "run-1",
+      agentRuntimeAuthorityState: "admitted",
+      status: "running",
+      lastActivityAt: Date.now() - 2 * 60 * 60 * 1000,
+    }),
+  };
+  const activeAutomationReaper = createSessionLifecycleService({
+    admin,
+    db: {
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({
+            exists: true,
+            id: "run-1",
+            data: () => ({
+              runId: "run-1",
+              ownerUid: "user-1",
+              workspaceId: "workspace-1",
+              sessionId: "auto-run-1",
+              status: "running",
+              cleanupState: "pending",
+            }),
+          }),
+        }),
+      }),
+      collectionGroup: () => ({
+        where: () => ({get: async () => ({docs: [automationReaperDoc], size: 1})}),
+      }),
+    },
+    deleteSessionService: async () => {
+      throw new Error("admitted automation should not be deleted");
+    },
+  });
+  assert.deepStrictEqual(await activeAutomationReaper.reapIdleSessions(), {
+    checked: 1,
+    eligible: 0,
+    bypassed: 1,
+    bypassedByReason: {automation_active_run: 1},
+    stopped: 0,
+    failed: 0,
+  });
+
   const failedReaper = createSessionLifecycleService({
     admin,
     db: {

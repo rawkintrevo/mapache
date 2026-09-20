@@ -213,6 +213,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     agentActivityPollIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_ACTIVITY_POLL_INTERVAL_MS, 1000),
     agentCompletedTurnDebounceMs: positiveNumber(process.env.MAPACHE_AGENT_COMPLETED_TURN_DEBOUNCE_MS, 1000),
     agentSnapshotIntervalMs: positiveNumber(process.env.MAPACHE_AGENT_SNAPSHOT_INTERVAL_MS, 60000),
+    automationExecutionPollIntervalMs: positiveNumber(process.env.MAPACHE_AUTOMATION_EXECUTION_POLL_INTERVAL_MS, 1000),
+    automationExecutionStatusTimeoutMs: positiveNumber(process.env.MAPACHE_AUTOMATION_EXECUTION_STATUS_TIMEOUT_MS, 5000),
     manualSaveBudgetMs: positiveNumber(process.env.MAPACHE_MANUAL_SAVE_BUDGET_MS, 120000),
     sigtermSaveBudgetMs: positiveNumber(process.env.MAPACHE_SIGTERM_SAVE_BUDGET_MS, 8000),
     piWebUiQuiesceTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_QUIESCE_TIMEOUT_MS, 5000),

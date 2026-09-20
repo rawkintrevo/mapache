@@ -17,6 +17,7 @@ const {
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
+const {resolveAutomationAssignment} = require("./automationAssignment.service");
 const {assertNoActiveResize} = require("./sessionResize.service");
 const {sessionSourceMetadata} = require("./github.service");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
@@ -492,8 +493,14 @@ async function reapIdleSessions(dependencies = {}) {
   const now = Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const session = doc.data();
-    if (isAutomationRuntime(session)) return {bypassed: true, bypassReason: "automation_runtime"};
-    if (isMarkedRuntimeSession(session) && session.longRunning === true) {
+    if (isAutomationRuntime(session)) {
+      const assignment = await resolveAutomationAssignment({
+        db: dependencies.db,
+        session,
+        sessionId: doc.id,
+      });
+      if (assignment.active) return {bypassed: true, bypassReason: "automation_active_run"};
+    } else if (isMarkedRuntimeSession(session) && session.longRunning === true) {
       return {bypassed: true, bypassReason: "long_running"};
     }
     if (!isIdleSession(session, now)) return {idle: false};

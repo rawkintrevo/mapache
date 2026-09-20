@@ -122,6 +122,15 @@ sockets, sessions, or API clients; the later automation subscription layer
 owns event delivery. Changes to this reducer require the same upstream build
 and a rebuilt `pi-chrome` revision.
 
+The runner's automation execution service starts only after private workspace
+materialization and runtime admission. It validates the owner/workspace/session
+assignment, claims `executionStartedAt` before sending the prompt once over the
+mode-0600 control socket, and polls the private reducer state with bounded
+requests. Browser disconnects do not affect this loop. A ready-child loss marks
+the run `interrupted` and leaves cleanup pending; the next boot never resumes a
+previous prompt. Active automation is exempt from idle reaping only while its
+admitted run assignment remains valid.
+
 The managed-only presentation patch removes the upstream name/logo, version
 controls, and repository link from the embedded header. It adds Chrome beside
 the upstream Chat, Terminal, and Git tabs; that control emits the typed

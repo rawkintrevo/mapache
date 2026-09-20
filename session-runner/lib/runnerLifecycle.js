@@ -4,6 +4,7 @@ function createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
   admin,
+  automationExecution,
   chromeProfile,
   chromeProfileSnapshots,
   chromeRuntime,
@@ -52,6 +53,7 @@ function createRunnerLifecycleCoordinator({
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
       if (config.agentRuntimeEnabled) await piWebUi.start();
+      await automationExecution?.start?.();
       chromeProfileSnapshots.start();
       if (checkpointScheduler) checkpointScheduler.start();
       else startSyncLoop();
@@ -83,6 +85,7 @@ function createRunnerLifecycleCoordinator({
 
   async function shutdownInternal({reason, budgetMs}) {
     const deadline = now() + Math.max(1, Number(budgetMs) || 120_000);
+    automationExecution?.stop?.();
     checkpointScheduler?.stop?.();
     try {
       if (config.agentRuntimeEnabled) {

@@ -14,6 +14,9 @@ protected HTTP routes, and runs the ordered startup/shutdown lifecycle.
   capture, publication, validation, and restore.
 - `lib/piWebUiProcess.js`: one managed upstream pi-web-ui child on the marked
   path; it does not launch a second Pi TUI or a Mapache chat/Goals process.
+- `lib/automationExecution.service.js`: owner/workspace/session-bound
+  browserless run assignment, claim-before-submit execution, bounded private
+  status polling, heartbeat publication, and interruption handling.
 - `lib/agentGateway.js` and `lib/agentWebSocketGateway.js`: signed `/agent/`
   HTTP/WebSocket forwarding to the private upstream child.
 - `lib/terminal.js` and `lib/shell.js`: terminal and independent shell PTYs.
@@ -38,6 +41,16 @@ The startup sequence fails closed if restore validation, credential/MCP
 materialization, authority acquisition, the pinned adapter, or upstream health
 checks fail. No startup path installs or patches `pi-goal-x`, starts Goals RPC,
 tails a transcript into a second UI, or automatically launches a second Pi TUI.
+
+After mount, private materialization, and boot admission, an automation runner
+resolves its owner-bound `automationRuns/{runId}` assignment and claims
+`executionStartedAt` transactionally with the admitted session identity. It
+then submits the prompt once through the private control socket and polls
+`automationStatus` independently of HTTP requests and browser connections.
+Existing claims are treated as interrupted on a later boot, so a crash between
+claim and submission cannot replay an unattended prompt. Terminal outcomes are
+normalized to stable Firestore codes and leave `cleanupState: "pending"` for
+the existing cleanup path.
 
 The main runtime uses the workspace and session documents as a paired authority
 record. An automation runtime uses only its deterministic run session for
@@ -118,6 +131,12 @@ Mapache Chat/Goals routes and are not forwarded through the public gateway.
 Checkpoint publication selects the workspace pointer for main runtimes and the
 run-session pointer for automation runtimes. Both paths require the current
 session/generation/boot identity and admitted authority before publishing.
+
+The idle reaper applies the same boundary: an automation session is bypassed
+only when its admitted session identity resolves to an active owner-bound run.
+It does not use browser socket count or the user-controlled `longRunning` flag
+as automation liveness signals. Missing or stale assignments remain eligible
+for ordinary cleanup.
 
 ## Invariants
 

@@ -216,6 +216,16 @@ an execution-duration cap. A failure records a stable error and desired
 `failed` outcome with `cleanupState=pending`, retaining the concurrency slot
 until the later cleanup path confirms service absence.
 
+An admitted automation runner resolves its assignment from the owner-bound run
+record only after its session boot has been admitted. The runner claims
+`executionStartedAt` exactly once before invoking the private pi-web-ui
+`startAutomation` control, publishes `executionHeartbeatAt` while polling, and
+writes only normalized outcomes (`succeeded`, `failed`, `canceled`, or
+`interrupted`). A claimed run that is not submitted before process loss is
+interrupted rather than replayed. The idle reaper uses the same run/session
+identity check and bypasses only active admitted automation runs; browser
+connections and `longRunning` do not keep automation alive.
+
 ## Persistence and connections
 
 Marked runners capture complete Pi JSONL history, allowlisted non-secret UI/Pi

@@ -47,6 +47,7 @@ const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
 const {createAutomationArtifactsService} = require("./lib/automationArtifacts.service");
+const {createAutomationExecutionService} = require("./lib/automationExecution.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
@@ -77,6 +78,7 @@ const chromeRuntime = createChromeRuntime(config, {
 const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
 const preview = createPreviewService(config, {browserQa});
 let piWebUi = null;
+let automationExecution = null;
 const workspaceAuthority = createWorkspaceAuthority({
   admin,
   config,
@@ -137,10 +139,20 @@ const terminalSession = createTerminalSession({
 });
 const shellSession = createShellSession({admin, config, activity});
 piWebUi = createPiWebUiProcess(config, {
-  onExit: ({error}) => activity.markRuntimeStartupFailure(error),
+  onExit: async ({error}) => {
+    await automationExecution?.handleProcessExit?.({error});
+    await activity.markRuntimeStartupFailure(error);
+  },
 });
 const agentSnapshot = createAgentSnapshotService({config});
 const automationArtifacts = createAutomationArtifactsService({admin, config, db, storage});
+automationExecution = createAutomationExecutionService({
+  admin,
+  config,
+  db,
+  piWebUi,
+  workspaceAuthority,
+});
 const checkpointScheduler = createAgentCheckpointScheduler({
   activity,
   automationArtifacts,
@@ -180,6 +192,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
   admin,
+  automationExecution,
   chromeProfile,
   chromeProfileSnapshots,
   chromeRuntime,
