@@ -440,6 +440,7 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
     stoppedAt,
     lastError: null,
     updatedAt: stoppedAt,
+    ...(usageRecord ? {usageAccountedAt: stoppedAt} : {}),
   }, {reconciliationReason: reason || "service_deleted"});
   if (reason) stopped.stopReason = reason;
   if (reason === "idle_timeout") stopped.autoStoppedAt = stoppedAt;

@@ -228,6 +228,16 @@ failed deletion leaves the run stopping or terminal with `cleanupState=error`
 and retains its slot for a later retry. Forced or incomplete checkpoint saves
 surface `persistenceState=partial` and never claim that all files were saved.
 
+`reconcileAutomationRuns` runs every minute with bounded run and Cloud Run
+pages. It resumes provisioning and pending cleanup, treats a heartbeat older
+than three minutes as a reason to probe the protected runner health endpoint
+and inspect the deterministic labeled service, and never treats elapsed
+runtime or a missed heartbeat alone as permission to replay a prompt. An
+unreachable runner is interrupted only after service deletion is confirmed;
+ambiguous Cloud Run state retains the reservation. Orphan discovery filters
+for automation labels, rechecks metadata before deletion, and never targets a
+main session service.
+
 An admitted automation runner resolves its assignment from the owner-bound run
 record only after its session boot has been admitted. The runner claims
 `executionStartedAt` exactly once before invoking the private pi-web-ui

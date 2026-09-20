@@ -45,6 +45,7 @@ const {createAutomationAdmissionService} = require("./automationAdmission.servic
 const {createAutomationCleanupService} = require("./automationCleanup.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationHistoryService} = require("./automationHistory.service");
+const {createAutomationReconciliationService} = require("./automationReconciliation.service");
 const {
   AUTOMATION_PROVISIONING_TIMEOUT_MS,
   createAutomationProvisioningService,
@@ -305,6 +306,19 @@ const automationCleanupService = createAutomationCleanupService({
 const {
   handleAutomationRunEvent: handleAutomationCleanupEvent,
 } = automationCleanupService;
+const automationReconciliationService = createAutomationReconciliationService({
+  admin,
+  auth,
+  cleanupAutomationRun: automationCleanupService.cleanupAutomationRun,
+  db,
+  featureEnabled: async () => {
+    const snap = await db.collection("appConfig").doc("automations").get();
+    return Boolean(snap.exists && snap.data()?.enabled === true);
+  },
+  provisionAutomationRun: automationProvisioningService.provisionAutomationRun,
+  requestRunnerJson,
+  sessionCollection,
+});
 
 const workspaceSharedStorageService = createWorkspaceSharedStorageService({
   admin,
@@ -572,6 +586,12 @@ exports.reconcileAutomationSessionProvisioning = onDocumentWritten({
 exports.dispatchAutomationSchedules = onSchedule("every 1 minutes", async (event) => {
   const result = await runAutomationScheduleTick(event);
   logger.info("automation schedule tick complete", result);
+  return result;
+});
+
+exports.reconcileAutomationRuns = onSchedule("every 1 minutes", async () => {
+  const result = await automationReconciliationService.reconcile();
+  logger.info("automation reconciliation complete", result);
   return result;
 });
 

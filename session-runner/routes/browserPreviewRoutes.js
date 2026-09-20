@@ -26,7 +26,7 @@ function registerBrowserRoutes({
     }));
   });
 
-  app.get("/healthz", requireBrowserAccess, async (req, res) => {
+  app.get("/healthz", requireBrowserOrRunnerAccess, async (req, res) => {
     const checkpoint = await checkpointPublisher?.status?.() || {};
     const health = {
       ok: true,

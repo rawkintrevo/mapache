@@ -202,6 +202,12 @@ deterministic `mpauto-{runId-hash}` service after that request, confirms the
 service is absent, and only then releases the automation slot. A timeout or
 unclosed writer is retained as interrupted/partial persistence evidence.
 
+The one-minute automation reconciler uses `/healthz` with the runner shutdown
+credential for stale-heartbeat probes. It may reconcile setup polling or
+cleanup, but it never restarts an automation prompt. Cloud Run orphan cleanup
+is limited to services carrying the automation label set and rechecks those
+labels immediately before deletion.
+
 Managed agent persistence capture and restore live in
 `session-runner/lib/agentSnapshot.service.js`,
 `session-runner/lib/agentCheckpoint.service.js`, and
