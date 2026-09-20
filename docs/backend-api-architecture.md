@@ -201,6 +201,13 @@ identity still match; partial or stale captures therefore leave the previous
 good pointer intact. `functions/automationHistory.service.js` exposes
 owner-scoped run and artifact history readers with opaque cursors, checksum and
 namespace validation, and bounded pages (200 records or 1 MiB for events).
+Run history is ordered by `createdAt` descending with a run-id tie-breaker and
+supports validated owner/workspace/automation/status/date filters. Responses
+retain the immutable run snapshot and snapshotted automation name while
+exposing only safe archive availability, cleanup error, final-result, restart,
+and `canStop`/`canRestart` metadata; storage object references and runner
+credentials are never returned. Event pages continue to read the immutable
+artifact objects after the compute service has been deleted.
 
 `functions/automationProvisioning.service.js` is the dedicated consumer for
 admitted `provisioning` runs. It claims the run idempotently, creates the

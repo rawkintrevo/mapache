@@ -139,6 +139,7 @@ test("claims and submits once, then records a normalized terminal outcome", asyn
   assert.equal(db.data.get("automationRuns/run-1").executionStartedAt, "SERVER_TIMESTAMP");
   await service.pollOnce();
   assert.equal(db.data.get("automationRuns/run-1").status, "succeeded");
+  assert.equal(db.data.get("automationRuns/run-1").finalResult, "success");
   assert.equal(db.data.get("automationRuns/run-1").cleanupState, "pending");
 });
 

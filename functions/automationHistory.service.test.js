@@ -45,7 +45,14 @@ class Query {
   async get() {
     let entries = [...this.db.data.entries()]
         .filter(([path]) => path.startsWith(`${this.path}/`) && !path.slice(this.path.length + 1).includes("/"));
-    entries = entries.filter(([, value]) => this.filters.every(({field, value: expected}) => value[field] === expected));
+    entries = entries.filter(([, value]) => this.filters.every(({field, operator, value: expected}) => {
+      if (operator === "==") return value[field] === expected;
+      const actual = Date.parse(String(value[field] || ""));
+      const boundary = expected instanceof Date ? expected.getTime() : Date.parse(String(expected || ""));
+      if (operator === ">=") return actual >= boundary;
+      if (operator === "<=") return actual <= boundary;
+      return false;
+    }));
     if (this.options.field) entries.sort(([, left], [, right]) => String(right[this.options.field] || "").localeCompare(String(left[this.options.field] || "")));
     if (this.options.limit) entries = entries.slice(0, this.options.limit);
     return {docs: entries.map(([path, value]) => new Snapshot(new Ref(this.db, path, path.split("/").pop()), value))};
@@ -151,6 +158,37 @@ test("history listing is owner scoped and bounded", async () => {
   assert.equal(page.nextCursor !== null, true);
   assert.equal((await service.listRuns("user-2")).runs.length, 1);
   await assert.rejects(() => service.getRun("user-2", "run-1"), /automation_run_forbidden/);
+});
+
+test("history cursors preserve identical timestamps and reject tampering", async () => {
+  const {db, service} = setup();
+  db.data.set("automationRuns/run-3", {
+    runId: "run-3", ownerUid: "user-1", workspaceId: "workspace-1", automationId: "automation-1",
+    status: "succeeded", cleanupState: "complete", createdAt: "2026-09-20T10:00:00.000Z",
+  });
+  const first = await service.listRuns("user-1", {limit: 2});
+  assert.deepEqual(first.runs.map((run) => run.runId), ["run-3", "run-1"]);
+  const second = await service.listRuns("user-1", {limit: 2, cursor: first.nextCursor});
+  assert.deepEqual(second.runs.map((run) => run.runId), ["run-2"]);
+  const payload = JSON.parse(Buffer.from(first.nextCursor, "base64url").toString("utf8"));
+  payload.runId = "missing-run";
+  const tampered = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  await assert.rejects(() => service.listRuns("user-1", {cursor: tampered}), /invalid_automation_cursor/);
+});
+
+test("history filters validate owned workspaces, dates, and status", async () => {
+  const {db, service} = setup();
+  db.data.set("workspaces/workspace-1", {ownerUid: "user-1"});
+  const filtered = await service.listRuns("user-1", {
+    workspaceId: "workspace-1",
+    status: "succeeded",
+    from: "2026-09-20T09:30:00.000Z",
+    to: "2026-09-20T10:30:00.000Z",
+  });
+  assert.deepEqual(filtered.runs.map((run) => run.runId), ["run-1"]);
+  await assert.rejects(() => service.listRuns("user-1", {status: "not-a-status"}), /invalid_automation_status/);
+  db.data.set("workspaces/workspace-1", {ownerUid: "user-1", deleted: true});
+  await assert.rejects(() => service.listRuns("user-1", {workspaceId: "workspace-1"}), /automation_workspace_unavailable/);
 });
 
 test("artifact events are checksum verified and paged at 200 records", async () => {

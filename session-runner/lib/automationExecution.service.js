@@ -267,6 +267,8 @@ function createAutomationExecutionService({
       const effectiveStatus = cancellationCommitted ? "canceled" : status;
       const normalizedError = errorCode ? normalizeFailureCode(errorCode, "automation_execution_failed") : null;
       const conversationId = cleanId(response?.conversationId) || execution.conversationId;
+      const rawFinalResult = cleanId(response?.state?.finalResult || response?.finalResult).toLowerCase();
+      const finalResult = ["success", "error"].includes(rawFinalResult) ? rawFinalResult : "";
       const runUpdates = {
         cleanupState: "pending",
         desiredOutcome: effectiveStatus,
@@ -276,6 +278,7 @@ function createAutomationExecutionService({
         executionOutcome: effectiveStatus,
         executionState: effectiveStatus,
         ...(conversationId ? {conversationId, executionConversationId: conversationId} : {}),
+        ...(finalResult ? {finalResult} : {}),
         ...(normalizedError ? {executionErrorCode: normalizedError, lastError: normalizedError} : {}),
         status: effectiveStatus,
         updatedAt: timestamp,
