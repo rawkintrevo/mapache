@@ -202,6 +202,45 @@ function nextAutomationOccurrence(expression, timezone, options = {}) {
   return nextAutomationOccurrences(expression, timezone, {...options, count: 1})[0];
 }
 
+function automationOccurrencesBetween(expression, timezone, from, to, options = {}) {
+  const parsed = parseAutomationCron(expression);
+  const normalizedTimezone = validateAutomationScheduleTimezone(timezone);
+  const start = asDate(from);
+  const end = asDate(to);
+  if (end < start) return [];
+  const maxOccurrences = Math.max(1, Math.min(
+      Number(options.maxOccurrences || 10080), MAX_CANDIDATES_TO_INSPECT,
+  ));
+  let parser;
+  try {
+    parser = CronExpressionParser.parse(parsed.expression, {
+      currentDate: new Date(start.getTime() - 1),
+      tz: normalizedTimezone,
+    });
+  } catch (error) {
+    throw scheduleError("invalid_automation_cron", {cause: error});
+  }
+  const occurrences = [];
+  const localKeys = new Set();
+  for (let inspected = 0; inspected < MAX_CANDIDATES_TO_INSPECT && occurrences.length < maxOccurrences; inspected++) {
+    let candidate;
+    try {
+      candidate = parser.next();
+    } catch (error) {
+      break;
+    }
+    const date = candidate && typeof candidate.toDate === "function" ? candidate.toDate() : new Date(candidate);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime()) || date > end) break;
+    if (date < start) continue;
+    const localParts = localDateTimeParts(date, normalizedTimezone);
+    const local = formatLocalMinute(date, normalizedTimezone);
+    if (!matchesAutomationCron(localParts, parsed) || localKeys.has(local)) continue;
+    localKeys.add(local);
+    occurrences.push({utc: date.toISOString(), local, timezone: normalizedTimezone});
+  }
+  return occurrences;
+}
+
 function occurrenceKey(workflowId, localMinute) {
   const id = String(workflowId || "").trim();
   const local = String(localMinute || "").trim();
@@ -229,6 +268,7 @@ module.exports = {
   PREVIEW_OCCURRENCE_COUNT,
   SEARCH_HORIZON_YEARS,
   formatLocalMinute,
+  automationOccurrencesBetween,
   matchesAutomationCron,
   nextAutomationOccurrence,
   nextAutomationOccurrences,

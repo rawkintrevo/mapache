@@ -44,15 +44,18 @@ async function enqueueRun(input = {}, dependencies = {}) {
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
   const occurrenceInput = input.occurrence;
   const restartOfRunId = input.restartOfRunId ? validateContextId(input.restartOfRunId, "run_id") : null;
+  const retryOfRunId = input.retryOfRunId ? validateContextId(input.retryOfRunId, "run_id") : null;
   const firestore = dependencies.firestore || dependencies.db || defaultDb;
   const admin = dependencies.firestoreAdmin || dependencies.admin || defaultAdmin;
   const workspaceRef = firestore.collection("workspaces").doc(workspaceId);
   const definitionRef = workspaceRef.collection("automations").doc(automationId);
-  const runId = trigger === "cron" ? deterministicCronRunId(automationId, occurrenceInput) : crypto.randomUUID();
+  const runId = trigger === "cron" ? deterministicCronRunId(automationId, occurrenceInput) :
+    trigger === "retry" ? deterministicRetryRunId(input.rootRunId || retryOfRunId, input.attemptNumber) : crypto.randomUUID();
   const runRef = firestore.collection("automationRuns").doc(runId);
   const requestKeyHash = idempotencyKey ? requestKeyHashFor(actorUid, workspaceId, trigger, idempotencyKey) : null;
   const requestRef = requestKeyHash ? firestore.collection("automationRunRequests").doc(requestKeyHash) : null;
-  const sourceRunRef = trigger === "restart" ? firestore.collection("automationRuns").doc(restartOfRunId) : null;
+  const sourceRunRef = ["restart", "retry"].includes(trigger) ?
+    firestore.collection("automationRuns").doc(trigger === "retry" ? retryOfRunId : restartOfRunId) : null;
   const now = serverTimestamp(admin);
   let response;
 
@@ -74,10 +77,15 @@ async function enqueueRun(input = {}, dependencies = {}) {
     const definition = definitionSnap.exists ? definitionSnap.data() || {} : null;
     let sourceRun = null;
 
-    if (trigger === "restart") {
-      sourceRun = assertRestartSource(sourceRunSnap, actorUid, workspaceId, restartOfRunId);
-      if (!definition && sourceRun.automationId !== automationId) {
-        throw httpError(409, "automation_restart_definition_mismatch");
+    if (trigger === "restart" || trigger === "retry") {
+      sourceRun = trigger === "retry" ?
+        assertRetrySource(sourceRunSnap, actorUid, workspaceId, retryOfRunId) :
+        assertRestartSource(sourceRunSnap, actorUid, workspaceId, restartOfRunId);
+      if (trigger === "retry" && (!definitionSnap.exists || definition.ownerUid !== actorUid || definition.deleted === true)) {
+        throw httpError(409, "automation_retry_definition_unavailable");
+      }
+      if (trigger === "restart" && !definition && sourceRun.automationId !== automationId) {
+        throw httpError(409, trigger === "retry" ? "automation_retry_definition_mismatch" : "automation_restart_definition_mismatch");
       }
     } else {
       if (!definitionSnap.exists) throw httpError(404, "automation_not_found");
@@ -94,6 +102,8 @@ async function enqueueRun(input = {}, dependencies = {}) {
       trigger,
       occurrence,
       restartOfRunId,
+      retryOfRunId,
+      attemptNumber: input.attemptNumber,
       snapshot,
     });
 
@@ -117,7 +127,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
     const pending = pendingRunSnap?.exists ? pendingRunSnap.data() || {} : null;
     const pendingIsActive = pending && ACTIVE_STATUSES.has(String(pending.status || "").toLowerCase());
     if (pendingIsActive) {
-      if (trigger !== "cron") {
+      if (!["cron", "catch_up"].includes(trigger)) {
         const error = httpError(409, "pending_run_exists");
         error.pendingRunId = pendingRunId;
         throw error;
@@ -128,6 +138,9 @@ async function enqueueRun(input = {}, dependencies = {}) {
         occurrence,
         ownerUid: actorUid,
         restartOfRunId,
+        retryOfRunId,
+        rootRunId: input.rootRunId || sourceRun?.rootRunId || sourceRun?.runId || runId,
+        attemptNumber: input.attemptNumber,
         runId,
         snapshot,
         status: "skipped",
@@ -151,6 +164,9 @@ async function enqueueRun(input = {}, dependencies = {}) {
       occurrence,
       ownerUid: actorUid,
       restartOfRunId,
+      retryOfRunId,
+      rootRunId: input.rootRunId || sourceRun?.rootRunId || sourceRun?.runId || runId,
+      attemptNumber: input.attemptNumber,
       runId,
       snapshot,
       status: "queued",
@@ -235,7 +251,7 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
   return response;
 }
 
-function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId, runId, snapshot, status, trigger, now, workspaceId, skippedReason, requestDigest}) {
+function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId, retryOfRunId, rootRunId, attemptNumber, runId, snapshot, status, trigger, now, workspaceId, skippedReason, requestDigest}) {
   const run = buildAutomationRun({}, {
     automationId,
     cleanupState: status === "skipped" ? "complete" : "pending",
@@ -243,6 +259,12 @@ function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId
     ownerUid,
     queuedAt: now,
     restartOfRunId,
+    retryOfRunId,
+    rootRunId,
+    attemptNumber: Number.isSafeInteger(attemptNumber) ? attemptNumber : 0,
+    retryPolicy: snapshot.retryPolicy || "none",
+    maximumRetries: Number.isSafeInteger(snapshot.maximumRetries) ? snapshot.maximumRetries : 0,
+    replaySafe: snapshot.replaySafe === true,
     runId,
     snapshot,
     status,
@@ -268,6 +290,11 @@ function buildSnapshot(definition, workspace) {
     allowParallelWithMain: definition.allowParallelWithMain,
     modelSelection: definition.modelSelection,
     resources: definition.resources === null || definition.resources === undefined ? workspace.resources || null : definition.resources,
+    missedRunPolicy: definition.missedRunPolicy || "skip",
+    catchUpWindowMinutes: definition.catchUpWindowMinutes || 1440,
+    retryPolicy: definition.retryPolicy || "none",
+    maximumRetries: Number.isSafeInteger(definition.maximumRetries) ? definition.maximumRetries : 0,
+    replaySafe: definition.replaySafe === true,
   });
 }
 
@@ -295,8 +322,20 @@ function assertRestartSource(snapshot, actorUid, workspaceId, runId) {
   return {...run, runId};
 }
 
+function assertRetrySource(snapshot, actorUid, workspaceId, runId) {
+  if (!snapshot?.exists) throw httpError(404, "automation_run_not_found");
+  const run = snapshot.data() || {};
+  if (run.ownerUid !== actorUid) throw httpError(403, "automation_run_forbidden");
+  if (run.workspaceId !== workspaceId) throw httpError(409, "automation_run_workspace_mismatch");
+  if (String(run.status || "").toLowerCase() !== "failed" || String(run.cleanupState || "").toLowerCase() !== "complete") {
+    throw httpError(409, "automation_retry_source_not_definite_failure");
+  }
+  if (!run.snapshot) throw httpError(409, "automation_run_snapshot_missing");
+  return {...run, runId};
+}
+
 function normalizeOccurrence(trigger, value, snapshot) {
-  if (trigger !== "cron") return null;
+  if (!["cron", "catch_up"].includes(trigger)) return null;
   const source = typeof value === "string" ? {local: value} : value || {};
   const local = String(source.local || source.localMinute || "").trim();
   if (!LOCAL_MINUTE_PATTERN.test(local)) throw httpError(400, "invalid_automation_occurrence");
@@ -315,6 +354,14 @@ function deterministicCronRunId(automationId, occurrence) {
   const source = typeof occurrence === "string" ? occurrence : occurrence?.local || occurrence?.localMinute;
   if (!LOCAL_MINUTE_PATTERN.test(String(source || "").trim())) throw httpError(400, "invalid_automation_occurrence");
   return crypto.createHash("sha256").update(`${automationId}/${String(source).trim()}`).digest("hex");
+}
+
+function deterministicRetryRunId(rootRunId, attemptNumber) {
+  const root = validateContextId(rootRunId, "root_run_id");
+  if (!Number.isSafeInteger(attemptNumber) || attemptNumber < 1 || attemptNumber > 2) {
+    throw httpError(400, "invalid_automation_retry_attempt");
+  }
+  return crypto.createHash("sha256").update(`${root}/retry/${attemptNumber}`).digest("hex");
 }
 
 function digestRequest(value) {
@@ -383,6 +430,7 @@ module.exports = {
   buildSnapshot,
   cancelQueuedRun,
   createAutomationRunsService,
+  deterministicRetryRunId,
   deterministicCronRunId,
   enqueueRun,
   normalizeOccurrence,

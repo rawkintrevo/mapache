@@ -189,6 +189,30 @@
         {"fieldPath": "cleanupState", "order": "ASCENDING"},
         {"fieldPath": "updatedAt", "order": "ASCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "cleanupState", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "sessions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"}
+      ]
     }
   ],
   "fieldOverrides": [

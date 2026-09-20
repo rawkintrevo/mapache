@@ -59,6 +59,9 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "automationRunCancel", jsonResult(({handlers, route, user}) => handlers.cancelAutomationRun(user, route.runId))],
     ["POST", "automationRunStop", jsonResult(({handlers, route, user}) => handlers.stopAutomationRun(user, route.runId))],
   ]),
+  instances: Object.freeze([
+    ["GET", "instances", jsonResult(({handlers, req, user}) => handlers.listActiveInstances(user.uid, req.query || {}))],
+  ]),
   workspaceStorage: Object.freeze([
     ["POST", "automationStoragePrepare", acceptedJsonResult(({handlers, route, user}) =>
       handlers.prepareWorkspaceStorageMigration(user.uid, route.workspaceId))],

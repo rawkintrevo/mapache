@@ -42,11 +42,13 @@ const {
 } = require("./admin.service");
 const {requireUser, updateUserTimezone} = require("./auth.service");
 const {previewAutomationSchedule} = require("./automationSchedule.helpers");
+const {createActiveInstancesService} = require("./activeInstances.service");
 const {createAutomationAdmissionService} = require("./automationAdmission.service");
 const {createAutomationCleanupService} = require("./automationCleanup.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationHistoryService} = require("./automationHistory.service");
 const {createAutomationReconciliationService} = require("./automationReconciliation.service");
+const {createAutomationRetryService} = require("./automationRetry.service");
 const {
   AUTOMATION_PROVISIONING_TIMEOUT_MS,
   createAutomationProvisioningService,
@@ -110,6 +112,8 @@ const {
 } = require("./sessionLifecycle.helpers");
 
 const automationAdmissionService = createAutomationAdmissionService({admin, db});
+const activeInstancesService = createActiveInstancesService({db});
+let automationRetryService;
 const {
   assertMainAdmissionAllowed,
   wakeQueue: wakeAutomationQueue,
@@ -305,6 +309,7 @@ const automationCleanupService = createAutomationCleanupService({
   db,
   deleteSessionService,
   releaseAutomationSlot: automationAdmissionService.releaseAutomationSlot,
+  scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
   sessionCollection,
   wakeQueue: wakeAutomationQueue,
 });
@@ -321,6 +326,7 @@ const automationReconciliationService = createAutomationReconciliationService({
     return Boolean(snap.exists && snap.data()?.enabled === true);
   },
   provisionAutomationRun: automationProvisioningService.provisionAutomationRun,
+  processDueRetries: (...args) => automationRetryService.processDueRetries(...args),
   requestRunnerJson,
   sessionCollection,
 });
@@ -372,6 +378,11 @@ const automationRunsService = createAutomationRunsService({
   requireWorkspace,
   wakeAutomationQueue,
 });
+automationRetryService = createAutomationRetryService({
+  admin,
+  db,
+  enqueueRetryRun: automationRunsService.enqueueRun,
+});
 const automationHistoryService = createAutomationHistoryService({db, storage});
 const automationAgentAuthService = createAutomationAgentAuthService({
   db,
@@ -418,6 +429,7 @@ function googleMcpTokenRefreshUrl() {
 }
 
 const API_HANDLERS = createApiHandlers({
+  activeInstancesService,
   agentAuthService,
   automationCleanupService,
   automationDefinitionsService,

@@ -17,6 +17,7 @@ function createAutomationCleanupService(dependencies = {}) {
     db: dependencies.db || defaultDb,
     deleteSessionService: dependencies.deleteSessionService,
     releaseAutomationSlot: dependencies.releaseAutomationSlot || dependencies.releaseAfterCleanup,
+    scheduleRetry: dependencies.scheduleRetry,
     sessionCollection: dependencies.sessionCollection,
     wakeQueue: dependencies.wakeQueue,
   };
@@ -167,10 +168,17 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   }, dependencies);
   if (!finalized) return {runId: normalizedRunId, skipped: "run_missing"};
 
-  try {
-    const released = await dependencies.releaseAutomationSlot(normalizedRunId, {serviceAbsent: true});
+    try {
+      const released = await dependencies.releaseAutomationSlot(normalizedRunId, {serviceAbsent: true});
     if (!released?.released && released?.workspaceId) {
       throw cleanupError("automation_slot_release_failed");
+    }
+    if (typeof dependencies.scheduleRetry === "function") {
+      try {
+        await dependencies.scheduleRetry(normalizedRunId);
+      } catch (error) {
+        await runRef.update({retryErrorCode: stableCleanupErrorCode(error), updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
+      }
     }
     return {runId: normalizedRunId, cleaned: true, released: released?.released !== false};
   } catch (error) {

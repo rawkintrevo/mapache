@@ -106,6 +106,13 @@ function createTestApiHandlers() {
     payload: {handler: "previewAutomationSchedule", args: [{cron: "0 10 * * *", timezone: "UTC"}]},
   });
   assert.deepStrictEqual(await collectDispatch({
+    route: {name: "instances"},
+    query: {limit: "10", type: "automation"},
+  }), {
+    status: 200,
+    payload: {handler: "listActiveInstances", args: ["user-1", {limit: "10", type: "automation"}]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "automations", workspaceId: "workspace-1"},
     body: {name: "Daily", prompt: "Report", cron: "0 10 * * *"},

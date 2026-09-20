@@ -26,6 +26,7 @@ Cloud Run provisioning contract.
 - Runner image contract: `functions/runnerCatalog.json` and
   `functions/runnerCatalog.helpers.js`
 - Scheduled automation lifecycle and release contract: [Scheduled Automations](./automations.md)
+- Owner-wide active compute inventory: `functions/activeInstances.service.js`
 
 ## Current API boundary
 
@@ -198,9 +199,20 @@ due definitions. A delivery more than 120 seconds late is ignored. Timely ticks
 recheck the definition in a transaction, use the stored timezone's local
 minute (including DST repeat suppression), create one deterministic cron run,
 advance `nextRunAt`, and compress older due occurrences into one skipped-range
-history record. A pending workflow run produces skipped queue-full history;
-the scheduler never calls a provider or replays a missed backlog. The flag is
-off by default, so re-enabling it does not backfill old schedule ticks.
+history record. The opt-in latest catch-up policy instead creates at most one
+newest `catch_up` run inside its bounded window; a current due occurrence wins.
+A pending workflow run produces skipped queue-full history; the scheduler never
+calls a provider or replays a missed backlog. The flag is off by default, so
+re-enabling it does not backfill old schedule ticks. `GET /api/instances`
+merges owner-scoped persisted main sessions and automation runs into a stable,
+cursor-paginated active inventory without per-row Cloud Run calls.
+
+`functions/automationRetry.service.js` keeps retries opt-in and durable. A
+known failed run with `retryPolicy=safe` and `replaySafe=true` receives at most
+two linked attempts after five and fifteen minutes. Retry workers claim intent
+before enqueueing, reuse normal concurrency admission, release the claim on
+queue contention, and never retry cancellation, interruption, unknown outcomes,
+or cleanup failures.
 
 `functions/workspaceStorageMigration.service.js` owns the paused-workspace
 GCS FUSE cutover. `POST /api/workspaces/{workspaceId}/automation-storage/prepare`

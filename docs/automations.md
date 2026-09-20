@@ -26,6 +26,10 @@ standing storage service. Each admitted run uses one deterministic
 - The minute scheduler validates the feature flag and schedule occurrence,
   records missed ranges as skipped history, and never creates a second pending
   occurrence for one definition.
+- Definitions default to `missedRunPolicy=skip`. The opt-in `latest` policy
+  accepts one newest missed occurrence inside `catchUpWindowMinutes` (1 to
+  10080, default 1440), preserves the current due occurrence when present,
+  and records `trigger=catch_up` with its original scheduled time.
 - Admission is transactional. `automationMaxConcurrency` defaults to one;
   lowering it never evicts active runs. `allowParallelWithMain: false` holds an
   explicit main-session exclusion, queues while main is active, rejects main
@@ -41,6 +45,20 @@ standing storage service. Each admitted run uses one deterministic
   `automation-runs/{runId}/v1/`; the manifest pointer is published only after
   checksum/size verification. Global history returns the snapshot and archived
   transcript metadata without exposing provider credentials.
+- Automatic retries default to `retryPolicy=none`. The opt-in `safe` policy
+  requires `replaySafe=true`, allows at most two linked attempts after known
+  failed outcomes (five minutes, then fifteen minutes), and preserves the
+  failed attempt snapshot. Canceled, interrupted, unknown-outcome, and cleanup
+  failures never retry; queue contention keeps the retry intent durable.
+
+`GET /api/instances` is the owner-wide active-instance inventory. It merges
+persisted main session and automation-run records, reports only
+`provisioning`, `running`, `stopping`, or `cleanup-error`, de-duplicates an
+automation runner session against its run record, and supports `workspaceId`,
+`type`, `status`, `limit` (default 50, maximum 100), and opaque cursor filters.
+Its stop target contains only workspace/session/run identifiers; no Cloud Run
+lookup, credential, or service secret is exposed. Reconciliation workers remain
+the authority for repairing stale persisted records.
 
 ## Shared GCS FUSE contract
 

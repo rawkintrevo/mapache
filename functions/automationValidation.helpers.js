@@ -9,6 +9,11 @@ const AUTOMATION_TIMEZONE_MAX_LENGTH = 100;
 const AUTOMATION_ID_MAX_LENGTH = 200;
 const AUTOMATION_REVISION_MIN = 1;
 const DEFAULT_AUTOMATION_MAX_CONCURRENCY = 1;
+const DEFAULT_MISSED_RUN_POLICY = "skip";
+const DEFAULT_CATCH_UP_WINDOW_MINUTES = 1440;
+const MAX_CATCH_UP_WINDOW_MINUTES = 10080;
+const DEFAULT_RETRY_POLICY = "none";
+const DEFAULT_MAXIMUM_RETRIES = 0;
 
 const AUTOMATION_MUTABLE_FIELDS = Object.freeze([
   "name",
@@ -21,6 +26,11 @@ const AUTOMATION_MUTABLE_FIELDS = Object.freeze([
   "providerId",
   "modelSelection",
   "resources",
+  "missedRunPolicy",
+  "catchUpWindowMinutes",
+  "retryPolicy",
+  "maximumRetries",
+  "replaySafe",
 ]);
 
 const AUTOMATION_SERVER_FIELDS = Object.freeze([
@@ -45,7 +55,7 @@ const AUTOMATION_SERVER_FIELDS = Object.freeze([
   "artifactPointers",
 ]);
 
-const AUTOMATION_RUN_TRIGGERS = Object.freeze(["cron", "manual", "restart"]);
+const AUTOMATION_RUN_TRIGGERS = Object.freeze(["cron", "manual", "restart", "catch_up", "retry"]);
 const AUTOMATION_RUN_STATUSES = Object.freeze([
   "queued",
   "provisioning",
@@ -133,6 +143,32 @@ function validateAutomationMaxConcurrency(value = DEFAULT_AUTOMATION_MAX_CONCURR
   return value;
 }
 
+function validateMissedRunPolicy(value = DEFAULT_MISSED_RUN_POLICY) {
+  const policy = String(value || "").trim().toLowerCase();
+  if (!["skip", "latest"].includes(policy)) throw validationError("invalid_automation_missed_run_policy");
+  return policy;
+}
+
+function validateCatchUpWindowMinutes(value = DEFAULT_CATCH_UP_WINDOW_MINUTES) {
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_CATCH_UP_WINDOW_MINUTES) {
+    throw validationError("invalid_automation_catch_up_window_minutes");
+  }
+  return value;
+}
+
+function validateRetryPolicy(value = DEFAULT_RETRY_POLICY) {
+  const policy = String(value || "").trim().toLowerCase();
+  if (!["none", "safe"].includes(policy)) throw validationError("invalid_automation_retry_policy");
+  return policy;
+}
+
+function validateMaximumRetries(value = DEFAULT_MAXIMUM_RETRIES) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 2) {
+    throw validationError("invalid_automation_maximum_retries");
+  }
+  return value;
+}
+
 function validateBoolean(value, field) {
   if (typeof value !== "boolean") throw validationError(`invalid_automation_${field}`);
   return value;
@@ -203,6 +239,21 @@ function normalizeAutomationMutation(payload = {}, options = {}) {
     normalized.modelSelection = normalizeModelSelection(payload);
   }
   if (Object.prototype.hasOwnProperty.call(payload, "resources")) normalized.resources = normalizeAutomationResources(payload.resources);
+  if (Object.prototype.hasOwnProperty.call(payload, "missedRunPolicy")) {
+    normalized.missedRunPolicy = validateMissedRunPolicy(payload.missedRunPolicy);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "catchUpWindowMinutes")) {
+    normalized.catchUpWindowMinutes = validateCatchUpWindowMinutes(payload.catchUpWindowMinutes);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "retryPolicy")) {
+    normalized.retryPolicy = validateRetryPolicy(payload.retryPolicy);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "maximumRetries")) {
+    normalized.maximumRetries = validateMaximumRetries(payload.maximumRetries);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "replaySafe")) {
+    normalized.replaySafe = validateBoolean(payload.replaySafe, "replay_safe");
+  }
   if (!options.partial) {
     for (const field of ["name", "prompt", "cron", "timezone"]) {
       if (!Object.prototype.hasOwnProperty.call(normalized, field)) throw validationError(`missing_automation_${field}`);
@@ -211,6 +262,14 @@ function normalizeAutomationMutation(payload = {}, options = {}) {
     if (!Object.prototype.hasOwnProperty.call(normalized, "allowParallelWithMain")) normalized.allowParallelWithMain = true;
     if (!Object.prototype.hasOwnProperty.call(normalized, "modelSelection")) normalized.modelSelection = null;
     if (!Object.prototype.hasOwnProperty.call(normalized, "resources")) normalized.resources = null;
+    if (!Object.prototype.hasOwnProperty.call(normalized, "missedRunPolicy")) normalized.missedRunPolicy = DEFAULT_MISSED_RUN_POLICY;
+    if (!Object.prototype.hasOwnProperty.call(normalized, "catchUpWindowMinutes")) normalized.catchUpWindowMinutes = DEFAULT_CATCH_UP_WINDOW_MINUTES;
+    if (!Object.prototype.hasOwnProperty.call(normalized, "retryPolicy")) normalized.retryPolicy = DEFAULT_RETRY_POLICY;
+    if (!Object.prototype.hasOwnProperty.call(normalized, "maximumRetries")) normalized.maximumRetries = DEFAULT_MAXIMUM_RETRIES;
+    if (!Object.prototype.hasOwnProperty.call(normalized, "replaySafe")) normalized.replaySafe = false;
+  }
+  if (normalized.retryPolicy === "safe" && normalized.replaySafe !== true) {
+    throw validationError("automation_retry_requires_replay_safe");
   }
   return normalized;
 }
@@ -250,6 +309,7 @@ function normalizeRunSnapshot(snapshot = {}) {
   const allowed = [
     "name", "prompt", "definitionRevision", "cron", "timezone",
     "allowParallelWithMain", "modelSelection", "resources",
+    "missedRunPolicy", "catchUpWindowMinutes", "retryPolicy", "maximumRetries", "replaySafe",
   ];
   if (Object.keys(snapshot).some((key) => !allowed.includes(key))) {
     throw validationError("invalid_automation_run_snapshot");
@@ -263,7 +323,7 @@ function normalizeRunSnapshot(snapshot = {}) {
     modelSelection: snapshot.modelSelection,
     resources: snapshot.resources,
   });
-  return {
+  const normalizedSnapshot = {
     name: definition.name,
     prompt: definition.prompt,
     definitionRevision: validateDefinitionRevision(snapshot.definitionRevision),
@@ -273,6 +333,10 @@ function normalizeRunSnapshot(snapshot = {}) {
     modelSelection: definition.modelSelection,
     resources: definition.resources,
   };
+  for (const field of ["missedRunPolicy", "catchUpWindowMinutes", "retryPolicy", "maximumRetries", "replaySafe"]) {
+    if (Object.prototype.hasOwnProperty.call(snapshot, field)) normalizedSnapshot[field] = definition[field];
+  }
+  return normalizedSnapshot;
 }
 
 function buildAutomationDefinition(payload = {}, server = {}) {
@@ -324,6 +388,9 @@ function buildAutomationRun(payload = {}, server = {}) {
     artifactPointers: {},
   };
   if (status === "skipped") run.skippedReason = validateSkippedReason(server.skippedReason || payload.skippedReason);
+  for (const field of ["retryPolicy", "maximumRetries", "replaySafe", "rootRunId", "retryOfRunId", "attemptNumber", "retryState", "retryNotBefore", "retryRunId"]) {
+    if (server[field] !== undefined || payload[field] !== undefined) run[field] = server[field] ?? payload[field];
+  }
   return run;
 }
 
@@ -352,6 +419,11 @@ module.exports = {
   AUTOMATION_SKIPPED_REASONS,
   AUTOMATION_TIMEZONE_MAX_LENGTH,
   DEFAULT_AUTOMATION_MAX_CONCURRENCY,
+  DEFAULT_CATCH_UP_WINDOW_MINUTES,
+  DEFAULT_MAXIMUM_RETRIES,
+  DEFAULT_MISSED_RUN_POLICY,
+  DEFAULT_RETRY_POLICY,
+  MAX_CATCH_UP_WINDOW_MINUTES,
   assertKnownMutableFields,
   assertNoServerOwnedFields,
   buildAutomationDefinition,
@@ -366,6 +438,9 @@ module.exports = {
   validateAutomationCron,
   validateAutomationId,
   validateAutomationMaxConcurrency,
+  validateCatchUpWindowMinutes,
+  validateMaximumRetries,
+  validateMissedRunPolicy,
   validateAutomationName,
   validateAutomationPrompt,
   validateAutomationTimezone,
@@ -374,4 +449,5 @@ module.exports = {
   validateRunStatus,
   validateRunTrigger,
   validateSkippedReason,
+  validateRetryPolicy,
 };

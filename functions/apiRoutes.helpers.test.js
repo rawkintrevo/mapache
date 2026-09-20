@@ -68,6 +68,7 @@ assertRoute("/api/workspaces/workspace-1/automations/automation-1/run", {
   automationId: "automation-1",
 });
 assertRoute("/api/automation-runs", {name: "automationRuns"});
+assertRoute("/api/instances", {name: "instances"});
 assertRoute("/api/automation-runs/run-1", {name: "automationRunDetail", runId: "run-1"});
 assertRoute("/api/automation-runs/run-1/events", {name: "automationRunEvents", runId: "run-1"});
 assertRoute("/api/agent/automations", {name: "automationAgent", resource: "definitions", action: "list"});

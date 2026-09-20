@@ -192,6 +192,36 @@ test("restart uses a terminal historical snapshot even after definition tombston
   );
 });
 
+test("retry uses the failed attempt snapshot and links the retry family", async () => {
+  const {admin, db, definition} = harness();
+  await definition.update({deleted: false, retryPolicy: "safe", maximumRetries: 2, replaySafe: true});
+  db.data.set("automationRuns/root-run", {
+    runId: "root-run",
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    automationId: "automation-1",
+    status: "failed",
+    cleanupState: "complete",
+    snapshot: {
+      name: "Old report", prompt: "Old prompt", definitionRevision: 2,
+      cron: "0 10 * * *", timezone: "America/Chicago", allowParallelWithMain: true,
+      modelSelection: {modelId: "old-model", providerId: "provider-1"}, resources: {cpu: "1", memory: "2Gi"},
+      retryPolicy: "safe", maximumRetries: 2, replaySafe: true,
+    },
+    retryPolicy: "safe", maximumRetries: 2, replaySafe: true, attemptNumber: 0,
+  });
+  const retry = await enqueueRun({
+    actor: {uid: "user-1"}, aid: "automation-1", trigger: "retry", wid: "workspace-1",
+    retryOfRunId: "root-run", rootRunId: "root-run", attemptNumber: 1,
+  }, {admin, db});
+  assert.equal(retry.status, "queued");
+  assert.equal(retry.trigger, "retry");
+  assert.equal(retry.retryOfRunId, "root-run");
+  assert.equal(retry.rootRunId, "root-run");
+  assert.equal(retry.attemptNumber, 1);
+  assert.equal(retry.snapshot.prompt, "Old prompt");
+});
+
 test("cancel clears the definition pointer only for its queued run", async () => {
   const {admin, db, definition} = harness();
   const queued = await enqueueRun({

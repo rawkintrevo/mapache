@@ -12,12 +12,14 @@ const {
 
 const AUTOMATION_PUBLIC_FIELDS = Object.freeze([
   "name", "prompt", "enabled", "cron", "timezone", "allowParallelWithMain",
-  "modelSelection", "resources", "revision", "deleted", "deletedAt", "nextRunAt",
+  "modelSelection", "resources", "missedRunPolicy", "catchUpWindowMinutes", "retryPolicy",
+  "maximumRetries", "replaySafe", "revision", "deleted", "deletedAt", "nextRunAt",
   "lastRunAt", "lastRunId", "createdAt", "updatedAt",
 ]);
 const AUTOMATION_MUTABLE_FIELD_SET = new Set([
   "name", "prompt", "enabled", "cron", "timezone", "allowParallelWithMain",
-  "modelSelection", "modelId", "providerId", "resources",
+  "modelSelection", "modelId", "providerId", "resources", "missedRunPolicy", "catchUpWindowMinutes",
+  "retryPolicy", "maximumRetries", "replaySafe",
 ]);
 
 function createAutomationDefinitionsService(dependencies = {}) {
@@ -110,11 +112,13 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
   const patch = normalizeAutomationMutation(mutationPayload, {partial: true});
   const now = serverTimestamp(dependencies.firestoreAdmin);
   const pendingRuns = queuedRunQuery(dependencies.firestore, workspaceId);
+  const retryRuns = retryIntentQuery(dependencies.firestore, workspaceId);
   let disabling = false;
   await dependencies.firestore.runTransaction(async (transaction) => {
-    const [snap, queuedRuns] = await Promise.all([
+    const [snap, queuedRuns, retryRunDocs] = await Promise.all([
       transaction.get(ref),
       pendingRuns ? transaction.get(pendingRuns) : Promise.resolve({docs: []}),
+      retryRuns ? transaction.get(retryRuns) : Promise.resolve({docs: []}),
     ]);
     if (!snap.exists) throw httpError(404, "automation_not_found");
     const current = snap.data() || {};
@@ -131,6 +135,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
     };
     transaction.update(ref, updates);
     if (disabling) cancelQueuedRuns(transaction, queuedRuns.docs, automationId, now, "definition_disabled");
+    if (disabling) cancelRetryIntents(transaction, retryRunDocs.docs, automationId, now, "definition_disabled");
     writeAudit(transaction, ref, {
       actorUid: uid,
       changedFields: Object.keys(patch),
@@ -148,10 +153,12 @@ async function deleteAutomation(uid, workspaceId, automationId, payload = {}, de
   const ref = workspaceRef.collection("automations").doc(automationId);
   const now = serverTimestamp(dependencies.firestoreAdmin);
   const pendingRuns = queuedRunQuery(dependencies.firestore, workspaceId);
+  const retryRuns = retryIntentQuery(dependencies.firestore, workspaceId);
   await dependencies.firestore.runTransaction(async (transaction) => {
-    const [snap, queuedRuns] = await Promise.all([
+    const [snap, queuedRuns, retryRunDocs] = await Promise.all([
       transaction.get(ref),
       pendingRuns ? transaction.get(pendingRuns) : Promise.resolve({docs: []}),
+      retryRuns ? transaction.get(retryRuns) : Promise.resolve({docs: []}),
     ]);
     if (!snap.exists) throw httpError(404, "automation_not_found");
     const current = snap.data() || {};
@@ -167,6 +174,7 @@ async function deleteAutomation(uid, workspaceId, automationId, payload = {}, de
       updatedAt: now,
     });
     cancelQueuedRuns(transaction, queuedRuns.docs, automationId, now, "definition_deleted");
+    cancelRetryIntents(transaction, retryRunDocs.docs, automationId, now, "definition_deleted");
     writeAudit(transaction, ref, {
       actorUid: uid,
       changedFields: ["deleted", "enabled", "nextRunAt"],
@@ -257,6 +265,11 @@ function normalizedDefinition(definition, workspace) {
     allowParallelWithMain: definition.allowParallelWithMain,
     modelSelection: definition.modelSelection,
     resources: definition.resources,
+    missedRunPolicy: definition.missedRunPolicy,
+    catchUpWindowMinutes: definition.catchUpWindowMinutes,
+    retryPolicy: definition.retryPolicy,
+    maximumRetries: definition.maximumRetries,
+    replaySafe: definition.replaySafe,
   });
   if (!normalized.modelSelection) {
     const saved = resolveModelSelection({}, workspace);
@@ -295,6 +308,14 @@ function queuedRunQuery(firestore, workspaceId) {
   return typeof query.get === "function" ? query : null;
 }
 
+function retryIntentQuery(firestore, workspaceId) {
+  if (!firestore || typeof firestore.collection !== "function") return null;
+  let query = firestore.collection("automationRuns");
+  if (typeof query.where !== "function") return null;
+  query = query.where("workspaceId", "==", workspaceId);
+  return typeof query.get === "function" ? query : null;
+}
+
 function cancelQueuedRuns(transaction, docs, automationId, now, reason) {
   docs.filter((doc) => doc.data()?.automationId === automationId).forEach((doc) => {
     const run = doc.data() || {};
@@ -307,6 +328,18 @@ function cancelQueuedRuns(transaction, docs, automationId, now, reason) {
       cancellationReason: reason,
     });
   });
+}
+
+function cancelRetryIntents(transaction, docs, automationId, now, reason) {
+  docs.filter((doc) => {
+    const run = doc.data() || {};
+    return run.automationId === automationId && ["scheduled", "enqueuing"].includes(String(run.retryState || "").trim().toLowerCase());
+  }).forEach((doc) => transaction.update(doc.ref, {
+    retryState: "canceled",
+    retryCanceledAt: now,
+    retryCancellationReason: reason,
+    updatedAt: now,
+  }));
 }
 
 function writeAudit(transaction, automationRef, {actorUid, changedFields, now, actorContext}, firestoreAdmin) {

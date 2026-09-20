@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  automationOccurrencesBetween,
   nextAutomationOccurrences,
   occurrenceKey,
   parseAutomationCron,
@@ -44,6 +45,10 @@ assert.deepEqual(nextAutomationOccurrences("30 1 * * *", "America/Chicago", {
 }), [
   {utc: "2026-11-01T06:30:00.000Z", local: "2026-11-01T01:30", timezone: "America/Chicago"},
   {utc: "2026-11-02T07:30:00.000Z", local: "2026-11-02T01:30", timezone: "America/Chicago"},
+]);
+assert.deepEqual(automationOccurrencesBetween("30 1 * * *", "America/Chicago",
+    new Date("2026-11-01T00:00:00.000Z"), new Date("2026-11-01T08:00:00.000Z")), [
+  {utc: "2026-11-01T06:30:00.000Z", local: "2026-11-01T01:30", timezone: "America/Chicago"},
 ]);
 assert.deepEqual(nextAutomationOccurrences("0 0 1 * 1", "UTC", {
   from: new Date("2026-01-02T00:00:00.000Z"),

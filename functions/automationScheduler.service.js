@@ -6,6 +6,7 @@ const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {buildAutomationRun, normalizeRunSnapshot} = require("./automationValidation.helpers");
 const {deterministicCronRunId} = require("./automationRuns.service");
 const {
+  automationOccurrencesBetween,
   formatLocalMinute,
   nextAutomationOccurrences,
   validateAutomationScheduleTimezone,
@@ -93,18 +94,24 @@ async function processDefinition(definition, tickDate, dependencies = {}) {
     const due = !currentNext || currentNext.getTime() <= tickDate.getTime();
     if (!due) return;
 
+    const catchUpOccurrence = !tickOccurrence && currentNext && current.missedRunPolicy === "latest" ?
+      latestCatchUpOccurrence(current, currentNext, tickDate) : null;
+    const selectedOccurrence = tickOccurrence || catchUpOccurrence;
+    const selectedTrigger = tickOccurrence ? "cron" : catchUpOccurrence ? "catch_up" : null;
+
     const now = firestoreAdmin.firestore.FieldValue.serverTimestamp();
     const pendingRunId = String(current.pendingRunId || "").trim();
     const pendingRef = pendingRunId ? firestore.collection("automationRuns").doc(pendingRunId) : null;
     const pendingSnap = pendingRef ? await transaction.get(pendingRef) : null;
     const pending = pendingSnap?.exists ? pendingSnap.data() || {} : null;
-    const existingRunId = tickOccurrence ? deterministicCronRunId(definitionId, tickOccurrence) : "";
+    const existingRunId = selectedOccurrence ? (selectedTrigger === "catch_up" ?
+      deterministicCatchUpRunId(definitionId, selectedOccurrence) : deterministicCronRunId(definitionId, selectedOccurrence)) : "";
     const existingRef = existingRunId ? firestore.collection("automationRuns").doc(existingRunId) : null;
     const existingSnap = existingRef ? await transaction.get(existingRef) : null;
 
     const nextUpdates = {nextRunAt: new Date(schedule.nextFuture.utc), updatedAt: now};
     let missedRange = false;
-    if (currentNext && (!tickOccurrenceDate || currentNext.getTime() < tickOccurrenceDate.getTime())) {
+    if (current.missedRunPolicy !== "latest" && currentNext && (!tickOccurrenceDate || currentNext.getTime() < tickOccurrenceDate.getTime())) {
       const summary = buildMissedRangeRun({
         definition: current,
         definitionId,
@@ -122,13 +129,13 @@ async function processDefinition(definition, tickDate, dependencies = {}) {
       missedRange = true;
     }
 
-    if (tickOccurrence && tickOccurrenceDate && currentNext && currentNext.getTime() > tickOccurrenceDate.getTime()) {
+    if (selectedOccurrence && tickOccurrenceDate && currentNext && currentNext.getTime() > tickOccurrenceDate.getTime()) {
       transaction.update(definitionRef, nextUpdates);
       result = {ignored: false, missedRange};
       return;
     }
 
-    if (!tickOccurrence || !tickOccurrenceDate) {
+    if (!selectedOccurrence || !selectedOccurrence.utc) {
       transaction.update(definitionRef, nextUpdates);
       result = {ignored: false, missedRange};
       return;
@@ -140,11 +147,12 @@ async function processDefinition(definition, tickDate, dependencies = {}) {
         const skipped = buildRun({
           automationId: definitionId,
           ownerUid: current.ownerUid,
-          occurrence: tickOccurrence,
+          occurrence: selectedOccurrence,
           runId: existingRunId,
           snapshot,
           status: "skipped",
           skippedReason: "queue_full",
+          trigger: selectedTrigger,
           workspaceId,
           now,
         });
@@ -154,10 +162,11 @@ async function processDefinition(definition, tickDate, dependencies = {}) {
         const queued = buildRun({
           automationId: definitionId,
           ownerUid: current.ownerUid,
-          occurrence: tickOccurrence,
+          occurrence: selectedOccurrence,
           runId: existingRunId,
           snapshot,
           status: "queued",
+          trigger: selectedTrigger,
           workspaceId,
           now,
         });
@@ -247,6 +256,22 @@ function tickSchedule(definition, tickDate) {
   return {local, nextFuture, tickOccurrence};
 }
 
+function latestCatchUpOccurrence(definition, currentNext, tickDate) {
+  const windowMinutes = Number.isSafeInteger(definition.catchUpWindowMinutes) && definition.catchUpWindowMinutes > 0 ?
+    definition.catchUpWindowMinutes : 1440;
+  const windowStart = new Date(tickDate.getTime() - windowMinutes * 60 * 1000);
+  const start = currentNext > windowStart ? currentNext : windowStart;
+  const occurrences = automationOccurrencesBetween(definition.cron, definition.timezone, start, tickDate, {
+    maxOccurrences: Math.min(windowMinutes + 1, 10080),
+  });
+  return occurrences.length ? occurrences[occurrences.length - 1] : null;
+}
+
+function deterministicCatchUpRunId(automationId, occurrence) {
+  const local = String(occurrence?.local || "").trim();
+  return crypto.createHash("sha256").update(`${automationId}/catch-up/${local}`).digest("hex");
+}
+
 function buildSnapshot(definition, workspace) {
   return normalizeRunSnapshot({
     name: definition.name,
@@ -257,10 +282,15 @@ function buildSnapshot(definition, workspace) {
     allowParallelWithMain: definition.allowParallelWithMain,
     modelSelection: definition.modelSelection,
     resources: definition.resources === null || definition.resources === undefined ? workspace.resources || null : definition.resources,
+    missedRunPolicy: definition.missedRunPolicy || "skip",
+    catchUpWindowMinutes: definition.catchUpWindowMinutes || 1440,
+    retryPolicy: definition.retryPolicy || "none",
+    maximumRetries: Number.isSafeInteger(definition.maximumRetries) ? definition.maximumRetries : 0,
+    replaySafe: definition.replaySafe === true,
   });
 }
 
-function buildRun({automationId, occurrence, ownerUid, runId, snapshot, status, skippedReason, workspaceId, now}) {
+function buildRun({automationId, occurrence, ownerUid, runId, snapshot, status, skippedReason, trigger = "cron", workspaceId, now}) {
   const run = buildAutomationRun({}, {
     automationId,
     cleanupState: status === "skipped" ? "complete" : "pending",
@@ -270,12 +300,13 @@ function buildRun({automationId, occurrence, ownerUid, runId, snapshot, status, 
     runId,
     snapshot,
     status,
-    trigger: "cron",
+    trigger,
     updatedAt: now,
     workspaceId,
     skippedReason,
   });
   run.occurrence = occurrence;
+  if (trigger === "catch_up") run.catchUpScheduledAt = occurrence.utc || null;
   return run;
 }
 

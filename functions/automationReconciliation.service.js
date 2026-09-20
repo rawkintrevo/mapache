@@ -44,6 +44,7 @@ function createAutomationReconciliationService(dependencies = {}) {
     listRuns: dependencies.listRuns,
     now: dependencies.now || (() => Date.now()),
     provisionAutomationRun: dependencies.provisionAutomationRun,
+    processDueRetries: dependencies.processDueRetries,
     requestRunnerJson: dependencies.requestRunnerJson,
     sessionCollection: dependencies.sessionCollection,
   };
@@ -74,7 +75,11 @@ async function reconcile(dependencies = {}) {
     orphanServices: 0,
     orphanDeleted: 0,
     errors: 0,
+    retries: {checked: 0, enqueued: 0, deferred: 0, canceled: 0, errors: 0},
   };
+  if (typeof dependencies.processDueRetries === "function") {
+    result.retries = await dependencies.processDueRetries();
+  }
   const liveAutomationLabels = new Set();
 
   for (const run of runs) {

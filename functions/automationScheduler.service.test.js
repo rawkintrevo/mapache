@@ -175,7 +175,7 @@ function toMillis(value) {
   return Number.isNaN(result) ? 0 : result;
 }
 
-function setup({nextRunAt = "2026-09-20T10:00:00.000Z", pendingRunId = null, cron = "0 10 * * *"} = {}) {
+function setup({nextRunAt = "2026-09-20T10:00:00.000Z", pendingRunId = null, cron = "0 10 * * *", missedRunPolicy = "skip", catchUpWindowMinutes = 1440} = {}) {
   const db = new FakeDb();
   db.data.set("appConfig/automations", {enabled: true});
   db.data.set("workspaces/workspace-1", {resources: {cpu: "1", memory: "2Gi"}});
@@ -195,6 +195,8 @@ function setup({nextRunAt = "2026-09-20T10:00:00.000Z", pendingRunId = null, cro
     deleted: false,
     nextRunAt,
     pendingRunId,
+    missedRunPolicy,
+    catchUpWindowMinutes,
   });
   if (pendingRunId) {
     db.data.set(`automationRuns/${pendingRunId}`, {
@@ -282,4 +284,61 @@ test("a pending run produces skipped cron history instead of another queued run"
   assert.equal(result.queued, 0);
   assert.equal(result.skipped, 1);
   assert.equal([...db.data.entries()].filter(([path]) => path.startsWith("automationRuns/")).length, 2);
+});
+
+test("latest catch-up queues only the newest missed occurrence", async () => {
+  const db = setup({
+    nextRunAt: "2026-09-20T09:00:00.000Z",
+    cron: "0 * * * *",
+    missedRunPolicy: "latest",
+  });
+  const result = await runAutomationSchedulerTick({scheduleTime: "2026-09-20T12:30:00.000Z"}, {
+    db,
+    admin,
+    now: () => new Date("2026-09-20T12:30:00.000Z"),
+    featureEnabled: async () => true,
+  });
+  assert.equal(result.queued, 1);
+  assert.equal(result.missedRanges, 0);
+  const runs = [...db.data.entries()].filter(([path]) => path.startsWith("automationRuns/")).map(([, value]) => value);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].trigger, "catch_up");
+  assert.equal(runs[0].occurrence.local, "2026-09-20T12:00");
+  assert.equal(runs[0].catchUpScheduledAt, "2026-09-20T12:00:00.000Z");
+});
+
+test("a due current occurrence wins over an older latest catch-up", async () => {
+  const db = setup({
+    nextRunAt: "2026-09-20T09:00:00.000Z",
+    cron: "0 * * * *",
+    missedRunPolicy: "latest",
+  });
+  const result = await runAutomationSchedulerTick({scheduleTime: "2026-09-20T10:00:00.000Z"}, {
+    db,
+    admin,
+    now: () => new Date("2026-09-20T10:00:00.000Z"),
+    featureEnabled: async () => true,
+  });
+  assert.equal(result.queued, 1);
+  const run = [...db.data.entries()].find(([path]) => path.startsWith("automationRuns/"))[1];
+  assert.equal(run.trigger, "cron");
+  assert.equal(run.occurrence.local, "2026-09-20T10:00");
+});
+
+test("latest catch-up respects its bounded window", async () => {
+  const db = setup({
+    nextRunAt: "2026-09-18T10:00:00.000Z",
+    cron: "0 10 * * *",
+    missedRunPolicy: "latest",
+    catchUpWindowMinutes: 60,
+  });
+  const result = await runAutomationSchedulerTick({scheduleTime: "2026-09-20T12:00:00.000Z"}, {
+    db,
+    admin,
+    now: () => new Date("2026-09-20T12:00:00.000Z"),
+    featureEnabled: async () => true,
+  });
+  assert.equal(result.queued, 0);
+  assert.equal(result.missedRanges, 0);
+  assert.equal([...db.data.keys()].filter((path) => path.startsWith("automationRuns/")).length, 0);
 });

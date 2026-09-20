@@ -85,6 +85,7 @@ function routeRequest(path) {
   if (parts.length === 1 && parts[0] === "automation-runs") {
     return {name: "automationRuns"};
   }
+  if (parts.length === 1 && parts[0] === "instances") return {name: "instances"};
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "restart") {
     return {name: "automationRunRestart", runId: parts[1]};
   }

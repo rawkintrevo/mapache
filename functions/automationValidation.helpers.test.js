@@ -23,6 +23,11 @@ assert.deepEqual(normalizeAutomationMutation(baseDefinition), {
   allowParallelWithMain: true,
   modelSelection: null,
   resources: null,
+  missedRunPolicy: "skip",
+  catchUpWindowMinutes: 1440,
+  retryPolicy: "none",
+  maximumRetries: 0,
+  replaySafe: false,
 });
 assert.throws(() => normalizeAutomationMutation({...baseDefinition, prompt: "   "}), /invalid_automation_prompt/);
 assert.throws(() => normalizeAutomationMutation({...baseDefinition, name: "x".repeat(121)}), /invalid_automation_name/);
@@ -47,6 +52,11 @@ assert.deepEqual(buildAutomationDefinition(baseDefinition, {
   allowParallelWithMain: true,
   modelSelection: null,
   resources: null,
+  missedRunPolicy: "skip",
+  catchUpWindowMinutes: 1440,
+  retryPolicy: "none",
+  maximumRetries: 0,
+  replaySafe: false,
   revision: 1,
   deleted: false,
   deletedAt: null,
@@ -76,6 +86,21 @@ assert.equal(run.cleanupState, "pending");
 assert.equal(run.sessionId, null);
 assert.deepEqual(normalizeAutomationSettings({}), {automationMaxConcurrency: 1});
 assert.deepEqual(normalizeAutomationSettings({automationMaxConcurrency: 4}), {automationMaxConcurrency: 4});
+assert.deepEqual(normalizeAutomationMutation({...baseDefinition, missedRunPolicy: "latest", catchUpWindowMinutes: 60}), {
+  ...baseDefinition,
+  enabled: false,
+  allowParallelWithMain: true,
+  modelSelection: null,
+  resources: null,
+  missedRunPolicy: "latest",
+  catchUpWindowMinutes: 60,
+  retryPolicy: "none",
+  maximumRetries: 0,
+  replaySafe: false,
+});
+assert.throws(() => normalizeAutomationMutation({...baseDefinition, retryPolicy: "safe"}), /automation_retry_requires_replay_safe/);
+assert.deepEqual(normalizeAutomationMutation({...baseDefinition, retryPolicy: "safe", maximumRetries: 2, replaySafe: true}).retryPolicy, "safe");
+assert.throws(() => normalizeAutomationMutation({...baseDefinition, maximumRetries: 3}), /invalid_automation_maximum_retries/);
 assert.throws(() => normalizeAutomationMutation({...baseDefinition, sessionId: "private"}), /automation_server_field/);
 
 console.log("automation validation helper tests passed");
