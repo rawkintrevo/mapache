@@ -44,6 +44,7 @@ const {previewAutomationSchedule} = require("./automationSchedule.helpers");
 const {createAutomationAdmissionService} = require("./automationAdmission.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationRunsService} = require("./automationRuns.service");
+const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
 } = require("./userUsage.service");
@@ -100,6 +101,11 @@ const {
   assertMainAdmissionAllowed,
   wakeQueue: wakeAutomationQueue,
 } = automationAdmissionService;
+const {runTick: runAutomationScheduleTick} = createAutomationSchedulerService({
+  admin,
+  db,
+  wakeQueue: wakeAutomationQueue,
+});
 
 const workspaceSessionReservationService = createWorkspaceSessionReservationService({admin, db});
 const {
@@ -473,6 +479,12 @@ exports.provisionQueuedSession = onDocumentWritten({
     GOOGLE_OAUTH_ENCRYPTION_KEY,
   ],
 }, provisionQueuedSession);
+
+exports.dispatchAutomationSchedules = onSchedule("every 1 minutes", async (event) => {
+  const result = await runAutomationScheduleTick(event);
+  logger.info("automation schedule tick complete", result);
+  return result;
+});
 
 exports.resizeQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",

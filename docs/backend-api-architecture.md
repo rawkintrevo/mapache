@@ -171,6 +171,16 @@ pending queue alone never blocks main use. Only confirmed service cleanup can
 release the slot, and that release wakes the queue. Enqueue, cancellation,
 concurrency-setting changes, and confirmed main-stop completion use the same
 idempotent queue wake path.
+`functions/automationScheduler.service.js` is the single minute-tick scheduler
+used by the `dispatchAutomationSchedules` function. It reads the
+`appConfig/automations` feature flag before querying bounded pages of enabled,
+due definitions. A delivery more than 120 seconds late is ignored. Timely ticks
+recheck the definition in a transaction, use the stored timezone's local
+minute (including DST repeat suppression), create one deterministic cron run,
+advance `nextRunAt`, and compress older due occurrences into one skipped-range
+history record. A pending workflow run produces skipped queue-full history;
+the scheduler never calls a provider or replays a missed backlog. The flag is
+off by default, so re-enabling it does not backfill old schedule ticks.
 
 ## Persistence and connections
 
