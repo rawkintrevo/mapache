@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const {agentSnapshotStoragePrefix, parseCompleteJsonl} = require("./agentSnapshot.service");
 const {CHECKPOINT_VERSION, WORKSPACE_FILE_NAMESPACE, validateRelativePath} = require("./agentCheckpoint.service");
+const {isSharedGcsFuseMode} = require("./sharedWorkspace.helpers");
 
 function isAutomationRuntime(config = {}) {
   return String(config.runtimeKind || "").trim().toLowerCase() === "automation";
@@ -60,12 +61,15 @@ function createAgentCheckpointRestoreService({
         db,
         fsImpl,
         includeAgent: true,
-        includeWorkspace: true,
+        includeWorkspace: !isSharedGcsFuseMode(config.workspaceStorageMode),
         randomId,
         storage,
       });
     },
     restoreWorkspaceFiles: (options = {}) => {
+      if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+        return Promise.resolve({enabled: true, skipped: true, reason: "shared_gcsfuse_authoritative"});
+      }
       if (!enabled && options.allowUnmarked !== true) return Promise.resolve({enabled: false, skipped: true});
       return restorePublishedCheckpoint({
         ...options,

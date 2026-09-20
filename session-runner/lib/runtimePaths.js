@@ -14,6 +14,8 @@ const INTERNAL_STORAGE_DIRS = [
   LEGACY_INTERNAL_STORAGE_DIR,
 ];
 
+const SHARED_WORKSPACE_READY_MARKER = `${INTERNAL_STORAGE_DIR}/workspace-ready.json`;
+
 function normalizeRuntimeKind(value) {
   return String(value || "").trim().toLowerCase() === "automation" ? "automation" : "main";
 }
@@ -49,6 +51,7 @@ module.exports = {
   INTERNAL_STORAGE_DIRS,
   LEGACY_DIRECTORY_MARKER_FILE,
   LEGACY_INTERNAL_STORAGE_DIR,
+  SHARED_WORKSPACE_READY_MARKER,
   isAutomationRuntime,
   isDirectoryMarkerFileName,
   isInternalStorageDirName,

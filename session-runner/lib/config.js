@@ -13,6 +13,7 @@ const {
   LEGACY_DIRECTORY_MARKER_FILE,
   INTERNAL_STORAGE_DIR,
   LEGACY_INTERNAL_STORAGE_DIR,
+  SHARED_WORKSPACE_READY_MARKER,
 } = require("./runtimePaths");
 const {isAutomationRuntime, normalizeRuntimeKind} = require("./runtimePaths");
 const {
@@ -22,6 +23,7 @@ const {
   normalizeRuntimeStorageMode,
   privateRuntimePaths,
 } = require("./runtimeStorage.helpers");
+const {SHARED_WORKSPACE_STORAGE_MODE} = require("./sharedWorkspace.helpers");
 
 function normalizeWorkspaceSourceMode(value) {
   return String(value || "blank").trim().toLowerCase() === "github" ? "github" : "blank";
@@ -56,11 +58,14 @@ function parseRunnerCapabilities() {
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
+  const workspaceStorageMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE ?
+    SHARED_WORKSPACE_STORAGE_MODE : "legacy";
   const automationRunId = isAutomationRuntime(runtimeKind) ?
     String(process.env.MAPACHE_AUTOMATION_RUN_ID || process.env.AUTOMATION_RUN_ID || "").trim() : "";
-  const runtimeStorageMode = normalizeRuntimeStorageMode(
-      process.env.MAPACHE_RUNTIME_STORAGE_MODE || process.env.RUNTIME_STORAGE_MODE,
+  const requestedRuntimeStorageMode = normalizeRuntimeStorageMode(
+    process.env.MAPACHE_RUNTIME_STORAGE_MODE || process.env.RUNTIME_STORAGE_MODE,
   );
+  const runtimeStorageMode = workspaceStorageMode === SHARED_WORKSPACE_STORAGE_MODE ? "private" : requestedRuntimeStorageMode;
   const runtimeIdentity = normalizeRuntimeIdentity(
       process.env.MAPACHE_RUNTIME_ID || process.env.RUN_ID || process.env.SESSION_ID,
   );
@@ -235,6 +240,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     workspaceGoogleApplicationCredentials: normalizeEnvString(workspaceGoogleApplicationCredentials),
     workspaceId: process.env.WORKSPACE_ID || "",
     workspaceSourceMode,
+    workspaceStorageGeneration: normalizeEnvString(process.env.WORKSPACE_STORAGE_GENERATION),
+    workspaceStorageMode,
+    workspaceStorageReadyMarker: normalizeEnvString(process.env.WORKSPACE_STORAGE_READY_MARKER) || SHARED_WORKSPACE_READY_MARKER,
     workspaceSyncRole,
     workspaceSyncPolicyExclude,
     workspaceSyncPolicyMode,

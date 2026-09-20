@@ -41,6 +41,8 @@ const {consumeQaFault} = require("./qaFaultHarness.helpers");
 const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helpers");
 
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
+const SHARED_WORKSPACE_STORAGE_MODE = "shared-gcsfuse-v1";
+const SHARED_WORKSPACE_READY_MARKER = ".mapache-internal/workspace-ready.json";
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -328,7 +330,7 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const body = await buildCloudRunPatch(session, options, dependencies);
     const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
     const sharedMask = Object.keys(sharedTemplate).length > 0 ?
-      ",template.volumes,template.executionEnvironment" : "";
+      ",template.volumes,template.executionEnvironment,template.containers.env" : "";
     const updateMask = (options.restart ?
       "template.containers,template.serviceAccount" :
       isMarkedRuntimeSession(session) ?
@@ -419,6 +421,7 @@ async function markSessionStopped(dependencies, sessionRef, session, reason) {
 
 async function buildCloudRunService(workspace, session, dependencies = {}) {
   const sharedTemplate = sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
+  const trustedWorkspaceFields = trustedWorkspaceRuntimeFields(workspace && workspace.sharedStorage);
   const container = {
     image: session.image,
     ports: [{containerPort: 8080}],
@@ -429,6 +432,7 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
         workspaceId: workspace.id,
         workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
         workspaceStoragePrefix: workspace.storagePrefix,
+        ...trustedWorkspaceFields,
       }, {}, dependencies),
     ],
     ...(sharedTemplate.containers?.[0] || {}),
@@ -448,12 +452,13 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
 
 async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
   const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+  const trustedWorkspaceFields = trustedWorkspaceRuntimeFields(options.trustedStorageDescriptor);
+  const patchSession = {...session, ...trustedWorkspaceFields};
   const container = {
     image: session.image,
     resources: runtimeResourceRequirements(session),
-    env: options.restart ? await sessionRunnerEnv(session, {
-      restartNonce: Date.now().toString(),
-    }, dependencies) : undefined,
+    env: options.restart || Object.keys(trustedWorkspaceFields).length > 0 ? await sessionRunnerEnv(patchSession,
+      options.restart ? {restartNonce: Date.now().toString()} : {}, dependencies) : undefined,
     ...(sharedTemplate.containers?.[0] || {}),
   };
   return {
@@ -480,6 +485,20 @@ function sharedWorkspaceTemplateFor(descriptor) {
     bucketName: descriptor.bucketName,
     storageGeneration: descriptor.storageGeneration,
   });
+}
+
+function trustedWorkspaceRuntimeFields(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  if (String(descriptor.state || "ready").trim().toLowerCase() !== "ready" || !descriptor.bucketName || !descriptor.storageGeneration) {
+    return {};
+  }
+  return {
+    runtimeStorageMode: "private",
+    workspaceStorageBucket: String(descriptor.bucketName),
+    workspaceStorageGeneration: String(descriptor.storageGeneration),
+    workspaceStorageMode: SHARED_WORKSPACE_STORAGE_MODE,
+    workspaceStorageReadyMarker: cleanName(descriptor.readyMarker || SHARED_WORKSPACE_READY_MARKER) || SHARED_WORKSPACE_READY_MARKER,
+  };
 }
 
 function runnerServiceAccountValue(options = {}) {
@@ -533,6 +552,9 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
+    {name: "WORKSPACE_STORAGE_MODE", value: session.workspaceStorageMode || ""},
+    {name: "WORKSPACE_STORAGE_GENERATION", value: session.workspaceStorageGeneration || ""},
+    {name: "WORKSPACE_STORAGE_READY_MARKER", value: session.workspaceStorageReadyMarker || ""},
     {name: "HOME_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "HOME_STORAGE_PREFIX", value: runtime.isPrivate ? "" : session.homeStoragePrefix || homeStoragePrefix(session.workspaceStoragePrefix)},
     {name: "HOME_SYNC_MODE", value: runtime.isPrivate ? "ephemeral" : cleanName(session.homeMode || "persistent") || "persistent"},
@@ -643,7 +665,9 @@ function terminalCommandEnv(session, runtime = runtimeStorageForSession(session)
 }
 
 function runtimeStorageForSession(session = {}) {
-  const storageMode = isAutomationRuntime(session) || cleanName(session.runtimeStorageMode).toLowerCase() === "private" ?
+  const storageMode = isAutomationRuntime(session) ||
+    cleanName(session.runtimeStorageMode).toLowerCase() === "private" ||
+    cleanName(session.workspaceStorageMode).toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE ?
     "private" : "shared";
   const identity = normalizeRuntimeIdentity(session.runId || session.runnerSessionId || session.id || "session");
   const root = storageMode === "private" ? `/var/lib/mapache/runtimes/${identity}` : "";

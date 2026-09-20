@@ -196,3 +196,41 @@ test("private runtime mode namespaces all generated roots and ignores legacy sha
     }
   }
 });
+
+test("shared GCS workspace mode forces private runtime roots and carries its generation contract", () => {
+  const names = [
+    "WORKSPACE_STORAGE_MODE",
+    "WORKSPACE_STORAGE_GENERATION",
+    "WORKSPACE_STORAGE_READY_MARKER",
+    "MAPACHE_RUNTIME_STORAGE_MODE",
+    "MAPACHE_RUNTIME_ID",
+    "MAPACHE_RUNTIME_ROOT",
+    "SESSION_ID",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    WORKSPACE_STORAGE_MODE: "shared-gcsfuse-v1",
+    WORKSPACE_STORAGE_GENERATION: "generation-7",
+    WORKSPACE_STORAGE_READY_MARKER: ".mapache-internal/workspace-ready.json",
+    MAPACHE_RUNTIME_STORAGE_MODE: "shared",
+    MAPACHE_RUNTIME_ID: "session-7",
+    MAPACHE_RUNTIME_ROOT: "/tmp/mapache-shared-workspace-runtime/session-7",
+    SESSION_ID: "session-7",
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.workspaceStorageMode, "shared-gcsfuse-v1");
+    assert.equal(config.workspaceStorageGeneration, "generation-7");
+    assert.equal(config.workspaceStorageReadyMarker, ".mapache-internal/workspace-ready.json");
+    assert.equal(config.runtimeStorageMode, "private");
+    assert.equal(config.isPrivateRuntime, true);
+    assert.equal(config.privateRuntimeRoot, "/tmp/mapache-shared-workspace-runtime/session-7");
+    assert.equal(config.piAgentDir.startsWith("/workspace"), false);
+    assert.equal(config.browserQaDir.startsWith("/workspace"), false);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

@@ -336,6 +336,11 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
   assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.mountOptions.includes("trees/42"), true);
   assert.deepStrictEqual(sharedService.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
+  const sharedServiceEnv = envMap(sharedService.template.containers[0].env);
+  assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
+  assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_GENERATION, "42");
+  assert.equal(sharedServiceEnv.STORAGE_BUCKET, "mpw-1234567890-workspace1");
+  assert.equal(sharedServiceEnv.MAPACHE_RUNTIME_STORAGE_MODE, "private");
 
   const patch = await buildCloudRunPatch({
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
@@ -363,6 +368,9 @@ assert.deepStrictEqual(terminalCommandEnv({
   });
   assert.equal(sharedPatch.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
   assert.deepStrictEqual(sharedPatch.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
+  const sharedPatchEnv = envMap(sharedPatch.template.containers[0].env);
+  assert.equal(sharedPatchEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
+  assert.equal(sharedPatchEnv.WORKSPACE_STORAGE_GENERATION, "42");
 
   const markedPatch = await buildCloudRunPatch({
     agentUiVersion: "pi-web-ui-v1",

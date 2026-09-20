@@ -8,6 +8,7 @@ const {createWorkspacePathHelpers} = require("./workspacePath.helpers");
 const {createWorkspaceAuthService} = require("./workspaceAuth.service");
 const {generationMatchOptions, isStorageGenerationConflict} = require("./workspaceSyncGeneration.helpers");
 const {normalizeRelativeWorkspacePath} = require("./utils");
+const {assertSharedWorkspaceMount, isSharedGcsFuseMode} = require("./sharedWorkspace.helpers");
 
 function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
@@ -21,14 +22,24 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   });
 
   async function ensureWorkspace() {
-    await fs.promises.mkdir(config.workspaceDir, {recursive: true});
+    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      await assertSharedWorkspaceMount(config);
+    } else {
+      await fs.promises.mkdir(config.workspaceDir, {recursive: true});
+    }
     await fs.promises.mkdir(config.piSessionDir, {recursive: true});
-    await Promise.all(archives.archiveSyncTargets
-        .filter((target) => target.ensureLocalPath)
-        .map((target) => fs.promises.mkdir(target.localPath, {recursive: true})));
+    if (!isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      await Promise.all(archives.archiveSyncTargets
+          .filter((target) => target.ensureLocalPath)
+          .map((target) => fs.promises.mkdir(target.localPath, {recursive: true})));
+    }
   }
 
   async function prepareWorkspaceSource() {
+    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      await assertSharedWorkspaceMount(config);
+      return {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
+    }
     if (git.isBlankWorkspace()) {
       await syncDown();
       return;
@@ -38,12 +49,16 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function syncDown() {
+    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      return {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
+    }
     if (!config.bucketName || !config.prefix) return;
     await syncWorktreeDown();
     await archives.syncArchivesDown();
   }
 
   async function syncWorktreeDown() {
+    if (isSharedGcsFuseMode(config.workspaceStorageMode)) return;
     if (!config.bucketName || !config.prefix) return;
     // Marked runtimes use the immutable workspace-file manifest. The legacy
     // flat prefix must not repopulate state when a checkpoint is absent.
@@ -77,6 +92,9 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   async function syncUp(options = {}) {
     await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
+    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      return {conflicts: [], skipped: true, reason: "shared_gcsfuse_authoritative"};
+    }
     if (!config.bucketName || !config.prefix) return {conflicts: []};
     if (config.agentRuntimeEnabled && checkpointPublisher?.publishWorkspaceFiles) {
       const identity = {
@@ -223,8 +241,10 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
     restoreCheckpoint,
     secretFileInventory: auth.secretFileInventory,
     extractStorageArchive: archives.extractStorageArchive,
-    syncArchivesDown: archives.syncArchivesDown,
-    syncArchivesUp: archives.syncArchivesUp,
+    syncArchivesDown: async (options = {}) => isSharedGcsFuseMode(config.workspaceStorageMode) ?
+      {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"} : archives.syncArchivesDown(options),
+    syncArchivesUp: async () => isSharedGcsFuseMode(config.workspaceStorageMode) ?
+      {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"} : archives.syncArchivesUp(),
     syncDown,
     syncUp,
     synchronizeAuth: auth.synchronizeAuth,

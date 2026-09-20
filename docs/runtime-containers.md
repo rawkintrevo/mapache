@@ -41,6 +41,15 @@ generation and disables the GCS FUSE metadata/type caches, file/negative caches,
 and noisy logging; legacy sessions without the descriptor keep their existing
 template. The descriptor is backend-owned, so session/client bucket fields and
 private archive storage cannot select the mounted bucket.
+The runner receives the trusted generation as `WORKSPACE_STORAGE_GENERATION` and
+uses `WORKSPACE_STORAGE_MODE=shared-gcsfuse-v1` only for a ready descriptor. Before
+agent or shell startup it verifies the mounted generation-ready marker, verifies
+that `/workspace` is writable, and rejects private runtime, Git, browser, and
+agent-state paths that resolve into the mount. A shared mount is authoritative:
+startup does not clone or restore a worktree, and periodic/final sync does not
+upload, delete, or restore legacy worktree and Git archives. Private transcript,
+Chrome, auth, and runtime cache/checkpoint roots remain outside the mount. The
+legacy runner path is unchanged when no trusted descriptor is present.
 Normal run completion never deletes a workspace bucket. Workspace deletion first
 confirms that all runner services are absent, deletes live objects and then the
 bucket, and reports the seven-day recovery window; soft-deleted objects remain
