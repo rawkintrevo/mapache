@@ -12,6 +12,7 @@ const {
   requireRunnerServiceAccount,
   resourceLimits,
   runnerServiceAccountValue,
+  runtimeStorageForSession,
   sessionEnvironmentEntryIds,
   sessionRunnerEnv,
   stringifySyncPolicyExclude,
@@ -63,6 +64,20 @@ assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapache
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/pi-session");
+assert.deepStrictEqual(runtimeStorageForSession({runnerSessionId: "session-1", homeDir: "/root"}), {
+  storageMode: "shared",
+  isPrivate: false,
+  identity: "session-1",
+  root: "",
+  homeDir: "/root",
+  piAgentDir: "/root/.pi/agent",
+  piSessionDir: "/root/.pi/agent/mapache-sessions/session-1",
+  browserQaDir: "/workspace/.mapache/qa",
+  chromeProfileDir: "/var/lib/mapache/chrome/profile",
+  privateGitDir: "",
+});
+assert.equal(runtimeStorageForSession({runtimeKind: "automation", runId: "run-1"}).homeDir,
+    "/var/lib/mapache/runtimes/run-1/home");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
 assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [" env-1 ", "env-1", ""]}), ["env-1"]);
@@ -160,6 +175,33 @@ assert.deepStrictEqual(terminalCommandEnv({
   }));
   assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_UI_VERSION, "pi-web-ui-v1");
   assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_RUNTIME_GENERATION, "7");
+
+  const automationEnv = envMap(await sessionRunnerEnv({
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "auto-run-1",
+    runId: "run-1",
+    runtimeKind: "automation",
+    homeDir: "/root",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
+    piSessionJsonlPath: "/workspace/.pi/agent/mapache-sessions/old.jsonl",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: false, chrome: true},
+  }));
+  assert.strictEqual(automationEnv.MAPACHE_RUNTIME_STORAGE_MODE, "private");
+  assert.strictEqual(automationEnv.MAPACHE_RUNTIME_ID, "run-1");
+  assert.strictEqual(automationEnv.HOME, "/var/lib/mapache/runtimes/run-1/home");
+  assert.strictEqual(automationEnv.HOME_STORAGE_PREFIX, "");
+  assert.strictEqual(automationEnv.HOME_SYNC_MODE, "ephemeral");
+  assert.strictEqual(automationEnv.PI_CODING_AGENT_DIR, "/var/lib/mapache/runtimes/run-1/agent-state/pi");
+  assert.strictEqual(automationEnv.PI_SESSION_DIR, "/var/lib/mapache/runtimes/run-1/agent-state/sessions");
+  assert.strictEqual(automationEnv.PI_SESSION_STORAGE_PREFIX, "");
+  assert.strictEqual(automationEnv.PI_SESSION_JSONL_PATH, "");
+  assert.strictEqual(automationEnv.CHROME_PROFILE_DIR, "/var/lib/mapache/runtimes/run-1/chrome/profile");
+  assert.strictEqual(automationEnv.MAPACHE_QA_DIR, "/var/lib/mapache/runtimes/run-1/qa");
+  assert.strictEqual(automationEnv.MAPACHE_PRIVATE_GIT_DIR, "/var/lib/mapache/runtimes/run-1/git/repository");
+  assert.equal(automationEnv.TERMINAL_ARGS.includes("/workspace"), false);
 
   const previewEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",

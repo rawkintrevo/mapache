@@ -103,6 +103,29 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
   }
 });
 
+test("private managed child loads MCP config from its local Pi state root", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild(4343);
+  const privateMcpPath = path.join(root, "private", "pi", "mcp.json");
+  config.isPrivateRuntime = true;
+  config.piMcpConfigPath = privateMcpPath;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      env: {PATH: "/usr/bin"},
+      fetch: healthyFetch(),
+      spawn: (_command, args, options) => {
+        assert.deepEqual(args.slice(1), ["--mcp-config", privateMcpPath]);
+        assert.equal(options.env.PI_WEB_MCP_CONFIG, privateMcpPath);
+        return child;
+      },
+    });
+    await managed.start();
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("quiesces through the local control socket and reports activity without a browser", async () => {
   const {root, config} = await fixture();
   const child = fakeChild();

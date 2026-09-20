@@ -32,6 +32,7 @@ const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {agentRuntimeEnvironment} = require("./agentRuntime.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
 const {
   isMarkedRuntimeSession,
   runtimeSessionStateUpdate,
@@ -477,10 +478,11 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const capabilities = resolveSessionCapabilities(session);
-  const terminal = terminalCommandEnv(session);
+  const runtime = runtimeStorageForSession(session);
+  const terminal = terminalCommandEnv(session, runtime);
   const terminalKind = "pi";
-  const homeDir = cleanHomeDir(session.homeDir || "/root");
-  const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
+  const homeDir = runtime.homeDir;
+  const piAgentDir = runtime.piAgentDir;
   const environmentEntryIds = sessionEnvironmentEntryIds(session);
   const genericEnvironment = typeof dependencies.buildGenericEnvironmentEnv === "function" ?
     await dependencies.buildGenericEnvironmentEnv(session, environmentEntryIds) : {};
@@ -494,6 +496,9 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     }),
     ...trustedRuntimeEnv(googleMcpRuntime.env),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
+    {name: "MAPACHE_RUNTIME_STORAGE_MODE", value: runtime.storageMode},
+    {name: "MAPACHE_RUNTIME_ID", value: runtime.identity},
+    {name: "MAPACHE_RUNTIME_ROOT", value: runtime.root},
     {name: "HOME", value: homeDir},
     {name: "MAPACHE_HOME_DIR", value: homeDir},
     {name: "OWNER_UID", value: session.ownerUid || ""},
@@ -501,18 +506,19 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
-    {name: "HOME_STORAGE_BUCKET", value: session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
-    {name: "HOME_STORAGE_PREFIX", value: session.homeStoragePrefix || homeStoragePrefix(session.workspaceStoragePrefix)},
-    {name: "HOME_SYNC_MODE", value: cleanName(session.homeMode || "persistent") || "persistent"},
+    {name: "HOME_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "HOME_STORAGE_PREFIX", value: runtime.isPrivate ? "" : session.homeStoragePrefix || homeStoragePrefix(session.workspaceStoragePrefix)},
+    {name: "HOME_SYNC_MODE", value: runtime.isPrivate ? "ephemeral" : cleanName(session.homeMode || "persistent") || "persistent"},
     {name: "HOME_ARCHIVE_NAME", value: cleanName(session.homeArchiveName || "home.tar.gz") || "home.tar.gz"},
-    {name: "PI_SESSION_DIR", value: session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "", homeDir)},
-    {name: "PI_SESSION_STORAGE_BUCKET", value: session.piSessionStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "PI_SESSION_DIR", value: runtime.piSessionDir},
+    {name: "PI_SESSION_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.piSessionStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {
       name: "PI_SESSION_STORAGE_PREFIX",
-      value: session.piSessionStoragePrefix || piSessionStoragePrefix(session.workspaceStoragePrefix, session.runnerSessionId || session.id || ""),
+      value: runtime.isPrivate ? "" : session.piSessionStoragePrefix || piSessionStoragePrefix(session.workspaceStoragePrefix, runtime.identity),
     },
-    {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
+    {name: "PI_SESSION_JSONL_PATH", value: runtime.isPrivate ? "" : session.piSessionJsonlPath || ""},
     {name: "PI_CODING_AGENT_DIR", value: piAgentDir},
+    {name: "MAPACHE_PRIVATE_GIT_DIR", value: runtime.privateGitDir},
     {name: "SESSION_NAME", value: cleanName(session.name || "Terminal session")},
     {name: "HARNESS_ID", value: "pi"},
     {name: "TERMINAL_COMMAND", value: terminal.command},
@@ -539,7 +545,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
         {name: "PREVIEW_LOG_LIMIT", value: "500"},
         {name: "MAPACHE_RUNNER_URL", value: "http://127.0.0.1:8080"},
         {name: "MAPACHE_PREVIEW_URL", value: "http://127.0.0.1:8080/preview/"},
-        {name: "MAPACHE_QA_DIR", value: "/workspace/.mapache/qa"},
+        {name: "MAPACHE_QA_DIR", value: runtime.browserQaDir},
     );
   }
 
@@ -571,7 +577,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
 
   if (capabilities.chrome) {
     env.push(
-        {name: "CHROME_PROFILE_DIR", value: "/var/lib/mapache/chrome/profile"},
+        {name: "CHROME_PROFILE_DIR", value: runtime.chromeProfileDir},
         {name: "CHROME_CDP_HOST", value: "127.0.0.1"},
         {name: "CHROME_CDP_PORT", value: "9222"},
         {name: "CHROME_DISPLAY", value: ":99"},
@@ -602,12 +608,38 @@ function sessionEnvironmentEntryIds(session = {}) {
   return [...new Set(selected.map((id) => String(id || "").trim()).filter(Boolean))];
 }
 
-function terminalCommandEnv(session) {
-  const homeDir = cleanHomeDir(session && session.homeDir || "/root");
+function terminalCommandEnv(session, runtime = runtimeStorageForSession(session)) {
   return {
     command: "pi",
-    args: ["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "", homeDir), "-c"],
+    args: ["--session-dir", runtime.piSessionDir, "-c"],
   };
+}
+
+function runtimeStorageForSession(session = {}) {
+  const storageMode = isAutomationRuntime(session) || cleanName(session.runtimeStorageMode).toLowerCase() === "private" ?
+    "private" : "shared";
+  const identity = normalizeRuntimeIdentity(session.runId || session.runnerSessionId || session.id || "session");
+  const root = storageMode === "private" ? `/var/lib/mapache/runtimes/${identity}` : "";
+  const homeDir = storageMode === "private" ? `${root}/home` : cleanHomeDir(session.homeDir || "/root");
+  return {
+    storageMode,
+    isPrivate: storageMode === "private",
+    identity,
+    root,
+    homeDir,
+    piAgentDir: storageMode === "private" ? `${root}/agent-state/pi` : `${homeDir}/.pi/agent`.replace(/\/+/g, "/"),
+    piSessionDir: storageMode === "private" ? `${root}/agent-state/sessions` :
+      session.piSessionDir || piSessionDir(identity, homeDir),
+    browserQaDir: storageMode === "private" ? `${root}/qa` : "/workspace/.mapache/qa",
+    chromeProfileDir: storageMode === "private" ? `${root}/chrome/profile` : "/var/lib/mapache/chrome/profile",
+    privateGitDir: storageMode === "private" ? `${root}/git/repository` : "",
+  };
+}
+
+function normalizeRuntimeIdentity(value) {
+  const normalized = String(value || "").trim();
+  const safe = normalized.replace(/[^A-Za-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^[-_]+|[-_]+$/g, "");
+  return (safe || "session").slice(0, 160);
 }
 
 function homeStoragePrefix(workspaceStoragePrefix) {
@@ -851,6 +883,7 @@ module.exports = {
   requestRunnerShutdown,
   requireRunnerServiceAccount,
   resourceLimits,
+  runtimeStorageForSession,
   runtimeResourceRequirements,
   runnerServiceAccountValue,
   sessionEnvironmentEntryIds,

@@ -1,8 +1,12 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
 const {
   CHROME_DEVTOOLS_MCP_PACKAGE,
+  createMcpConfigService,
   parseMcpConfig,
   piMcpConfig,
   runnerMcpConfig,
@@ -66,3 +70,39 @@ assert.deepStrictEqual(piMcpConfig({
 });
 
 console.log("mcp config service tests passed");
+
+(async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-private-mcp-"));
+  const workspaceDir = path.join(root, "workspace");
+  const firstPath = path.join(root, "run-1", "agent", "mcp.json");
+  const secondPath = path.join(root, "run-2", "agent", "mcp.json");
+  await fs.mkdir(workspaceDir, {recursive: true});
+  try {
+    const first = createMcpConfigService({config: {
+      isPrivateRuntime: true,
+      mcpConfigRaw: JSON.stringify({mcpServers: {private: {command: "node", env: {TOKEN: "run-1-secret"}}}}),
+      piMcpConfigPath: firstPath,
+      workspaceDir,
+    }});
+    const second = createMcpConfigService({config: {
+      isPrivateRuntime: true,
+      mcpConfigRaw: JSON.stringify({mcpServers: {private: {command: "node", env: {TOKEN: "run-2-secret"}}}}),
+      piMcpConfigPath: secondPath,
+      workspaceDir,
+    }});
+    await first.materializeMcpConfig();
+    await second.materializeMcpConfig();
+    const firstText = await fs.readFile(firstPath, "utf8");
+    const secondText = await fs.readFile(secondPath, "utf8");
+    assert.match(firstText, /run-1-secret/);
+    assert.match(secondText, /run-2-secret/);
+    assert.equal(firstText.includes("run-2-secret"), false);
+    assert.equal(secondText.includes("run-1-secret"), false);
+    await assert.rejects(fs.access(path.join(workspaceDir, ".mcp.json")), {code: "ENOENT"});
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

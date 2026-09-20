@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const {compactErrorMessage} = require("./utils");
 const {resolveHarnessMetadata} = require("./harnesses/metadata");
+const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 
 function createWorkspaceAuthService({admin, config, db}) {
   const harness = resolveHarnessMetadata(config);
@@ -15,7 +16,7 @@ function createWorkspaceAuthService({admin, config, db}) {
     // authoritative and the fixed agent directory is only a materialization
     // target.  In particular, never read a restored native auth file and copy
     // it back into Mapache's canonical credential document.
-    if (isManagedAgentRuntime(config)) {
+    if (isCanonicalAuthRuntime(config)) {
       if (!options.materialize) return {ok: true, appliedToRunner: false, providerCount: 0, secretFiles: secretFileInventory(config)};
       return materializeCanonicalAuth();
     }
@@ -77,7 +78,7 @@ function createWorkspaceAuthService({admin, config, db}) {
     if (!config.ownerUid || !harness.auth?.supported) {
       return {ok: true, appliedToRunner: false, providerCount: 0, secretFiles: secretFileInventory(config)};
     }
-    if (isManagedAgentRuntime(config)) return materializeCanonicalAuth(selection);
+    if (isCanonicalAuthRuntime(config)) return materializeCanonicalAuth(selection);
     const data = await readRemoteAuthData();
     const auth = buildMaterializedAuth(data, selection === null ? await readSessionAuthSelection() : selection);
     await writeGitHubCliAuth(auth);
@@ -87,7 +88,7 @@ function createWorkspaceAuthService({admin, config, db}) {
   }
 
   async function clearManagedCredentialShadowFiles() {
-    if (!isManagedAgentRuntime(config) || !config.piAgentDir) return;
+    if (!isCanonicalAuthRuntime(config) || !config.piAgentDir) return;
     await fs.promises.unlink(path.join(config.piAgentDir, "provider-keys.json")).catch((error) => {
       if (error && error.code !== "ENOENT") throw error;
     });
@@ -135,6 +136,7 @@ function createWorkspaceAuthService({admin, config, db}) {
   async function writeLocalAuthFile(auth) {
     const authPath = authFilePath();
     const nativeAuth = authFileProviders(auth);
+    if (config.isPrivateRuntime) await ensurePrivateRuntimeDirectory(path.dirname(authPath));
     await fs.promises.mkdir(path.dirname(authPath), {recursive: true});
     const content = JSON.stringify(normalizeAuthProviders(nativeAuth), null, 2);
     await fs.promises.writeFile(authPath, `${content}\n`, {mode: 0o600});
@@ -145,6 +147,7 @@ function createWorkspaceAuthService({admin, config, db}) {
     const credential = normalizeGitHubCliCredential(auth && auth["github-cli"]);
     const hostsPath = githubCliHostsPath(config);
     if (!hostsPath) return;
+    if (config.isPrivateRuntime) await ensurePrivateRuntimeDirectory(path.dirname(hostsPath));
     await fs.promises.mkdir(path.dirname(hostsPath), {recursive: true});
     if (!credential) {
       await fs.promises.unlink(hostsPath).catch((error) => {
@@ -178,6 +181,10 @@ function isManagedAgentRuntime(config = {}) {
   return config.agentRuntimeEnabled === true && resolveHarnessMetadata(config).id === "pi";
 }
 
+function isCanonicalAuthRuntime(config = {}) {
+  return isManagedAgentRuntime(config) || config.isPrivateRuntime === true;
+}
+
 /**
  * Secret-bearing files known to the runner auth/materialization boundary.
  * The capture helper consumes this inventory later; it deliberately contains
@@ -198,6 +205,9 @@ function secretFileInventory(config = {}) {
     add("pi-provider-keys", path.join(config.piAgentDir, "provider-keys.json"), "credential", "upstream provider key store is not Mapache-owned");
     add("pi-model-config", path.join(config.piAgentDir, "models.json"), "secret-bearing-config", "custom provider keys or secret headers may be present");
     add("pi-mcp-oauth", path.join(config.piAgentDir, "mcp-oauth"), "connector-credential", "MCP OAuth state is materialized separately");
+  }
+  if (config.piMcpConfigPath) {
+    add("pi-mcp-config", config.piMcpConfigPath, "secret-bearing-config", "generated MCP bindings are private Pi configuration");
   }
   add("github-cli-hosts", githubCliHostsPath(config), "credential", "GitHub CLI token is materialized from the Mapache provider");
 
