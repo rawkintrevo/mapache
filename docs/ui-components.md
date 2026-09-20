@@ -33,6 +33,8 @@ This index maps significant React components to their current responsibilities.
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth, then returns to Google Workspace account management. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |
+| `AutomationEditor` | `src/components/automations/AutomationEditor.jsx` | Controlled create/edit form for automation instructions, enabled and concurrency settings, model guidance, revision-aware save, and schedule preview. |
+| `ScheduleControls` | `src/components/automations/ScheduleControls.jsx` | Daily, weekly, and advanced cron controls with explicit IANA timezone selection and debounced next-run preview. |
 
 Files, Git, model selection, skills, extensions, subagents, and native Goals
 are upstream-owned surfaces inside the embedded Agent application. The deleted

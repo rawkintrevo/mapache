@@ -145,6 +145,16 @@ marker. Active/queued history polls every five seconds only while the document
 is visible, and no Firestore history listener is created. Pending-run and
 main-paused responses retain their server-provided run IDs for UI links.
 
+The automation editor is a controlled component owned by the automation workflow.
+`AutomationEditor` keeps edits, expected revisions, and save/error retention in the
+parent controller; `ScheduleControls` converts daily and weekly selections to
+canonical numeric five-field cron while preserving arbitrary advanced expressions.
+Preview requests are debounced and fenced so an older response cannot replace a
+newer schedule. New definitions use the saved profile timezone (or the browser
+timezone during profile bootstrap); editing always preserves the stored timezone.
+The form intentionally remains mountable without workspace navigation: the
+automation management surface owns routing and placement in a later slice.
+
 ## Invariants
 
 - The browser cannot select an image or runtime UI version; Functions resolves
