@@ -47,3 +47,18 @@ test("private runtime child environment moves HOME and XDG state out of the work
   assert.equal(childEnv.XDG_STATE_HOME, "/var/lib/mapache/runtimes/run-1/state");
   assert.equal(childEnv.TMPDIR, "/var/lib/mapache/runtimes/run-1/tmp");
 });
+
+test("shared worktree child environment exposes private Git metadata consistently", () => {
+  const childEnv = createWorkspaceProcessEnvironment({
+    isPrivateRuntime: true,
+    homeDir: "/var/lib/mapache/runtimes/session-1/home",
+    privateGitDir: "/var/lib/mapache/git/repository",
+    privateRuntimeRoot: "/var/lib/mapache/runtimes/session-1",
+    workspaceDir: "/workspace",
+    workspaceStorageMode: "shared-gcsfuse-v1",
+    workspaceGoogleApplicationCredentials: "",
+  }, {});
+
+  assert.equal(childEnv.GIT_DIR, "/var/lib/mapache/git/repository");
+  assert.equal(childEnv.GIT_WORK_TREE, "/workspace");
+});

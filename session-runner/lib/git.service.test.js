@@ -61,3 +61,73 @@ test("lists local and remote branches, checks out remote branches, creates branc
     fs.rmSync(root, {recursive: true, force: true});
   }
 });
+
+test("shared workspaces keep Git metadata private while Git commands use the mounted worktree", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-shared-git-service-"));
+  try {
+    const workspaceDir = path.join(root, "workspace");
+    const privateGitDir = path.join(root, "private-git");
+    fs.mkdirSync(workspaceDir);
+    git(root, "init", "--bare", privateGitDir);
+    execFileSync("git", ["--git-dir", privateGitDir, "config", "user.name", "Test User"]);
+    execFileSync("git", ["--git-dir", privateGitDir, "config", "user.email", "test@example.com"]);
+    fs.writeFileSync(path.join(workspaceDir, "README.md"), "shared\n");
+    execFileSync("git", ["--git-dir", privateGitDir, "--work-tree", workspaceDir, "add", "README.md"]);
+    execFileSync("git", ["--git-dir", privateGitDir, "--work-tree", workspaceDir, "commit", "-m", "initial"]);
+    const objects = new Map();
+    const storage = {
+      bucket() {
+        return {
+          file(objectPath) {
+            return {
+              async exists() { return [objects.has(objectPath)]; },
+              async download() { return [objects.get(objectPath)]; },
+              async save(content) { objects.set(objectPath, Buffer.from(content)); },
+            };
+          },
+        };
+      },
+    };
+    const config = {
+      bucketName: "shared-bucket",
+      internalStorageDir: ".mapache-internal",
+      privateGitDir,
+      prefix: "workspaces/u/w",
+      runtimeKind: "main",
+      sessionId: "session-1",
+      workspaceDir,
+      workspaceSourceMode: "github",
+      workspaceStorageMode: "shared-gcsfuse-v1",
+    };
+    const service = createGitService({
+      activity: {updateSessionActivity: async () => {}, updateWorkspaceSourceState: async () => {}},
+      config,
+      storage,
+    });
+
+    await service.prepareSharedWorkspaceGit();
+    assert.equal(fs.lstatSync(path.join(workspaceDir, ".git")).isSymbolicLink(), true);
+    assert.equal(fs.realpathSync(path.join(workspaceDir, ".git")), fs.realpathSync(privateGitDir));
+    assert.equal((await service.getGitStatusSummary()).commit, git(privateGitDir, "rev-parse", "HEAD"));
+    assert.equal((await service.prepareGithubAutomationBranch()), null);
+    assert.equal((await service.finalizeGithubAutomationBranch(0)).skipped, true);
+
+    const archive = await service.archiveSharedWorkspaceGit();
+    assert.equal(archive.archivePath, "workspaces/u/w/.mapache-internal/shared-workspace/git/main.tar.gz");
+    assert.equal(objects.has(archive.archivePath), true);
+
+    const restoredWorkspace = path.join(root, "restored-workspace");
+    const restoredPrivateGit = path.join(root, "restored-private-git");
+    fs.mkdirSync(restoredWorkspace);
+    const restored = createGitService({
+      activity: {updateSessionActivity: async () => {}, updateWorkspaceSourceState: async () => {}},
+      config: {...config, privateGitDir: restoredPrivateGit, workspaceDir: restoredWorkspace},
+      storage,
+    });
+    await restored.prepareSharedWorkspaceGit();
+    assert.equal((await restored.getGitStatusSummary()).commit, git(privateGitDir, "rev-parse", "HEAD"));
+    assert.equal(fs.lstatSync(path.join(restoredWorkspace, ".git")).isSymbolicLink(), true);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});

@@ -683,7 +683,9 @@ function runtimeStorageForSession(session = {}) {
       session.piSessionDir || piSessionDir(identity, homeDir),
     browserQaDir: storageMode === "private" ? `${root}/qa` : "/workspace/.mapache/qa",
     chromeProfileDir: storageMode === "private" ? `${root}/chrome/profile` : "/var/lib/mapache/chrome/profile",
-    privateGitDir: storageMode === "private" ? `${root}/git/repository` : "",
+    privateGitDir: storageMode === "private" ?
+      (cleanName(session.workspaceStorageMode).toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE && !isAutomationRuntime(session) ?
+        "/var/lib/mapache/git/repository" : `${root}/git/repository`) : "",
   };
 }
 

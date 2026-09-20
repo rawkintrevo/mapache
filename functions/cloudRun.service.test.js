@@ -78,6 +78,10 @@ assert.deepStrictEqual(runtimeStorageForSession({runnerSessionId: "session-1", h
 });
 assert.equal(runtimeStorageForSession({runtimeKind: "automation", runId: "run-1"}).homeDir,
     "/var/lib/mapache/runtimes/run-1/home");
+assert.equal(runtimeStorageForSession({
+  runnerSessionId: "session-1",
+  workspaceStorageMode: "shared-gcsfuse-v1",
+}).privateGitDir, "/var/lib/mapache/git/repository");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
 assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [" env-1 ", "env-1", ""]}), ["env-1"]);

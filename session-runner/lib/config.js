@@ -117,6 +117,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const browserQaDir = path.resolve(privatePaths?.browserQaDir || process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
   const piMcpConfigPath = privatePaths?.piMcpConfigPath || path.join(workspaceDir, ".mcp.json");
   const piWebUiControlPath = privatePaths?.piWebUiControlPath || normalizeEnvString(process.env.PI_WEB_UI_CONTROL_PATH);
+  const privateGitDir = workspaceStorageMode === SHARED_WORKSPACE_STORAGE_MODE && !isAutomationRuntime(runtimeKind) ?
+    path.resolve(normalizeEnvString(process.env.MAPACHE_PRIVATE_GIT_DIR) || "/var/lib/mapache/git/repository") :
+    privatePaths?.privateGitDir || "";
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
@@ -218,7 +221,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piSessionStorageBucket,
     piSessionStoragePrefix,
     port: Number(process.env.PORT || 8080),
-    privateGitDir: privatePaths?.privateGitDir || "",
+    privateGitDir,
     privateRuntimeRoot: privatePaths?.runtimeRoot || "",
     prefix,
     previewBasePath,

@@ -18,10 +18,12 @@ const {
   normalizeGitPushAuthPayload,
 } = require("./gitValidation.helpers");
 const {compactErrorMessage} = require("./utils");
+const {createSharedWorkspaceGitService} = require("./sharedWorkspaceGit.service");
 
-function createGitService({config, activity}) {
+function createGitService({config, activity, storage}) {
   const tokenProvider = createGithubTokenProvider({config});
   const runGitCommand = createGitCommandRunner({config});
+  const sharedWorkspaceGit = createSharedWorkspaceGitService({config, runGitCommand, storage});
   const {
     withGitCloneAuth,
     withGitPushAuth,
@@ -48,6 +50,11 @@ function createGitService({config, activity}) {
   }
 
   async function cloneGithubWorkspace() {
+    if (sharedWorkspaceGit.enabled()) {
+      const error = new Error("Git clone is disabled for shared workspaces; restore private Git metadata instead");
+      error.code = "shared_workspace_git_clone_forbidden";
+      throw error;
+    }
     if (!config.githubRepoUrl) {
       throw new Error("missing GitHub repo URL for workspace startup");
     }
@@ -398,6 +405,8 @@ function createGitService({config, activity}) {
     isBlankWorkspace,
     isGithubWorkspace,
     prepareGithubAutomationBranch: automation.prepareGithubAutomationBranch,
+    prepareSharedWorkspaceGit: sharedWorkspaceGit.prepareForStartup,
+    archiveSharedWorkspaceGit: sharedWorkspaceGit.archivePrivateMetadata,
     prepareGitPullRequest,
     publishGithubResolvedMetadata,
     pullGitAction,

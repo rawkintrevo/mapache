@@ -34,6 +34,7 @@ function createGithubAutomationService({
 
   function shouldAutomateGithubPullRequest() {
     return config.workspaceSourceMode === "github" &&
+      config.workspaceStorageMode !== "shared-gcsfuse-v1" &&
       config.harnessId === "pi" &&
       Boolean(getGithubAutomationToken && (config.githubAutomationToken || config.githubAutomationTokenRefreshUrl) &&
         config.githubRepoOwner && config.githubRepoName);

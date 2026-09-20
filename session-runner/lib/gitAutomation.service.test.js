@@ -136,6 +136,19 @@ test("automation skips finalization after switching away from its session branch
   assert.equal(harness.commands.some((args) => args[0] === "commit"), false);
 });
 
+test("shared workspaces do not run automatic branch or pull-request lifecycle", async () => {
+  const harness = createAutomationHarness({commitCount: 1, status: " M src/app.js"});
+  harness.config.workspaceStorageMode = "shared-gcsfuse-v1";
+  assert.equal(await harness.service.prepareGithubAutomationBranch(), null);
+  assert.deepEqual(await harness.service.finalizeGithubAutomationBranch(0), {
+    ok: true,
+    skipped: true,
+    reason: "github_automation_not_enabled",
+  });
+  assert.equal(harness.commands.length, 0);
+  assert.equal(harness.pullRequests.length, 0);
+});
+
 test("automation cleanup reapplies restored tracked and untracked files after branching", async (t) => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mapache-automation-restore-"));
   t.after(() => fs.promises.rm(root, {recursive: true, force: true}));

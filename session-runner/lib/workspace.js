@@ -93,6 +93,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
     await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
     if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      await git.archiveSharedWorkspaceGit?.();
       return {conflicts: [], skipped: true, reason: "shared_gcsfuse_authoritative"};
     }
     if (!config.bucketName || !config.prefix) return {conflicts: []};

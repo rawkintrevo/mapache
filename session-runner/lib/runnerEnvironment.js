@@ -24,6 +24,10 @@ function createWorkspaceProcessEnvironment(config, baseEnv = process.env) {
     env.XDG_STATE_HOME = path.join(privateRuntimeRoot, "state");
     env.TMPDIR = path.join(privateRuntimeRoot, "tmp");
   }
+  if (config?.workspaceStorageMode === "shared-gcsfuse-v1" && config.privateGitDir) {
+    env.GIT_DIR = config.privateGitDir;
+    env.GIT_WORK_TREE = config.workspaceDir;
+  }
   return env;
 }
 
