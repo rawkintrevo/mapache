@@ -66,6 +66,12 @@ while still allowing disabled workflow drafts to be saved; preparation never sto
 the main workspace automatically. `AutomationManagementPage` composes the
 definition and history sections while `automationsController` remains the owner of
 requests, filtering, polling, selection, and revision fencing.
+On desktop, `.automation-management-page` is the single shrinkable vertical scroll
+container under `main`; the topbar stays outside it. Its grid aligns content at
+the top and bounds the column width. At the shell’s 900px breakpoint it returns
+to natural document scrolling, without a competing full-page nested scroller.
+Embedded history shares that page flow; bounded event panes and horizontal table
+overflow retain their own local behavior. Agent and terminal sizing is unchanged.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
