@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {Blocks, Bot, History, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
@@ -26,7 +26,6 @@ export function Topbar({
   onSelectWorkspace,
   onShowAdmin,
   onShowAutomations,
-  onShowAutomationHistory,
   onShowInstances,
   onShowLogs,
   onShowProfile,
@@ -176,8 +175,7 @@ export function Topbar({
         ) : null}
         <Button
           aria-label="Automations"
-          aria-pressed={state.activePage === "automations"}
-          disabled={!selectedWorkspace}
+          aria-pressed={state.activePage === "automations" || state.activePage === "automation-history"}
           icon
           title="Automations"
           tooltip="Automations"
@@ -185,17 +183,6 @@ export function Topbar({
           onClick={onShowAutomations}
         >
           <Blocks aria-hidden="true" />
-        </Button>
-        <Button
-          aria-label="Run history"
-          aria-pressed={state.activePage === "automation-history"}
-          icon
-          title="Run history"
-          tooltip="Run history"
-          variant={state.activePage === "automation-history" ? "primary" : "secondary"}
-          onClick={onShowAutomationHistory}
-        >
-          <History aria-hidden="true" />
         </Button>
         <span aria-hidden="true" className="topbar-action-divider" />
         {showManagePiAuth ? (
@@ -254,7 +241,6 @@ export function Topbar({
           onSelectCanvas={onSelectCanvas}
           onShowAutomations={onShowAutomations}
           onShowLogs={onShowLogs}
-          onShowAutomationHistory={onShowAutomationHistory}
           showWorkspaceTools={showWorkspaceTools}
           managePiAuthLabel={managePiAuthLabel}
           onDeleteWorkspace={onDeleteWorkspace}

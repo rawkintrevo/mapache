@@ -13,6 +13,7 @@ export function RunHistoryPage({
   onSelectRun,
   onSetFilters,
   onStopRun,
+  embedded = false,
   state,
 }) {
   const history = state.automations.globalHistory || state.automations.history;
@@ -40,7 +41,7 @@ export function RunHistoryPage({
   }
 
   return (
-    <div className="run-history-page">
+    <div className={`run-history-page${embedded ? " run-history-page--embedded" : ""}`}>
       <header className="run-history-page__header">
         <div>
           <p className="eyebrow">Automations</p>

@@ -203,7 +203,7 @@ export function AutomationsPanel({
                       <Button disabled={automationState.busy} icon size="small" title="Edit" variant="secondary" onClick={() => beginEdit(automation)}><Pencil aria-hidden="true" /></Button>
                       <Button disabled={automationState.busy} icon size="small" title="Delete" variant="secondary" onClick={() => deleteDefinition(automation)}><Trash2 aria-hidden="true" /></Button>
                     </div>
-                    {latest && ACTIVE_RUN_STATUSES.has(String(latest.status || "").toLowerCase()) ? <button className="automation-definition__history-link" type="button" onClick={onOpenHistory}>View active run in history</button> : null}
+                    {latest && ACTIVE_RUN_STATUSES.has(String(latest.status || "").toLowerCase()) ? <button className="automation-definition__history-link" type="button" onClick={() => onOpenHistory?.(latest.id)}>View active run in history</button> : null}
                   </article>
                 );
               })}

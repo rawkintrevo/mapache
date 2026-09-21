@@ -55,15 +55,17 @@ it persists the explicit Long-running policy through
 account/repository connection controls remain in the profile and workspace
 creation flows.
 
-Workspace **Automations** is a lazy, workspace-scoped surface opened from the
-topbar or responsive More menu. Opening it never starts a runner. The panel owns
-definition selection/editing, storage preparation status, max-concurrency edits,
+Workspace **Automations** is a lazy management surface opened from the topbar or
+responsive More menu. It combines workspace-scoped definition management with
+owner-wide run history and run details in one page; there is no separate top-level
+Run history entry. Opening it never starts a runner. The definition section owns
+selection/editing, storage preparation status, max-concurrency edits,
 enable/disable, Run now, delete confirmation, and links from active/queued run
-reasons to global history. Storage readiness gates enabling and execution while
-still allowing disabled workflow drafts to be saved; preparation never stops the
-main workspace automatically. The panel delegates requests and revision fencing
-to `automationsController` and returns to the workspace surface without changing
-the selected runtime.
+reasons to the history section. Storage readiness gates enabling and execution
+while still allowing disabled workflow drafts to be saved; preparation never stops
+the main workspace automatically. `AutomationManagementPage` composes the
+definition and history sections while `automationsController` remains the owner of
+requests, filtering, polling, selection, and revision fencing.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
@@ -176,17 +178,19 @@ policies with the same defaults and replay-safety acknowledgement. Run details
 render catch-up scheduling time, immutable recovery snapshot values, and retry
 family links/reasons. Recovery settings are part of the saved definition and
 the run snapshot, so editing a definition never mutates an accepted run.
-The form intentionally remains mountable without workspace navigation: the
-automation management surface owns routing and placement in a later slice.
+The form remains mountable without workspace navigation; `AutomationManagementPage`
+owns its placement beside the combined definition and history sections.
 
-Global run history is a separate controller scope from the selected-workspace
-automation slice. `RunHistoryPage` can load owner-wide runs when no workspace is
-selected, preserving filters and cursor state while `RunDetailsPanel` loads a
-single snapshot and paged archived events. History actions use the existing
-server-owned Stop/Restart endpoints; archived prompt and transcript content is
-rendered through `react-markdown` without raw HTML or a live runner session.
-Entering history disables runtime access URL and resource-metrics attachment so
-the page cannot boot or reconnect the main runtime merely to inspect a past run.
+Global run history remains a separate controller scope from the selected-workspace
+automation slice even though `AutomationManagementPage` renders both together.
+`RunHistoryPage` can load owner-wide runs when no workspace is selected, preserving
+filters and cursor state while `RunDetailsPanel` loads a single snapshot and paged
+archived events. History actions use the existing server-owned Stop/Restart
+endpoints; archived prompt and transcript content is rendered through
+`react-markdown` without raw HTML or a live runner session.
+Entering the Automations management surface disables runtime access URL and
+resource-metrics attachment so the page cannot boot or reconnect the main runtime
+merely to inspect a past run.
 
 ## Invariants
 

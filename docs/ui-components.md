@@ -33,10 +33,11 @@ This index maps significant React components to their current responsibilities.
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth, then returns to Google Workspace account management. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |
-| `AutomationsPanel` | `src/components/automations/AutomationsPanel.jsx` | Workspace-scoped automation definitions, storage preparation state/cost warning, concurrency limit, CRUD, enable/disable, Run now, queued reasons, and responsive management navigation. |
+| `AutomationManagementPage` | `src/components/automations/AutomationManagementPage.jsx` | Single Automations entry point that combines workspace definition management with owner-wide run history and run details. |
+| `AutomationsPanel` | `src/components/automations/AutomationsPanel.jsx` | Workspace-scoped automation definitions, storage preparation state/cost warning, concurrency limit, CRUD, enable/disable, Run now, queued reasons, and responsive management controls. |
 | `AutomationEditor` | `src/components/automations/AutomationEditor.jsx` | Controlled create/edit form for automation instructions, enabled and concurrency settings, model guidance, revision-aware save, and schedule preview. |
 | `ScheduleControls` | `src/components/automations/ScheduleControls.jsx` | Daily, weekly, and advanced cron controls with explicit IANA timezone selection and debounced next-run preview. |
-| `RunHistoryPage` | `src/components/automations/RunHistoryPage.jsx` | Workspace-independent global run history navigation with workspace/workflow/status/date filters, cursor pagination, and run selection. |
+| `RunHistoryPage` | `src/components/automations/RunHistoryPage.jsx` | Global run history section with workspace/workflow/status/date filters, cursor pagination, run selection, and embedded/full-page layout support. |
 | `RunDetailsPanel` | `src/components/automations/RunDetailsPanel.jsx` | Sanitized archived run details, snapshotted configuration, status actions, restart lineage, and paged conversation/tool event display. |
 | `InstancesPage` | `src/components/instances/InstancesPage.jsx` | Owner-wide active main/automation inventory with filters, cursor paging, elapsed/resource/heartbeat summaries, workspace/history links, and targeted Stop actions. |
 

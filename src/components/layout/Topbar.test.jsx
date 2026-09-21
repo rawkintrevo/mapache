@@ -16,6 +16,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
   const onOpenGenericEnvironment = vi.fn();
   const onOpenGoogleWorkspace = vi.fn();
   const onOpenMcpServers = vi.fn();
+  const onShowAutomations = vi.fn();
   const onSetSessionLongRunning = vi.fn();
   render(
     <Topbar
@@ -31,6 +32,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
       onSelectCanvas={vi.fn()}
       onSelectWorkspace={vi.fn()}
       onShowAdmin={vi.fn()}
+      onShowAutomations={onShowAutomations}
       onShowLogs={vi.fn()}
       onShowProfile={vi.fn()}
       onSignOut={vi.fn()}
@@ -45,6 +47,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
     onOpenMcpServers,
     onOpenPiAuthManage,
     onSetSessionLongRunning,
+    onShowAutomations,
     onToggleWorkspace,
   };
 }
@@ -89,6 +92,21 @@ describe("Topbar workspace lifecycle", () => {
     renderTopbar();
     expect(screen.getByRole("button", {name: "Start workspace"})).toBeEnabled();
   });
+});
+
+test("uses one automation navigation entry for definitions and run history", async () => {
+  const user = userEvent.setup();
+  const {onShowAutomations} = renderTopbar();
+
+  const automationsButton = screen.getByRole("button", {name: "Automations"});
+  expect(automationsButton).toBeEnabled();
+  expect(screen.queryByRole("button", {name: "Run history"})).not.toBeInTheDocument();
+  await user.click(automationsButton);
+  expect(onShowAutomations).toHaveBeenCalledOnce();
+
+  await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+  expect(screen.getByRole("menuitem", {name: "Automations"})).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", {name: "Run history"})).not.toBeInTheDocument();
 });
 
 test("opens labeled secondary actions from the More menu", async () => {

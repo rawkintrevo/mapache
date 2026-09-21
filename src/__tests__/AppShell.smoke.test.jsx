@@ -40,6 +40,8 @@ function createHandlers() {
     google: handlerGroup(),
     modals: handlerGroup(),
     pi: handlerGroup(),
+    automations: handlerGroup(),
+    instances: handlerGroup(),
     sessions: handlerGroup(),
     workspaces: handlerGroup(),
   };
@@ -129,6 +131,18 @@ describe("frontend shell ownership", () => {
     const dialog = await screen.findByRole("dialog", {name: "MCP Servers"});
     expect(within(dialog).getByText("linear")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", {name: "New MCP server"})).toBeInTheDocument();
+  });
+
+  test("combines automation definitions and global run history on one page", async () => {
+    const handlers = createHandlers();
+    render(<AppShell handlers={handlers} state={createState({activePage: "automations"})} />);
+
+    expect(await screen.findByRole("heading", {name: "Automations"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "New automation"})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {name: "Run history"})).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox", {name: "Workspace"})).toHaveLength(2);
+    expect(handlers.automations.loadWorkspace).toHaveBeenCalledWith(workspace.id);
+    expect(handlers.automations.loadGlobalHistory).toHaveBeenCalledOnce();
   });
 
   test("renders Google Workspace account management in a modal", async () => {

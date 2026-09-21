@@ -172,5 +172,5 @@ workspaces are not migrated automatically.
 
 - Local deterministic lifecycle evidence: `node scripts/automation-lifecycle-harness.mjs run --project pi-agents-cloud`.
 - Real two-runner GCS FUSE evidence: `node scripts/automation-storage-live-harness.mjs run --project pi-agents-cloud --storage-rate-usd-per-gib-month RATE`.
-- Browser management/history evidence: `e2e/qa/cases/automation-management.json` through Chrome DevTools-assisted QA.
+- Browser combined management/history evidence: `e2e/qa/cases/automation-management.json` through Chrome DevTools-assisted QA. The signed-in shell exposes one Automations entry in the topbar and More menu; the resulting page renders definitions and owner-wide run history together.
 - Backend, runner, frontend, build, and documentation checks: `npm run check` and the focused commands in [Testing](./testing.md).
