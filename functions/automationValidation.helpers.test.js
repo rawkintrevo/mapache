@@ -84,6 +84,34 @@ const run = buildAutomationRun({
 assert.equal(run.status, "queued");
 assert.equal(run.cleanupState, "pending");
 assert.equal(run.sessionId, null);
+const recoveredRun = buildAutomationRun({
+  runId: "run-recovery",
+  ownerUid: "user-1",
+  workspaceId: "workspace-1",
+  automationId: "automation-1",
+  trigger: "cron",
+  snapshot: {
+    ...baseDefinition,
+    definitionRevision: 3,
+    missedRunPolicy: "latest",
+    catchUpWindowMinutes: 60,
+    retryPolicy: "safe",
+    maximumRetries: 2,
+    replaySafe: true,
+  },
+});
+assert.deepEqual(recoveredRun.snapshot, {
+  ...baseDefinition,
+  definitionRevision: 3,
+  allowParallelWithMain: true,
+  modelSelection: null,
+  resources: null,
+  missedRunPolicy: "latest",
+  catchUpWindowMinutes: 60,
+  retryPolicy: "safe",
+  maximumRetries: 2,
+  replaySafe: true,
+});
 assert.deepEqual(normalizeAutomationSettings({}), {automationMaxConcurrency: 1});
 assert.deepEqual(normalizeAutomationSettings({automationMaxConcurrency: 4}), {automationMaxConcurrency: 4});
 assert.deepEqual(normalizeAutomationMutation({...baseDefinition, missedRunPolicy: "latest", catchUpWindowMinutes: 60}), {

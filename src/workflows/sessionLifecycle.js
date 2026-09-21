@@ -35,9 +35,11 @@ export async function retryProvisioningSessionState(state, sessionId) {
   await state.api.restartSession(state.selectedWorkspaceId, sessionId);
 }
 
-export async function stopSessionState(state, sessionId, dispatch) {
-  await state.api.stopSession(state.selectedWorkspaceId, sessionId);
-  await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
+export async function stopSessionState(state, sessionId, dispatch, workspaceId = state.selectedWorkspaceId) {
+  await state.api.stopSession(workspaceId, sessionId);
+  if (workspaceId === state.selectedWorkspaceId) {
+    await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
+  }
 }
 
 export async function deleteSessionState(state, sessionId, dispatch) {

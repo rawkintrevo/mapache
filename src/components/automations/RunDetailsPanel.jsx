@@ -46,6 +46,7 @@ export function RunDetailsPanel({
         <dl className="run-details-grid">
           <Detail label="Trigger" value={run.trigger || "—"} />
           <Detail label="Scheduled local time" value={formatOccurrence(run.occurrence)} />
+          {run.catchUpScheduledAt ? <Detail label="Catch-up scheduled" value={formatTimestamp(run.catchUpScheduledAt)} /> : null}
           <Detail label="Created" value={formatTimestamp(run.createdAt)} />
           <Detail label="Queued" value={formatTimestamp(run.queuedAt)} />
           <Detail label="Started" value={formatTimestamp(run.startedAt)} />
@@ -61,6 +62,11 @@ export function RunDetailsPanel({
           <Detail label="Timezone" value={snapshot.timezone || "—"} />
           <Detail label="Definition revision" value={snapshot.definitionRevision ?? "—"} />
           <Detail label="Parallel with main" value={snapshot.allowParallelWithMain === undefined ? "—" : snapshot.allowParallelWithMain ? "Allowed" : "Paused"} />
+          <Detail label="Missed runs" value={snapshot.missedRunPolicy || "skip"} />
+          <Detail label="Catch-up window" value={snapshot.catchUpWindowMinutes ? `${snapshot.catchUpWindowMinutes} minutes` : "—"} />
+          <Detail label="Retry policy" value={snapshot.retryPolicy || "none"} />
+          <Detail label="Maximum retries" value={snapshot.maximumRetries ?? 0} />
+          <Detail label="Replay-safe acknowledgement" value={snapshot.replaySafe === true ? "Acknowledged" : "Not acknowledged"} />
         </dl>
         <div className="run-details-markdown">
           <h4>Instructions snapshot</h4>
@@ -79,6 +85,19 @@ export function RunDetailsPanel({
           <button className="run-details-link" type="button" onClick={() => onSelectRun?.(restartOfRunId)}>
             Restarted from {restartOfRunId}
           </button>
+        </section>
+      ) : null}
+      {(run.rootRunId || run.retryOfRunId || run.retryState || run.retryReason) ? (
+        <section>
+          <h3>Retry family</h3>
+          <dl className="run-details-grid">
+            <Detail label="Root run" value={run.rootRunId && run.rootRunId !== (run.id || run.runId) ? <RunLink runId={run.rootRunId} onSelectRun={onSelectRun} /> : (run.rootRunId || run.id || run.runId || "—")} />
+            <Detail label="Retry of" value={run.retryOfRunId ? <RunLink runId={run.retryOfRunId} onSelectRun={onSelectRun} /> : "—"} />
+            <Detail label="Attempt" value={run.attemptNumber ?? 0} />
+            <Detail label="Retry state" value={run.retryState || "—"} />
+            <Detail label="Retry reason" value={run.retryReason || "—"} />
+            <Detail label="Retry run" value={run.retryRunId ? <RunLink runId={run.retryRunId} onSelectRun={onSelectRun} /> : "—"} />
+          </dl>
         </section>
       ) : null}
       <section>
@@ -117,7 +136,11 @@ export function formatOccurrence(occurrence) {
 }
 
 function Detail({label, value}) {
-  return <><dt>{label}</dt><dd>{String(value)}</dd></>;
+  return <><dt>{label}</dt><dd>{value}</dd></>;
+}
+
+function RunLink({onSelectRun, runId}) {
+  return <button className="run-details-link" type="button" onClick={() => onSelectRun?.(runId)}>{runId}</button>;
 }
 
 function Value({markdown = false, value}) {

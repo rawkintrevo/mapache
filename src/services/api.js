@@ -82,6 +82,10 @@ export function createApiClient(getToken) {
         `/api/automation-runs/${encodeURIComponent(runId)}/restart`,
         {method: "POST", body: {}, idempotencyKey},
     ),
+    getActiveInstances: (query = {}) => request(
+        getToken,
+        `/api/instances?${automationQuery(query)}`,
+    ),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
       params.set("pageSize", String(pageSize));

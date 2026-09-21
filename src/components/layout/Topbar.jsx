@@ -27,6 +27,7 @@ export function Topbar({
   onShowAdmin,
   onShowAutomations,
   onShowAutomationHistory,
+  onShowInstances,
   onShowLogs,
   onShowProfile,
   onSignOut,
@@ -280,6 +281,7 @@ export function Topbar({
           state={state}
           onRefresh={onRefresh}
           onShowAdmin={onShowAdmin}
+          onShowInstances={onShowInstances}
           onShowProfile={onShowProfile}
           onSignOut={onSignOut}
         />

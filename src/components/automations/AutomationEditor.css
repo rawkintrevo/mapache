@@ -18,6 +18,50 @@
   gap: 1rem;
 }
 
+.automation-editor__recovery {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .5rem;
+  display: grid;
+  gap: .8rem;
+  padding: 1rem;
+}
+
+.automation-editor__recovery legend {
+  font-weight: 700;
+  padding: 0 .35rem;
+}
+
+.automation-editor__recovery p {
+  margin: 0;
+}
+
+.automation-editor__recovery select,
+.automation-editor__recovery input[type="number"] {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .4rem;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 2.5rem;
+  padding: .55rem .65rem;
+  width: 100%;
+}
+
+.automation-editor__acknowledgement {
+  align-items: flex-start;
+  display: flex !important;
+  font-size: .9rem !important;
+  font-weight: 400 !important;
+  gap: .55rem;
+  text-transform: none !important;
+}
+
+.automation-editor__acknowledgement input {
+  flex: 0 0 auto;
+  margin-top: .2rem;
+  min-height: auto;
+  width: auto;
+}
+
 .automation-editor label,
 .automation-schedule-controls label {
   display: grid;

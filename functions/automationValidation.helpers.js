@@ -314,15 +314,16 @@ function normalizeRunSnapshot(snapshot = {}) {
   if (Object.keys(snapshot).some((key) => !allowed.includes(key))) {
     throw validationError("invalid_automation_run_snapshot");
   }
-  const definition = normalizeAutomationMutation({
+  const source = {
     name: snapshot.name,
     prompt: snapshot.prompt,
     cron: snapshot.cron,
     timezone: snapshot.timezone,
-    allowParallelWithMain: snapshot.allowParallelWithMain,
-    modelSelection: snapshot.modelSelection,
-    resources: snapshot.resources,
-  });
+  };
+  for (const field of ["allowParallelWithMain", "modelSelection", "resources", "missedRunPolicy", "catchUpWindowMinutes", "retryPolicy", "maximumRetries", "replaySafe"]) {
+    if (Object.prototype.hasOwnProperty.call(snapshot, field)) source[field] = snapshot[field];
+  }
+  const definition = normalizeAutomationMutation(source);
   const normalizedSnapshot = {
     name: definition.name,
     prompt: definition.prompt,

@@ -15,10 +15,11 @@ const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({Profi
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
 const AutomationsPanel = lazy(() => import("../automations/AutomationsPanel.jsx").then(({AutomationsPanel: panel}) => ({default: panel})));
 const RunHistoryPage = lazy(() => import("../automations/RunHistoryPage.jsx").then(({RunHistoryPage: page}) => ({default: page})));
+const InstancesPage = lazy(() => import("../instances/InstancesPage.jsx").then(({InstancesPage: page}) => ({default: page})));
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, automations, github, modals, sessions, workspaces} = handlers;
+  const {admin, app, automations, github, instances, modals, sessions, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -81,6 +82,7 @@ export function AppShell(props) {
         onShowAdmin={admin.showAdmin}
         onShowAutomations={app.showAutomations}
         onShowAutomationHistory={app.showAutomationsHistory}
+        onShowInstances={app.showInstances}
         onShowLogs={() => setLogsOpen(true)}
         onShowProfile={modals.showProfile}
         onSignOut={app.signOut}
@@ -122,6 +124,18 @@ export function AppShell(props) {
               onSelectRun={(runId) => automations.selectRun(runId, {global: true})}
               onSetFilters={automations.setGlobalHistoryFilters}
               onStopRun={automations.stopGlobalRun}
+            />
+          </Suspense>
+        ) : state.activePage === "instances" ? (
+          <Suspense fallback={<LazySurfaceFallback label="Loading running instances..." />}>
+            <InstancesPage
+              onLoad={instances.load}
+              onLoadNextPage={instances.loadNextPage}
+              onSelectWorkspace={workspaces.selectWorkspace}
+              onSetFilters={instances.setFilters}
+              onShowHistory={app.showAutomationsHistory}
+              onStopInstance={app.stopInstance}
+              state={state}
             />
           </Suspense>
         ) : state.activePage === "automations" ? (

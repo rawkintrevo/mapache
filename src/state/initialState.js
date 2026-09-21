@@ -116,6 +116,17 @@ export function createAutomationsState(overrides = {}) {
   };
 }
 
+export function createInstancesState(overrides = {}) {
+  return {
+    loading: false,
+    error: "",
+    instances: [],
+    filters: {workspaceId: "", type: "", status: ""},
+    nextCursor: "",
+    ...overrides,
+  };
+}
+
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -147,6 +158,7 @@ export function createInitialState() {
     githubConnection: createGithubConnectionState(),
     googleWorkspace: createGoogleWorkspaceState(),
     automations: createAutomationsState(),
+    instances: createInstancesState(),
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     sessionEditModalSessionId: null,

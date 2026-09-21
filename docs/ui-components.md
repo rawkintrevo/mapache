@@ -7,7 +7,7 @@ This index maps significant React components to their current responsibilities.
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
 | `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Keep running, Agent, Logs, and workspace Automations controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
-| `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, refresh, and sign-out actions. |
+| `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, running instances, refresh, and sign-out actions. |
 | `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible responsive menu for workspace, connection, runtime, and documentation actions. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
@@ -38,6 +38,7 @@ This index maps significant React components to their current responsibilities.
 | `ScheduleControls` | `src/components/automations/ScheduleControls.jsx` | Daily, weekly, and advanced cron controls with explicit IANA timezone selection and debounced next-run preview. |
 | `RunHistoryPage` | `src/components/automations/RunHistoryPage.jsx` | Workspace-independent global run history navigation with workspace/workflow/status/date filters, cursor pagination, and run selection. |
 | `RunDetailsPanel` | `src/components/automations/RunDetailsPanel.jsx` | Sanitized archived run details, snapshotted configuration, status actions, restart lineage, and paged conversation/tool event display. |
+| `InstancesPage` | `src/components/instances/InstancesPage.jsx` | Owner-wide active main/automation inventory with filters, cursor paging, elapsed/resource/heartbeat summaries, workspace/history links, and targeted Stop actions. |
 
 Files, Git, model selection, skills, extensions, subagents, and native Goals
 are upstream-owned surfaces inside the embedded Agent application. The deleted

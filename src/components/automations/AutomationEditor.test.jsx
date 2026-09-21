@@ -47,6 +47,32 @@ describe("automation editor helpers", () => {
       timezone: "UTC",
     }).cron).toBe("0 9 1 * *");
   });
+
+  test("defaults recovery safely and requires an acknowledgement for safe retries", () => {
+    expect(createAutomationDraft({userTimezone: "UTC"})).toMatchObject({
+      catchUpWindowMinutes: 1440,
+      maximumRetries: 0,
+      missedRunPolicy: "skip",
+      replaySafe: false,
+      retryPolicy: "none",
+    });
+    expect(automationEditorErrors({
+      catchUpWindowMinutes: 1440,
+      cron: "0 9 * * *",
+      name: "Daily",
+      prompt: "Check files.",
+      replaySafe: false,
+      retryPolicy: "safe",
+      timezone: "UTC",
+    }).replaySafe).toMatch(/Acknowledge/);
+    expect(automationPayload({
+      catchUpWindowMinutes: 60,
+      maximumRetries: 2,
+      missedRunPolicy: "latest",
+      replaySafe: true,
+      retryPolicy: "safe",
+    })).toMatchObject({catchUpWindowMinutes: 60, maximumRetries: 2, missedRunPolicy: "latest", replaySafe: true, retryPolicy: "safe"});
+  });
 });
 
 describe("AutomationEditor", () => {

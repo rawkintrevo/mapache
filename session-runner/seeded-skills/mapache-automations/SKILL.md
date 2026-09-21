@@ -18,6 +18,12 @@ never ask for or invent a `workspaceId` or `ownerUid`.
 - Schedule mutations do not need a separate approval step. Validate a cron
   expression with `automations_schedule_preview` before saving when the user
   is deciding on timing.
+- Recovery defaults are `missedRunPolicy=skip` and `retryPolicy=none`.
+  `missedRunPolicy=latest` must include a bounded `catchUpWindowMinutes` from
+  1 through 10080. `retryPolicy=safe` must include `replaySafe=true` and
+  `maximumRetries` from 0 through 2. A safe retry can repeat publication or
+  sends, and every attempt reads the current files; do not enable it unless
+  the saved prompt is safe to replay.
 - Use `automations_get` before editing and pass its `revision` as
   `expectedRevision` to `automations_update` or `automations_delete`. A
   revision conflict means the definition changed; re-read it and reconcile

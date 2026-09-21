@@ -16,6 +16,8 @@ const RESOURCES = z.object({
   cpu: z.string().min(1).optional(),
   memory: z.string().min(1).optional(),
 }).strict();
+const MISSED_RUN_POLICY = z.enum(["skip", "latest"]);
+const RETRY_POLICY = z.enum(["none", "safe"]);
 const AUTOMATION_FIELDS = {
   name: z.string().min(1).max(120),
   prompt: z.string().min(1).max(32768),
@@ -25,6 +27,11 @@ const AUTOMATION_FIELDS = {
   allowParallelWithMain: z.boolean().optional(),
   modelSelection: MODEL_SELECTION.optional(),
   resources: RESOURCES.nullable().optional(),
+  missedRunPolicy: MISSED_RUN_POLICY.optional(),
+  catchUpWindowMinutes: z.number().int().min(1).max(10080).optional(),
+  retryPolicy: RETRY_POLICY.optional(),
+  maximumRetries: z.number().int().min(0).max(2).optional(),
+  replaySafe: z.boolean().optional(),
 };
 const AUTOMATION_PATCH_FIELDS = {
   ...AUTOMATION_FIELDS,
@@ -32,7 +39,20 @@ const AUTOMATION_PATCH_FIELDS = {
   prompt: AUTOMATION_FIELDS.prompt.optional(),
   cron: AUTOMATION_FIELDS.cron.optional(),
   timezone: AUTOMATION_FIELDS.timezone.optional(),
+  missedRunPolicy: AUTOMATION_FIELDS.missedRunPolicy,
+  catchUpWindowMinutes: AUTOMATION_FIELDS.catchUpWindowMinutes,
+  retryPolicy: AUTOMATION_FIELDS.retryPolicy,
+  maximumRetries: AUTOMATION_FIELDS.maximumRetries,
+  replaySafe: AUTOMATION_FIELDS.replaySafe,
 };
+
+function recoveryValidated(schema) {
+  return schema.superRefine((value, context) => {
+    if (value.retryPolicy === "safe" && value.replaySafe !== true) {
+      context.addIssue({code: "custom", message: "retryPolicy=safe requires replaySafe=true", path: ["replaySafe"]});
+    }
+  });
+}
 const OCCURRENCE = z.object({
   local: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
   utc: z.string().datetime().optional(),
@@ -76,13 +96,13 @@ export function registerAutomationTools(server, client) {
   }, ({automationId}) => invoke(() => client.call(`/api/agent/automations/${encodeURIComponent(automationId)}`)));
 
   server.registerTool("automations_create", {
-    description: "Create a saved workspace automation. Schedule changes do not require a separate approval step.",
-    inputSchema: z.object(AUTOMATION_FIELDS).strict(),
+    description: "Create a saved workspace automation. Recovery defaults to skipping missed runs and no automatic retries. Schedule and recovery changes do not require a separate approval step.",
+    inputSchema: recoveryValidated(z.object(AUTOMATION_FIELDS).strict()),
   }, (input) => invoke(() => client.call("/api/agent/automations", {method: "POST", body: input, retry: false})));
 
   server.registerTool("automations_update", {
-    description: "Update a saved automation using its expected revision. Schedule changes do not require a separate approval step.",
-    inputSchema: z.object({automationId: AUTOMATION_ID, expectedRevision: REVISION, ...AUTOMATION_PATCH_FIELDS}).strict(),
+    description: "Update a saved automation using its expected revision. Safe retries require replaySafe=true; they may repeat publication or sends and use current files.",
+    inputSchema: recoveryValidated(z.object({automationId: AUTOMATION_ID, expectedRevision: REVISION, ...AUTOMATION_PATCH_FIELDS}).strict()),
   }, ({automationId, ...body}) => invoke(() => client.call(
       `/api/agent/automations/${encodeURIComponent(automationId)}`,
       {method: "PATCH", body, retry: false},

@@ -32,6 +32,13 @@ test("registers the bounded automation MCP contract without workspace parameters
   for (const name of TOOL_NAMES) {
     assert.equal(typeof server.tools.get(name).handler, "function", name);
   }
+  assert.throws(() => server.tools.get("automations_create").config.inputSchema.parse({
+    name: "Daily",
+    prompt: "Check files.",
+    cron: "0 9 * * *",
+    timezone: "UTC",
+    retryPolicy: "safe",
+  }), /replaySafe/);
 
   const result = await server.tools.get("automations_update").handler({
     automationId: "automation-1", expectedRevision: 2, enabled: true,
@@ -41,6 +48,24 @@ test("registers the bounded automation MCP contract without workspace parameters
   assert.equal(update.path, "/api/agent/automations/automation-1");
   assert.equal(update.options.body.workspaceId, undefined);
   assert.equal(update.options.body.expectedRevision, 2);
+
+  await server.tools.get("automations_update").handler({
+    automationId: "automation-1",
+    expectedRevision: 2,
+    catchUpWindowMinutes: 60,
+    maximumRetries: 2,
+    missedRunPolicy: "latest",
+    replaySafe: true,
+    retryPolicy: "safe",
+  });
+  assert.deepEqual(calls.at(-1).options.body, {
+    catchUpWindowMinutes: 60,
+    expectedRevision: 2,
+    maximumRetries: 2,
+    missedRunPolicy: "latest",
+    replaySafe: true,
+    retryPolicy: "safe",
+  });
 
   await server.tools.get("automations_schedule_preview").handler({cron: "0 9 * * *", timezone: "America/Chicago"});
   const preview = calls.at(-1);

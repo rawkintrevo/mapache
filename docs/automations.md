@@ -60,6 +60,23 @@ Its stop target contains only workspace/session/run identifiers; no Cloud Run
 lookup, credential, or service secret is exposed. Reconciliation workers remain
 the authority for repairing stale persisted records.
 
+The avatar menu's **Running instances** page is intentionally an owner-wide
+operational view rather than a second session navigator. It polls the bounded
+inventory only while the browser tab is visible, supports workspace/type/status
+filters and cursor paging, and displays workspace links, automation history
+links, elapsed time, resources, and last heartbeat. Main Stop uses the existing
+workspace Pause endpoint; automation Stop uses run cleanup. A cleanup error is
+shown as an in-progress/attention state and cannot be force-killed from this
+page.
+
+The editor's Recovery section exposes `missedRunPolicy` (`skip` or `latest`), a
+1–10080 minute catch-up window, `retryPolicy` (`none` or `safe`), zero to two
+maximum retries, and an explicit replay-safe acknowledgement. Safe retries can
+repeat publication or sends and use current files on each attempt. Agent MCP
+schemas and seeded guidance use these same bounds; revision fencing remains
+unchanged. Run history exposes the catch-up scheduled timestamp and retry
+family IDs/state/reason alongside the immutable recovery snapshot.
+
 ## Shared GCS FUSE contract
 
 Automation storage preparation is a paused-workspace migration. The backend

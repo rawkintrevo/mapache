@@ -27,6 +27,7 @@ import {createSessionSubscriptionController} from "./controllers/sessionSubscrip
 import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
 import {createAutomationsController} from "./controllers/automationsController.js";
+import {createInstancesController} from "./controllers/instancesController.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -65,6 +66,7 @@ const adminController = createAdminController({state, render, dispatch});
 const piPanelsController = createPiPanelsController({state, render});
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
 const automationsController = createAutomationsController({state, render});
+const instancesController = createInstancesController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -99,7 +101,9 @@ const handlers = {
     showAutomations,
     signOut,
     showAutomationsHistory,
+    showInstances,
     showWorkspace,
+    stopInstance,
   },
   github: {
     connectGithub,
@@ -126,6 +130,7 @@ const handlers = {
     stopSession,
   },
   automations: automationsController,
+  instances: instancesController,
   workspaces: {
     ...workspaceController,
     selectWorkspace: async (workspaceId) => {
@@ -153,6 +158,7 @@ async function start() {
       if (!user) {
         sessionSubscriptionController.detach();
         automationsController.clear();
+        instancesController.clear();
         resetSignedOutState(state);
         dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
@@ -203,10 +209,17 @@ function openApp() {
   render();
 }
 
-async function showAutomationsHistory() {
+async function showAutomationsHistory(runId = "") {
   const alreadyOpen = state.activePage === "automation-history";
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automation-history"});
-  if (alreadyOpen) await automationsController.loadGlobalHistory();
+  await automationsController.loadGlobalHistory();
+  if (runId) await automationsController.selectRun(runId, {global: true});
+  if (!alreadyOpen && !runId) return;
+}
+
+async function showInstances() {
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "instances"});
+  await instancesController.load();
 }
 
 async function showAutomations() {
@@ -217,6 +230,20 @@ async function showAutomations() {
 
 function showWorkspace() {
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
+}
+
+async function stopInstance(instance) {
+  const target = instance?.stopTarget || {};
+  if (target.type === "main-session" && target.workspaceId && target.sessionId) {
+    await runBusy(
+        () => stopSessionState(state, target.sessionId, dispatch, target.workspaceId),
+        "Stopping workspace...",
+        OPERATION_KEYS.SESSION_STOP,
+    );
+  } else if (target.type === "automation-run" && target.runId) {
+    await automationsController.stopGlobalRun(target.runId);
+  }
+  await instancesController.load({silent: true});
 }
 
 async function signInAndOpenApp() {

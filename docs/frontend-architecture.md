@@ -155,6 +155,15 @@ marker. Active/queued history polls every five seconds only while the document
 is visible, and no Firestore history listener is created. Pending-run and
 main-paused responses retain their server-provided run IDs for UI links.
 
+The avatar menu opens the lazy `InstancesPage` through a focused
+`instancesController` and `instancesApi` facade. The page reads the
+owner-scoped `/api/instances` inventory, keeps workspace/type/status filters and
+opaque cursor paging, and polls every five seconds only while the document is
+visible. Main-session Stop delegates the existing session stop/Pause endpoint;
+automation Stop delegates the run cleanup endpoint. The page never performs
+Cloud Run discovery or offers bulk/forced termination, and logout clears the
+inventory and stops its polling lifecycle.
+
 The automation editor is a controlled component owned by the automation workflow.
 `AutomationEditor` keeps edits, expected revisions, and save/error retention in the
 parent controller; `ScheduleControls` converts daily and weekly selections to
@@ -162,6 +171,11 @@ canonical numeric five-field cron while preserving arbitrary advanced expression
 Preview requests are debounced and fenced so an older response cannot replace a
 newer schedule. New definitions use the saved profile timezone (or the browser
 timezone during profile bootstrap); editing always preserves the stored timezone.
+The Recovery fieldset exposes the backend's bounded missed-run and safe-retry
+policies with the same defaults and replay-safety acknowledgement. Run details
+render catch-up scheduling time, immutable recovery snapshot values, and retry
+family links/reasons. Recovery settings are part of the saved definition and
+the run snapshot, so editing a definition never mutates an accepted run.
 The form intentionally remains mountable without workspace navigation: the
 automation management surface owns routing and placement in a later slice.
 

@@ -161,6 +161,14 @@ through the Chrome DevTools-assisted QA workflow after providing an authorized
 disposable backend and QA account. Browser execution is intentionally outside
 the default PR check.
 
+The management case should be extended with the user-menu Running instances
+surface when a disposable account has one active main session, two automation
+runs, and a cleanup failure. Verify filtering, cursor paging, keyboard/mobile
+layout, targeted Stop behavior, workspace/history links, and that switching
+accounts leaves no stale inventory. Recovery-editor QA should verify the
+skip/latest and no-retry/safe controls, the replay acknowledgement requirement,
+revision conflict retention, and run-history catch-up/retry lineage.
+
 ## LLM-Assisted Regression Suite
 
 LLM-assisted regression checks are useful for broad UI and workflow review, but they must be deterministic enough to produce actionable failures.

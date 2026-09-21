@@ -76,6 +76,7 @@ export function appReducer(state, action = {}) {
         operationSequence: 0,
         error: "",
         automations: createInitialState().automations,
+        instances: createInitialState().instances,
       };
     default:
       return state;
