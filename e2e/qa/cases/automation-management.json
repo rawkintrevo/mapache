@@ -50,12 +50,15 @@
         "width": 390,
         "height": 844
       },
-      "expected": "Use keyboard to open More workspace actions. Exactly one Automations menu item shows Clock3; Manage Google Workspace shows Blocks; no Run history menu item. Enter on Automations opens the combined definition and Run history screen and closes the menu."
+      "expected": "Use keyboard to open More workspace actions. Exactly one Automations menu item shows Clock3; Manage Google Workspace shows Blocks; no Run history menu item. Leave the menu open for its screenshot."
     },
     {
       "capture": "screenshot",
-      "fileName": "automation-mobile-navigation.png",
-      "when": "More workspace actions is open, before activating Automations"
+      "fileName": "automation-mobile-navigation.png"
+    },
+    {
+      "assert": "automation-responsive-keyboard-entry",
+      "expected": "Focus Automations in the More menu and press Enter. The combined definition and Run history screen opens and the menu closes."
     },
     {
       "assert": "automation-desktop-return",
@@ -188,6 +191,9 @@
     },
     {
       "capture": "network"
+    },
+    {
+      "useCase": "cases/automation-readiness.json"
     },
     {
       "useScript": "scripts/delete-selected-workspace.json"

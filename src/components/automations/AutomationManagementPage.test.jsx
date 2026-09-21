@@ -6,7 +6,7 @@ import {AutomationManagementPage} from "./AutomationManagementPage.jsx";
 function createState() {
   const state = createInitialState();
   state.selectedWorkspaceId = "workspace-1";
-  state.workspaces = [{id: "workspace-1", name: "Writing", sharedStorage: {state: "ready"}}];
+  state.workspaces = [{id: "workspace-1", name: "Writing", sharedStorage: {configured: true, state: "ready", errorCode: null}}];
   state.automations = {
     ...state.automations,
     globalHistory: {...state.automations.globalHistory, runs: []},
@@ -26,7 +26,7 @@ function createProps() {
     onOpenHistory: vi.fn(),
     onPrepareStorage: vi.fn(),
     onPreviewSchedule: vi.fn(),
-    onRefresh: vi.fn(),
+    onOpenModelSettings: vi.fn(),
     onRestartRun: vi.fn(),
     onRunNow: vi.fn(),
     onSelectRun: vi.fn(),

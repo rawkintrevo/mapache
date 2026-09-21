@@ -9,7 +9,7 @@ afterEach(() => vi.useRealTimers());
 function fixture(overrides = {}) {
   const state = createInitialState();
   state.selectedWorkspaceId = "workspace-1";
-  state.workspaces = [{id: "workspace-1", name: "Demo", canonicalSessionId: "session-1", sharedStorage: {state: "legacy"}}];
+  state.workspaces = [{id: "workspace-1", name: "Demo", canonicalSessionId: "session-1", sharedStorage: {configured: false, state: "legacy", errorCode: null}}];
   state.sessions = [{id: "session-1", status: "stopped"}];
   state.automations = {
     ...state.automations,
@@ -38,6 +38,68 @@ function renderPanel(state, overrides = {}) {
 }
 
 describe("AutomationsPanel", () => {
+  test("enables a ready definition and leaves Disable available when storage is lost", async () => {
+    const user = userEvent.setup();
+    const definition = {id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false, modelSelection: {modelId: "configured"}};
+    const state = fixture({automations: {definitions: [definition]}});
+    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
+    const onUpdateDefinition = vi.fn();
+    const view = render(<AutomationsPanel state={state} onUpdateDefinition={onUpdateDefinition} />);
+    await user.click(screen.getByRole("button", {name: "Enable"}));
+    expect(onUpdateDefinition).toHaveBeenLastCalledWith("a1", {enabled: true}, "workspace-1");
+    state.automations.definitions = [{...definition, enabled: true}];
+    state.workspaces[0].sharedStorage = {configured: true, state: "error", errorCode: "validation_failed"};
+    state.automations.busy = true;
+    state.automations.busyAction = "storage";
+    state.automations.pendingActions = [{action: "storage"}];
+    view.rerender(<AutomationsPanel state={state} onUpdateDefinition={onUpdateDefinition} />);
+    expect(screen.getByRole("button", {name: "Disable"})).toBeEnabled();
+    await user.click(screen.getByRole("button", {name: "Disable"}));
+    expect(onUpdateDefinition).toHaveBeenLastCalledWith("a1", {enabled: false}, "workspace-1");
+    state.automations.pendingActions = [{action: "update", automationId: "a1"}];
+    state.automations.busyAction = "update";
+    view.rerender(<AutomationsPanel state={state} onUpdateDefinition={onUpdateDefinition} />);
+    expect(screen.getByRole("button", {name: "Disable"})).toBeDisabled();
+  });
+
+  test("unlocks list and editor from a reconciled public summary without losing draft values", async () => {
+    const user = userEvent.setup();
+    const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false}]}});
+    state.workspaces[0].sharedStorage = {configured: true, state: "legacy", errorCode: null};
+    state.workspaces[0].modelSelection = {modelId: "configured"};
+    const onPrepareStorage = vi.fn();
+    const onShowWorkspace = vi.fn();
+    const props = {state, onPrepareStorage, onShowWorkspace};
+    const view = render(<AutomationsPanel {...props} />);
+    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/needs validation/);
+    await user.click(screen.getByRole("button", {name: "Revalidate shared storage"}));
+    expect(onPrepareStorage).toHaveBeenCalledWith("workspace-1");
+    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
+    view.rerender(<AutomationsPanel {...props} />);
+    expect(screen.getByRole("button", {name: "Enable"})).toBeEnabled();
+    await user.click(screen.getByRole("button", {name: "New automation"}));
+    await user.type(screen.getByRole("textbox", {name: /^Name/}), "Retain my draft");
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
+    state.workspaces[0].sharedStorage.state = "error";
+    state.workspaces[0].sharedStorage.errorCode = "bucket_missing";
+    view.rerender(<AutomationsPanel {...props} />);
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeDisabled();
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toHaveAccessibleDescription(/validation failed.*bucket_missing/);
+    expect(screen.getByRole("textbox", {name: /^Name/})).toHaveValue("Retain my draft");
+  });
+
+  test("explains missing models and provides a working return to Agent without a conflict banner", async () => {
+    const user = userEvent.setup();
+    const state = fixture({automations: {error: "missing_model_selection", definitions: [{id: "a1", name: "Daily"}]}});
+    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
+    const onOpenModelSettings = vi.fn();
+    renderPanel(state, {onOpenModelSettings});
+    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/Agent settings/);
+    expect(screen.queryByText(/changed elsewhere/)).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", {name: "Back to Agent"})[0]);
+    expect(onOpenModelSettings).toHaveBeenCalledOnce();
+  });
+
   test("previews once through the real editor chain despite loading, result, field and parent updates", async () => {
     vi.useFakeTimers();
     let resolve;
@@ -131,8 +193,8 @@ describe("AutomationsPanel", () => {
       sharedStorageState: "legacy",
       sharedStorage: {
         state: "ready",
-        bucketName: "backend-owned",
-        storageGeneration: "generation-7",
+        configured: true,
+        errorCode: null,
       },
     };
     renderPanel(state);

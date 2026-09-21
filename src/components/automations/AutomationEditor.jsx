@@ -1,6 +1,7 @@
 import {useMemo} from "react";
 import {Button} from "../common/Button.jsx";
 import {inferScheduleMode, ScheduleControls, timezoneOptions, validateCronShape, validateTimezone} from "./ScheduleControls.jsx";
+import {automationReadiness} from "../../utils/automationReadiness.js";
 import "./AutomationEditor.css";
 
 export function browserTimezone() {
@@ -113,11 +114,18 @@ export function AutomationEditor({
   previewError = "",
   previewLoading = false,
   storageReady = true,
+  readiness,
   userTimezone = "",
 }) {
   const form = draft || createAutomationDraft({userTimezone});
   const errors = useMemo(() => automationEditorErrors(form), [form]);
   const hasModel = modelConfigured === undefined ? Boolean(form.modelSelection?.modelId || form.modelSelection?.providerId) : modelConfigured;
+  const availability = readiness || automationReadiness({
+    storage: {configured: storageReady, state: storageReady ? "ready" : "legacy"},
+    busy,
+    modelConfigured: hasModel,
+  });
+  const enableSaveBlocked = form.enabled === true && !availability.canEnable;
   const editorTitle = isCreating ? "New automation" : "Edit automation";
   const update = (patch) => onChange?.({...form, ...patch});
   const previewUpdate = (cron) => update({cron});
@@ -127,7 +135,8 @@ export function AutomationEditor({
       onChange?.({...form, validationErrors: errors});
       return;
     }
-    onSave?.(automationPayload({...form, enabled: storageReady && form.enabled === true}));
+    if (busy || enableSaveBlocked) return;
+    onSave?.(automationPayload(form));
   };
 
   return (
@@ -153,10 +162,10 @@ export function AutomationEditor({
           {errors.prompt ? <span className="field-error" id="automation-prompt-error">{errors.prompt}</span> : null}
         </label>
         <div className="automation-editor__switches">
-          <label className="automation-editor__switch"><input checked={form.enabled === true && storageReady} disabled={busy || !storageReady} type="checkbox" onChange={(event) => update({enabled: event.target.checked})} /> Enabled</label>
+          <label className="automation-editor__switch"><input aria-describedby={availability.reason ? "automation-enable-reason" : undefined} checked={form.enabled === true} disabled={busy || (!form.enabled && !availability.canEnable)} type="checkbox" onChange={(event) => update({enabled: event.target.checked})} /> Enabled</label>
           <label className="automation-editor__switch"><input checked={form.allowParallelWithMain !== false} disabled={busy} type="checkbox" onChange={(event) => update({allowParallelWithMain: event.target.checked})} /> Allow running while main workspace is active</label>
         </div>
-        {!storageReady ? <p className="automation-editor__storage-warning" role="status">Configure existing shared workspace storage before enabling or running automations. Disabled workflows can still be saved.</p> : null}
+        {availability.reason ? <p className="automation-editor__storage-warning" id="automation-enable-reason" role="status">{availability.reason} Disabled workflows can still be saved.</p> : null}
         <ScheduleControls
           cron={form.cron || ""}
           mode={form.scheduleMode || inferScheduleMode(form.cron)}
@@ -208,15 +217,15 @@ export function AutomationEditor({
           </label>
           {errors.replaySafe ? <span className="field-error" id="automation-replay-safe-error">{errors.replaySafe}</span> : null}
         </fieldset>
-        {form.enabled === true && !hasModel ? (
+        {!hasModel ? (
           <div className="automation-editor__model-warning" role="status">
-            <strong>Choose a model in main Agent settings before enabling this automation.</strong>
-            {onOpenModelSettings ? <Button disabled={busy} variant="secondary" onClick={onOpenModelSettings}>Open Agent settings</Button> : null}
+            <strong>Choose a model in the workspace Agent settings, then return here and Refresh.</strong>
+            {onOpenModelSettings ? <Button disabled={busy} variant="secondary" onClick={onOpenModelSettings}>Back to Agent</Button> : null}
           </div>
         ) : null}
         <div className="automation-editor__actions">
           <Button disabled={busy} variant="secondary" onClick={onCancel}>Cancel</Button>
-          <Button disabled={busy} type="submit">{busy ? "Saving..." : isCreating ? "Create automation" : "Save automation"}</Button>
+          <Button aria-describedby={enableSaveBlocked ? "automation-enable-reason" : undefined} disabled={busy || enableSaveBlocked} type="submit">{busy ? "Saving..." : isCreating ? "Create automation" : "Save automation"}</Button>
         </div>
       </form>
     </section>

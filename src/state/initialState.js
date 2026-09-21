@@ -80,6 +80,7 @@ export function createAutomationsState(overrides = {}) {
   return {
     busy: false,
     busyAction: "",
+    pendingActions: [],
     error: "",
     selectedWorkspaceId: null,
     definitions: [],

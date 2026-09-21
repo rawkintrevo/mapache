@@ -1,4 +1,4 @@
-import {act, render, screen} from "@testing-library/react";
+import {act, fireEvent, render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {afterEach, describe, expect, test, vi} from "vitest";
 import {AutomationEditor, automationEditorErrors, automationPayload, createAutomationDraft} from "./AutomationEditor.jsx";
@@ -76,6 +76,25 @@ describe("automation editor helpers", () => {
 });
 
 describe("AutomationEditor", () => {
+  test("preserves enabled draft intent when readiness is lost and allows an explicit disabled save", async () => {
+    const user = userEvent.setup();
+    const draft = {cron: "0 9 * * *", name: "Daily", prompt: "Retain these instructions", timezone: "UTC", enabled: true, modelSelection: {modelId: "configured"}};
+    const onSave = vi.fn();
+    const onChange = vi.fn();
+    const view = render(<AutomationEditor draft={draft} onChange={onChange} onSave={onSave} />);
+    view.rerender(<AutomationEditor draft={draft} storageReady={false} onChange={onChange} onSave={onSave} />);
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeChecked();
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
+    expect(screen.getByRole("button", {name: "Save automation"})).toBeDisabled();
+    fireEvent.submit(screen.getByRole("button", {name: "Save automation"}).closest("form"));
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", {name: "Enabled"}));
+    expect(onChange).toHaveBeenLastCalledWith({...draft, enabled: false});
+    view.rerender(<AutomationEditor draft={{...draft, enabled: false}} storageReady={false} onChange={onChange} onSave={onSave} />);
+    await user.click(screen.getByRole("button", {name: "Save automation"}));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({enabled: false, prompt: draft.prompt}));
+  });
+
   test("keeps invalid drafts from submitting and exposes field errors", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();
