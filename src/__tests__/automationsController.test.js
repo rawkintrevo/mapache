@@ -51,6 +51,17 @@ function createFixture(overrides = {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("automationsController", () => {
+  test("propagates structured schedule failures without changing mutation state", async () => {
+    const error = Object.assign(new Error("invalid_cron"), {code: "invalid_cron", status: 400, data: {field: "cron"}});
+    const fixture = createFixture({api: {previewSchedule: vi.fn().mockRejectedValue(error)}});
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    fixture.state.automations.error = "prior save error";
+    await expect(controller.previewSchedule("bad", "UTC")).rejects.toBe(error);
+    expect(fixture.state.automations.error).toBe("prior save error");
+    expect(fixture.state.automations.busy).toBe(false);
+    expect(fixture.state.automations.conflict).toBeNull();
+  });
+
   test("loads workspace definitions/settings and tracks revision and storage readiness", async () => {
     const fixture = createFixture();
     const controller = createAutomationsController({

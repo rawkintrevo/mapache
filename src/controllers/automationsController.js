@@ -234,12 +234,9 @@ export function createAutomationsController({
   }
 
   async function previewSchedule(cron, timezone) {
-    try {
-      return await getAutomationApi().previewSchedule(cron, timezone);
-    } catch (error) {
-      handleError(error);
-      return null;
-    }
+    // The editor owns preview errors and request fencing; save/revision state
+    // must not be changed by a schedule validation failure.
+    return getAutomationApi().previewSchedule(cron, timezone);
   }
 
   async function loadHistory(options = {}) {

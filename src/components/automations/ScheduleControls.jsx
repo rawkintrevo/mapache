@@ -75,23 +75,44 @@ export function timezoneOptions(currentTimezone = "", userTimezone = "") {
   return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
 
-export function useSchedulePreview({cron, timezone, onPreview, onPreviewResult, debounceMs = 350}) {
-  const requestRef = useRef(0);
+export function useSchedulePreview({cron, timezone, contextKey, onPreview, onPreviewResult, onPreviewStateChange, debounceMs = 350}) {
+  const handlers = useRef({onPreview, onPreviewResult, onPreviewStateChange});
   useEffect(() => {
-    const requestId = requestRef.current + 1;
-    requestRef.current = requestId;
-    const cronError = validateCronShape(cron);
-    const timezoneError = validateTimezone(timezone);
-    if (cronError || timezoneError || typeof onPreview !== "function") return undefined;
+    handlers.current = {onPreview, onPreviewResult, onPreviewStateChange};
+  }, [onPreview, onPreviewResult, onPreviewStateChange]);
+  const canPreview = typeof onPreview === "function";
+
+  useEffect(() => {
+    // This effect instance fences data, errors, and loading together. Callback
+    // replacement does not invalidate a schedule; editor context changes do.
+    let current = true;
+    const error = validateCronShape(cron) || validateTimezone(timezone);
+    const publish = (state) => {
+      if (current) handlers.current.onPreviewStateChange?.(state);
+    };
+    if (error || !canPreview) {
+      publish({data: null, error, loading: false});
+      return () => { current = false; };
+    }
+    publish({data: null, error: "", loading: true});
     const timer = setTimeout(() => {
-      Promise.resolve(onPreview(cron, timezone)).then((result) => {
-        if (requestId === requestRef.current) onPreviewResult?.(result);
+      Promise.resolve().then(() => handlers.current.onPreview(cron, timezone)).then((result) => {
+        if (!result || result.error) throw new Error(result?.error || "Could not preview schedule.");
+        if (!current) return;
+        publish({data: result, error: "", loading: false});
+        handlers.current.onPreviewResult?.(result);
       }).catch((error) => {
-        if (requestId === requestRef.current) onPreviewResult?.({error: error?.code || error?.message || "Could not preview schedule."});
+        if (!current) return;
+        const message = error?.code || error?.message || "Could not preview schedule.";
+        publish({data: null, error: message, loading: false});
+        handlers.current.onPreviewResult?.({error: message});
       });
     }, Math.max(0, Number(debounceMs) || 0));
-    return () => clearTimeout(timer);
-  }, [cron, debounceMs, onPreview, onPreviewResult, timezone]);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [cron, timezone, contextKey, debounceMs, canPreview]);
 }
 
 export function ScheduleControls({
@@ -101,6 +122,8 @@ export function ScheduleControls({
   onModeChange,
   onPreview,
   onPreviewResult,
+  onPreviewStateChange,
+  previewContextKey,
   onTimezoneChange,
   preview = null,
   previewError = "",
@@ -115,7 +138,7 @@ export function ScheduleControls({
   const time = timeFromCron(cron);
   const cronError = validateCronShape(cron);
   const timezoneError = validateTimezone(timezone);
-  useSchedulePreview({cron, timezone, onPreview, onPreviewResult});
+  useSchedulePreview({cron, timezone, contextKey: previewContextKey, onPreview, onPreviewResult, onPreviewStateChange});
 
   function changeMode(nextMode) {
     const next = nextMode === "weekly" || nextMode === "advanced" ? nextMode : "daily";

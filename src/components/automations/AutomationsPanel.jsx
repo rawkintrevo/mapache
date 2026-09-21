@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Clock3, Pencil, Play, Plus, RefreshCw, Trash2} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AutomationEditor, createAutomationDraft} from "./AutomationEditor.jsx";
@@ -31,8 +31,9 @@ export function AutomationsPanel({
   const automationState = state.automations;
   const workspace = state.workspaces.find((item) => item.id === state.selectedWorkspaceId);
   const [editor, setEditor] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewState, setPreviewState] = useState({data: null, error: "", loading: false});
+  const editorSequence = useRef(0);
+  const previewSchedule = useCallback((cron, timezone) => onPreviewSchedule?.(cron, timezone), [onPreviewSchedule]);
   const [settingsValue, setSettingsValue] = useState(String(automationState.maxConcurrency || 1));
   const storageState = String(workspace?.sharedStorage?.state || automationState.storageState || workspace?.sharedStorageState || "legacy").toLowerCase();
   const storageReady = storageState === "ready";
@@ -54,7 +55,7 @@ export function AutomationsPanel({
 
   useEffect(() => {
     setEditor(null);
-    setPreview(null);
+    setPreviewState({data: null, error: "", loading: false});
     if (!state.selectedWorkspaceId) return;
     void onLoadWorkspace?.(state.selectedWorkspaceId);
     void onLoadHistory?.({workspaceId: state.selectedWorkspaceId, filters: {workspaceId: state.selectedWorkspaceId}});
@@ -71,13 +72,13 @@ export function AutomationsPanel({
   }
 
   function beginCreate() {
-    setPreview(null);
-    setEditor({isCreating: true, draft: createAutomationDraft({userTimezone: state.profile?.timezone || ""})});
+    setPreviewState({data: null, error: "", loading: false});
+    setEditor({contextKey: ++editorSequence.current, workspaceId: state.selectedWorkspaceId, isCreating: true, draft: createAutomationDraft({userTimezone: state.profile?.timezone || ""})});
   }
 
   function beginEdit(automation) {
-    setPreview(null);
-    setEditor({automationId: automation.id, draft: createAutomationDraft({automation, userTimezone: state.profile?.timezone || ""})});
+    setPreviewState({data: null, error: "", loading: false});
+    setEditor({contextKey: ++editorSequence.current, workspaceId: state.selectedWorkspaceId, automationId: automation.id, draft: createAutomationDraft({automation, userTimezone: state.profile?.timezone || ""})});
   }
 
   async function saveDefinition(payload) {
@@ -86,7 +87,7 @@ export function AutomationsPanel({
       await onUpdateDefinition?.(editor?.automationId, payload, state.selectedWorkspaceId);
     if (result) {
       setEditor(null);
-      setPreview(null);
+      setPreviewState({data: null, error: "", loading: false});
       await onLoadHistory?.({workspaceId: state.selectedWorkspaceId, filters: {workspaceId: state.selectedWorkspaceId}});
     }
   }
@@ -156,8 +157,9 @@ export function AutomationsPanel({
           <p className="subtle">Lowering the limit does not stop existing runs; it only limits future admission.</p>
         </form>
       </section>
-      {editor ? (
+      {editor?.workspaceId === state.selectedWorkspaceId ? (
         <AutomationEditor
+          key={`${editor.workspaceId}:${editor.contextKey}`}
           busy={automationState.busy}
           conflict={automationState.conflict}
           draft={editor.draft}
@@ -166,16 +168,13 @@ export function AutomationsPanel({
           modelConfigured={Boolean(editor.draft.modelSelection?.modelId || editor.draft.modelSelection?.providerId)}
           onCancel={() => setEditor(null)}
           onChange={(draft) => setEditor({...editor, draft})}
-          onPreview={async (cron, timezone) => {
-            setPreviewLoading(true);
-            const result = await onPreviewSchedule?.(cron, timezone);
-            setPreviewLoading(false);
-            return result;
-          }}
-          onPreviewResult={setPreview}
+          onPreview={previewSchedule}
+          onPreviewStateChange={setPreviewState}
+          previewContextKey={`${editor.workspaceId}:${editor.contextKey}`}
           onSave={saveDefinition}
-          preview={preview}
-          previewLoading={previewLoading}
+          preview={previewState.data}
+          previewError={previewState.error}
+          previewLoading={previewState.loading}
           storageReady={storageReady}
           userTimezone={state.profile?.timezone || ""}
         />

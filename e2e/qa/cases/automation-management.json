@@ -96,6 +96,10 @@
       "value": "America/Chicago"
     },
     {
+      "assert": "automation-preview-stability",
+      "expected": "Wait for exactly five occurrences and no Checking schedule text. Record schedule-preview request count, edit Name and Instructions, and wait at least 11000ms (two five-second polling intervals), including two history refreshes. Occurrences remain and no preview request is added. Burst-edit cron/timezone within 350ms; only the final pair adds one successful request and five new occurrences. Capture the endpoint counts and statuses, without auth headers."
+    },
+    {
       "assert": "automation-editor-scroll",
       "viewports": [
         {

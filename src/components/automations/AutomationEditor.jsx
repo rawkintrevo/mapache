@@ -106,6 +106,8 @@ export function AutomationEditor({
   onOpenModelSettings,
   onPreview,
   onPreviewResult,
+  onPreviewStateChange,
+  previewContextKey,
   onSave,
   preview = null,
   previewError = "",
@@ -162,6 +164,8 @@ export function AutomationEditor({
           onModeChange={(scheduleMode) => update({scheduleMode})}
           onPreview={onPreview}
           onPreviewResult={onPreviewResult}
+          onPreviewStateChange={onPreviewStateChange}
+          previewContextKey={previewContextKey}
           preview={preview}
           previewError={previewError || errors.cron || errors.timezone}
           previewLoading={previewLoading}

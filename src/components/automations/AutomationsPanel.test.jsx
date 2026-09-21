@@ -1,8 +1,10 @@
-import {render, screen} from "@testing-library/react";
+import {act, fireEvent, render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {describe, expect, test, vi} from "vitest";
+import {afterEach, describe, expect, test, vi} from "vitest";
 import {createInitialState} from "../../state/initialState.js";
 import {AutomationsPanel} from "./AutomationsPanel.jsx";
+
+afterEach(() => vi.useRealTimers());
 
 function fixture(overrides = {}) {
   const state = createInitialState();
@@ -36,6 +38,59 @@ function renderPanel(state, overrides = {}) {
 }
 
 describe("AutomationsPanel", () => {
+  test("previews once through the real editor chain despite loading, result, field and parent updates", async () => {
+    vi.useFakeTimers();
+    let resolve;
+    const onPreviewSchedule = vi.fn(() => new Promise((done) => { resolve = done; }));
+    const state = fixture();
+    const props = {state, onPreviewSchedule};
+    const view = render(<AutomationsPanel {...props} />);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    expect(screen.getByText("Checking schedule...")).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    expect(onPreviewSchedule).toHaveBeenCalledTimes(1);
+    await act(async () => resolve({occurrences: [{local: "current occurrence", timezone: "UTC"}]}));
+    expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", {name: /^Name/}), {target: {value: "Edited"}});
+    fireEvent.change(screen.getByRole("textbox", {name: /^Instructions/}), {target: {value: "Unrelated"}});
+    view.rerender(<AutomationsPanel {...props} state={{...state, automations: {...state.automations, history: {...state.automations.history, runs: []}}}} />);
+    await act(() => vi.advanceTimersByTimeAsync(11_000));
+    expect(onPreviewSchedule).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/current occurrence/)).toBeInTheDocument();
+  });
+
+  test("shows preview failures locally and ignores completion from a closed editor or old workspace", async () => {
+    vi.useFakeTimers();
+    const requests = [];
+    const onPreviewSchedule = vi.fn(() => new Promise((resolve, reject) => requests.push({resolve, reject})));
+    const state = fixture();
+    const view = render(<AutomationsPanel state={state} onPreviewSchedule={onPreviewSchedule} />);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    fireEvent.click(screen.getAllByRole("button", {name: "Cancel"})[0]);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    await act(async () => requests[0].resolve({occurrences: [{local: "closed editor"}]}));
+    expect(screen.queryByText(/closed editor/)).not.toBeInTheDocument();
+    expect(screen.getByText("Checking schedule...")).toBeInTheDocument();
+    await act(async () => requests[1].reject(Object.assign(new Error("unavailable"), {code: "schedule_unavailable"})));
+    expect(screen.getByText("schedule_unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
+    expect(state.automations.error).toBe("");
+    fireEvent.change(screen.getByRole("combobox", {name: "Timezone"}), {target: {value: "Europe/London"}});
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    const nextState = {...state, selectedWorkspaceId: "workspace-2", workspaces: [{id: "workspace-2", name: "Second"}]};
+    view.rerender(<AutomationsPanel state={nextState} onPreviewSchedule={onPreviewSchedule} />);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    await act(async () => requests[2].resolve({occurrences: [{local: "old workspace"}]}));
+    expect(screen.queryByText(/old workspace/)).not.toBeInTheDocument();
+    expect(screen.getByText("Checking schedule...")).toBeInTheDocument();
+    await act(async () => requests[3].resolve({occurrences: [{local: "new workspace"}]}));
+    expect(screen.getByText(/new workspace/)).toBeInTheDocument();
+    expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
+  });
+
   test("requires existing shared storage and does not enable run actions before ready", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {storageState: "legacy", definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false} ]}});

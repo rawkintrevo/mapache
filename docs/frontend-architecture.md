@@ -176,8 +176,13 @@ The automation editor is a controlled component owned by the automation workflow
 `AutomationEditor` keeps edits, expected revisions, and save/error retention in the
 parent controller; `ScheduleControls` converts daily and weekly selections to
 canonical numeric five-field cron while preserving arbitrary advanced expressions.
-Preview requests are debounced and fenced so an older response cannot replace a
-newer schedule. New definitions use the saved profile timezone (or the browser
+Preview requests start once after a 350ms debounce when cron, timezone, or the
+explicit editor/workspace context changes. Latest-handler refs prevent callback
+replacement, unrelated draft edits, and history renders from restarting the
+request. The same effect lifetime fences occurrences, errors, and loading;
+schedule changes and editor close/unmount invalidate late completions. Invalid
+input and server errors settle visibly inside Next five runs without changing
+definition-save busy/error or revision-conflict state. New definitions use the saved profile timezone (or the browser
 timezone during profile bootstrap); editing always preserves the stored timezone.
 The Recovery fieldset exposes the backend's bounded missed-run and safe-retry
 policies with the same defaults and replay-safety acknowledgement. Run details
