@@ -83,7 +83,7 @@ It runs:
 
 1. Developer docs relative-link validation.
 2. Firestore Emulator security-rule and automation-index contract tests using the
-   repository-pinned `firebase-tools` CLI.
+   repository-pinned `firebase-tools` CLI and Java 21 runtime.
 3. Cloud Functions unit tests and syntax lint.
 4. Session runner JavaScript syntax lint and unit tests.
 5. Frontend smoke tests.

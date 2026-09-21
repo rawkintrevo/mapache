@@ -33,6 +33,12 @@ jobs:
             functions/package-lock.json
             session-runner/package-lock.json
 
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install frontend dependencies
         run: npm ci
 
