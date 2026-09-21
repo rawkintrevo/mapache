@@ -6,9 +6,9 @@ For every actionable implementation request in a GitHub-backed repository, use a
 
 1. Inspect the request and repository context. Ask focused questions before creating remote state when requirements are ambiguous.
 2. If the user supplied an issue, read it and its comments. Otherwise, search for duplicates and create a scoped GitHub issue before editing. Do not create an issue for explanation, investigation, review, or issue-only requests that do not authorize implementation.
-3. Never implement normal work directly on `main`. In connected Mapache sessions, keep the runner-created `mapache/*` automation branch. Outside that lifecycle, create a collision-free working branch from an updated `main` following repository naming policy.
+3. Never implement normal work directly on `main`. Always check out `main`, update it with a fast-forward-only pull, and create a collision-free working branch named `<issue-number>-<kebab-case-description>` from the updated `main`.
 4. Implement, document, and test the change. Commit only scoped files with a concise message that references the issue.
-5. Push the working branch and open a pull request against `main`. Connected Mapache sessions may leave publication to runner exit automation when the current branch is the session automation branch; otherwise publish and verify the PR before handoff.
+5. Push the working branch and open a pull request against `main`. Publish and verify the PR before handoff.
 6. Report the issue, branch, commit, PR, checks, deployment outcome, and any remaining risk.
 
 An explicit `hotfix` description or explicit instruction to work `directly on main` overrides the issue/branch/PR flow. For that exception, first update `main` with a fast-forward-only pull, implement and test on `main`, commit, and push `main` directly. Do not create an issue or PR unless separately requested. Never force-push, bypass branch protection, or discard unrelated work.

@@ -26,9 +26,8 @@ An explicit `hotfix` description or explicit instruction to work `directly on ma
 
 ## Branch Naming
 
-1. In a connected Mapache session already on its runner-created `mapache/*` automation branch, keep that branch; it satisfies the separate-branch requirement and preserves exit automation.
-2. Otherwise derive a short kebab-case description from the issue title and create a branch following repository policy. For Mapache, use `mapache/<kebab-case-desc>`.
-3. If the exact branch already exists locally or remotely, stop and ask for a different description unless repository policy explicitly defines another collision strategy.
+1. Always derive a short kebab-case description from the issue title and create a branch named `<issue-number>-<kebab-case-description>` from the updated `main`.
+2. If the exact branch already exists locally or remotely, stop and ask for a different description unless repository policy explicitly defines another collision strategy.
 
 ## Implementation
 
@@ -116,8 +115,7 @@ Before the final response after completion, user-action pause, or blocked bailou
 
 1. Ensure useful issue-related changes have been committed and pushed, or intentionally left uncommitted only when blocked before a meaningful commit can be made.
 2. Inspect `git status --short`.
-3. In a connected Mapache session, preserve the session automation branch so runner exit automation remains enabled. Do not switch to `main` merely for cleanup.
-4. Outside a runner-managed automation branch, return to `main` after publishing when safe. If local changes would block switching, do not stash, reset, delete, or overwrite them automatically; report the branch and blocking paths.
+3. Return to `main` after publishing when safe. If local changes would block switching, do not stash, reset, delete, or overwrite them automatically; report the branch and blocking paths.
 
 ## Final Response
 
