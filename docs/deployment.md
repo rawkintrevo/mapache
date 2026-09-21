@@ -44,6 +44,11 @@ canonical Firestore Emulator checks and invokes the repository-pinned Firebase
 CLI from the root lockfile. Keep those CI versions aligned with local
 verification so preview and production do not drift.
 
+Firestore appends the document-name field to composite indexes when it is not
+listed explicitly. Keep only one definition for each resulting field order;
+declaring both an omitted and explicit `__name__` variant makes Firebase try to
+create the same production index twice and fails deployment with HTTP 409.
+
 Workspace deletion is a Functions-only control-plane change. Deploy it with
 `firebase deploy --only functions --project pi-agents-cloud`; keep the
 `appConfig/automations.enabled` feature flag false until the complete
