@@ -210,11 +210,8 @@ function openApp() {
 }
 
 async function showAutomationsHistory(runId = "") {
-  const alreadyOpen = state.activePage === "automation-history";
-  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automation-history"});
-  await automationsController.loadGlobalHistory();
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automations"});
   if (runId) await automationsController.selectRun(runId, {global: true});
-  if (!alreadyOpen && !runId) return;
 }
 
 async function showInstances() {
@@ -222,10 +219,8 @@ async function showInstances() {
   await instancesController.load();
 }
 
-async function showAutomations() {
-  if (!state.selectedWorkspaceId) return;
+function showAutomations() {
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automations"});
-  await automationsController.loadWorkspace(state.selectedWorkspaceId);
 }
 
 function showWorkspace() {

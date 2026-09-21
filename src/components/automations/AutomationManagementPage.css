@@ -1,0 +1,30 @@
+.automation-management-page {
+  display: grid;
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 90rem;
+  padding: 1.5rem;
+}
+
+.automation-management-page__header {
+  display: grid;
+  gap: .35rem;
+}
+
+.automation-management-page__header h2,
+.automation-management-page__header p {
+  margin: 0;
+}
+
+.automation-management-page > .automations-panel,
+.automation-management-page > .run-history-page {
+  margin: 0;
+  max-width: none;
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .automation-management-page {
+    padding: 1rem;
+  }
+}

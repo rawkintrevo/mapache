@@ -13,8 +13,7 @@ const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: 
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
 const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({ProfilePage: page}) => ({default: page})));
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
-const AutomationsPanel = lazy(() => import("../automations/AutomationsPanel.jsx").then(({AutomationsPanel: panel}) => ({default: panel})));
-const RunHistoryPage = lazy(() => import("../automations/RunHistoryPage.jsx").then(({RunHistoryPage: page}) => ({default: page})));
+const AutomationManagementPage = lazy(() => import("../automations/AutomationManagementPage.jsx").then(({AutomationManagementPage: page}) => ({default: page})));
 const InstancesPage = lazy(() => import("../instances/InstancesPage.jsx").then(({InstancesPage: page}) => ({default: page})));
 
 export function AppShell(props) {
@@ -81,7 +80,6 @@ export function AppShell(props) {
         onSelectWorkspace={workspaces.selectWorkspace}
         onShowAdmin={admin.showAdmin}
         onShowAutomations={app.showAutomations}
-        onShowAutomationHistory={app.showAutomationsHistory}
         onShowInstances={app.showInstances}
         onShowLogs={() => setLogsOpen(true)}
         onShowProfile={modals.showProfile}
@@ -113,19 +111,6 @@ export function AppShell(props) {
               onSignOut={app.signOut}
             />
           </Suspense>
-        ) : state.activePage === "automation-history" ? (
-          <Suspense fallback={<LazySurfaceFallback label="Loading run history..." />}>
-            <RunHistoryPage
-              state={state}
-              onLoadEvents={automations.listEvents}
-              onLoadHistory={automations.loadGlobalHistory}
-              onLoadNextPage={automations.loadNextGlobalHistoryPage}
-              onRestartRun={automations.restartGlobalRun}
-              onSelectRun={(runId) => automations.selectRun(runId, {global: true})}
-              onSetFilters={automations.setGlobalHistoryFilters}
-              onStopRun={automations.stopGlobalRun}
-            />
-          </Suspense>
         ) : state.activePage === "instances" ? (
           <Suspense fallback={<LazySurfaceFallback label="Loading running instances..." />}>
             <InstancesPage
@@ -138,19 +123,26 @@ export function AppShell(props) {
               state={state}
             />
           </Suspense>
-        ) : state.activePage === "automations" ? (
+        ) : state.activePage === "automations" || state.activePage === "automation-history" ? (
           <Suspense fallback={<LazySurfaceFallback label="Loading automations..." />}>
-            <AutomationsPanel
+            <AutomationManagementPage
               onCreateDefinition={automations.createDefinition}
               onDeleteDefinition={automations.deleteDefinition}
+              onLoadEvents={automations.listEvents}
               onLoadHistory={automations.loadHistory}
+              onLoadGlobalHistory={automations.loadGlobalHistory}
+              onLoadNextGlobalHistoryPage={automations.loadNextGlobalHistoryPage}
               onLoadWorkspace={automations.loadWorkspace}
               onOpenHistory={app.showAutomationsHistory}
               onPrepareStorage={automations.prepareStorage}
               onPreviewSchedule={automations.previewSchedule}
               onRefresh={app.refreshAll}
+              onRestartRun={automations.restartGlobalRun}
               onRunNow={automations.runNow}
+              onSelectRun={(runId) => automations.selectRun(runId, {global: true})}
+              onSetGlobalHistoryFilters={automations.setGlobalHistoryFilters}
               onShowWorkspace={app.showWorkspace}
+              onStopRun={automations.stopGlobalRun}
               onUpdateDefinition={automations.updateDefinition}
               onUpdateSettings={automations.updateSettings}
               state={state}
