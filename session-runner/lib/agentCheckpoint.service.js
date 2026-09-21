@@ -5,9 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {agentSnapshotStoragePrefix} = require("./agentSnapshot.service");
 const {generationMatchOptions} = require("./workspaceSyncGeneration.helpers");
+const {isSharedGcsFuseMode} = require("./sharedWorkspace.helpers");
 
 const CHECKPOINT_VERSION = 1;
 const WORKSPACE_FILE_NAMESPACE = "workspace-files";
+
+function isAutomationRuntime(config = {}) {
+  return String(config.runtimeKind || "").trim().toLowerCase() === "automation";
+}
 
 /**
  * Owns immutable agent-state and workspace-file publication. Capture is kept
@@ -55,6 +60,9 @@ function createAgentCheckpointService({
       });
     },
     publishWorkspaceFiles: (options = {}) => {
+      if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+        return Promise.resolve({enabled: true, skipped: true, reason: "shared_gcsfuse_authoritative"});
+      }
       if (!enabled && options.allowUnmarked !== true) return Promise.resolve({enabled: false, skipped: true});
       return publishWorkspaceFiles({
         ...options,
@@ -227,7 +235,7 @@ async function commitCheckpoint({
       agentRuntimeCheckpointError: null,
       agentRuntimeLastCheckpointAt: timestamp,
     };
-    transaction.update(workspaceRef, updates);
+    if (!isAutomationRuntime(config)) transaction.update(workspaceRef, updates);
     transaction.update(sessionRef, updates);
   });
   return {ok: true, pointer};
@@ -260,6 +268,9 @@ async function publishWorkspaceFiles({
   workspaceId,
   assertCurrentWriter,
 } = {}) {
+  if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+    return {enabled: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
+  }
   const identity = validateIdentity({
     bootInstanceId: bootInstanceId || config.agentRuntimeBootInstanceId,
     generation: generation || config.agentRuntimeGeneration,
@@ -424,12 +435,12 @@ async function commitWorkspaceFileManifest({
     const workspace = workspaceSnap.data() || {};
     const session = sessionSnap.data() || {};
     assertCurrentAuthority(workspace, session, identity);
-    const currentCaptureId = workspace.agentRuntimeWorkspaceFiles?.captureId || null;
+    const currentCaptureId = (isAutomationRuntime(config) ? session : workspace).agentRuntimeWorkspaceFiles?.captureId || null;
     if (currentCaptureId !== expectedCaptureId) {
       throw checkpointError("checkpoint_publication_conflict", "Workspace file publication base is stale");
     }
     const publishedPointer = {...pointer, publishedAt: timestamp};
-    transaction.update(workspaceRef, {agentRuntimeWorkspaceFiles: publishedPointer});
+    if (!isAutomationRuntime(config)) transaction.update(workspaceRef, {agentRuntimeWorkspaceFiles: publishedPointer});
     transaction.update(sessionRef, {agentRuntimeWorkspaceFiles: publishedPointer});
   });
   return {ok: true, pointer: {...pointer, publishedAt: timestamp}};
@@ -443,11 +454,12 @@ async function readPublishedWorkspaceState({config = {}, db, identity, storage} 
   if (typeof workspaceRef.get !== "function") {
     throw checkpointError("checkpoint_coordination_unavailable", "Checkpoint workspace reads are not configured");
   }
-  const workspaceSnap = await workspaceRef.get();
-  if (!workspaceSnap?.exists) {
+  const authorityRef = isAutomationRuntime(config) ? sessionDocument(workspaceRef, identity.sessionId) : workspaceRef;
+  const authoritySnap = await authorityRef.get();
+  if (!authoritySnap?.exists) {
     throw checkpointError("checkpoint_writer_not_current", "Checkpoint workspace document is missing");
   }
-  const pointer = workspaceSnap.data()?.agentRuntimeWorkspaceFiles || null;
+  const pointer = authoritySnap.data()?.agentRuntimeWorkspaceFiles || null;
   if (!pointer) return {paths: [], pointer: null};
   const manifest = await readWorkspaceManifest({config, pointer, storage});
   return {
@@ -510,7 +522,7 @@ async function recordCheckpointError({
     if (!workspaceSnap.exists || !sessionSnap.exists) throw checkpointError("checkpoint_writer_not_current", "Checkpoint authority documents are missing");
     assertCurrentAuthority(workspaceSnap.data() || {}, sessionSnap.data() || {}, identity);
     const updates = {agentRuntimeCheckpointError: safeCode, agentRuntimeCheckpointErrorAt: timestamp};
-    transaction.update(workspaceRef, updates);
+    if (!isAutomationRuntime(config)) transaction.update(workspaceRef, updates);
     transaction.update(sessionRef, updates);
   });
   return {ok: true, checkpointError: safeCode};
@@ -640,8 +652,24 @@ function validateIdentity({bootInstanceId, generation, sessionId, workspaceId}) 
 }
 
 function assertCurrentAuthority(workspace, session, identity) {
+  if (workspace.deleted === true || ["deleting", "deleted"].includes(
+      String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+  )) {
+    throw checkpointError("checkpoint_workspace_deleted", "Workspace deletion has revoked checkpoint publication");
+  }
   if (workspace.agentUiVersion !== "pi-web-ui-v1" || session.agentUiVersion !== "pi-web-ui-v1") {
     throw checkpointError("checkpoint_writer_not_current", "Checkpoint writer is not a managed runtime");
+  }
+  const automationRuntime = isAutomationRuntime(session);
+  if (automationRuntime) {
+    if (String(session.runtimeKind || "").trim().toLowerCase() !== "automation" ||
+        String(session.agentRuntimeSessionId || "") !== identity.sessionId ||
+        Number(session.agentRuntimeGeneration) !== identity.generation ||
+        String(session.agentRuntimeBootInstanceId || "") !== identity.bootInstanceId ||
+        String(session.agentRuntimeAuthorityState || "").toLowerCase() !== "admitted") {
+      throw checkpointError("checkpoint_writer_not_current", "Checkpoint writer authority is stale");
+    }
+    return;
   }
   if (String(workspace.agentRuntimeSessionId || "") !== identity.sessionId ||
       Number(workspace.agentRuntimeGeneration) !== identity.generation ||

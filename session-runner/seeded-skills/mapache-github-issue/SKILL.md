@@ -5,6 +5,8 @@ description: Use the default issue, working-branch, commit, and pull-request wor
 
 Use this skill for every actionable implementation request in a GitHub repository, when the user gives an issue number such as "work on issue 42" or "fix #42", asks you to create GitHub issues, or explicitly requests a branch or pull request. An issue-only request does not authorize implementation or publishing. Explanations, investigations, and reviews do not create an issue unless the user also authorizes implementation.
 
+In a shared GCS workspace, `.git` is private runner metadata behind `GIT_DIR`/`GIT_WORK_TREE`; use the normal explicit Git commands for status, diff, staging, commits, branches, and pushes, but do not assume that `.git` entries are visible in the worktree or that automatic branch/commit/PR exit automation is enabled. Never copy Git metadata into the shared worktree or archive it as ordinary workspace files.
+
 ## Maintainer Source
 
 When working on Mapache itself, edit `session-runner/seeded-skills/mapache-github-issue/SKILL.md`, not the runtime-installed `.pi/skills/mapache-github-issue/SKILL.md`. The runner catalog supplies this source during skill materialization. Current seeding only writes missing files, so existing workspace copies may retain older instructions even after an image update.

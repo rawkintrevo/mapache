@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  automationCloudRunServiceId,
   cloudRunServiceId,
   initialProvisioningMetadata,
   isRetryableProvisioningError,
@@ -19,6 +20,8 @@ assert.strictEqual(provisioningSessionId("operation-1"), provisioningSessionId("
 assert.notStrictEqual(provisioningSessionId("operation-1"), provisioningSessionId("operation-2"));
 assert.strictEqual(cloudRunServiceId("operation-1"), cloudRunServiceId("operation-1"));
 assert.notStrictEqual(cloudRunServiceId("operation-1"), cloudRunServiceId("operation-2"));
+assert.match(automationCloudRunServiceId("run-1"), /^mpauto-[a-f0-9]{40}$/);
+assert.notStrictEqual(automationCloudRunServiceId("run-1"), automationCloudRunServiceId("run-2"));
 assert.strictEqual(isValidCloudRunServiceId(cloudRunServiceId("operation-1")), true);
 assert.ok(cloudRunServiceId("operation-1").length < 50);
 assert.strictEqual(resolveCloudRunServiceId("operation-1", "session-existing"), "session-existing");

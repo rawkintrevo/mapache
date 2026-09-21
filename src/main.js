@@ -26,6 +26,8 @@ import {createPiPanelsController} from "./controllers/piPanelsController.js";
 import {createSessionSubscriptionController} from "./controllers/sessionSubscriptionController.js";
 import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
+import {createAutomationsController} from "./controllers/automationsController.js";
+import {createInstancesController} from "./controllers/instancesController.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -44,6 +46,7 @@ import {
 } from "./workflows/sessionLifecycle.js";
 import {createSessionRequestTracker, isCurrentSessionRequest} from "./utils/sessionRequest.js";
 import {OPERATION_KEYS} from "./utils/operationKeys.js";
+import {ensureUserTimezone} from "./utils/userTimezone.js";
 
 const appStore = createAppStore(createInitialState());
 const state = appStore.state;
@@ -62,6 +65,8 @@ const APP_PATH = "/app";
 const adminController = createAdminController({state, render, dispatch});
 const piPanelsController = createPiPanelsController({state, render});
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
+const automationsController = createAutomationsController({state, render});
+const instancesController = createInstancesController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -93,7 +98,12 @@ const handlers = {
   admin: adminController,
   app: {
     refreshAll,
+    showAutomations,
     signOut,
+    showAutomationsHistory,
+    showInstances,
+    showWorkspace,
+    stopInstance,
   },
   github: {
     connectGithub,
@@ -119,8 +129,15 @@ const handlers = {
     selectSession,
     stopSession,
   },
+  automations: automationsController,
+  instances: instancesController,
   workspaces: {
     ...workspaceController,
+    selectWorkspace: async (workspaceId) => {
+      const result = await workspaceController.selectWorkspace(workspaceId);
+      automationsController.setWorkspace(workspaceId);
+      return result;
+    },
     toggleWorkspace,
   },
 };
@@ -137,8 +154,11 @@ async function start() {
         user,
         api: user ? createApiClient(() => user.getIdToken()) : null,
       });
+      automationsController.setIdentity(user?.uid || "");
       if (!user) {
         sessionSubscriptionController.detach();
+        automationsController.clear();
+        instancesController.clear();
         resetSignedOutState(state);
         dispatch({type: APP_ACTIONS.RESET_SIGNED_OUT});
         render();
@@ -171,7 +191,12 @@ function render() {
   }));
 }
 
-appStore.subscribe(() => render());
+appStore.subscribe((_nextState, action) => {
+  if (action?.type === APP_ACTIONS.SET_SELECTED_WORKSPACE) {
+    automationsController.setWorkspace(state.selectedWorkspaceId);
+  }
+  render();
+});
 
 function isAppPath(pathname = window.location.pathname) {
   return pathname === APP_PATH || pathname.startsWith(`${APP_PATH}/`);
@@ -182,6 +207,43 @@ function openApp() {
     window.history.pushState({}, "", APP_PATH);
   }
   render();
+}
+
+async function showAutomationsHistory(runId = "") {
+  const alreadyOpen = state.activePage === "automation-history";
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automation-history"});
+  await automationsController.loadGlobalHistory();
+  if (runId) await automationsController.selectRun(runId, {global: true});
+  if (!alreadyOpen && !runId) return;
+}
+
+async function showInstances() {
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "instances"});
+  await instancesController.load();
+}
+
+async function showAutomations() {
+  if (!state.selectedWorkspaceId) return;
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automations"});
+  await automationsController.loadWorkspace(state.selectedWorkspaceId);
+}
+
+function showWorkspace() {
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
+}
+
+async function stopInstance(instance) {
+  const target = instance?.stopTarget || {};
+  if (target.type === "main-session" && target.workspaceId && target.sessionId) {
+    await runBusy(
+        () => stopSessionState(state, target.sessionId, dispatch, target.workspaceId),
+        "Stopping workspace...",
+        OPERATION_KEYS.SESSION_STOP,
+    );
+  } else if (target.type === "automation-run" && target.runId) {
+    await automationsController.stopGlobalRun(target.runId);
+  }
+  await instancesController.load({silent: true});
 }
 
 async function signInAndOpenApp() {
@@ -205,12 +267,17 @@ function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
 async function refreshAll() {
   await runBusy(async () => {
     const me = await state.api.getMe();
-    dispatch({type: APP_ACTIONS.SET_PROFILE, profile: me.user || null});
+    const profile = await ensureUserTimezone({
+      profile: me.user || null,
+      updateTimezone: state.api.updateUserTimezone,
+    });
+    dispatch({type: APP_ACTIONS.SET_PROFILE, profile});
     await loadGithubConnectionState({state, render, silent: true});
     if (state.activePage === "admin" && state.profile?.isAdmin !== true) {
       dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     }
     await workspaceController.refreshWorkspaceList();
+    automationsController.setWorkspace(state.selectedWorkspaceId);
     await loadSessions();
     await piPanelsController.loadMcpServers();
     await googleWorkspaceController.loadGoogleWorkspace({silent: true});

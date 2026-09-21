@@ -14,6 +14,7 @@ function assertRoute(path, expected) {
 
 assertRoute("/api/me", {name: "me"});
 assertRoute("/me", {name: "me"});
+assertRoute("/api/automation-schedule-preview", {name: "automationSchedulePreview"});
 assertRoute("/api/admin/users", {name: "adminUsers"});
 assertRoute("/api/admin/users/uid-1/whitelist", {
   name: "adminUserWhitelist",
@@ -50,6 +51,50 @@ assertRoute("/api/workspaces/workspace-1", {
 });
 assertRoute("/api/workspaces/workspace-1/mcp", {
   name: "workspaceMcp",
+  workspaceId: "workspace-1",
+});
+assertRoute("/api/workspaces/workspace-1/automations", {
+  name: "automations",
+  workspaceId: "workspace-1",
+});
+assertRoute("/api/workspaces/workspace-1/automations/automation-1", {
+  name: "automation",
+  workspaceId: "workspace-1",
+  automationId: "automation-1",
+});
+assertRoute("/api/workspaces/workspace-1/automations/automation-1/run", {
+  name: "automationRun",
+  workspaceId: "workspace-1",
+  automationId: "automation-1",
+});
+assertRoute("/api/automation-runs", {name: "automationRuns"});
+assertRoute("/api/instances", {name: "instances"});
+assertRoute("/api/automation-runs/run-1", {name: "automationRunDetail", runId: "run-1"});
+assertRoute("/api/automation-runs/run-1/events", {name: "automationRunEvents", runId: "run-1"});
+assertRoute("/api/agent/automations", {name: "automationAgent", resource: "definitions", action: "list"});
+assertRoute("/api/agent/automations/automation-1", {
+  name: "automationAgent", resource: "definition", action: "detail", automationId: "automation-1",
+});
+assertRoute("/api/agent/automations/automation-1/run", {
+  name: "automationAgent", resource: "run", action: "enqueue", automationId: "automation-1",
+});
+assertRoute("/api/agent/automation-settings", {name: "automationAgent", resource: "settings", action: "detail"});
+assertRoute("/api/agent/automation-runs", {name: "automationAgent", resource: "runs", action: "list"});
+assertRoute("/api/agent/automation-runs/run-1/events", {
+  name: "automationAgent", resource: "events", action: "list", runId: "run-1",
+});
+assertRoute("/api/agent/automation-schedule-preview", {
+  name: "automationAgentSchedulePreview", resource: "schedule", action: "preview",
+});
+assertRoute("/api/workspaces/workspace-1/automation-storage/prepare", {
+  name: "automationStoragePrepare",
+  workspaceId: "workspace-1",
+});
+assertRoute("/api/automation-runs/run-1/restart", {name: "automationRunRestart", runId: "run-1"});
+assertRoute("/api/automation-runs/run-1/cancel", {name: "automationRunCancel", runId: "run-1"});
+assertRoute("/api/automation-runs/run-1/stop", {name: "automationRunStop", runId: "run-1"});
+assertRoute("/api/workspaces/workspace-1/automation-settings", {
+  name: "automationSettings",
   workspaceId: "workspace-1",
 });
 assertRoute("/api/workspaces/workspace-1/sessions", {

@@ -14,6 +14,7 @@ const {
   timestampMillis,
 } = require("./backendUtils.helpers");
 const {isSessionTerminal} = require("./sessionLifecycle.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
 
 async function userWithUsage(user) {
   return {
@@ -27,6 +28,14 @@ async function getUserSessionUsage(uid) {
   const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
   const totals = createUsageTotals();
   const last30Days = createUsageTotals();
+  const byRuntimeKind = {
+    main: createUsageTotals(),
+    automation: createUsageTotals(),
+  };
+  const last30DaysByRuntimeKind = {
+    main: createUsageTotals(),
+    automation: createUsageTotals(),
+  };
 
   const [ledgerSnap, sessionDocs] = await Promise.all([
     db.collection("users").doc(uid).collection("sessionUsage").get(),
@@ -36,7 +45,10 @@ async function getUserSessionUsage(uid) {
   ledgerSnap.docs.forEach((doc) => {
     const entry = doc.data();
     addUsageTotals(totals, entry);
-    addUsageTotals(last30Days, prorateUsageEntry(entry, thirtyDaysAgo, now));
+    addUsageTotals(byRuntimeKind[runtimeKindForEntry(entry)], entry);
+    const recent = prorateUsageEntry(entry, thirtyDaysAgo, now);
+    addUsageTotals(last30Days, recent);
+    addUsageTotals(last30DaysByRuntimeKind[runtimeKindForEntry(entry)], recent);
   });
 
   sessionDocs.forEach((doc) => {
@@ -45,12 +57,19 @@ async function getUserSessionUsage(uid) {
     const entry = sessionUsageEntry(doc.id, session, now);
     if (!entry) return;
     addUsageTotals(totals, entry);
-    addUsageTotals(last30Days, prorateUsageEntry(entry, thirtyDaysAgo, now));
+    addUsageTotals(byRuntimeKind[runtimeKindForEntry(session)], entry);
+    const recent = prorateUsageEntry(entry, thirtyDaysAgo, now);
+    addUsageTotals(last30Days, recent);
+    addUsageTotals(last30DaysByRuntimeKind[runtimeKindForEntry(session)], recent);
   });
 
   return {
     lifetime: roundUsageTotals(totals),
     last30Days: roundUsageTotals(last30Days),
+    byRuntimeKind: {
+      lifetime: roundUsageTotalsByRuntimeKind(byRuntimeKind),
+      last30Days: roundUsageTotalsByRuntimeKind(last30DaysByRuntimeKind),
+    },
   };
 }
 
@@ -112,6 +131,13 @@ function roundUsageTotals(totals) {
   };
 }
 
+function roundUsageTotalsByRuntimeKind(totals = {}) {
+  return {
+    main: roundUsageTotals(totals.main || createUsageTotals()),
+    automation: roundUsageTotals(totals.automation || createUsageTotals()),
+  };
+}
+
 function sessionUsageEntry(sessionId, session, fallbackEndMs = Date.now()) {
   const startedMs = timestampMillis(session.createdAt);
   if (!startedMs) return null;
@@ -140,6 +166,7 @@ function sessionUsageEntry(sessionId, session, fallbackEndMs = Date.now()) {
     cpuSeconds: accruedCpuSeconds + (intervalSeconds * cpu),
     memoryGbSeconds: accruedMemoryGbSeconds + (intervalSeconds * memoryGb),
     sessionCount: 1,
+    runtimeKind: runtimeKindForEntry(session),
   };
 }
 
@@ -198,9 +225,14 @@ function sessionUsageRecord(sessionRef, session, endedAt) {
     data: {
       ...entry,
       ownerUid: session.ownerUid,
+      runtimeKind: runtimeKindForEntry(session),
       recordedAt: endedAt,
     },
   };
+}
+
+function runtimeKindForEntry(value = {}) {
+  return isAutomationRuntime(value) ? "automation" : "main";
 }
 
 function parseCpuCount(value) {

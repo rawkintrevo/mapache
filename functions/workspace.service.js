@@ -1,6 +1,4 @@
 "use strict";
-const {assertNoActiveResize} = require("./sessionResize.service");
-
 const logger = require("firebase-functions/logger");
 const {
   admin,
@@ -27,6 +25,7 @@ const {
   normalizeStoredMcpConfig,
 } = require("./mcpConfig.helpers");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
+const {isMainRuntime} = require("./runtimePaths.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 
 const ACTIVE_SESSION_STATUSES = new Set([
@@ -46,6 +45,7 @@ function createWorkspaceService(dependencies = {}) {
     deleteWorkspace: (uid, workspaceId) => deleteWorkspace(uid, workspaceId, dependencies),
     getWorkspaceMcpConfig,
     listWorkspaces: (uid) => listWorkspaces(uid, dependencies),
+    prepareWorkspaceStorageMigration: (uid, workspaceId) => dependencies.workspaceStorageMigrationService.prepare(uid, workspaceId),
     renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
     saveWorkspaceMcpConfig,
   };
@@ -57,10 +57,10 @@ async function listWorkspaces(uid, dependencies = {}) {
   const snap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
-  const workspaces = await Promise.all(snap.docs.map((doc) =>
+  const workspaces = await Promise.all(snap.docs.filter((doc) => !isWorkspaceDeleted(doc.data() || {})).map((doc) =>
     ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
   ));
-  return workspaces.map(serialize).sort(sortByUpdatedAtDesc);
+  return workspaces.map(serializeWorkspaceForClient).sort(sortByUpdatedAtDesc);
 }
 
 async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
@@ -71,6 +71,7 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
   let workspace = workspaceSnap.data() || {};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(workspace);
 
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_workspace_name");
@@ -94,7 +95,7 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
     await updateCanonicalSessionResources(workspaceRef, workspace, update.resources, workspaceAdmin);
   }
   await workspaceRef.update(update);
-  return toClientDoc(await workspaceRef.get());
+  return serializeWorkspaceForClient(toClientDoc(await workspaceRef.get()));
 }
 
 async function updateCanonicalSessionResources(workspaceRef, workspace, resources, workspaceAdmin) {
@@ -123,6 +124,7 @@ async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
   if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
   const workspace = workspaceSnap.data() || {};
   if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(workspace);
 
   const mcpConfig = normalizeMcpConfigPayload(payload);
   await workspaceRef.update({
@@ -133,39 +135,10 @@ async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
 }
 
 async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
-  const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  const workspaceSnap = await workspaceRef.get();
-  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  const workspace = {id: workspaceSnap.id, ...workspaceSnap.data()};
-  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-
-  const sessionSnap = await workspaceSessionCollection(workspaceId).get();
-  for (const sessionDoc of sessionSnap.docs) assertNoActiveResize(sessionDoc.data() || {});
-  for (const sessionDoc of sessionSnap.docs) {
-    const session = sessionDoc.data() || {};
-    if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
-    await sessionDoc.ref.update({
-      status: "deleting",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    const serviceDeleted = await dependencies.deleteSessionService(
-        sessionDoc.ref,
-        session,
-        {reason: "workspace_deleted"},
-    );
-    if (!serviceDeleted) throw httpError(502, "workspace_delete_failed");
+  if (typeof dependencies.workspaceAutomationDeletionService?.deleteWorkspace === "function") {
+    return dependencies.workspaceAutomationDeletionService.deleteWorkspace(uid, workspaceId);
   }
-
-  await deleteWorkspaceStorageIfUnshared(uid, workspace);
-  if (typeof db.recursiveDelete === "function") {
-    await db.recursiveDelete(workspaceRef);
-  } else {
-    for (const sessionDoc of sessionSnap.docs) {
-      await sessionDoc.ref.delete();
-    }
-    await workspaceRef.delete();
-  }
-  return {ok: true};
+  throw httpError(503, "workspace_deletion_unavailable");
 }
 
 async function createWorkspace(uid, payload, dependencies = {}) {
@@ -401,12 +374,14 @@ function parsePublicGitHubRepoUrl(value) {
   };
 }
 
-async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
+async function deleteWorkspaceStorageIfUnshared(uid, workspace, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
   const bucketName = workspace.bucket || DEFAULT_BUCKET;
   const prefix = normalizeStoragePrefix(workspace.storagePrefix || "");
   if (!bucketName || !prefix) return;
 
-  const sameOwnerSnap = await db.collection("workspaces")
+  const sameOwnerSnap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
   const shared = sameOwnerSnap.docs.some((doc) => {
@@ -419,7 +394,20 @@ async function deleteWorkspaceStorageIfUnshared(uid, workspace) {
     return;
   }
 
-  await admin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
+  await workspaceAdmin.storage().bucket(bucketName).deleteFiles({prefix: `${prefix}/`});
+}
+
+function serializeWorkspaceForClient(value) {
+  const serialized = serialize(value);
+  if (!serialized || typeof serialized !== "object" || Array.isArray(serialized)) return serialized;
+  if (serialized.sharedStorage) {
+    serialized.sharedStorage = {
+      state: serialized.sharedStorage.state || serialized.sharedStorageState || "legacy",
+      errorCode: serialized.sharedStorage.errorCode || serialized.sharedStorageErrorCode || null,
+    };
+  }
+  delete serialized.sharedStorageOperationId;
+  return serialized;
 }
 
 async function requireWorkspace(uid, workspaceId) {
@@ -427,7 +415,18 @@ async function requireWorkspace(uid, workspaceId) {
   if (!snap.exists) throw httpError(404, "workspace_not_found");
   const data = snap.data();
   if (data.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(data);
   return {id: snap.id, ...data};
+}
+
+function isWorkspaceDeleted(workspace = {}) {
+  return workspace.deleted === true || ["deleting", "deleted"].includes(
+      String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
+  );
+}
+
+function assertWorkspaceMutable(workspace = {}) {
+  if (isWorkspaceDeleted(workspace)) throw httpError(409, "workspace_deleted");
 }
 
 async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
@@ -439,10 +438,11 @@ async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
   const sessionsRef = workspaceDb.collection("workspaces").doc(workspace.id).collection("sessions");
   const sessionsSnap = await sessionsRef.get();
   const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
+  const mainSessions = sessions.filter(isMainRuntime);
   let canonical = workspace.canonicalSessionId ?
-    sessions.find((session) => session.id === workspace.canonicalSessionId) : null;
-  if (!canonical && sessions.length) {
-    canonical = [...sessions].sort((left, right) => {
+    mainSessions.find((session) => session.id === workspace.canonicalSessionId) : null;
+  if (!canonical && mainSessions.length) {
+    canonical = [...mainSessions].sort((left, right) => {
       const leftActive = ACTIVE_SESSION_STATUSES.has(String(left.status || "").toLowerCase()) ? 1 : 0;
       const rightActive = ACTIVE_SESSION_STATUSES.has(String(right.status || "").toLowerCase()) ? 1 : 0;
       if (leftActive !== rightActive) return rightActive - leftActive;
@@ -485,4 +485,5 @@ module.exports = {
   requireWorkspace,
   renameWorkspace,
   saveWorkspaceMcpConfig,
+  isWorkspaceDeleted,
 };

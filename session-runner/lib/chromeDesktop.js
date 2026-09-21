@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const {execFile, spawn} = require("child_process");
+const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 
 const PROFILE_LOCKS = ["SingletonLock", "SingletonCookie", "SingletonSocket", "DevToolsActivePort"];
 const PROCESS_NAMES = ["vnc", "chromium", "taskbar", "windowManager", "xvfb"];
@@ -51,6 +52,10 @@ function createChromeDesktopService(config = {}, deps = {}) {
     notifyStateChange();
 
     startupPromise = (async () => {
+      if (config.isPrivateRuntime) {
+        await ensurePrivateRuntimeDirectory(config.privateRuntimeRoot || path.dirname(config.chromeProfileDir), {fsImpl});
+        await ensurePrivateRuntimeDirectory(config.chromeProfileDir, {fsImpl});
+      }
       await fsImpl.promises.mkdir(config.chromeProfileDir, {recursive: true, mode: 0o700});
       await cleanupStaleLocks(fsImpl, config);
 

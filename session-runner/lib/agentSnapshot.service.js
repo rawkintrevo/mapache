@@ -24,6 +24,10 @@ const EXCLUDED_DIRECTORY_NAMES = new Set([
   "log",
   "runtime",
   "process",
+  "socket",
+  "sockets",
+  "sqlite",
+  "databases",
 ]);
 
 /**
@@ -168,6 +172,10 @@ async function captureAgentSnapshot({
       manifestPath,
       stagingDir: destination,
       storagePrefix,
+      // The complete records are already parsed while validating transcript
+      // JSONL. Automation artifact capture reuses them so a live trailing
+      // append is never published as a malformed record.
+      transcriptRecords: records,
     };
   } catch (error) {
     if (ownsStaging) await fsImpl.promises.rm(destination, {recursive: true, force: true}).catch(() => {});
@@ -432,11 +440,22 @@ function exclusionReason(sourcePath, relative, sourceKind, exclusions) {
   if (sourceKind === "ui-state" && parts[0] === "uploads") return "referenced-attachments-only";
   if (parts.some((part) => EXCLUDED_DIRECTORY_NAMES.has(part))) return "cache-or-process-state";
   const base = path.posix.basename(relative);
-  if (sourceKind !== "transcript" && (base.endsWith(".lock") || base.endsWith(".pid") || base.endsWith(".sock"))) {
+  if (sourceKind !== "transcript" && (base.endsWith(".lock") || base.endsWith(".pid") || base.endsWith(".sock") ||
+      base.endsWith(".sqlite") || base.endsWith(".sqlite3") || base.endsWith(".db"))) {
     return "lock-or-process-state";
   }
   if (sourceKind === "pi-setting" && !SAFE_PI_SETTING_FILES.has(base)) return "non-persistent-pi-config";
-  if (sourceKind === "ui-state" && (base === "mcp.json" || base === "auth.json" || base === "credentials.json")) {
+  if (sourceKind === "ui-state" && [
+    "mcp.json",
+    "auth.json",
+    "credentials.json",
+    "secret.json",
+    "secrets.json",
+    "token.json",
+    "tokens.json",
+    ".env",
+    ".env.local",
+  ].includes(base.toLowerCase())) {
     return "credential-or-connector-state";
   }
   return "";

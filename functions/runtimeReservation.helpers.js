@@ -1,6 +1,8 @@
 "use strict";
 
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
+const {httpError} = require("./backendUtils.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
 
 const ACTIVE_RUNTIME_SESSION_STATUSES = new Set([
   "provisioning", "running", "restarting", "resizing", "stopping", "deleting",
@@ -13,6 +15,18 @@ function isMarkedRuntimeWorkspace(workspace = {}) {
 
 function isMarkedRuntimeSession(session = {}) {
   return session.agentUiVersion === AGENT_UI_VERSION;
+}
+
+function isWorkspaceStorageMigrationActive(workspace = {}) {
+  const state = String(workspace.sharedStorageMigration?.state || workspace.sharedStorageState || "")
+      .trim().toLowerCase();
+  return Boolean(workspace.sharedStorageMigration?.operationId) && ["preparing", "migrating"].includes(state);
+}
+
+function assertWorkspaceStorageMigrationAllowed(workspace = {}) {
+  if (isWorkspaceStorageMigrationActive(workspace)) {
+    throw httpError(409, "workspace_storage_migration_active");
+  }
 }
 
 function isActiveMarkedRuntimeSession(session = {}) {
@@ -40,6 +54,23 @@ function resolveRuntimeReservation(workspace = {}, sessions = [], session = {}, 
   const current = sessions.find((candidate) => candidate.id === sessionId) || null;
   if (current && options.idempotent !== false) {
     return {idempotent: true, conflict: null, sessionUpdates: {}, workspaceUpdates: {}};
+  }
+
+  if (isAutomationRuntime(session)) {
+    const generation = nextRuntimeGeneration(workspace, sessions);
+    const normalizedOperationId = String(operationId || "").trim();
+    return {
+      idempotent: false,
+      conflict: null,
+      sessionUpdates: {
+        agentRuntimeOperationId: normalizedOperationId,
+        agentRuntimeSessionId: sessionId,
+        agentRuntimeGeneration: generation,
+        agentRuntimeState: "starting",
+        agentRuntimeAuthorityState: "starting",
+      },
+      workspaceUpdates: {},
+    };
   }
 
   const reservedSessionId = String(workspace.agentRuntimeSessionId || "").trim();
@@ -77,6 +108,7 @@ function resolveRuntimeReservation(workspace = {}, sessions = [], session = {}, 
 
 function runtimeStateUpdate(workspace = {}, session = {}, state, now, options = {}) {
   if (!isMarkedRuntimeWorkspace(workspace) || !isMarkedRuntimeSession(session)) return {};
+  if (isAutomationRuntime(session)) return {};
   const sessionId = String(session.id || "").trim();
   const reservedSessionId = String(workspace.agentRuntimeSessionId || "").trim();
   const sessionGeneration = positiveRuntimeGeneration(session.agentRuntimeGeneration);
@@ -103,9 +135,31 @@ function runtimeSessionStateUpdate(session = {}, state) {
   return isMarkedRuntimeSession(session) ? {agentRuntimeState: String(state || "").trim().toLowerCase()} : {};
 }
 
+function runtimeSessionAuthorityStateUpdate(session = {}, state, now, options = {}) {
+  if (!isMarkedRuntimeSession(session) || !isAutomationRuntime(session)) return {};
+  const sessionId = String(session.id || "").trim();
+  if (!sessionId) return {};
+  return {
+    agentRuntimeSessionId: options.release ? null : sessionId,
+    agentRuntimeState: String(state || "").trim().toLowerCase(),
+    agentRuntimeUpdatedAt: now || null,
+    ...(options.release ? {
+      agentRuntimeAuthorityState: "released",
+      agentRuntimeBootHeartbeatAt: now || null,
+      agentRuntimeBootInstanceId: null,
+    } : {}),
+  };
+}
+
 function runtimeAuthorityReleaseUpdates(workspace = {}, session = {}, now) {
   if (!isMarkedRuntimeWorkspace(workspace) || !isMarkedRuntimeSession(session)) {
     return {sessionUpdates: {}, workspaceUpdates: {}};
+  }
+  if (isAutomationRuntime(session)) {
+    return {
+      sessionUpdates: runtimeSessionAuthorityStateUpdate(session, "stopped", now, {release: true}),
+      workspaceUpdates: {},
+    };
   }
   const bootInstanceId = String(session.agentRuntimeBootInstanceId || "").trim();
   const sessionId = String(session.id || "").trim();
@@ -145,11 +199,14 @@ module.exports = {
   isActiveMarkedRuntimeSession,
   isMarkedRuntimeSession,
   isMarkedRuntimeWorkspace,
+  isWorkspaceStorageMigrationActive,
+  assertWorkspaceStorageMigrationAllowed,
   nextRuntimeGeneration,
   positiveRuntimeGeneration,
   resolveRuntimeReservation,
   runtimeAuthorityReleaseUpdates,
   runtimeAuthoritySessionReleaseUpdates,
+  runtimeSessionAuthorityStateUpdate,
   runtimeSessionStateUpdate,
   runtimeStateUpdate,
 };

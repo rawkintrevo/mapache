@@ -39,12 +39,21 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn() &&
         request.resource.data.ownerUid == request.auth.uid &&
-        request.resource.data.userPath == "users/" + request.auth.uid;
+        request.resource.data.userPath == "users/" + request.auth.uid &&
+        !request.resource.data.keys().hasAny(["automationMaxConcurrency"]);
       allow update: if signedIn() &&
         resource.data.ownerUid == request.auth.uid &&
         request.resource.data.ownerUid == request.auth.uid &&
-        request.resource.data.userPath == "users/" + request.auth.uid;
+        request.resource.data.userPath == "users/" + request.auth.uid &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "automationMaxConcurrency"
+        ]);
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /automations/{automationId} {
+        allow read: if ownsWorkspace(workspaceId);
+        allow write: if false;
+      }
 
       match /sessions/{sessionId} {
         allow read: if ownsWorkspace(workspaceId);
@@ -55,6 +64,11 @@ service cloud.firestore {
           allow write: if ownsWorkspace(workspaceId);
         }
       }
+    }
+
+    match /automationRuns/{runId} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow write: if false;
     }
   }
 }

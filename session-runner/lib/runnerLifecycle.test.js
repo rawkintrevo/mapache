@@ -41,6 +41,7 @@ function createLifecycleHarness(events, overrides = {}) {
       stop: async () => events.push("chromeRuntime.stop"),
     },
     checkpointScheduler: overrides.checkpointScheduler,
+    automationExecution: overrides.automationExecution,
     config,
     git: overrides.git || service("prepareGithubAutomationBranch", "git.prepareGithubAutomationBranch"),
     listen: overrides.listen || (() => events.push("server.listen")),
@@ -137,6 +138,27 @@ test("managed startup launches pi-web-ui after materialization and stops it firs
   await lifecycle.shutdown();
   assert.equal(events.indexOf("piWebUi.quiesce") < events.indexOf("piWebUi.stop"), true);
   assert.equal(events.at(-1), "workspaceAuthority.release:shutdown");
+});
+
+test("automation execution starts only after Pi admission and stops before upstream quiesce", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    config: {agentRuntimeEnabled: true, runtimeKind: "automation"},
+    automationExecution: {
+      start: async () => events.push("automationExecution.start"),
+      stop: () => events.push("automationExecution.stop"),
+    },
+    piWebUi: {
+      start: async () => events.push("piWebUi.start"),
+      quiesce: async () => events.push("piWebUi.quiesce"),
+      stop: async () => events.push("piWebUi.stop"),
+    },
+  });
+
+  await lifecycle.start();
+  assert.equal(events.indexOf("piWebUi.start") < events.indexOf("automationExecution.start"), true);
+  await lifecycle.shutdown();
+  assert.equal(events.indexOf("automationExecution.stop") < events.indexOf("piWebUi.quiesce"), true);
 });
 
 test("managed shutdown escalates after cooperative quiesce fails", async () => {

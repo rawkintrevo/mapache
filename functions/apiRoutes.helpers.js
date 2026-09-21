@@ -6,6 +6,9 @@ const {ROUTE_METHODS} = require("./apiRouteManifest");
 function routeRequest(path) {
   const parts = String(path || "").replace(/^\/api\/?/, "/").split("/").filter(Boolean);
   if (parts.length === 1 && parts[0] === "me") return {name: "me"};
+  if (parts.length === 1 && parts[0] === "automation-schedule-preview") {
+    return {name: "automationSchedulePreview"};
+  }
   if (parts.length === 2 && parts[0] === "admin" && parts[1] === "users") {
     return {name: "adminUsers"};
   }
@@ -66,6 +69,68 @@ function routeRequest(path) {
   if (parts.length === 1 && parts[0] === "workspaces") return {name: "workspaces"};
   if (parts.length === 2 && parts[0] === "workspaces") {
     return {name: "workspace", workspaceId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "automations") {
+    return {name: "automations", workspaceId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "automations") {
+    return {name: "automation", workspaceId: parts[1], automationId: parts[3]};
+  }
+  if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "automations" && parts[4] === "run") {
+    return {name: "automationRun", workspaceId: parts[1], automationId: parts[3]};
+  }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "automation-settings") {
+    return {name: "automationSettings", workspaceId: parts[1]};
+  }
+  if (parts.length === 1 && parts[0] === "automation-runs") {
+    return {name: "automationRuns"};
+  }
+  if (parts.length === 1 && parts[0] === "instances") return {name: "instances"};
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "restart") {
+    return {name: "automationRunRestart", runId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "cancel") {
+    return {name: "automationRunCancel", runId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "stop") {
+    return {name: "automationRunStop", runId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "events") {
+    return {name: "automationRunEvents", runId: parts[1]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "automation-storage" && parts[3] === "prepare") {
+    return {name: "automationStoragePrepare", workspaceId: parts[1]};
+  }
+  if (parts.length === 2 && parts[0] === "automation-runs") {
+    return {name: "automationRunDetail", runId: parts[1]};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automations") {
+    return {name: "automationAgent", resource: "definitions", action: "list"};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automation-schedule-preview") {
+    return {name: "automationAgentSchedulePreview", resource: "schedule", action: "preview"};
+  }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "automations") {
+    return {name: "automationAgent", resource: "definition", action: "detail", automationId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "automations" && parts[3] === "run") {
+    return {name: "automationAgent", resource: "run", action: "enqueue", automationId: parts[2]};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automation-settings") {
+    return {name: "automationAgent", resource: "settings", action: "detail"};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automation-runs") {
+    return {name: "automationAgent", resource: "runs", action: "list"};
+  }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "automation-runs") {
+    return {name: "automationAgent", resource: "run", action: "detail", runId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "automation-runs" && parts[3] === "events") {
+    return {name: "automationAgent", resource: "events", action: "list", runId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "automation-runs" &&
+      ["cancel", "restart", "stop"].includes(parts[3])) {
+    return {name: "automationAgent", resource: "run", action: parts[3], runId: parts[2]};
   }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
     return {name: "workspaceMcp", workspaceId: parts[1]};

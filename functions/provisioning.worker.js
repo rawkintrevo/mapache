@@ -7,6 +7,7 @@ const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {publicGoogleError} = require("./backendUtils.helpers");
 const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
 const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
 
 function createProvisioningWorker(dependencies = {}) {
   const requireWorkspace = dependencies.requireWorkspace;
@@ -37,6 +38,7 @@ async function provisionQueuedSession(event, dependencies) {
 
   const session = {id: after.id, ...after.data()};
   if (!isQueuedProvisioningSession(session)) return {skipped: "not_queued"};
+  if (isAutomationRuntime(session)) return {skipped: "automation_runtime"};
 
   if (!isSupportedProvisioningSession(session)) {
     const error = new Error("unsupported_runner");

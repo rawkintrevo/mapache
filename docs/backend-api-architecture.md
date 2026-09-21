@@ -14,6 +14,8 @@ Cloud Run provisioning contract.
   `functions/sessionLifecycle.service.js`, and `functions/cloudRun.service.js`
 - Owner-scoped Cloud Run log reads: `functions/sessionLogs.service.js`
 - Signed browser/agent access and preview publication: `functions/preview.service.js`
+- Automation agent credentials and workspace API: `functions/automationAgentAuth.service.js`
+  and `functions/automationAgentApi.service.js`
 - Credentials and environment keys: `functions/agentAuth.service.js`,
   `functions/environmentKeys.service.js`, and
   `functions/openAiCodexAuth.service.js`
@@ -23,6 +25,8 @@ Cloud Run provisioning contract.
   `functions/github.service.js`
 - Runner image contract: `functions/runnerCatalog.json` and
   `functions/runnerCatalog.helpers.js`
+- Scheduled automation lifecycle and release contract: [Scheduled Automations](./automations.md)
+- Owner-wide active compute inventory: `functions/activeInstances.service.js`
 
 ## Current API boundary
 
@@ -88,6 +92,14 @@ worker repeats the pi-chrome identity check before creating a per-session Cloud
 Run service. Historical unsupported records remain readable but cannot be
 converted into newly launched unsupported runners.
 
+Automation sessions are a separate runtime identity: each run uses the
+deterministic `auto-{runId}` session ID and stores its generation, boot, writer
+authority, and checkpoint pointer on that session document. Automation sessions
+do not become the workspace canonical session, do not claim the workspace
+singleton runtime or sync-writer lease, and are excluded from the main session
+listing, user lifecycle controls, and idle reaper. Missing `runtimeKind`
+continues to mean `main` for legacy sessions.
+
 Agent access is a short-lived signed URL/cookie flow with an `agent` audience,
 session identity, and current runtime generation. The runner gateway, not the
 browser, validates the token before forwarding to upstream. Browser, terminal,
@@ -96,6 +108,202 @@ The authenticated session Logs route verifies workspace/session ownership and
 queries only the session's recorded Cloud Run service name. Responses are
 bounded to timestamp, severity, and message fields; request query strings and
 broader Logging metadata are not exposed to the browser.
+
+Automation runners have a separate five-minute HMAC credential broker. The
+protected `automationAgentToken` Function accepts only a live admitted
+automation session's workspace/session IDs plus that runner's shutdown
+credential, then signs `ownerUid`, `workspaceId`, `sessionId`, generation, and
+boot-instance identity for the `automation-api` audience. The signing secret is
+Functions-owned and is never sent to Cloud Run. `/api/agent/automations` and
+`/api/agent/automation-runs` re-read the workspace and session on every request,
+so changing the owner, workspace, generation, boot, or admitted state revokes a
+token before its expiry. The adapter forces the token workspace onto history
+filters and resolves run IDs server-side before stop/restart/event operations;
+it delegates definition, settings, enqueue, history, and cleanup behavior to
+the existing services. Agent definition/settings audit records carry
+`actorType: "agent"` and the controlling automation `sessionId`.
+
+## Scheduled automation data boundary
+
+Scheduled automation definitions live at
+`workspaces/{workspaceId}/automations/{automationId}` and owner-wide run records
+live at `automationRuns/{runId}`. `functions/automationValidation.helpers.js`
+owns the bounded DTOs and validation rules: names are at most 120 characters,
+prompts at most 32,768 characters, cron and IANA timezone strings at most 100
+characters, and definition revisions and workspace automation concurrency are
+positive safe integers. Definitions default to disabled with
+`allowParallelWithMain: true`; runs carry an immutable prompt/definition
+snapshot and use the `queued` → `provisioning` → `running` → `stopping` →
+terminal state contract from `functions/automationState.helpers.js`.
+
+`functions/runtimePaths.helpers.js` normalizes missing `runtimeKind` to `main`
+and provides the deterministic `auto-{runId}` automation session identity. The
+Firestore rules expose definitions and runs only to the owning user and deny
+client writes; automation concurrency settings are backend-owned workspace
+fields. The corresponding due-definition, owner-history, queue, and cleanup
+query shapes are declared in `firestore.indexes.json`.
+
+The authenticated profile route accepts `PATCH /api/me` with only an IANA
+`timezone` field. `POST /api/automation-schedule-preview` validates a numeric
+five-field cron expression and returns the next five `{utc, local, timezone}`
+occurrences using server time; the client cannot supply `nextRunAt` or preview
+time. Automation runners use the equivalent
+`POST /api/agent/automation-schedule-preview` broker route, which derives the
+workspace from the admitted session rather than accepting a workspace ID. The
+schedule matcher preserves standard day-of-month/day-of-week OR
+semantics, skips nonexistent DST minutes, and de-duplicates repeated local
+minutes to the first occurrence.
+
+`functions/automationDefinitions.service.js` owns the workspace-scoped
+definition/settings API. Definition DTOs contain only workflow fields and
+model/provider IDs; ownership is checked through the workspace owner, edits
+and deletes require the current revision, and edits append field-name-only
+audit records. Deletion is a tombstone: ordinary lists exclude it, queued
+runs are canceled transactionally, and provisioning/running/stopping history
+is left untouched. Disabled definitions can be saved before shared storage is
+ready; enabling requires a saved model selection and ready shared storage.
+Workspace concurrency changes only the admission limit, so lowering it never
+stops active allocations.
+
+`functions/automationRuns.service.js` owns immutable run admission. Manual
+requests use UUIDs; cron requests use a SHA-256 ID derived from the automation
+and local schedule minute. A transaction captures the current definition
+revision, prompt, timezone, model reference, parallelism policy, and resource
+snapshot, then sets the definition's `pendingRunId` without calling Cloud Run.
+The same transaction handles cron queue-full skips, pending-run rejection for
+manual/restart requests, owner/workspace/storage checks, and scoped
+Idempotency-Key digests. `POST /api/workspaces/{workspaceId}/automations/{automationId}/run`
+accepts disabled definitions but not tombstones; terminal historical runs can
+be restarted through `POST /api/automation-runs/{runId}/restart` using their
+saved snapshot, even after the definition is tombstoned. `POST
+/api/automation-runs/{runId}/cancel` atomically cancels only queued work and
+clears `pendingRunId` when it still points at that run. Credentials and files
+remain current at launch rather than being copied into the run snapshot.
+`functions/automationAdmission.service.js` owns the next transaction boundary:
+it counts provisioning/running/stopping runs plus terminal runs whose cleanup is
+still pending, applies the workspace concurrency limit, and admits the oldest
+eligible `(createdAt, runId)` candidate. A queued `allowParallelWithMain: false`
+candidate is skipped while the main session is not confirmed stopped, so a later
+parallel candidate can proceed without head-of-line blocking. Admission records
+`automationActiveRunIds` and, for an exclusive run,
+`automationMainExclusionRunId` on the workspace; main start/play/restart/resize
+paths reject that reservation with `automation_requires_main_paused`, while a
+pending queue alone never blocks main use. Only confirmed service cleanup can
+release the slot, and that release wakes the queue. Enqueue, cancellation,
+concurrency-setting changes, and confirmed main-stop completion use the same
+idempotent queue wake path.
+`functions/automationScheduler.service.js` is the single minute-tick scheduler
+used by the `dispatchAutomationSchedules` function. It reads the
+`appConfig/automations` feature flag before querying bounded pages of enabled,
+due definitions. A delivery more than 120 seconds late is ignored. Timely ticks
+recheck the definition in a transaction, use the stored timezone's local
+minute (including DST repeat suppression), create one deterministic cron run,
+advance `nextRunAt`, and compress older due occurrences into one skipped-range
+history record. The opt-in latest catch-up policy instead creates at most one
+newest `catch_up` run inside its bounded window; a current due occurrence wins.
+A pending workflow run produces skipped queue-full history; the scheduler never
+calls a provider or replays a missed backlog. The flag is off by default, so
+re-enabling it does not backfill old schedule ticks. `GET /api/instances`
+merges owner-scoped persisted main sessions and automation runs into a stable,
+cursor-paginated active inventory without per-row Cloud Run calls.
+
+`functions/automationRetry.service.js` keeps retries opt-in and durable. A
+known failed run with `retryPolicy=safe` and `replaySafe=true` receives at most
+two linked attempts after five and fifteen minutes. Retry workers claim intent
+before enqueueing, reuse normal concurrency admission, release the claim on
+queue contention, and never retry cancellation, interruption, unknown outcomes,
+or cleanup failures.
+
+`functions/workspaceStorageMigration.service.js` owns the paused-workspace
+GCS FUSE cutover. `POST /api/workspaces/{workspaceId}/automation-storage/prepare`
+acquires an idempotent migration reservation, rejects new main/automation
+admissions while it is active, and returns a short-lived import descriptor with
+HTTP 202. The maintenance importer uploads a fresh tree generation and verifies
+its hashes and ready marker; only a transaction that rechecks paused sessions,
+operation identity, and the verified marker publishes `sharedStorage.state=ready`
+and `shared-gcsfuse-v1`. Failures retain the legacy checkpoint/prefix as the
+authority and expose a safe error/progress state.
+
+Automation execution artifacts are independent of the compute lifecycle.
+`session-runner/lib/automationArtifacts.service.js` writes sanitized, immutable
+versioned JSONL event/transcript chunks and a final summary below the private
+workspace path `automation-runs/{runId}`. It publishes a Firestore pointer only
+after every object is complete and the workspace, session, generation, and boot
+identity still match; partial or stale captures therefore leave the previous
+good pointer intact. `functions/automationHistory.service.js` exposes
+owner-scoped run and artifact history readers with opaque cursors, checksum and
+namespace validation, and bounded pages (200 records or 1 MiB for events).
+Run history is ordered by `createdAt` descending with a run-id tie-breaker and
+supports validated owner/workspace/automation/status/date filters. Responses
+retain the immutable run snapshot and snapshotted automation name while
+exposing only safe archive availability, cleanup error, final-result, restart,
+and `canStop`/`canRestart` metadata; storage object references and runner
+credentials are never returned. Event pages continue to read the immutable
+artifact objects after the compute service has been deleted.
+
+`functions/workspaceAutomationDeletion.service.js` owns resumable workspace
+deletion. The first transaction writes `deleted=true`, `lifecycle=deleting`,
+and a durable `workspaceDeletionOperations/{workspaceId}` record, so ordinary
+workspace reads, schedule ticks, admission, provisioning, migration cutover,
+and runner checkpoint publication are fenced immediately. The operation
+cancels queued runs, sends active automation runs through the existing cleanup
+owner, deletes every main and automation service only after Cloud Run absence
+is confirmed, then removes the workspace's legacy prefix, shared bucket IAM
+binding, live bucket objects, shared bucket, definitions, audit records, and
+global run index. The workspace document remains as a deleted tombstone and
+the usage ledger is not part of recursive cleanup.
+
+Retries resume the same operation and backend-owned resource inventory. A
+failed service deletion blocks storage cleanup. Successful bucket deletion
+records `recoverableUntil`, known retained live bytes when Cloud Storage can
+report them, soft-delete retention, and cleanup evidence; soft-deleted bytes
+remain potentially billable until the seven-day policy expires.
+
+`functions/automationProvisioning.service.js` is the dedicated consumer for
+admitted `provisioning` runs. It claims the run idempotently, creates the
+deterministic `auto-{runId}` session and `mpauto-{runId-hash}` Cloud Run
+service, and leaves `canonicalSessionId` and main-runtime reservations alone.
+The ordinary queued-session worker skips automation sessions; run/session
+Firestore workers reconcile duplicate deliveries and response loss against the
+same session operation. Cloud Run creation reuses the trusted `pi-chrome`,
+runner service account, fresh credential/MCP resolution, and ready shared GCS
+FUSE descriptor, while automation labels fence owner/workspace/run identity.
+Provisioning operations have a 15-minute infrastructure deadline rather than
+an execution-duration cap. A failure records a stable error and desired
+`failed` outcome with `cleanupState=pending`, retaining the concurrency slot
+until the later cleanup path confirms service absence.
+
+`POST /api/automation-runs/{runId}/stop` is the owner-authorized cancellation
+boundary. Queued runs are canceled in their admission transaction; admitted
+runs move to `stopping` with `desiredOutcome=canceled`, then the cleanup worker
+uses the same run-scoped shutdown path as normal completion. Stop and completion
+are serialized by the run transaction, so a committed cancellation wins until
+a terminal outcome has already been committed. Cleanup deletes only the
+deterministic automation Cloud Run service, confirms absence, finalizes the
+run, releases exactly one concurrency reservation, and wakes the queue. A
+failed deletion leaves the run stopping or terminal with `cleanupState=error`
+and retains its slot for a later retry. Forced or incomplete checkpoint saves
+surface `persistenceState=partial` and never claim that all files were saved.
+
+`reconcileAutomationRuns` runs every minute with bounded run and Cloud Run
+pages. It resumes provisioning and pending cleanup, treats a heartbeat older
+than three minutes as a reason to probe the protected runner health endpoint
+and inspect the deterministic labeled service, and never treats elapsed
+runtime or a missed heartbeat alone as permission to replay a prompt. An
+unreachable runner is interrupted only after service deletion is confirmed;
+ambiguous Cloud Run state retains the reservation. Orphan discovery filters
+for automation labels, rechecks metadata before deletion, and never targets a
+main session service.
+
+An admitted automation runner resolves its assignment from the owner-bound run
+record only after its session boot has been admitted. The runner claims
+`executionStartedAt` exactly once before invoking the private pi-web-ui
+`startAutomation` control, publishes `executionHeartbeatAt` while polling, and
+writes only normalized outcomes (`succeeded`, `failed`, `canceled`, or
+`interrupted`). A claimed run that is not submitted before process loss is
+interrupted rather than replayed. The idle reaper uses the same run/session
+identity check and bypasses only active admitted automation runs; browser
+connections and `longRunning` do not keep automation alive.
 
 ## Persistence and connections
 

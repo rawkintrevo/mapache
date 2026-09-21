@@ -13,6 +13,7 @@ const {
 const {
   DEFAULT_BUCKET,
   DEFAULT_FUNCTION_REGION,
+  AUTOMATION_AGENT_TOKEN_SECRET,
   GITHUB_APP_CLIENT_ID_SECRET,
   GITHUB_APP_CLIENT_SECRET_SECRET,
   GITHUB_APP_ID_SECRET,
@@ -39,14 +40,32 @@ const {
   listAdminUsers,
   setAdminUserWhitelist,
 } = require("./admin.service");
-const {requireUser} = require("./auth.service");
+const {requireUser, updateUserTimezone} = require("./auth.service");
+const {previewAutomationSchedule} = require("./automationSchedule.helpers");
+const {createActiveInstancesService} = require("./activeInstances.service");
+const {createAutomationAdmissionService} = require("./automationAdmission.service");
+const {createAutomationCleanupService} = require("./automationCleanup.service");
+const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
+const {createAutomationHistoryService} = require("./automationHistory.service");
+const {createAutomationReconciliationService} = require("./automationReconciliation.service");
+const {createAutomationRetryService} = require("./automationRetry.service");
+const {
+  AUTOMATION_PROVISIONING_TIMEOUT_MS,
+  createAutomationProvisioningService,
+} = require("./automationProvisioning.service");
+const {createAutomationRunsService} = require("./automationRuns.service");
+const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
 } = require("./userUsage.service");
 const {
   createWorkspaceService,
+  deleteWorkspaceStorageIfUnshared,
   requireWorkspace,
 } = require("./workspace.service");
+const {createWorkspaceAutomationDeletionService} = require("./workspaceAutomationDeletion.service");
+const {createWorkspaceSharedStorageService} = require("./workspaceSharedStorage.service");
+const {createWorkspaceStorageMigrationService} = require("./workspaceStorageMigration.service");
 const {
   createCloudRunService,
   runnerServiceAccountValue,
@@ -63,6 +82,8 @@ const {createGoogleWorkspaceApiService} = require("./googleWorkspaceApi.service"
 const {createGoogleWorkspaceProvisioningService} = require("./googleWorkspaceProvisioning.service");
 const {createGoogleMcpTokenBrokerService} = require("./googleMcpTokenBroker.service");
 const {createGithubAutomationTokenBrokerService} = require("./githubAutomationTokenBroker.service");
+const {createAutomationAgentAuthService} = require("./automationAgentAuth.service");
+const {createAutomationAgentApiService} = require("./automationAgentApi.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
@@ -83,11 +104,25 @@ const {
   getSessionImageFreshness,
 } = require("./runnerImageFreshness.service");
 const {resolveSyncWriterLease} = require("./syncWriterLease.helpers");
+const {isMainRuntime} = require("./runtimePaths.helpers");
 const {createSyncWriterLeaseService} = require("./syncWriterLease.service");
 const {createWorkspaceSessionReservationService} = require("./workspaceSessionReservation.service");
 const {
   isActiveGithubWorkspaceSession,
 } = require("./sessionLifecycle.helpers");
+
+const automationAdmissionService = createAutomationAdmissionService({admin, db});
+const activeInstancesService = createActiveInstancesService({db});
+let automationRetryService;
+const {
+  assertMainAdmissionAllowed,
+  wakeQueue: wakeAutomationQueue,
+} = automationAdmissionService;
+const {runTick: runAutomationScheduleTick} = createAutomationSchedulerService({
+  admin,
+  db,
+  wakeQueue: wakeAutomationQueue,
+});
 
 const workspaceSessionReservationService = createWorkspaceSessionReservationService({admin, db});
 const {
@@ -111,11 +146,13 @@ const githubAutomationTokenBrokerService = createGithubAutomationTokenBrokerServ
 });
 const lifecycleDependencies = {
   admin,
+  assertMainAdmissionAllowed,
   db,
   markChromeWorkspaceSessionStopping,
   normalizeRequestedSessionResources,
   requireWorkspace,
   sessionCollection,
+  wakeAutomationQueue,
 };
 const sessionLifecycleService = createSessionLifecycleService(lifecycleDependencies);
 const {
@@ -224,6 +261,7 @@ const cloudRunService = createCloudRunService({
   ),
   markChromeWorkspaceSessionRunning,
   releaseWorkspaceSyncWriterLease,
+  automationOperationTimeoutMs: AUTOMATION_PROVISIONING_TIMEOUT_MS,
 });
 const {
   deleteSessionService,
@@ -249,13 +287,117 @@ const {provisionQueuedSession} = createProvisioningWorker({
   releaseChromeWorkspaceSession,
   releaseWorkspaceSyncWriterLease,
 });
+const automationProvisioningService = createAutomationProvisioningService({
+  admin,
+  createSession,
+  db,
+  featureEnabled: async () => {
+    const snap = await db.collection("appConfig").doc("automations").get();
+    return Boolean(snap.exists && snap.data()?.enabled === true);
+  },
+  provisionSessionService,
+  requireWorkspace,
+  sessionCollection,
+});
+const {
+  handleAutomationRunEvent,
+  handleAutomationSessionEvent,
+} = automationProvisioningService;
 
+const automationCleanupService = createAutomationCleanupService({
+  admin,
+  db,
+  deleteSessionService,
+  releaseAutomationSlot: automationAdmissionService.releaseAutomationSlot,
+  scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
+  sessionCollection,
+  wakeQueue: wakeAutomationQueue,
+});
+const {
+  handleAutomationRunEvent: handleAutomationCleanupEvent,
+} = automationCleanupService;
+const automationReconciliationService = createAutomationReconciliationService({
+  admin,
+  auth,
+  cleanupAutomationRun: automationCleanupService.cleanupAutomationRun,
+  db,
+  featureEnabled: async () => {
+    const snap = await db.collection("appConfig").doc("automations").get();
+    return Boolean(snap.exists && snap.data()?.enabled === true);
+  },
+  provisionAutomationRun: automationProvisioningService.provisionAutomationRun,
+  processDueRetries: (...args) => automationRetryService.processDueRetries(...args),
+  requestRunnerJson,
+  sessionCollection,
+});
+
+const workspaceSharedStorageService = createWorkspaceSharedStorageService({
+  admin,
+  auth,
+  db,
+  requireWorkspace,
+  storage,
+});
+const workspaceStorageMigrationService = createWorkspaceStorageMigrationService({
+  admin,
+  db,
+  requireWorkspace,
+  sessionCollection,
+  sharedStorageService: workspaceSharedStorageService,
+  storage,
+});
+const workspaceAutomationDeletionService = createWorkspaceAutomationDeletionService({
+  admin,
+  automationCleanupService,
+  db,
+  deleteLegacyStorage: (uid, workspace, options) => deleteWorkspaceStorageIfUnshared(uid, workspace, {admin, db, ...options}),
+  deleteSessionForWorkspace: sessionLifecycleService.deleteSessionForWorkspace,
+  deleteSessionService,
+  deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
+  sessionCollection,
+});
 const workspaceService = createWorkspaceService({
   admin,
   db,
   deleteSessionService,
+  deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
+  workspaceAutomationDeletionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
+  workspaceStorageMigrationService,
+});
+const automationDefinitionsService = createAutomationDefinitionsService({
+  admin,
+  db,
+  requireWorkspace,
+  wakeAutomationQueue,
+});
+const automationRunsService = createAutomationRunsService({
+  admin,
+  db,
+  requireWorkspace,
+  wakeAutomationQueue,
+});
+automationRetryService = createAutomationRetryService({
+  admin,
+  db,
+  enqueueRetryRun: automationRunsService.enqueueRun,
+});
+const automationHistoryService = createAutomationHistoryService({db, storage});
+const automationAgentAuthService = createAutomationAgentAuthService({
+  db,
+  secret: () => secretValue(AUTOMATION_AGENT_TOKEN_SECRET),
+  sessionCollection,
+});
+const automationAgentApiService = createAutomationAgentApiService({
+  authService: automationAgentAuthService,
+  cleanupService: automationCleanupService,
+  db,
+  definitionsService: automationDefinitionsService,
+  historyService: automationHistoryService,
+  previewAutomationSchedule,
+  runsService: automationRunsService,
+  sessionCollection,
 });
 const googleWorkspaceApiService = createGoogleWorkspaceApiService({
   connectionsService: googleWorkspaceConnectionsService,
@@ -287,7 +429,12 @@ function googleMcpTokenRefreshUrl() {
 }
 
 const API_HANDLERS = createApiHandlers({
+  activeInstancesService,
   agentAuthService,
+  automationCleanupService,
+  automationDefinitionsService,
+  automationHistoryService,
+  automationRunsService,
   environmentKeysService,
   openAiCodexAuthService,
   qaFaultHarnessService,
@@ -296,6 +443,8 @@ const API_HANDLERS = createApiHandlers({
   googleWorkspaceService: googleWorkspaceApiService,
   operations: {
     userWithUsage,
+    updateUserTimezone,
+    previewAutomationSchedule,
     listAdminUsers,
     setAdminUserWhitelist,
     listSessions,
@@ -319,7 +468,12 @@ const API_HANDLERS = createApiHandlers({
 Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
   configurable: false,
   enumerable: false,
-  value: Object.freeze({restartSession}),
+  value: Object.freeze({
+    prepareWorkspaceSharedStorage: workspaceSharedStorageService.prepareWorkspaceSharedStorage,
+    prepareWorkspaceStorageMigration: workspaceStorageMigrationService.prepare,
+    completeWorkspaceStorageMigration: workspaceStorageMigrationService.complete,
+    restartSession,
+  }),
   writable: false,
 });
 
@@ -334,6 +488,7 @@ exports.api = onRequest({
     GOOGLE_OAUTH_CLIENT_SECRET,
     GOOGLE_OAUTH_STATE_SECRET,
     GOOGLE_OAUTH_ENCRYPTION_KEY,
+    AUTOMATION_AGENT_TOKEN_SECRET,
     QA_LOGIN_SECRET,
   ],
 }, async (req, res) => {
@@ -344,6 +499,12 @@ exports.api = onRequest({
     }
 
     const route = apiRouteRequest(req.path);
+
+    if (route.name === "automationAgent" || route.name === "automationAgentSchedulePreview") {
+      const result = await automationAgentApiService.handleRequest(req, route);
+      res.status(result.status || 200).json(result.body);
+      return;
+    }
 
     if (req.method === "GET" && route.name === "githubCallback") {
       await githubService.handleGithubCallback(req, res);
@@ -377,7 +538,14 @@ exports.api = onRequest({
   } catch (error) {
     logger.error("api request failed", error);
     const status = error.status || 500;
-    res.status(status).json({error: error.publicMessage || "internal_error"});
+    const body = {error: error.publicMessage || "internal_error"};
+    if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(String(error.pendingRunId || ""))) {
+      body.pendingRunId = String(error.pendingRunId);
+    }
+    if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(String(error.runId || ""))) {
+      body.runId = String(error.runId);
+    }
+    res.status(status).json(body);
   }
 });
 
@@ -421,6 +589,24 @@ exports.githubAutomationToken = onRequest({
   }
 });
 
+exports.automationAgentToken = onRequest({
+  cors: false,
+  timeoutSeconds: 30,
+  secrets: [AUTOMATION_AGENT_TOKEN_SECRET],
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.status(200).json(await automationAgentAuthService.mintToken(req));
+  } catch (error) {
+    const status = error.status || 500;
+    logger.warn("Automation agent token request failed", {
+      status,
+      error: error.publicMessage || "internal_error",
+    });
+    res.status(status).json({error: error.publicMessage || "internal_error"});
+  }
+});
+
 exports.provisionQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
   timeoutSeconds: 540,
@@ -432,6 +618,57 @@ exports.provisionQueuedSession = onDocumentWritten({
     GOOGLE_OAUTH_ENCRYPTION_KEY,
   ],
 }, provisionQueuedSession);
+
+exports.provisionAutomationRun = onDocumentWritten({
+  document: "automationRuns/{runId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, handleAutomationRunEvent);
+
+exports.cleanupAutomationRun = onDocumentWritten({
+  document: "automationRuns/{runId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, handleAutomationCleanupEvent);
+
+exports.reconcileAutomationSessionProvisioning = onDocumentWritten({
+  document: "workspaces/{workspaceId}/sessions/{sessionId}",
+  timeoutSeconds: 540,
+  retry: true,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, handleAutomationSessionEvent);
+
+exports.dispatchAutomationSchedules = onSchedule("every 1 minutes", async (event) => {
+  const result = await runAutomationScheduleTick(event);
+  logger.info("automation schedule tick complete", result);
+  return result;
+});
+
+exports.reconcileAutomationRuns = onSchedule("every 1 minutes", async () => {
+  const result = await automationReconciliationService.reconcile();
+  logger.info("automation reconciliation complete", result);
+  return result;
+});
 
 exports.resizeQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
@@ -493,7 +730,7 @@ async function listSessions(uid, workspaceId) {
   const snap = await sessionCollection(workspaceId)
       .orderBy("updatedAt", "desc")
       .get();
-  return Promise.all(snap.docs.map(async (doc) => {
+  return Promise.all(snap.docs.filter((doc) => isMainRuntime(doc.data() || {})).map(async (doc) => {
     const session = toClientDoc(doc);
     const currentDigest = await getCurrentRunnerImageDigestForSession(session);
     return {

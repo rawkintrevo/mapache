@@ -46,6 +46,9 @@ const {createPiWebUiProcess} = require("./lib/piWebUiProcess");
 const {createAgentWebSocketGateway} = require("./lib/agentWebSocketGateway");
 const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
+const {createAutomationArtifactsService} = require("./lib/automationArtifacts.service");
+const {createAutomationExecutionService} = require("./lib/automationExecution.service");
+const {createAutomationAgentApiService} = require("./lib/automationAgentApi.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
@@ -76,6 +79,7 @@ const chromeRuntime = createChromeRuntime(config, {
 const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chromeVncPort});
 const preview = createPreviewService(config, {browserQa});
 let piWebUi = null;
+let automationExecution = null;
 const workspaceAuthority = createWorkspaceAuthority({
   admin,
   config,
@@ -83,7 +87,7 @@ const workspaceAuthority = createWorkspaceAuthority({
   onLost: () => piWebUi?.stop?.(),
 });
 const activity = createActivityService({admin, db, config, isCurrentRuntime: workspaceAuthority.isCurrentWriter});
-const git = createGitService({config, activity});
+const git = createGitService({config, activity, storage});
 const qaFaultHarness = createQaFaultHarness({
   config,
   db,
@@ -118,6 +122,7 @@ const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const piModelScope = createPiModelScopeService({admin, config, db});
 const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
+const automationAgentApi = createAutomationAgentApiService(config);
 const harnesses = createRunnerHarnessRegistry({config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
 const terminalSession = createTerminalSession({
@@ -136,11 +141,23 @@ const terminalSession = createTerminalSession({
 });
 const shellSession = createShellSession({admin, config, activity});
 piWebUi = createPiWebUiProcess(config, {
-  onExit: ({error}) => activity.markRuntimeStartupFailure(error),
+  onExit: async ({error}) => {
+    await automationExecution?.handleProcessExit?.({error});
+    await activity.markRuntimeStartupFailure(error);
+  },
 });
 const agentSnapshot = createAgentSnapshotService({config});
+const automationArtifacts = createAutomationArtifactsService({admin, config, db, storage});
+automationExecution = createAutomationExecutionService({
+  admin,
+  config,
+  db,
+  piWebUi,
+  workspaceAuthority,
+});
 const checkpointScheduler = createAgentCheckpointScheduler({
   activity,
+  automationArtifacts,
   agentSnapshot,
   checkpointIdentity,
   checkpointPublisher,
@@ -177,6 +194,8 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
   admin,
+  automationAgentApi,
+  automationExecution,
   chromeProfile,
   chromeProfileSnapshots,
   chromeRuntime,

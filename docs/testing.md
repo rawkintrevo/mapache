@@ -82,10 +82,12 @@ npm run check
 It runs:
 
 1. Developer docs relative-link validation.
-2. Cloud Functions unit tests and syntax lint.
-3. Session runner JavaScript syntax lint and unit tests.
-4. Frontend smoke tests.
-5. Full Vite app and Docusaurus community build.
+2. Firestore Emulator security-rule and automation-index contract tests using the
+   repository-pinned `firebase-tools` CLI and Java 21 runtime.
+3. Cloud Functions unit tests and syntax lint.
+4. Session runner JavaScript syntax lint and unit tests.
+5. Frontend smoke tests.
+6. Full Vite app and Docusaurus community build.
 
 Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
@@ -125,6 +127,49 @@ Run slower checks when a change touches the related subsystem:
   Agent iframe can settle before its next refresh. Migration instructions are in
   `e2e/qa/migration/hubspot-import-checks.md`; they never authorize a live
   HubSpot source write or CRM mutation.
+
+### Shared workspace storage live harness
+
+Run `node scripts/automation-storage-live-harness.mjs run --project
+pi-agents-cloud --storage-rate-usd-per-gib-month CURRENT_US_CENTRAL_STANDARD_RATE`
+with credentials that can create/delete disposable Cloud Run services and
+buckets. The harness creates two gen2 Cloud Run fixture runners using the
+native `shared-gcsfuse-v1` mount, checks cross-runner visibility,
+overwrite/delete/rename, symlink behavior, Git with private metadata,
+package/script execution, concurrent same-file outcomes, anonymous bucket
+denial, retention policy, and private-state boundaries, then tears down live
+resources. It writes sanitized machine-readable checks under
+`artifacts/automation-storage/`; soft-deleted bytes remain billed for the
+configured seven-day window after cleanup. Supply the current
+[Cloud Storage pricing](https://cloud.google.com/storage/pricing) rate at run
+time rather than relying on a stale hard-coded price. `--keep` is an explicit
+debugging exception and leaves services/buckets for manual cleanup.
+
+### Automation lifecycle harness
+
+Run `node scripts/automation-lifecycle-harness.mjs run --project
+pi-agents-cloud` for deterministic lifecycle evidence. It exercises cron
+admission, immutable snapshots, main-session exclusion, concurrency, stop and
+restart paths, duplicate/lost callbacks, and final Cloud Run cleanup. The
+optional `--live --runner-url URL` mode adds a disposable runner health probe;
+it does not enable the product flag or mutate production definitions.
+
+### Automation browser management QA
+
+The opt-in `e2e/qa/cases/automation-management.json` case covers workspace
+navigation, storage preparation gating, disabled definition save, schedule and
+timezone controls, concurrency, global history navigation, and cleanup. Run it
+through the Chrome DevTools-assisted QA workflow after providing an authorized
+disposable backend and QA account. Browser execution is intentionally outside
+the default PR check.
+
+The management case should be extended with the user-menu Running instances
+surface when a disposable account has one active main session, two automation
+runs, and a cleanup failure. Verify filtering, cursor paging, keyboard/mobile
+layout, targeted Stop behavior, workspace/history links, and that switching
+accounts leaves no stale inventory. Recovery-editor QA should verify the
+skip/latest and no-retry/safe controls, the replay acknowledgement requirement,
+revision conflict retention, and run-history catch-up/retry lineage.
 
 ## LLM-Assisted Regression Suite
 

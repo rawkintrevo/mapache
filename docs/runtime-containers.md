@@ -12,6 +12,132 @@ Live resource metrics support both unified cgroup v2 files and Cloud Run's cgrou
 The sampler handles the separately scoped `cpu` and `cpuacct` mounts used by Cloud Run Services,
 the combined `cpu,cpuacct` mount used by Cloud Run Jobs, and the `memory` controller in both.
 
+## Shared workspace buckets
+
+Prepared shared-mode workspaces use one private Cloud Storage bucket in `us-central1`.
+The Functions control plane derives the bucket name as
+`mpw-<project-number>-<first-24-hex-sha256(workspaceId)>`, persists that exact identity
+on the workspace, and never accepts a browser-provided bucket name. Creation is
+idempotent and reconciles the existing bucket before applying the existing
+`mapache-runner@pi-agents-cloud.iam.gserviceaccount.com` object binding.
+
+The bucket contract is fixed at creation: Standard storage class, hierarchical
+namespace enabled, uniform bucket-level access, public access prevention enforced,
+Object Versioning disabled, and an explicit 604800-second (seven-day) Cloud Storage
+soft-delete policy. A bucket with a different project, owner labels, region, HNS
+setting, retention policy, public-access setting, or versioning setting is rejected;
+the control plane does not silently adopt a foreign or incompatible bucket. Firestore
+stores only normalized lifecycle state (`legacy`, `preparing`, `migrating`, `ready`,
+or `error`) and normalized error codes to callers; the bucket identity remains private.
+
+Preparation is explicit and requires the workspace to be paused, so a disabled
+automation definition does not allocate storage by itself. `POST
+/api/workspaces/{workspaceId}/automation-storage/prepare` acquires an idempotent
+migration reservation and returns `202` while the scoped maintenance importer
+uploads and verifies a fresh generation. The shared bucket is not mounted by
+preparation: later migration publishes a verified
+`trees/{storageGeneration}/` prefix before a runner receives it as `/workspace`.
+When that trusted bucket/generation descriptor is present, Cloud Run provisioning
+uses the shared template helper to add a gen2 `gcsfuse.run.googleapis.com` CSI
+volume at `/workspace`. The mount is writable but scoped to the exact tree
+generation and disables the GCS FUSE metadata/type caches, file/negative caches,
+and noisy logging; legacy sessions without the descriptor keep their existing
+template. The descriptor is backend-owned, so session/client bucket fields and
+private archive storage cannot select the mounted bucket.
+The runner receives the trusted generation as `WORKSPACE_STORAGE_GENERATION` and
+uses `WORKSPACE_STORAGE_MODE=shared-gcsfuse-v1` only for a ready descriptor. Before
+agent or shell startup it verifies the mounted generation-ready marker, verifies
+that `/workspace` is writable, and rejects private runtime, Git, browser, and
+agent-state paths that resolve into the mount. A shared mount is authoritative:
+startup does not clone or restore a worktree, and periodic/final sync does not
+upload, delete, or restore legacy worktree and Git archives. Private transcript,
+Chrome, auth, and runtime cache/checkpoint roots remain outside the mount. The
+legacy runner path is unchanged when no trusted descriptor is present.
+The maintenance importer in `session-runner/maintenance/shared-workspace-import.js`
+validates a local published workspace staging root before touching Cloud Storage. It
+uploads files, supported relative symlinks, empty-directory markers, and original
+mode metadata under a fresh `trees/{operationId}/` prefix using create-only
+generation preconditions. Private `.git` metadata is archived separately as the
+immutable shared-workspace Git seed; it is never written below the mounted tree.
+The resumable control manifest lives under `.mapache-internal/shared-workspace-imports/`
+outside the tree, records object generations and hashes, and is updated after each
+object. Destination hashes are revalidated on resume, foreign changes fail closed,
+and the generation-ready marker is published last. A caller must perform the
+Firestore descriptor/pointer cutover; an interrupted unpublished generation can be
+cleaned only through its owned control manifest.
+Normal run completion never deletes a workspace bucket. Workspace deletion is
+owned by the Functions-side `workspaceDeletionOperations/{workspaceId}`
+operation: it tombstones the workspace first, fences checkpoint publication
+and late automation admission, confirms every main and automation service is
+absent, removes the runner IAM member, then deletes live objects and the
+bucket. The operation removes published and unpublished tree generations,
+private run artifacts, and automation records while preserving the user's
+allocated usage ledger. It reports the seven-day `recoverableUntil` window and
+known retained live bytes when available; soft-deleted objects remain
+recoverable and can continue to incur storage charges until retention expires.
+
+### Workspace storage recovery
+
+The seven-day soft-delete window is the only supported workspace storage recovery
+mechanism. Object Versioning remains disabled, there are no daily full-bucket
+copies, and there is no standing recovery service. Soft-deleted overwritten or
+deleted objects continue to count as billed retained bytes until their
+`recoverableUntil` time; expired generations are not recoverable.
+
+Recovery is an operator maintenance operation, not an automatic rollback. All
+workspace runners must be stopped before an operator acquires the workspace's
+`workspaceStorageRecoveryReservations/{workspaceId}` reservation. The Functions
+service rechecks ownership, workspace availability, and the paused-session
+condition for every inventory, restore, tree recovery, and publish operation.
+The reservation is intentionally held until the operator verifies the result and
+releases it.
+
+Use the checked-in script with the explicit production project and owner/workspace
+identifiers:
+
+```bash
+node scripts/workspace-storage-recovery.mjs check \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID
+node scripts/workspace-storage-recovery.mjs reserve \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID
+node scripts/workspace-storage-recovery.mjs list \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID
+node scripts/workspace-storage-recovery.mjs restore \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID --object-path PATH --generation GENERATION \
+  --confirm workspace-storage-recovery
+node scripts/workspace-storage-recovery.mjs recover-tree \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID --manifest MANIFEST.json \
+  --confirm workspace-storage-recovery
+node scripts/workspace-storage-recovery.mjs release \
+  --project pi-agents-cloud --uid OWNER_UID --workspace-id WORKSPACE_ID \
+  --reservation-id RESERVATION_ID --confirm workspace-storage-recovery
+```
+
+Single-object recovery requires an exact object path and soft-deleted generation;
+the GCS restore creates a new live generation. Whole-tree recovery consumes a
+recorded version-1 manifest containing the source workspace/bucket identity and
+each object's path, generation, and optional MD5/CRC32C/SHA-256/size evidence.
+It restores selected generations into a new `recovery-trees/{reservationId}/`
+prefix, verifies copied objects, writes the ready marker and control manifest,
+and only then publishes the separate `sharedStorageRecovery` pointer. The live
+`sharedStorage` pointer is never changed by this operation, so a failed or
+partial tree recovery leaves the active workspace unchanged. An operator must
+explicitly validate the recorded hashes/content and perform any later cutover.
+The pre-migration checkpoint remains separate from this recovery pointer.
+
+Admitted automation runs use the same trusted mount and pinned `pi-chrome` image
+as other supported sessions, but receive a separate `auto-{runId}` session and
+`mpauto-{runId-hash}` Cloud Run service. The service carries hashed owner,
+workspace, and run labels; an existing service is adopted only when all labels
+match the current run. Automation provisioning resolves connector credentials
+at launch and keeps prompts and tokens out of service metadata and logs. The
+run/session workers are idempotent across duplicate Firestore deliveries and
+Cloud Run response loss; provisioning failure leaves cleanup responsible for
+confirming service absence and releasing the run reservation.
+
 ## Runner Images
 
 The supported runner image is built from `session-runner/Dockerfile.pi-chrome`
@@ -43,6 +169,25 @@ at runner startup. The generated health descriptor is safe for runtime status
 reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
+
+The pinned patch series also contains `server/automation-run-state.ts`, a pure
+reducer for one unattended automation run. It scopes events to the run and
+conversation, deduplicates event and task IDs, requires a final non-retry agent
+result plus drained tool/subagent/background work, and distinguishes
+`interaction_required`, failure, cancellation, and success. It never infers
+completion from log silence or aggregate turn counters and does not create
+sockets, sessions, or API clients; the later automation subscription layer
+owns event delivery. Changes to this reducer require the same upstream build
+and a rebuilt `pi-chrome` revision.
+
+The runner's automation execution service starts only after private workspace
+materialization and runtime admission. It validates the owner/workspace/session
+assignment, claims `executionStartedAt` before sending the prompt once over the
+mode-0600 control socket, and polls the private reducer state with bounded
+requests. Browser disconnects do not affect this loop. A ready-child loss marks
+the run `interrupted` and leaves cleanup pending; the next boot never resumes a
+previous prompt. Active automation is exempt from idle reaping only while its
+admitted run assignment remains valid.
 
 The managed-only presentation patch removes the upstream name/logo, version
 controls, and repository link from the embedded header. It adds Chrome beside
@@ -106,6 +251,20 @@ deletes the Cloud Run service, clears the reserved authority through the normal
 stopped transition, and records an interrupted-checkpoint warning. This is the
 controlled recovery path for a fenced replacement boot; it does not permit
 heartbeat-only authority takeover or concurrent writers.
+
+For an automation runtime, the protected shutdown request first sends a
+run-scoped cancellation through the private pi-web-ui control socket, then
+awaits the same bounded agent quiesce and checkpoint/artifact finalization used
+by ordinary runner shutdown. The Functions cleanup worker deletes only the
+deterministic `mpauto-{runId-hash}` service after that request, confirms the
+service is absent, and only then releases the automation slot. A timeout or
+unclosed writer is retained as interrupted/partial persistence evidence.
+
+The one-minute automation reconciler uses `/healthz` with the runner shutdown
+credential for stale-heartbeat probes. It may reconcile setup polling or
+cleanup, but it never restarts an automation prompt. Cloud Run orphan cleanup
+is limited to services carrying the automation label set and rechecks those
+labels immediately before deletion.
 
 Managed agent persistence capture and restore live in
 `session-runner/lib/agentSnapshot.service.js`,
@@ -193,15 +352,38 @@ inventory for native auth, provider keys, `models.json`, Pi MCP OAuth state,
 GitHub CLI hosts, and the legacy restored auth path so the later capture helper
 can exclude every known secret-bearing location.
 
+Automation runners use the private storage mode instead of these legacy fixed
+roots. Their HOME, auth, Pi sessions, UI data, sockets, Chrome profile, QA
+output, and Git metadata are namespaced by `sessionId`/`runId` below
+`/var/lib/mapache/runtimes/{identity}`. Private roots reject symlinked
+ancestors before materialization, and private home/session archive targets are
+disabled; the shared `/workspace` mount remains the user worktree only.
+The runner also owns a 0600 `automation-agent.sock` Unix socket in that private
+runtime root for the managed MCP process. Its adapter keeps the five-minute
+automation API token in memory, refreshes it with the runner-only shutdown
+credential, and forwards only workspace-scoped automation requests. The child
+receives the socket path, not `SESSION_SHUTDOWN_TOKEN` or the broker signing
+secret; the socket is removed during runner shutdown.
+
 The frontend image catalog is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It exposes only the supported `pi-chrome` image and Pi harness. Historical shell, SSH, Codex, web, and N64 records may remain in Firestore for readable old sessions and cleanup, but they are not catalog launch targets. New session creation is server-owned and resolves the marked `pi-chrome`/Pi image; legacy Chat and Goals capability flags are no longer advertised.
 
 The supported runner key is `pi-chrome`. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so the supported image renders `pi` and `chrome` tags without adding a view-specific mapping.
 
 The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` resolve the exact `pi-chrome` entry and Pi harness. Client `imageKey` and `image` fields cannot select another image; provisioning and queued-worker paths repeat the canonical identity check and reject unsupported or arbitrary runner records before any Cloud Run request. Historical records remain readable for status and cleanup without becoming launchable.
 
-Workspace MCP server config is managed from the top-navigation MCP dialog and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. The runner writes a standard `/workspace/.mcp.json` for shared MCP discovery. The `pi-chrome` image bakes the exact `pi-mcp-adapter@2.32.1` package and exposes its image-owned `index.ts` entry through `PI_WEB_MCP_ADAPTER_PATH`; managed pi-web sessions pass that one path to the Pi SDK `additionalExtensionPaths` loader. The managed server does not start its legacy `<dataDir>/mcp.json` `McpBridge`, so the adapter is the only MCP transport and each configured server is started once. Its setup/editor, auth actions, project enable/disable, and bearer-token write paths are read-only/refused in managed mode; Mapache remains the owner of workspace config and Google token refresh/materialization.
+Workspace MCP server config is managed from the top-navigation MCP dialog and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. Legacy/shared runners write `/workspace/.mcp.json` for shared MCP discovery. Private automation runners instead write the generated Pi config below their private runtime root and launch the managed child with `--mcp-config`; they never replace the shared project file with generated credential-bearing content. The `pi-chrome` image bakes the exact `pi-mcp-adapter@2.32.1` package and exposes its image-owned `index.ts` entry through `PI_WEB_MCP_ADAPTER_PATH`; managed pi-web sessions pass that one path to the Pi SDK `additionalExtensionPaths` loader. The managed server does not start its legacy `<dataDir>/mcp.json` `McpBridge`, so the adapter is the only MCP transport and each configured server is started once. Its setup/editor, auth actions, project enable/disable, and bearer-token write paths are read-only/refused in managed mode; Mapache remains the owner of workspace config and Google token refresh/materialization.
 
-Workspace-bound Google MCP services are injected during Functions provisioning after a server-side refresh. The runner receives an ephemeral `GOOGLE_MCP_ACCESS_TOKEN`; local mode starts `/app/google-workspace-mcp/server.mjs` over stdio and passes enabled services/scopes through non-secret environment values. No Google token is written to `MCP_CONFIG`, `/workspace/.mcp.json`, or persisted pi-web UI config: the adapter uses the runner's `bearer_env` reference and the local wrapper asks Mapache for a bounded refresh after a 401. Pi's `/root/.pi/agent/mcp-oauth` directory has a dedicated hidden archive target so it is excluded from the general home archive. `GET /google/mcp/status` performs local initialize/tools-list readiness evidence and exposes only service state, adapter, and safe account metadata behind the shutdown-token gate. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
+Workspace-bound Google MCP services are injected during Functions provisioning after a server-side refresh. The runner receives an ephemeral `GOOGLE_MCP_ACCESS_TOKEN`; local mode starts `/app/google-workspace-mcp/server.mjs` over stdio and passes enabled services/scopes through non-secret environment values. No Google token is written to `MCP_CONFIG`, `/workspace/.mcp.json`, or persisted pi-web UI config: the adapter uses the runner's `bearer_env` reference and the local wrapper asks Mapache for a bounded refresh after a 401. Pi's legacy `/root/.pi/agent/mcp-oauth` directory has a dedicated hidden archive target, while private automation OAuth state is local-only and namespaced with the run. `GET /google/mcp/status` performs local initialize/tools-list readiness evidence and exposes only service state, adapter, and safe account metadata behind the shutdown-token gate. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
+
+Automation runtimes additionally materialize the image-owned
+`/app/automation-mcp/server.mjs` as one managed MCP entry. It talks only to
+the runner's mode-0600 `MAPACHE_AUTOMATION_AGENT_SOCKET`; the child never
+receives the bearer token or `SESSION_SHUTDOWN_TOKEN`. The broker derives the
+current workspace from the admitted automation session and revalidates that
+session on every request. The managed entry is added without replacing user
+MCP entries; a collision uses a deterministic alternate server name. The
+server and `mapache-automations` guidance skill are baked into the `pi-chrome`
+image, so startup performs no npm download.
 
 ## Base Environment
 
@@ -316,7 +498,7 @@ Cloud Run does not permit the nested PID/network namespaces Chromium's Linux pro
 
 The browser surface is protected by the same per-session HMAC browser token as the terminal and preview. `/browser/` serves authenticated noVNC, `/browser/status` reports safe desktop/CDP readiness, `/browser/activity` records meaningful agent browser actions, and the `/browser/vnc` WebSocket bridges only to loopback x11vnc. Browser runtime readiness requires a live CDP endpoint, all required desktop processes, and a reachable loopback VNC port; a later supervised process exit transitions the runtime away from `ready` until the desktop and both probes recover. A dropped VNC bridge is closed so noVNC can reconnect to a replacement x11vnc process. CDP and VNC ports are not public. `mapache-chrome-status` reports only readiness and browser version and exits nonzero when CDP is unavailable.
 
-Chrome profiles are not part of the visible workspace tree or the general home archive. The isolated archive target is `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`; the runner stages and sanitizes it before atomic restore, then serializes periodic and final snapshots. Profile extraction uses GNU-compatible ownership and permission guards, and reports the tar process error ahead of any secondary stream-close error. Cache, crash, download, lock, socket, and other transient paths are excluded. Shell sessions never create, restore, or overwrite this target.
+Chrome profiles are not part of the visible workspace tree or the general home archive. Legacy/shared runners use the isolated archive target `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`; private automation runners use `/var/lib/mapache/runtimes/{identity}/chrome/profile` and do not publish the profile to the shared prefix. The runner stages and sanitizes legacy profiles before atomic restore, then serializes periodic and final snapshots. Profile extraction uses GNU-compatible ownership and permission guards, and reports the tar process error ahead of any secondary stream-close error. Cache, crash, download, lock, socket, and other transient paths are excluded. Shell sessions never create, restore, or overwrite the shared target.
 
 The Chrome DevTools MCP package is baked into both Chrome images at `chrome-devtools-mcp@1.6.0`. The runner materializes a reserved `chrome-devtools` MCP server with `--browser-url http://127.0.0.1:9222`, disables usage statistics/update checks, and attaches to the existing browser rather than launching another one. Chrome-image QA uses Playwright `connectOverCDP`; it closes only the temporary QA page and writes its normal reports under `$MAPACHE_QA_DIR`.
 
@@ -548,19 +730,30 @@ The runner restores these directories from gzip-compressed tar archives during s
 archives live under `.mapache-internal/archives/` inside the workspace storage
 prefix, and that internal directory is hidden from browser-facing surfaces.
 
-The `$HOME` archive includes Pi auth, settings, shell state, and per-session Pi
-conversation directories. It excludes mutable caches, runtime package trees,
-and other transient state. Treat the archive path as sensitive runtime state
-because it can contain credentials and command history; it lives under the
-hidden workspace internal prefix and is never exposed to the browser.
+The legacy `$HOME` archive includes Pi auth, settings, shell state, and
+per-session Pi conversation directories. It excludes mutable caches, runtime
+package trees, and other transient state. Treat the archive path as sensitive
+runtime state because it can contain credentials and command history; it lives
+under the hidden workspace internal prefix and is never exposed to the browser.
+Private automation mode forces an ephemeral home and leaves its private
+conversation/auth roots out of the shared archive path.
 
-Each Cloud session uses a unique Pi conversation directory under `$HOME/.pi/agent/mapache-sessions/{sessionId}`. The runner launches Pi with `--session-dir $PI_SESSION_DIR -c` and updates the session document with `piSessionJsonlPath`/`piSessionJsonlRelativePath` after Pi creates the JSONL. The whole-home archive persists those directories, but the session id keeps each Cloud session's thread separate from other sessions in the same workspace.
+Each legacy Cloud session uses a unique Pi conversation directory under
+`$HOME/.pi/agent/mapache-sessions/{sessionId}`. Private automation sessions use
+their run-scoped agent-state session root instead; both launch Pi with
+`--session-dir $PI_SESSION_DIR -c`, keeping each conversation outside the
+mounted worktree.
 
 Pi provider auth persists in Firestore at `users/{uid}/private/agentAuth`. The `providers` map matches Pi's `$HOME/.pi/agent/auth.json` object shape exactly (`providerKey -> credential object`) for native materialization, while the `entries` map stores named credentials as `entryId -> {providerKey, label, credential}` so users can keep multiple credentials for one provider and choose which one a session should use. The backend API writes web-added API keys and tokens as `{type: "api_key", key: "..."}` and records them as named entries. It also supports OpenAI ChatGPT Plus/Pro Codex subscription login through OpenAI's device-code flow and saves completed OAuth credentials for `openai-codex` as `{type: "oauth", access, refresh, expires, accountId}` entries. The Authentication Center lets users delete named credentials and restart the device-code login directly from an existing OAuth entry. Deletion replaces the complete Firestore `providers` and `entries` map fields so removed nested keys cannot survive merge semantics; when another entry exists for the same provider, the newest remaining credential becomes the provider value. Sessions store `authSelection` (`{harness, providers}`), and the runner materializes either the selected entries or all provider values into the Pi auth file with `0600` permissions on startup and during periodic sync. The runner receives `OWNER_UID`, and the backend sets `PI_CODING_AGENT_DIR=$HOME/.pi/agent` so Pi resolves auth storage to the materialized home tree. This makes CLI/TUI `/login` additions visible to the web UI after runner sync while letting web-added credentials appear in already-running sessions after the runner sync interval.
 
+Private automation sessions use the canonical provider selection on each boot,
+materialize it into their run-scoped Pi directory, and never import local
+restored auth. This keeps fresh runs on the existing broker/revocation boundary
+without copying credentials into the shared worktree.
+
 GitHub CLI auth is app-managed rather than archive-managed. Users save a `github-cli` token in the Authentication Center and select it for a Pi session. The runner materializes that selected token to `$HOME/.config/gh/hosts.yml` with `0600` permissions, and removes that file when no GitHub CLI token is selected for the session. The `$HOME` archive excludes `.config/gh/hosts.yml`, so a manual `gh auth login` inside the terminal is not the durable credential source. This keeps GitHub CLI credentials scoped through the same saved-entry and per-session selection UI as other agent auth, avoids silently persisting terminal-entered tokens in workspace home archives, and lets users rotate or delete the saved token centrally. GitHub App workspace clone, push, and automatic PR flows still use short-lived installation tokens supplied by the backend and do not depend on the user's `gh` token.
 
-For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces, and archive upload stores `.git` under the hidden internal archive prefix while skipping obvious transient `*.lock` files where practical. Dedicated startup restore ordering for `.git` remains a later task.
+For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces, and archive upload stores `.git` under the hidden internal archive prefix while skipping obvious transient `*.lock` files where practical. Private automation runners reserve a run-scoped `/var/lib/mapache/runtimes/{identity}/git/repository` root and do not publish a workspace `.git` archive; private Git migration/capture remains the dedicated follow-up boundary.
 
 This keeps dependency installs, Git metadata, and Pi Agent state available without creating thousands of Cloud Storage objects for `node_modules` or `.git`. Archive-backed changes can lag normal file sync by up to `ARCHIVE_SYNC_INTERVAL_MS` unless the session is stopped cleanly, which triggers the final archive sync.
 

@@ -225,6 +225,25 @@ function sessionRef(sessionsRef, id) {
   assert.strictEqual(legacy.state.workspace.agentRuntimeGeneration, undefined);
   assert.strictEqual(legacy.state.sessions.get("legacy").agentRuntimeGeneration, undefined);
 
+  const automation = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
+  const automationService = createWorkspaceSessionReservationService({db: automation.firestore, admin});
+  await Promise.all([
+    automationService.reserveChromeWorkspaceSession(
+        "workspace-1", sessionRef(automation.sessionsRef, "auto-run-a"),
+        {...session("auto-run-a", "run-a"), runtimeKind: "automation", automationRunId: "run-a"},
+        {newRuntime: true, runtimeOperationId: "run-a", singleRunner: false, syncWriterEligible: true},
+    ),
+    automationService.reserveChromeWorkspaceSession(
+        "workspace-1", sessionRef(automation.sessionsRef, "auto-run-b"),
+        {...session("auto-run-b", "run-b"), runtimeKind: "automation", automationRunId: "run-b"},
+        {newRuntime: true, runtimeOperationId: "run-b", singleRunner: false, syncWriterEligible: true},
+    ),
+  ]);
+  assert.equal(automation.state.sessions.size, 2);
+  assert.equal(automation.state.workspace.agentRuntimeSessionId, undefined);
+  assert.equal(automation.state.sessions.get("auto-run-a").syncWriterRole, "none");
+  assert.equal(automation.state.sessions.get("auto-run-b").syncWriterRole, "none");
+
   console.log("workspace session reservation service tests passed");
 })().catch((error) => {
   console.error(error);

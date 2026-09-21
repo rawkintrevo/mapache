@@ -30,7 +30,7 @@ test("selects harness-neutral skill profiles from workspace context and capabili
 });
 
 test("resolves optional profiles into one canonical file-backed skill catalog", () => {
-  assert.deepEqual(Object.keys(WORKSPACE_SKILL_PROFILES), ["chrome", "github", "web"]);
+  assert.deepEqual(Object.keys(WORKSPACE_SKILL_PROFILES), ["chrome", "github", "web", "automations"]);
   assert.deepEqual(skillsForWorkspaceProfiles(["web", "github", "web", "unknown"])
       .map((skill) => skill.name), [
     "mapache-preview-build",
@@ -56,4 +56,9 @@ test("resolves optional profiles into one canonical file-backed skill catalog", 
     "mapache-api-hosting",
     "mapache-preview-qa",
   ]);
+  assert.deepEqual(defaultWorkspaceSkills({
+    runtimeKind: "automation",
+    workspaceSourceMode: "blank",
+    runnerCapabilities: {},
+  }).map((skill) => skill.name), ["mapache-automations"]);
 });

@@ -7,6 +7,85 @@ function encodePathQuery(value) {
 export function createApiClient(getToken) {
   const api = {
     getMe: () => request(getToken, "/api/me"),
+    updateUserTimezone: (timezone) => request(getToken, "/api/me", {method: "PATCH", body: {timezone}}),
+    previewAutomationSchedule: (cron, timezone) => request(
+        getToken,
+        "/api/automation-schedule-preview",
+        {method: "POST", body: {cron, timezone}},
+    ),
+    getAutomations: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automations`,
+    ),
+    createAutomation: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automations`,
+        {method: "POST", body},
+    ),
+    getAutomation: (workspaceId, automationId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automations/${encodeURIComponent(automationId)}`,
+    ),
+    updateAutomation: (workspaceId, automationId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automations/${encodeURIComponent(automationId)}`,
+        {method: "PATCH", body},
+    ),
+    deleteAutomation: (workspaceId, automationId, body = {}) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automations/${encodeURIComponent(automationId)}`,
+        {method: "DELETE", body},
+    ),
+    getAutomationSettings: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automation-settings`,
+    ),
+    updateAutomationSettings: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automation-settings`,
+        {method: "PATCH", body},
+    ),
+    prepareAutomationStorage: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automation-storage/prepare`,
+        {method: "POST", body: {}},
+    ),
+    enqueueAutomationRun: (workspaceId, automationId, body = {}, idempotencyKey = "") => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/automations/${encodeURIComponent(automationId)}/run`,
+        {method: "POST", body, idempotencyKey},
+    ),
+    listAutomationRuns: (query = {}) => request(
+        getToken,
+        `/api/automation-runs?${automationQuery(query)}`,
+    ),
+    getAutomationRun: (runId) => request(
+        getToken,
+        `/api/automation-runs/${encodeURIComponent(runId)}`,
+    ),
+    listAutomationRunEvents: (runId, query = {}) => request(
+        getToken,
+        `/api/automation-runs/${encodeURIComponent(runId)}/events?${automationQuery(query)}`,
+    ),
+    stopAutomationRun: (runId) => request(
+        getToken,
+        `/api/automation-runs/${encodeURIComponent(runId)}/stop`,
+        {method: "POST", body: {}},
+    ),
+    cancelAutomationRun: (runId) => request(
+        getToken,
+        `/api/automation-runs/${encodeURIComponent(runId)}/cancel`,
+        {method: "POST", body: {}},
+    ),
+    restartAutomationRun: (runId, idempotencyKey = "") => request(
+        getToken,
+        `/api/automation-runs/${encodeURIComponent(runId)}/restart`,
+        {method: "POST", body: {}, idempotencyKey},
+    ),
+    getActiveInstances: (query = {}) => request(
+        getToken,
+        `/api/instances?${automationQuery(query)}`,
+    ),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
       params.set("pageSize", String(pageSize));
@@ -195,13 +274,28 @@ async function request(getToken, path, options = {}) {
     headers: {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
+      ...(options.headers || {}),
+      ...(options.idempotencyKey ? {"Idempotency-Key": options.idempotencyKey} : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || response.statusText || "Request failed");
+    const error = new Error(data.error || response.statusText || "Request failed");
+    error.code = data.error || "request_failed";
+    error.status = response.status;
+    error.data = data;
+    throw error;
   }
   return data;
+}
+
+function automationQuery(query = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query || {})) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  return params.toString();
 }

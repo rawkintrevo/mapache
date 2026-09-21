@@ -6,7 +6,22 @@
 const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["githubCallback", ["GET"]],
   ["googleCallback", ["GET"]],
-  ["me", ["GET"]],
+  ["me", ["GET", "PATCH"]],
+  ["automationSchedulePreview", ["POST"]],
+  ["automations", ["GET", "POST"]],
+  ["automation", ["GET", "PATCH", "DELETE"]],
+  ["automationRun", ["POST"]],
+  ["automationSettings", ["GET", "PATCH"]],
+  ["automationRunRestart", ["POST"]],
+  ["automationRunCancel", ["POST"]],
+  ["automationRunStop", ["POST"]],
+  ["automationRuns", ["GET"]],
+  ["instances", ["GET"]],
+  ["automationRunDetail", ["GET"]],
+  ["automationRunEvents", ["GET"]],
+  ["automationStoragePrepare", ["POST"]],
+  ["automationAgent", ["GET", "POST", "PATCH", "DELETE"]],
+  ["automationAgentSchedulePreview", ["POST"]],
   ["adminUsers", ["GET"]],
   ["adminUserWhitelist", ["POST"]],
   ["qaCustomToken", ["POST"]],
@@ -43,6 +58,13 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["googleBinding", ["POST", "DELETE"]],
 ].map(([name, methods]) => [name, Object.freeze(methods)])));
 
-const SPECIAL_ROUTE_NAMES = Object.freeze(["githubCallback", "googleCallback", "qaCustomToken", "publicPreview"]);
+const SPECIAL_ROUTE_NAMES = Object.freeze([
+  "githubCallback",
+  "googleCallback",
+  "qaCustomToken",
+  "publicPreview",
+  "automationAgent",
+  "automationAgentSchedulePreview",
+]);
 
 module.exports = {ROUTE_METHODS, SPECIAL_ROUTE_NAMES};

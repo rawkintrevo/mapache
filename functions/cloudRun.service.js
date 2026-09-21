@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const logger = require("firebase-functions/logger");
 const {
   admin,
@@ -10,6 +11,7 @@ const {
   DEFAULT_BUCKET,
   DEFAULT_CLOUD_RUN_OPERATION_TIMEOUT_MS,
   DEFAULT_CPU,
+  DEFAULT_FUNCTION_REGION,
   DEFAULT_MEMORY,
   DEFAULT_REGION,
   DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS,
@@ -18,6 +20,7 @@ const {
 } = require("./backendConfig");
 const {
   cleanName,
+  cloudRunServiceName,
   defaultPreviewStaticRoot,
   httpError,
   isGoogleAlreadyExists,
@@ -32,13 +35,19 @@ const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
 const {agentRuntimeEnvironment} = require("./agentRuntime.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
+const {automationCloudRunServiceId} = require("./provisioning.helpers");
 const {
   isMarkedRuntimeSession,
   runtimeSessionStateUpdate,
 } = require("./runtimeReservation.helpers");
 const {consumeQaFault} = require("./qaFaultHarness.helpers");
+const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helpers");
 
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
+const SHARED_WORKSPACE_STORAGE_MODE = "shared-gcsfuse-v1";
+const SHARED_WORKSPACE_READY_MARKER = ".mapache-internal/workspace-ready.json";
+const AUTOMATION_CLOUD_RUN_OPERATION_TIMEOUT_MS = 15 * 60 * 1000;
 
 function createCloudRunService(dependencies = {}) {
   return {
@@ -76,9 +85,10 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       operationName = claim.operationName || operationName;
     }
 
+    const operationOptions = provisioningOperationOptions(claimedSession, dependencies);
     client = await (dependencies.auth || auth).getClient();
     if (claim && claim.action === "poll") {
-      await waitForOperation(client, {name: operationName}, dependencies);
+      await waitForOperation(client, {name: operationName}, operationOptions);
     } else {
       const url = `https://run.googleapis.com/v2/${parent}/services?serviceId=${claimedSession.serviceId}`;
       const body = await buildCloudRunService(workspace, claimedSession, dependencies);
@@ -91,10 +101,11 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
-      await waitForOperation(client, response.data, dependencies);
+      await waitForOperation(client, response.data, operationOptions);
     }
     await setPublicInvoker(client, serviceName);
     const service = await getCloudRunService(client, serviceName);
+    assertCloudRunServiceIdentity(service, claimedSession);
     const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
     await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
       ...runtimeSessionStateUpdate(claimedSession, "running"),
@@ -109,7 +120,12 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     let provisioningError = error;
     if (client && isGoogleAlreadyExists(error)) {
       try {
-        const service = await waitForCloudRunServiceReady(client, serviceName, dependencies);
+        const service = await waitForCloudRunServiceReady(
+            client,
+            serviceName,
+            provisioningOperationOptions(claimedSession, dependencies),
+        );
+        assertCloudRunServiceIdentity(service, claimedSession);
         await setPublicInvoker(client, serviceName);
         const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
         await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
@@ -127,9 +143,10 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
       }
     }
     if (client && isCloudRunOperationTimeout(error)) {
-      const service = await reconcileProvisioningTimeout(client, serviceName);
+      const service = await reconcileProvisioningTimeout(client, serviceName, claimedSession);
       if (service) {
         try {
+          assertCloudRunServiceIdentity(service, claimedSession);
           await setPublicInvoker(client, serviceName);
           const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
           await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
@@ -149,7 +166,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     }
     await sessionRef.update(sessionStatusUpdate(claimedSession, "provision_failed", {
       ...runtimeSessionStateUpdate(claimedSession, "failed"),
-      lastError: publicGoogleError(provisioningError),
+      lastError: provisioningErrorForSession(claimedSession, provisioningError),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...provisioningFailureUpdates(claimedSession, operationName, provisioningError),
     }, {reconciliationReason: "cloud_run_provisioning_failed"}));
@@ -254,15 +271,19 @@ function provisioningFailureUpdates(session, operationName, error) {
     provisioningCloudRunOperationName: operationName || session.provisioningCloudRunOperationName || null,
     provisioningAttemptCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
     provisioningRetryable: isRetryableProvisioningError(error),
-    provisioningLastError: publicGoogleError(error),
+    provisioningLastError: provisioningErrorForSession(session, error),
   };
 }
 
-async function reconcileProvisioningTimeout(client, serviceName) {
+async function reconcileProvisioningTimeout(client, serviceName, session = {}) {
   try {
     const service = await getCloudRunService(client, serviceName);
-    if (isCloudRunServiceReady(service)) return service;
+    if (isCloudRunServiceReady(service)) {
+      assertCloudRunServiceIdentity(service, session);
+      return service;
+    }
   } catch (error) {
+    if (error && error.code === "cloud_run_service_identity_mismatch") throw error;
     if (!isGoogleNotFound(error)) {
       logger.warn("Cloud Run provisioning reconciliation failed", publicGoogleError(error));
     }
@@ -324,11 +345,14 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = await buildCloudRunPatch(session, options, dependencies);
-    const updateMask = options.restart ?
+    const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+    const sharedMask = Object.keys(sharedTemplate).length > 0 ?
+      ",template.volumes,template.executionEnvironment,template.containers.env" : "";
+    const updateMask = (options.restart ?
       "template.containers,template.serviceAccount" :
       isMarkedRuntimeSession(session) ?
         "template.containers.resources,template.serviceAccount" :
-        "template.containers.resources.limits,template.serviceAccount";
+        "template.containers.resources.limits,template.serviceAccount") + sharedMask;
     const response = await client.request({
       url: `${url}?updateMask=${encodeURIComponent(updateMask)}`,
       method: "PATCH",
@@ -359,13 +383,15 @@ async function markChromeWorkspaceSessionRunning(sessionRef, session, dependenci
 }
 
 async function deleteSessionService(sessionRef, session, options = {}, dependencies = {}) {
-  if (!session.serviceName) {
-    await markSessionStopped(dependencies, sessionRef, session, options.reason);
-    return true;
+  const serviceName = deletionServiceName(session);
+  if (!serviceName) {
+    await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
+    return deletionResult(options, {serviceAbsent: true, shutdownAcknowledged: true, skipped: true});
   }
 
+  let shutdownResult = {ok: true, skipped: true};
   try {
-    const shutdownResult = await requestRunnerShutdown(session, {
+    shutdownResult = await requestRunnerShutdown(session, {
       requireAcknowledgement: false,
       timeoutMs: dependencies.shutdownTimeoutMs,
     });
@@ -378,22 +404,30 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       throw error;
     }
     const client = await (dependencies.auth || auth).getClient();
-    const url = `https://run.googleapis.com/v2/${session.serviceName}`;
+    const url = `https://run.googleapis.com/v2/${serviceName}`;
     const response = await client.request({url, method: "DELETE"});
     await waitForOperation(client, response.data, dependencies);
-    const deletionConfirmed = await waitForCloudRunServiceDeleted(client, session.serviceName, dependencies);
-    await markSessionStopped(dependencies, sessionRef, session, options.reason);
+    const deletionConfirmed = await waitForCloudRunServiceDeleted(client, serviceName, dependencies);
+    await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
     if (deletionConfirmed === "absent" && (options.recoveryWarning || !shutdownResult.ok)) {
       await recordInterruptedRuntimeWarning(sessionRef);
     }
-    return true;
+    return deletionResult(options, {
+      serviceAbsent: true,
+      shutdownAcknowledged: shutdownResult.ok !== false,
+      persistenceWarning: options.recoveryWarning || shutdownResult.ok === false,
+    });
   } catch (error) {
     if (isGoogleNotFound(error)) {
-      await markSessionStopped(dependencies, sessionRef, session, options.reason);
-      if (options.recoveryWarning) {
+      await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
+      if (options.recoveryWarning || shutdownResult.ok === false) {
         await recordInterruptedRuntimeWarning(sessionRef);
       }
-      return true;
+      return deletionResult(options, {
+        serviceAbsent: true,
+        shutdownAcknowledged: shutdownResult.ok !== false,
+        persistenceWarning: options.recoveryWarning || shutdownResult.ok === false,
+      });
     }
 
     const failureState = options.reason === "manual" || options.reason === "idle_timeout" ? "stop_failed" : "delete_failed";
@@ -401,8 +435,29 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       lastError: publicGoogleError(error),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, {reconciliationReason: failureState === "stop_failed" ? "cloud_run_stop_failed" : "cloud_run_delete_failed"}));
-    return false;
+    return deletionResult(options, {
+      serviceAbsent: false,
+      shutdownAcknowledged: shutdownResult.ok !== false,
+      errorCode: cleanName(error.code || "cloud_run_delete_failed"),
+    });
   }
+}
+
+function deletionServiceName(session = {}) {
+  if (isAutomationRuntime(session)) {
+    const runId = String(session.automationRunId || session.runId || "").trim();
+    if (runId) return cloudRunServiceName(session.region || DEFAULT_REGION, automationCloudRunServiceId(runId));
+  }
+  return String(session.serviceName || "").trim();
+}
+
+function deletionResult(options, result) {
+  return options.returnDetails === true ? result : result.serviceAbsent === true;
+}
+
+async function markSessionStoppedIfNeeded(dependencies, sessionRef, session, options = {}) {
+  if (options.skipSessionState === true) return;
+  await markSessionStopped(dependencies, sessionRef, session, options.reason);
 }
 
 async function markSessionStopped(dependencies, sessionRef, session, reason) {
@@ -413,46 +468,135 @@ async function markSessionStopped(dependencies, sessionRef, session, reason) {
 }
 
 async function buildCloudRunService(workspace, session, dependencies = {}) {
+  const sharedTemplate = sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
+  const trustedWorkspaceFields = trustedWorkspaceRuntimeFields(workspace && workspace.sharedStorage);
+  const container = {
+    image: session.image,
+    ports: [{containerPort: 8080}],
+    resources: runtimeResourceRequirements(session),
+    env: [
+      ...await sessionRunnerEnv({
+        ...session,
+        workspaceId: workspace.id,
+        workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
+        workspaceStoragePrefix: workspace.storagePrefix,
+        ...trustedWorkspaceFields,
+      }, {}, dependencies),
+    ],
+    ...(sharedTemplate.containers?.[0] || {}),
+  };
   return {
+    ...(Object.keys(cloudRunServiceLabels(session)).length ? {
+      labels: cloudRunServiceLabels(session),
+    } : {}),
     template: {
+      ...sharedTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
         minInstanceCount: 1,
         maxInstanceCount: 1,
       },
-      containers: [{
-        image: session.image,
-        ports: [{containerPort: 8080}],
-        resources: runtimeResourceRequirements(session),
-        env: [
-          ...await sessionRunnerEnv({
-            ...session,
-            workspaceId: workspace.id,
-            workspaceStorageBucket: workspace.bucket || DEFAULT_BUCKET,
-            workspaceStoragePrefix: workspace.storagePrefix,
-          }, {}, dependencies),
-        ],
-      }],
+      containers: [container],
     },
   };
 }
 
 async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
+  const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+  const trustedWorkspaceFields = trustedWorkspaceRuntimeFields(options.trustedStorageDescriptor);
+  const patchSession = {...session, ...trustedWorkspaceFields};
+  const container = {
+    image: session.image,
+    resources: runtimeResourceRequirements(session),
+    env: options.restart || Object.keys(trustedWorkspaceFields).length > 0 ? await sessionRunnerEnv(patchSession,
+      options.restart ? {restartNonce: Date.now().toString()} : {}, dependencies) : undefined,
+    ...(sharedTemplate.containers?.[0] || {}),
+  };
   return {
     template: {
+      ...sharedTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
         minInstanceCount: 1,
         maxInstanceCount: 1,
       },
-      containers: [{
-        image: session.image,
-        resources: runtimeResourceRequirements(session),
-        env: options.restart ? await sessionRunnerEnv(session, {
-          restartNonce: Date.now().toString(),
-        }, dependencies) : undefined,
-      }],
+      containers: [container],
     },
+  };
+}
+
+function sharedWorkspaceTemplateFor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  // A legacy workspace has no migration descriptor and keeps its old template.
+  // An incomplete or non-ready descriptor is not mountable; client/session
+  // bucket fields are never consulted here.
+  if (descriptor.state && String(descriptor.state).trim().toLowerCase() !== "ready") return {};
+  if (!descriptor.bucketName || !descriptor.storageGeneration) return {};
+  return buildSharedWorkspaceTemplate({
+    bucketName: descriptor.bucketName,
+    storageGeneration: descriptor.storageGeneration,
+  });
+}
+
+function cloudRunServiceLabels(session = {}) {
+  if (!isAutomationRuntime(session)) return {};
+  return {
+    "mapache-runtime-kind": "automation",
+    "mapache-automation-run": automationLabelValue(session.automationRunId || session.runId),
+    "mapache-workspace": automationLabelValue(session.workspaceId),
+    "mapache-owner": automationLabelValue(session.ownerUid),
+  };
+}
+
+function automationLabelValue(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex").slice(0, 40);
+}
+
+function assertCloudRunServiceIdentity(service = {}, session = {}) {
+  if (!isAutomationRuntime(session)) return true;
+  const labels = service.labels || service.metadata?.labels || {};
+  const expected = cloudRunServiceLabels(session);
+  if (!Object.entries(expected).every(([key, value]) => labels[key] === value)) {
+    const error = new Error("cloud_run_service_identity_mismatch");
+    error.code = "cloud_run_service_identity_mismatch";
+    throw error;
+  }
+  return true;
+}
+
+function provisioningOperationOptions(session, dependencies = {}) {
+  if (!isAutomationRuntime(session)) return dependencies;
+  return {
+    ...dependencies,
+    operationTimeoutMs: positiveOperationNumber(
+        dependencies.automationOperationTimeoutMs,
+        positiveOperationNumber(dependencies.operationTimeoutMs, AUTOMATION_CLOUD_RUN_OPERATION_TIMEOUT_MS),
+    ),
+  };
+}
+
+function provisioningErrorForSession(session, error) {
+  if (!isAutomationRuntime(session)) return publicGoogleError(error);
+  if (error && error.code === "cloud_run_service_identity_mismatch") return error.code;
+  if (error && error.code === "cloud_run_operation_timeout") return error.code;
+  const message = String(error && error.message || "").toLowerCase();
+  if (/quota|resource exhausted/.test(message)) return "cloud_run_quota_exceeded";
+  if (/permission|unauthenticated|forbidden/.test(message)) return "cloud_run_permission_denied";
+  if (error && /^[a-z][a-z0-9_]{2,127}$/.test(String(error.code || ""))) return error.code;
+  return "automation_provisioning_failed";
+}
+
+function trustedWorkspaceRuntimeFields(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  if (String(descriptor.state || "ready").trim().toLowerCase() !== "ready" || !descriptor.bucketName || !descriptor.storageGeneration) {
+    return {};
+  }
+  return {
+    runtimeStorageMode: "private",
+    workspaceStorageBucket: String(descriptor.bucketName),
+    workspaceStorageGeneration: String(descriptor.storageGeneration),
+    workspaceStorageMode: SHARED_WORKSPACE_STORAGE_MODE,
+    workspaceStorageReadyMarker: cleanName(descriptor.readyMarker || SHARED_WORKSPACE_READY_MARKER) || SHARED_WORKSPACE_READY_MARKER,
   };
 }
 
@@ -477,10 +621,11 @@ function requireRunnerServiceAccount(session = {}, options = {}) {
 
 async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   const capabilities = resolveSessionCapabilities(session);
-  const terminal = terminalCommandEnv(session);
+  const runtime = runtimeStorageForSession(session);
+  const terminal = terminalCommandEnv(session, runtime);
   const terminalKind = "pi";
-  const homeDir = cleanHomeDir(session.homeDir || "/root");
-  const piAgentDir = `${homeDir}/.pi/agent`.replace(/\/+/g, "/");
+  const homeDir = runtime.homeDir;
+  const piAgentDir = runtime.piAgentDir;
   const environmentEntryIds = sessionEnvironmentEntryIds(session);
   const genericEnvironment = typeof dependencies.buildGenericEnvironmentEnv === "function" ?
     await dependencies.buildGenericEnvironmentEnv(session, environmentEntryIds) : {};
@@ -494,6 +639,11 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     }),
     ...trustedRuntimeEnv(googleMcpRuntime.env),
     {name: "FIREBASE_PROJECT_ID", value: process.env.GCLOUD_PROJECT || ""},
+    {name: "MAPACHE_RUNTIME_KIND", value: session.runtimeKind || "main"},
+    {name: "MAPACHE_AUTOMATION_RUN_ID", value: session.automationRunId || ""},
+    {name: "MAPACHE_RUNTIME_STORAGE_MODE", value: runtime.storageMode},
+    {name: "MAPACHE_RUNTIME_ID", value: runtime.identity},
+    {name: "MAPACHE_RUNTIME_ROOT", value: runtime.root},
     {name: "HOME", value: homeDir},
     {name: "MAPACHE_HOME_DIR", value: homeDir},
     {name: "OWNER_UID", value: session.ownerUid || ""},
@@ -501,18 +651,22 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
-    {name: "HOME_STORAGE_BUCKET", value: session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
-    {name: "HOME_STORAGE_PREFIX", value: session.homeStoragePrefix || homeStoragePrefix(session.workspaceStoragePrefix)},
-    {name: "HOME_SYNC_MODE", value: cleanName(session.homeMode || "persistent") || "persistent"},
+    {name: "WORKSPACE_STORAGE_MODE", value: session.workspaceStorageMode || ""},
+    {name: "WORKSPACE_STORAGE_GENERATION", value: session.workspaceStorageGeneration || ""},
+    {name: "WORKSPACE_STORAGE_READY_MARKER", value: session.workspaceStorageReadyMarker || ""},
+    {name: "HOME_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "HOME_STORAGE_PREFIX", value: runtime.isPrivate ? "" : session.homeStoragePrefix || homeStoragePrefix(session.workspaceStoragePrefix)},
+    {name: "HOME_SYNC_MODE", value: runtime.isPrivate ? "ephemeral" : cleanName(session.homeMode || "persistent") || "persistent"},
     {name: "HOME_ARCHIVE_NAME", value: cleanName(session.homeArchiveName || "home.tar.gz") || "home.tar.gz"},
-    {name: "PI_SESSION_DIR", value: session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "", homeDir)},
-    {name: "PI_SESSION_STORAGE_BUCKET", value: session.piSessionStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
+    {name: "PI_SESSION_DIR", value: runtime.piSessionDir},
+    {name: "PI_SESSION_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.piSessionStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {
       name: "PI_SESSION_STORAGE_PREFIX",
-      value: session.piSessionStoragePrefix || piSessionStoragePrefix(session.workspaceStoragePrefix, session.runnerSessionId || session.id || ""),
+      value: runtime.isPrivate ? "" : session.piSessionStoragePrefix || piSessionStoragePrefix(session.workspaceStoragePrefix, runtime.identity),
     },
-    {name: "PI_SESSION_JSONL_PATH", value: session.piSessionJsonlPath || ""},
+    {name: "PI_SESSION_JSONL_PATH", value: runtime.isPrivate ? "" : session.piSessionJsonlPath || ""},
     {name: "PI_CODING_AGENT_DIR", value: piAgentDir},
+    {name: "MAPACHE_PRIVATE_GIT_DIR", value: runtime.privateGitDir},
     {name: "SESSION_NAME", value: cleanName(session.name || "Terminal session")},
     {name: "HARNESS_ID", value: "pi"},
     {name: "TERMINAL_COMMAND", value: terminal.command},
@@ -520,6 +674,8 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "TERMINAL_KIND", value: terminalKind},
     {name: "SESSION_SHUTDOWN_TOKEN", value: session.shutdownToken || ""},
     {name: "SESSION_BROWSER_TOKEN_SECRET", value: session.browserAccessTokenSecret || ""},
+    {name: "MAPACHE_AUTOMATION_AGENT_TOKEN_URL", value: automationAgentFunctionUrl("automationAgentToken")},
+    {name: "MAPACHE_AUTOMATION_AGENT_API_URL", value: automationAgentFunctionUrl("api")},
     ...agentRuntimeEnvironment(session),
     {name: "WORKSPACE_SOURCE_TYPE", value: cleanName(session.sourceType || "blank") || "blank"},
     {name: "WORKSPACE_SYNC_ROLE", value: cleanName(session.syncWriterRole || "writer") || "writer"},
@@ -539,7 +695,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
         {name: "PREVIEW_LOG_LIMIT", value: "500"},
         {name: "MAPACHE_RUNNER_URL", value: "http://127.0.0.1:8080"},
         {name: "MAPACHE_PREVIEW_URL", value: "http://127.0.0.1:8080/preview/"},
-        {name: "MAPACHE_QA_DIR", value: "/workspace/.mapache/qa"},
+        {name: "MAPACHE_QA_DIR", value: runtime.browserQaDir},
     );
   }
 
@@ -571,7 +727,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
 
   if (capabilities.chrome) {
     env.push(
-        {name: "CHROME_PROFILE_DIR", value: "/var/lib/mapache/chrome/profile"},
+        {name: "CHROME_PROFILE_DIR", value: runtime.chromeProfileDir},
         {name: "CHROME_CDP_HOST", value: "127.0.0.1"},
         {name: "CHROME_CDP_PORT", value: "9222"},
         {name: "CHROME_DISPLAY", value: ":99"},
@@ -585,6 +741,12 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   }
 
   return env.filter(Boolean);
+}
+
+function automationAgentFunctionUrl(name) {
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
+  return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/${name}`;
 }
 
 function trustedRuntimeEnv(value) {
@@ -602,12 +764,42 @@ function sessionEnvironmentEntryIds(session = {}) {
   return [...new Set(selected.map((id) => String(id || "").trim()).filter(Boolean))];
 }
 
-function terminalCommandEnv(session) {
-  const homeDir = cleanHomeDir(session && session.homeDir || "/root");
+function terminalCommandEnv(session, runtime = runtimeStorageForSession(session)) {
   return {
     command: "pi",
-    args: ["--session-dir", session.piSessionDir || piSessionDir(session.runnerSessionId || session.id || "", homeDir), "-c"],
+    args: ["--session-dir", runtime.piSessionDir, "-c"],
   };
+}
+
+function runtimeStorageForSession(session = {}) {
+  const storageMode = isAutomationRuntime(session) ||
+    cleanName(session.runtimeStorageMode).toLowerCase() === "private" ||
+    cleanName(session.workspaceStorageMode).toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE ?
+    "private" : "shared";
+  const identity = normalizeRuntimeIdentity(session.runId || session.runnerSessionId || session.id || "session");
+  const root = storageMode === "private" ? `/var/lib/mapache/runtimes/${identity}` : "";
+  const homeDir = storageMode === "private" ? `${root}/home` : cleanHomeDir(session.homeDir || "/root");
+  return {
+    storageMode,
+    isPrivate: storageMode === "private",
+    identity,
+    root,
+    homeDir,
+    piAgentDir: storageMode === "private" ? `${root}/agent-state/pi` : `${homeDir}/.pi/agent`.replace(/\/+/g, "/"),
+    piSessionDir: storageMode === "private" ? `${root}/agent-state/sessions` :
+      session.piSessionDir || piSessionDir(identity, homeDir),
+    browserQaDir: storageMode === "private" ? `${root}/qa` : "/workspace/.mapache/qa",
+    chromeProfileDir: storageMode === "private" ? `${root}/chrome/profile` : "/var/lib/mapache/chrome/profile",
+    privateGitDir: storageMode === "private" ?
+      (cleanName(session.workspaceStorageMode).toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE && !isAutomationRuntime(session) ?
+        "/var/lib/mapache/git/repository" : `${root}/git/repository`) : "",
+  };
+}
+
+function normalizeRuntimeIdentity(value) {
+  const normalized = String(value || "").trim();
+  const safe = normalized.replace(/[^A-Za-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^[-_]+|[-_]+$/g, "");
+  return (safe || "session").slice(0, 160);
 }
 
 function homeStoragePrefix(workspaceStoragePrefix) {
@@ -841,8 +1033,10 @@ function runtimeResourceRequirements(session = {}) {
 }
 
 module.exports = {
+  assertCloudRunServiceIdentity,
   buildCloudRunPatch,
   buildCloudRunService,
+  cloudRunServiceLabels,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,
@@ -851,6 +1045,7 @@ module.exports = {
   requestRunnerShutdown,
   requireRunnerServiceAccount,
   resourceLimits,
+  runtimeStorageForSession,
   runtimeResourceRequirements,
   runnerServiceAccountValue,
   sessionEnvironmentEntryIds,

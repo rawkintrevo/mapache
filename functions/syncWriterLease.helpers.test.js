@@ -10,10 +10,16 @@ const {
 const now = "timestamp";
 const writer = {id: "session-writer", status: "running", sessionType: "cloud"};
 const reader = {id: "session-reader", status: "provisioning", sessionType: "cloud"};
+const automation = {id: "auto-run-1", runtimeKind: "automation", status: "provisioning", sessionType: "cloud"};
 
 assert.strictEqual(isSyncWriterEligible(writer), true);
 assert.strictEqual(isSyncWriterEligible({status: "running", sessionType: "cloud", terminalKind: "pi"}), true);
 assert.strictEqual(isActiveSyncWriterSession({id: "stopped", status: "stopped"}), false);
+assert.strictEqual(isSyncWriterEligible(automation), false);
+assert.deepStrictEqual(resolveSyncWriterLease({}, [], automation, automation.id, {now}), {
+  sessionUpdates: {syncWriterRole: "none", syncWriterLeaseId: null, syncWriterLeaseUpdatedAt: null},
+  workspaceUpdates: {},
+});
 
 const firstLease = resolveSyncWriterLease({}, [], reader, reader.id, {now});
 assert.strictEqual(firstLease.sessionUpdates.syncWriterRole, "writer");

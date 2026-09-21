@@ -16,6 +16,8 @@ const {
   toClientDoc,
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
+const {isAutomationRuntime} = require("./runtimePaths.helpers");
+const {resolveAutomationAssignment} = require("./automationAssignment.service");
 const {assertNoActiveResize} = require("./sessionResize.service");
 const {sessionSourceMetadata} = require("./github.service");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
@@ -45,6 +47,8 @@ const {
 function createSessionLifecycleService(dependencies = {}) {
   return {
     deleteSession: (uid, workspaceId, sessionId) => deleteSession(uid, workspaceId, sessionId, dependencies),
+    deleteSessionForWorkspace: (sessionRef, session, options = {}) =>
+      deleteSessionForWorkspace(sessionRef, session, options, dependencies),
     markSessionStopped: (sessionRef, session, reason) => markSessionStopped(sessionRef, session, reason, dependencies),
     reapIdleSessions: () => reapIdleSessions(dependencies),
     requireSession: (uid, workspaceId, sessionId) => requireSession(uid, workspaceId, sessionId, dependencies),
@@ -67,7 +71,8 @@ async function requireSession(uid, workspaceId, sessionId, dependencies = {}) {
 }
 
 async function renameSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
-  const {sessionRef} = await requireSession(uid, workspaceId, sessionId, dependencies);
+  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
+  assertMainSession(sessionSnap.data());
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_session_name");
   await sessionRef.update({
@@ -80,6 +85,7 @@ async function renameSession(uid, workspaceId, sessionId, payload, dependencies 
 async function setSessionLongRunning(uid, workspaceId, sessionId, payload, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
   if (!isMarkedRuntimeSession(session)) throw httpError(409, "long_running_unavailable");
   if (!payload || typeof payload.enabled !== "boolean") throw httpError(400, "invalid_long_running");
   await sessionRef.update({
@@ -92,6 +98,8 @@ async function setSessionLongRunning(uid, workspaceId, sessionId, payload, depen
 async function resizeSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
   const {sessionRef, sessionSnap, workspace} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
+  assertMainAdmissionAllowed(workspace, dependencies);
   assertSupportedSessionLaunch(session);
   const resources = dependencies.normalizeRequestedSessionResources(payload, {defaultResources: null});
   if (isMarkedRuntimeSession(session)) {
@@ -105,7 +113,9 @@ async function resizeSession(uid, workspaceId, sessionId, payload, dependencies 
     resources,
     updatedAt: resizedAt,
   }));
-  await dependencies.patchSessionService(sessionRef, {...session, resources});
+  await dependencies.patchSessionService(sessionRef, {...session, resources}, {
+    trustedStorageDescriptor: workspace.sharedStorage,
+  });
   return toClientDoc(await sessionRef.get());
 }
 
@@ -116,6 +126,8 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (!sessionSnap.exists) throw httpError(404, "session_not_found");
   let session = sessionSnap.data();
   if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  assertMainSession(session);
+  assertMainAdmissionAllowed(workspace, dependencies);
   assertNoActiveResize(session);
   if (session.resizeOperationState === "failed") {
     await sessionRef.update({resizeOperationState: null, resizeOperationError: null});
@@ -215,7 +227,10 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
         await dependencies.prepareSessionForProvisioning(restartedSession),
     );
   } else {
-    await dependencies.patchSessionService(sessionRef, restartedSession, {restart: true});
+    await dependencies.patchSessionService(sessionRef, restartedSession, {
+      restart: true,
+      trustedStorageDescriptor: workspace.sharedStorage,
+    });
   }
 
   return toClientDoc(await sessionRef.get());
@@ -373,6 +388,7 @@ function assertRuntimeRecreationAllowed(session) {
 async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
   assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "stopping", {
     ...runtimeSessionStateUpdate(session, "stopping"),
@@ -389,6 +405,16 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
 async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
+  assertMainSession(session);
+  await deleteSessionForWorkspace(sessionRef, session, {reason: "deleted"}, dependencies);
+  return {ok: true};
+}
+
+// Workspace deletion has already tombstoned the workspace, so it cannot use
+// the user-facing requireSession/requireWorkspace path. It still uses the
+// same lifecycle owner and Cloud Run deletion contract as a normal delete.
+async function deleteSessionForWorkspace(sessionRef, session, options = {}, dependencies = {}) {
+  assertMainSession(session);
   assertNoActiveResize(session);
   await sessionRef.update(sessionStatusUpdate(session, "deleting", {
     ...runtimeSessionStateUpdate(session, "stopping"),
@@ -397,12 +423,15 @@ async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }
-  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason: "deleted"});
-  if (!serviceDeleted) {
-    throw httpError(502, "session_delete_failed");
-  }
+  const deletion = await dependencies.deleteSessionService(sessionRef, session, {
+    reason: options.reason || "deleted",
+    returnDetails: true,
+    recoveryWarning: options.recoveryWarning,
+  });
+  const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
+  if (details.serviceAbsent !== true) throw httpError(502, "session_delete_failed");
   await sessionRef.delete();
-  return {ok: true};
+  return {ok: true, ...details};
 }
 
 async function markSessionStopped(sessionRef, session, reason, dependencies = {}) {
@@ -425,6 +454,7 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
     stoppedAt,
     lastError: null,
     updatedAt: stoppedAt,
+    ...(usageRecord ? {usageAccountedAt: stoppedAt} : {}),
   }, {reconciliationReason: reason || "service_deleted"});
   if (reason) stopped.stopReason = reason;
   if (reason === "idle_timeout") stopped.autoStoppedAt = stoppedAt;
@@ -434,16 +464,26 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
       const workspaceSnap = await transaction.get(workspaceRef);
       if (usageRecord) transaction.set(usageRecord.ref, usageRecord.data, {merge: true});
       transaction.update(sessionRef, stopped);
-      if (workspaceSnap.exists && workspaceSnap.data().activeChromeSessionId === sessionRef.id) {
+      const workspace = workspaceSnap.exists ? workspaceSnap.data() : {};
+      if (workspaceSnap.exists && (workspace.activeChromeSessionId === sessionRef.id ||
+        workspace.automationMainAdmissionSessionId === sessionRef.id)) {
         transaction.update(workspaceRef, {
-          activeChromeSessionId: dependencies.admin.firestore.FieldValue.delete(),
-          activeChromeSessionState: "released",
-          activeChromeSessionReleasedAt: stoppedAt,
+          ...(workspace.activeChromeSessionId === sessionRef.id ? {
+            activeChromeSessionId: dependencies.admin.firestore.FieldValue.delete(),
+            activeChromeSessionState: "released",
+            activeChromeSessionReleasedAt: stoppedAt,
+          } : {}),
+          ...(workspace.automationMainAdmissionSessionId === sessionRef.id ? {
+            automationMainAdmissionSessionId: dependencies.admin.firestore.FieldValue.delete(),
+            automationMainAdmissionState: "stopped",
+            automationMainAdmissionUpdatedAt: stoppedAt,
+          } : {}),
           updatedAt: stoppedAt,
-          ...runtimeStateUpdate(workspaceSnap.data(), {...session, id: sessionRef.id}, "stopped", stoppedAt, {release: true}),
+          ...runtimeStateUpdate(workspace, {...session, id: sessionRef.id}, "stopped", stoppedAt, {release: true}),
         });
       }
     });
+    await wakeAutomationQueue(session, dependencies);
     return;
   }
   if (usageRecord) {
@@ -452,9 +492,13 @@ async function markSessionStopped(sessionRef, session, reason, dependencies = {}
     batch.set(usageRecord.ref, usageRecord.data, {merge: true});
     batch.update(sessionRef, stopped);
     await batch.commit();
+    await releaseMainAdmissionReservation(sessionRef, session, reason, dependencies);
+    await wakeAutomationQueue(session, dependencies);
     return;
   }
   await sessionRef.update(stopped);
+  await releaseMainAdmissionReservation(sessionRef, session, reason, dependencies);
+  await wakeAutomationQueue(session, dependencies);
 }
 
 async function reapIdleSessions(dependencies = {}) {
@@ -464,7 +508,14 @@ async function reapIdleSessions(dependencies = {}) {
   const now = Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const session = doc.data();
-    if (isMarkedRuntimeSession(session) && session.longRunning === true) {
+    if (isAutomationRuntime(session)) {
+      const assignment = await resolveAutomationAssignment({
+        db: dependencies.db,
+        session,
+        sessionId: doc.id,
+      });
+      if (assignment.active) return {bypassed: true, bypassReason: "automation_active_run"};
+    } else if (isMarkedRuntimeSession(session) && session.longRunning === true) {
       return {bypassed: true, bypassReason: "long_running"};
     }
     if (!isIdleSession(session, now)) return {idle: false};
@@ -527,6 +578,32 @@ async function reapIdleSessions(dependencies = {}) {
     stopped,
     failed: failed.length,
   };
+}
+
+function assertMainSession(session = {}) {
+  if (isAutomationRuntime(session)) throw httpError(409, "automation_session_controlled");
+}
+
+function assertMainAdmissionAllowed(workspace = {}, dependencies = {}) {
+  if (typeof dependencies.assertMainAdmissionAllowed !== "function") return true;
+  return dependencies.assertMainAdmissionAllowed(workspace);
+}
+
+async function wakeAutomationQueue(session = {}, dependencies = {}) {
+  if (!session.workspaceId || typeof dependencies.wakeAutomationQueue !== "function") return;
+  try {
+    await dependencies.wakeAutomationQueue(session.workspaceId);
+  } catch (error) {
+    logger.warn("Automation queue wake failed after main session stop", {
+      workspaceId: session.workspaceId,
+      error: error.message || String(error),
+    });
+  }
+}
+
+async function releaseMainAdmissionReservation(sessionRef, session, reason, dependencies = {}) {
+  if (isChromeSession(session) || typeof dependencies.releaseChromeWorkspaceSession !== "function") return;
+  await dependencies.releaseChromeWorkspaceSession(sessionRef, session, reason);
 }
 
 async function assertNoActiveGithubWorkspaceSession(workspaceId, sessionId, session, dependencies) {
@@ -596,4 +673,4 @@ function isIdleSession(session, now) {
   return now - baseline >= idleTimeoutMinutes * 60 * 1000;
 }
 
-module.exports = {createSessionLifecycleService, isIdleSession};
+module.exports = {createSessionLifecycleService, deleteSessionForWorkspace, isIdleSession};

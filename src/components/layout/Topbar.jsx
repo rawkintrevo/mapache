@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, Bot, History, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
@@ -25,6 +25,9 @@ export function Topbar({
   onSelectCanvas,
   onSelectWorkspace,
   onShowAdmin,
+  onShowAutomations,
+  onShowAutomationHistory,
+  onShowInstances,
   onShowLogs,
   onShowProfile,
   onSignOut,
@@ -171,6 +174,30 @@ export function Topbar({
             <span aria-hidden="true" className="topbar-action-divider" />
           </>
         ) : null}
+        <Button
+          aria-label="Automations"
+          aria-pressed={state.activePage === "automations"}
+          disabled={!selectedWorkspace}
+          icon
+          title="Automations"
+          tooltip="Automations"
+          variant={state.activePage === "automations" ? "primary" : "secondary"}
+          onClick={onShowAutomations}
+        >
+          <Blocks aria-hidden="true" />
+        </Button>
+        <Button
+          aria-label="Run history"
+          aria-pressed={state.activePage === "automation-history"}
+          icon
+          title="Run history"
+          tooltip="Run history"
+          variant={state.activePage === "automation-history" ? "primary" : "secondary"}
+          onClick={onShowAutomationHistory}
+        >
+          <History aria-hidden="true" />
+        </Button>
+        <span aria-hidden="true" className="topbar-action-divider" />
         {showManagePiAuth ? (
           <Button
             aria-label={managePiAuthLabel}
@@ -225,7 +252,9 @@ export function Topbar({
           disabled={busy}
           onRefresh={onRefresh}
           onSelectCanvas={onSelectCanvas}
+          onShowAutomations={onShowAutomations}
           onShowLogs={onShowLogs}
+          onShowAutomationHistory={onShowAutomationHistory}
           showWorkspaceTools={showWorkspaceTools}
           managePiAuthLabel={managePiAuthLabel}
           onDeleteWorkspace={onDeleteWorkspace}
@@ -252,6 +281,7 @@ export function Topbar({
           state={state}
           onRefresh={onRefresh}
           onShowAdmin={onShowAdmin}
+          onShowInstances={onShowInstances}
           onShowProfile={onShowProfile}
           onSignOut={onSignOut}
         />

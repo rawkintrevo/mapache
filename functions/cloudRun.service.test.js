@@ -2,8 +2,10 @@
 
 const assert = require("assert");
 const {
+  assertCloudRunServiceIdentity,
   buildCloudRunPatch,
   buildCloudRunService,
+  cloudRunServiceLabels,
   createCloudRunService,
   homeStoragePrefix,
   normalizeResources,
@@ -12,6 +14,7 @@ const {
   requireRunnerServiceAccount,
   resourceLimits,
   runnerServiceAccountValue,
+  runtimeStorageForSession,
   sessionEnvironmentEntryIds,
   sessionRunnerEnv,
   stringifySyncPolicyExclude,
@@ -63,6 +66,24 @@ assert.strictEqual(homeStoragePrefix("workspaces/u/w"), "workspaces/u/w/.mapache
 assert.strictEqual(piSessionDir("session-1"), "/root/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionDir("session-1", "/home/mapache"), "/home/mapache/.pi/agent/mapache-sessions/session-1");
 assert.strictEqual(piSessionStoragePrefix("workspaces/u/w", "session-1"), "workspaces/u/w/.mapache-internal/sessions/session-1/pi-session");
+assert.deepStrictEqual(runtimeStorageForSession({runnerSessionId: "session-1", homeDir: "/root"}), {
+  storageMode: "shared",
+  isPrivate: false,
+  identity: "session-1",
+  root: "",
+  homeDir: "/root",
+  piAgentDir: "/root/.pi/agent",
+  piSessionDir: "/root/.pi/agent/mapache-sessions/session-1",
+  browserQaDir: "/workspace/.mapache/qa",
+  chromeProfileDir: "/var/lib/mapache/chrome/profile",
+  privateGitDir: "",
+});
+assert.equal(runtimeStorageForSession({runtimeKind: "automation", runId: "run-1"}).homeDir,
+    "/var/lib/mapache/runtimes/run-1/home");
+assert.equal(runtimeStorageForSession({
+  runnerSessionId: "session-1",
+  workspaceStorageMode: "shared-gcsfuse-v1",
+}).privateGitDir, "/var/lib/mapache/git/repository");
 assert.strictEqual(stringifySyncPolicyExclude([".git/", "node_modules/"]), "[\".git/\",\"node_modules/\"]");
 assert.strictEqual(stringifySyncPolicyExclude("bad"), "[]");
 assert.deepStrictEqual(sessionEnvironmentEntryIds({environmentEntryIds: [" env-1 ", "env-1", ""]}), ["env-1"]);
@@ -160,6 +181,36 @@ assert.deepStrictEqual(terminalCommandEnv({
   }));
   assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_UI_VERSION, "pi-web-ui-v1");
   assert.strictEqual(markedAgentEnv.MAPACHE_AGENT_RUNTIME_GENERATION, "7");
+
+  const automationEnv = envMap(await sessionRunnerEnv({
+    automationRunId: "run-123",
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "auto-run-1",
+    runId: "run-123",
+    runtimeKind: "automation",
+    homeDir: "/root",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
+    piSessionJsonlPath: "/workspace/.pi/agent/mapache-sessions/old.jsonl",
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: false, chrome: true},
+  }));
+  assert.strictEqual(automationEnv.MAPACHE_RUNTIME_KIND, "automation");
+  assert.strictEqual(automationEnv.MAPACHE_AUTOMATION_RUN_ID, "run-123");
+  assert.strictEqual(automationEnv.MAPACHE_RUNTIME_STORAGE_MODE, "private");
+  assert.strictEqual(automationEnv.MAPACHE_RUNTIME_ID, "run-123");
+  assert.strictEqual(automationEnv.HOME, "/var/lib/mapache/runtimes/run-123/home");
+  assert.strictEqual(automationEnv.HOME_STORAGE_PREFIX, "");
+  assert.strictEqual(automationEnv.HOME_SYNC_MODE, "ephemeral");
+  assert.strictEqual(automationEnv.PI_CODING_AGENT_DIR, "/var/lib/mapache/runtimes/run-123/agent-state/pi");
+  assert.strictEqual(automationEnv.PI_SESSION_DIR, "/var/lib/mapache/runtimes/run-123/agent-state/sessions");
+  assert.strictEqual(automationEnv.PI_SESSION_STORAGE_PREFIX, "");
+  assert.strictEqual(automationEnv.PI_SESSION_JSONL_PATH, "");
+  assert.strictEqual(automationEnv.CHROME_PROFILE_DIR, "/var/lib/mapache/runtimes/run-123/chrome/profile");
+  assert.strictEqual(automationEnv.MAPACHE_QA_DIR, "/var/lib/mapache/runtimes/run-123/qa");
+  assert.strictEqual(automationEnv.MAPACHE_PRIVATE_GIT_DIR, "/var/lib/mapache/runtimes/run-123/git/repository");
+  assert.equal(automationEnv.TERMINAL_ARGS.includes("/workspace"), false);
 
   const previewEnv = envMap(await sessionRunnerEnv({
     ownerUid: "uid-1",
@@ -270,6 +321,55 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
 
+  const sharedService = await buildCloudRunService({
+    id: "workspace-1",
+    bucket: "legacy-archive-bucket",
+    storagePrefix: "workspaces/uid-1/demo",
+    sharedStorage: {
+      state: "ready",
+      bucketName: "mpw-1234567890-workspace1",
+      storageGeneration: "42",
+    },
+  }, {
+    ownerUid: "uid-1",
+    runnerSessionId: "shared-session",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  });
+  assert.equal(sharedService.template.executionEnvironment, "EXECUTION_ENVIRONMENT_GEN2");
+  assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
+  assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.mountOptions.includes("trees/42"), true);
+  assert.deepStrictEqual(sharedService.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
+  const sharedServiceEnv = envMap(sharedService.template.containers[0].env);
+  assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
+  assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_GENERATION, "42");
+  assert.equal(sharedServiceEnv.STORAGE_BUCKET, "mpw-1234567890-workspace1");
+  assert.equal(sharedServiceEnv.MAPACHE_RUNTIME_STORAGE_MODE, "private");
+
+  const automationSession = {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runtimeKind: "automation",
+    automationRunId: "run-123",
+    runnerSessionId: "auto-run-123",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "2", memory: "2Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: true, previewQa: true, functions: false, chrome: true},
+  };
+  const automationService = await buildCloudRunService({
+    id: "workspace-1",
+    sharedStorage: {state: "ready", bucketName: "mpw-1234567890-workspace1", storageGeneration: "42"},
+  }, automationSession);
+  assert.deepStrictEqual(automationService.labels, cloudRunServiceLabels(automationSession));
+  assert.equal(automationService.labels["mapache-runtime-kind"], "automation");
+  assert.doesNotThrow(() => assertCloudRunServiceIdentity({labels: automationService.labels}, automationSession));
+  assert.throws(() => assertCloudRunServiceIdentity({labels: {...automationService.labels, "mapache-workspace": "wrong"}}, automationSession),
+      /cloud_run_service_identity_mismatch/);
+
   const patch = await buildCloudRunPatch({
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
@@ -282,6 +382,23 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
   assert.strictEqual(patch.template.containers[0].resources.cpuIdle, undefined);
+
+  const sharedPatch = await buildCloudRunPatch({
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+  }, {
+    trustedStorageDescriptor: {
+      bucketName: "mpw-1234567890-workspace1",
+      storageGeneration: "42",
+    },
+  });
+  assert.equal(sharedPatch.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
+  assert.deepStrictEqual(sharedPatch.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
+  const sharedPatchEnv = envMap(sharedPatch.template.containers[0].env);
+  assert.equal(sharedPatchEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
+  assert.equal(sharedPatchEnv.WORKSPACE_STORAGE_GENERATION, "42");
 
   const markedPatch = await buildCloudRunPatch({
     agentUiVersion: "pi-web-ui-v1",

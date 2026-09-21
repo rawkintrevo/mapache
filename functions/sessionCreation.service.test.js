@@ -53,7 +53,7 @@ const dependencies = {
     mcpConfig: {},
   }),
   runnerServiceAccountValue: () => "runner@example.iam.gserviceaccount.com",
-  sessionCollection: () => ({doc: () => sessionRef}),
+  sessionCollection: () => ({doc: (id) => ({...sessionRef, id})}),
 };
 const service = createSessionCreationService(dependencies);
 
@@ -144,6 +144,21 @@ async function createWithWorkspace(workspace, payload) {
       }, {operationId: "marked-unsupported-1", type: "ssh"}),
       (error) => error.status === 400 && error.publicMessage === "unsupported_session_type",
   );
+
+  const automation = await createWithWorkspace({
+    ownerUid: "user-1",
+    agentUiVersion: AGENT_UI_VERSION,
+    bucket: "bucket",
+    storagePrefix: "workspaces/user-1/automation",
+    source: {type: "blank"},
+    mcpConfig: {},
+  }, {operationId: "automation-operation", runtimeKind: "automation", runId: "run-123"});
+  assert.strictEqual(automation.id, "auto-run-123");
+  assert.strictEqual(automation.runtimeKind, "automation");
+  assert.strictEqual(automation.automationRunId, "run-123");
+  assert.match(automation.serviceId, /^mpauto-[a-f0-9]{40}$/);
+  assert.strictEqual(automation.longRunning, true);
+  assert.strictEqual(reservations[0].args[3].singleRunner, false);
 
   console.log("session creation service tests passed");
 })().catch((error) => {

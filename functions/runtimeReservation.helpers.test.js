@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const {
   isActiveMarkedRuntimeSession,
+  isWorkspaceStorageMigrationActive,
+  assertWorkspaceStorageMigrationAllowed,
   isMarkedRuntimeWorkspace,
   nextRuntimeGeneration,
   resolveRuntimeReservation,
@@ -27,6 +29,11 @@ assert.strictEqual(isActiveMarkedRuntimeSession(session), true);
 assert.strictEqual(isActiveMarkedRuntimeSession({...session, status: "stopping"}), true);
 assert.strictEqual(isActiveMarkedRuntimeSession({...session, status: "provision_failed"}), false);
 assert.strictEqual(nextRuntimeGeneration(workspace, [session, {agentRuntimeGeneration: 9}]), 10);
+assert.strictEqual(isWorkspaceStorageMigrationActive({sharedStorageMigration: {operationId: "op", state: "migrating"}}), true);
+assert.throws(
+    () => assertWorkspaceStorageMigrationAllowed({sharedStorageMigration: {operationId: "op", state: "preparing"}}),
+    (error) => error.publicMessage === "workspace_storage_migration_active",
+);
 
 const reservation = resolveRuntimeReservation(
     {agentUiVersion: AGENT_UI_VERSION},

@@ -11,6 +11,8 @@ Mapache owns the surrounding workspace/session shell and account connections.
   `src/state/initialState.js`
 - Workspace selection, resource settings, and lifecycle: `src/controllers/workspaceController.js`
 - Canonical runtime subscription/selection: `src/controllers/sessionSubscriptionController.js`
+- Automation API/state/polling: `src/services/automationsApi.js` and
+  `src/controllers/automationsController.js`
 - API client: `src/services/api.js`
 - React root and shell: `src/App.jsx`, `src/components/layout/`,
   `src/components/drawers/`, and `src/components/workspaces/`
@@ -29,10 +31,15 @@ React. The subscription resolves the workspace's canonical runtime; access URLs
 are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
+On the first authenticated refresh, `src/utils/userTimezone.js` initializes a
+missing profile timezone from the browser's IANA timezone (falling back to
+`UTC`) through `PATCH /api/me`. Existing saved timezones are never overwritten;
+the schedule preview API remains server-authoritative.
+
 The signed-in shell has no left drawer. Its top navigation contains workspace
 Play/Pause lifecycle control beside the workspace selector, followed by the
 selected canonical cloud runtime's live CPU and memory meters, then
-marked-runtime Agent and Logs icons, compact actions for Pi auth, generic
+marked-runtime Agent and Logs icons, workspace Automations, and compact actions for Pi auth, generic
 environment keys, workspace MCP servers, and Google Workspace, plus an avatar
 icon for the user menu. At tablet and phone widths the shell becomes a two-row
 header: brand/avatar/More on the first row and a shrinkable workspace selector
@@ -47,6 +54,16 @@ it persists the explicit Long-running policy through
 `setSessionLongRunningState`. The shell no longer reserves either sidebar column. GitHub
 account/repository connection controls remain in the profile and workspace
 creation flows.
+
+Workspace **Automations** is a lazy, workspace-scoped surface opened from the
+topbar or responsive More menu. Opening it never starts a runner. The panel owns
+definition selection/editing, storage preparation status, max-concurrency edits,
+enable/disable, Run now, delete confirmation, and links from active/queued run
+reasons to global history. Storage readiness gates enabling and execution while
+still allowing disabled workflow drafts to be saved; preparation never stops the
+main workspace automatically. The panel delegates requests and revision fencing
+to `automationsController` and returns to the workspace surface without changing
+the selected runtime.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
@@ -124,6 +141,52 @@ session subscription follows `resizeOperationState`; queued/running operations
 show **Resizing** and disable the workspace lifecycle button. Terminal failure
 shows `resizeOperationError`, and successful completion restores the normal
 runtime status. The browser does not hold a request open for shutdown/startup.
+
+Automation definitions, settings, storage preparation, schedule preview, manual
+enqueue, owner-wide history, run events, stop, cancel, and restart use the
+dedicated `automationsApi` facade over the shared HTTP client. The controller
+stores workspace-scoped definitions and revision state, storage readiness,
+concurrency settings, history filters/cursors, the selected run, and bounded
+event pages in `state.automations`. Each response is fenced by user, selected
+workspace, and controller epoch before it can mutate state. Manual run/restart
+actions retain one `Idempotency-Key` across a failed retry and rotate it after
+success; revision conflicts refresh the definition and leave a visible conflict
+marker. Active/queued history polls every five seconds only while the document
+is visible, and no Firestore history listener is created. Pending-run and
+main-paused responses retain their server-provided run IDs for UI links.
+
+The avatar menu opens the lazy `InstancesPage` through a focused
+`instancesController` and `instancesApi` facade. The page reads the
+owner-scoped `/api/instances` inventory, keeps workspace/type/status filters and
+opaque cursor paging, and polls every five seconds only while the document is
+visible. Main-session Stop delegates the existing session stop/Pause endpoint;
+automation Stop delegates the run cleanup endpoint. The page never performs
+Cloud Run discovery or offers bulk/forced termination, and logout clears the
+inventory and stops its polling lifecycle.
+
+The automation editor is a controlled component owned by the automation workflow.
+`AutomationEditor` keeps edits, expected revisions, and save/error retention in the
+parent controller; `ScheduleControls` converts daily and weekly selections to
+canonical numeric five-field cron while preserving arbitrary advanced expressions.
+Preview requests are debounced and fenced so an older response cannot replace a
+newer schedule. New definitions use the saved profile timezone (or the browser
+timezone during profile bootstrap); editing always preserves the stored timezone.
+The Recovery fieldset exposes the backend's bounded missed-run and safe-retry
+policies with the same defaults and replay-safety acknowledgement. Run details
+render catch-up scheduling time, immutable recovery snapshot values, and retry
+family links/reasons. Recovery settings are part of the saved definition and
+the run snapshot, so editing a definition never mutates an accepted run.
+The form intentionally remains mountable without workspace navigation: the
+automation management surface owns routing and placement in a later slice.
+
+Global run history is a separate controller scope from the selected-workspace
+automation slice. `RunHistoryPage` can load owner-wide runs when no workspace is
+selected, preserving filters and cursor state while `RunDetailsPanel` loads a
+single snapshot and paged archived events. History actions use the existing
+server-owned Stop/Restart endpoints; archived prompt and transcript content is
+rendered through `react-markdown` without raw HTML or a live runner session.
+Entering history disables runtime access URL and resource-metrics attachment so
+the page cannot boot or reconnect the main runtime merely to inspect a past run.
 
 ## Invariants
 

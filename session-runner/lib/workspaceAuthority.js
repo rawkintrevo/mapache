@@ -28,6 +28,7 @@ function createWorkspaceAuthority({
   setIntervalFn = setInterval,
 } = {}) {
   const enabled = config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1";
+  const automationRuntime = String(config.runtimeKind || "").trim().toLowerCase() === "automation";
   const bootInstanceId = String(instanceId || randomUUIDImpl()).trim();
   const renewalIntervalMs = positiveNumber(
       config.workspaceAuthorityRenewalIntervalMs,
@@ -61,7 +62,12 @@ function createWorkspaceAuthority({
       const existingWorkspaceBoot = String(workspace.agentRuntimeBootInstanceId || "").trim();
       const existingSessionBoot = String(session.agentRuntimeBootInstanceId || "").trim();
       const workspaceState = String(workspace.agentRuntimeAuthorityState || "").trim().toLowerCase();
-      if (existingWorkspaceBoot || existingSessionBoot) {
+      const sessionState = String(session.agentRuntimeAuthorityState || "").trim().toLowerCase();
+      if (automationRuntime && existingSessionBoot) {
+        if (existingSessionBoot === bootInstanceId && sessionState === "admitted") return;
+        throw authorityError("workspace_runtime_authority_denied");
+      }
+      if (!automationRuntime && (existingWorkspaceBoot || existingSessionBoot)) {
         if (existingWorkspaceBoot === bootInstanceId && existingSessionBoot === bootInstanceId && workspaceState === "admitted") {
           return;
         }
@@ -69,18 +75,19 @@ function createWorkspaceAuthority({
       }
 
       const timestamp = serverTimestamp();
-      transaction.update(refs.workspaceRef, {
+      const workspaceUpdates = {
         agentRuntimeAuthorityState: "admitted",
         agentRuntimeBootAcquiredAt: timestamp,
         agentRuntimeBootHeartbeatAt: timestamp,
         agentRuntimeBootInstanceId: bootInstanceId,
-      });
+      };
       transaction.update(refs.sessionRef, {
         agentRuntimeAuthorityState: "admitted",
         agentRuntimeBootAcquiredAt: timestamp,
         agentRuntimeBootHeartbeatAt: timestamp,
         agentRuntimeBootInstanceId: bootInstanceId,
       });
+      if (!automationRuntime) transaction.update(refs.workspaceRef, workspaceUpdates);
     });
     admitted = true;
     lossReported = false;
@@ -112,8 +119,8 @@ function createWorkspaceAuthority({
         const {workspace, session} = await readAuthority(transaction, refs);
         validateCurrent(workspace, session);
         const timestamp = serverTimestamp();
-        transaction.update(refs.workspaceRef, {agentRuntimeBootHeartbeatAt: timestamp});
         transaction.update(refs.sessionRef, {agentRuntimeBootHeartbeatAt: timestamp});
+        if (!automationRuntime) transaction.update(refs.workspaceRef, {agentRuntimeBootHeartbeatAt: timestamp});
       });
       return true;
     } catch (error) {
@@ -134,16 +141,17 @@ function createWorkspaceAuthority({
         const {workspace, session} = await readAuthority(transaction, refs);
         if (!matchesCurrent(workspace, session)) return false;
         const timestamp = serverTimestamp();
-        transaction.update(refs.workspaceRef, {
+        const workspaceUpdates = {
           agentRuntimeAuthorityState: "released",
           agentRuntimeBootHeartbeatAt: timestamp,
           agentRuntimeBootInstanceId: null,
-        });
+        };
         transaction.update(refs.sessionRef, {
           agentRuntimeAuthorityState: "released",
           agentRuntimeBootHeartbeatAt: timestamp,
           agentRuntimeBootInstanceId: null,
         });
+        if (!automationRuntime) transaction.update(refs.workspaceRef, workspaceUpdates);
         logger.log?.(`released workspace runtime authority (${reason})`);
         return true;
       });
@@ -166,16 +174,17 @@ function createWorkspaceAuthority({
       const {workspace, session} = await readAuthority(transaction, refs);
       validateCurrent(workspace, session);
       const timestamp = serverTimestamp();
-      transaction.update(refs.workspaceRef, {
+      const workspaceUpdates = {
         agentRuntimeAuthorityState: "released",
         agentRuntimeBootHeartbeatAt: timestamp,
         agentRuntimeBootInstanceId: null,
-      });
+      };
       transaction.update(refs.sessionRef, {
         agentRuntimeAuthorityState: "released",
         agentRuntimeBootHeartbeatAt: timestamp,
         agentRuntimeBootInstanceId: null,
       });
+      if (!automationRuntime) transaction.update(refs.workspaceRef, workspaceUpdates);
     });
     const error = authorityError(reason);
     await loseAuthority(error);
@@ -254,7 +263,20 @@ function createWorkspaceAuthority({
       throw authorityError("workspace_runtime_authority_denied");
     }
     const generation = positiveGeneration(config.agentRuntimeGeneration);
-    if (!generation || positiveGeneration(workspace.agentRuntimeGeneration) !== generation || positiveGeneration(session.agentRuntimeGeneration) !== generation) {
+    if (!generation || positiveGeneration(session.agentRuntimeGeneration) !== generation) {
+      throw authorityError("workspace_runtime_generation_mismatch");
+    }
+    if (automationRuntime) {
+      if (String(session.runtimeKind || "").trim().toLowerCase() !== "automation" || String(session.agentRuntimeSessionId || "").trim() !== String(config.sessionId) ||
+          (config.automationRunId && String(session.automationRunId || "").trim() !== String(config.automationRunId))) {
+        throw authorityError("workspace_runtime_authority_denied");
+      }
+      if (!ADMISSION_SESSION_STATES.has(String(session.status || "").trim().toLowerCase())) {
+        throw authorityError("workspace_runtime_authority_denied");
+      }
+      return;
+    }
+    if (positiveGeneration(workspace.agentRuntimeGeneration) !== generation) {
       throw authorityError("workspace_runtime_generation_mismatch");
     }
     if (String(workspace.agentRuntimeSessionId || "").trim() !== String(config.sessionId)) {
@@ -268,12 +290,18 @@ function createWorkspaceAuthority({
 
   function validateCurrent(workspace, session) {
     validateReservation(workspace, session);
-    if (!matchesCurrent(workspace, session) || String(workspace.agentRuntimeAuthorityState || "").trim().toLowerCase() !== "admitted") {
+    if (!matchesCurrent(workspace, session) || (!automationRuntime && String(workspace.agentRuntimeAuthorityState || "").trim().toLowerCase() !== "admitted") ||
+        (automationRuntime && String(session.agentRuntimeAuthorityState || "").trim().toLowerCase() !== "admitted")) {
       throw authorityError("workspace_writer_authority_lost");
     }
   }
 
   function matchesCurrent(workspace, session) {
+    if (automationRuntime) {
+      return String(session.agentRuntimeBootInstanceId || "").trim() === bootInstanceId &&
+        String(session.agentRuntimeSessionId || "").trim() === String(config.sessionId) &&
+        positiveGeneration(session.agentRuntimeGeneration) === positiveGeneration(config.agentRuntimeGeneration);
+    }
     return String(workspace.agentRuntimeBootInstanceId || "").trim() === bootInstanceId &&
       String(session.agentRuntimeBootInstanceId || "").trim() === bootInstanceId &&
       String(workspace.agentRuntimeSessionId || "").trim() === String(config.sessionId) &&

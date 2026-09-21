@@ -90,6 +90,45 @@ function createTestApiHandlers() {
     payload: {workspaces: {handler: "listWorkspaces", args: ["user-1"]}},
   });
   assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "me"},
+    body: {timezone: "UTC"},
+  }), {
+    status: 200,
+    payload: {user: {handler: "updateUserTimezone", args: ["user-1", {timezone: "UTC"}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "automationSchedulePreview"},
+    body: {cron: "0 10 * * *", timezone: "UTC"},
+  }), {
+    status: 200,
+    payload: {handler: "previewAutomationSchedule", args: [{cron: "0 10 * * *", timezone: "UTC"}]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    route: {name: "instances"},
+    query: {limit: "10", type: "automation"},
+  }), {
+    status: 200,
+    payload: {handler: "listActiveInstances", args: ["user-1", {limit: "10", type: "automation"}]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "automations", workspaceId: "workspace-1"},
+    body: {name: "Daily", prompt: "Report", cron: "0 10 * * *"},
+  }), {
+    status: 201,
+    payload: {automation: {handler: "createAutomation", args: ["user-1", "workspace-1", {name: "Daily", prompt: "Report", cron: "0 10 * * *"}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "automation", workspaceId: "workspace-1", automationId: "automation-1"},
+    body: {expectedRevision: 1, enabled: false},
+  }), {
+    status: 200,
+    payload: {automation: {handler: "updateAutomation", args: ["user-1", "workspace-1", "automation-1", {expectedRevision: 1, enabled: false}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "sessions", workspaceId: "workspace-1"},
     body: {name: "Session"},

@@ -76,6 +76,57 @@ export function createGoogleWorkspaceState(overrides = {}) {
   };
 }
 
+export function createAutomationsState(overrides = {}) {
+  return {
+    busy: false,
+    busyAction: "",
+    error: "",
+    selectedWorkspaceId: null,
+    definitions: [],
+    selectedAutomationId: "",
+    editRevision: null,
+    storageReady: false,
+    storageState: "",
+    maxConcurrency: 1,
+    history: {
+      loading: false,
+      error: "",
+      runs: [],
+      filters: {},
+      nextCursor: "",
+      cursor: "",
+    },
+    globalHistory: {
+      loading: false,
+      error: "",
+      runs: [],
+      filters: {},
+      nextCursor: "",
+      cursor: "",
+    },
+    selectedRunId: "",
+    selectedRunScope: "workspace",
+    selectedRun: null,
+    events: [],
+    eventsNextCursor: "",
+    conflict: null,
+    pendingRunId: "",
+    requiresMainPausedRunId: "",
+    ...overrides,
+  };
+}
+
+export function createInstancesState(overrides = {}) {
+  return {
+    loading: false,
+    error: "",
+    instances: [],
+    filters: {workspaceId: "", type: "", status: ""},
+    nextCursor: "",
+    ...overrides,
+  };
+}
+
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -106,6 +157,8 @@ export function createInitialState() {
     repoPicker: createRepoPickerState(),
     githubConnection: createGithubConnectionState(),
     googleWorkspace: createGoogleWorkspaceState(),
+    automations: createAutomationsState(),
+    instances: createInstancesState(),
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     sessionEditModalSessionId: null,

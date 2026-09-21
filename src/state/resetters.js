@@ -1,6 +1,7 @@
 import {
   createAdminState,
   createGoogleWorkspaceState,
+  createAutomationsState,
   createMcpServersState,
   createPiAuthState,
 } from "./initialState.js";
@@ -21,6 +22,10 @@ export function resetGoogleWorkspace(state) {
   state.googleWorkspace = createGoogleWorkspaceState();
 }
 
+export function resetAutomations(state) {
+  state.automations = createAutomationsState();
+}
+
 export function resetSignedOutState(state) {
   state.sessionEditModalSessionId = null;
   state.googleWorkspaceManageModalOpen = false;
@@ -33,4 +38,5 @@ export function resetSignedOutState(state) {
   resetMcpServers(state);
   resetPiAuth(state);
   resetGoogleWorkspace(state);
+  resetAutomations(state);
 }

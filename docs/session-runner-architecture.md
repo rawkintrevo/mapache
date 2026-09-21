@@ -14,6 +14,9 @@ protected HTTP routes, and runs the ordered startup/shutdown lifecycle.
   capture, publication, validation, and restore.
 - `lib/piWebUiProcess.js`: one managed upstream pi-web-ui child on the marked
   path; it does not launch a second Pi TUI or a Mapache chat/Goals process.
+- `lib/automationExecution.service.js`: owner/workspace/session-bound
+  browserless run assignment, claim-before-submit execution, bounded private
+  status polling, heartbeat publication, and interruption handling.
 - `lib/agentGateway.js` and `lib/agentWebSocketGateway.js`: signed `/agent/`
   HTTP/WebSocket forwarding to the private upstream child.
 - `lib/terminal.js` and `lib/shell.js`: terminal and independent shell PTYs.
@@ -38,6 +41,45 @@ The startup sequence fails closed if restore validation, credential/MCP
 materialization, authority acquisition, the pinned adapter, or upstream health
 checks fail. No startup path installs or patches `pi-goal-x`, starts Goals RPC,
 tails a transcript into a second UI, or automatically launches a second Pi TUI.
+
+After mount, private materialization, and boot admission, an automation runner
+resolves its owner-bound `automationRuns/{runId}` assignment and claims
+`executionStartedAt` transactionally with the admitted session identity. It
+then submits the prompt once through the private control socket and polls
+`automationStatus` independently of HTTP requests and browser connections.
+Existing claims are treated as interrupted on a later boot, so a crash between
+claim and submission cannot replay an unattended prompt. Terminal outcomes are
+normalized to stable Firestore codes and leave `cleanupState: "pending"` for
+the existing cleanup path.
+
+When the protected runner shutdown route is used for an automation assignment,
+the runner first asks pi-web-ui to cancel the run through its private control
+socket, waits for that bounded response, and then quiesces the managed agent
+and finalizes the normal checkpoint/artifact pipeline. A cancellation already
+committed by Functions is preserved if the upstream reports success during the
+race. If the cooperative request or final persistence cannot be acknowledged,
+the control plane deletes the deterministic run service and records partial
+checkpoint evidence rather than reporting a complete save.
+
+The main runtime uses the workspace and session documents as a paired authority
+record. An automation runtime uses only its deterministic run session for
+generation, boot admission, heartbeat, and writer fencing, so multiple
+automation runs can coexist without replacing the main workspace identity or
+each other. Automation checkpoint and workspace-file pointers are committed on
+that session document; a stale or duplicate boot is rejected before agent or
+shared-file writes.
+
+Runners default to the legacy shared storage mode. Automation sessions set
+`MAPACHE_RUNTIME_STORAGE_MODE=private` and a run-scoped identity; the runner
+then derives HOME, Pi auth/settings, transcripts, MCP configuration, UI data,
+control sockets, Chrome profile, QA output, and Git metadata below the private
+`/var/lib/mapache/runtimes/{sessionId-or-runId}` root. User-authored skills and
+project configuration remain in `/workspace`. Generated MCP JSON is written to
+the private Pi config and passed to the managed child with `--mcp-config`, so
+the shared `/workspace/.mcp.json` is never replaced by credential-bearing
+runtime data. Private auth is materialized from the canonical Mapache stores on
+each boot, while Google and GitHub access continues to use the existing
+short-lived broker paths.
 
 Quiesce rejects new work and waits for the managed child and writers to stop.
 The runner then captures a final acknowledged checkpoint, closes browser/SSH
@@ -77,15 +119,43 @@ hashes, and safe permissions. Complete JSONL prefixes may be captured while a
 turn is live, but malformed interior records, traversal, unsafe symlinks, mixed
 generations, and corrupt objects are rejected.
 
-Workspace files and `.git` remain under their existing Cloud Storage/archive
-ownership. Marked workspace-file publication is generation/boot fenced and
-cannot be replaced by stale delayed writers. Credentials, provider-key stores,
-MCP OAuth state, GitHub CLI auth, and other secret-bearing paths are excluded
-from persistent agent snapshots and recreated from Mapache stores.
+Workspace files and legacy `.git` remain under their existing Cloud
+Storage/archive ownership. Marked workspace-file publication is generation/boot
+fenced and cannot be replaced by stale delayed writers. Private automation
+roots are never archive-published to the shared worktree prefix: home,
+provider-key stores, MCP OAuth state, GitHub CLI auth, generated MCP config,
+Chrome profile, sockets, SQLite/cache state, and private Git metadata stay
+local to the run until their dedicated persistence work is applied. Persistent
+agent snapshots continue to allowlist safe settings/transcripts and exclude
+auth, tokens, connector state, locks, sockets, and cache databases.
+
+The marked Pi runtime also exposes local mode-0600 sockets inside that private
+root. The runner uses one for quiesce/activity and browserless conversation
+controls (`startAutomation`, `automationStatus`, and `cancelAutomation`), and
+automation runtimes expose a second runner-owned HTTP Unix socket to the
+image-owned `mapache-automations` MCP server. That MCP server exposes only the
+bounded current-workspace automation API; the runner keeps bearer-token minting
+and refresh outside the child process. Automation creates one fresh persistent
+conversation per run, keeps its reducer state private to the runner, rejects a
+second run, and uses the existing session abort path for cancellation. These
+controls are not Mapache Chat/Goals routes and are not forwarded through the
+public browser gateway.
+
+Checkpoint publication selects the workspace pointer for main runtimes and the
+run-session pointer for automation runtimes. Both paths require the current
+session/generation/boot identity and admitted authority before publishing.
+
+The idle reaper applies the same boundary: an automation session is bypassed
+only when its admitted session identity resolves to an active owner-bound run.
+It does not use browser socket count or the user-controlled `longRunning` flag
+as automation liveness signals. Missing or stale assignments remain eligible
+for ordinary cleanup.
 
 ## Invariants
 
 - There is exactly one admitted managed upstream agent child per marked runner.
+- Automation runtimes materialize exactly one image-owned automation MCP
+  server, preserving user MCP entries and choosing a non-colliding server name.
 - Browser presence never determines runtime execution state.
 - The runner never exposes shutdown credentials, private upstream tokens, or
   workspace secrets through browser responses.

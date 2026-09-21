@@ -83,10 +83,10 @@ export function createSessionSubscriptionController({
     const previousSession = getSelectedSession();
     const previousSessionId = state.selectedSessionId;
     const previousServiceUrl = previousSession?.serviceUrl || "";
-    state.sessions = sessions;
+    state.sessions = sessions.filter((session) => String(session.runtimeKind || "").trim().toLowerCase() !== "automation");
 
     const workspace = state.workspaces.find((candidate) => candidate.id === workspaceId);
-    const canonicalSession = chooseCanonicalSession(sessions, workspace?.canonicalSessionId);
+    const canonicalSession = chooseCanonicalSession(state.sessions, workspace?.canonicalSessionId);
     if (state.selectedSessionId !== canonicalSession?.id) {
       dispatch({
         type: APP_ACTIONS.SET_SELECTED_SESSION,
@@ -100,15 +100,18 @@ export function createSessionSubscriptionController({
   }
 
   function chooseCanonicalSession(sessions, canonicalSessionId = "") {
-    if (!Array.isArray(sessions) || !sessions.length) return null;
+    const mainSessions = Array.isArray(sessions) ? sessions.filter((session) =>
+      String(session.runtimeKind || "").trim().toLowerCase() !== "automation",
+    ) : [];
+    if (!mainSessions.length) return null;
     if (canonicalSessionId) {
-      const canonical = sessions.find((session) => session.id === canonicalSessionId);
+      const canonical = mainSessions.find((session) => session.id === canonicalSessionId);
       if (canonical) return canonical;
     }
-    const active = sessions.find((session) => [
+    const active = mainSessions.find((session) => [
       "running", "ready", "provisioning", "queued", "restarting", "resizing", "needs_service", "stopping",
     ].includes(String(session.status || "").toLowerCase()));
-    return active || sessions[0];
+    return active || mainSessions[0];
   }
 
   return {

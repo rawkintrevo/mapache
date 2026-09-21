@@ -1,0 +1,197 @@
+.automation-editor {
+  display: grid;
+  gap: 1rem;
+  max-width: 48rem;
+}
+.automation-editor__heading,
+.automation-editor__actions,
+.automation-schedule-preview__heading {
+  align-items: center;
+  display: flex;
+  gap: .75rem;
+  justify-content: space-between;
+}
+
+.automation-editor form,
+.automation-schedule-controls {
+  display: grid;
+  gap: 1rem;
+}
+
+.automation-editor__recovery {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .5rem;
+  display: grid;
+  gap: .8rem;
+  padding: 1rem;
+}
+
+.automation-editor__recovery legend {
+  font-weight: 700;
+  padding: 0 .35rem;
+}
+
+.automation-editor__recovery p {
+  margin: 0;
+}
+
+.automation-editor__recovery select,
+.automation-editor__recovery input[type="number"] {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .4rem;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 2.5rem;
+  padding: .55rem .65rem;
+  width: 100%;
+}
+
+.automation-editor__acknowledgement {
+  align-items: flex-start;
+  display: flex !important;
+  font-size: .9rem !important;
+  font-weight: 400 !important;
+  gap: .55rem;
+  text-transform: none !important;
+}
+
+.automation-editor__acknowledgement input {
+  flex: 0 0 auto;
+  margin-top: .2rem;
+  min-height: auto;
+  width: auto;
+}
+
+.automation-editor label,
+.automation-schedule-controls label {
+  display: grid;
+  gap: .35rem;
+}
+
+.automation-editor input:not([type="checkbox"]),
+.automation-editor textarea,
+.automation-schedule-controls input,
+.automation-schedule-controls select {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .4rem;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 2.5rem;
+  padding: .55rem .65rem;
+  width: 100%;
+}
+
+.automation-editor textarea {
+  min-height: 10rem;
+  resize: vertical;
+}
+
+.automation-editor input:focus,
+.automation-editor textarea:focus,
+.automation-schedule-controls input:focus,
+.automation-schedule-controls select:focus {
+  outline: 2px solid var(--focus-color, #2563eb);
+  outline-offset: 1px;
+}
+
+.automation-editor__switches {
+  display: grid;
+  gap: .65rem;
+}
+
+.automation-editor__switch {
+  align-items: center;
+  display: flex !important;
+  gap: .55rem;
+}
+
+.automation-editor__switch input {
+  min-height: auto;
+  width: auto;
+}
+
+.automation-schedule-controls {
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: .5rem;
+  padding: 1rem;
+}
+
+.automation-schedule-controls__row {
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.automation-schedule-controls__cron {
+  grid-column: span 2;
+}
+
+.automation-schedule-controls__canonical {
+  margin: -.5rem 0 0;
+}
+
+.automation-schedule-preview {
+  border-top: 1px solid var(--border-color, #cbd5e1);
+  display: grid;
+  gap: .5rem;
+  padding-top: .75rem;
+}
+
+.automation-schedule-preview ol {
+  display: grid;
+  gap: .35rem;
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.automation-schedule-preview li {
+  display: flex;
+  gap: .75rem;
+  justify-content: space-between;
+}
+
+.automation-schedule-preview__note {
+  margin: 0;
+}
+
+.field-error,
+.automation-editor__conflict {
+  color: var(--error-color, #b42318);
+  font-size: .9rem;
+  margin: 0;
+}
+
+.automation-editor__model-warning {
+  align-items: center;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border: 1px solid #f59e0b;
+  border-radius: .45rem;
+  display: flex;
+  gap: .75rem;
+  justify-content: space-between;
+  padding: .75rem;
+}
+
+.automation-editor__storage-warning {
+  background: color-mix(in srgb, #2563eb 8%, transparent);
+  border: 1px solid color-mix(in srgb, #2563eb 35%, var(--border-color, #cbd5e1));
+  border-radius: .45rem;
+  margin: 0;
+  padding: .75rem;
+}
+
+@media (max-width: 42rem) {
+  .automation-schedule-controls__row {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-schedule-controls__cron {
+    grid-column: auto;
+  }
+
+  .automation-schedule-preview li,
+  .automation-editor__model-warning {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

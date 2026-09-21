@@ -18,6 +18,10 @@ function acceptedNamedJsonResult(name, handler) {
   return async (context) => ({status: 202, body: {[name]: await handler(context)}});
 }
 
+function acceptedJsonResult(handler) {
+  return async (context) => ({status: 202, body: await handler(context)});
+}
+
 function createdNamedJsonResult(name, handler) {
   return async (context) => ({status: 201, body: {[name]: await handler(context)}});
 }
@@ -25,6 +29,42 @@ function createdNamedJsonResult(name, handler) {
 const ROUTE_DISPATCHERS = Object.freeze({
   profile: Object.freeze([
     ["GET", "me", namedJsonResult("user", ({handlers, user}) => handlers.userWithUsage(user))],
+    ["PATCH", "me", namedJsonResult("user", ({handlers, req, user}) => handlers.updateUserTimezone(user.uid, req.body || {}))],
+  ]),
+  automation: Object.freeze([
+    ["POST", "automationSchedulePreview", jsonResult(({handlers, req}) => handlers.previewAutomationSchedule(req.body || {}))],
+    ["GET", "automations", namedJsonResult("automations", ({handlers, route, user}) => handlers.listAutomations(user.uid, route.workspaceId))],
+    ["POST", "automations", createdNamedJsonResult("automation", ({handlers, req, route, user}) => handlers.createAutomation(user.uid, route.workspaceId, req.body || {}))],
+    ["GET", "automation", namedJsonResult("automation", ({handlers, route, user}) => handlers.getAutomation(user.uid, route.workspaceId, route.automationId))],
+    ["PATCH", "automation", namedJsonResult("automation", ({handlers, req, route, user}) => handlers.updateAutomation(user.uid, route.workspaceId, route.automationId, req.body || {}))],
+    ["DELETE", "automation", jsonResult(({handlers, req, route, user}) => handlers.deleteAutomation(user.uid, route.workspaceId, route.automationId, req.body || {}))],
+    ["POST", "automationRun", createdNamedJsonResult("run", ({handlers, req, route, user}) => handlers.enqueueAutomationRun({
+      actor: user,
+      aid: route.automationId,
+      occurrence: req.body?.occurrence,
+      trigger: req.body?.trigger || "manual",
+      idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey,
+      wid: route.workspaceId,
+    }))],
+    ["GET", "automationSettings", jsonResult(({handlers, route, user}) => handlers.getAutomationSettings(user.uid, route.workspaceId))],
+    ["PATCH", "automationSettings", jsonResult(({handlers, req, route, user}) => handlers.updateAutomationSettings(user.uid, route.workspaceId, req.body || {}))],
+  ]),
+  automationRuns: Object.freeze([
+    ["GET", "automationRuns", jsonResult(({handlers, req, user}) => handlers.listAutomationRuns(user.uid, req.query || {}))],
+    ["GET", "automationRunDetail", namedJsonResult("run", ({handlers, route, user}) => handlers.getAutomationRun(user.uid, route.runId))],
+    ["GET", "automationRunEvents", jsonResult(({handlers, req, route, user}) => handlers.listAutomationRunEvents(user.uid, route.runId, req.query || {}))],
+    ["POST", "automationRunRestart", createdNamedJsonResult("run", ({handlers, req, route, user}) => handlers.restartAutomationRun(
+      user, route.runId, {idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey},
+    ))],
+    ["POST", "automationRunCancel", jsonResult(({handlers, route, user}) => handlers.cancelAutomationRun(user, route.runId))],
+    ["POST", "automationRunStop", jsonResult(({handlers, route, user}) => handlers.stopAutomationRun(user, route.runId))],
+  ]),
+  instances: Object.freeze([
+    ["GET", "instances", jsonResult(({handlers, req, user}) => handlers.listActiveInstances(user.uid, req.query || {}))],
+  ]),
+  workspaceStorage: Object.freeze([
+    ["POST", "automationStoragePrepare", acceptedJsonResult(({handlers, route, user}) =>
+      handlers.prepareWorkspaceStorageMigration(user.uid, route.workspaceId))],
   ]),
   admin: Object.freeze([
     ["GET", "adminUsers", jsonResult(({handlers, req, user}) => handlers.listAdminUsers(user, req.query || {}))],

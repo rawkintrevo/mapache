@@ -39,6 +39,53 @@ firebase deploy --only functions --project pi-agents-cloud
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
 ```
 
+Workspace deletion is a Functions-only control-plane change. Deploy it with
+`firebase deploy --only functions --project pi-agents-cloud`; keep the
+`appConfig/automations.enabled` feature flag false until the complete
+automation rollout is ready. The deletion operation retains the workspace
+tombstone and its `workspaceDeletionOperations/{workspaceId}` recovery
+evidence, so a failed Cloud Run or bucket operation can be resumed by the
+backend without deleting unrelated storage resources.
+
+Workspace storage recovery is an operator-only Functions service and checked-in
+maintenance script. Before using it, stop every runner for the workspace and
+run the retention diagnostic with `--project pi-agents-cloud`; a policy drift,
+foreign bucket, enabled Object Versioning, or non-seven-day soft-delete policy
+is a hard failure. The script requires an owner UID, workspace ID, and explicit
+maintenance reservation for all inventory or mutation commands. Restore and
+whole-tree recovery also require `--confirm workspace-storage-recovery`.
+
+The recovery feature is deliberately disabled from normal workspace and
+automation workflows until its release. Do not add a scheduled full-bucket
+backup, enable Object Versioning, or deploy a rollback hook as part of this
+runbook. The operator must verify the returned generation and content/hash
+evidence, retain the recovery pointer as a separate checkpoint, and release the
+reservation only after verification. Functions changes for this disabled
+operator surface are validated in CI; production deployment is a release-time
+step using the explicit project flag:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+The automation agent credential broker requires the Functions secret
+`AUTOMATION_AGENT_TOKEN_SECRET`; set it with
+`firebase functions:secrets:set AUTOMATION_AGENT_TOKEN_SECRET --project pi-agents-cloud`
+before deploying the Functions revision. The broker/API feature remains behind
+the existing `appConfig/automations.enabled` rollout flag. Because the runner
+adds the private Unix adapter and removes the shutdown credential from the
+managed child environment, rebuild and publish `pi-chrome`, then restart or
+recreate automation runners after deploying Functions:
+
+```bash
+gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+Do not enable the automation feature as part of this implementation; a later
+rollout must verify broker expiry/refresh, boot revocation, and sibling-workspace
+isolation first.
+
 The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash
@@ -50,6 +97,22 @@ firebase deploy --only hosting --project pi-agents-cloud
 Record the resulting Artifact Registry digest and verify the `pi-chrome` tag before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
 
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account, `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events, and `roles/logging.viewer` so the authenticated session Logs modal can read the selected runner's Cloud Run entries. Restore the project-level bindings with:
+
+Scheduled automation workspace buckets keep this same identity boundary. The
+control plane, running as the mandated `mapache-api` identity, applies an
+idempotent bucket-level `roles/storage.objectUser` binding for
+`mapache-runner`; it never grants the runner project-wide storage access or
+bucket administration. Before changing IAM, the backend verifies the explicit
+project, bucket name, workspace/owner labels, uniform bucket-level access, and
+public-access-prevention metadata. Existing unrelated IAM bindings are
+preserved and stale-etag updates retry with a bounded compare-and-set loop.
+
+One shared runner service identity can still read any other bucket to which
+that identity has been granted. Per-workspace IAM is not advertised as a raw
+GCS tenant sandbox; API and agent-tool ownership checks remain the enforced
+workspace boundary. Use explicit project flags for any manual IAM inspection or
+repair, for example `gcloud storage buckets get-iam-policy gs://BUCKET
+--project=pi-agents-cloud`.
 
 ```bash
 gcloud projects add-iam-policy-binding pi-agents-cloud \
@@ -73,7 +136,7 @@ GitHub Actions preview and production workflows install root, `community/`, `fun
 
 Browser QA login uses a Functions secret plus configured QA account params. Configure `QA_LOGIN_SECRET` as a Firebase Functions secret, and set `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and optionally `QA_LOGIN_DISPLAY_NAME` for the deployed function. The QA account must also be present in `appConfig/access` when the app allowlist is enabled. The API service account needs `roles/firebaseauth.admin` so it can create or update the controlled QA Firebase Auth user before minting the custom token.
 
-MCP management changes require both the Functions API revision and the `pi-chrome` runner revision. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. The runner image must be rebuilt when the baked `pi-mcp-adapter` install changes; existing Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents.
+MCP management changes require both the Functions API revision and the `pi-chrome` runner revision. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. The runner image must be rebuilt when the baked `pi-mcp-adapter`, image-owned automation MCP server, or seeded guidance skill changes; existing Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents. The automation MCP broker route is feature-gated with the rest of the automation rollout and does not enable the product flag.
 
 Google Workspace MCP connectivity additionally requires the configured OAuth client ID/redirect URI and the `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_STATE_SECRET`, and `GOOGLE_OAUTH_ENCRYPTION_KEY` Functions secrets. Deploy the Functions API before testing OAuth or provisioning, then rebuild the affected runner image for runner status/archive changes. Existing sessions keep their previous environment until restart or recreation. The storage model, scope catalog, and rollback/revoke procedure are documented in [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
 

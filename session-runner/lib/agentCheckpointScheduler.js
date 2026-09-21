@@ -17,6 +17,7 @@ const DEFAULT_MANUAL_SAVE_BUDGET_MS = 120_000;
  */
 function createAgentCheckpointScheduler({
   activity,
+  automationArtifacts,
   agentSnapshot,
   checkpointIdentity,
   checkpointPublisher,
@@ -55,6 +56,7 @@ function createAgentCheckpointScheduler({
   let lastWorkspaceSaveAt = null;
   let lastAgentSaveAt = null;
   let lastError = null;
+  let lastAutomationStatus = null;
 
   return {
     start,
@@ -243,6 +245,7 @@ function createAgentCheckpointScheduler({
         bootInstanceId: identity.bootInstanceId || config.agentRuntimeBootInstanceId,
         generation: identity.generation || config.agentRuntimeGeneration,
       }), deadline, "checkpoint_timeout");
+      await captureAutomationArtifacts(capture, identity, deadline);
       const uploaded = await bounded(checkpointPublisher.uploadCapture(capture), deadline, "checkpoint_timeout");
       return await bounded(checkpointPublisher.commitCheckpoint(uploaded), deadline, "checkpoint_timeout");
     } catch (error) {
@@ -255,6 +258,52 @@ function createAgentCheckpointScheduler({
     } finally {
       if (capture?.stagingDir) await fsImpl.promises.rm(capture.stagingDir, {recursive: true, force: true}).catch(() => {});
     }
+  }
+
+  async function captureAutomationArtifacts(capture, identity, deadline) {
+    if (!automationArtifacts ||
+        (typeof automationArtifacts.enabled === "function" && !automationArtifacts.enabled())) return null;
+    const runId = identity.runId || config.automationRunId;
+    if (!runId || typeof automationArtifacts.capture !== "function") return null;
+
+    let status = lastAutomationStatus;
+    if (typeof piWebUi?.automationStatus === "function") {
+      try {
+        const current = await bounded(Promise.resolve(piWebUi.automationStatus(runId)), deadline, "checkpoint_timeout");
+        if (current?.ok === true && (!current.runId || current.runId === runId)) {
+          status = current;
+          lastAutomationStatus = current;
+        }
+      } catch (error) {
+        logger.warn?.("automation status capture failed", safeError(error));
+      }
+    }
+    const state = safeAutomationState(status?.state);
+    const event = {
+      type: "automation_status",
+      runId,
+      conversationId: status?.conversationId || state?.conversationId || null,
+      status: status?.status || null,
+      state,
+      capturedAt: new Date(now()).toISOString(),
+    };
+    const summary = {
+      runId,
+      conversationId: event.conversationId,
+      status: event.status,
+      outcome: state?.terminal || event.status || null,
+      error: state?.finalError || status?.error || null,
+      finalText: extractFinalAgentText(capture?.transcriptRecords || []),
+    };
+    return bounded(automationArtifacts.capture({
+      ...identity,
+      bootInstanceId: identity.bootInstanceId || config.agentRuntimeBootInstanceId,
+      generation: identity.generation || config.agentRuntimeGeneration,
+      runId,
+      events: [event],
+      summary,
+      transcript: capture?.transcriptRecords || [],
+    }), deadline, "checkpoint_timeout");
   }
 
   function bounded(value, deadline, code) {
@@ -288,6 +337,35 @@ function createAgentCheckpointScheduler({
       completedTurnsSeen,
     };
   }
+}
+
+function safeAutomationState(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const state = {};
+  for (const key of [
+    "runId", "conversationId", "submitted", "agentEnded", "modelEnded",
+    "toolIds", "subagentIds", "backgroundTaskIds", "inputRequestIds",
+    "interactionRequired", "finalResult", "finalError", "terminal", "seenEventIds",
+  ]) {
+    if (value[key] !== undefined) state[key] = value[key];
+  }
+  return state;
+}
+
+function extractFinalAgentText(records) {
+  for (let index = records.length - 1; index >= 0; index--) {
+    const message = records[index]?.message;
+    if (!message || message.role !== "assistant") continue;
+    const content = Array.isArray(message.content) ? message.content : [message.content];
+    const text = content
+        .filter((part) => typeof part === "string" || part?.type === "text")
+        .map((part) => typeof part === "string" ? part : part.text)
+        .filter((part) => typeof part === "string")
+        .join("\n")
+        .trim();
+    if (text) return text.slice(-32_768);
+  }
+  return null;
 }
 
 function positiveNumber(value, fallback) {

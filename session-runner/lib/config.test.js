@@ -118,3 +118,119 @@ test("marked runners use the managed pi-web-ui state contract while unmarked run
     }
   }
 });
+
+test("automation runtime config keeps identity scoped to its session", () => {
+  const names = ["MAPACHE_RUNTIME_KIND", "MAPACHE_AUTOMATION_RUN_ID", "MAPACHE_AGENT_UI_VERSION", "MAPACHE_AGENT_RUNTIME_GENERATION", "SESSION_ID"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    MAPACHE_RUNTIME_KIND: "automation",
+    MAPACHE_AUTOMATION_RUN_ID: "run-123",
+    MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
+    MAPACHE_AGENT_RUNTIME_GENERATION: "4",
+    SESSION_ID: "auto-run-123",
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.runtimeKind, "automation");
+    assert.equal(config.automationRunId, "run-123");
+    assert.equal(config.sessionId, "auto-run-123");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("private runtime mode namespaces all generated roots and ignores legacy shared paths", () => {
+  const names = [
+    "MAPACHE_RUNTIME_STORAGE_MODE",
+    "MAPACHE_RUNTIME_ID",
+    "MAPACHE_RUNTIME_ROOT",
+    "MAPACHE_HOME_DIR",
+    "MAPACHE_QA_DIR",
+    "PI_CODING_AGENT_DIR",
+    "PI_SESSION_DIR",
+    "PI_WEB_MCP_ADAPTER_PATH",
+    "CHROME_PROFILE_DIR",
+    "RUNNER_CAPABILITIES",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const root = "/tmp/mapache-private-runtime-test/auto-run-1";
+  Object.assign(process.env, {
+    MAPACHE_RUNTIME_STORAGE_MODE: "private",
+    MAPACHE_RUNTIME_ID: "run-1",
+    MAPACHE_RUNTIME_ROOT: root,
+    MAPACHE_HOME_DIR: "/workspace/shared-home",
+    MAPACHE_QA_DIR: "/workspace/.mapache/qa",
+    PI_CODING_AGENT_DIR: "/workspace/.pi/agent",
+    PI_SESSION_DIR: "/workspace/.pi/sessions",
+    PI_WEB_MCP_ADAPTER_PATH: "/root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts",
+    CHROME_PROFILE_DIR: "/workspace/.chrome",
+    RUNNER_CAPABILITIES: JSON.stringify({terminal: true, chrome: true}),
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.runtimeStorageMode, "private");
+    assert.equal(config.runtimeIdentity, "run-1");
+    assert.equal(config.privateRuntimeRoot, root);
+    assert.equal(config.homeDir, path.join(root, "home"));
+    assert.equal(config.piAgentDir, path.join(root, "agent-state", "pi"));
+    assert.equal(config.piSessionDir, path.join(root, "agent-state", "sessions"));
+    assert.equal(config.piMcpConfigPath, path.join(root, "agent-state", "pi", "mcp.json"));
+    assert.equal(config.piWebUiControlPath, path.join(root, "agent-state", "ui", "pi-web-ui.sock"));
+    assert.equal(config.chromeProfileDir, path.join(root, "chrome", "profile"));
+    assert.equal(config.browserQaDir, path.join(root, "qa"));
+    assert.equal(config.privateGitDir, path.join(root, "git", "repository"));
+    assert.equal(config.homeSyncMode, "ephemeral");
+    assert.equal(config.piSessionStoragePrefix, "");
+    assert.equal(config.isPrivateRuntime, true);
+    assert.equal(config.piMcpAdapterPath, "/root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts");
+    for (const privatePath of [config.homeDir, config.piAgentDir, config.piSessionDir, config.chromeProfileDir]) {
+      assert.equal(privatePath.startsWith("/workspace"), false);
+    }
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("shared GCS workspace mode forces private runtime roots and carries its generation contract", () => {
+  const names = [
+    "WORKSPACE_STORAGE_MODE",
+    "WORKSPACE_STORAGE_GENERATION",
+    "WORKSPACE_STORAGE_READY_MARKER",
+    "MAPACHE_RUNTIME_STORAGE_MODE",
+    "MAPACHE_RUNTIME_ID",
+    "MAPACHE_RUNTIME_ROOT",
+    "SESSION_ID",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    WORKSPACE_STORAGE_MODE: "shared-gcsfuse-v1",
+    WORKSPACE_STORAGE_GENERATION: "generation-7",
+    WORKSPACE_STORAGE_READY_MARKER: ".mapache-internal/workspace-ready.json",
+    MAPACHE_RUNTIME_STORAGE_MODE: "shared",
+    MAPACHE_RUNTIME_ID: "session-7",
+    MAPACHE_RUNTIME_ROOT: "/tmp/mapache-shared-workspace-runtime/session-7",
+    SESSION_ID: "session-7",
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.workspaceStorageMode, "shared-gcsfuse-v1");
+    assert.equal(config.workspaceStorageGeneration, "generation-7");
+    assert.equal(config.workspaceStorageReadyMarker, ".mapache-internal/workspace-ready.json");
+    assert.equal(config.runtimeStorageMode, "private");
+    assert.equal(config.isPrivateRuntime, true);
+    assert.equal(config.privateRuntimeRoot, "/tmp/mapache-shared-workspace-runtime/session-7");
+    assert.equal(config.piAgentDir.startsWith("/workspace"), false);
+    assert.equal(config.browserQaDir.startsWith("/workspace"), false);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

@@ -65,9 +65,10 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
   const child = fakeChild();
   const spawnCalls = [];
   const logs = [];
+  config.automationAgentSocketPath = "/var/lib/mapache/runtimes/run-1/automation-agent.sock";
   try {
     const process = createPiWebUiProcess(config, {
-      env: {PATH: "/usr/bin", GOOGLE_APPLICATION_CREDENTIALS: "/secret"},
+      env: {PATH: "/usr/bin", GOOGLE_APPLICATION_CREDENTIALS: "/secret", SESSION_SHUTDOWN_TOKEN: "runner-secret"},
       fetch: healthyFetch(),
       logger: {error: (message) => logs.push(message)},
       randomBytes: () => Buffer.alloc(32, 7),
@@ -91,6 +92,8 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(spawnCalls[0].options.env.PI_WEB_ENGINE, "pi");
     assert.equal(spawnCalls[0].options.env.PI_WEB_TOKEN.length > 20, true);
     assert.equal(spawnCalls[0].options.env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
+    assert.equal(spawnCalls[0].options.env.SESSION_SHUTDOWN_TOKEN, undefined);
+    assert.equal(spawnCalls[0].options.env.MAPACHE_AUTOMATION_AGENT_SOCKET, config.automationAgentSocketPath);
     assert.equal(JSON.stringify(ready).includes(spawnCalls[0].options.env.PI_WEB_TOKEN), false);
     assert.equal(logs.some((entry) => String(entry).includes(spawnCalls[0].options.env.PI_WEB_TOKEN)), false);
 
@@ -103,10 +106,34 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
   }
 });
 
+test("private managed child loads MCP config from its local Pi state root", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild(4343);
+  const privateMcpPath = path.join(root, "private", "pi", "mcp.json");
+  config.isPrivateRuntime = true;
+  config.piMcpConfigPath = privateMcpPath;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      env: {PATH: "/usr/bin"},
+      fetch: healthyFetch(),
+      spawn: (_command, args, options) => {
+        assert.deepEqual(args.slice(1), ["--mcp-config", privateMcpPath]);
+        assert.equal(options.env.PI_WEB_MCP_CONFIG, privateMcpPath);
+        return child;
+      },
+    });
+    await managed.start();
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("quiesces through the local control socket and reports activity without a browser", async () => {
   const {root, config} = await fixture();
   const child = fakeChild();
   const commands = [];
+  const requests = [];
   try {
     const managed = createPiWebUiProcess(config, {
       fetch: healthyFetch({
@@ -122,9 +149,16 @@ test("quiesces through the local control socket and reports activity without a b
         socket.destroy = () => {};
         socket.write = (line) => {
           const request = JSON.parse(String(line));
+          requests.push(request);
           commands.push(request.cmd);
           const body = request.cmd === "quiesce"
             ? {ok: true, quiesced: true, activeConversations: 0, activeTools: 0, pendingMessages: 0}
+            : request.cmd === "startAutomation"
+              ? {ok: true, runId: request.runId, conversationId: "c1", status: "running"}
+              : request.cmd === "automationStatus"
+                ? {ok: true, runId: request.runId, conversationId: "c1", status: "running"}
+                : request.cmd === "cancelAutomation"
+                  ? {ok: true, runId: request.runId, conversationId: "c1", status: "canceled"}
             : {ok: true, quiesced: false, connectedClients: 0, activeConversations: 1, activeTools: 1, pendingMessages: 0};
           setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")), 5);
         };
@@ -136,7 +170,18 @@ test("quiesces through the local control socket and reports activity without a b
     await managed.start();
     await assert.doesNotReject(() => managed.quiesce());
     const activity = await managed.activity();
-    assert.deepEqual(commands, ["quiesce", "status"]);
+    const started = await managed.startAutomation({runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"});
+    const automation = await managed.automationStatus("run-1");
+    const canceled = await managed.cancelAutomation("run-1");
+    assert.deepEqual(commands, ["quiesce", "status", "startAutomation", "automationStatus", "cancelAutomation"]);
+    assert.deepEqual(requests.slice(2), [
+      {cmd: "startAutomation", runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"},
+      {cmd: "automationStatus", runId: "run-1"},
+      {cmd: "cancelAutomation", runId: "run-1"},
+    ]);
+    assert.deepEqual(started, {ok: true, runId: "run-1", conversationId: "c1", status: "running"});
+    assert.deepEqual(automation, {ok: true, runId: "run-1", conversationId: "c1", status: "running"});
+    assert.deepEqual(canceled, {ok: true, runId: "run-1", conversationId: "c1", status: "canceled"});
     assert.deepEqual(activity, {
       ok: true,
       quiesced: false,
