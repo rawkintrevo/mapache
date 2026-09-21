@@ -35,7 +35,20 @@ function createWorkspaceStorageMigrationService(dependencies = {}) {
 
 async function prepareMigration(uid, workspaceId, dependencies = {}) {
   const {workspaceRef, workspace, migration, response} = await reserveMigration(uid, workspaceId, dependencies);
-  if (response) return response;
+  if (response) {
+    if (!response.alreadyReady) return response;
+    let descriptor;
+    try {
+      if (typeof dependencies.sharedStorageService?.validateExistingWorkspaceSharedStorage !== "function") {
+        throw migrationError("workspace_storage_migration_unavailable", 503);
+      }
+      descriptor = await dependencies.sharedStorageService.validateExistingWorkspaceSharedStorage(uid, workspaceId);
+    } catch (error) {
+      await persistExistingStorageFailure(workspaceRef, uid, error, dependencies);
+      throw normalizeMigrationError(error);
+    }
+    return reconcileExistingReadyStorage(workspaceRef, uid, workspaceId, descriptor, dependencies);
+  }
 
   let identity;
   try {
@@ -96,7 +109,7 @@ async function reserveMigration(uid, workspaceId, dependencies) {
       response = migrationResponse(workspace, existing, {accepted: true, idempotent: true});
       return;
     }
-    if (String(workspace.sharedStorageState || "").toLowerCase() === "ready" && workspace.sharedStorage?.storageGeneration) {
+    if (hasExistingSharedStorageDescriptor(workspace)) {
       response = migrationResponse(workspace, existing, {accepted: true, alreadyReady: true});
       return;
     }
@@ -218,7 +231,7 @@ async function failMigration(uid, workspaceId, payload = {}, dependencies = {}) 
 async function getMigrationStatus(uid, workspaceId, dependencies = {}) {
   const workspace = await loadWorkspace(uid, workspaceId, dependencies);
   return {
-    state: String(workspace.sharedStorageMigration?.state || workspace.sharedStorageState || "legacy"),
+    state: String(workspace.sharedStorageMigration?.state || workspace.sharedStorage?.state || workspace.sharedStorageState || "legacy"),
     operationId: workspace.sharedStorageMigration?.operationId || null,
     progress: workspace.sharedStorageMigration?.progress || null,
     errorCode: workspace.sharedStorageMigration?.errorCode || workspace.sharedStorageErrorCode || null,
@@ -310,7 +323,7 @@ function migrationResponse(workspace, migration, flags = {}) {
     accepted: flags.accepted !== false,
     idempotent: Boolean(flags.idempotent),
     alreadyReady: Boolean(flags.alreadyReady),
-    state: migration?.state || workspace.sharedStorageState || "legacy",
+    state: migration?.state || workspace.sharedStorage?.state || workspace.sharedStorageState || "legacy",
     operationId: migration?.operationId || workspace.sharedStorage?.operationId || null,
     generation: migration?.generation || workspace.sharedStorage?.storageGeneration || null,
     progress: migration?.progress || null,
@@ -321,7 +334,7 @@ function migrationResponse(workspace, migration, flags = {}) {
       sourcePrefix: migration.source?.prefix || null,
       targetBucketName: migration.bucketName || null,
       targetGeneration: migration.generation || null,
-      targetTreePrefix: migration.generation ? `trees/${migration.operationId}` : null,
+      targetTreePrefix: migration.generation ? `trees/${migration.generation}` : null,
       readyMarker: ".mapache-internal/workspace-ready.json",
     } : null,
   };
@@ -354,6 +367,72 @@ function persistMigrationFailure(workspaceRef, migration, error, dependencies) {
       updatedAt: now,
     });
   });
+}
+
+async function reconcileExistingReadyStorage(workspaceRef, uid, workspaceId, descriptor, dependencies) {
+  let completed;
+  await dependencies.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(workspaceRef);
+    if (!snapshot.exists) throw migrationError("workspace_not_found", 404);
+    const workspace = snapshot.data() || {};
+    assertOwner(workspace, uid);
+    assertWorkspaceAvailable(workspace);
+    assertPaused(await readSessions(transaction, workspaceRef, dependencies));
+    const current = workspace.sharedStorage || {};
+    if (current.bucketName && current.bucketName !== descriptor.bucketName) {
+      throw migrationError("workspace_storage_migration_conflict", 409);
+    }
+    if (current.storageGeneration && current.storageGeneration !== descriptor.storageGeneration) {
+      throw migrationError("workspace_storage_migration_generation_conflict", 409);
+    }
+    const now = serverTimestamp(dependencies.admin);
+    completed = {
+      ...current,
+      ...descriptor,
+      state: "ready",
+      errorCode: null,
+    };
+    transaction.update(workspaceRef, {
+      sharedStorageState: "ready",
+      sharedStorageErrorCode: null,
+      sharedStorage: completed,
+      workspaceStorageMode: SHARED_STORAGE_MODE,
+      updatedAt: now,
+    });
+  });
+  return {
+    accepted: true,
+    idempotent: true,
+    alreadyReady: true,
+    reused: true,
+    state: "ready",
+    operationId: completed.operationId || null,
+    generation: completed.storageGeneration,
+    progress: {phase: "reconciled", completed: true},
+    errorCode: null,
+    importDescriptor: null,
+  };
+}
+
+function persistExistingStorageFailure(workspaceRef, uid, error, dependencies) {
+  const errorCode = normalizeErrorCode(error?.publicMessage || error?.code || "workspace_storage_migration_failed");
+  return dependencies.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(workspaceRef);
+    if (!snapshot.exists) return;
+    const workspace = snapshot.data() || {};
+    if (workspace.ownerUid !== uid) return;
+    const current = workspace.sharedStorage;
+    transaction.update(workspaceRef, {
+      sharedStorageState: "error",
+      sharedStorageErrorCode: errorCode,
+      ...(current ? {sharedStorage: {...current, state: "error", errorCode}} : {}),
+      updatedAt: serverTimestamp(dependencies.admin),
+    });
+  });
+}
+
+function hasExistingSharedStorageDescriptor(workspace = {}) {
+  return Boolean(workspace.sharedStorage?.bucketName);
 }
 
 function normalizeMigrationError(error) {

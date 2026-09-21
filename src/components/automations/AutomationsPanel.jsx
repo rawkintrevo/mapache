@@ -34,7 +34,7 @@ export function AutomationsPanel({
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [settingsValue, setSettingsValue] = useState(String(automationState.maxConcurrency || 1));
-  const storageState = String(automationState.storageState || workspace?.sharedStorage?.state || "legacy").toLowerCase();
+  const storageState = String(workspace?.sharedStorage?.state || automationState.storageState || workspace?.sharedStorageState || "legacy").toLowerCase();
   const storageReady = storageState === "ready";
   const canonicalSession = state.sessions.find((session) => session.id === workspace?.canonicalSessionId) ||
     state.sessions.find((session) => session.id === state.selectedSessionId);
@@ -132,6 +132,7 @@ export function AutomationsPanel({
           <p className="eyebrow">Storage</p>
           <h3>{currentStorageLabel}</h3>
           {storageState === "legacy" || storageState === "error" ? <p className="subtle">Prepare shared GCS storage before enabling or running workflows. Usage-based storage/operation charges and seven-day recovery retention apply.</p> : null}
+          {storageReady ? <p className="subtle">Existing backend-owned shared storage is ready. Automations reuse its authoritative generation.</p> : null}
           {storageState === "preparing" || storageState === "migrating" ? <p className="subtle">Storage preparation is in progress. The main workspace was not stopped automatically.</p> : null}
           {storageState === "error" ? <p className="error">{workspace.sharedStorage?.errorCode || "Storage preparation failed. Retry while the main workspace is paused."}</p> : null}
           {mainActive && !storageReady ? <p className="subtle">Pause the main workspace before preparing storage.</p> : null}

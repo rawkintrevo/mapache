@@ -308,7 +308,7 @@ function assertWorkspace(snapshot, actorUid, workspaceId) {
 }
 
 function assertStorageReady(workspace) {
-  const state = String(workspace.sharedStorageState || workspace.sharedStorage?.state || "").trim().toLowerCase();
+  const state = String(workspace.sharedStorage?.state || workspace.sharedStorageState || "").trim().toLowerCase();
   if (state !== "ready") throw httpError(409, "automation_shared_storage_not_ready");
 }
 

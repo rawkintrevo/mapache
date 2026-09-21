@@ -68,6 +68,24 @@ describe("automationsController", () => {
     expect(fixture.state.automations.maxConcurrency).toBe(2);
   });
 
+  test("trusts the prepared shared-storage descriptor when the legacy state field is stale", async () => {
+    const fixture = createFixture({
+      state: {
+        workspaces: [{
+          id: "workspace-1",
+          sharedStorageState: "legacy",
+          sharedStorage: {state: "ready", bucketName: "backend-owned", storageGeneration: "generation-7"},
+        }],
+      },
+    });
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+
+    await controller.loadWorkspace();
+
+    expect(fixture.state.automations.storageState).toBe("ready");
+    expect(fixture.state.automations.storageReady).toBe(true);
+  });
+
   test("loads global history and run details without requiring a selected workspace", async () => {
     const fixture = createFixture({api: {
       listHistory: vi.fn().mockResolvedValue({runs: [{id: "run-global", status: "succeeded"}], nextCursor: "next"}),

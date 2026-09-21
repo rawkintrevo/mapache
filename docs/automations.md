@@ -87,6 +87,15 @@ policy. The existing bucket owner labels and project/workspace identity are
 validated before IAM reconciliation. The runner receives only a backend-owned
 bucket/generation descriptor; browser payloads cannot choose a bucket.
 
+If the workspace already has a backend-owned `sharedStorage` descriptor with a
+bucket, generation, and tree prefix, preparation is a reconcile-only operation:
+the control plane validates the recorded project/bucket identity, labels,
+region, HNS, uniform access, public-access prevention, versioning, retention,
+and runner IAM without creating a bucket or copying workspace data. Its
+recorded generation and `trees/{generation}` prefix remain authoritative. A
+foreign, missing, or incompatible bucket fails closed with an owner-visible
+error instead of falling back to a second bucket.
+
 The active `pi-chrome` revision mounts the exact `trees/{storageGeneration}`
 prefix using the gen2 `gcsfuse.run.googleapis.com` CSI driver with:
 

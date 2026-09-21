@@ -200,6 +200,64 @@ assert.deepEqual(bucketCreationMetadata({workspaceId, ownerUid}), {
   );
   assert.equal(active.getCreateCalls(), 0);
 
+  const existing = createHarness({
+    metadata: validMetadata(),
+    workspace: {
+      sharedStorageState: "legacy",
+      sharedStorage: {
+        state: "ready",
+        bucketName,
+        projectId: project.projectId,
+        projectNumber: project.projectNumber,
+        operationId: "existing-operation",
+        storageGeneration: "existing-generation",
+        treePrefix: "trees/existing-generation",
+      },
+    },
+  });
+  const reused = await existing.service.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId);
+  assert.equal(reused.bucketName, bucketName);
+  assert.equal(reused.storageGeneration, "existing-generation");
+  assert.equal(reused.treePrefix, "trees/existing-generation");
+  assert.equal(existing.getCreateCalls(), 0, "reusing a prepared workspace must not create another bucket");
+
+  const missingExisting = createHarness({
+    workspace: {
+      sharedStorage: {
+        state: "ready",
+        bucketName,
+        projectId: project.projectId,
+        projectNumber: project.projectNumber,
+        storageGeneration: "existing-generation",
+        treePrefix: "trees/existing-generation",
+      },
+    },
+  });
+  await assert.rejects(
+      missingExisting.service.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId),
+      /workspace_bucket_not_found/,
+  );
+  assert.equal(missingExisting.getCreateCalls(), 0, "a missing referenced bucket must fail closed");
+
+  const incompatibleExisting = createHarness({
+    metadata: validMetadata({labels: {"mapache-workspace-id": "other", "mapache-owner-uid": "other"}}),
+    workspace: {
+      sharedStorage: {
+        state: "ready",
+        bucketName,
+        projectId: project.projectId,
+        projectNumber: project.projectNumber,
+        storageGeneration: "existing-generation",
+        treePrefix: "trees/existing-generation",
+      },
+    },
+  });
+  await assert.rejects(
+      incompatibleExisting.service.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId),
+      /workspace_bucket_ownership_conflict/,
+  );
+  assert.equal(incompatibleExisting.getCreateCalls(), 0, "an incompatible bucket must not be replaced");
+
   const deletable = createHarness({
     metadata: validMetadata(),
     workspace: {

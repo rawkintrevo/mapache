@@ -216,13 +216,19 @@ or cleanup failures.
 
 `functions/workspaceStorageMigration.service.js` owns the paused-workspace
 GCS FUSE cutover. `POST /api/workspaces/{workspaceId}/automation-storage/prepare`
-acquires an idempotent migration reservation, rejects new main/automation
+first detects an existing backend-owned `sharedStorage` descriptor. When its
+bucket, generation, and tree prefix are present, the control plane validates
+the recorded bucket contract and runner IAM without creating a bucket or
+starting an importer, then normalizes the workspace to
+`sharedStorage.state=ready` while preserving that generation/prefix. Otherwise
+it acquires an idempotent migration reservation, rejects new main/automation
 admissions while it is active, and returns a short-lived import descriptor with
 HTTP 202. The maintenance importer uploads a fresh tree generation and verifies
 its hashes and ready marker; only a transaction that rechecks paused sessions,
 operation identity, and the verified marker publishes `sharedStorage.state=ready`
-and `shared-gcsfuse-v1`. Failures retain the legacy checkpoint/prefix as the
-authority and expose a safe error/progress state.
+and `shared-gcsfuse-v1`. Foreign or incompatible existing buckets fail closed;
+migration failures retain the legacy checkpoint/prefix as the authority and
+expose a safe error/progress state.
 
 Automation execution artifacts are independent of the compute lifecycle.
 `session-runner/lib/automationArtifacts.service.js` writes sanitized, immutable

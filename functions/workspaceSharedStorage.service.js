@@ -58,7 +58,7 @@ function operationIdForWorkspace(workspaceId) {
 }
 
 function storageState(workspace = {}) {
-  return String(workspace.sharedStorageState || workspace.sharedStorage?.state || "legacy")
+  return String(workspace.sharedStorage?.state || workspace.sharedStorageState || "legacy")
       .trim().toLowerCase() || "legacy";
 }
 
@@ -231,10 +231,11 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     await bucket.create(metadata);
   }
 
-  async function ensureBucket(binding) {
+  async function ensureBucket(binding, {createIfMissing = true} = {}) {
     const bucket = storage.bucket(binding.bucketName);
     let metadata = await readBucket(bucket);
     if (!metadata) {
+      if (!createIfMissing) throw storageError("workspace_bucket_not_found", 404);
       try {
         await createBucket(binding.bucketName, bucketCreationMetadata(binding));
       } catch (error) {
@@ -267,6 +268,28 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
       softDeleteRetentionSeconds: SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS,
       versioning: false,
       operationId,
+    };
+  }
+
+  function existingReadyDescriptor(workspace, workspaceId, project) {
+    const existing = workspace.sharedStorage || {};
+    const identity = identityFor(workspace, workspaceId, project);
+    const storageGeneration = String(existing.storageGeneration || "").trim();
+    if (!storageGeneration || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(storageGeneration) || storageGeneration.includes("..")) {
+      throw storageError("workspace_storage_generation_missing", 409);
+    }
+    const treePrefix = String(existing.treePrefix || `trees/${storageGeneration}`).trim();
+    if (treePrefix !== `trees/${storageGeneration}`) {
+      throw storageError("workspace_storage_generation_prefix_mismatch", 409);
+    }
+    return {
+      ...existing,
+      ...identity,
+      storageGeneration,
+      treePrefix,
+      readyMarker: String(existing.readyMarker || ".mapache-internal/workspace-ready.json").trim(),
+      state: "ready",
+      errorCode: null,
     };
   }
 
@@ -356,6 +379,38 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     return identity;
   }
 
+  // Reconcile a descriptor that already points at a prepared workspace bucket.
+  // This path never creates a bucket and never changes the generation/prefix.
+  async function validateExistingWorkspaceSharedStorage(uid, workspaceId) {
+    const workspace = await loadWorkspace(uid, workspaceId);
+    const sessions = await listSessions(workspaceId);
+    assertWorkspacePaused(sessions);
+    let identity;
+    try {
+      const project = workspace.sharedStorage?.projectId && normalizeProjectNumber(workspace.sharedStorage?.projectNumber) ? {
+        projectId: workspace.sharedStorage.projectId,
+        projectNumber: normalizeProjectNumber(workspace.sharedStorage.projectNumber),
+      } : await resolveProjectIdentity();
+      identity = existingReadyDescriptor(workspace, workspaceId, project);
+      const binding = {
+        projectId: identity.projectId,
+        projectNumber: identity.projectNumber,
+        bucketName: identity.bucketName,
+        workspaceId,
+        ownerUid: uid,
+      };
+      await ensureBucket(binding, {createIfMissing: false});
+      try {
+        await bucketAccess.ensureRunnerObjectAccess(binding);
+      } catch (error) {
+        throw storageError("workspace_bucket_iam_failed", 502, {cause: error});
+      }
+      return identity;
+    } catch (error) {
+      throw normalizeStorageFailure(error);
+    }
+  }
+
   async function deleteWorkspaceSharedStorage(uid, workspaceId, options = {}) {
     if (options.reason !== "workspace_deleted") {
       throw storageError("workspace_bucket_delete_requires_workspace_deletion", 400);
@@ -419,6 +474,7 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
   return {
     deleteWorkspaceSharedStorage,
     ensureWorkspaceSharedStorage,
+    validateExistingWorkspaceSharedStorage,
     prepareWorkspaceSharedStorage,
     publicStorageState,
   };

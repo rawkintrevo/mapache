@@ -18,7 +18,8 @@ Prepared shared-mode workspaces use one private Cloud Storage bucket in `us-cent
 The Functions control plane derives the bucket name as
 `mpw-<project-number>-<first-24-hex-sha256(workspaceId)>`, persists that exact identity
 on the workspace, and never accepts a browser-provided bucket name. Creation is
-idempotent and reconciles the existing bucket before applying the existing
+idempotent; an existing ready descriptor is reconciled in place, preserving its
+generation and tree prefix, before applying the existing
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com` object binding.
 
 The bucket contract is fixed at creation: Standard storage class, hierarchical

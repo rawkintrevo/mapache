@@ -66,4 +66,25 @@ describe("AutomationsPanel", () => {
     await user.click(screen.getByRole("button", {name: "Save limit"}));
     expect(onUpdateSettings).toHaveBeenCalledWith({automationMaxConcurrency: 3}, "workspace-1");
   });
+
+  test("shows an existing prepared workspace bucket as ready even with stale legacy state", () => {
+    const state = fixture({
+      automations: {storageState: "legacy"},
+    });
+    state.workspaces[0] = {
+      ...state.workspaces[0],
+      sharedStorageState: "legacy",
+      sharedStorage: {
+        state: "ready",
+        bucketName: "backend-owned",
+        storageGeneration: "generation-7",
+      },
+    };
+    renderPanel(state);
+
+    expect(screen.getByRole("heading", {name: "Ready"})).toBeInTheDocument();
+    expect(screen.getByText(/Existing backend-owned shared storage is ready/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Storage ready"})).toBeDisabled();
+    expect(screen.queryByRole("button", {name: "Prepare automations"})).not.toBeInTheDocument();
+  });
 });
