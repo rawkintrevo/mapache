@@ -34,8 +34,9 @@ export function AutomationsPanel({
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [settingsValue, setSettingsValue] = useState(String(automationState.maxConcurrency || 1));
-  const storageState = String(automationState.storageState || workspace?.sharedStorage?.state || "legacy").toLowerCase();
+  const storageState = String(workspace?.sharedStorage?.state || automationState.storageState || workspace?.sharedStorageState || "legacy").toLowerCase();
   const storageReady = storageState === "ready";
+  const storageConfigured = Boolean(workspace?.sharedStorage?.configured || workspace?.sharedStorage?.bucketName || storageReady);
   const canonicalSession = state.sessions.find((session) => session.id === workspace?.canonicalSessionId) ||
     state.sessions.find((session) => session.id === state.selectedSessionId);
   const mainActive = ACTIVE_RUN_STATUSES.has(String(canonicalSession?.status || "").toLowerCase());
@@ -131,16 +132,18 @@ export function AutomationsPanel({
         <div>
           <p className="eyebrow">Storage</p>
           <h3>{currentStorageLabel}</h3>
-          {storageState === "legacy" || storageState === "error" ? <p className="subtle">Prepare shared GCS storage before enabling or running workflows. Usage-based storage/operation charges and seven-day recovery retention apply.</p> : null}
+          {storageState === "legacy" || storageState === "error" ? <p className="subtle">Automations reuse an existing backend-owned shared-storage bucket; this surface never creates one.</p> : null}
+          {!storageConfigured ? <p className="subtle">Prepare shared storage through the workspace storage flow before using Automations.</p> : null}
+          {storageReady ? <p className="subtle">Existing backend-owned shared storage is ready. Automations reuse its authoritative generation.</p> : null}
           {storageState === "preparing" || storageState === "migrating" ? <p className="subtle">Storage preparation is in progress. The main workspace was not stopped automatically.</p> : null}
           {storageState === "error" ? <p className="error">{workspace.sharedStorage?.errorCode || "Storage preparation failed. Retry while the main workspace is paused."}</p> : null}
           {mainActive && !storageReady ? <p className="subtle">Pause the main workspace before preparing storage.</p> : null}
         </div>
         <Button
-          disabled={automationState.busy || mainActive || storageState === "preparing" || storageState === "migrating" || storageReady}
+          disabled={automationState.busy || mainActive || !storageConfigured || storageState === "preparing" || storageState === "migrating" || storageReady}
           onClick={async () => { await onPrepareStorage?.(state.selectedWorkspaceId); await onRefresh?.(); }}
         >
-          {storageReady ? "Storage ready" : storageState === "preparing" || storageState === "migrating" ? "Preparing…" : "Prepare automations"}
+          {storageReady ? "Storage ready" : !storageConfigured ? "Shared storage required" : storageState === "preparing" || storageState === "migrating" ? "Preparing…" : "Revalidate shared storage"}
         </Button>
       </section>
       <section className="automation-settings-card" aria-label="Automation concurrency settings">

@@ -79,13 +79,26 @@ family IDs/state/reason alongside the immutable recovery snapshot.
 
 ## Shared GCS FUSE contract
 
-Automation storage preparation is a paused-workspace migration. The backend
-creates or reconciles one private regional `us-central1` Standard bucket with
-hierarchical namespace, uniform bucket-level access, public-access prevention,
-Object Versioning disabled, and a seven-day (`604800` second) soft-delete
-policy. The existing bucket owner labels and project/workspace identity are
-validated before IAM reconciliation. The runner receives only a backend-owned
-bucket/generation descriptor; browser payloads cannot choose a bucket.
+Automation storage preparation is a paused-workspace reconciliation gate. The
+automations path never creates a bucket, copies legacy workspace data, or
+resets a generation. A workspace must already have a backend-owned shared
+storage descriptor; without one, the endpoint returns
+`workspace_shared_storage_required`. The existing bucket owner labels and
+project/workspace identity are validated before IAM reconciliation. The runner
+receives only a backend-owned bucket/generation descriptor; browser payloads
+cannot choose a bucket.
+Because Cloud Storage user-label values are lowercase and character-restricted,
+the workspace and owner identifiers are stored in a deterministic normalized
+label form; validation applies the same normalization before accepting a bucket.
+
+If the workspace already has a backend-owned `sharedStorage` descriptor with a
+bucket, generation, and tree prefix, preparation is a reconcile-only operation:
+the control plane validates the recorded project/bucket identity, labels,
+region, HNS, uniform access, public-access prevention, versioning, retention,
+and runner IAM without creating a bucket or copying workspace data. Its
+recorded generation and `trees/{generation}` prefix remain authoritative. A
+foreign, missing, or incompatible bucket fails closed with an owner-visible
+error instead of falling back to a second bucket.
 
 The active `pi-chrome` revision mounts the exact `trees/{storageGeneration}`
 prefix using the gen2 `gcsfuse.run.googleapis.com` CSI driver with:

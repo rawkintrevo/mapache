@@ -7,6 +7,7 @@ const {
   addRunnerObjectBinding,
   assertBucketMetadata,
   createWorkspaceBucketAccessService,
+  expectedBucketLabels,
   removeRunnerObjectBinding,
 } = require("./workspaceBucketAccess.service");
 
@@ -35,6 +36,22 @@ assert.doesNotThrow(() => assertBucketMetadata(metadata, binding, {projectId: bi
 assert.throws(() => assertBucketMetadata({...metadata, project: "other-project"}, binding), /workspace_bucket_project_mismatch/);
 assert.throws(() => assertBucketMetadata({...metadata, labels: {}}, binding), /workspace_bucket_binding_mismatch/);
 assert.throws(() => assertBucketMetadata({...metadata, iamConfiguration: {...metadata.iamConfiguration, publicAccessPrevention: "unspecified"}}, binding), /workspace_bucket_public_access_prevention_required/);
+
+const mixedCaseBinding = {
+  ...binding,
+  workspaceId: "eTnWAO3WUxHuBMxuP0Ws",
+  ownerUid: "Owner_UID/with-invalid-chars",
+};
+const normalizedLabels = expectedBucketLabels(mixedCaseBinding);
+assert.deepEqual(normalizedLabels, {
+  "mapache-workspace-id": "etnwao3wuxhubmxup0ws",
+  "mapache-owner-uid": "owner_uid-with-invalid-chars",
+});
+assert.doesNotThrow(() => assertBucketMetadata({
+  ...metadata,
+  name: mixedCaseBinding.bucketName,
+  labels: normalizedLabels,
+}, mixedCaseBinding, {projectId: mixedCaseBinding.projectId}));
 
 const policy = {
   version: 3,

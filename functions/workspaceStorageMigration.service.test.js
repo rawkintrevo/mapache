@@ -76,66 +76,101 @@ class Snapshot {
   }
 }
 
-function setup(sessions = {}) {
+function setup(sessions = {}, workspaceOverrides = {}) {
   const db = new Db();
-  db.data.set("workspaces/workspace-1", {
+  const workspace = {
     ownerUid: "user-1",
     bucket: "legacy-bucket",
     storagePrefix: "workspaces/user-1/workspace-1",
     sharedStorageState: "legacy",
-  });
+    ...workspaceOverrides,
+  };
+  db.data.set("workspaces/workspace-1", workspace);
   for (const [id, value] of Object.entries(sessions)) {
     db.data.set(`workspaces/workspace-1/sessions/${id}`, value);
   }
+  let ensureCalls = 0;
+  let validateCalls = 0;
   const service = createWorkspaceStorageMigrationService({
     admin: {firestore: {FieldValue: {serverTimestamp: () => "SERVER"}}},
     db,
     sharedStorageService: {
-      ensureWorkspaceSharedStorage: async () => ({
-        bucketName: "mpw-123-workspace",
-        projectId: "pi-agents-cloud",
-        projectNumber: "123",
-      }),
+      ensureWorkspaceSharedStorage: async () => {
+        ensureCalls++;
+        return {
+          bucketName: "mpw-123-workspace",
+          projectId: "pi-agents-cloud",
+          projectNumber: "123",
+        };
+      },
+      validateExistingWorkspaceSharedStorage: async () => {
+        validateCalls++;
+        return {
+          ...workspace.sharedStorage,
+          state: "ready",
+          errorCode: null,
+        };
+      },
     },
     verifyReadyGeneration: async () => {},
   });
-  return {db, service};
+  return {db, service, getEnsureCalls: () => ensureCalls, getValidateCalls: () => validateCalls};
 }
 
-test("reserves a paused workspace idempotently and cuts over only after verification", async () => {
+test("requires an existing shared-storage descriptor and never starts bucket preparation", async () => {
   const {db, service} = setup({main: {status: "stopped"}});
-  const prepared = await service.prepare("user-1", "workspace-1");
-  assert.equal(prepared.accepted, true);
-  assert.equal(prepared.state, "migrating");
-  assert.equal(prepared.operationId.length > 0, true);
-  const repeated = await service.prepare("user-1", "workspace-1");
-  assert.equal(repeated.idempotent, true);
-
-  const completed = await service.complete("user-1", "workspace-1", {
-    operationId: prepared.operationId,
-    bucketName: "mpw-123-workspace",
-    storageGeneration: prepared.generation,
-    readyMarkerObjectPath: `trees/${prepared.operationId}/.mapache-internal/workspace-ready.json`,
-    readyMarker: ".mapache-internal/workspace-ready.json",
-    treePrefix: `trees/${prepared.operationId}`,
-  });
-  assert.equal(completed.state, "ready");
-  assert.equal(db.data.get("workspaces/workspace-1").sharedStorage.storageGeneration, prepared.generation);
-  assert.equal(db.data.get("workspaces/workspace-1").sharedStorageState, "ready");
-  assert.equal(db.data.get("workspaces/workspace-1").bucket, "legacy-bucket");
+  await assert.rejects(
+      service.prepare("user-1", "workspace-1"),
+      /workspace_shared_storage_required/,
+  );
+  assert.equal(db.data.get("workspaces/workspace-1").sharedStorageState, "legacy");
 });
 
 test("active services block migration and preserve the legacy pointer on failure", async () => {
   const {db, service} = setup({main: {status: "running"}});
   await assert.rejects(() => service.prepare("user-1", "workspace-1"), /workspace_must_be_paused/);
 
-  const ready = setup({main: {status: "stopped"}});
-  const prepared = await ready.service.prepare("user-1", "workspace-1");
+  const ready = setup({main: {status: "stopped"}}, {
+    sharedStorageMigration: {
+      operationId: "existing-operation",
+      generation: "existing-generation",
+      state: "migrating",
+      progress: {phase: "awaiting_import", completed: false},
+    },
+  });
   const failed = await ready.service.fail("user-1", "workspace-1", {
-    operationId: prepared.operationId,
+    operationId: "existing-operation",
     errorCode: "unsupported_file",
   });
   assert.equal(failed.state, "error");
   assert.equal(ready.db.data.get("workspaces/workspace-1").bucket, "legacy-bucket");
   assert.equal(ready.db.data.get("workspaces/workspace-1").sharedStorage, undefined);
+});
+
+test("reuses and validates an already-prepared workspace descriptor", async () => {
+  const existingDescriptor = {
+    state: "ready",
+    bucketName: "mpw-123-existing",
+    projectId: "pi-agents-cloud",
+    projectNumber: "123",
+    operationId: "existing-operation",
+    storageGeneration: "existing-generation",
+    treePrefix: "trees/existing-generation",
+  };
+  const {db, service, getEnsureCalls, getValidateCalls} = setup({main: {status: "stopped"}}, {
+    sharedStorageState: "legacy",
+    sharedStorage: existingDescriptor,
+  });
+
+  const result = await service.prepare("user-1", "workspace-1");
+
+  assert.equal(result.reused, true);
+  assert.equal(result.state, "ready");
+  assert.equal(result.generation, "existing-generation");
+  assert.equal(getValidateCalls(), 1);
+  assert.equal(getEnsureCalls(), 0, "an already-prepared workspace must not start a migration or create a bucket");
+  assert.equal(db.data.get("workspaces/workspace-1").sharedStorage.storageGeneration, "existing-generation");
+  assert.equal(db.data.get("workspaces/workspace-1").sharedStorage.treePrefix, "trees/existing-generation");
+  assert.equal(db.data.get("workspaces/workspace-1").sharedStorageState, "ready");
+  assert.equal(db.data.get("workspaces/workspace-1").workspaceStorageMode, "shared-gcsfuse-v1");
 });

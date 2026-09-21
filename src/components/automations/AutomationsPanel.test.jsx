@@ -36,13 +36,13 @@ function renderPanel(state, overrides = {}) {
 }
 
 describe("AutomationsPanel", () => {
-  test("shows storage preparation and does not enable run actions before ready", async () => {
+  test("requires existing shared storage and does not enable run actions before ready", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {storageState: "legacy", definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false} ]}});
     renderPanel(state);
 
-    expect(screen.getByRole("button", {name: "Prepare automations"})).toBeInTheDocument();
-    expect(screen.getByText(/Usage-based storage/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Shared storage required"})).toBeDisabled();
+    expect(screen.getByText(/never creates one/)).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Run now"})).toBeDisabled();
     await user.click(screen.getByRole("button", {name: "New automation"}));
     expect(screen.getByRole("heading", {name: "New automation"})).toBeInTheDocument();
@@ -65,5 +65,26 @@ describe("AutomationsPanel", () => {
     await user.type(screen.getByRole("spinbutton", {name: "Maximum concurrent automations"}), "3");
     await user.click(screen.getByRole("button", {name: "Save limit"}));
     expect(onUpdateSettings).toHaveBeenCalledWith({automationMaxConcurrency: 3}, "workspace-1");
+  });
+
+  test("shows an existing prepared workspace bucket as ready even with stale legacy state", () => {
+    const state = fixture({
+      automations: {storageState: "legacy"},
+    });
+    state.workspaces[0] = {
+      ...state.workspaces[0],
+      sharedStorageState: "legacy",
+      sharedStorage: {
+        state: "ready",
+        bucketName: "backend-owned",
+        storageGeneration: "generation-7",
+      },
+    };
+    renderPanel(state);
+
+    expect(screen.getByRole("heading", {name: "Ready"})).toBeInTheDocument();
+    expect(screen.getByText(/Existing backend-owned shared storage is ready/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Storage ready"})).toBeDisabled();
+    expect(screen.queryByRole("button", {name: "Prepare automations"})).not.toBeInTheDocument();
   });
 });

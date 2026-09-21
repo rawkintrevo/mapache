@@ -5,7 +5,6 @@ const crypto = require("node:crypto");
 const {
   SHARED_STORAGE_REGION,
   SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS,
-  bucketCreationMetadata,
   createWorkspaceSharedStorageService,
   deriveWorkspaceBucketName,
 } = require("./workspaceSharedStorage.service");
@@ -139,59 +138,59 @@ assert.equal(
     deriveWorkspaceBucketName(project.projectNumber, workspaceId),
     `mpw-${project.projectNumber}-${crypto.createHash("sha256").update(workspaceId).digest("hex").slice(0, 24)}`,
 );
-assert.deepEqual(bucketCreationMetadata({workspaceId, ownerUid}), {
-  location: SHARED_STORAGE_REGION,
-  storageClass: "STANDARD",
-  hierarchicalNamespace: {enabled: true},
-  iamConfiguration: {
-    uniformBucketLevelAccess: {enabled: true},
-    publicAccessPrevention: "enforced",
-  },
-  softDeletePolicy: {retentionDurationSeconds: String(SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS)},
-  versioning: {enabled: false},
-  labels: {"mapache-workspace-id": workspaceId, "mapache-owner-uid": ownerUid},
-});
-
 (async () => {
   const created = createHarness();
-  assert.deepEqual(await created.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId), {
+  await assert.rejects(
+      created.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId),
+      /workspace_shared_storage_required/,
+  );
+  assert.equal(created.getCreateCalls(), 0, "storage validation must never create a bucket");
+
+  const existing = createHarness({metadata: validMetadata(), workspace: {
+    sharedStorage: {
+      state: "ready",
+      bucketName,
+      projectId: project.projectId,
+      projectNumber: project.projectNumber,
+      storageGeneration: "existing-generation",
+      treePrefix: "trees/existing-generation",
+    },
+  }});
+  assert.deepEqual(await existing.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId), {
     state: "ready",
     errorCode: null,
   });
-  assert.equal(created.getCreateCalls(), 1);
-  assert.equal(created.getWorkspace().sharedStorage.bucketName, bucketName);
-  assert.equal(created.getWorkspace().sharedStorageState, "ready");
+  assert.equal(existing.getCreateCalls(), 0, "existing shared storage must be reused");
 
-  await created.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId);
-  assert.equal(created.getCreateCalls(), 1, "reconciliation must not create a second bucket");
-
-  const partial = createHarness({createError: new Error("response lost after create")});
-  await assert.rejects(
-      partial.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId),
-      /workspace_shared_storage_operation_failed/,
-  );
-  await partial.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId);
-  assert.equal(partial.getCreateCalls(), 1, "a partially created bucket must be resumed");
-
-  const foreign = createHarness({metadata: validMetadata({labels: {"mapache-workspace-id": "other", "mapache-owner-uid": "other"}})});
+  const foreign = createHarness({
+    metadata: validMetadata({labels: {"mapache-workspace-id": "other", "mapache-owner-uid": "other"}}),
+    workspace: {sharedStorage: {bucketName, projectId: project.projectId, projectNumber: project.projectNumber, storageGeneration: "existing-generation"}},
+  });
   await assert.rejects(
       foreign.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId),
       /workspace_bucket_ownership_conflict/,
   );
-  assert.equal(foreign.getWorkspace().sharedStorageState, "error");
+  assert.notEqual(foreign.getWorkspace().sharedStorageState, "error", "validation must not rewrite workspace state");
 
-  const wrongRegion = createHarness({metadata: validMetadata({location: "europe-west1"})});
+  const wrongRegion = createHarness({
+    metadata: validMetadata({location: "europe-west1"}),
+    workspace: {sharedStorage: {bucketName, projectId: project.projectId, projectNumber: project.projectNumber, storageGeneration: "existing-generation"}},
+  });
   await assert.rejects(
       wrongRegion.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId),
       /workspace_bucket_region_mismatch/,
   );
 
-  const iamFailure = createHarness({iamError: new Error("permission denied")});
+  const iamFailure = createHarness({
+    metadata: validMetadata(),
+    iamError: new Error("permission denied"),
+    workspace: {sharedStorage: {bucketName, projectId: project.projectId, projectNumber: project.projectNumber, storageGeneration: "existing-generation"}},
+  });
   await assert.rejects(
       iamFailure.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId),
       /workspace_bucket_iam_failed/,
   );
-  assert.equal(iamFailure.getWorkspace().sharedStorage.errorCode, "workspace_bucket_iam_failed");
+  assert.equal(iamFailure.getWorkspace().sharedStorage.errorCode, undefined, "validation must not rewrite workspace state");
 
   const active = createHarness({sessions: [{id: "main", status: "running"}]});
   await assert.rejects(
@@ -199,6 +198,64 @@ assert.deepEqual(bucketCreationMetadata({workspaceId, ownerUid}), {
       /workspace_must_be_paused/,
   );
   assert.equal(active.getCreateCalls(), 0);
+
+  const prepared = createHarness({
+    metadata: validMetadata(),
+    workspace: {
+      sharedStorageState: "legacy",
+      sharedStorage: {
+        state: "ready",
+        bucketName,
+        projectId: project.projectId,
+        projectNumber: project.projectNumber,
+        operationId: "existing-operation",
+        storageGeneration: "existing-generation",
+        treePrefix: "trees/existing-generation",
+      },
+    },
+  });
+  const reused = await prepared.service.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId);
+  assert.equal(reused.bucketName, bucketName);
+  assert.equal(reused.storageGeneration, "existing-generation");
+  assert.equal(reused.treePrefix, "trees/existing-generation");
+  assert.equal(prepared.getCreateCalls(), 0, "reusing a prepared workspace must not create another bucket");
+
+  const missingExisting = createHarness({
+    workspace: {
+      sharedStorage: {
+        state: "ready",
+        bucketName,
+        projectId: project.projectId,
+        projectNumber: project.projectNumber,
+        storageGeneration: "existing-generation",
+        treePrefix: "trees/existing-generation",
+      },
+    },
+  });
+  await assert.rejects(
+      missingExisting.service.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId),
+      /workspace_bucket_not_found/,
+  );
+  assert.equal(missingExisting.getCreateCalls(), 0, "a missing referenced bucket must fail closed");
+
+  const incompatibleExisting = createHarness({
+    metadata: validMetadata({labels: {"mapache-workspace-id": "other", "mapache-owner-uid": "other"}}),
+    workspace: {
+      sharedStorage: {
+        state: "ready",
+        bucketName,
+        projectId: project.projectId,
+        projectNumber: project.projectNumber,
+        storageGeneration: "existing-generation",
+        treePrefix: "trees/existing-generation",
+      },
+    },
+  });
+  await assert.rejects(
+      incompatibleExisting.service.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId),
+      /workspace_bucket_ownership_conflict/,
+  );
+  assert.equal(incompatibleExisting.getCreateCalls(), 0, "an incompatible bucket must not be replaced");
 
   const deletable = createHarness({
     metadata: validMetadata(),

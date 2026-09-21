@@ -1,12 +1,10 @@
 "use strict";
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
-const {DEFAULT_BUCKET} = require("./backendConfig");
-const {httpError, normalizeStoragePrefix} = require("./backendUtils.helpers");
+const {httpError} = require("./backendUtils.helpers");
 const {
   isWorkspaceStorageMigrationActive,
 } = require("./runtimeReservation.helpers");
-const {operationIdForWorkspace} = require("./workspaceSharedStorage.service");
 
 const SHARED_STORAGE_MODE = "shared-gcsfuse-v1";
 const ACTIVE_MIGRATION_STATES = new Set(["preparing", "migrating"]);
@@ -34,54 +32,28 @@ function createWorkspaceStorageMigrationService(dependencies = {}) {
 }
 
 async function prepareMigration(uid, workspaceId, dependencies = {}) {
-  const {workspaceRef, workspace, migration, response} = await reserveMigration(uid, workspaceId, dependencies);
-  if (response) return response;
-
-  let identity;
-  try {
-    if (typeof dependencies.sharedStorageService?.ensureWorkspaceSharedStorage !== "function") {
-      throw migrationError("workspace_storage_migration_unavailable", 503);
+  const {workspaceRef, response} = await reserveMigration(uid, workspaceId, dependencies);
+  if (response) {
+    if (!response.alreadyReady) return response;
+    let descriptor;
+    try {
+      if (typeof dependencies.sharedStorageService?.validateExistingWorkspaceSharedStorage !== "function") {
+        throw migrationError("workspace_storage_migration_unavailable", 503);
+      }
+      descriptor = await dependencies.sharedStorageService.validateExistingWorkspaceSharedStorage(uid, workspaceId);
+    } catch (error) {
+      await persistExistingStorageFailure(workspaceRef, uid, error, dependencies);
+      throw normalizeMigrationError(error);
     }
-    identity = await dependencies.sharedStorageService.ensureWorkspaceSharedStorage(uid, workspaceId);
-  } catch (error) {
-    await persistMigrationFailure(workspaceRef, migration, error, dependencies);
-    throw normalizeMigrationError(error);
+    return reconcileExistingReadyStorage(workspaceRef, uid, workspaceId, descriptor, dependencies);
   }
-
-  const updated = await dependencies.db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(workspaceRef);
-    if (!snapshot.exists) throw migrationError("workspace_not_found", 404);
-    const current = snapshot.data() || {};
-    assertOwner(current, uid);
-    assertMigrationIdentity(current, migration.operationId);
-    const now = serverTimestamp(dependencies.admin);
-    const next = {
-      ...migration,
-      state: "migrating",
-      bucketName: identity.bucketName,
-      projectId: identity.projectId,
-      projectNumber: identity.projectNumber,
-      progress: {phase: "awaiting_import", completed: false},
-      updatedAt: now,
-      errorCode: null,
-    };
-    transaction.update(workspaceRef, {
-      sharedStorageState: "migrating",
-      sharedStorageErrorCode: null,
-      sharedStorageMigration: next,
-      updatedAt: now,
-    });
-    return next;
-  });
-
-  return migrationResponse(workspace, updated, {accepted: true});
+  throw migrationError("workspace_shared_storage_required", 409);
 }
 
 async function reserveMigration(uid, workspaceId, dependencies) {
   const workspaceRef = workspaceDocument(dependencies.db, workspaceId);
   let response = null;
   let workspace = null;
-  let migration = null;
   await dependencies.db.runTransaction(async (transaction) => {
     const workspaceSnap = await transaction.get(workspaceRef);
     if (!workspaceSnap.exists) throw migrationError("workspace_not_found", 404);
@@ -96,37 +68,13 @@ async function reserveMigration(uid, workspaceId, dependencies) {
       response = migrationResponse(workspace, existing, {accepted: true, idempotent: true});
       return;
     }
-    if (String(workspace.sharedStorageState || "").toLowerCase() === "ready" && workspace.sharedStorage?.storageGeneration) {
+    if (hasExistingSharedStorageDescriptor(workspace)) {
       response = migrationResponse(workspace, existing, {accepted: true, alreadyReady: true});
       return;
     }
-
-    const operationId = String(existing.operationId || workspace.sharedStorage?.operationId || operationIdForWorkspace(workspaceId)).trim();
-    // The importer uses its operation ID as the immutable tree generation so
-    // resume and cutover share one deterministic destination namespace.
-    const generation = String(existing.generation || operationId);
-    migration = {
-      version: 1,
-      operationId,
-      generation,
-      state: "preparing",
-      progress: {phase: "bucket", completed: false},
-      source: {
-        bucketName: workspace.bucket || DEFAULT_BUCKET,
-        prefix: normalizeStoragePrefix(workspace.storagePrefix || ""),
-      },
-      startedAt: existing.startedAt || serverTimestamp(dependencies.admin),
-      updatedAt: serverTimestamp(dependencies.admin),
-      errorCode: null,
-    };
-    transaction.update(workspaceRef, {
-      sharedStorageState: "preparing",
-      sharedStorageErrorCode: null,
-      sharedStorageMigration: migration,
-      updatedAt: serverTimestamp(dependencies.admin),
-    });
+    throw migrationError("workspace_shared_storage_required", 409);
   });
-  return {workspaceRef, workspace, migration, response};
+  return {workspaceRef, response};
 }
 
 async function completeMigration(uid, workspaceId, payload = {}, dependencies = {}) {
@@ -218,7 +166,7 @@ async function failMigration(uid, workspaceId, payload = {}, dependencies = {}) 
 async function getMigrationStatus(uid, workspaceId, dependencies = {}) {
   const workspace = await loadWorkspace(uid, workspaceId, dependencies);
   return {
-    state: String(workspace.sharedStorageMigration?.state || workspace.sharedStorageState || "legacy"),
+    state: String(workspace.sharedStorageMigration?.state || workspace.sharedStorage?.state || workspace.sharedStorageState || "legacy"),
     operationId: workspace.sharedStorageMigration?.operationId || null,
     progress: workspace.sharedStorageMigration?.progress || null,
     errorCode: workspace.sharedStorageMigration?.errorCode || workspace.sharedStorageErrorCode || null,
@@ -278,12 +226,6 @@ function assertWorkspaceAvailable(workspace) {
   )) throw migrationError("workspace_deleted", 409);
 }
 
-function assertMigrationIdentity(workspace, operationId) {
-  if (workspace.sharedStorageMigration?.operationId !== operationId || !isWorkspaceStorageMigrationActive(workspace)) {
-    throw migrationError("workspace_storage_migration_conflict", 409);
-  }
-}
-
 function normalizeImportResult(payload) {
   const operationId = String(payload.operationId || "").trim();
   const bucketName = String(payload.bucketName || "").trim();
@@ -310,7 +252,7 @@ function migrationResponse(workspace, migration, flags = {}) {
     accepted: flags.accepted !== false,
     idempotent: Boolean(flags.idempotent),
     alreadyReady: Boolean(flags.alreadyReady),
-    state: migration?.state || workspace.sharedStorageState || "legacy",
+    state: migration?.state || workspace.sharedStorage?.state || workspace.sharedStorageState || "legacy",
     operationId: migration?.operationId || workspace.sharedStorage?.operationId || null,
     generation: migration?.generation || workspace.sharedStorage?.storageGeneration || null,
     progress: migration?.progress || null,
@@ -321,7 +263,7 @@ function migrationResponse(workspace, migration, flags = {}) {
       sourcePrefix: migration.source?.prefix || null,
       targetBucketName: migration.bucketName || null,
       targetGeneration: migration.generation || null,
-      targetTreePrefix: migration.generation ? `trees/${migration.operationId}` : null,
+      targetTreePrefix: migration.generation ? `trees/${migration.generation}` : null,
       readyMarker: ".mapache-internal/workspace-ready.json",
     } : null,
   };
@@ -339,21 +281,70 @@ function safeObjectPath(value) {
   return Boolean(path && !path.startsWith("/") && !path.includes("..") && !path.includes("\\") && path.length <= 512);
 }
 
-function persistMigrationFailure(workspaceRef, migration, error, dependencies) {
+async function reconcileExistingReadyStorage(workspaceRef, uid, workspaceId, descriptor, dependencies) {
+  let completed;
+  await dependencies.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(workspaceRef);
+    if (!snapshot.exists) throw migrationError("workspace_not_found", 404);
+    const workspace = snapshot.data() || {};
+    assertOwner(workspace, uid);
+    assertWorkspaceAvailable(workspace);
+    assertPaused(await readSessions(transaction, workspaceRef, dependencies));
+    const current = workspace.sharedStorage || {};
+    if (current.bucketName && current.bucketName !== descriptor.bucketName) {
+      throw migrationError("workspace_storage_migration_conflict", 409);
+    }
+    if (current.storageGeneration && current.storageGeneration !== descriptor.storageGeneration) {
+      throw migrationError("workspace_storage_migration_generation_conflict", 409);
+    }
+    const now = serverTimestamp(dependencies.admin);
+    completed = {
+      ...current,
+      ...descriptor,
+      state: "ready",
+      errorCode: null,
+    };
+    transaction.update(workspaceRef, {
+      sharedStorageState: "ready",
+      sharedStorageErrorCode: null,
+      sharedStorage: completed,
+      workspaceStorageMode: SHARED_STORAGE_MODE,
+      updatedAt: now,
+    });
+  });
+  return {
+    accepted: true,
+    idempotent: true,
+    alreadyReady: true,
+    reused: true,
+    state: "ready",
+    operationId: completed.operationId || null,
+    generation: completed.storageGeneration,
+    progress: {phase: "reconciled", completed: true},
+    errorCode: null,
+    importDescriptor: null,
+  };
+}
+
+function persistExistingStorageFailure(workspaceRef, uid, error, dependencies) {
   const errorCode = normalizeErrorCode(error?.publicMessage || error?.code || "workspace_storage_migration_failed");
   return dependencies.db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(workspaceRef);
     if (!snapshot.exists) return;
-    const current = snapshot.data() || {};
-    if (current.sharedStorageMigration?.operationId !== migration.operationId) return;
-    const now = serverTimestamp(dependencies.admin);
+    const workspace = snapshot.data() || {};
+    if (workspace.ownerUid !== uid) return;
+    const current = workspace.sharedStorage;
     transaction.update(workspaceRef, {
       sharedStorageState: "error",
       sharedStorageErrorCode: errorCode,
-      sharedStorageMigration: {...migration, state: "error", errorCode, updatedAt: now},
-      updatedAt: now,
+      ...(current ? {sharedStorage: {...current, state: "error", errorCode}} : {}),
+      updatedAt: serverTimestamp(dependencies.admin),
     });
   });
+}
+
+function hasExistingSharedStorageDescriptor(workspace = {}) {
+  return Boolean(workspace.sharedStorage?.bucketName);
 }
 
 function normalizeMigrationError(error) {

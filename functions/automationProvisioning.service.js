@@ -272,7 +272,7 @@ function assertAutomationSessionIdentity(session, run) {
 }
 
 function assertSharedStorageReady(workspace = {}) {
-  const state = String(workspace.sharedStorageState || workspace.sharedStorage?.state || "").trim().toLowerCase();
+  const state = String(workspace.sharedStorage?.state || workspace.sharedStorageState || "").trim().toLowerCase();
   if (state !== "ready" || !workspace.sharedStorage?.bucketName || !workspace.sharedStorage?.storageGeneration) {
     throw automationError("automation_shared_storage_not_ready");
   }

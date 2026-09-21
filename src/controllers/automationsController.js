@@ -226,8 +226,9 @@ export function createAutomationsController({
     return perform(context, "storage", async (client) => {
       const result = await client.prepareStorage(context.workspaceId);
       if (!isCurrent(context)) return null;
-      state.automations.storageState = "preparing";
-      state.automations.storageReady = false;
+      const storageState = String(result?.state || result?.storage?.state || "preparing").trim().toLowerCase();
+      state.automations.storageState = storageState;
+      state.automations.storageReady = storageState === "ready";
       return result;
     });
   }
@@ -559,7 +560,7 @@ export function createAutomationsController({
 
   function updateStorageState(workspaceId) {
     const workspace = state.workspaces?.find((item) => item.id === workspaceId);
-    const storageState = String(workspace?.sharedStorageState || workspace?.sharedStorage?.state || "").toLowerCase();
+    const storageState = String(workspace?.sharedStorage?.state || workspace?.sharedStorageState || "").toLowerCase();
     state.automations.storageState = storageState;
     state.automations.storageReady = storageState === "ready";
   }
