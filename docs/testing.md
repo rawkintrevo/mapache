@@ -82,10 +82,11 @@ npm run check
 It runs:
 
 1. Developer docs relative-link validation.
-2. Cloud Functions unit tests and syntax lint.
-3. Session runner JavaScript syntax lint and unit tests.
-4. Frontend smoke tests.
-5. Full Vite app and Docusaurus community build.
+2. Firestore Emulator security-rule and automation-index contract tests.
+3. Cloud Functions unit tests and syntax lint.
+4. Session runner JavaScript syntax lint and unit tests.
+5. Frontend smoke tests.
+6. Full Vite app and Docusaurus community build.
 
 Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 

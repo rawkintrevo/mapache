@@ -8,12 +8,13 @@
     "docs:check": "node scripts/check-doc-links.js",
     "generate:runner-catalog": "node scripts/generate-runner-catalog.mjs",
     "test:frontend": "vitest run",
+    "test:firestore-rules": "firebase emulators:exec --only firestore --project mapache-rules-test --log-verbosity SILENT \"node firestore.rules.test.cjs\"",
     "build:main": "vite build",
     "analyze:bundle": "vite build --sourcemap && node scripts/analyze-vite-bundle.mjs",
     "build:community": "cd community && npm run build",
     "move:community": "mkdir -p dist/community && cp -r community/build/* dist/community/",
     "build": "npm run build:main && npm run build:community && npm run move:community",
-    "check": "npm run docs:check && npm --prefix functions test && npm --prefix functions run lint && npm --prefix session-runner run lint && npm --prefix session-runner test && npm run test:frontend && npm run build",
+    "check": "npm run docs:check && npm run test:firestore-rules && npm --prefix functions test && npm --prefix functions run lint && npm --prefix session-runner run lint && npm --prefix session-runner test && npm run test:frontend && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
     "vite": "^8.0.16"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
