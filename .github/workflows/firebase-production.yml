@@ -33,6 +33,12 @@ jobs:
             functions/package-lock.json
             session-runner/package-lock.json
 
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -67,4 +73,4 @@ jobs:
             > functions/.env.pi-agents-cloud
 
       - name: Deploy Firebase production
-        run: npx firebase-tools@latest deploy --only hosting,functions,firestore,storage --project pi-agents-cloud --force
+        run: npm exec -- firebase deploy --only hosting,functions,firestore,storage --project pi-agents-cloud --force
