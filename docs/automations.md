@@ -86,6 +86,9 @@ Object Versioning disabled, and a seven-day (`604800` second) soft-delete
 policy. The existing bucket owner labels and project/workspace identity are
 validated before IAM reconciliation. The runner receives only a backend-owned
 bucket/generation descriptor; browser payloads cannot choose a bucket.
+Because Cloud Storage user-label values are lowercase and character-restricted,
+the workspace and owner identifiers are stored in a deterministic normalized
+label form; validation applies the same normalization before accepting a bucket.
 
 If the workspace already has a backend-owned `sharedStorage` descriptor with a
 bucket, generation, and tree prefix, preparation is a reconcile-only operation:
