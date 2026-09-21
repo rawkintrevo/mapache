@@ -5,30 +5,153 @@
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/automation.management",
   "steps": [
-    {"useCase": "cases/login.json"},
-    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-automation-{{timestamp}}", "workspaceEnv": "QA_CASE=automation-management"}},
-    {"type": "click", "role": "button", "name": "Automations"},
-    {"assert": "snapshot-text", "expected": "Automations reuse an existing backend-owned shared-storage bucket"},
-    {"assert": "snapshot-text", "expected": "Legacy storage"},
-    {"assert": "snapshot-text", "expected": "Shared storage required"},
-    {"type": "click", "role": "button", "name": "New automation"},
-    {"type": "fill", "label": "Name", "value": "Safe fixture automation {{timestamp}}"},
-    {"type": "fill", "label": "Instructions", "value": "Write one unique fixture file; do not publish or send external messages."},
-    {"type": "select", "label": "Schedule type", "value": "advanced"},
-    {"type": "fill", "label": "Cron expression", "value": "17 14 * * 2"},
-    {"type": "fill", "label": "Timezone", "value": "America/Chicago"},
-    {"type": "click", "role": "button", "name": "Create automation"},
-    {"type": "waitForNetwork", "requestUrlIncludes": "/automations", "method": "POST", "expectedStatus": 201, "timeoutMs": 15000},
-    {"assert": "snapshot-text", "expected": "Disabled"},
-    {"assert": "snapshot-text", "expected": "Run history"},
-    {"assert": "snapshot-text", "expected": "Latest runs"},
-    {"assert": "snapshot-text", "expected": "All workspaces"},
-    {"type": "fill", "label": "Maximum concurrent automations", "value": "2"},
-    {"type": "click", "role": "button", "name": "Save limit"},
-    {"type": "waitForNetwork", "requestUrlIncludes": "/automation-settings", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 15000},
-    {"capture": "screenshot", "fileName": "automation-management.png"},
-    {"capture": "console"},
-    {"capture": "network"},
-    {"useScript": "scripts/delete-selected-workspace.json"}
+    {
+      "useCase": "cases/login.json"
+    },
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-automation-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=automation-management"
+      }
+    },
+    {
+      "assert": "automation-desktop-navigation",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "expected": "One accessible Automations button with a visible Clock3 icon, no Run history navigation button, and the unchanged Blocks icon for Manage Google Workspace."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-desktop-navigation.png"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Automations"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Automations reuse an existing backend-owned shared-storage bucket"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Legacy storage"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Shared storage required"
+    },
+    {
+      "assert": "automation-responsive-navigation",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "expected": "Use keyboard to open More workspace actions. Exactly one Automations menu item shows Clock3; Manage Google Workspace shows Blocks; no Run history menu item. Enter on Automations opens the combined definition and Run history screen and closes the menu."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-mobile-navigation.png",
+      "when": "More workspace actions is open, before activating Automations"
+    },
+    {
+      "assert": "automation-desktop-return",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "expected": "Return to desktop and confirm the combined Automations surface is open."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "New automation"
+    },
+    {
+      "type": "fill",
+      "label": "Name",
+      "value": "Safe fixture automation {{timestamp}}"
+    },
+    {
+      "type": "fill",
+      "label": "Instructions",
+      "value": "Write one unique fixture file; do not publish or send external messages."
+    },
+    {
+      "type": "select",
+      "label": "Schedule type",
+      "value": "advanced"
+    },
+    {
+      "type": "fill",
+      "label": "Cron expression",
+      "value": "17 14 * * 2"
+    },
+    {
+      "type": "fill",
+      "label": "Timezone",
+      "value": "America/Chicago"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Create automation"
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/automations",
+      "method": "POST",
+      "expectedStatus": 201,
+      "timeoutMs": 15000
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Disabled"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Run history"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Latest runs"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "All workspaces"
+    },
+    {
+      "type": "fill",
+      "label": "Maximum concurrent automations",
+      "value": "2"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Save limit"
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/automation-settings",
+      "method": "PATCH",
+      "expectedStatus": 200,
+      "timeoutMs": 15000
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-management.png"
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "capture": "network"
+    },
+    {
+      "useScript": "scripts/delete-selected-workspace.json"
+    }
   ]
 }

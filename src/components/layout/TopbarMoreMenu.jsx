@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from "react";
-import {Blocks, BookOpen, Bot, KeyRound, MoreHorizontal, Pencil, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, BookOpen, Bot, Clock3, KeyRound, MoreHorizontal, Pencil, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 
 export function TopbarMoreMenu({
@@ -71,7 +71,7 @@ export function TopbarMoreMenu({
             <MenuItem icon={<ScrollText aria-hidden="true" />} label="Logs" onClick={onShowLogs} close={close} />
             <div className="topbar-more-divider" role="separator" />
           </> : null}
-          <MenuItem icon={<Blocks aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} />
+          <MenuItem icon={<Clock3 aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} />
           <div className="topbar-more-divider" role="separator" />
           <MenuItem firstItemRef={firstItemRef} icon={<Plus aria-hidden="true" />} label="Create workspace" onClick={onOpenWorkspaceModal} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<Pencil aria-hidden="true" />} label={`Edit workspace ${workspaceLabel}`} onClick={onOpenWorkspaceEditModal} close={close} />

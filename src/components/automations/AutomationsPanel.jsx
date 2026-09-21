@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from "react";
-import {Blocks, Clock3, Pencil, Play, Plus, RefreshCw, Trash2} from "lucide-react";
+import {Clock3, Pencil, Play, Plus, RefreshCw, Trash2} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AutomationEditor, createAutomationDraft} from "./AutomationEditor.jsx";
 import "./AutomationsPanel.css";
@@ -63,7 +63,7 @@ export function AutomationsPanel({
   if (!workspace) {
     return (
       <section className="automations-panel automations-panel--empty" aria-labelledby="automations-title">
-        <Blocks aria-hidden="true" size={32} />
+        <Clock3 aria-hidden="true" size={32} />
         <h2 id="automations-title">Automations</h2>
         <p className="subtle">Select a workspace to manage its scheduled automations.</p>
       </section>

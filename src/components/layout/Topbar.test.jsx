@@ -100,13 +100,19 @@ test("uses one automation navigation entry for definitions and run history", asy
 
   const automationsButton = screen.getByRole("button", {name: "Automations"});
   expect(automationsButton).toBeEnabled();
+  expect(automationsButton).toHaveAttribute("title", "Automations");
   expect(screen.queryByRole("button", {name: "Run history"})).not.toBeInTheDocument();
-  await user.click(automationsButton);
+  automationsButton.focus();
+  await user.keyboard("{Enter}");
   expect(onShowAutomations).toHaveBeenCalledOnce();
 
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   expect(screen.getByRole("menuitem", {name: "Automations"})).toBeInTheDocument();
   expect(screen.queryByRole("menuitem", {name: "Run history"})).not.toBeInTheDocument();
+  screen.getByRole("menuitem", {name: "Automations"}).focus();
+  await user.keyboard("{Enter}");
+  expect(onShowAutomations).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 });
 
 test("opens labeled secondary actions from the More menu", async () => {
