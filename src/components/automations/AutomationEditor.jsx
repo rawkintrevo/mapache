@@ -154,7 +154,7 @@ export function AutomationEditor({
           <label className="automation-editor__switch"><input checked={form.enabled === true && storageReady} disabled={busy || !storageReady} type="checkbox" onChange={(event) => update({enabled: event.target.checked})} /> Enabled</label>
           <label className="automation-editor__switch"><input checked={form.allowParallelWithMain !== false} disabled={busy} type="checkbox" onChange={(event) => update({allowParallelWithMain: event.target.checked})} /> Allow running while main workspace is active</label>
         </div>
-        {!storageReady ? <p className="automation-editor__storage-warning" role="status">Prepare shared workspace storage before enabling or running automations. Disabled workflows can still be saved.</p> : null}
+        {!storageReady ? <p className="automation-editor__storage-warning" role="status">Configure existing shared workspace storage before enabling or running automations. Disabled workflows can still be saved.</p> : null}
         <ScheduleControls
           cron={form.cron || ""}
           mode={form.scheduleMode || inferScheduleMode(form.cron)}

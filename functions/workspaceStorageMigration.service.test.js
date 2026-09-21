@@ -117,37 +117,29 @@ function setup(sessions = {}, workspaceOverrides = {}) {
   return {db, service, getEnsureCalls: () => ensureCalls, getValidateCalls: () => validateCalls};
 }
 
-test("reserves a paused workspace idempotently and cuts over only after verification", async () => {
+test("requires an existing shared-storage descriptor and never starts bucket preparation", async () => {
   const {db, service} = setup({main: {status: "stopped"}});
-  const prepared = await service.prepare("user-1", "workspace-1");
-  assert.equal(prepared.accepted, true);
-  assert.equal(prepared.state, "migrating");
-  assert.equal(prepared.operationId.length > 0, true);
-  const repeated = await service.prepare("user-1", "workspace-1");
-  assert.equal(repeated.idempotent, true);
-
-  const completed = await service.complete("user-1", "workspace-1", {
-    operationId: prepared.operationId,
-    bucketName: "mpw-123-workspace",
-    storageGeneration: prepared.generation,
-    readyMarkerObjectPath: `trees/${prepared.operationId}/.mapache-internal/workspace-ready.json`,
-    readyMarker: ".mapache-internal/workspace-ready.json",
-    treePrefix: `trees/${prepared.operationId}`,
-  });
-  assert.equal(completed.state, "ready");
-  assert.equal(db.data.get("workspaces/workspace-1").sharedStorage.storageGeneration, prepared.generation);
-  assert.equal(db.data.get("workspaces/workspace-1").sharedStorageState, "ready");
-  assert.equal(db.data.get("workspaces/workspace-1").bucket, "legacy-bucket");
+  await assert.rejects(
+      service.prepare("user-1", "workspace-1"),
+      /workspace_shared_storage_required/,
+  );
+  assert.equal(db.data.get("workspaces/workspace-1").sharedStorageState, "legacy");
 });
 
 test("active services block migration and preserve the legacy pointer on failure", async () => {
   const {db, service} = setup({main: {status: "running"}});
   await assert.rejects(() => service.prepare("user-1", "workspace-1"), /workspace_must_be_paused/);
 
-  const ready = setup({main: {status: "stopped"}});
-  const prepared = await ready.service.prepare("user-1", "workspace-1");
+  const ready = setup({main: {status: "stopped"}}, {
+    sharedStorageMigration: {
+      operationId: "existing-operation",
+      generation: "existing-generation",
+      state: "migrating",
+      progress: {phase: "awaiting_import", completed: false},
+    },
+  });
   const failed = await ready.service.fail("user-1", "workspace-1", {
-    operationId: prepared.operationId,
+    operationId: "existing-operation",
     errorCode: "unsupported_file",
   });
   assert.equal(failed.state, "error");

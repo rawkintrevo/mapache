@@ -402,6 +402,7 @@ function serializeWorkspaceForClient(value) {
   if (!serialized || typeof serialized !== "object" || Array.isArray(serialized)) return serialized;
   if (serialized.sharedStorage) {
     serialized.sharedStorage = {
+      configured: Boolean(serialized.sharedStorage.bucketName),
       state: serialized.sharedStorage.state || serialized.sharedStorageState || "legacy",
       errorCode: serialized.sharedStorage.errorCode || serialized.sharedStorageErrorCode || null,
     };

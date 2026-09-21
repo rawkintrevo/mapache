@@ -36,13 +36,13 @@ function renderPanel(state, overrides = {}) {
 }
 
 describe("AutomationsPanel", () => {
-  test("shows storage preparation and does not enable run actions before ready", async () => {
+  test("requires existing shared storage and does not enable run actions before ready", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {storageState: "legacy", definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false} ]}});
     renderPanel(state);
 
-    expect(screen.getByRole("button", {name: "Prepare automations"})).toBeInTheDocument();
-    expect(screen.getByText(/Usage-based storage/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Shared storage required"})).toBeDisabled();
+    expect(screen.getByText(/never creates one/)).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Run now"})).toBeDisabled();
     await user.click(screen.getByRole("button", {name: "New automation"}));
     expect(screen.getByRole("heading", {name: "New automation"})).toBeInTheDocument();

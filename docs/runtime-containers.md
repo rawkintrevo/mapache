@@ -17,9 +17,10 @@ the combined `cpu,cpuacct` mount used by Cloud Run Jobs, and the `memory` contro
 Prepared shared-mode workspaces use one private Cloud Storage bucket in `us-central1`.
 The Functions control plane derives the bucket name as
 `mpw-<project-number>-<first-24-hex-sha256(workspaceId)>`, persists that exact identity
-on the workspace, and never accepts a browser-provided bucket name. Creation is
-idempotent; an existing ready descriptor is reconciled in place, preserving its
-generation and tree prefix, before applying the existing
+on the workspace, and never accepts a browser-provided bucket name. Workspace
+storage setup owns bucket lifecycle. The automation preparation endpoint only
+reconciles an existing ready descriptor in place, preserving its generation and
+tree prefix, before applying the existing
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com` object binding.
 
 The bucket contract is fixed at creation: Standard storage class, hierarchical
@@ -33,10 +34,11 @@ or `error`) and normalized error codes to callers; the bucket identity remains p
 
 Preparation is explicit and requires the workspace to be paused, so a disabled
 automation definition does not allocate storage by itself. `POST
-/api/workspaces/{workspaceId}/automation-storage/prepare` acquires an idempotent
-migration reservation and returns `202` while the scoped maintenance importer
-uploads and verifies a fresh generation. The shared bucket is not mounted by
-preparation: later migration publishes a verified
+/api/workspaces/{workspaceId}/automation-storage/prepare` validates and
+reconciles the existing backend-owned descriptor, or returns
+`workspace_shared_storage_required` when no descriptor exists. It never creates
+a bucket, starts the maintenance importer, or resets a generation. The shared
+bucket is not mounted by preparation: a ready descriptor publishes a verified
 `trees/{storageGeneration}/` prefix before a runner receives it as `/workspace`.
 When that trusted bucket/generation descriptor is present, Cloud Run provisioning
 uses the shared template helper to add a gen2 `gcsfuse.run.googleapis.com` CSI

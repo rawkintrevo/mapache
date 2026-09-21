@@ -1,13 +1,11 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const logger = require("firebase-functions/logger");
-const {admin: defaultAdmin, auth: defaultAuth, db: defaultDb, storage: defaultStorage} = require("./backendContext");
+const {auth: defaultAuth, db: defaultDb, storage: defaultStorage} = require("./backendContext");
 const {httpError, isGoogleAlreadyExists, isGoogleNotFound} = require("./backendUtils.helpers");
 const {
   assertBucketMetadata,
   createWorkspaceBucketAccessService,
-  expectedBucketLabels,
 } = require("./workspaceBucketAccess.service");
 
 const SHARED_STORAGE_REGION = "us-central1";
@@ -74,23 +72,6 @@ function isAlreadyExists(error) {
   return isGoogleAlreadyExists(error) || Number(error?.code) === 409 || Number(error?.status) === 409;
 }
 
-function bucketCreationMetadata(binding) {
-  return {
-    location: SHARED_STORAGE_REGION,
-    storageClass: SHARED_STORAGE_CLASS,
-    hierarchicalNamespace: {enabled: true},
-    iamConfiguration: {
-      uniformBucketLevelAccess: {enabled: true},
-      publicAccessPrevention: "enforced",
-    },
-    softDeletePolicy: {
-      retentionDurationSeconds: String(SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS),
-    },
-    versioning: {enabled: false},
-    labels: expectedBucketLabels(binding),
-  };
-}
-
 function assertSharedBucketContract(metadata = {}, binding) {
   assertBucketMetadata(metadata, binding, {
     projectId: binding.projectId,
@@ -147,7 +128,6 @@ function publicStorageState(workspace = {}) {
 }
 
 function createWorkspaceSharedStorageService(dependencies = {}) {
-  const admin = dependencies.admin || defaultAdmin;
   const db = dependencies.db || defaultDb;
   const auth = dependencies.auth || defaultAuth;
   const storage = dependencies.storage || defaultStorage;
@@ -221,29 +201,10 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     }
   }
 
-  async function createBucket(bucketName, metadata) {
-    if (typeof storage.createBucket === "function") {
-      await storage.createBucket(bucketName, metadata);
-      return;
-    }
-    const bucket = storage.bucket(bucketName);
-    if (typeof bucket.create !== "function") throw storageError("workspace_bucket_client_unavailable", 500);
-    await bucket.create(metadata);
-  }
-
-  async function ensureBucket(binding, {createIfMissing = true} = {}) {
+  async function ensureBucket(binding) {
     const bucket = storage.bucket(binding.bucketName);
-    let metadata = await readBucket(bucket);
-    if (!metadata) {
-      if (!createIfMissing) throw storageError("workspace_bucket_not_found", 404);
-      try {
-        await createBucket(binding.bucketName, bucketCreationMetadata(binding));
-      } catch (error) {
-        if (!isAlreadyExists(error)) throw error;
-      }
-      metadata = await readBucket(bucket);
-      if (!metadata) throw storageError("workspace_bucket_create_unconfirmed", 502);
-    }
+    const metadata = await readBucket(bucket);
+    if (!metadata) throw storageError("workspace_bucket_not_found", 404);
     assertSharedBucketContract(metadata, binding);
     return {bucket, metadata};
   }
@@ -273,6 +234,7 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
 
   function existingReadyDescriptor(workspace, workspaceId, project) {
     const existing = workspace.sharedStorage || {};
+    if (!existing.bucketName) throw storageError("workspace_shared_storage_required", 409);
     const identity = identityFor(workspace, workspaceId, project);
     const storageGeneration = String(existing.storageGeneration || "").trim();
     if (!storageGeneration || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(storageGeneration) || storageGeneration.includes("..")) {
@@ -293,90 +255,16 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
     };
   }
 
-  async function updateStorageState(workspaceId, identity, state, errorCode = null) {
-    const update = {
-      sharedStorageState: state,
-      sharedStorageErrorCode: errorCode,
-      sharedStorage: {
-        ...identity,
-        state,
-        errorCode,
-      },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    await workspaceRef(workspaceId).update(update);
-  }
-
   async function prepareWorkspaceSharedStorage(uid, workspaceId) {
-    const workspace = await loadWorkspace(uid, workspaceId);
-    const sessions = await listSessions(workspaceId);
-    assertWorkspacePaused(sessions);
-
-    let identity;
-    try {
-      const project = workspace.sharedStorage?.projectId && normalizeProjectNumber(workspace.sharedStorage?.projectNumber) ? {
-        projectId: workspace.sharedStorage.projectId,
-        projectNumber: normalizeProjectNumber(workspace.sharedStorage.projectNumber),
-      } : await resolveProjectIdentity();
-      identity = identityFor(workspace, workspaceId, project);
-      await updateStorageState(workspaceId, identity, "preparing");
-      const binding = {
-        projectId: identity.projectId,
-        projectNumber: identity.projectNumber,
-        bucketName: identity.bucketName,
-        workspaceId,
-        ownerUid: uid,
-      };
-      await ensureBucket(binding);
-      try {
-        await bucketAccess.ensureRunnerObjectAccess(binding);
-      } catch (error) {
-        throw storageError("workspace_bucket_iam_failed", 502, {cause: error});
-      }
-      await updateStorageState(workspaceId, identity, "ready");
-      return {state: "ready", errorCode: null};
-    } catch (error) {
-      const normalized = normalizeStorageFailure(error);
-      if (identity) {
-        try {
-          await updateStorageState(workspaceId, identity, "error", normalized.publicMessage);
-        } catch (stateError) {
-          logger.error("failed to persist shared storage error state", {
-            workspaceId,
-            error: stateError.message || String(stateError),
-          });
-        }
-      }
-      throw normalized;
-    }
+    await validateExistingWorkspaceSharedStorage(uid, workspaceId);
+    return {state: "ready", errorCode: null};
   }
 
-  // Migration owns the Firestore cutover. This helper only creates/verifies
-  // the destination bucket and grants the runner principal access, leaving the
-  // legacy workspace pointer authoritative until the importer verifies it.
+  // Kept for checked-in migration callers. It is deliberately reuse-only:
+  // callers must provide an existing descriptor and this helper never creates
+  // a bucket or mutates workspace storage state.
   async function ensureWorkspaceSharedStorage(uid, workspaceId) {
-    const workspace = await loadWorkspace(uid, workspaceId);
-    const sessions = await listSessions(workspaceId);
-    assertWorkspacePaused(sessions);
-    const project = workspace.sharedStorage?.projectId && normalizeProjectNumber(workspace.sharedStorage?.projectNumber) ? {
-      projectId: workspace.sharedStorage.projectId,
-      projectNumber: normalizeProjectNumber(workspace.sharedStorage.projectNumber),
-    } : await resolveProjectIdentity();
-    const identity = identityFor(workspace, workspaceId, project);
-    const binding = {
-      projectId: identity.projectId,
-      projectNumber: identity.projectNumber,
-      bucketName: identity.bucketName,
-      workspaceId,
-      ownerUid: uid,
-    };
-    await ensureBucket(binding);
-    try {
-      await bucketAccess.ensureRunnerObjectAccess(binding);
-    } catch (error) {
-      throw storageError("workspace_bucket_iam_failed", 502, {cause: error});
-    }
-    return identity;
+    return validateExistingWorkspaceSharedStorage(uid, workspaceId);
   }
 
   // Reconcile a descriptor that already points at a prepared workspace bucket.
@@ -399,7 +287,7 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
         workspaceId,
         ownerUid: uid,
       };
-      await ensureBucket(binding, {createIfMissing: false});
+      await ensureBucket(binding);
       try {
         await bucketAccess.ensureRunnerObjectAccess(binding);
       } catch (error) {
@@ -511,7 +399,6 @@ module.exports = {
   SHARED_STORAGE_SOFT_DELETE_RETENTION_SECONDS,
   SHARED_STORAGE_STATES,
   assertSharedBucketContract,
-  bucketCreationMetadata,
   createWorkspaceSharedStorageService,
   deriveWorkspaceBucketName,
   normalizeStorageFailure,
