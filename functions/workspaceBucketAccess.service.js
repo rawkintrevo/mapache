@@ -1,11 +1,13 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
 
 const RUNNER_OBJECT_ROLE = "roles/storage.objectUser";
 const RUNNER_SERVICE_ACCOUNT = "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com";
 const PUBLIC_MEMBERS = new Set(["allUsers", "allAuthenticatedUsers"]);
 const MAX_IAM_RETRIES = 3;
+const BUCKET_LABEL_VALUE_MAX_LENGTH = 63;
 
 function accessError(code, details = {}) {
   const error = new Error(code);
@@ -33,9 +35,21 @@ function normalizeWorkspaceBucketBinding(binding = {}, options = {}) {
 
 function expectedBucketLabels(binding) {
   return {
-    "mapache-workspace-id": binding.workspaceId,
-    "mapache-owner-uid": binding.ownerUid,
+    "mapache-workspace-id": normalizeBucketLabelValue(binding.workspaceId),
+    "mapache-owner-uid": normalizeBucketLabelValue(binding.ownerUid),
   };
+}
+
+function normalizeBucketLabelValue(value) {
+  const rawValue = String(value || "").trim();
+  const normalizedValue = rawValue.toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "-")
+      .replace(/^-+|-+$/g, "");
+  if (!normalizedValue) return "unknown";
+  if (normalizedValue.length <= BUCKET_LABEL_VALUE_MAX_LENGTH) return normalizedValue;
+
+  const suffix = crypto.createHash("sha256").update(rawValue).digest("hex").slice(0, 12);
+  return `${normalizedValue.slice(0, BUCKET_LABEL_VALUE_MAX_LENGTH - suffix.length - 1)}-${suffix}`;
 }
 
 function assertBucketMetadata(metadata = {}, binding, options = {}) {
