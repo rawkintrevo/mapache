@@ -50,6 +50,8 @@ standing storage service. Each admitted run uses one deterministic
   `us-central1`) and filters/rechecks automation labels locally. Cloud Run v2
   [service listing](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.services/list)
   accepts neither the wildcard region nor a `filter` query parameter.
+  The scheduled recovery Function binds the same GitHub/Google secrets and
+  540-second timeout as provisioning because it can resume that work directly.
 - Artifacts are immutable, sanitized, and written under
   `automation-runs/{runId}/v1/`; the manifest pointer is published only after
   checksum/size verification. Global history returns the snapshot and archived

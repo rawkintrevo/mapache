@@ -664,7 +664,17 @@ exports.dispatchAutomationSchedules = onSchedule("every 1 minutes", async (event
   return result;
 });
 
-exports.reconcileAutomationRuns = onSchedule("every 1 minutes", async () => {
+exports.reconcileAutomationRuns = onSchedule({
+  schedule: "every 1 minutes",
+  timeoutSeconds: 540,
+  secrets: [
+    GITHUB_APP_ID_SECRET,
+    GITHUB_APP_PRIVATE_KEY_SECRET,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_STATE_SECRET,
+    GOOGLE_OAUTH_ENCRYPTION_KEY,
+  ],
+}, async () => {
   const result = await automationReconciliationService.reconcile();
   logger.info("automation reconciliation complete", result);
   return result;
