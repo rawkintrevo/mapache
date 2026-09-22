@@ -29,7 +29,13 @@ class Ref {
   }
 
   async update(updates) {
-    this.db.data.set(this.path, {...(this.db.data.get(this.path) || {}), ...updates});
+    const before = this.db.data.get(this.path);
+    const after = {...(before || {}), ...updates};
+    this.db.data.set(this.path, after);
+    this.db.events.push({path: this.path, data: {
+      before: {id: this.id, exists: Boolean(before), data: () => before},
+      after: {id: this.id, exists: true, data: () => after},
+    }});
   }
 
   collection(name) {
@@ -51,6 +57,7 @@ class Collection {
 class Db {
   constructor() {
     this.data = new Map();
+    this.events = [];
   }
 
   collection(name) {
@@ -88,7 +95,7 @@ function baseRun(overrides = {}) {
   };
 }
 
-function setup({run = baseRun(), existingSession} = {}) {
+function setup({run = baseRun(), existingSession, pending = false} = {}) {
   const db = new Db();
   db.data.set("automationRuns/run-1", run);
   db.data.set("workspaces/workspace-1", {
@@ -127,7 +134,7 @@ function setup({run = baseRun(), existingSession} = {}) {
     featureEnabled: async () => true,
     provisionSessionService: async (workspace, sessionRef, session) => {
       calls.push({kind: "provision", workspace, session});
-      await sessionRef.update({status: "running", serviceUrl: "https://automation.example.run.app"});
+      if (!pending) await sessionRef.update({status: "running", serviceUrl: "https://automation.example.run.app"});
     },
     requireWorkspace: async () => db.collection("workspaces").doc("workspace-1").get().then((snap) => ({id: "workspace-1", ...snap.data()})),
     sessionCollection: (workspaceId) => db.collection("workspaces").doc(workspaceId).collection("sessions"),
@@ -176,6 +183,46 @@ test("routes an identity mismatch to failed cleanup while retaining the run slot
 test("uses stable failure codes and does not serialize arbitrary provider errors", () => {
   assert.equal(stableAutomationFailureCode({message: "quota exhausted for secret token"}), "cloud_run_quota_exceeded");
   assert.equal(stableAutomationFailureCode({message: "provider returned a bearer token"}), "automation_provisioning_failed");
+});
+
+test("pending provisioning does not generate a recursive Firestore event loop", async () => {
+  const {calls, db, service} = setup({pending: true});
+  await service.handleAutomationRunEvent({data: {
+    before: {exists: true, data: () => baseRun({status: "queued"})},
+    after: {id: "run-1", exists: true, data: () => baseRun()},
+  }});
+  assert.equal(db.events.length, 2);
+  for (let i = 0; i < db.events.length; i++) {
+    assert.ok(i < 10, "self-generated writes must stop");
+    await service.handleAutomationRunEvent(db.events[i]);
+  }
+  assert.equal(calls.filter((call) => call.kind === "provision").length, 1);
+
+  // Reconciliation can still resume a lost/pending attempt without rewriting
+  // its claim or attachment on every minute tick.
+  await service.provisionAutomationRun("run-1");
+  assert.equal(calls.filter((call) => call.kind === "provision").length, 2);
+  assert.equal(db.events.length, 2);
+});
+
+test("session worker ignores progress writes but reconciles a completed provision", async () => {
+  const {calls, db, service} = setup({pending: true});
+  await service.provisionAutomationRun("run-1");
+  const sessionPath = "workspaces/workspace-1/sessions/auto-run-1";
+  const session = db.data.get(sessionPath);
+  const event = (before, after) => ({data: {
+    before: {exists: true, data: () => before},
+    after: {id: "auto-run-1", exists: true, data: () => after},
+  }});
+  await service.handleAutomationSessionEvent(event(session, {...session, provisioningState: "running"}));
+  assert.equal(calls.filter((call) => call.kind === "provision").length, 1);
+  const running = {...session, status: "running", serviceUrl: "https://automation.example.run.app"};
+  db.data.set(sessionPath, running);
+  await service.handleAutomationSessionEvent(event(session, running));
+  assert.equal(db.data.get("automationRuns/run-1").status, "running");
+  const writes = db.events.length;
+  await service.handleAutomationSessionEvent(event(running, {...running, heartbeat: 1}));
+  assert.equal(db.events.length, writes);
 });
 
 console.log("automation provisioning service tests passed");

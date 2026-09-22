@@ -41,6 +41,13 @@ async function handleAutomationRunEvent(event, dependencies = {}) {
   const after = event && event.data && event.data.after;
   if (!after || !after.exists) return {skipped: "deleted"};
   const run = after.data() || {};
+  const before = event.data.before;
+  const previous = before?.exists ? before.data() || {} : null;
+  // A cleanup error is retried by reconciliation, never by its own Firestore
+  // write. Otherwise a persistent failure exhausts the Cloud Run write quota.
+  if (previous && previous.status === run.status) {
+    return {skipped: "no_cleanup_transition", runId: after.id || event.params?.runId};
+  }
   if (run.status === "stopping" ||
       (isTerminalAutomationStatus(run.status) && normalize(run.cleanupState) !== "complete")) {
     return cleanupAutomationRun(after.id || event.params?.runId, dependencies);

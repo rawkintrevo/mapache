@@ -40,6 +40,12 @@ standing storage service. Each admitted run uses one deterministic
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.
+- Firestore provisioning workers react to admission and session provisioning
+  results; their own claim, attachment, and heartbeat writes do not start more
+  workers. Cleanup reacts to run status transitions. Cleanup-error writes are
+  retried by the minute reconciler rather than immediately retriggering deletion.
+  The reconciler requires the `automationRuns` collection index on `status ASC,
+  updatedAt ASC` in `firestore.indexes.json`; deploy it before the worker changes.
 - Artifacts are immutable, sanitized, and written under
   `automation-runs/{runId}/v1/`; the manifest pointer is published only after
   checksum/size verification. Global history returns the snapshot and archived
@@ -115,6 +121,15 @@ checks for FUSE mounts, rejects a writable input, and probes writable output.
 Private agent state, credentials, Chrome profiles, and seeded skills stay outside
 the source mount. The automation keeps its existing independent runtime authority
 and never acquires the main sync-writer lease.
+
+Private automation and Google token broker sockets use
+`session-runner/lib/unixSocketPath.helpers.js` to bound pathname byte length.
+Paths longer than 100 bytes resolve under a private `/tmp/mapache-ipc-{sha256}`
+directory using a hash of the full original path, keeping runtime and broker
+identities distinct. The directory remains 0700 and each socket 0600. This is
+required for scheduled run IDs, whose ordinary runtime paths exceed Unix socket
+limits. Rebuild and publish `pi-chrome` for this fix; existing services require
+restart/recreation to receive the new socket configuration.
 
 Automations can run alongside main and each other. They see saved input selected
 at admission/provisioning, not unsaved main-session edits. They cannot overwrite

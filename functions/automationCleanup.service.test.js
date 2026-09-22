@@ -139,4 +139,23 @@ test("repeated stop after completed cleanup is idempotent", async () => {
   assert.equal(calls.length, 0);
 });
 
+test("cleanup errors do not recursively delete services and reconciliation can retry", async () => {
+  const deleteResult = {serviceAbsent: false};
+  const failed = run({status: "failed"});
+  const {calls, db, service} = harness({runData: failed, deleteResult});
+  const event = (before, after) => ({data: {
+    before: {exists: true, data: () => before},
+    after: {id: "run-1", exists: true, data: () => after},
+  }});
+  await service.handleAutomationRunEvent(event(run(), failed));
+  const errorState = db.data.get("automationRuns/run-1");
+  assert.equal(errorState.cleanupState, "error");
+  await service.handleAutomationRunEvent(event(failed, errorState));
+  assert.equal(calls.length, 1);
+  deleteResult.serviceAbsent = true;
+  await service.cleanupAutomationRun("run-1");
+  assert.equal(db.data.get("automationRuns/run-1").cleanupState, "complete");
+  assert.equal(calls.length, 3); // two deletion attempts and one slot release
+});
+
 console.log("automation cleanup service tests passed");

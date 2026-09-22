@@ -170,4 +170,35 @@ test("reconciliation resumes provisioning and deletes only rechecked labeled orp
   assert.equal(calls.some((call) => call.action === "delete" && call.serviceName.endsWith("/main")), false);
 });
 
+test("the production reconciliation query has a matching checked-in Firestore index", async () => {
+  const fields = [];
+  const query = {
+    where(field, operator) {
+      assert.equal(operator, "in");
+      fields.push({fieldPath: field, order: "ASCENDING"});
+      return this;
+    },
+    orderBy(field, direction) {
+      fields.push({fieldPath: field, order: direction === "asc" ? "ASCENDING" : "DESCENDING"});
+      return this;
+    },
+    limit() { return this; },
+    async get() { return {docs: []}; },
+  };
+  const {service} = harness([], {
+    listRuns: undefined,
+    db: {collection: (name) => {
+      assert.equal(name, "automationRuns");
+      return query;
+    }},
+  });
+  await service.reconcile();
+  const indexSource = require("node:fs").readFileSync(require("node:path").join(__dirname, "../firestore.indexes.json"), "utf8");
+  const {indexes} = JSON.parse(indexSource.replace(/^\s*\/\/.*$/gm, ""));
+  assert.ok(indexes.some((index) => index.collectionGroup === "automationRuns" &&
+    index.queryScope === "COLLECTION" &&
+    JSON.stringify(index.fields.filter((field) => field.fieldPath !== "__name__")) === JSON.stringify(fields)),
+  "deployable index must match the actual reconciliation query");
+});
+
 console.log("automation reconciliation service tests passed");
