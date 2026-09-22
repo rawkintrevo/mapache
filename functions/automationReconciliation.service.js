@@ -277,6 +277,9 @@ async function reconcileOrphanServices(liveAutomationLabels, dependencies = {}) 
   try {
     services = await listCloudRunServices(dependencies);
   } catch (error) {
+    logger.warn("automation orphan inventory failed", {
+      code: stableReconciliationErrorCode(error, "automation_service_list_failed"),
+    });
     return {checked: 0, deleted: 0, errors: 1};
   }
   const result = {checked: 0, deleted: 0, errors: 0};
@@ -309,12 +312,14 @@ async function listCloudRunServices(dependencies = {}) {
   let pageToken = "";
   for (let page = 0; page < MAX_SERVICE_PAGES; page++) {
     const params = new URLSearchParams({
-      filter: 'labels.mapache-runtime-kind="automation"',
       pageSize: String(PAGE_SIZE),
     });
     if (pageToken) params.set("pageToken", pageToken);
     const response = await client.request({
-      url: `https://run.googleapis.com/v2/projects/${project}/locations/-/services?${params.toString()}`,
+      // Cloud Run v2 requires a concrete region and has no label filter.
+      // Automation creation uses DEFAULT_REGION; label checks stay below
+      // the inventory boundary and are repeated before deleting a service.
+      url: `https://run.googleapis.com/v2/projects/${project}/locations/${DEFAULT_REGION}/services?${params.toString()}`,
       method: "GET",
     });
     services.push(...(response.data?.services || []));

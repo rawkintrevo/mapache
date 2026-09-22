@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("path");
+const {boundedUnixSocketPath} = require("./unixSocketPath.helpers");
 const {
   envFlag,
   normalizeEnvString,
@@ -123,12 +124,12 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     path.resolve(normalizeEnvString(process.env.MAPACHE_PRIVATE_GIT_DIR) || "/var/lib/mapache/git/repository") :
     privatePaths?.privateGitDir || "";
   const automationAgentSocketPath = runtimeKind === "automation" ?
-    (normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_SOCKET) ||
+    boundedUnixSocketPath(normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_SOCKET) ||
       path.join(privatePaths?.runtimeRoot || "/tmp", "automation-agent.sock")) : "";
-  const googleMcpTokenSocketPath = path.join(
+  const googleMcpTokenSocketPath = boundedUnixSocketPath(path.join(
       privatePaths?.runtimeRoot || "/tmp",
       `google-mcp-token-${normalizeRuntimeIdentity(runtimeIdentity)}.sock`,
-  );
+  ));
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),

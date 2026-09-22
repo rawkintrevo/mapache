@@ -44,6 +44,13 @@ function createAutomationProvisioningService(dependencies = {}) {
 async function handleAutomationRunEvent(event, dependencies = {}) {
   const after = event && event.data && event.data.after;
   if (!after || !after.exists) return {skipped: "deleted"};
+  const before = event.data.before;
+  const run = after.data() || {};
+  // Claim/attachment/heartbeat writes must not recursively provision the run.
+  // The minute reconciler resumes incomplete work after a worker is lost.
+  if (run.status !== "provisioning" || before?.exists && before.data()?.status === "provisioning") {
+    return {skipped: "not_admission", runId: after.id || event.params?.runId};
+  }
   return provisionAutomationRun(after.id || event.params?.runId, dependencies);
 }
 
@@ -52,6 +59,11 @@ async function handleAutomationSessionEvent(event, dependencies = {}) {
   if (!after || !after.exists) return {skipped: "deleted"};
   const session = {id: after.id, ...after.data()};
   if (!isAutomationRuntime(session)) return {skipped: "not_automation"};
+  const before = event.data.before;
+  if (!["running", "provision_failed"].includes(session.status) ||
+      before?.exists && before.data()?.status === session.status) {
+    return {skipped: "not_provisioning_result"};
+  }
   const runId = session.automationRunId || event.params?.sessionId?.replace(/^auto-/, "");
   if (!runId) return {skipped: "missing_run_id"};
   return provisionAutomationRun(runId, dependencies);
@@ -133,6 +145,9 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
 
     const operationId = run.provisioningOperationId || automationProvisioningOperationId(run.workspaceId, runId);
     const serviceId = run.provisioningServiceId || automationCloudRunServiceId(runId);
+    if (run.provisioningOperationId && run.provisioningServiceId && run.provisioningClaim) {
+      return {action: "provision", run};
+    }
     const now = firestoreAdmin.firestore.FieldValue.serverTimestamp();
     const claim = {
       ...(run.provisioningClaim || {}),
@@ -192,6 +207,7 @@ async function attachSessionToRun(runRef, run, session, dependencies = {}) {
     if (!currentSnap.exists) return false;
     const current = currentSnap.data() || {};
     if (isTerminalAutomationStatus(current.status) || current.status === "stopping" || current.desiredOutcome === "canceled") return false;
+    if (current.sessionId === session.id && current.provisioningState === "provisioning") return true;
     transaction.update(runRef, {
       sessionId: session.id,
       ...(session.automationStorage ? {workspaceOutput: session.automationStorage.output} : {}),

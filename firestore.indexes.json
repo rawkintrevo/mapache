@@ -166,6 +166,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "automationRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "cleanupState", "order": "ASCENDING"},
         {"fieldPath": "updatedAt", "order": "ASCENDING"}
       ]
