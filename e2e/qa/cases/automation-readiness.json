@@ -1,16 +1,33 @@
 {
   "id": "automation.readiness",
   "title": "Enable automations with existing GCS workspace storage",
-  "description": "Run after creating a disabled definition in the disposable QA workspace. No storage preparation or runner start.",
+  "description": "Run after creating a disabled definition in the disposable QA workspace. Choose its model in the UI; no backend seeding, storage preparation, or runner start.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/automation.readonly",
-  "requires": {
-    "fixtureModel": "Using backend/admin tools in pi-agents-cloud, set a fixture-only modelSelection on the exact disposable QA-owned workspace and definition. Keep the definition schedule far in the future and disable immediately after checking enable. Do not create a bucket, add sharedStorage, change rollout flags, or start a runner."
-  },
   "steps": [
     {
       "assert": "ordinary-gcs-fixture",
       "expected": "Selected disposable workspace has its original GCS bucket/prefix and no sharedStorage descriptor."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Choose model"
+    },
+    {
+      "type": "select",
+      "label": "Provider",
+      "value": "openai"
+    },
+    {
+      "type": "select",
+      "label": "Model",
+      "value": "gpt-4.1"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Save automation"
     },
     {
       "type": "click",

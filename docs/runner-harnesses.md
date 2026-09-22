@@ -48,7 +48,11 @@ compatible while ensuring `gh` receives both the token and active username.
 
 The frontend exposes top-navigation dialogs for saved authentication, generic environment keys, and MCP, plus
 Google Workspace and GitHub connector workflows. Upstream owns model metadata,
-model selection, skills, extensions, subagents, files, Git, and native Goals.
+interactive model selection, skills, extensions, subagents, files, Git, and native Goals.
+The [automation editor](./automations.md) separately selects the provider/model
+pair stored on an automation definition, using a generated export of the pinned
+runner catalog. It does not change the interactive Agent's model or require an
+active runtime.
 
 ## Startup hooks
 

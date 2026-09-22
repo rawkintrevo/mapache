@@ -38,9 +38,25 @@ function renderPanel(state, overrides = {}) {
 }
 
 describe("AutomationsPanel", () => {
+  test("creates an enabled automation using the editor picker with no workspace model or active session", async () => {
+    const user = userEvent.setup();
+    const onCreateDefinition = vi.fn().mockResolvedValue({id: "new"});
+    const onShowWorkspace = vi.fn();
+    renderPanel(fixture(), {onCreateDefinition, onShowWorkspace});
+    await user.click(screen.getByRole("button", {name: "New automation"}));
+    await user.type(screen.getByRole("textbox", {name: /^Name/}), "Daily report");
+    await user.type(screen.getByRole("textbox", {name: /^Instructions/}), "Summarize my files.");
+    await user.selectOptions(screen.getByRole("combobox", {name: "Provider"}), "openai");
+    await user.selectOptions(screen.getByRole("combobox", {name: "Model"}), "gpt-4.1");
+    await user.click(screen.getByRole("checkbox", {name: "Enabled"}));
+    await user.click(screen.getByRole("button", {name: "Create automation"}));
+    expect(onCreateDefinition).toHaveBeenCalledWith(expect.objectContaining({enabled: true, modelSelection: {providerId: "openai", modelId: "gpt-4.1"}}), "workspace-1");
+    expect(onShowWorkspace).not.toHaveBeenCalled();
+  });
+
   test("enables a ready definition and leaves Disable available when storage is lost", async () => {
     const user = userEvent.setup();
-    const definition = {id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false, modelSelection: {modelId: "configured"}};
+    const definition = {id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false, modelSelection: {providerId: "openai", modelId: "configured"}};
     const state = fixture({automations: {definitions: [definition]}});
     state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
     const onUpdateDefinition = vi.fn();
@@ -65,7 +81,7 @@ describe("AutomationsPanel", () => {
   test("enables list and editor without prepared storage, preserving drafts through workspace refresh", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false}]}});
-    state.workspaces[0].modelSelection = {modelId: "configured"};
+    state.workspaces[0].modelSelection = {providerId: "openai", modelId: "configured"};
     const props = {state};
     const view = render(<AutomationsPanel {...props} />);
     expect(screen.getByRole("button", {name: "Enable"})).toBeEnabled();
@@ -79,16 +95,17 @@ describe("AutomationsPanel", () => {
     expect(screen.getByRole("textbox", {name: /^Name/})).toHaveValue("Retain my draft");
   });
 
-  test("explains missing models and provides a working return to Agent without a conflict banner", async () => {
+  test("opens the model picker from missing-model guidance without starting the workspace", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {error: "missing_model_selection", definitions: [{id: "a1", name: "Daily"}]}});
     state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
-    const onOpenModelSettings = vi.fn();
-    renderPanel(state, {onOpenModelSettings});
-    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/Agent settings/);
+    const onShowWorkspace = vi.fn();
+    renderPanel(state, {onShowWorkspace});
+    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/automation's editor/);
     expect(screen.queryByText(/changed elsewhere/)).not.toBeInTheDocument();
-    await user.click(screen.getAllByRole("button", {name: "Back to Agent"})[0]);
-    expect(onOpenModelSettings).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", {name: "Choose model"}));
+    expect(screen.getByRole("combobox", {name: "Provider"})).toBeInTheDocument();
+    expect(onShowWorkspace).not.toHaveBeenCalled();
   });
 
   test("previews once through the real editor chain despite loading, result, field and parent updates", async () => {
@@ -146,8 +163,8 @@ describe("AutomationsPanel", () => {
 
   test("supports concurrent main sessions with existing GCS and no storage setup action", async () => {
     const user = userEvent.setup();
-    const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", modelSelection: {modelId: "configured"}}]}});
-    state.workspaces[0].modelSelection = {modelId: "configured"};
+    const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", modelSelection: {providerId: "openai", modelId: "configured"}}]}});
+    state.workspaces[0].modelSelection = {providerId: "openai", modelId: "configured"};
     state.sessions[0].status = "running";
     const onRunNow = vi.fn();
     renderPanel(state, {onRunNow});

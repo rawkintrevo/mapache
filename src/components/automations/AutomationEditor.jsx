@@ -1,7 +1,8 @@
 import {useMemo} from "react";
 import {Button} from "../common/Button.jsx";
 import {inferScheduleMode, ScheduleControls, timezoneOptions, validateCronShape, validateTimezone} from "./ScheduleControls.jsx";
-import {automationReadiness} from "../../utils/automationReadiness.js";
+import {automationModelSelection, automationReadiness, hasAutomationModel} from "../../utils/automationReadiness.js";
+import {AutomationModelPicker} from "./AutomationModelPicker.jsx";
 import "./AutomationEditor.css";
 
 export function browserTimezone() {
@@ -12,10 +13,11 @@ export function browserTimezone() {
   }
 }
 
-export function createAutomationDraft({automation = null, userTimezone = ""} = {}) {
+export function createAutomationDraft({automation = null, workspace = {}, userTimezone = ""} = {}) {
   if (automation) {
     return {
       ...automation,
+      modelSelection: automationModelSelection(automation, workspace),
       prompt: automation.prompt || "",
       enabled: automation.enabled === true,
       allowParallelWithMain: automation.allowParallelWithMain !== false,
@@ -37,7 +39,7 @@ export function createAutomationDraft({automation = null, userTimezone = ""} = {
     allowParallelWithMain: true,
     cron: "0 9 * * *",
     timezone,
-    modelSelection: null,
+    modelSelection: automationModelSelection({}, workspace),
     missedRunPolicy: "skip",
     catchUpWindowMinutes: 1440,
     retryPolicy: "none",
@@ -76,6 +78,8 @@ export function automationEditorErrors(draft = {}) {
 }
 
 export function automationPayload(draft = {}) {
+  const providerId = String(draft.modelSelection?.providerId || "").trim();
+  const modelId = String(draft.modelSelection?.modelId || "").trim();
   const payload = {
     name: String(draft.name || "").trim(),
     prompt: String(draft.prompt || ""),
@@ -88,7 +92,7 @@ export function automationPayload(draft = {}) {
     retryPolicy: draft.retryPolicy || "none",
     maximumRetries: Number(draft.maximumRetries) || 0,
     replaySafe: draft.replaySafe === true,
-    ...(draft.modelSelection ? {modelSelection: draft.modelSelection} : {}),
+    modelSelection: providerId || modelId ? {providerId: providerId || null, modelId: modelId || null} : null,
     ...(draft.resources ? {resources: draft.resources} : {}),
   };
   if (draft.expectedRevision !== undefined && draft.expectedRevision !== null) payload.expectedRevision = draft.expectedRevision;
@@ -101,10 +105,8 @@ export function AutomationEditor({
   draft,
   error = "",
   isCreating = false,
-  modelConfigured,
   onCancel,
   onChange,
-  onOpenModelSettings,
   onPreview,
   onPreviewResult,
   onPreviewStateChange,
@@ -113,15 +115,13 @@ export function AutomationEditor({
   preview = null,
   previewError = "",
   previewLoading = false,
-  readiness,
   userTimezone = "",
 }) {
   const form = draft || createAutomationDraft({userTimezone});
   const errors = useMemo(() => automationEditorErrors(form), [form]);
-  const hasModel = modelConfigured === undefined ? Boolean(form.modelSelection?.modelId || form.modelSelection?.providerId) : modelConfigured;
-  const availability = readiness || automationReadiness({
+  const availability = automationReadiness({
     busy,
-    modelConfigured: hasModel,
+    modelConfigured: hasAutomationModel(form),
   });
   const enableSaveBlocked = form.enabled === true && !availability.canEnable;
   const editorTitle = isCreating ? "New automation" : "Edit automation";
@@ -159,6 +159,7 @@ export function AutomationEditor({
           <textarea aria-describedby={errors.prompt ? "automation-prompt-error" : undefined} aria-invalid={Boolean(errors.prompt)} disabled={busy} rows={8} value={form.prompt || ""} onChange={(event) => update({prompt: event.target.value})} />
           {errors.prompt ? <span className="field-error" id="automation-prompt-error">{errors.prompt}</span> : null}
         </label>
+        <AutomationModelPicker disabled={busy} value={form.modelSelection} onChange={(modelSelection) => update({modelSelection})} />
         <div className="automation-editor__switches">
           <label className="automation-editor__switch"><input aria-describedby={availability.reason ? "automation-enable-reason" : undefined} checked={form.enabled === true} disabled={busy || (!form.enabled && !availability.canEnable)} type="checkbox" onChange={(event) => update({enabled: event.target.checked})} /> Enabled</label>
           <label className="automation-editor__switch"><input checked={form.allowParallelWithMain !== false} disabled={busy} type="checkbox" onChange={(event) => update({allowParallelWithMain: event.target.checked})} /> Allow running while main workspace is active</label>
@@ -215,12 +216,6 @@ export function AutomationEditor({
           </label>
           {errors.replaySafe ? <span className="field-error" id="automation-replay-safe-error">{errors.replaySafe}</span> : null}
         </fieldset>
-        {!hasModel ? (
-          <div className="automation-editor__model-warning" role="status">
-            <strong>Choose a model in the workspace Agent settings, then return here and Refresh.</strong>
-            {onOpenModelSettings ? <Button disabled={busy} variant="secondary" onClick={onOpenModelSettings}>Back to Agent</Button> : null}
-          </div>
-        ) : null}
         <div className="automation-editor__actions">
           <Button disabled={busy} variant="secondary" onClick={onCancel}>Cancel</Button>
           <Button aria-describedby={enableSaveBlocked ? "automation-enable-reason" : undefined} disabled={busy || enableSaveBlocked} type="submit">{busy ? "Saving..." : isCreating ? "Create automation" : "Save automation"}</Button>

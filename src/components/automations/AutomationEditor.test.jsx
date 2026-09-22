@@ -78,19 +78,19 @@ describe("automation editor helpers", () => {
 describe("AutomationEditor", () => {
   test("preserves enabled draft intent when readiness is lost and allows an explicit disabled save", async () => {
     const user = userEvent.setup();
-    const draft = {cron: "0 9 * * *", name: "Daily", prompt: "Retain these instructions", timezone: "UTC", enabled: true, modelSelection: {modelId: "configured"}};
+    const draft = {cron: "0 9 * * *", name: "Daily", prompt: "Retain these instructions", timezone: "UTC", enabled: true, modelSelection: {providerId: "openai", modelId: "configured"}};
     const onSave = vi.fn();
     const onChange = vi.fn();
     const view = render(<AutomationEditor draft={draft} onChange={onChange} onSave={onSave} />);
-    view.rerender(<AutomationEditor draft={draft} modelConfigured={false} onChange={onChange} onSave={onSave} />);
+    view.rerender(<AutomationEditor draft={{...draft, modelSelection: null}} onChange={onChange} onSave={onSave} />);
     expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeChecked();
     expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
     expect(screen.getByRole("button", {name: "Save automation"})).toBeDisabled();
     fireEvent.submit(screen.getByRole("button", {name: "Save automation"}).closest("form"));
     expect(onSave).not.toHaveBeenCalled();
     await user.click(screen.getByRole("checkbox", {name: "Enabled"}));
-    expect(onChange).toHaveBeenLastCalledWith({...draft, enabled: false});
-    view.rerender(<AutomationEditor draft={{...draft, enabled: false}} modelConfigured={false} onChange={onChange} onSave={onSave} />);
+    expect(onChange).toHaveBeenLastCalledWith({...draft, modelSelection: null, enabled: false});
+    view.rerender(<AutomationEditor draft={{...draft, modelSelection: null, enabled: false}} onChange={onChange} onSave={onSave} />);
     await user.click(screen.getByRole("button", {name: "Save automation"}));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({enabled: false, prompt: draft.prompt}));
   });
