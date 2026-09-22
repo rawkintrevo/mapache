@@ -390,7 +390,8 @@ function buildAutomationRun(payload = {}, server = {}) {
   };
   if (status === "skipped") run.skippedReason = validateSkippedReason(server.skippedReason || payload.skippedReason);
   for (const field of ["retryPolicy", "maximumRetries", "replaySafe", "rootRunId", "retryOfRunId", "attemptNumber", "retryState", "retryNotBefore", "retryRunId"]) {
-    if (server[field] !== undefined || payload[field] !== undefined) run[field] = server[field] ?? payload[field];
+    const value = server[field] !== undefined ? server[field] : payload[field];
+    if (value !== undefined) run[field] = value;
   }
   return run;
 }

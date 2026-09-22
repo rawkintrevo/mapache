@@ -2,12 +2,16 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const {Firestore} = require("firebase-admin/firestore");
 const {
   cancelQueuedRun,
   deterministicCronRunId,
   enqueueRun,
   restartRun,
 } = require("./automationRuns.service");
+
+// Validate writes with the real serializer without committing or contacting Firestore.
+const serializationDb = new Firestore({projectId: "automation-unit-tests"});
 
 class Snapshot {
   constructor(ref, data) {
@@ -33,7 +37,8 @@ class Ref {
     return new Snapshot(this, this.db.data.get(this.path));
   }
 
-  async set(value) {
+  set(value) {
+    serializationDb.batch().set(serializationDb.doc(this.path), value);
     this.db.data.set(this.path, {...value});
   }
 
@@ -114,6 +119,8 @@ test("manual and cron enqueue capture immutable snapshots and deduplicate", asyn
     actor: {uid: "user-1"}, aid: "automation-1", trigger: "manual", wid: "workspace-1",
   }, {admin, db});
   assert.equal(first.status, "queued");
+  assert.equal(first.retryOfRunId, null);
+  assert.deepEqual(first.snapshot.modelSelection, {modelId: "model-1", providerId: "provider-1"});
   assert.equal(first.snapshot.prompt, "Summarize the workspace");
   await definition.update({prompt: "Edited later", revision: 4});
   assert.equal(runAt(db, first.id).snapshot.prompt, "Summarize the workspace");
@@ -143,6 +150,7 @@ test("queue admission skips cron work but rejects manual and restart work", asyn
     occurrence: {local: "2026-09-20T11:00", timezone: "America/Chicago"},
   }, {admin, db});
   assert.equal(skipped.status, "skipped");
+  assert.equal(skipped.retryOfRunId, null);
   assert.equal(skipped.skippedReason, "queue_full");
   assert.equal(pending.status, "queued");
 });
@@ -181,6 +189,7 @@ test("restart uses a terminal historical snapshot even after definition tombston
   await definition.update({deleted: true});
   const restarted = await restartRun({uid: "user-1"}, "old-run", {}, {admin, db});
   assert.equal(restarted.status, "queued");
+  assert.equal(restarted.retryOfRunId, null);
   assert.equal(restarted.restartOfRunId, "old-run");
   assert.equal(restarted.snapshot.prompt, "Old prompt");
   assert.equal(db.data.get(definition.path).pendingRunId, null);

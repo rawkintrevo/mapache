@@ -84,6 +84,19 @@ const run = buildAutomationRun({
 assert.equal(run.status, "queued");
 assert.equal(run.cleanupState, "pending");
 assert.equal(run.sessionId, null);
+const initialAttempt = buildAutomationRun({}, {
+  ...run, retryOfRunId: null, retryNotBefore: null, retryRunId: null,
+  attemptNumber: 0, maximumRetries: 0, replaySafe: false,
+});
+assert.equal(initialAttempt.retryOfRunId, null);
+assert.equal(initialAttempt.retryNotBefore, null);
+assert.equal(initialAttempt.retryRunId, null);
+assert.equal(initialAttempt.attemptNumber, 0);
+assert.equal(initialAttempt.maximumRetries, 0);
+assert.equal(initialAttempt.replaySafe, false);
+assert.equal(Object.hasOwn(initialAttempt, "retryState"), false);
+assert.equal(buildAutomationRun({...run, retryOfRunId: "old-run"}, {retryOfRunId: null}).retryOfRunId, null);
+assert.equal(buildAutomationRun({...run, retryOfRunId: "old-run"}).retryOfRunId, "old-run");
 const recoveredRun = buildAutomationRun({
   runId: "run-recovery",
   ownerUid: "user-1",

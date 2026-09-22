@@ -22,6 +22,10 @@ standing storage service. Each admitted run uses one deterministic
 - Runs live at `automationRuns/{runId}`. Manual runs use an idempotency key;
   cron occurrences use a deterministic ID. Each run keeps an immutable prompt,
   schedule, timezone, model, resource, and parallelism snapshot.
+  `functions/automationValidation.helpers.js` preserves explicit null retry
+  metadata, including `retryOfRunId: null` for initial attempts, and omits
+  undefined fields. Firestore rejects undefined values before a run can queue;
+  enqueue tests use its real serializer without committing database writes.
 - The minute scheduler validates the feature flag and schedule occurrence,
   records missed ranges as skipped history, and never creates a second pending
   occurrence for one definition.
