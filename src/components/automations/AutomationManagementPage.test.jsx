@@ -26,7 +26,6 @@ function createProps() {
     onOpenHistory: vi.fn(),
     onPrepareStorage: vi.fn(),
     onPreviewSchedule: vi.fn(),
-    onOpenModelSettings: vi.fn(),
     onRestartRun: vi.fn(),
     onRunNow: vi.fn(),
     onSelectRun: vi.fn(),

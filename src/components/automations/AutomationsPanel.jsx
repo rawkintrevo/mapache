@@ -18,7 +18,6 @@ export function AutomationsPanel({
   onRunNow,
   onUpdateDefinition,
   onUpdateSettings,
-  onOpenModelSettings,
   onShowWorkspace,
   state,
 }) {
@@ -68,12 +67,12 @@ export function AutomationsPanel({
 
   function beginCreate() {
     setPreviewState({data: null, error: "", loading: false});
-    setEditor({contextKey: ++editorSequence.current, workspaceId: state.selectedWorkspaceId, isCreating: true, draft: createAutomationDraft({userTimezone: state.profile?.timezone || ""})});
+    setEditor({contextKey: ++editorSequence.current, workspaceId: state.selectedWorkspaceId, isCreating: true, draft: createAutomationDraft({workspace, userTimezone: state.profile?.timezone || ""})});
   }
 
   function beginEdit(automation) {
     setPreviewState({data: null, error: "", loading: false});
-    setEditor({contextKey: ++editorSequence.current, workspaceId: state.selectedWorkspaceId, automationId: automation.id, draft: createAutomationDraft({automation, userTimezone: state.profile?.timezone || ""})});
+    setEditor({contextKey: ++editorSequence.current, workspaceId: state.selectedWorkspaceId, automationId: automation.id, draft: createAutomationDraft({automation, workspace, userTimezone: state.profile?.timezone || ""})});
   }
 
   async function saveDefinition(payload) {
@@ -124,7 +123,6 @@ export function AutomationsPanel({
         </div>
       </header>
       {automationState.error ? <p className="error" role="alert">{automationErrorMessage(automationState.error)}</p> : null}
-      {automationState.error === "missing_model_selection" ? <Button variant="secondary" onClick={onOpenModelSettings || onShowWorkspace}>Back to Agent</Button> : null}
       <section className="automation-storage-card" aria-label="Automation storage">
         <div>
           <p className="eyebrow">Workspace files</p>
@@ -150,9 +148,6 @@ export function AutomationsPanel({
           draft={editor.draft}
           error={automationErrorMessage(automationState.error)}
           isCreating={editor.isCreating}
-          modelConfigured={hasAutomationModel(editor.draft, workspace)}
-          readiness={availabilityFor(editor.draft)}
-          onOpenModelSettings={onOpenModelSettings || onShowWorkspace}
           onCancel={() => setEditor(null)}
           onChange={(draft) => setEditor({...editor, draft})}
           onPreview={previewSchedule}
@@ -191,7 +186,7 @@ export function AutomationsPanel({
                       <Button disabled={automationState.busy} icon size="small" title="Delete" variant="secondary" onClick={() => deleteDefinition(automation)}><Trash2 aria-hidden="true" /></Button>
                     </div>
                     {availability.reason ? <p className="subtle" id={reasonId} role="status">{availability.reason}</p> : null}
-                    {!hasAutomationModel(automation, workspace) ? <Button variant="secondary" onClick={onOpenModelSettings || onShowWorkspace}>Back to Agent</Button> : null}
+                    {!hasAutomationModel(automation, workspace) ? <Button disabled={automationState.busy} variant="secondary" onClick={() => beginEdit(automation)}>Choose model</Button> : null}
                     {latest && ACTIVE_RUN_STATUSES.has(String(latest.status || "").toLowerCase()) ? <button className="automation-definition__history-link" type="button" onClick={() => onOpenHistory?.(latest.id)}>View active run in history</button> : null}
                   </article>
                 );

@@ -59,24 +59,23 @@ Workspace **Automations** is a lazy management surface opened from the topbar or
 responsive More menu. It combines workspace-scoped definition management with
 owner-wide run history and run details in one page; there is no separate top-level
 Run history entry. Opening it never starts a runner. The definition section owns
-selection/editing, storage preparation status, max-concurrency edits,
+selection/editing, provider/model selection, max-concurrency edits,
 enable/disable, Run now, delete confirmation, and links from active/queued run
 reasons to the history section. `utils/automationReadiness.js` normalizes the public
-workspace storage summary
-(`configured`, `state`, `errorCode`) for both controller and components. Readiness
-requires configured storage with server state `ready`; bucket names never enter
-the browser decision. Reconciliation applies the new summary to the workspace
-and automation slice together, fences older reads, and then refreshes the
-authoritative workspace. Panel Refresh reloads that summary as well as definitions
-and concurrency settings. Pending mutations are tracked to settle busy state even
-on failure or overlap; preview and history requests do not block Enable.
-Storage and model readiness gate enabling and execution
-while still allowing disabled workflow drafts to be saved; preparation never stops
-the main workspace automatically. Blocked controls describe their prerequisite
-inline through `aria-describedby`. Existing enabled definitions can be disabled
-when storage is unavailable, and an enabled draft is never silently downgraded
-on save. Missing model errors offer Back to Agent followed by Refresh; missing
-storage has an operator prerequisite because there is no user provisioning flow.
+workspace storage summary (`configured`, `state`, `errorCode`) for maintenance
+state, but storage preparation does not gate automations. Each run reads existing
+GCS workspace files and writes separate outputs; see [Automations](./automations.md).
+Panel Refresh reloads the workspace, definitions and concurrency settings while
+preserving an open draft. Pending mutations settle busy state even on failure or
+overlap; preview and history requests do not block Enable.
+`AutomationModelPicker` inside `AutomationEditor` uses a generated catalog from
+the pinned runner SDK, preserves saved/custom IDs, and lets users choose a provider
+and model without starting the workspace. The complete pair is saved with the
+definition. Missing-model list guidance opens that editor directly. Model and
+loading/mutation state gate enabling and execution while allowing disabled drafts
+to be saved. Blocked controls explain the prerequisite via `aria-describedby`.
+Existing enabled definitions can be disabled, and an enabled draft is never
+silently downgraded on save.
 Only `revision_conflict` produces an edit-conflict banner.
 `AutomationManagementPage` composes the
 definition and history sections while `automationsController` remains the owner of

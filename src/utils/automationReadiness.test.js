@@ -14,15 +14,17 @@ describe("public automation readiness", () => {
   test.each([
     [{configured: true, state: "ready"}, {busy: true, busyAction: "load"}, /Loading/],
     [{configured: true, state: "ready"}, {busy: true, busyAction: "update"}, /Saving/],
-    [{configured: true, state: "ready"}, {modelConfigured: false}, /Agent settings/],
+    [{configured: true, state: "ready"}, {modelConfigured: false}, /automation's editor/],
   ])("explains each block without blocking an unrelated Disable", (storage, options, reason) => {
     expect(automationReadiness({storage, ...options, mutationBusy: false})).toMatchObject({canEnable: false, canRun: false, canDisable: true, reason: expect.stringMatching(reason)});
   });
 
   test("recognizes workspace model defaults and prerequisite errors", () => {
-    expect(hasAutomationModel({}, {automationModelSelection: {modelId: "configured"}})).toBe(true);
-    expect(hasAutomationModel({modelSelection: {providerId: "configured"}})).toBe(true);
+    expect(hasAutomationModel({}, {automationModelSelection: {providerId: "openai", modelId: "configured"}})).toBe(true);
+    expect(hasAutomationModel({modelSelection: {providerId: "configured"}})).toBe(false);
+    expect(hasAutomationModel({modelSelection: {modelId: "configured"}})).toBe(false);
+    expect(hasAutomationModel({modelSelection: {providerId: "openai", modelId: " "}})).toBe(false);
     expect(hasAutomationModel()).toBe(false);
-    expect(automationErrorMessage("missing_model_selection")).toMatch(/Agent settings/);
+    expect(automationErrorMessage("missing_model_selection")).toMatch(/automation's editor/);
   });
 });

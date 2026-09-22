@@ -127,8 +127,22 @@ The legacy shared-storage preparation/recovery endpoints remain maintenance
 surfaces for previously configured workspaces; they are not part of automation
 setup. The Automations panel describes separate outputs and provides no storage
 provisioning or revalidation action. Enable/Run now are gated only by model and
-pending mutation/loading state. Missing models offer **Back to Agent**; definition
-revision fencing and draft preservation remain unchanged.
+pending mutation/loading state. Missing models offer **Choose model**, which opens
+that definition's editor. `AutomationModelPicker.jsx` provides provider/model
+dropdowns directly in `AutomationEditor.jsx`, without starting the main session.
+Both IDs must be present before Enable/Run now become usable; changing provider
+clears the model. Disabled drafts can still be saved. Existing workspace defaults
+populate the draft, and the selected pair is saved on the automation definition
+through the existing revisioned API. Refresh preserves an open draft.
+
+The picker uses `src/config/automationModelCatalog.json`, a labels/IDs-only export
+of the runner's pinned `@earendil-works/pi-ai` catalog. Regenerate it with
+`npm run generate:automation-models` when updating the Pi SDK pin in
+`session-runner/upstream/pi-web-ui/manifest.json`; a frontend test checks version
+alignment. Saved unknown IDs remain selectable, and custom IDs can be entered for
+new models or providers already configured in the runner. The catalog does not
+verify credentials or provider account access; execution uses existing saved
+credentials. Interactive Agent model selection remains upstream-owned.
 
 ## Cost and recovery accounting
 

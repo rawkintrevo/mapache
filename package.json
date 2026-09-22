@@ -7,6 +7,7 @@
     "dev": "vite",
     "docs:check": "node scripts/check-doc-links.js",
     "generate:runner-catalog": "node scripts/generate-runner-catalog.mjs",
+    "generate:automation-models": "node scripts/generate-automation-model-catalog.mjs",
     "test:frontend": "vitest run",
     "test:firestore-rules": "firebase emulators:exec --only firestore --project mapache-rules-test --log-verbosity SILENT \"node firestore.rules.test.cjs\"",
     "build:main": "vite build",

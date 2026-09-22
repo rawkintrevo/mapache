@@ -1,0 +1,207 @@
+{
+  "id": "automation.model-selection",
+  "title": "Select and persist an automation model without starting the workspace",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/automation.model-selection",
+  "steps": [
+    {
+      "useCase": "cases/login.json"
+    },
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-automation-model-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=automation-model-selection"
+      }
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Automations"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "New automation"
+    },
+    {
+      "assert": "no-inherited-model",
+      "expected": "No model is preconfigured. Enabled is disabled. No Agent settings link or storage prerequisite appears."
+    },
+    {
+      "type": "fill",
+      "label": "Name",
+      "value": "Model picker QA"
+    },
+    {
+      "type": "fill",
+      "label": "Instructions",
+      "value": "Read workspace files and write a summary to your output folder. Do not publish or send messages."
+    },
+    {
+      "type": "select",
+      "label": "Schedule type",
+      "value": "advanced"
+    },
+    {
+      "type": "fill",
+      "label": "Cron expression",
+      "value": "0 0 1 1 *"
+    },
+    {
+      "type": "select",
+      "label": "Timezone",
+      "value": "UTC"
+    },
+    {
+      "type": "select",
+      "label": "Provider",
+      "value": "openai"
+    },
+    {
+      "assert": "incomplete-selection",
+      "expected": "Enabled is still disabled until a model is selected."
+    },
+    {
+      "type": "select",
+      "label": "Model",
+      "value": "gpt-4.1"
+    },
+    {
+      "type": "click",
+      "role": "checkbox",
+      "name": "Enabled"
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-model-selected.png"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Create automation"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Refresh"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "assert": "persisted-selection",
+      "expected": "Enabled remains checked and provider/model are openai/gpt-4.1 after save and server refresh. Creation returned 201 with that exact pair. No backend modelSelection fixture was used."
+    },
+    {
+      "type": "select",
+      "label": "Provider",
+      "value": "anthropic"
+    },
+    {
+      "assert": "provider-change",
+      "expected": "Model is empty; enabled intent is retained but Save automation is disabled."
+    },
+    {
+      "type": "select",
+      "label": "Provider",
+      "value": "openai"
+    },
+    {
+      "type": "select",
+      "label": "Model",
+      "value": "gpt-4.1-mini"
+    },
+    {
+      "type": "fill",
+      "label": "Name",
+      "value": "Edited model picker QA"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Refresh"
+    },
+    {
+      "assert": "draft-preserved",
+      "expected": "Edited name and openai/gpt-4.1-mini remain in the open editor across Refresh."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Save automation"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Refresh"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "assert": "updated-selection",
+      "expected": "Name and openai/gpt-4.1-mini survive server refresh and re-opening. Revisioned PATCH succeeded."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-model-reloaded.png"
+    },
+    {
+      "type": "click",
+      "role": "checkbox",
+      "name": "Enabled"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Save automation"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "New automation"
+    },
+    {
+      "type": "fill",
+      "label": "Name",
+      "value": "Disabled model draft"
+    },
+    {
+      "type": "fill",
+      "label": "Instructions",
+      "value": "Draft only."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Create automation"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Choose model"
+    },
+    {
+      "assert": "missing-model-remedy",
+      "expected": "Choose model opens the definition editor directly, with a usable Provider selector. Disabled draft saved without a model."
+    },
+    {
+      "assert": "no-runtime-or-provisioning",
+      "expected": "No session/runtime creation, automation run, or storage preparation request occurred. Both definitions are disabled."
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "capture": "network"
+    },
+    {
+      "useScript": "scripts/delete-selected-workspace.json"
+    }
+  ]
+}
