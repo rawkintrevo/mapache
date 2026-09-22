@@ -40,7 +40,10 @@ standing storage service. Each admitted run uses one deterministic
 - Provisioning creates only the labeled run service after admission. The
   automation session is not the workspace canonical session, does not claim the
   main sync-writer lease, and is excluded from the user session list and idle
-  reaper.
+  reaper. Initial browserless submission has its own bounded 60-second control
+  deadline because creating the first SDK conversation and selecting its model
+  can exceed the five-second shutdown/quiesce deadline. The upstream socket
+  allows 75 seconds so the runner remains the earlier timeout authority.
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.

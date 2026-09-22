@@ -1,0 +1,12 @@
+diff --git a/server/control-socket.ts b/server/control-socket.ts
+--- a/server/control-socket.ts
++++ b/server/control-socket.ts
+@@ -47,7 +47,7 @@ type ControlService = {
+ };
+ 
+ /** How long a control connection may sit idle before the server closes it. */
+-const CONTROL_IDLE_TIMEOUT_MS = 15_000;
++const CONTROL_IDLE_TIMEOUT_MS = 75_000;
+ 
+ /** How long the CLI waits for a reply before giving up. */
+ const CONTROL_CLIENT_TIMEOUT_MS = 10_000;

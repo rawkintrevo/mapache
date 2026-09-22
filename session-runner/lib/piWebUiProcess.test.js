@@ -253,6 +253,44 @@ test("does not acknowledge a timed-out cooperative quiesce", async () => {
   }
 });
 
+test("allows automation initialization to outlive the shutdown control deadline", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild();
+  config.piWebUiQuiesceTimeoutMs = 10;
+  config.piWebUiAutomationStartTimeoutMs = 50;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      fetch: healthyFetch(),
+      processKill: (_pid, signal) => child.kill(signal),
+      spawn: () => child,
+      controlConnect: () => {
+        const socket = new EventEmitter();
+        socket.destroy = () => {};
+        socket.write = (line) => {
+          const request = JSON.parse(String(line));
+          if (request.cmd === "startAutomation") {
+            setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify({
+              ok: true,
+              runId: request.runId,
+              conversationId: "conversation-1",
+              status: "running",
+            }) + "\n")), 20);
+          }
+        };
+        setImmediate(() => socket.emit("connect"));
+        return socket;
+      },
+    });
+    await managed.start();
+    const response = await managed.startAutomation({runId: "run-1", prompt: "write a poem"});
+    assert.equal(response.ok, true);
+    assert.equal(response.status, "running");
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("stops the managed process group so tool descendants cannot outlive the runner", async () => {
   const {root, config} = await fixture();
   const child = fakeChild(4343);

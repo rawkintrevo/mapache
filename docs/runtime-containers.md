@@ -193,7 +193,9 @@ assignment, claims `executionStartedAt` before sending the prompt once over the
 mode-0600 control socket, and polls the private reducer state with bounded
 requests. Browser disconnects do not affect this loop. A ready-child loss marks
 the run `interrupted` and leaves cleanup pending; the next boot never resumes a
-previous prompt. Active automation is exempt from idle reaping only while its
+previous prompt. Initial submission allows 60 seconds for SDK conversation and
+model initialization, independently of the five-second shutdown/quiesce bound;
+the upstream control connection remains bounded at 75 seconds. Active automation is exempt from idle reaping only while its
 admitted run assignment remains valid.
 
 The managed-only presentation patch removes the upstream name/logo, version

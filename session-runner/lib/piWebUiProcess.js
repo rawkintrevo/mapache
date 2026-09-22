@@ -10,6 +10,7 @@ const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 
 const DEFAULT_HEALTH_INTERVAL_MS = 100;
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000;
+const DEFAULT_AUTOMATION_START_TIMEOUT_MS = 60_000;
 const DEFAULT_STOP_TIMEOUT_MS = 5_000;
 const DEFAULT_QUIESCE_TIMEOUT_MS = 5_000;
 
@@ -41,6 +42,10 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   const exitWaiters = new Map();
   const healthIntervalMs = positiveNumber(config.piWebUiHealthIntervalMs, DEFAULT_HEALTH_INTERVAL_MS);
   const startupTimeoutMs = positiveNumber(config.piWebUiStartupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
+  const automationStartTimeoutMs = positiveNumber(
+      config.piWebUiAutomationStartTimeoutMs,
+      DEFAULT_AUTOMATION_START_TIMEOUT_MS,
+  );
   const stopTimeoutMs = positiveNumber(config.piWebUiStopTimeoutMs, DEFAULT_STOP_TIMEOUT_MS);
   const quiesceTimeoutMs = positiveNumber(config.piWebUiQuiesceTimeoutMs, DEFAULT_QUIESCE_TIMEOUT_MS);
   let state = enabled ? "stopped" : "disabled";
@@ -219,7 +224,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   /** Start or re-acknowledge the one browserless automation conversation. */
   async function startAutomation(input = {}) {
     if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
-    const response = await controlRequest("startAutomation", quiesceTimeoutMs, {
+    const response = await controlRequest("startAutomation", automationStartTimeoutMs, {
       runId: input.runId,
       prompt: input.prompt,
       modelRef: input.modelRef,
