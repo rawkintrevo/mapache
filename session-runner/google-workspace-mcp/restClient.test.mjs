@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {test} from "node:test";
+import {createRequire} from "node:module";
 import {createGoogleRestClient, GoogleRestError} from "./restClient.mjs";
+
+const require = createRequire(import.meta.url);
+const {createGoogleMcpTokenApiService} = require("../lib/googleMcpTokenApi.service.js");
 
 function response(body, status = 200) {
   return new Response(body == null ? "" : JSON.stringify(body), {
@@ -95,6 +102,56 @@ test("refreshes once after a 401 and retries with the fresh token", async () => 
   });
   assert.equal(calls[2].authorization, "Bearer fresh-token");
   assert.equal(calls[3].authorization, "Bearer fresh-token");
+});
+
+test("uses the runner-owned renewal socket without direct broker inputs", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-google-rest-"));
+  const socketPath = path.join(root, "google-token.sock");
+  const requests = [];
+  let refreshCalls = 0;
+  let googleCalls = 0;
+  const env = {
+    GOOGLE_MCP_ACCESS_TOKEN: "expired-token",
+    GOOGLE_MCP_TOKEN_SOCKET: socketPath,
+  };
+  const tokenApi = createGoogleMcpTokenApiService({
+    googleMcpTokenSocketPath: socketPath,
+    googleMcpTokenRefreshUrl: "https://functions.example/googleMcpToken",
+    googleMcpConnectionId: "connection-a",
+    workspaceId: "workspace-a",
+    sessionId: "session-a",
+    shutdownToken: "runner-secret",
+  }, {fetch: async () => {
+    refreshCalls += 1;
+    return Response.json({accessToken: refreshCalls === 1 ? "fresh-token" : "fresh-token-2", expiresIn: 3600});
+  }});
+  const client = createGoogleRestClient({
+    env,
+    fetchImpl: async (url, options) => {
+      const authorization = options.headers.get("authorization");
+      requests.push({url, authorization});
+      googleCalls += 1;
+      if (authorization === "Bearer expired-token" || (authorization === "Bearer fresh-token" && googleCalls === 3)) {
+        return response({error: {message: "expired"}}, 401);
+      }
+      return response({files: [{id: "file-a"}]});
+    },
+  });
+  try {
+    await tokenApi.start();
+    assert.deepEqual(await client.request("/drive/v3/files"), {files: [{id: "file-a"}]});
+    assert.deepEqual(await client.request("/drive/v3/files"), {files: [{id: "file-a"}]});
+    assert.deepEqual(requests, [
+      {url: "https://www.googleapis.com/drive/v3/files", authorization: "Bearer expired-token"},
+      {url: "https://www.googleapis.com/drive/v3/files", authorization: "Bearer fresh-token"},
+      {url: "https://www.googleapis.com/drive/v3/files", authorization: "Bearer fresh-token"},
+      {url: "https://www.googleapis.com/drive/v3/files", authorization: "Bearer fresh-token-2"},
+    ]);
+    assert.equal(refreshCalls, 2);
+  } finally {
+    await tokenApi.stop();
+    await fs.rm(root, {recursive: true, force: true});
+  }
 });
 
 test("does not retry more than once when a refreshed token is also rejected", async () => {

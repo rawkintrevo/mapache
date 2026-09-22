@@ -125,6 +125,10 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const automationAgentSocketPath = runtimeKind === "automation" ?
     (normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_SOCKET) ||
       path.join(privatePaths?.runtimeRoot || "/tmp", "automation-agent.sock")) : "";
+  const googleMcpTokenSocketPath = path.join(
+      privatePaths?.runtimeRoot || "/tmp",
+      `google-mcp-token-${normalizeRuntimeIdentity(runtimeIdentity)}.sock`,
+  );
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
@@ -189,6 +193,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     googleMcpAccountName: normalizeEnvString(process.env.GOOGLE_MCP_ACCOUNT_NAME),
     googleMcpConnectionStatus: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_STATUS),
     googleMcpEnabledServices: normalizeEnvString(process.env.GOOGLE_MCP_ENABLED_SERVICES),
+    googleMcpConnectionId: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_ID),
+    googleMcpTokenRefreshUrl: normalizeEnvString(process.env.GOOGLE_MCP_TOKEN_REFRESH_URL),
+    googleMcpTokenSocketPath,
     harnessId,
     homeArchiveName,
     homeDir,

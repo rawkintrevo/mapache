@@ -1,5 +1,8 @@
+import http from "node:http";
+
 const DEFAULT_BASE_URL = "https://www.googleapis.com";
 const DEFAULT_TOKEN_ENV = "GOOGLE_MCP_ACCESS_TOKEN";
+const DEFAULT_TOKEN_SOCKET_ENV = "GOOGLE_MCP_TOKEN_SOCKET";
 const DEFAULT_REFRESH_URL_ENV = "GOOGLE_MCP_TOKEN_REFRESH_URL";
 const DEFAULT_CONNECTION_ID_ENV = "GOOGLE_MCP_CONNECTION_ID";
 const DEFAULT_WORKSPACE_ID_ENV = "WORKSPACE_ID";
@@ -102,6 +105,7 @@ export function createGoogleRestClient({
   }
 
   async function requestFreshAccessToken(refreshConfig) {
+    if (refreshConfig.socketPath) return requestSocketAccessToken(refreshConfig.socketPath);
     const result = await fetchAndRead(refreshConfig.url, {
       method: "POST",
       headers: {
@@ -124,6 +128,64 @@ export function createGoogleRestClient({
     const accessToken = String(body?.accessToken || "").trim();
     if (!accessToken) throw new GoogleRestError("google_access_token_missing", "Google token refresh returned no access token.");
     return accessToken;
+  }
+
+  function requestSocketAccessToken(socketPath) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer;
+      const finish = (error, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(value);
+      };
+      const request = http.request({
+        socketPath,
+        path: "/google/token",
+        method: "POST",
+        headers: {"content-type": "application/json"},
+      }, (response) => {
+        const chunks = [];
+        let total = 0;
+        response.on("data", (chunk) => {
+          total += chunk.length;
+          if (total > MAX_REFRESH_RESPONSE_BYTES) {
+            response.destroy();
+            finish(new GoogleRestError("google_token_refresh_response_too_large", "Google token refresh response is too large."));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on("end", () => {
+          let body;
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+          } catch (error) {
+            finish(new GoogleRestError("google_token_refresh_invalid_response", "Google token refresh returned an invalid response.", {cause: error}));
+            return;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            finish(normalizedRefreshError(response.statusCode, body));
+            return;
+          }
+          const token = String(body?.accessToken || "").trim();
+          if (!token) {
+            finish(new GoogleRestError("google_access_token_missing", "Google token refresh returned no access token."));
+            return;
+          }
+          finish(null, token);
+        });
+        response.on("error", (error) => finish(new GoogleRestError("google_token_refresh_failed", "Google access-token refresh failed.", {cause: error})));
+      });
+      request.on("error", (error) => finish(new GoogleRestError("google_token_refresh_unavailable", "Google access-token renewal transport is unavailable.", {cause: error})));
+      timer = setTimeout(() => {
+        request.destroy();
+        finish(new GoogleRestError("google_token_refresh_timeout", "Google access-token refresh timed out."));
+      }, boundedTimeout(timeoutMs));
+      request.end();
+    });
   }
 
   async function fetchAndRead(url, options, responseLimit, errors) {
@@ -178,6 +240,8 @@ export function createGoogleRestClient({
 }
 
 function googleTokenRefreshConfig(env) {
+  const socketPath = String(env?.[DEFAULT_TOKEN_SOCKET_ENV] || "").trim();
+  if (socketPath) return {socketPath};
   const rawUrl = String(env?.[DEFAULT_REFRESH_URL_ENV] || "").trim();
   const connectionId = String(env?.[DEFAULT_CONNECTION_ID_ENV] || "").trim();
   const workspaceId = String(env?.[DEFAULT_WORKSPACE_ID_ENV] || "").trim();
@@ -293,4 +357,5 @@ export const googleRestDefaults = Object.freeze({
   maxResponseBytes: DEFAULT_MAX_RESPONSE_BYTES,
   timeoutMs: DEFAULT_TIMEOUT_MS,
   tokenEnv: DEFAULT_TOKEN_ENV,
+  tokenSocketEnv: DEFAULT_TOKEN_SOCKET_ENV,
 });

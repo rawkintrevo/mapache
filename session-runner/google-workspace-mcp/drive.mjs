@@ -8,8 +8,9 @@ import {
 } from "./tools.mjs";
 
 const DRIVE_API = "/drive/v3";
-const FILE_FIELDS = "nextPageToken,files(id,name,mimeType,description,modifiedTime,createdTime,webViewLink,size,parents,driveId,trashed,owners(displayName,emailAddress))";
-const PERMISSION_FIELDS = "nextPageToken,permissions(id,type,role,emailAddress,displayName,domain,allowFileDiscovery),inheritedPermissions";
+const FILE_FIELDS = "id,name,mimeType,description,modifiedTime,createdTime,webViewLink,size,parents,driveId,trashed,owners(displayName,emailAddress)";
+const FILE_LIST_FIELDS = `nextPageToken,files(${FILE_FIELDS})`;
+const PERMISSION_FIELDS = "nextPageToken,permissions(id,type,role,emailAddress,displayName,domain,allowFileDiscovery)";
 
 const sharedDriveSchema = {
   driveId: z.string().max(512).optional(),
@@ -48,13 +49,13 @@ export async function listRecentFiles(client, input = {}) {
 
 export async function getFileMetadata(client, input = {}) {
   const fileId = pathSegment(input.fileId, "fileId");
-  const result = await client.request(`${DRIVE_API}/files/${fileId}?${queryParams(sharedParams(input, {fields: FILE_FIELDS.replace("nextPageToken,", "")}))}`);
+  const result = await client.request(`${DRIVE_API}/files/${fileId}?${queryParams(fileGetParams(input, {fields: FILE_FIELDS}))}`);
   return {file: compactFile(result)};
 }
 
 export async function getFilePermissions(client, input = {}) {
   const fileId = pathSegment(input.fileId, "fileId");
-  const result = await client.paginate((params) => client.request(`${DRIVE_API}/files/${fileId}/permissions?${queryParams(sharedParams(input, {
+  const result = await client.paginate((params) => client.request(`${DRIVE_API}/files/${fileId}/permissions?${queryParams(fileGetParams(input, {
     ...params,
     pageSize: boundedPageSize(input.pageSize),
     fields: PERMISSION_FIELDS,
@@ -80,9 +81,16 @@ async function listFiles(client, input, extra) {
     ...params,
     ...extra,
     pageSize: boundedPageSize(input.pageSize),
-    fields: FILE_FIELDS,
+    fields: FILE_LIST_FIELDS,
   }))}`), {itemsKey: "files", maxItems: boundedItemLimit(input.maxItems)});
   return {files: result.items.map(compactFile), pages: result.pages, truncated: result.truncated, nextPageToken: result.nextPageToken};
+}
+
+function fileGetParams(input, extra = {}) {
+  return {
+    ...extra,
+    supportsAllDrives: input.includeAllDrives === true,
+  };
 }
 
 function sharedParams(input, extra = {}) {

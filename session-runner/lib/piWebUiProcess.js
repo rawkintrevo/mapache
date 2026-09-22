@@ -373,6 +373,12 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     // The embedded process talks to the runner's Unix adapter. It must not
     // receive the runner-only shutdown credential as a child environment var.
     delete childEnv.SESSION_SHUTDOWN_TOKEN;
+    // Google token renewal is brokered by the runner-owned Unix socket. Do not
+    // expose the broker URL, connection identity, or direct broker inputs to
+    // the embedded process.
+    delete childEnv.GOOGLE_MCP_TOKEN_REFRESH_URL;
+    delete childEnv.GOOGLE_MCP_CONNECTION_ID;
+    delete childEnv.GOOGLE_MCP_TOKEN_SOCKET_PATH;
     return {
       ...childEnv,
       HOME: config.homeDir || environment.HOME || "/root",
@@ -388,6 +394,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       PI_WEB_PKG_ROOT: config.piWebUiRoot,
       PI_WEB_PORT: String(config.piWebUiPort || 8787),
       PI_WEB_TOKEN: token,
+      ...(config.googleMcpTokenSocketPath ? {GOOGLE_MCP_TOKEN_SOCKET: config.googleMcpTokenSocketPath} : {}),
       MAPACHE_AUTOMATION_AGENT_SOCKET: config.automationAgentSocketPath || "",
     };
   }
