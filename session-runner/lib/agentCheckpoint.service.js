@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {agentSnapshotStoragePrefix} = require("./agentSnapshot.service");
 const {generationMatchOptions} = require("./workspaceSyncGeneration.helpers");
-const {isSharedGcsFuseMode} = require("./sharedWorkspace.helpers");
+const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 const CHECKPOINT_VERSION = 1;
 const WORKSPACE_FILE_NAMESPACE = "workspace-files";
@@ -60,7 +60,7 @@ function createAgentCheckpointService({
       });
     },
     publishWorkspaceFiles: (options = {}) => {
-      if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+      if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
         return Promise.resolve({enabled: true, skipped: true, reason: "shared_gcsfuse_authoritative"});
       }
       if (!enabled && options.allowUnmarked !== true) return Promise.resolve({enabled: false, skipped: true});
@@ -268,7 +268,7 @@ async function publishWorkspaceFiles({
   workspaceId,
   assertCurrentWriter,
 } = {}) {
-  if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+  if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
     return {enabled: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
   }
   const identity = validateIdentity({

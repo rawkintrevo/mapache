@@ -251,6 +251,11 @@ function toHistoryDto(doc) {
     restartUrl: `/api/automation-runs/${encodeURIComponent(id)}/restart`,
     finalResult: run.finalResult || run.executionResult || run.executionOutcome || null,
     conversationId: run.conversationId || null,
+    workspaceOutput: run.workspaceOutput ? {
+      id: run.workspaceOutput.id,
+      path: run.workspaceOutput.path,
+      storageUri: `gs://${run.workspaceOutput.bucketName}/${run.workspaceOutput.prefix}/`,
+    } : null,
     archiveAvailable: Boolean(artifactPointer),
     artifactAvailable: Boolean(artifactPointer),
     archiveCapturedAt: artifactPointer?.capturedAt || null,

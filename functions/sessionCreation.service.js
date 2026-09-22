@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const {automationStorageForWorkspace} = require("./automationStorage.service");
 const {
   DEFAULT_BUCKET,
   DEFAULT_CPU,
@@ -133,6 +134,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...(runtimeKind === "automation" ? {
       runtimeKind,
       automationRunId,
+      automationStorage: automationStorageForWorkspace({...workspace, id: workspaceId}),
     } : {}),
     workspaceStoragePrefix: workspace.storagePrefix,
     piSessionDir: piSessionDir(sessionRef.id),

@@ -6,6 +6,7 @@ const {
   admin,
   db,
   auth,
+  storage,
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
@@ -43,6 +44,8 @@ const {
 } = require("./runtimeReservation.helpers");
 const {consumeQaFault} = require("./qaFaultHarness.helpers");
 const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helpers");
+
+const {AUTOMATION_STORAGE_MODE, buildAutomationStorageTemplate, prepareAutomationStorage} = require("./automationStorage.service");
 
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
 const SHARED_WORKSPACE_STORAGE_MODE = "shared-gcsfuse-v1";
@@ -468,8 +471,15 @@ async function markSessionStopped(dependencies, sessionRef, session, reason) {
 }
 
 async function buildCloudRunService(workspace, session, dependencies = {}) {
-  const sharedTemplate = sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
-  const trustedWorkspaceFields = trustedWorkspaceRuntimeFields(workspace && workspace.sharedStorage);
+  const automationStorage = isAutomationRuntime(session) ?
+    await prepareAutomationStorage(session.automationStorage, dependencies.storage || storage) : null;
+  const sharedTemplate = automationStorage ? buildAutomationStorageTemplate(automationStorage) :
+    sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
+  const trustedWorkspaceFields = automationStorage ? {
+    runtimeStorageMode: "private",
+    workspaceStorageMode: AUTOMATION_STORAGE_MODE,
+    automationOutputDir: automationStorage.output.path,
+  } : trustedWorkspaceRuntimeFields(workspace && workspace.sharedStorage);
   const container = {
     image: session.image,
     ports: [{containerPort: 8080}],
@@ -502,8 +512,14 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
 }
 
 async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
-  const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
-  const trustedWorkspaceFields = trustedWorkspaceRuntimeFields(options.trustedStorageDescriptor);
+  const automationStorage = isAutomationRuntime(session) ?
+    await prepareAutomationStorage(session.automationStorage, dependencies.storage || storage) : null;
+  const sharedTemplate = automationStorage ? buildAutomationStorageTemplate(automationStorage) :
+    sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+  const trustedWorkspaceFields = automationStorage ? {
+    runtimeStorageMode: "private", workspaceStorageMode: AUTOMATION_STORAGE_MODE,
+    automationOutputDir: automationStorage.output.path,
+  } : trustedWorkspaceRuntimeFields(options.trustedStorageDescriptor);
   const patchSession = {...session, ...trustedWorkspaceFields};
   const container = {
     image: session.image,
@@ -652,6 +668,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "STORAGE_BUCKET", value: session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
     {name: "WORKSPACE_STORAGE_MODE", value: session.workspaceStorageMode || ""},
+    {name: "MAPACHE_AUTOMATION_OUTPUT_DIR", value: session.automationOutputDir || session.automationStorage?.output?.path || ""},
     {name: "WORKSPACE_STORAGE_GENERATION", value: session.workspaceStorageGeneration || ""},
     {name: "WORKSPACE_STORAGE_READY_MARKER", value: session.workspaceStorageReadyMarker || ""},
     {name: "HOME_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},

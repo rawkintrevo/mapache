@@ -71,7 +71,6 @@ async function provisionAutomationRun(runId, dependencies = {}) {
   let sessionRef;
   try {
     const workspace = await dependencies.requireWorkspace(run.ownerUid, run.workspaceId);
-    assertSharedStorageReady(workspace);
     const session = await ensureAutomationSession(run, workspace, dependencies);
     sessionRef = dependencies.sessionCollection(run.workspaceId).doc(session.id);
     const attached = await attachSessionToRun(runRef, run, session, dependencies);
@@ -195,6 +194,7 @@ async function attachSessionToRun(runRef, run, session, dependencies = {}) {
     if (isTerminalAutomationStatus(current.status) || current.status === "stopping" || current.desiredOutcome === "canceled") return false;
     transaction.update(runRef, {
       sessionId: session.id,
+      ...(session.automationStorage ? {workspaceOutput: session.automationStorage.output} : {}),
       provisioningState: "provisioning",
       provisioningClaim: {
         ...(current.provisioningClaim || run.provisioningClaim || {}),
@@ -271,12 +271,6 @@ function assertAutomationSessionIdentity(session, run) {
   }
 }
 
-function assertSharedStorageReady(workspace = {}) {
-  const state = String(workspace.sharedStorage?.state || workspace.sharedStorageState || "").trim().toLowerCase();
-  if (state !== "ready" || !workspace.sharedStorage?.bucketName || !workspace.sharedStorage?.storageGeneration) {
-    throw automationError("automation_shared_storage_not_ready");
-  }
-}
 
 function stableAutomationFailureCode(error) {
   const candidate = String(typeof error === "string" ? error : error?.publicMessage || error?.code || error?.message || "").trim();
@@ -306,7 +300,6 @@ function automationError(code) {
 module.exports = {
   AUTOMATION_PROVISIONING_TIMEOUT_MS,
   assertAutomationSessionIdentity,
-  assertSharedStorageReady,
   automationProvisioningOperationId,
   createAutomationProvisioningService,
   handleAutomationRunEvent,

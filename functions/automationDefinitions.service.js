@@ -281,8 +281,6 @@ function normalizedDefinition(definition, workspace) {
 function assertCanEnable(definition, workspace) {
   if (!definition.enabled) return;
   if (!definition.modelSelection) throw httpError(409, "missing_model_selection");
-  const storageState = String(workspace.sharedStorage?.state || workspace.sharedStorageState || "").trim().toLowerCase();
-  if (storageState !== "ready") throw httpError(409, "automation_shared_storage_not_ready");
 }
 
 function requireExpectedRevision(payload = {}) {

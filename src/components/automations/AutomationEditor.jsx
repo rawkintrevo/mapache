@@ -113,7 +113,6 @@ export function AutomationEditor({
   preview = null,
   previewError = "",
   previewLoading = false,
-  storageReady = true,
   readiness,
   userTimezone = "",
 }) {
@@ -121,7 +120,6 @@ export function AutomationEditor({
   const errors = useMemo(() => automationEditorErrors(form), [form]);
   const hasModel = modelConfigured === undefined ? Boolean(form.modelSelection?.modelId || form.modelSelection?.providerId) : modelConfigured;
   const availability = readiness || automationReadiness({
-    storage: {configured: storageReady, state: storageReady ? "ready" : "legacy"},
     busy,
     modelConfigured: hasModel,
   });

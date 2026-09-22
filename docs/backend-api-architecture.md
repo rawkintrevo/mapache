@@ -160,8 +160,9 @@ model/provider IDs; ownership is checked through the workspace owner, edits
 and deletes require the current revision, and edits append field-name-only
 audit records. Deletion is a tombstone: ordinary lists exclude it, queued
 runs are canceled transactionally, and provisioning/running/stopping history
-is left untouched. Disabled definitions can be saved before shared storage is
-ready; enabling requires a saved model selection and ready shared storage.
+is left untouched. Enabling requires a saved model selection, with no prepared
+shared-storage prerequisite. Automation sessions use the existing GCS workspace
+as read-only input and a separate UUID output prefix; see [Automations](./automations.md).
 Workspace concurrency changes only the admission limit, so lowering it never
 stops active allocations.
 

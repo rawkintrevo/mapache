@@ -84,7 +84,7 @@ describe("automationsController", () => {
     }});
     const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
     await controller.loadWorkspace();
-    expect(fixture.state.automations.storageReady).toBe(false);
+    expect(fixture.state.automations.storageReady).toBe(true);
     await controller.prepareStorage();
     expect(fixture.state.workspaces[0].sharedStorage.state).toBe("error");
     expect(fixture.state.automations).toMatchObject({busy: false, busyAction: "", conflict: null, error: "workspace_bucket_not_found"});
@@ -111,7 +111,7 @@ describe("automationsController", () => {
     controller.setWorkspace("workspace-2");
     pending.resolve({state: "ready"});
     await request;
-    expect(fixture.state.automations).toMatchObject({selectedWorkspaceId: "workspace-2", storageReady: false, busy: false});
+    expect(fixture.state.automations).toMatchObject({selectedWorkspaceId: "workspace-2", storageReady: true, busy: false});
     expect(fixture.api.listWorkspaces).not.toHaveBeenCalled();
   });
 

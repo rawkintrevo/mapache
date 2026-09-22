@@ -95,8 +95,6 @@ function setup({run = baseRun(), existingSession} = {}) {
     ownerUid: "user-1",
     canonicalSessionId: "main-session",
     resources: {cpu: "1", memory: "1Gi"},
-    sharedStorageState: "ready",
-    sharedStorage: {state: "ready", bucketName: "mpw-workspace", storageGeneration: "7"},
   });
   if (existingSession) db.data.set("workspaces/workspace-1/sessions/auto-run-1", existingSession);
 

@@ -39,6 +39,8 @@ function normalizePreviewBasePath(value) {
   return clean === "/" ? "/preview" : clean;
 }
 
+const {AUTOMATION_STORAGE_MODE, isAutomationStorageMode} = require("./automationStorage.helpers");
+
 const PI_MCP_ADAPTER_VERSION = "2.32.1";
 
 function parseRunnerCapabilities() {
@@ -58,14 +60,14 @@ function parseRunnerCapabilities() {
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
-  const workspaceStorageMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE ?
-    SHARED_WORKSPACE_STORAGE_MODE : "legacy";
+  const requestedWorkspaceMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase();
+  const workspaceStorageMode = [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(requestedWorkspaceMode) ? requestedWorkspaceMode : "legacy";
   const automationRunId = isAutomationRuntime(runtimeKind) ?
     String(process.env.MAPACHE_AUTOMATION_RUN_ID || process.env.AUTOMATION_RUN_ID || "").trim() : "";
   const requestedRuntimeStorageMode = normalizeRuntimeStorageMode(
     process.env.MAPACHE_RUNTIME_STORAGE_MODE || process.env.RUNTIME_STORAGE_MODE,
   );
-  const runtimeStorageMode = workspaceStorageMode === SHARED_WORKSPACE_STORAGE_MODE ? "private" : requestedRuntimeStorageMode;
+  const runtimeStorageMode = [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(workspaceStorageMode) ? "private" : requestedRuntimeStorageMode;
   const runtimeIdentity = normalizeRuntimeIdentity(
       process.env.MAPACHE_RUNTIME_ID || process.env.RUN_ID || process.env.SESSION_ID,
   );
@@ -133,6 +135,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     automationAgentSocketPath,
     automationAgentTokenUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_TOKEN_URL),
     automationRunId,
+    automationOutputDir: isAutomationStorageMode(workspaceStorageMode) ? normalizeEnvString(process.env.MAPACHE_AUTOMATION_OUTPUT_DIR) : "",
     workspaceAuthorityRenewalIntervalMs: positiveNumber(process.env.MAPACHE_WORKSPACE_AUTHORITY_RENEWAL_INTERVAL_MS, 5000),
     agentStateRoot,
     agentUiVersion,

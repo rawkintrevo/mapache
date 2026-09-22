@@ -1,0 +1,71 @@
+{
+  "id": "automation.readonly",
+  "title": "Read-only workspace automation readiness MVP",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/automation.readonly",
+  "steps": [
+    {
+      "useCase": "cases/login.json"
+    },
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-automation-readonly-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=automation-readonly"
+      }
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Automations"
+    },
+    {
+      "assert": "storage-description",
+      "expected": "Read-only workspace, separate outputs; no provisioning prerequisite."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "New automation"
+    },
+    {
+      "type": "fill",
+      "label": "Name",
+      "value": "Read-only fixture"
+    },
+    {
+      "type": "fill",
+      "label": "Instructions",
+      "value": "Read workspace files and write outputs to your own directory. Do not publish or send external messages."
+    },
+    {
+      "type": "select",
+      "label": "Schedule type",
+      "value": "advanced"
+    },
+    {
+      "type": "fill",
+      "label": "Cron expression",
+      "value": "0 0 1 1 *"
+    },
+    {
+      "type": "fill",
+      "label": "Timezone",
+      "value": "UTC"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Create automation"
+    },
+    {
+      "useCase": "cases/automation-readiness.json"
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "useScript": "scripts/delete-selected-workspace.json"
+    }
+  ]
+}

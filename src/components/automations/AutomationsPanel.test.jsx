@@ -62,29 +62,20 @@ describe("AutomationsPanel", () => {
     expect(screen.getByRole("button", {name: "Disable"})).toBeDisabled();
   });
 
-  test("unlocks list and editor from a reconciled public summary without losing draft values", async () => {
+  test("enables list and editor without prepared storage, preserving drafts through workspace refresh", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false}]}});
-    state.workspaces[0].sharedStorage = {configured: true, state: "legacy", errorCode: null};
     state.workspaces[0].modelSelection = {modelId: "configured"};
-    const onPrepareStorage = vi.fn();
-    const onShowWorkspace = vi.fn();
-    const props = {state, onPrepareStorage, onShowWorkspace};
+    const props = {state};
     const view = render(<AutomationsPanel {...props} />);
-    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/needs validation/);
-    await user.click(screen.getByRole("button", {name: "Revalidate shared storage"}));
-    expect(onPrepareStorage).toHaveBeenCalledWith("workspace-1");
-    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
-    view.rerender(<AutomationsPanel {...props} />);
     expect(screen.getByRole("button", {name: "Enable"})).toBeEnabled();
+    expect(screen.getByRole("button", {name: "Run now"})).toBeEnabled();
+    expect(screen.queryByRole("button", {name: /shared storage/i})).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "New automation"}));
     await user.type(screen.getByRole("textbox", {name: /^Name/}), "Retain my draft");
-    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
-    state.workspaces[0].sharedStorage.state = "error";
-    state.workspaces[0].sharedStorage.errorCode = "bucket_missing";
+    state.workspaces[0].sharedStorage = {configured: false, state: "error", errorCode: "bucket_missing"};
     view.rerender(<AutomationsPanel {...props} />);
-    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeDisabled();
-    expect(screen.getByRole("checkbox", {name: "Enabled"})).toHaveAccessibleDescription(/validation failed.*bucket_missing/);
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
     expect(screen.getByRole("textbox", {name: /^Name/})).toHaveValue("Retain my draft");
   });
 
@@ -153,17 +144,18 @@ describe("AutomationsPanel", () => {
     expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
   });
 
-  test("requires existing shared storage and does not enable run actions before ready", async () => {
+  test("supports concurrent main sessions with existing GCS and no storage setup action", async () => {
     const user = userEvent.setup();
-    const state = fixture({automations: {storageState: "legacy", definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false} ]}});
-    renderPanel(state);
-
-    expect(screen.getByRole("button", {name: "Shared storage required"})).toBeDisabled();
-    expect(screen.getByText(/never creates one/)).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Run now"})).toBeDisabled();
+    const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", modelSelection: {modelId: "configured"}}]}});
+    state.workspaces[0].modelSelection = {modelId: "configured"};
+    state.sessions[0].status = "running";
+    const onRunNow = vi.fn();
+    renderPanel(state, {onRunNow});
+    expect(screen.getByText(/main session can keep running/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Run now"}));
+    expect(onRunNow).toHaveBeenCalledWith("a1", {trigger: "manual"}, "workspace-1");
     await user.click(screen.getByRole("button", {name: "New automation"}));
-    expect(screen.getByRole("heading", {name: "New automation"})).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeDisabled();
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
   });
 
   test("updates concurrency and retains queued reason in the workflow list", async () => {
@@ -184,24 +176,9 @@ describe("AutomationsPanel", () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({automationMaxConcurrency: 3}, "workspace-1");
   });
 
-  test("shows an existing prepared workspace bucket as ready even with stale legacy state", () => {
-    const state = fixture({
-      automations: {storageState: "legacy"},
-    });
-    state.workspaces[0] = {
-      ...state.workspaces[0],
-      sharedStorageState: "legacy",
-      sharedStorage: {
-        state: "ready",
-        configured: true,
-        errorCode: null,
-      },
-    };
-    renderPanel(state);
-
-    expect(screen.getByRole("heading", {name: "Ready"})).toBeInTheDocument();
-    expect(screen.getByText(/Existing backend-owned shared storage is ready/)).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Storage ready"})).toBeDisabled();
-    expect(screen.queryByRole("button", {name: "Prepare automations"})).not.toBeInTheDocument();
+  test("describes separate outputs without offering storage provisioning", () => {
+    renderPanel(fixture());
+    expect(screen.getByRole("heading", {name: "Read-only workspace, separate outputs"})).toBeInTheDocument();
+    expect(screen.queryByText(/operator|provision|Shared storage required/)).not.toBeInTheDocument();
   });
 });

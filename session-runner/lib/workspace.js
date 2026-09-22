@@ -8,7 +8,9 @@ const {createWorkspacePathHelpers} = require("./workspacePath.helpers");
 const {createWorkspaceAuthService} = require("./workspaceAuth.service");
 const {generationMatchOptions, isStorageGenerationConflict} = require("./workspaceSyncGeneration.helpers");
 const {normalizeRelativeWorkspacePath} = require("./utils");
-const {assertSharedWorkspaceMount, isSharedGcsFuseMode} = require("./sharedWorkspace.helpers");
+const {assertSharedWorkspaceMount, isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
+
+const {assertAutomationStorageMounts} = require("./automationStorage.helpers");
 
 function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
@@ -22,13 +24,14 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   });
 
   async function ensureWorkspace() {
-    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+    if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await assertSharedWorkspaceMount(config);
+      await assertAutomationStorageMounts(config);
     } else {
       await fs.promises.mkdir(config.workspaceDir, {recursive: true});
     }
     await fs.promises.mkdir(config.piSessionDir, {recursive: true});
-    if (!isSharedGcsFuseMode(config.workspaceStorageMode)) {
+    if (!isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await Promise.all(archives.archiveSyncTargets
           .filter((target) => target.ensureLocalPath)
           .map((target) => fs.promises.mkdir(target.localPath, {recursive: true})));
@@ -36,7 +39,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function prepareWorkspaceSource() {
-    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+    if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await assertSharedWorkspaceMount(config);
       return {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
     }
@@ -49,7 +52,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function syncDown() {
-    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+    if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       return {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
     }
     if (!config.bucketName || !config.prefix) return;
@@ -58,7 +61,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function syncWorktreeDown() {
-    if (isSharedGcsFuseMode(config.workspaceStorageMode)) return;
+    if (isMountedWorkspaceMode(config.workspaceStorageMode)) return;
     if (!config.bucketName || !config.prefix) return;
     // Marked runtimes use the immutable workspace-file manifest. The legacy
     // flat prefix must not repopulate state when a checkpoint is absent.
@@ -92,7 +95,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   async function syncUp(options = {}) {
     await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
-    if (isSharedGcsFuseMode(config.workspaceStorageMode)) {
+    if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await git.archiveSharedWorkspaceGit?.();
       return {conflicts: [], skipped: true, reason: "shared_gcsfuse_authoritative"};
     }
@@ -242,9 +245,9 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
     restoreCheckpoint,
     secretFileInventory: auth.secretFileInventory,
     extractStorageArchive: archives.extractStorageArchive,
-    syncArchivesDown: async (options = {}) => isSharedGcsFuseMode(config.workspaceStorageMode) ?
+    syncArchivesDown: async (options = {}) => isMountedWorkspaceMode(config.workspaceStorageMode) ?
       {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"} : archives.syncArchivesDown(options),
-    syncArchivesUp: async () => isSharedGcsFuseMode(config.workspaceStorageMode) ?
+    syncArchivesUp: async () => isMountedWorkspaceMode(config.workspaceStorageMode) ?
       {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"} : archives.syncArchivesUp(),
     syncDown,
     syncUp,

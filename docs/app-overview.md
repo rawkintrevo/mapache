@@ -38,7 +38,7 @@ The detailed model for GitHub-backed workspaces lives in [github-workspaces.md](
 - Firestore stores user profiles, workspaces, sessions, usage ledgers, GitHub connection metadata, and versioned runtime pointers.
 - Cloud Storage stores blank workspace files, cached GitHub worktrees, and archive-backed runtime state.
 - Cloud Run runs per-session terminal containers from curated runner images.
-- Scheduled automation runs use separate labeled Cloud Run services and the workspace's prepared shared GCS FUSE tree; the feature remains gated until canary release.
+- Scheduled automation runs use separate labeled Cloud Run services and read-only workspace files in the existing GCS bucket plus a UUID output directory; the feature remains gated until canary release.
 
 ## Ownership Model
 

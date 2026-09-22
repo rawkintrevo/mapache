@@ -82,7 +82,7 @@ describe("AutomationEditor", () => {
     const onSave = vi.fn();
     const onChange = vi.fn();
     const view = render(<AutomationEditor draft={draft} onChange={onChange} onSave={onSave} />);
-    view.rerender(<AutomationEditor draft={draft} storageReady={false} onChange={onChange} onSave={onSave} />);
+    view.rerender(<AutomationEditor draft={draft} modelConfigured={false} onChange={onChange} onSave={onSave} />);
     expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeChecked();
     expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
     expect(screen.getByRole("button", {name: "Save automation"})).toBeDisabled();
@@ -90,7 +90,7 @@ describe("AutomationEditor", () => {
     expect(onSave).not.toHaveBeenCalled();
     await user.click(screen.getByRole("checkbox", {name: "Enabled"}));
     expect(onChange).toHaveBeenLastCalledWith({...draft, enabled: false});
-    view.rerender(<AutomationEditor draft={{...draft, enabled: false}} storageReady={false} onChange={onChange} onSave={onSave} />);
+    view.rerender(<AutomationEditor draft={{...draft, enabled: false}} modelConfigured={false} onChange={onChange} onSave={onSave} />);
     await user.click(screen.getByRole("button", {name: "Save automation"}));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({enabled: false, prompt: draft.prompt}));
   });

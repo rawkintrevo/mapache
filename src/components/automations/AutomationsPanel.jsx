@@ -2,17 +2,11 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Clock3, Pencil, Play, Plus, RefreshCw, Trash2} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {AutomationEditor, createAutomationDraft} from "./AutomationEditor.jsx";
-import {automationErrorMessage, automationReadiness, automationStorageSummary, hasAutomationModel} from "../../utils/automationReadiness.js";
+import {automationErrorMessage, automationReadiness, hasAutomationModel} from "../../utils/automationReadiness.js";
 import "./AutomationsPanel.css";
 
 const ACTIVE_RUN_STATUSES = new Set(["queued", "provisioning", "running", "stopping"]);
-const STORAGE_LABELS = {
-  legacy: "Legacy storage",
-  preparing: "Preparing storage",
-  migrating: "Migrating storage",
-  ready: "Ready",
-  error: "Storage error",
-};
+
 
 export function AutomationsPanel({
   onCreateDefinition,
@@ -20,7 +14,6 @@ export function AutomationsPanel({
   onLoadHistory,
   onLoadWorkspace,
   onOpenHistory,
-  onPrepareStorage,
   onPreviewSchedule,
   onRunNow,
   onUpdateDefinition,
@@ -36,20 +29,13 @@ export function AutomationsPanel({
   const editorSequence = useRef(0);
   const previewSchedule = useCallback((cron, timezone) => onPreviewSchedule?.(cron, timezone), [onPreviewSchedule]);
   const [settingsValue, setSettingsValue] = useState(String(automationState.maxConcurrency || 1));
-  const storage = automationStorageSummary(workspace);
-  const {state: storageState, configured: storageConfigured} = storage;
-  const storageReady = automationReadiness({storage}).ready;
   const availabilityFor = (automation) => automationReadiness({
-    storage,
     busy: automationState.busy,
     busyAction: automationState.busyAction,
     modelConfigured: hasAutomationModel(automation, workspace),
     mutationBusy: automationState.pendingActions?.some((operation) =>
       ["update", "delete"].includes(operation.action) && operation.automationId === automation?.id) || false,
   });
-  const canonicalSession = state.sessions.find((session) => session.id === workspace?.canonicalSessionId) ||
-    state.sessions.find((session) => session.id === state.selectedSessionId);
-  const mainActive = ACTIVE_RUN_STATUSES.has(String(canonicalSession?.status || "").toLowerCase());
   const latestRuns = useMemo(() => {
     const result = new Map();
     for (const run of automationState.history.runs || []) {
@@ -124,7 +110,6 @@ export function AutomationsPanel({
     await onUpdateSettings?.({automationMaxConcurrency: value}, state.selectedWorkspaceId);
   }
 
-  const currentStorageLabel = STORAGE_LABELS[storageState] || storageState || "Legacy storage";
   return (
     <div className="automations-panel">
       <header className="automations-panel__header">
@@ -140,23 +125,12 @@ export function AutomationsPanel({
       </header>
       {automationState.error ? <p className="error" role="alert">{automationErrorMessage(automationState.error)}</p> : null}
       {automationState.error === "missing_model_selection" ? <Button variant="secondary" onClick={onOpenModelSettings || onShowWorkspace}>Back to Agent</Button> : null}
-      <section className={`automation-storage-card automation-storage-card--${storageState}`} aria-label="Automation storage">
+      <section className="automation-storage-card" aria-label="Automation storage">
         <div>
-          <p className="eyebrow">Storage</p>
-          <h3>{currentStorageLabel}</h3>
-          {storageState === "legacy" || storageState === "error" ? <p className="subtle">Automations reuse an existing backend-owned shared-storage bucket; this surface never creates one.</p> : null}
-          {!storageConfigured ? <p className="subtle">This workspace lacks required prepared shared storage. Ask an operator to provision it; this app has no storage provisioning flow.</p> : null}
-          {storageReady ? <p className="subtle">Existing backend-owned shared storage is ready. Automations reuse its authoritative generation.</p> : null}
-          {storageState === "preparing" || storageState === "migrating" ? <p className="subtle">Storage preparation is in progress. The main workspace was not stopped automatically.</p> : null}
-          {storageState === "error" ? <p className="error">{storage.errorCode || "Storage preparation failed. Retry while the main workspace is paused."}</p> : null}
-          {mainActive && !storageReady ? <p className="subtle">Pause the main workspace before preparing storage.</p> : null}
+          <p className="eyebrow">Workspace files</p>
+          <h3>Read-only workspace, separate outputs</h3>
+          <p className="subtle">Each run reads your saved workspace files and writes to its own output folder. Your main session can keep running. Outputs stay separate until you copy them back.</p>
         </div>
-        <Button
-          disabled={automationState.busy || mainActive || !storageConfigured || storageState === "preparing" || storageState === "migrating" || storageReady}
-          onClick={() => onPrepareStorage?.(state.selectedWorkspaceId)}
-        >
-          {storageReady ? "Storage ready" : !storageConfigured ? "Shared storage required" : storageState === "preparing" || storageState === "migrating" ? "Preparing…" : "Revalidate shared storage"}
-        </Button>
       </section>
       <section className="automation-settings-card" aria-label="Automation concurrency settings">
         <form onSubmit={saveSettings}>
@@ -188,7 +162,6 @@ export function AutomationsPanel({
           preview={previewState.data}
           previewError={previewState.error}
           previewLoading={previewState.loading}
-          storageReady={storageReady}
           userTimezone={state.profile?.timezone || ""}
         />
       ) : (
@@ -224,7 +197,7 @@ export function AutomationsPanel({
                 );
               })}
             </div>
-          ) : <p className="subtle">No automations yet. Disabled workflows can be saved before storage is prepared.</p>}
+          ) : <p className="subtle">No automations yet. Create a workflow to get started.</p>}
         </section>
       )}
     </div>
