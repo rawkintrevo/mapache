@@ -20,7 +20,7 @@ export function AutomationManagementPage({state, ...props}) {
         onOpenHistory={props.onOpenHistory}
         onPrepareStorage={props.onPrepareStorage}
         onPreviewSchedule={props.onPreviewSchedule}
-        onRefresh={props.onRefresh}
+        onOpenModelSettings={props.onOpenModelSettings}
         onRunNow={props.onRunNow}
         onShowWorkspace={props.onShowWorkspace}
         onUpdateDefinition={props.onUpdateDefinition}

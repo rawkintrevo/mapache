@@ -17,10 +17,11 @@ function createFixture(overrides = {}) {
     ...createInitialState(),
     user: {uid: "user-1"},
     selectedWorkspaceId: "workspace-1",
-    workspaces: [{id: "workspace-1", sharedStorageState: "ready"}],
+    workspaces: [{id: "workspace-1", sharedStorage: {configured: true, state: "ready", errorCode: null}}],
     ...overrides.state,
   };
   const api = {
+    listWorkspaces: vi.fn(async () => ({workspaces: structuredClone(state.workspaces)})),
     listDefinitions: vi.fn().mockResolvedValue({automations: [{id: "automation-1", revision: 3, name: "Daily"}]}),
     createDefinition: vi.fn().mockResolvedValue({automation: {id: "automation-2", revision: 1}}),
     getDefinition: vi.fn().mockResolvedValue({automation: {id: "automation-1", revision: 4, name: "Fresh"}}),
@@ -51,6 +52,90 @@ function createFixture(overrides = {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("automationsController", () => {
+  test("reconciles both public slices atomically, refreshes the workspace, and ignores older reads", async () => {
+    const staleRead = deferred();
+    const verificationRead = deferred();
+    const fixture = createFixture({state: {workspaces: [{id: "workspace-1", sharedStorage: {configured: true, state: "legacy"}}]}, api: {
+      prepareStorage: vi.fn().mockResolvedValue({state: "ready", reused: true}),
+      listWorkspaces: vi.fn().mockReturnValueOnce(staleRead.promise).mockReturnValueOnce(verificationRead.promise),
+    }});
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    const load = controller.loadWorkspace();
+    const prepare = controller.prepareStorage();
+    await Promise.resolve();
+    expect(fixture.state.workspaces[0].sharedStorage).toEqual({configured: true, state: "ready", errorCode: null});
+    controller.setWorkspace("workspace-1");
+    expect(fixture.state.automations.storageReady).toBe(true);
+    staleRead.resolve({workspaces: [{id: "workspace-1", sharedStorage: {configured: true, state: "legacy"}}]});
+    await load;
+    expect(fixture.state.automations.storageReady).toBe(true);
+    expect(fixture.state.automations.busy).toBe(true);
+    verificationRead.resolve({workspaces: [{id: "workspace-1", sharedStorage: {configured: true, state: "ready", errorCode: null}}]});
+    await prepare;
+    expect(fixture.api.listWorkspaces).toHaveBeenCalledTimes(2);
+    expect(fixture.state.automations.busy).toBe(false);
+    expect(fixture.state.automations.pendingActions).toEqual([]);
+  });
+
+  test("Refresh retrieves authoritative readiness and failed revalidation settles busy", async () => {
+    const fixture = createFixture({api: {
+      listWorkspaces: vi.fn().mockResolvedValue({workspaces: [{id: "workspace-1", sharedStorage: {configured: true, state: "error", errorCode: "workspace_bucket_not_found"}}]}),
+      prepareStorage: vi.fn().mockRejectedValue(Object.assign(new Error("workspace_bucket_not_found"), {code: "workspace_bucket_not_found", status: 404})),
+    }});
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    await controller.loadWorkspace();
+    expect(fixture.state.automations.storageReady).toBe(false);
+    await controller.prepareStorage();
+    expect(fixture.state.workspaces[0].sharedStorage.state).toBe("error");
+    expect(fixture.state.automations).toMatchObject({busy: false, busyAction: "", conflict: null, error: "workspace_bucket_not_found"});
+  });
+
+  test.each(["load", "update", "storage"])("clears busy after %s fails", async (operation) => {
+    const fixture = createFixture();
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    fixture.api.listDefinitions.mockRejectedValue(new Error("load failed"));
+    fixture.api.updateDefinition.mockRejectedValue(new Error("save failed"));
+    fixture.api.prepareStorage.mockRejectedValue(new Error("validation failed"));
+    await ({load: () => controller.loadWorkspace(), update: () => controller.updateDefinition("a1", {enabled: true}), storage: () => controller.prepareStorage()})[operation]();
+    expect(fixture.state.automations.busy).toBe(false);
+    expect(fixture.state.automations.pendingActions).toEqual([]);
+  });
+
+  test("does not apply late reconciliation after switching workspaces", async () => {
+    const pending = deferred();
+    const fixture = createFixture({api: {prepareStorage: vi.fn().mockReturnValue(pending.promise)}});
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    const request = controller.prepareStorage();
+    fixture.state.selectedWorkspaceId = "workspace-2";
+    fixture.state.workspaces.push({id: "workspace-2", sharedStorage: {configured: false, state: "legacy"}});
+    controller.setWorkspace("workspace-2");
+    pending.resolve({state: "ready"});
+    await request;
+    expect(fixture.state.automations).toMatchObject({selectedWorkspaceId: "workspace-2", storageReady: false, busy: false});
+    expect(fixture.api.listWorkspaces).not.toHaveBeenCalled();
+  });
+
+  test.each(["missing_model_selection", "automation_shared_storage_not_ready"])("does not misclassify %s as a revision conflict", async (code) => {
+    const fixture = createFixture({api: {updateDefinition: vi.fn().mockRejectedValue(Object.assign(new Error(code), {code, status: 409}))}});
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    await controller.loadWorkspace();
+    await controller.updateDefinition("automation-1", {enabled: true});
+    expect(fixture.api.updateDefinition).toHaveBeenCalledWith("workspace-1", "automation-1", {enabled: true, expectedRevision: 3});
+    expect(fixture.api.getDefinition).not.toHaveBeenCalled();
+    expect(fixture.state.automations).toMatchObject({error: code, conflict: null, busy: false});
+  });
+
+  test("propagates structured schedule failures without changing mutation state", async () => {
+    const error = Object.assign(new Error("invalid_cron"), {code: "invalid_cron", status: 400, data: {field: "cron"}});
+    const fixture = createFixture({api: {previewSchedule: vi.fn().mockRejectedValue(error)}});
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+    fixture.state.automations.error = "prior save error";
+    await expect(controller.previewSchedule("bad", "UTC")).rejects.toBe(error);
+    expect(fixture.state.automations.error).toBe("prior save error");
+    expect(fixture.state.automations.busy).toBe(false);
+    expect(fixture.state.automations.conflict).toBeNull();
+  });
+
   test("loads workspace definitions/settings and tracks revision and storage readiness", async () => {
     const fixture = createFixture();
     const controller = createAutomationsController({
@@ -74,7 +159,7 @@ describe("automationsController", () => {
         workspaces: [{
           id: "workspace-1",
           sharedStorageState: "legacy",
-          sharedStorage: {state: "ready", bucketName: "backend-owned", storageGeneration: "generation-7"},
+          sharedStorage: {configured: true, state: "ready", errorCode: null},
         }],
       },
     });

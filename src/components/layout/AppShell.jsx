@@ -136,7 +136,7 @@ export function AppShell(props) {
               onOpenHistory={app.showAutomationsHistory}
               onPrepareStorage={automations.prepareStorage}
               onPreviewSchedule={automations.previewSchedule}
-              onRefresh={app.refreshAll}
+              onOpenModelSettings={() => { setActiveCanvas("agent"); app.showWorkspace(); }}
               onRestartRun={automations.restartGlobalRun}
               onRunNow={automations.runNow}
               onSelectRun={(runId) => automations.selectRun(runId, {global: true})}

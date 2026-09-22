@@ -1,5 +1,6 @@
 import {createAutomationsState} from "../state/initialState.js";
 import {createAutomationsApi} from "../services/automationsApi.js";
+import {automationReadiness, automationStorageSummary} from "../utils/automationReadiness.js";
 
 const POLL_INTERVAL_MS = 5_000;
 const ACTIVE_RUN_STATUSES = new Set(["queued", "provisioning", "running", "stopping"]);
@@ -26,6 +27,8 @@ export function createAutomationsController({
   let visibilityAttached = false;
   let actionKeys = new Map();
   let actionSequence = 0;
+  let storageRevision = 0;
+  const pendingOperations = new Map();
 
   return {
     cancelRun,
@@ -99,12 +102,13 @@ export function createAutomationsController({
     setWorkspace(workspaceId);
     const context = capture(workspaceId);
     if (!context.workspaceId) return null;
-    const client = getAutomationApi();
-    setBusy(true, "load");
+    const finish = beginOperation(context, "load");
     try {
+      const client = getAutomationApi();
       const [definitions, settings] = await Promise.all([
         client.listDefinitions(context.workspaceId),
         client.getSettings(context.workspaceId),
+        refreshWorkspaceRecord(context),
       ]);
       if (!isCurrent(context)) return null;
       applyDefinitions(definitions?.automations || []);
@@ -116,7 +120,7 @@ export function createAutomationsController({
       if (isCurrent(context)) handleError(error);
       return null;
     } finally {
-      if (isCurrent(context)) setBusy(false, "load");
+      finish();
     }
   }
 
@@ -224,22 +228,47 @@ export function createAutomationsController({
     const context = capture(workspaceId);
     if (!context.workspaceId) return null;
     return perform(context, "storage", async (client) => {
-      const result = await client.prepareStorage(context.workspaceId);
+      // Ignore workspace reads started before this reconciliation.
+      storageRevision += 1;
+      let result;
+      try {
+        result = await client.prepareStorage(context.workspaceId);
+      } catch (error) {
+        // Validation failures are persisted by the server. Read that summary
+        // before settling, while preserving the original actionable error.
+        if (isCurrent(context)) {
+          storageRevision += 1;
+          const workspace = state.workspaces.find((item) => item.id === context.workspaceId);
+          applyWorkspaceRecord(context, {...workspace, sharedStorage: {
+            ...automationStorageSummary(workspace),
+            state: "error",
+            errorCode: error?.code || error?.message || "Storage validation failed",
+          }});
+          await refreshWorkspaceRecord(context).catch(() => {});
+        }
+        throw error;
+      }
       if (!isCurrent(context)) return null;
-      const storageState = String(result?.state || result?.storage?.state || "preparing").trim().toLowerCase();
-      state.automations.storageState = storageState;
-      state.automations.storageReady = storageState === "ready";
+      storageRevision += 1;
+      const workspace = state.workspaces.find((item) => item.id === context.workspaceId);
+      const summary = automationStorageSummary(workspace);
+      const nextState = String(result?.state || result?.storage?.state || "preparing").trim().toLowerCase();
+      applyWorkspaceRecord(context, {...workspace, sharedStorage: {
+        configured: summary.configured || nextState === "ready",
+        state: nextState,
+        errorCode: result?.errorCode || null,
+      }});
+      // Both local slices already agree, so intervening history refreshes or
+      // setWorkspace calls cannot rederive readiness from the old summary.
+      await refreshWorkspaceRecord(context);
       return result;
     });
   }
 
   async function previewSchedule(cron, timezone) {
-    try {
-      return await getAutomationApi().previewSchedule(cron, timezone);
-    } catch (error) {
-      handleError(error);
-      return null;
-    }
+    // The editor owns preview errors and request fencing; save/revision state
+    // must not be changed by a schedule validation failure.
+    return getAutomationApi().previewSchedule(cron, timezone);
   }
 
   async function loadHistory(options = {}) {
@@ -498,7 +527,7 @@ export function createAutomationsController({
   }
 
   async function perform(context, action, task, metadata = {}) {
-    setBusy(true, action);
+    const finish = beginOperation(context, action, metadata);
     try {
       const result = await task(getAutomationApi());
       if (!isCurrent(context)) return null;
@@ -510,20 +539,22 @@ export function createAutomationsController({
       }
       return result;
     } catch (error) {
-      if (isCurrent(context)) await handleError(error, metadata);
+      if (isCurrent(context)) await handleError(error, metadata, context);
       return null;
     } finally {
-      if (isCurrent(context)) setBusy(false, action);
+      finish();
     }
   }
 
-  async function handleError(error, metadata = {}) {
+  async function handleError(error, metadata = {}, context = capture(state.selectedWorkspaceId)) {
     const code = error?.code || error?.message || "Request failed";
     state.automations.error = code;
-    if (code === "revision_conflict" || error?.status === 409 && metadata.automationId) {
+    state.automations.conflict = null;
+    if (code === "revision_conflict") {
       const conflict = {type: "revision", automationId: metadata.automationId};
       state.automations.conflict = conflict;
       if (metadata.automationId) await loadDefinition(metadata.automationId);
+      if (!isCurrent(context)) return;
       state.automations.conflict = conflict;
       state.automations.error = code;
     } else if (code === "pending_run_exists") {
@@ -560,9 +591,23 @@ export function createAutomationsController({
 
   function updateStorageState(workspaceId) {
     const workspace = state.workspaces?.find((item) => item.id === workspaceId);
-    const storageState = String(workspace?.sharedStorage?.state || workspace?.sharedStorageState || "").toLowerCase();
-    state.automations.storageState = storageState;
-    state.automations.storageReady = storageState === "ready";
+    const storage = automationStorageSummary(workspace);
+    state.automations.storageState = storage.state;
+    state.automations.storageReady = automationReadiness({storage}).ready;
+  }
+
+  function applyWorkspaceRecord(context, workspace) {
+    if (!isCurrent(context) || !workspace) return;
+    state.workspaces = state.workspaces.map((item) => item.id === context.workspaceId ? workspace : item);
+    updateStorageState(context.workspaceId);
+  }
+
+  async function refreshWorkspaceRecord(context) {
+    const revision = storageRevision;
+    const data = await getAutomationApi().listWorkspaces();
+    if (!isCurrent(context) || revision !== storageRevision) return;
+    const workspace = data?.workspaces?.find((item) => item.id === context.workspaceId);
+    if (workspace) applyWorkspaceRecord(context, workspace);
   }
 
   function capture(workspaceId, scope = "workspace") {
@@ -588,16 +633,27 @@ export function createAutomationsController({
   }
 
   function resetSlice(workspaceId) {
+    pendingOperations.clear();
+    storageRevision += 1;
     const next = createAutomationsState({selectedWorkspaceId: workspaceId || null});
     state.automations = next;
     if (workspaceId) updateStorageState(workspaceId);
     updatePollingState();
   }
 
-  function setBusy(value, action = "") {
-    state.automations.busy = value;
-    state.automations.busyAction = value ? action : "";
-    render();
+  function beginOperation(context, action, metadata = {}) {
+    const token = Symbol(action);
+    pendingOperations.set(token, {context, action, automationId: metadata.automationId || ""});
+    const sync = () => {
+      if (!isCurrent(context)) return;
+      const actions = [...pendingOperations.values()].filter((entry) => isCurrent(entry.context));
+      state.automations.pendingActions = actions.map(({action, automationId}) => ({action, automationId}));
+      state.automations.busy = actions.length > 0;
+      state.automations.busyAction = actions.at(-1)?.action || "";
+      render();
+    };
+    sync();
+    return () => { pendingOperations.delete(token); sync(); };
   }
 
   function ensurePolling() {

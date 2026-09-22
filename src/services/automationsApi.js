@@ -10,6 +10,7 @@ export function createAutomationsApi(apiOrOptions) {
   if (!api) throw new Error("Automation API requires an API client.");
 
   return {
+    listWorkspaces: () => api.getWorkspaces(),
     listDefinitions: (workspaceId) => api.getAutomations(workspaceId),
     createDefinition: (workspaceId, body) => api.createAutomation(workspaceId, body),
     getDefinition: (workspaceId, automationId) => api.getAutomation(workspaceId, automationId),

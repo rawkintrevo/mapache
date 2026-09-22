@@ -1,13 +1,15 @@
-import {render, screen} from "@testing-library/react";
+import {act, fireEvent, render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {describe, expect, test, vi} from "vitest";
+import {afterEach, describe, expect, test, vi} from "vitest";
 import {createInitialState} from "../../state/initialState.js";
 import {AutomationsPanel} from "./AutomationsPanel.jsx";
+
+afterEach(() => vi.useRealTimers());
 
 function fixture(overrides = {}) {
   const state = createInitialState();
   state.selectedWorkspaceId = "workspace-1";
-  state.workspaces = [{id: "workspace-1", name: "Demo", canonicalSessionId: "session-1", sharedStorage: {state: "legacy"}}];
+  state.workspaces = [{id: "workspace-1", name: "Demo", canonicalSessionId: "session-1", sharedStorage: {configured: false, state: "legacy", errorCode: null}}];
   state.sessions = [{id: "session-1", status: "stopped"}];
   state.automations = {
     ...state.automations,
@@ -36,6 +38,121 @@ function renderPanel(state, overrides = {}) {
 }
 
 describe("AutomationsPanel", () => {
+  test("enables a ready definition and leaves Disable available when storage is lost", async () => {
+    const user = userEvent.setup();
+    const definition = {id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false, modelSelection: {modelId: "configured"}};
+    const state = fixture({automations: {definitions: [definition]}});
+    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
+    const onUpdateDefinition = vi.fn();
+    const view = render(<AutomationsPanel state={state} onUpdateDefinition={onUpdateDefinition} />);
+    await user.click(screen.getByRole("button", {name: "Enable"}));
+    expect(onUpdateDefinition).toHaveBeenLastCalledWith("a1", {enabled: true}, "workspace-1");
+    state.automations.definitions = [{...definition, enabled: true}];
+    state.workspaces[0].sharedStorage = {configured: true, state: "error", errorCode: "validation_failed"};
+    state.automations.busy = true;
+    state.automations.busyAction = "storage";
+    state.automations.pendingActions = [{action: "storage"}];
+    view.rerender(<AutomationsPanel state={state} onUpdateDefinition={onUpdateDefinition} />);
+    expect(screen.getByRole("button", {name: "Disable"})).toBeEnabled();
+    await user.click(screen.getByRole("button", {name: "Disable"}));
+    expect(onUpdateDefinition).toHaveBeenLastCalledWith("a1", {enabled: false}, "workspace-1");
+    state.automations.pendingActions = [{action: "update", automationId: "a1"}];
+    state.automations.busyAction = "update";
+    view.rerender(<AutomationsPanel state={state} onUpdateDefinition={onUpdateDefinition} />);
+    expect(screen.getByRole("button", {name: "Disable"})).toBeDisabled();
+  });
+
+  test("unlocks list and editor from a reconciled public summary without losing draft values", async () => {
+    const user = userEvent.setup();
+    const state = fixture({automations: {definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false}]}});
+    state.workspaces[0].sharedStorage = {configured: true, state: "legacy", errorCode: null};
+    state.workspaces[0].modelSelection = {modelId: "configured"};
+    const onPrepareStorage = vi.fn();
+    const onShowWorkspace = vi.fn();
+    const props = {state, onPrepareStorage, onShowWorkspace};
+    const view = render(<AutomationsPanel {...props} />);
+    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/needs validation/);
+    await user.click(screen.getByRole("button", {name: "Revalidate shared storage"}));
+    expect(onPrepareStorage).toHaveBeenCalledWith("workspace-1");
+    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
+    view.rerender(<AutomationsPanel {...props} />);
+    expect(screen.getByRole("button", {name: "Enable"})).toBeEnabled();
+    await user.click(screen.getByRole("button", {name: "New automation"}));
+    await user.type(screen.getByRole("textbox", {name: /^Name/}), "Retain my draft");
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeEnabled();
+    state.workspaces[0].sharedStorage.state = "error";
+    state.workspaces[0].sharedStorage.errorCode = "bucket_missing";
+    view.rerender(<AutomationsPanel {...props} />);
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toBeDisabled();
+    expect(screen.getByRole("checkbox", {name: "Enabled"})).toHaveAccessibleDescription(/validation failed.*bucket_missing/);
+    expect(screen.getByRole("textbox", {name: /^Name/})).toHaveValue("Retain my draft");
+  });
+
+  test("explains missing models and provides a working return to Agent without a conflict banner", async () => {
+    const user = userEvent.setup();
+    const state = fixture({automations: {error: "missing_model_selection", definitions: [{id: "a1", name: "Daily"}]}});
+    state.workspaces[0].sharedStorage = {configured: true, state: "ready", errorCode: null};
+    const onOpenModelSettings = vi.fn();
+    renderPanel(state, {onOpenModelSettings});
+    expect(screen.getByRole("button", {name: "Enable"})).toHaveAccessibleDescription(/Agent settings/);
+    expect(screen.queryByText(/changed elsewhere/)).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", {name: "Back to Agent"})[0]);
+    expect(onOpenModelSettings).toHaveBeenCalledOnce();
+  });
+
+  test("previews once through the real editor chain despite loading, result, field and parent updates", async () => {
+    vi.useFakeTimers();
+    let resolve;
+    const onPreviewSchedule = vi.fn(() => new Promise((done) => { resolve = done; }));
+    const state = fixture();
+    const props = {state, onPreviewSchedule};
+    const view = render(<AutomationsPanel {...props} />);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    expect(screen.getByText("Checking schedule...")).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    expect(onPreviewSchedule).toHaveBeenCalledTimes(1);
+    await act(async () => resolve({occurrences: [{local: "current occurrence", timezone: "UTC"}]}));
+    expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", {name: /^Name/}), {target: {value: "Edited"}});
+    fireEvent.change(screen.getByRole("textbox", {name: /^Instructions/}), {target: {value: "Unrelated"}});
+    view.rerender(<AutomationsPanel {...props} state={{...state, automations: {...state.automations, history: {...state.automations.history, runs: []}}}} />);
+    await act(() => vi.advanceTimersByTimeAsync(11_000));
+    expect(onPreviewSchedule).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/current occurrence/)).toBeInTheDocument();
+  });
+
+  test("shows preview failures locally and ignores completion from a closed editor or old workspace", async () => {
+    vi.useFakeTimers();
+    const requests = [];
+    const onPreviewSchedule = vi.fn(() => new Promise((resolve, reject) => requests.push({resolve, reject})));
+    const state = fixture();
+    const view = render(<AutomationsPanel state={state} onPreviewSchedule={onPreviewSchedule} />);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    fireEvent.click(screen.getAllByRole("button", {name: "Cancel"})[0]);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    await act(async () => requests[0].resolve({occurrences: [{local: "closed editor"}]}));
+    expect(screen.queryByText(/closed editor/)).not.toBeInTheDocument();
+    expect(screen.getByText("Checking schedule...")).toBeInTheDocument();
+    await act(async () => requests[1].reject(Object.assign(new Error("unavailable"), {code: "schedule_unavailable"})));
+    expect(screen.getByText("schedule_unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
+    expect(state.automations.error).toBe("");
+    fireEvent.change(screen.getByRole("combobox", {name: "Timezone"}), {target: {value: "Europe/London"}});
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    const nextState = {...state, selectedWorkspaceId: "workspace-2", workspaces: [{id: "workspace-2", name: "Second"}]};
+    view.rerender(<AutomationsPanel state={nextState} onPreviewSchedule={onPreviewSchedule} />);
+    fireEvent.click(screen.getByRole("button", {name: "New automation"}));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    await act(async () => requests[2].resolve({occurrences: [{local: "old workspace"}]}));
+    expect(screen.queryByText(/old workspace/)).not.toBeInTheDocument();
+    expect(screen.getByText("Checking schedule...")).toBeInTheDocument();
+    await act(async () => requests[3].resolve({occurrences: [{local: "new workspace"}]}));
+    expect(screen.getByText(/new workspace/)).toBeInTheDocument();
+    expect(screen.queryByText("Checking schedule...")).not.toBeInTheDocument();
+  });
+
   test("requires existing shared storage and does not enable run actions before ready", async () => {
     const user = userEvent.setup();
     const state = fixture({automations: {storageState: "legacy", definitions: [{id: "a1", name: "Daily", cron: "0 9 * * *", timezone: "UTC", enabled: false} ]}});
@@ -76,8 +193,8 @@ describe("AutomationsPanel", () => {
       sharedStorageState: "legacy",
       sharedStorage: {
         state: "ready",
-        bucketName: "backend-owned",
-        storageGeneration: "generation-7",
+        configured: true,
+        errorCode: null,
       },
     };
     renderPanel(state);

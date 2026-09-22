@@ -100,6 +100,32 @@ recorded generation and `trees/{generation}` prefix remain authoritative. A
 foreign, missing, or incompatible bucket fails closed with an owner-visible
 error instead of falling back to a second bucket.
 
+The browser consumes only the sanitized `{configured, state, errorCode}` storage
+summary. Configuration alone does not imply readiness. The automation controller
+applies successful reconciliation to both the workspace summary and its own
+readiness slice before refreshing workspace data; older reads cannot revert the
+validated result. The panel Refresh reloads workspace data, definitions, and
+settings. A paused workspace with an existing descriptor can use **Revalidate
+shared storage** and then enable a definition without reloading the page.
+
+This release has no user-accessible bucket provisioning flow. An operator must
+prepare the backend-owned bucket and record its matching project/workspace/owner
+identity, generation, tree prefix, and ready marker before the reconciliation
+endpoint can validate it. The operator must follow the shared-storage contract
+above; the Automations UI never creates a second bucket, resets the generation,
+migrates a workspace, or pauses its main runtime. A missing descriptor is shown
+as this explicit prerequisite, rather than a link to a nonexistent workflow.
+
+Enable and Run now explain loading, saving, validation progress/failure, missing
+storage, and missing model state next to their controls. A missing model offers
+**Back to Agent**: choose a model in workspace Agent settings, return to
+Automations, and Refresh. Backend model/storage checks remain authoritative;
+these prerequisite errors are not revision conflicts. Disable remains available
+if storage becomes unavailable except while that definition is being mutated.
+Readiness updates preserve draft values; a checked Enabled draft with a new
+block cannot be submitted until the block is resolved or the user explicitly
+unchecks Enabled. Preview and history work do not hold the definition busy.
+
 The active `pi-chrome` revision mounts the exact `trees/{storageGeneration}`
 prefix using the gen2 `gcsfuse.run.googleapis.com` CSI driver with:
 

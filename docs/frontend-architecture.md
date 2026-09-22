@@ -61,11 +61,32 @@ owner-wide run history and run details in one page; there is no separate top-lev
 Run history entry. Opening it never starts a runner. The definition section owns
 selection/editing, storage preparation status, max-concurrency edits,
 enable/disable, Run now, delete confirmation, and links from active/queued run
-reasons to the history section. Storage readiness gates enabling and execution
+reasons to the history section. `utils/automationReadiness.js` normalizes the public
+workspace storage summary
+(`configured`, `state`, `errorCode`) for both controller and components. Readiness
+requires configured storage with server state `ready`; bucket names never enter
+the browser decision. Reconciliation applies the new summary to the workspace
+and automation slice together, fences older reads, and then refreshes the
+authoritative workspace. Panel Refresh reloads that summary as well as definitions
+and concurrency settings. Pending mutations are tracked to settle busy state even
+on failure or overlap; preview and history requests do not block Enable.
+Storage and model readiness gate enabling and execution
 while still allowing disabled workflow drafts to be saved; preparation never stops
-the main workspace automatically. `AutomationManagementPage` composes the
+the main workspace automatically. Blocked controls describe their prerequisite
+inline through `aria-describedby`. Existing enabled definitions can be disabled
+when storage is unavailable, and an enabled draft is never silently downgraded
+on save. Missing model errors offer Back to Agent followed by Refresh; missing
+storage has an operator prerequisite because there is no user provisioning flow.
+Only `revision_conflict` produces an edit-conflict banner.
+`AutomationManagementPage` composes the
 definition and history sections while `automationsController` remains the owner of
 requests, filtering, polling, selection, and revision fencing.
+On desktop, `.automation-management-page` is the single shrinkable vertical scroll
+container under `main`; the topbar stays outside it. Its grid aligns content at
+the top and bounds the column width. At the shell’s 900px breakpoint it returns
+to natural document scrolling, without a competing full-page nested scroller.
+Embedded history shares that page flow; bounded event panes and horizontal table
+overflow retain their own local behavior. Agent and terminal sizing is unchanged.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
 server-selected `pi-chrome` sessions. A marked running session renders
@@ -170,8 +191,13 @@ The automation editor is a controlled component owned by the automation workflow
 `AutomationEditor` keeps edits, expected revisions, and save/error retention in the
 parent controller; `ScheduleControls` converts daily and weekly selections to
 canonical numeric five-field cron while preserving arbitrary advanced expressions.
-Preview requests are debounced and fenced so an older response cannot replace a
-newer schedule. New definitions use the saved profile timezone (or the browser
+Preview requests start once after a 350ms debounce when cron, timezone, or the
+explicit editor/workspace context changes. Latest-handler refs prevent callback
+replacement, unrelated draft edits, and history renders from restarting the
+request. The same effect lifetime fences occurrences, errors, and loading;
+schedule changes and editor close/unmount invalidate late completions. Invalid
+input and server errors settle visibly inside Next five runs without changing
+definition-save busy/error or revision-conflict state. New definitions use the saved profile timezone (or the browser
 timezone during profile bootstrap); editing always preserves the stored timezone.
 The Recovery fieldset exposes the backend's bounded missed-run and safe-retry
 policies with the same defaults and replay-safety acknowledgement. Run details

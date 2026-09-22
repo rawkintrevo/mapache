@@ -5,30 +5,198 @@
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/automation.management",
   "steps": [
-    {"useCase": "cases/login.json"},
-    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-automation-{{timestamp}}", "workspaceEnv": "QA_CASE=automation-management"}},
-    {"type": "click", "role": "button", "name": "Automations"},
-    {"assert": "snapshot-text", "expected": "Automations reuse an existing backend-owned shared-storage bucket"},
-    {"assert": "snapshot-text", "expected": "Legacy storage"},
-    {"assert": "snapshot-text", "expected": "Shared storage required"},
-    {"type": "click", "role": "button", "name": "New automation"},
-    {"type": "fill", "label": "Name", "value": "Safe fixture automation {{timestamp}}"},
-    {"type": "fill", "label": "Instructions", "value": "Write one unique fixture file; do not publish or send external messages."},
-    {"type": "select", "label": "Schedule type", "value": "advanced"},
-    {"type": "fill", "label": "Cron expression", "value": "17 14 * * 2"},
-    {"type": "fill", "label": "Timezone", "value": "America/Chicago"},
-    {"type": "click", "role": "button", "name": "Create automation"},
-    {"type": "waitForNetwork", "requestUrlIncludes": "/automations", "method": "POST", "expectedStatus": 201, "timeoutMs": 15000},
-    {"assert": "snapshot-text", "expected": "Disabled"},
-    {"assert": "snapshot-text", "expected": "Run history"},
-    {"assert": "snapshot-text", "expected": "Latest runs"},
-    {"assert": "snapshot-text", "expected": "All workspaces"},
-    {"type": "fill", "label": "Maximum concurrent automations", "value": "2"},
-    {"type": "click", "role": "button", "name": "Save limit"},
-    {"type": "waitForNetwork", "requestUrlIncludes": "/automation-settings", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 15000},
-    {"capture": "screenshot", "fileName": "automation-management.png"},
-    {"capture": "console"},
-    {"capture": "network"},
-    {"useScript": "scripts/delete-selected-workspace.json"}
+    {
+      "useCase": "cases/login.json"
+    },
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-automation-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=automation-management"
+      }
+    },
+    {
+      "assert": "automation-desktop-navigation",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "expected": "One accessible Automations button with a visible Clock3 icon, no Run history navigation button, and the unchanged Blocks icon for Manage Google Workspace."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-desktop-navigation.png"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Automations"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Automations reuse an existing backend-owned shared-storage bucket"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Legacy storage"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Shared storage required"
+    },
+    {
+      "assert": "automation-responsive-navigation",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "expected": "Use keyboard to open More workspace actions. Exactly one Automations menu item shows Clock3; Manage Google Workspace shows Blocks; no Run history menu item. Leave the menu open for its screenshot."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-mobile-navigation.png"
+    },
+    {
+      "assert": "automation-responsive-keyboard-entry",
+      "expected": "Focus Automations in the More menu and press Enter. The combined definition and Run history screen opens and the menu closes."
+    },
+    {
+      "assert": "automation-desktop-return",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "expected": "Return to desktop and confirm the combined Automations surface is open."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "New automation"
+    },
+    {
+      "type": "fill",
+      "label": "Name",
+      "value": "Safe fixture automation {{timestamp}}"
+    },
+    {
+      "type": "fill",
+      "label": "Instructions",
+      "value": "Write one unique fixture file; do not publish or send external messages."
+    },
+    {
+      "type": "select",
+      "label": "Schedule type",
+      "value": "advanced"
+    },
+    {
+      "type": "fill",
+      "label": "Cron expression",
+      "value": "17 14 * * 2"
+    },
+    {
+      "type": "fill",
+      "label": "Timezone",
+      "value": "America/Chicago"
+    },
+    {
+      "assert": "automation-preview-stability",
+      "expected": "Wait for exactly five occurrences and no Checking schedule text. Record schedule-preview request count, edit Name and Instructions, and wait at least 11000ms (two five-second polling intervals), including two history refreshes. Occurrences remain and no preview request is added. Burst-edit cron/timezone within 350ms; only the final pair adds one successful request and five new occurrences. Capture the endpoint counts and statuses, without auth headers."
+    },
+    {
+      "assert": "automation-editor-scroll",
+      "viewports": [
+        {
+          "width": 1280,
+          "height": 720
+        },
+        {
+          "width": 901,
+          "height": 844
+        },
+        {
+          "width": 900,
+          "height": 844
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "expected": "With the tall editor open, wheel/trackpad and keyboard Tab can reach Recovery, Create automation, Cancel, Run history, and its bottom controls. On desktop only the automation page scrolls and topbar stays fixed; at widths <=900px the document scrolls continuously (also verify touch at 390px). No page-wide horizontal overflow. Capture the top and bottom at 1280x720 and 390x844."
+    },
+    {
+      "capture": "screenshot",
+      "fileNames": [
+        "automation-desktop-top.png",
+        "automation-desktop-bottom.png",
+        "automation-mobile-top.png",
+        "automation-mobile-bottom.png"
+      ]
+    },
+    {
+      "assert": "automation-workspace-return",
+      "expected": "Cancel the draft, Back to workspace, and verify the main Agent/terminal sizing and scroll ownership are unchanged. Reopen Automations and recreate the same draft; restore 1280x720 before continuing."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Create automation"
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/automations",
+      "method": "POST",
+      "expectedStatus": 201,
+      "timeoutMs": 15000
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Disabled"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Run history"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "Latest runs"
+    },
+    {
+      "assert": "snapshot-text",
+      "expected": "All workspaces"
+    },
+    {
+      "type": "fill",
+      "label": "Maximum concurrent automations",
+      "value": "2"
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Save limit"
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/automation-settings",
+      "method": "PATCH",
+      "expectedStatus": 200,
+      "timeoutMs": 15000
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-management.png"
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "capture": "network"
+    },
+    {
+      "useCase": "cases/automation-readiness.json"
+    },
+    {
+      "useScript": "scripts/delete-selected-workspace.json"
+    }
   ]
 }

@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {Blocks, Bot, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, Bot, Clock3, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
@@ -182,7 +182,7 @@ export function Topbar({
           variant={state.activePage === "automations" ? "primary" : "secondary"}
           onClick={onShowAutomations}
         >
-          <Blocks aria-hidden="true" />
+          <Clock3 aria-hidden="true" />
         </Button>
         <span aria-hidden="true" className="topbar-action-divider" />
         {showManagePiAuth ? (

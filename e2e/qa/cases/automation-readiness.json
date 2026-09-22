@@ -1,0 +1,75 @@
+{
+  "id": "automation.readiness",
+  "title": "Public storage reconciliation and real enable/disable round trip",
+  "description": "Composed by automation-management after creating its disabled draft; use only that disposable QA-owned workspace and definition.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/automation.management",
+  "requires": {
+    "operatorPreparation": "Using backend/admin tools in pi-agents-cloud, prepare one empty HNS bucket for the exact disposable workspace created by automation.management. Follow workspaceSharedStorage.service.js and workspaceBucketAccess.service.js: derived bucket name, matching owner/workspace labels, us-central1 STANDARD, uniform access, public-access prevention, seven-day soft delete, no versioning, stable generation/tree prefix/ready marker, and bucket-scoped control-plane access for mapache-api@pi-agents-cloud.iam.gserviceaccount.com so the existing endpoint can validate metadata and reconcile runner IAM. Record its backend descriptor with state legacy and a fixture model selection. Never touch another workspace or the rollout flag; never start a runner. Record fixture IDs for cleanup.",
+    "faultScope": "For the missing-model race, remove model selections only from this disposable workspace and definition after the browser has loaded them; restore them before cleanup. Do not alter bucket or generation identity."
+  },
+  "steps": [
+    {
+      "assert": "operator-fixture-prepared",
+      "expected": "Selected workspace is the exact disposable QA fixture, paused, with a backend-prepared bucket and configured model. GET workspaces exposes only configured/state/errorCode, initially configured=true and state=legacy."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Refresh"
+    },
+    {
+      "assert": "enable-blocked-with-reason",
+      "expected": "Enable is disabled with an aria-describedby reason for storage validation. Revalidate shared storage is available."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Revalidate shared storage"
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/automation-storage/prepare",
+      "method": "POST",
+      "expectedStatus": 202,
+      "timeoutMs": 30000
+    },
+    {
+      "assert": "storage-ready-without-reload",
+      "expected": "Enable becomes usable with no reload, GET workspaces was refreshed, and backend bucket/generation identity is unchanged."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Enable"
+    },
+    {
+      "assert": "enabled-round-trip",
+      "expected": "Revisioned PATCH succeeds; Enabled appears and survives Refresh. Disable succeeds and remains usable even if the workspace later loses readiness."
+    },
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Edit"
+    },
+    {
+      "assert": "editor-enable-round-trip",
+      "expected": "Enabled checkbox is usable. Check it, save, verify successful revisioned PATCH and Enabled after Refresh, then Disable."
+    },
+    {
+      "assert": "missing-model-race",
+      "expected": "After backend fixture-only model removal, click cached Enable. Expect missing_model_selection HTTP 409, a visible model prerequisite with Back to Agent, and no changed elsewhere conflict banner. Back to Agent opens the workspace Agent surface; return to Automations, restore the fixture model through backend tools, and Refresh."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "automation-ready.png"
+    },
+    {
+      "capture": "network"
+    },
+    {
+      "assert": "ready-fixture-cleanup-precondition",
+      "expected": "Fixture definition is Disabled. Restore the original backend descriptor and model so the parent case can delete the workspace and its one bucket. Verify no runtime or automation run was started."
+    }
+  ]
+}
