@@ -17,9 +17,9 @@ The selected-workspace view is Agent-first for the workspace's canonical marked 
 The workspace Automations surface manages revisioned scheduled definitions,
 manual Run now, concurrency, and owner-scoped history. It is lazy and
 workspace-specific; it never starts a runtime when opened. Shared GCS FUSE
-storage must be explicitly prepared while the main workspace is paused before a
-definition can be enabled or run. The complete lifecycle, storage contract,
-cost/recovery model, and gated release procedure are in
+storage is optional; automations use the existing workspace bucket and expose
+their persistent outputs to the main Agent through a read-only `/automations`
+mount. The complete lifecycle, storage contract, cost/recovery model, and gated release procedure are in
 [Scheduled Automations](./automations.md).
 
 Admin users are identified by `isAdmin: true` on their `users/{uid}` Firestore document. They get an Admin page from the top-navigation user menu for paginated user visibility, allowlist toggles, and per-user runner cost summaries.
@@ -38,7 +38,7 @@ The detailed model for GitHub-backed workspaces lives in [github-workspaces.md](
 - Firestore stores user profiles, workspaces, sessions, usage ledgers, GitHub connection metadata, and versioned runtime pointers.
 - Cloud Storage stores blank workspace files, cached GitHub worktrees, and archive-backed runtime state.
 - Cloud Run runs per-session terminal containers from curated runner images.
-- Scheduled automation runs use separate labeled Cloud Run services and read-only workspace files in the existing GCS bucket plus a UUID output directory; the feature remains gated until canary release.
+- Scheduled automation runs use separate labeled Cloud Run services and read-only workspace files in the existing GCS bucket. Each run has an isolated output directory, and main Agent sessions mount their aggregate output root read-only at `/automations`; the feature remains gated until canary release.
 
 ## Ownership Model
 

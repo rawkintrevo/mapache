@@ -139,6 +139,13 @@ function setup() {
   db.data.set("automationRuns/run-1", {
     runId: "run-1", ownerUid: "user-1", workspaceId: "workspace-1", automationId: "automation-1",
     status: "succeeded", cleanupState: "complete", createdAt: "2026-09-20T10:00:00.000Z", artifactPointers: {automation: pointer},
+    workspaceOutput: {
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      bucketName: "bucket-1",
+      prefix: "workspaces/workspace-1/.mapache-internal/automation-outputs/daily-report-2026-09-20-05-00-00-run1",
+      path: "/automation-output/123e4567-e89b-12d3-a456-426614174000",
+      agentPath: "/automations/daily-report-2026-09-20-05-00-00-run1",
+    },
   });
   db.data.set("automationRuns/run-2", {
     runId: "run-2", ownerUid: "user-1", workspaceId: "workspace-1", automationId: "automation-1",
@@ -158,6 +165,18 @@ test("history listing is owner scoped and bounded", async () => {
   assert.equal(page.nextCursor !== null, true);
   assert.equal((await service.listRuns("user-2")).runs.length, 1);
   await assert.rejects(() => service.getRun("user-2", "run-1"), /automation_run_forbidden/);
+});
+
+test("run details expose the main Agent path while retaining the runtime path", async () => {
+  const {db, service} = setup();
+  const run = await service.getRun("user-1", "run-1");
+  assert.equal(run.workspaceOutput.path, "/automations/daily-report-2026-09-20-05-00-00-run1");
+  assert.equal(run.workspaceOutput.runtimePath, "/automation-output/123e4567-e89b-12d3-a456-426614174000");
+
+  delete db.data.get("automationRuns/run-1").workspaceOutput.agentPath;
+  delete db.data.get("automationRuns/run-1").workspaceOutput.folderName;
+  const historical = await service.getRun("user-1", "run-1");
+  assert.equal(historical.workspaceOutput.path, "/automations/123e4567-e89b-12d3-a456-426614174000");
 });
 
 test("history cursors preserve identical timestamps and reject tampering", async () => {

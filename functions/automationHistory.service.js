@@ -253,7 +253,9 @@ function toHistoryDto(doc) {
     conversationId: run.conversationId || null,
     workspaceOutput: run.workspaceOutput ? {
       id: run.workspaceOutput.id,
-      path: run.workspaceOutput.path,
+      path: run.workspaceOutput.agentPath ||
+        `/automations/${run.workspaceOutput.folderName || run.workspaceOutput.id}`,
+      runtimePath: run.workspaceOutput.path,
       storageUri: `gs://${run.workspaceOutput.bucketName}/${run.workspaceOutput.prefix}/`,
     } : null,
     archiveAvailable: Boolean(artifactPointer),

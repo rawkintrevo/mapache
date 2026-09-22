@@ -2,7 +2,15 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const {test} = require("node:test");
-const {automationStorageForWorkspace, prepareAutomationStorage, buildAutomationStorageTemplate} = require("./automationStorage.service");
+const {
+  automationOutputFolderName,
+  automationOutputRootForWorkspace,
+  automationStorageForWorkspace,
+  buildAutomationOutputAccessTemplate,
+  buildAutomationStorageTemplate,
+  prepareAutomationOutputAccess,
+  prepareAutomationStorage,
+} = require("./automationStorage.service");
 
 const workspace = {id: "w", bucket: "existing-bucket", storagePrefix: "workspaces/u/w", agentUiVersion: "pi-web-ui-v1"};
 function fixture() {
@@ -21,12 +29,15 @@ function fixture() {
 }
 
 test("concurrent runs reuse the existing bucket with disjoint outputs and a read-only source", async () => {
-  const a = automationStorageForWorkspace(workspace);
-  const b = automationStorageForWorkspace(workspace);
+  const runAt = "2026-09-22T20:40:50.000Z";
+  const a = automationStorageForWorkspace(workspace, {runAt, runName: "Poem 2", timezone: "America/Chicago"});
+  const b = automationStorageForWorkspace(workspace, {runAt, runName: "Poem 2", timezone: "America/Chicago"});
   assert.notEqual(a.output.id, b.output.id);
   assert.equal(a.input.kind, "empty");
   assert.equal(a.output.bucketName, workspace.bucket);
-  assert.match(a.output.prefix, /\.mapache-internal\/automation-outputs\/[a-f0-9-]{36}$/);
+  assert.match(a.output.prefix, /\.mapache-internal\/automation-outputs\/poem-2-2026-09-22-15-40-50-[a-f0-9]{8}$/);
+  assert.equal(a.output.agentPath, `/automations/${a.output.folderName}`);
+  assert.notEqual(a.output.prefix, b.output.prefix);
   const {storage, writes} = fixture();
   await prepareAutomationStorage(a, storage);
   await prepareAutomationStorage(a, storage);
@@ -38,6 +49,26 @@ test("concurrent runs reuse the existing bucket with disjoint outputs and a read
   assert.equal(template.containers[0].volumeMounts[0].mountPath, "/workspace");
   assert.equal(template.containers[0].volumeMounts[1].mountPath, a.output.path);
   assert.equal(template.volumes.some((v) => v.nfs || v.csi), false);
+});
+
+test("builds a read-only aggregate mount for the main Agent", async () => {
+  const root = automationOutputRootForWorkspace(workspace);
+  const {storage, writes} = fixture();
+  await prepareAutomationOutputAccess(root, storage);
+  await prepareAutomationOutputAccess(root, storage);
+  assert.deepEqual(writes, [`${workspace.bucket}/${workspace.storagePrefix}/.mapache-internal/automation-outputs/`]);
+  const template = buildAutomationOutputAccessTemplate(root);
+  assert.equal(template.volumes[0].gcs.readOnly, true);
+  assert.equal(template.containers[0].volumeMounts[0].mountPath, "/automations");
+});
+
+test("uses the run timezone and a safe human-readable folder name", () => {
+  assert.equal(automationOutputFolderName({
+    name: "  Résumé / Writer  ",
+    runAt: "2026-01-02T03:04:05.000Z",
+    runId: "run-ABC_123456789",
+    timezone: "UTC",
+  }), "resume-writer-2026-01-02-03-04-05-runabc12");
 });
 
 test("pins the saved snapshot, preserves symlinks and never copies or overwrites input files", async () => {

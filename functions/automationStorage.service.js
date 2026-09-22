@@ -5,14 +5,24 @@ const path = require("node:path");
 const {DEFAULT_BUCKET} = require("./backendConfig");
 
 const AUTOMATION_STORAGE_MODE = "automation-readonly-gcs-v1";
+const AUTOMATION_OUTPUTS_MOUNT_PATH = "/automations";
 const MOUNT_OPTIONS = ["implicit-dirs=true", "metadata-cache-ttl-secs=0", "file-mode=0755", "dir-mode=0755"];
 
 // Called only with the owner-checked workspace record. Persist this selection on
 // the session so provisioning retries cannot choose different input or output.
-function automationStorageForWorkspace(workspace, outputId = crypto.randomUUID()) {
+function automationStorageForWorkspace(workspace, options = {}) {
+  if (typeof options === "string") options = {outputId: options};
+  const outputId = options.outputId || crypto.randomUUID();
   if (!/^[a-f0-9-]{36}$/.test(outputId)) throw new Error("invalid_automation_output_id");
   const bucketName = workspace.bucket || DEFAULT_BUCKET;
   const prefix = safePrefix(workspace.storagePrefix);
+  const outputRoot = automationOutputRootForWorkspace(workspace);
+  const folderName = automationOutputFolderName({
+    name: options.runName,
+    runAt: options.runAt,
+    runId: options.runId || outputId,
+    timezone: options.timezone,
+  });
   const pointer = workspace.agentRuntimeWorkspaceFiles;
   let input = {bucketName, prefix, kind: "legacy"};
   if (workspace.sharedStorage?.state === "ready" && workspace.sharedStorage.bucketName && workspace.sharedStorage.storageGeneration) {
@@ -35,8 +45,77 @@ function automationStorageForWorkspace(workspace, outputId = crypto.randomUUID()
   return {
     workspaceId: workspace.id,
     input,
-    output: {id: outputId, bucketName, prefix: `${prefix}/.mapache-internal/automation-outputs/${outputId}`, path: `/automation-output/${outputId}`},
+    output: {
+      id: outputId,
+      folderName,
+      bucketName,
+      prefix: `${outputRoot.prefix}/${folderName}`,
+      path: `/automation-output/${outputId}`,
+      agentPath: `${AUTOMATION_OUTPUTS_MOUNT_PATH}/${folderName}`,
+    },
   };
+}
+
+function automationOutputRootForWorkspace(workspace = {}) {
+  const bucketName = workspace.bucket || workspace.workspaceStorageBucket || DEFAULT_BUCKET;
+  const prefix = safePrefix(workspace.storagePrefix || workspace.workspaceStoragePrefix);
+  return {
+    bucketName,
+    prefix: `${prefix}/.mapache-internal/automation-outputs`,
+    path: AUTOMATION_OUTPUTS_MOUNT_PATH,
+  };
+}
+
+function automationOutputFolderName({name, runAt, runId, timezone} = {}) {
+  const slug = slugify(name) || "automation";
+  const date = normalizeRunDate(runAt);
+  const parts = dateParts(date, timezone);
+  const suffix = String(runId || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 8) || crypto.createHash("sha256").update(String(runId || date.toISOString())).digest("hex").slice(0, 8);
+  return `${slug}-${parts.year}-${parts.month}-${parts.day}-${parts.hour}-${parts.minute}-${parts.second}-${suffix}`;
+}
+
+function slugify(value) {
+  return Array.from(String(value || "")
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/\p{Mark}+/gu, "")
+      .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+      .replace(/^-+|-+$/g, ""))
+      .slice(0, 48)
+      .join("")
+      .replace(/-+$/g, "");
+}
+
+function normalizeRunDate(value) {
+  const source = value && typeof value.toDate === "function" ? value.toDate() :
+    value && Number.isFinite(value.seconds) ? new Date(value.seconds * 1000) : new Date(value || Date.now());
+  return Number.isNaN(source.getTime()) ? new Date() : source;
+}
+
+function dateParts(date, timezone) {
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: String(timezone || "UTC"),
+      year: "numeric",
+    });
+  } catch (_error) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit", hour: "2-digit", hourCycle: "h23", minute: "2-digit", month: "2-digit", second: "2-digit", timeZone: "UTC", year: "numeric",
+    });
+  }
+  return Object.fromEntries(formatter.formatToParts(date)
+      .filter(({type}) => type !== "literal")
+      .map(({type, value}) => [type, value]));
 }
 
 async function prepareAutomationStorage(descriptor, storage) {
@@ -88,6 +167,22 @@ function buildAutomationStorageTemplate({input, output}) {
   };
 }
 
+async function prepareAutomationOutputAccess(descriptor, storage) {
+  if (!descriptor?.bucketName || !descriptor?.prefix) throw new Error("automation_output_access_descriptor_missing");
+  safePrefix(descriptor.prefix);
+  await createObject(storage, descriptor.bucketName, `${descriptor.prefix}/`, "");
+  return descriptor;
+}
+
+function buildAutomationOutputAccessTemplate(descriptor) {
+  if (!descriptor?.bucketName || !descriptor?.prefix) throw new Error("automation_output_access_descriptor_missing");
+  return {
+    executionEnvironment: "EXECUTION_ENVIRONMENT_GEN2",
+    volumes: [volume("automation-outputs", descriptor, true)],
+    containers: [{volumeMounts: [{name: "automation-outputs", mountPath: AUTOMATION_OUTPUTS_MOUNT_PATH}]}],
+  };
+}
+
 function volume(name, source, readOnly) {
   // Cloud Run v2 uses gcs, not the v1 csi/volumeAttributes representation.
   return {name, gcs: {bucket: source.bucketName, readOnly, mountOptions: [`only-dir=${safePrefix(source.prefix)}`, ...MOUNT_OPTIONS]}};
@@ -117,4 +212,14 @@ function safeRelativePath(value) {
   return result;
 }
 
-module.exports = {AUTOMATION_STORAGE_MODE, automationStorageForWorkspace, buildAutomationStorageTemplate, prepareAutomationStorage};
+module.exports = {
+  AUTOMATION_OUTPUTS_MOUNT_PATH,
+  AUTOMATION_STORAGE_MODE,
+  automationOutputFolderName,
+  automationOutputRootForWorkspace,
+  automationStorageForWorkspace,
+  buildAutomationOutputAccessTemplate,
+  buildAutomationStorageTemplate,
+  prepareAutomationOutputAccess,
+  prepareAutomationStorage,
+};

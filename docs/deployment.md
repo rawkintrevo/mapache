@@ -96,6 +96,15 @@ Do not enable the automation feature as part of this implementation; a later
 rollout must verify broker expiry/refresh, boot revocation, and sibling-workspace
 isolation first.
 
+The main Agent's read-only `/automations` mount is a Cloud Run template change
+owned by Cloud Functions. No Hosting deploy or runner image rebuild is required.
+New main sessions receive the mount at creation; restart an existing main
+session to create a Cloud Run revision with the mount:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+```
+
 The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash

@@ -187,6 +187,8 @@ async function ensureAutomationSession(run, workspace, dependencies = {}) {
       name: run.snapshot?.name || "Automation run",
       operationId: run.provisioningOperationId,
       resources: run.snapshot?.resources || workspace.resources || undefined,
+      automationRunAt: run.createdAt,
+      automationTimezone: run.snapshot?.timezone,
       runtimeKind: "automation",
       runId: run.runId,
       sessionType: "cloud",

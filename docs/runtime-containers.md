@@ -973,5 +973,14 @@ separate output prefix read-write. Cloud Run v2 uses the `gcs` volume field.
 The agent's working directory is the output folder; private configuration and
 seeded skills remain in its private runtime directories. Workspace restore,
 legacy sync, and automatic Git mutation are skipped. See [Automations](./automations.md)
-for snapshot selection and persistence. Changes to this path require a rebuilt
-`pi-chrome` image and new automation services; running main sessions are unchanged.
+for snapshot selection and persistence.
+
+Marked main Agent sessions also mount the workspace's aggregate automation
+output prefix read-only at `/automations`. This is a sibling of `/workspace`, so
+the same template works when `/workspace` is local or is the existing shared
+GCS FUSE mount. New output folder names include the automation name, local run
+date/time, and a short run ID; historical UUID folders remain readable. The
+control plane creates the aggregate prefix before provisioning. New sessions
+receive the mount automatically, while an already-running main session must be
+restarted so Cloud Run creates a revision with the new volume. This change is
+implemented in Cloud Functions and does not require a runner image rebuild.

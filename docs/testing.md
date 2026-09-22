@@ -154,6 +154,11 @@ restart paths, duplicate/lost callbacks, and final Cloud Run cleanup. The
 optional `--live --runner-url URL` mode adds a disposable runner health probe;
 it does not enable the product flag or mutate production definitions.
 
+Functions unit tests cover friendly output-folder naming, idempotent aggregate
+prefix creation, the main Agent's read-only `/automations` mount beside local
+and shared `/workspace` templates, and the Agent-readable path returned by run
+history.
+
 ### Automation browser management QA
 
 The opt-in `e2e/qa/cases/automation-management.json` case covers workspace

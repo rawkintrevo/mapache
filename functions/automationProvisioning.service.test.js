@@ -81,6 +81,7 @@ function baseRun(overrides = {}) {
     automationId: "automation-1",
     status: "provisioning",
     cleanupState: "pending",
+    createdAt: "2026-09-22T20:40:50.000Z",
     snapshot: {
       name: "Daily report",
       prompt: "private prompt must never enter the runner environment",
@@ -152,6 +153,9 @@ test("claims and provisions an admitted run without changing the canonical main 
   assert.equal(calls.filter((call) => call.kind === "createSession").length, 1);
   assert.equal(calls.find((call) => call.kind === "createSession").payload.runtimeKind, "automation");
   assert.equal(calls.find((call) => call.kind === "createSession").payload.resources.memory, "4Gi");
+  assert.equal(calls.find((call) => call.kind === "createSession").payload.automationRunAt,
+      "2026-09-22T20:40:50.000Z");
+  assert.equal(calls.find((call) => call.kind === "createSession").payload.automationTimezone, "America/Chicago");
 
   const repeated = await service.provisionAutomationRun("run-1");
   assert.deepEqual(repeated, {skipped: "status_running", runId: "run-1"});

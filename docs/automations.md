@@ -102,26 +102,38 @@ shared-storage descriptor, NFS, new bucket, or Google Drive connection. The UI,
 definition service, enqueue service, and provisioning service do not gate on
 `sharedStorage.state`. Model selection and owner checks still apply.
 
-`functions/automationStorage.service.js` selects trusted input and a random UUID
-output directory when the automation session is created. The descriptor is saved
-on that session so retries reuse both paths. For ordinary marked workspaces,
+`functions/automationStorage.service.js` selects trusted input and an isolated
+output directory when the automation session is created. New output folders use
+the automation name, run date/time in the automation timezone, and a short run
+ID suffix, for example `daily-report-2026-09-22-15-40-50-a1b2c3d4`.
+The descriptor is saved on that session so provisioning retries reuse both
+paths. For ordinary marked workspaces,
 `agentRuntimeWorkspaceFiles` selects the latest committed GCS snapshot. Its
 `objects/` prefix mounts at `/workspace` read-only. A workspace without a saved
 snapshot starts with empty input; stale legacy files are not restored. Legacy
 workspaces use their existing flat prefix. Existing ready shared workspaces use
 their recorded `trees/{generation}` prefix, also mounted read-only.
 
-Each run's `/automation-output/{uuid}` is a separate writable GCS mount backed by
-`{workspace.storagePrefix}/.mapache-internal/automation-outputs/{uuid}/` in the
-existing workspace bucket. The runner starts its agent in that directory and
-prepends input/output instructions to the automation prompt. Closed output files
-persist independently of runner shutdown, transcript archival, and the main
-session. Run history reports the output path and GCS location. Automatic merging,
-output downloads in the file browser, and a reconciliation service are follow-up
-work. Workspace deletion retains its existing storage cleanup behavior.
+Each automation runner keeps its separate writable
+`/automation-output/{uuid}` mount, backed by
+`{workspace.storagePrefix}/.mapache-internal/automation-outputs/{folder}/` in
+the existing workspace bucket. The runner starts its agent in that directory
+and prepends input/output instructions to the automation prompt. Main Agent
+sessions mount the shared automation-output root read-only at `/automations`, so
+new closed files become available to the main Agent without waiting for cleanup
+or workspace synchronization. The main Agent can copy selected files into
+`/workspace` when edits are needed. Existing UUID-named output directories also
+appear under `/automations/{uuid}` after the main session receives the mount.
 
-Cloud Run v2 volumes use `gcs: {bucket, readOnly, mountOptions}`. The input and
-output mounts are siblings, because Cloud Run does not support nested mounts.
+Outputs persist independently of runner shutdown and transcript archival. Run
+history reports the main-Agent path and GCS location. There is no symlink or
+automatic merge into `/workspace`; the `/automations` tree is intentionally
+read-only in the main session. Workspace deletion retains its existing storage
+cleanup behavior.
+
+Cloud Run v2 volumes use `gcs: {bucket, readOnly, mountOptions}`. Automation
+input/output mounts and the main session's `/workspace` and `/automations`
+mounts are siblings, because Cloud Run does not support nested mounts.
 Directory marker objects make empty prefixes mountable. Snapshot manifests are
 checksum- and workspace-validated; saved relative symlinks are materialized using
 GCS FUSE's `gcsfuse_symlink_target` metadata when older snapshots contain only the
