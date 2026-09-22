@@ -46,6 +46,10 @@ standing storage service. Each admitted run uses one deterministic
   retried by the minute reconciler rather than immediately retriggering deletion.
   The reconciler requires the `automationRuns` collection index on `status ASC,
   updatedAt ASC` in `firestore.indexes.json`; deploy it before the worker changes.
+  Orphan discovery pages through the configured `SESSION_REGION` (default
+  `us-central1`) and filters/rechecks automation labels locally. Cloud Run v2
+  [service listing](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.services/list)
+  accepts neither the wildcard region nor a `filter` query parameter.
 - Artifacts are immutable, sanitized, and written under
   `automation-runs/{runId}/v1/`; the manifest pointer is published only after
   checksum/size verification. Global history returns the snapshot and archived

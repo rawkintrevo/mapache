@@ -201,4 +201,33 @@ test("the production reconciliation query has a matching checked-in Firestore in
   "deployable index must match the actual reconciliation query");
 });
 
+test("orphan inventory uses the regional Cloud Run v2 request contract and skips main services", async () => {
+  const requests = [];
+  const client = {
+    getProjectId: async () => "test-project",
+    request: async ({url, method}) => {
+      const parsed = new URL(url);
+      requests.push(parsed);
+      assert.equal(method, "GET");
+      assert.ok(parsed.pathname.endsWith(`/locations/${require("./backendConfig").DEFAULT_REGION}/services`));
+      assert.equal(parsed.searchParams.has("filter"), false);
+      assert.equal(parsed.searchParams.get("pageSize"), "50");
+      return {data: requests.length === 1 ? {
+        services: [{name: "main-service", labels: {"mapache-runtime-kind": "main"}}],
+        nextPageToken: "next-page",
+      } : {services: []}};
+    },
+  };
+  const {calls, service} = harness([], {
+    auth: {getClient: async () => client},
+    listCloudRunServices: undefined,
+  });
+  const result = await service.reconcile();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].searchParams.get("pageToken"), "next-page");
+  assert.equal(result.errors, 0);
+  assert.equal(result.orphanServices, 0);
+  assert.deepEqual(calls, []);
+});
+
 console.log("automation reconciliation service tests passed");
