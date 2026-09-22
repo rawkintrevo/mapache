@@ -22,6 +22,7 @@ const {createPiService} = require("./lib/pi");
 const {createPiModelScopeService} = require("./lib/piModelScope.service");
 const {createMcpConfigService} = require("./lib/mcpConfig.service");
 const {createGoogleMcpStatusService} = require("./lib/googleMcpStatus.service");
+const {createGoogleMcpTokenApiService} = require("./lib/googleMcpTokenApi.service");
 const {createPreviewService} = require("./lib/preview");
 const {createResourceMetricsService} = require("./lib/resourceMetrics.service");
 const {createResourceMetricsWebSocket} = require("./lib/resourceMetricsWebSocket");
@@ -122,6 +123,7 @@ const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const piModelScope = createPiModelScopeService({admin, config, db});
 const mcpConfig = createMcpConfigService({config});
 const googleMcpStatus = createGoogleMcpStatusService({config});
+const googleMcpTokenApi = createGoogleMcpTokenApiService(config);
 const automationAgentApi = createAutomationAgentApiService(config);
 const harnesses = createRunnerHarnessRegistry({config, mcpConfig, pi, workspace});
 const activeHarness = harnesses.resolveHarness();
@@ -195,6 +197,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   activeHarness,
   admin,
   automationAgentApi,
+  googleMcpTokenApi,
   automationExecution,
   chromeProfile,
   chromeProfileSnapshots,

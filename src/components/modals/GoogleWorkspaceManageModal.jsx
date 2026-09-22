@@ -50,7 +50,7 @@ export function GoogleWorkspaceManageModal({
                 <InspectorResourceRow
                   busy={busy}
                   detail={<span className="subtle">
-                    {account.status === "connected" ? "Ready" : "Reconnect required"}
+                    {account.status === "connected" ? "Authorized" : "Reconnect required"}
                     {account.workspaceUsage?.count ? ` · ${account.workspaceUsage.count} workspace${account.workspaceUsage.count === 1 ? "" : "s"}` : ""}
                   </span>}
                   meta={account.displayName || "Google account"}

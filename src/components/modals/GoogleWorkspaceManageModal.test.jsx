@@ -44,6 +44,8 @@ describe("GoogleWorkspaceManageModal", () => {
     const props = renderModal();
 
     expect(screen.getByRole("dialog", {name: "Google Workspace"})).toBeInTheDocument();
+    expect(screen.getByText(/Authorized/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Ready$/)).not.toBeInTheDocument();
     expect(screen.getByText(/1 workspace/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", {name: "Disable a@example.com"}));
     expect(props.onUnbindConnection).toHaveBeenCalledOnce();

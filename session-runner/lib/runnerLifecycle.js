@@ -4,6 +4,7 @@ function createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
   automationAgentApi,
+  googleMcpTokenApi,
   admin,
   automationExecution,
   chromeProfile,
@@ -35,6 +36,7 @@ function createRunnerLifecycleCoordinator({
 
   async function start() {
     try {
+      await googleMcpTokenApi?.start?.();
       await automationAgentApi?.start?.();
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
@@ -67,6 +69,7 @@ function createRunnerLifecycleCoordinator({
         logger.error("workspace runtime authority release failed after startup error", releaseError);
       });
       await automationAgentApi?.stop?.().catch?.(() => {});
+      await googleMcpTokenApi?.stop?.().catch?.(() => {});
       await activity.markRuntimeStartupFailure(error).catch((writeError) => {
         logger.error("session runtime failure write failed", writeError);
       });
@@ -126,6 +129,7 @@ function createRunnerLifecycleCoordinator({
         shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       await automationAgentApi?.stop?.();
+      await googleMcpTokenApi?.stop?.();
     } finally {
       await authority.release("shutdown").catch((error) => {
         logger.error("workspace runtime authority release failed during shutdown", error);

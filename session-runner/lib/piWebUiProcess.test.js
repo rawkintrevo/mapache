@@ -129,6 +129,39 @@ test("private managed child loads MCP config from its local Pi state root", asyn
   }
 });
 
+test("keeps Google renewal inputs in the runner and passes only its socket path", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild(4444);
+  config.googleMcpTokenSocketPath = "/var/lib/mapache/google-token.sock";
+  const env = {
+    PATH: "/usr/bin",
+    GOOGLE_MCP_TOKEN_REFRESH_URL: "https://functions.example/googleMcpToken",
+    GOOGLE_MCP_CONNECTION_ID: "connection-a",
+    GOOGLE_MCP_TOKEN_SOCKET_PATH: "/unsafe/direct-path.sock",
+    SESSION_SHUTDOWN_TOKEN: "runner-secret",
+  };
+  let childEnvironment;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      env,
+      fetch: healthyFetch(),
+      spawn: (_command, _args, options) => {
+        childEnvironment = options.env;
+        return child;
+      },
+    });
+    await managed.start();
+    assert.equal(childEnvironment.SESSION_SHUTDOWN_TOKEN, undefined);
+    assert.equal(childEnvironment.GOOGLE_MCP_TOKEN_REFRESH_URL, undefined);
+    assert.equal(childEnvironment.GOOGLE_MCP_CONNECTION_ID, undefined);
+    assert.equal(childEnvironment.GOOGLE_MCP_TOKEN_SOCKET_PATH, undefined);
+    assert.equal(childEnvironment.GOOGLE_MCP_TOKEN_SOCKET, config.googleMcpTokenSocketPath);
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("quiesces through the local control socket and reports activity without a browser", async () => {
   const {root, config} = await fixture();
   const child = fakeChild();

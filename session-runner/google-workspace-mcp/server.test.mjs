@@ -101,8 +101,10 @@ test("tools/call returns the deterministic health payload", async () => {
   try {
     const result = await server.request("tools/call", {name: "google_workspace_health", arguments: {}});
     assert.equal(result.error, undefined);
-    assert.deepEqual(result.result.structuredContent, {ok: true});
-    assert.deepEqual(JSON.parse(result.result.content[0].text), {ok: true});
+    assert.equal(result.result.structuredContent.ok, false);
+    assert.equal(result.result.structuredContent.processReady, true);
+    assert.equal(result.result.structuredContent.services.gmail.code, "google_access_token_missing");
+    assert.deepEqual(JSON.parse(result.result.content[0].text), result.result.structuredContent);
   } finally {
     await server.close();
   }

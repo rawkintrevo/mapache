@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {buildFileQuery, escapeDriveQueryValue, listRecentFiles, registerDriveReadTools, searchFiles} from "./drive.mjs";
+import {buildFileQuery, escapeDriveQueryValue, getFileMetadata, getFilePermissions, listRecentFiles, registerDriveReadTools, searchFiles} from "./drive.mjs";
 import {createGoogleRestClient} from "./restClient.mjs";
 
 function fakeServer() {
@@ -52,4 +52,21 @@ test("escapes Drive search values and includes shared-drive flags and projection
   assert.match(calls[0].url, /driveId=shared-1/);
   assert.match(calls[0].url, /fields=/);
   assert.match(calls[0].url, /includeItemsFromAllDrives=true/);
+});
+
+test("uses endpoint-specific Drive field selections", async () => {
+  const urls = [];
+  const client = createGoogleRestClient({
+    env: {GOOGLE_MCP_ACCESS_TOKEN: "test-token"},
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      urls.push(parsed);
+      return new Response(JSON.stringify(parsed.pathname.endsWith("/permissions") ? {permissions: []} : {id: "file-1", name: "File"}));
+    },
+  });
+  await getFileMetadata(client, {fileId: "file-1"});
+  await getFilePermissions(client, {fileId: "file-1"});
+  assert.equal(urls[0].searchParams.get("fields").startsWith("files("), false);
+  assert.equal(urls[1].searchParams.get("fields").includes("inheritedPermissions"), false);
+  assert.match(urls[1].searchParams.get("fields"), /^nextPageToken,permissions\(/);
 });
