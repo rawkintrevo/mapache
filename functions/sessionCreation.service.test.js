@@ -152,11 +152,20 @@ async function createWithWorkspace(workspace, payload) {
     storagePrefix: "workspaces/user-1/automation",
     source: {type: "blank"},
     mcpConfig: {},
-  }, {operationId: "automation-operation", runtimeKind: "automation", runId: "run-123"});
+  }, {
+    operationId: "automation-operation",
+    runtimeKind: "automation",
+    runId: "run-123",
+    name: "Daily Report",
+    automationRunAt: "2026-09-22T20:40:50.000Z",
+    automationTimezone: "America/Chicago",
+  });
   assert.strictEqual(automation.id, "auto-run-123");
   assert.strictEqual(automation.runtimeKind, "automation");
   assert.strictEqual(automation.automationRunId, "run-123");
   assert.match(automation.serviceId, /^mpauto-[a-f0-9]{40}$/);
+  assert.match(automation.automationStorage.output.agentPath,
+      /^\/automations\/daily-report-2026-09-22-15-40-50-run123$/);
   assert.strictEqual(automation.longRunning, true);
   assert.strictEqual(reservations[0].args[3].singleRunner, false);
 

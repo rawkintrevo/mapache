@@ -162,7 +162,9 @@ audit records. Deletion is a tombstone: ordinary lists exclude it, queued
 runs are canceled transactionally, and provisioning/running/stopping history
 is left untouched. Enabling requires a saved model selection, with no prepared
 shared-storage prerequisite. Automation sessions use the existing GCS workspace
-as read-only input and a separate UUID output prefix; see [Automations](./automations.md).
+as read-only input and a separate run output prefix. Main Agent services mount
+the aggregate output root read-only at `/automations`; see
+[Automations](./automations.md).
 Workspace concurrency changes only the admission limit, so lowering it never
 stops active allocations.
 

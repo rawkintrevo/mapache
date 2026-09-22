@@ -28,6 +28,14 @@ function envMap(env) {
   }, {});
 }
 
+function storageFixture() {
+  const writes = [];
+  return {
+    writes,
+    storage: {bucket: (bucket) => ({file: (name) => ({save: async () => writes.push(`${bucket}/${name}`)})})},
+  };
+}
+
 assert.strictEqual(
     runnerServiceAccountValue({
       envValue: "Mapache-Runner@Pi-Agents-Cloud.iam.gserviceaccount.com",
@@ -302,6 +310,7 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(service.template.containers[0].resources.cpuIdle, undefined);
   assert.strictEqual(envMap(service.template.containers[0].env).WORKSPACE_ID, "workspace-1");
 
+  const markedStorage = storageFixture();
   const markedService = await buildCloudRunService({
     id: "workspace-1",
     bucket: "bucket-1",
@@ -315,11 +324,13 @@ assert.deepStrictEqual(terminalCommandEnv({
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
-  });
+  }, {storage: markedStorage.storage});
   assert.strictEqual(markedService.template.scaling.minInstanceCount, 1);
   assert.strictEqual(markedService.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
+  assert.equal(markedService.template.volumes[0].gcs.readOnly, true);
+  assert.deepStrictEqual(markedService.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}]);
 
   const sharedService = await buildCloudRunService({
     id: "workspace-1",
@@ -331,17 +342,22 @@ assert.deepStrictEqual(terminalCommandEnv({
       storageGeneration: "42",
     },
   }, {
+    agentUiVersion: "pi-web-ui-v1",
     ownerUid: "uid-1",
     runnerSessionId: "shared-session",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
-  });
+  }, {storage: storageFixture().storage});
   assert.equal(sharedService.template.executionEnvironment, "EXECUTION_ENVIRONMENT_GEN2");
   assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
   assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.mountOptions.includes("trees/42"), true);
-  assert.deepStrictEqual(sharedService.template.containers[0].volumeMounts, [{name: "workspace", mountPath: "/workspace"}]);
+  assert.equal(sharedService.template.volumes[1].gcs.readOnly, true);
+  assert.deepStrictEqual(sharedService.template.containers[0].volumeMounts, [
+    {name: "workspace", mountPath: "/workspace"},
+    {name: "automation-outputs", mountPath: "/automations"},
+  ]);
   const sharedServiceEnv = envMap(sharedService.template.containers[0].env);
   assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
   assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_GENERATION, "42");
@@ -409,13 +425,16 @@ assert.deepStrictEqual(terminalCommandEnv({
 
   const markedPatch = await buildCloudRunPatch({
     agentUiVersion: "pi-web-ui-v1",
+    workspaceStorageBucket: "bucket-1",
+    workspaceStoragePrefix: "workspaces/uid-1/demo",
     serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
-  });
+  }, {}, {storage: storageFixture().storage});
   assert.strictEqual(markedPatch.template.containers[0].resources.cpuIdle, false);
+  assert.deepStrictEqual(markedPatch.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}]);
 
   let operationPolls = 0;
   const delayedUpdates = [];

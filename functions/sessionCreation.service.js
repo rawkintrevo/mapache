@@ -134,7 +134,12 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...(runtimeKind === "automation" ? {
       runtimeKind,
       automationRunId,
-      automationStorage: automationStorageForWorkspace({...workspace, id: workspaceId}),
+      automationStorage: automationStorageForWorkspace({...workspace, id: workspaceId}, {
+        runAt: payload.automationRunAt,
+        runId: automationRunId,
+        runName: payload.name,
+        timezone: payload.automationTimezone,
+      }),
     } : {}),
     workspaceStoragePrefix: workspace.storagePrefix,
     piSessionDir: piSessionDir(sessionRef.id),

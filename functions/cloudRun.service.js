@@ -45,7 +45,14 @@ const {
 const {consumeQaFault} = require("./qaFaultHarness.helpers");
 const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helpers");
 
-const {AUTOMATION_STORAGE_MODE, buildAutomationStorageTemplate, prepareAutomationStorage} = require("./automationStorage.service");
+const {
+  AUTOMATION_STORAGE_MODE,
+  automationOutputRootForWorkspace,
+  buildAutomationOutputAccessTemplate,
+  buildAutomationStorageTemplate,
+  prepareAutomationOutputAccess,
+  prepareAutomationStorage,
+} = require("./automationStorage.service");
 
 const INTERRUPTED_RUNTIME_WARNING = "runtime_interrupted_checkpoint_recovery_required";
 const SHARED_WORKSPACE_STORAGE_MODE = "shared-gcsfuse-v1";
@@ -349,13 +356,16 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = await buildCloudRunPatch(session, options, dependencies);
     const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
-    const sharedMask = Object.keys(sharedTemplate).length > 0 ?
+    const storageMask = Object.keys(sharedTemplate).length > 0 ?
       ",template.volumes,template.executionEnvironment,template.containers.env" : "";
+    const automationOutputMask = options.restart && isMarkedRuntimeSession(session) && session.workspaceStoragePrefix ?
+      ",template.volumes,template.executionEnvironment" : "";
     const updateMask = (options.restart ?
       "template.containers,template.serviceAccount" :
       isMarkedRuntimeSession(session) ?
         "template.containers.resources,template.serviceAccount" :
-        "template.containers.resources.limits,template.serviceAccount") + sharedMask;
+        "template.containers.resources.limits,template.serviceAccount") + storageMask +
+      (storageMask ? "" : automationOutputMask);
     const response = await client.request({
       url: `${url}?updateMask=${encodeURIComponent(updateMask)}`,
       method: "PATCH",
@@ -475,6 +485,15 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
     await prepareAutomationStorage(session.automationStorage, dependencies.storage || storage) : null;
   const sharedTemplate = automationStorage ? buildAutomationStorageTemplate(automationStorage) :
     sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
+  const automationOutputAccess = automationStorage ? null : await prepareMainAutomationOutputAccess(
+      workspace,
+      session,
+      dependencies.storage || storage,
+  );
+  const storageTemplate = mergeStorageTemplates(
+      sharedTemplate,
+      automationOutputAccess ? buildAutomationOutputAccessTemplate(automationOutputAccess) : {},
+  );
   const trustedWorkspaceFields = automationStorage ? {
     runtimeStorageMode: "private",
     workspaceStorageMode: AUTOMATION_STORAGE_MODE,
@@ -493,14 +512,14 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
         ...trustedWorkspaceFields,
       }, {}, dependencies),
     ],
-    ...(sharedTemplate.containers?.[0] || {}),
+    ...(storageTemplate.containers?.[0] || {}),
   };
   return {
     ...(Object.keys(cloudRunServiceLabels(session)).length ? {
       labels: cloudRunServiceLabels(session),
     } : {}),
     template: {
-      ...sharedTemplate,
+      ...storageTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
         minInstanceCount: 1,
@@ -516,6 +535,14 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
     await prepareAutomationStorage(session.automationStorage, dependencies.storage || storage) : null;
   const sharedTemplate = automationStorage ? buildAutomationStorageTemplate(automationStorage) :
     sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
+  const automationOutputAccess = automationStorage ? null : await prepareMainAutomationOutputAccess({
+    bucket: session.workspaceStorageBucket,
+    storagePrefix: session.workspaceStoragePrefix,
+  }, session, dependencies.storage || storage);
+  const storageTemplate = mergeStorageTemplates(
+      sharedTemplate,
+      automationOutputAccess ? buildAutomationOutputAccessTemplate(automationOutputAccess) : {},
+  );
   const trustedWorkspaceFields = automationStorage ? {
     runtimeStorageMode: "private", workspaceStorageMode: AUTOMATION_STORAGE_MODE,
     automationOutputDir: automationStorage.output.path,
@@ -526,11 +553,11 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
     resources: runtimeResourceRequirements(session),
     env: options.restart || Object.keys(trustedWorkspaceFields).length > 0 ? await sessionRunnerEnv(patchSession,
       options.restart ? {restartNonce: Date.now().toString()} : {}, dependencies) : undefined,
-    ...(sharedTemplate.containers?.[0] || {}),
+    ...(storageTemplate.containers?.[0] || {}),
   };
   return {
     template: {
-      ...sharedTemplate,
+      ...storageTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
         minInstanceCount: 1,
@@ -538,6 +565,24 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
       },
       containers: [container],
     },
+  };
+}
+
+async function prepareMainAutomationOutputAccess(workspace, session, storageClient) {
+  if (!isMarkedRuntimeSession(session) || !workspace?.storagePrefix) return null;
+  const descriptor = automationOutputRootForWorkspace(workspace);
+  return prepareAutomationOutputAccess(descriptor, storageClient);
+}
+
+function mergeStorageTemplates(...templates) {
+  const fragments = templates.filter((template) => template && Object.keys(template).length);
+  if (!fragments.length) return {};
+  const volumes = fragments.flatMap((template) => template.volumes || []);
+  const volumeMounts = fragments.flatMap((template) => template.containers?.[0]?.volumeMounts || []);
+  return {
+    executionEnvironment: fragments.find((template) => template.executionEnvironment)?.executionEnvironment,
+    ...(volumes.length ? {volumes} : {}),
+    ...(volumeMounts.length ? {containers: [{volumeMounts}]} : {}),
   };
 }
 
