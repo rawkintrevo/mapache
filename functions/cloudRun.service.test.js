@@ -348,7 +348,10 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.equal(sharedServiceEnv.STORAGE_BUCKET, "mpw-1234567890-workspace1");
   assert.equal(sharedServiceEnv.MAPACHE_RUNTIME_STORAGE_MODE, "private");
 
+  const {automationStorageForWorkspace} = require("./automationStorage.service");
+  const automationWorkspace = {id: "workspace-1", bucket: "existing-bucket", storagePrefix: "workspaces/u/w", agentUiVersion: "pi-web-ui-v1"};
   const automationSession = {
+    automationStorage: automationStorageForWorkspace(automationWorkspace),
     ownerUid: "uid-1",
     workspaceId: "workspace-1",
     runtimeKind: "automation",
@@ -360,10 +363,14 @@ assert.deepStrictEqual(terminalCommandEnv({
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: false, chrome: true},
   };
-  const automationService = await buildCloudRunService({
-    id: "workspace-1",
-    sharedStorage: {state: "ready", bucketName: "mpw-1234567890-workspace1", storageGeneration: "42"},
-  }, automationSession);
+  const automationDeps = {storage: {bucket: () => ({file: () => ({save: async () => {}})})}};
+  const automationService = await buildCloudRunService(automationWorkspace, automationSession, automationDeps);
+  assert.equal(automationService.template.volumes[0].gcs.readOnly, true);
+  assert.equal(automationService.template.volumes[1].gcs.readOnly, false);
+  assert.equal(automationService.template.volumes[1].gcs.bucket, "existing-bucket");
+  assert.equal(envMap(automationService.template.containers[0].env).WORKSPACE_STORAGE_MODE, "automation-readonly-gcs-v1");
+  const automationPatch = await buildCloudRunPatch(automationSession, {restart: true}, automationDeps);
+  assert.deepStrictEqual(automationPatch.template.volumes, automationService.template.volumes);
   assert.deepStrictEqual(automationService.labels, cloudRunServiceLabels(automationSession));
   assert.equal(automationService.labels["mapache-runtime-kind"], "automation");
   assert.doesNotThrow(() => assertCloudRunServiceIdentity({labels: automationService.labels}, automationSession));

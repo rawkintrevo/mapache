@@ -131,7 +131,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
         args.push("--mcp-config", config.piMcpConfigPath);
       }
       next = spawnImpl(process.execPath, args, {
-        cwd: config.workspaceDir,
+        cwd: config.automationOutputDir || config.workspaceDir,
         detached: true,
         env: childEnvironment(privateToken),
         stdio: ["ignore", "pipe", "pipe"],
@@ -378,7 +378,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       HOME: config.homeDir || environment.HOME || "/root",
       PI_CODING_AGENT_DIR: config.piWebUiPiDir,
       PI_CODING_AGENT_SESSION_DIR: config.piWebUiSessionDir,
-      PI_WEB_CWD: config.workspaceDir,
+      PI_WEB_CWD: config.automationOutputDir || config.workspaceDir,
       PI_WEB_DATA_DIR: config.piWebUiDataDir,
       PI_WEB_ENGINE: "pi",
       PI_WEB_HOST: config.piWebUiHost || "127.0.0.1",

@@ -14,6 +14,10 @@ the combined `cpu,cpuacct` mount used by Cloud Run Jobs, and the `memory` contro
 
 ## Shared workspace buckets
 
+This section describes existing shared-mode workspaces. Automations do not require
+this setup; their MVP uses the existing GCS workspace and isolated output folders
+as described in [Automations](./automations.md).
+
 Prepared shared-mode workspaces use one private Cloud Storage bucket in `us-central1`.
 The Functions control plane derives the bucket name as
 `mpw-<project-number>-<first-24-hex-sha256(workspaceId)>`, persists that exact identity
@@ -958,3 +962,14 @@ agent-control API is part of the current deployment.
 - [SSH-backed sessions guide](./guides/ssh-backed-sessions.md)
 - [Session resource benchmark](./guides/session-resource-benchmark.md)
 - [Deployment](./deployment.md)
+
+## Automation read-only workspace mounts
+
+Automation sessions use `automation-readonly-gcs-v1`: `/workspace` mounts the
+existing GCS input read-only, and `/automation-output/{uuid}` mounts that run's
+separate output prefix read-write. Cloud Run v2 uses the `gcs` volume field.
+The agent's working directory is the output folder; private configuration and
+seeded skills remain in its private runtime directories. Workspace restore,
+legacy sync, and automatic Git mutation are skipped. See [Automations](./automations.md)
+for snapshot selection and persistence. Changes to this path require a rebuilt
+`pi-chrome` image and new automation services; running main sessions are unchanged.

@@ -73,7 +73,6 @@ async function enqueueRun(input = {}, dependencies = {}) {
 
     const workspace = assertWorkspace(workspaceSnap, actorUid, workspaceId);
     assertWorkspaceStorageMigrationAllowed(workspace);
-    assertStorageReady(workspace);
     const definition = definitionSnap.exists ? definitionSnap.data() || {} : null;
     let sourceRun = null;
 
@@ -307,10 +306,6 @@ function assertWorkspace(snapshot, actorUid, workspaceId) {
   return workspace;
 }
 
-function assertStorageReady(workspace) {
-  const state = String(workspace.sharedStorage?.state || workspace.sharedStorageState || "").trim().toLowerCase();
-  if (state !== "ready") throw httpError(409, "automation_shared_storage_not_ready");
-}
 
 function assertRestartSource(snapshot, actorUid, workspaceId, runId) {
   if (!snapshot?.exists) throw httpError(404, "automation_run_not_found");

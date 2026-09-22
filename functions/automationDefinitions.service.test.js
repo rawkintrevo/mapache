@@ -173,7 +173,7 @@ test("automation definition CRUD is owner-scoped, revisioned, and redacts server
   assert.equal(db.data.get("automationRuns/run-active").snapshot.prompt, "original");
   assert.equal(db.data.get("automationRuns/run-queued").status, "queued");
 
-  db.data.get("workspaces/workspace-1").sharedStorageState = "ready";
+  // Ordinary existing GCS storage needs no prepared descriptor.
   const enabled = await service.updateAutomation("user-1", "workspace-1", created.id, {
     expectedRevision: 2,
     enabled: true,

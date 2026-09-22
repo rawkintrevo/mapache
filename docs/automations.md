@@ -4,11 +4,10 @@
 
 Scheduled workspace automations are an opt-in product slice. The
 `appConfig/automations.enabled` flag remains false until the release canary has
-verified scheduling, dedicated runner cleanup, shared-storage behavior, browser
-management, and ordinary main-session regression. A disabled definition may be
-saved, but it cannot be enabled or run before its workspace has ready shared
-storage. Opening the Automations panel never starts or stops a runner, and
-preparing storage never stops the main workspace automatically.
+verified scheduling, dedicated runner cleanup, read-only workspace inputs, isolated
+outputs, browser management, and ordinary main-session regression. Definitions
+can be enabled and run using the workspace’s existing GCS storage and configured
+model. Opening the Automations panel never starts or stops a runner.
 
 The product does not provision Filestore, NFS, VMs, VPC infrastructure, or a
 standing storage service. Each admitted run uses one deterministic
@@ -77,80 +76,59 @@ schemas and seeded guidance use these same bounds; revision fencing remains
 unchanged. Run history exposes the catch-up scheduled timestamp and retry
 family IDs/state/reason alongside the immutable recovery snapshot.
 
-## Shared GCS FUSE contract
+## Read-only GCS inputs and isolated outputs
 
-Automation storage preparation is a paused-workspace reconciliation gate. The
-automations path never creates a bucket, copies legacy workspace data, or
-resets a generation. A workspace must already have a backend-owned shared
-storage descriptor; without one, the endpoint returns
-`workspace_shared_storage_required`. The existing bucket owner labels and
-project/workspace identity are validated before IAM reconciliation. The runner
-receives only a backend-owned bucket/generation descriptor; browser payloads
-cannot choose a bucket.
-Because Cloud Storage user-label values are lowercase and character-restricted,
-the workspace and owner identifiers are stored in a deterministic normalized
-label form; validation applies the same normalization before accepting a bucket.
+The automation MVP reuses the workspace's existing bucket. It needs no prepared
+shared-storage descriptor, NFS, new bucket, or Google Drive connection. The UI,
+definition service, enqueue service, and provisioning service do not gate on
+`sharedStorage.state`. Model selection and owner checks still apply.
 
-If the workspace already has a backend-owned `sharedStorage` descriptor with a
-bucket, generation, and tree prefix, preparation is a reconcile-only operation:
-the control plane validates the recorded project/bucket identity, labels,
-region, HNS, uniform access, public-access prevention, versioning, retention,
-and runner IAM without creating a bucket or copying workspace data. Its
-recorded generation and `trees/{generation}` prefix remain authoritative. A
-foreign, missing, or incompatible bucket fails closed with an owner-visible
-error instead of falling back to a second bucket.
+`functions/automationStorage.service.js` selects trusted input and a random UUID
+output directory when the automation session is created. The descriptor is saved
+on that session so retries reuse both paths. For ordinary marked workspaces,
+`agentRuntimeWorkspaceFiles` selects the latest committed GCS snapshot. Its
+`objects/` prefix mounts at `/workspace` read-only. A workspace without a saved
+snapshot starts with empty input; stale legacy files are not restored. Legacy
+workspaces use their existing flat prefix. Existing ready shared workspaces use
+their recorded `trees/{generation}` prefix, also mounted read-only.
 
-The browser consumes only the sanitized `{configured, state, errorCode}` storage
-summary. Configuration alone does not imply readiness. The automation controller
-applies successful reconciliation to both the workspace summary and its own
-readiness slice before refreshing workspace data; older reads cannot revert the
-validated result. The panel Refresh reloads workspace data, definitions, and
-settings. A paused workspace with an existing descriptor can use **Revalidate
-shared storage** and then enable a definition without reloading the page.
+Each run's `/automation-output/{uuid}` is a separate writable GCS mount backed by
+`{workspace.storagePrefix}/.mapache-internal/automation-outputs/{uuid}/` in the
+existing workspace bucket. The runner starts its agent in that directory and
+prepends input/output instructions to the automation prompt. Closed output files
+persist independently of runner shutdown, transcript archival, and the main
+session. Run history reports the output path and GCS location. Automatic merging,
+output downloads in the file browser, and a reconciliation service are follow-up
+work. Workspace deletion retains its existing storage cleanup behavior.
 
-This release has no user-accessible bucket provisioning flow. An operator must
-prepare the backend-owned bucket and record its matching project/workspace/owner
-identity, generation, tree prefix, and ready marker before the reconciliation
-endpoint can validate it. The operator must follow the shared-storage contract
-above; the Automations UI never creates a second bucket, resets the generation,
-migrates a workspace, or pauses its main runtime. A missing descriptor is shown
-as this explicit prerequisite, rather than a link to a nonexistent workflow.
+Cloud Run v2 volumes use `gcs: {bucket, readOnly, mountOptions}`. The input and
+output mounts are siblings, because Cloud Run does not support nested mounts.
+Directory marker objects make empty prefixes mountable. Snapshot manifests are
+checksum- and workspace-validated; saved relative symlinks are materialized using
+GCS FUSE's `gcsfuse_symlink_target` metadata when older snapshots contain only the
+manifest entry. Ordinary input files are neither copied nor rewritten. GCS FUSE
+presents uniform 0755 modes, not the original per-file permission bits.
 
-Enable and Run now explain loading, saving, validation progress/failure, missing
-storage, and missing model state next to their controls. A missing model offers
-**Back to Agent**: choose a model in workspace Agent settings, return to
-Automations, and Refresh. Backend model/storage checks remain authoritative;
-these prerequisite errors are not revision conflicts. Disable remains available
-if storage becomes unavailable except while that definition is being mutated.
-Readiness updates preserve draft values; a checked Enabled draft with a new
-block cannot be submitted until the block is resolved or the user explicitly
-unchecks Enabled. Preview and history work do not hold the definition busy.
+`automation-readonly-gcs-v1` tells the runner to skip workspace download, restore,
+git checkout/branch preparation, upload, and deletion reconciliation. Startup
+checks for FUSE mounts, rejects a writable input, and probes writable output.
+Private agent state, credentials, Chrome profiles, and seeded skills stay outside
+the source mount. The automation keeps its existing independent runtime authority
+and never acquires the main sync-writer lease.
 
-The active `pi-chrome` revision mounts the exact `trees/{storageGeneration}`
-prefix using the gen2 `gcsfuse.run.googleapis.com` CSI driver with:
+Automations can run alongside main and each other. They see saved input selected
+at admission/provisioning, not unsaved main-session edits. They cannot overwrite
+one another's outputs through these mounts. This is a filesystem write boundary,
+not a new IAM sandbox: the mandated runner service account keeps its existing
+GCS permissions. Direct cloud API access is still governed by existing account
+and application authorization.
 
-```text
-only-dir=trees/{storageGeneration}
-metadata-cache-ttl-secs=0
-stat-cache-max-size-mb=0
-type-cache-max-size-mb=0
-implicit-dirs=true
-log-severity=warning
-```
-
-The ready marker is published last. Close-to-open visibility is the supported
-consistency expectation; the last writer wins when two runners write the same
-file, and ESTALE/managed mount errors must be surfaced rather than retried as
-silent success. The runtime does not promise distributed locks, native chmod,
-or fsync-only durability. Supported Git flows keep repository metadata in the
-private runner path (`GIT_DIR`/`GIT_WORK_TREE`); `.git`, browser profiles,
-credentials, caches, and agent state never enter the shared mount. Submodules
-and nested-repository migration remain explicit unsupported cases.
-
-Per-workspace bucket names and prefixes are not an IAM tenant sandbox. The
-mandated runner principal can read any bucket to which it is granted. API,
-agent-tool, and Firestore owner checks remain the security boundary; anonymous
-and unprivileged bucket reads must fail.
+The legacy shared-storage preparation/recovery endpoints remain maintenance
+surfaces for previously configured workspaces; they are not part of automation
+setup. The Automations panel describes separate outputs and provides no storage
+provisioning or revalidation action. Enable/Run now are gated only by model and
+pending mutation/loading state. Missing models offer **Back to Agent**; definition
+revision fencing and draft preservation remain unchanged.
 
 ## Cost and recovery accounting
 
@@ -177,7 +155,7 @@ retained bytes and their `recoverableUntil` time must be recorded.
 ## Release and rollback
 
 Stage Firestore rules/indexes and worker consumers before producer/API routes,
-build and publish the immutable `pi-chrome` image before storage preparation or
+build and publish the immutable `pi-chrome` image before the new automation path or
 the Automations UI, then deploy Functions before Hosting with explicit project
 flags. Keep the feature flag off through deployment and enable it only for the
 canary. Record the image digest, exact commands, mount configuration,

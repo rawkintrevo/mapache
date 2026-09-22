@@ -34,7 +34,7 @@ This index maps significant React components to their current responsibilities.
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |
 | `AutomationManagementPage` | `src/components/automations/AutomationManagementPage.jsx` | Single Automations entry point that combines workspace definition management with owner-wide run history and run details. |
-| `AutomationsPanel` | `src/components/automations/AutomationsPanel.jsx` | Workspace-scoped automation definitions, storage preparation state/cost warning, concurrency limit, CRUD, enable/disable, Run now, queued reasons, and responsive management controls. |
+| `AutomationsPanel` | `src/components/automations/AutomationsPanel.jsx` | Workspace-scoped automation definitions, read-only input/separate output guidance, concurrency limit, CRUD, enable/disable, Run now, queued reasons, and responsive management controls. |
 | `AutomationEditor` | `src/components/automations/AutomationEditor.jsx` | Controlled create/edit form for automation instructions, enabled and concurrency settings, model guidance, revision-aware save, and schedule preview. |
 | `ScheduleControls` | `src/components/automations/ScheduleControls.jsx` | Daily, weekly, and advanced cron controls with explicit IANA timezone selection and debounced next-run preview. |
 | `RunHistoryPage` | `src/components/automations/RunHistoryPage.jsx` | Global run history section with workspace/workflow/status/date filters, cursor pagination, run selection, and embedded/full-page layout support. |

@@ -1,5 +1,7 @@
 "use strict";
 
+const {automationPrompt} = require("./automationStorage.helpers");
+
 const AUTOMATION_ACTIVE_RUN_STATUSES = new Set(["provisioning", "running", "stopping"]);
 const AUTOMATION_ACTIVE_SESSION_STATUSES = new Set(["provisioning", "running", "restarting", "resizing"]);
 const AUTOMATION_TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled", "interrupted", "skipped"]);
@@ -85,7 +87,7 @@ function createAutomationExecutionService({
     try {
       const response = await piWebUi.startAutomation({
         modelRef: claim.assignment.modelRef || undefined,
-        prompt: claim.assignment.prompt,
+        prompt: automationPrompt(claim.assignment.prompt, config),
         runId: claim.assignment.runId,
       });
       if (!response || response.ok !== true) {

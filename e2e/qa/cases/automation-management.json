@@ -34,15 +34,7 @@
     },
     {
       "assert": "snapshot-text",
-      "expected": "Automations reuse an existing backend-owned shared-storage bucket"
-    },
-    {
-      "assert": "snapshot-text",
-      "expected": "Legacy storage"
-    },
-    {
-      "assert": "snapshot-text",
-      "expected": "Shared storage required"
+      "expected": "Read-only workspace, separate outputs"
     },
     {
       "assert": "automation-responsive-navigation",

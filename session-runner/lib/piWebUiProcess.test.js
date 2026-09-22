@@ -327,3 +327,23 @@ test("reports an unexpected ready-child exit without respawning", async () => {
     await fs.rm(root, {recursive: true, force: true});
   }
 });
+
+test("automation child and Pi tools use the persistent output directory as cwd", async (t) => {
+  const {root, config} = await fixture();
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  config.automationOutputDir = "/automation-output/11111111-1111-4111-8111-111111111111";
+  let options;
+  const managed = createPiWebUiProcess(config, {
+    env: {PATH: "/usr/bin"},
+    fetch: healthyFetch(),
+    spawn: (_command, _args, spawnOptions) => {
+      options = spawnOptions;
+      return fakeChild();
+    },
+  });
+  await managed.start();
+  assert.equal(options.cwd, config.automationOutputDir);
+  assert.equal(options.env.PI_WEB_CWD, config.automationOutputDir);
+  assert.notEqual(options.cwd, config.workspaceDir);
+  await managed.stop();
+});

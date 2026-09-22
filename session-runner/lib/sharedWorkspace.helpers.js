@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const {isAutomationStorageMode} = require("./automationStorage.helpers");
 const fs = require("node:fs");
 const path = require("node:path");
 const {SHARED_WORKSPACE_READY_MARKER} = require("./runtimePaths");
@@ -9,6 +10,10 @@ const SHARED_WORKSPACE_STORAGE_MODE = "shared-gcsfuse-v1";
 
 function isSharedGcsFuseMode(value) {
   return String(value || "").trim().toLowerCase() === SHARED_WORKSPACE_STORAGE_MODE;
+}
+
+function isMountedWorkspaceMode(value) {
+  return isSharedGcsFuseMode(value) || isAutomationStorageMode(value);
 }
 
 function sharedWorkspaceError(code, message, cause) {
@@ -104,5 +109,6 @@ module.exports = {
   assertPathOutsideWorkspace,
   assertSharedWorkspaceMount,
   isSharedGcsFuseMode,
+  isMountedWorkspaceMode,
   markerPathFor,
 };

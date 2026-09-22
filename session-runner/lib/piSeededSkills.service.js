@@ -19,7 +19,8 @@ function createPiSeededSkillService({config, defaultRuntimeSkills}) {
     const skills = defaultRuntimeSkills(config);
     if (!skills.length) return;
 
-    const skillsPath = path.join(config.workspaceDir, ".pi", "skills");
+    const skillsPath = config.automationOutputDir ? path.join(config.piAgentDir, "skills") :
+      path.join(config.workspaceDir, ".pi", "skills");
     await fs.promises.mkdir(skillsPath, {recursive: true});
 
     for (const skill of skills) {

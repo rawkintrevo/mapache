@@ -86,7 +86,6 @@ function harness() {
   db.data.set(workspace.path, {
     ownerUid: "user-1",
     resources: {cpu: "2", memory: "4Gi"},
-    sharedStorageState: "ready",
   });
   db.data.set(definition.path, {
     ownerUid: "user-1",

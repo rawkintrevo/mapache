@@ -28,6 +28,12 @@ export function RunDetailsPanel({
 
   return (
     <aside aria-label="Run details" className="run-details-panel">
+      {run.workspaceOutput ? <section aria-label="Run output folder">
+        <h3>Output folder</h3>
+        <p><code>{run.workspaceOutput.path}</code></p>
+        <p className="subtle">Saved separately from your workspace. Automatic merging is not enabled.</p>
+        <p><code>{run.workspaceOutput.storageUri}</code></p>
+      </section> : null}
       <div className="run-details-panel__heading">
         <div>
           <p className="eyebrow">Run details</p>
