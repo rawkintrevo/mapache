@@ -82,15 +82,15 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       if (activeRunner) throw httpError(409, "workspace_already_has_active_runner");
     }
 
-    const activeChrome = automationRuntime ? null : findActiveChromeSession(sessionsSnap.docs, sessionRef.id);
+    const mainSessions = sessions.filter((candidate) => !isAutomationRuntime(candidate));
+    const activeChrome = automationRuntime ? null : findActiveChromeSession(mainSessions, sessionRef.id);
     if (activeChrome) {
       throw httpError(409, "This workspace already has an active Chrome session. Stop it before creating another one.");
     }
     if (options.githubWorkspace && !automationRuntime) {
-      const activeGithub = sessionsSnap.docs.find((doc) => {
-        if (doc.id === sessionRef.id) return false;
-        const active = doc.data();
-        return isActiveGithubWorkspaceSession(active);
+      const activeGithub = mainSessions.find((candidate) => {
+        if (candidate.id === sessionRef.id) return false;
+        return isActiveGithubWorkspaceSession(candidate);
       });
       if (activeGithub) {
         throw httpError(409, "This GitHub workspace already has an active session. Stop it before creating another one.");

@@ -268,6 +268,9 @@ remain potentially billable until the seven-day policy expires.
 admitted `provisioning` runs. It claims the run idempotently, creates the
 deterministic `auto-{runId}` session and `mpauto-{runId-hash}` Cloud Run
 service, and leaves `canonicalSessionId` and main-runtime reservations alone.
+It selects the last complete immutable browser snapshot already published for
+the owning workspace; provisioning never requests a live profile capture.
+Snapshot refresh remains a separate protected runner operation.
 The ordinary queued-session worker skips automation sessions; run/session
 Firestore workers reconcile duplicate deliveries and response loss against the
 same session operation. Cloud Run creation reuses the trusted `pi-chrome`,
@@ -337,6 +340,9 @@ expiry with `Cache-Control: no-store`.
 
 - Functions, not the browser, chooses the runner image and enforces lifecycle
   and workspace concurrency.
+- Automation sessions are not competing main sessions. The automation admission
+  transaction is the sole authority for parallel versus exclusive main access;
+  generic runtime, Chrome, and GitHub session guards consider main sessions only.
 - Credentials, connection bindings, access tokens, and shutdown tokens never
   appear in public workspace/session data or ordinary agent snapshots.
 - Route handlers stay small and delegate domain behavior to focused services.

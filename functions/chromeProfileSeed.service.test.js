@@ -90,35 +90,22 @@ test("uses the latest complete seed when the workspace browser is stopped", asyn
   assert.equal(selected.descriptor.seedVersion, descriptor.seedVersion);
 });
 
-test("distinguishes a genuine no-seed workspace from a failed capture", async () => {
+test("reports a genuine no-seed workspace without contacting a live browser", async () => {
   const fresh = await selectAutomationChromeProfileSeed({
     sessionCollection: sessions([]),
     storage: {bucket: () => ({file: () => ({download: async () => { throw Object.assign(new Error("missing"), {code: 404}); }})})},
     workspace: {id: workspaceId, bucket: bucketName, storagePrefix: prefix},
   });
   assert.deepEqual(fresh, {mode: "fresh", reason: "no_seed", descriptor: null, ageMs: null});
-
-  const descriptor = seedDescriptor();
-  await assert.rejects(() => selectAutomationChromeProfileSeed({
-    requestRunnerJson: async () => { throw Object.assign(new Error("capture timed out"), {code: "chrome_profile_capture_timeout"}); },
-    sessionCollection: sessions([{
-      status: "running",
-      serviceUrl: "https://workspace.example",
-      shutdownToken: "runner-token",
-      capabilities: {chrome: true},
-    }]),
-    storage: storageFor(descriptor),
-    workspace: {id: workspaceId, bucket: bucketName, storagePrefix: prefix},
-  }), (error) => error.code === "chrome_profile_capture_timeout");
 });
 
-test("pins a fresh capture from the owning workspace and never accepts a sibling seed", async () => {
+test("ordinary startup pins the saved snapshot without capturing a changing live profile", async () => {
   const descriptor = seedDescriptor();
-  let requested = null;
+  let requested = false;
   const selected = await selectAutomationChromeProfileSeed({
-    requestRunnerJson: async (_session, route, options) => {
-      requested = {route, options};
-      return {seed: descriptor};
+    requestRunnerJson: async () => {
+      requested = true;
+      throw Object.assign(new Error("capture timed out"), {code: "chrome_profile_capture_timeout"});
     },
     sessionCollection: sessions([{
       status: "running",
@@ -129,10 +116,9 @@ test("pins a fresh capture from the owning workspace and never accepts a sibling
     storage: storageFor(descriptor),
     workspace: {id: workspaceId, bucket: bucketName, storagePrefix: prefix},
   });
-  assert.equal(selected.reason, "fresh_capture");
+  assert.equal(selected.reason, "latest_published");
   assert.equal(selected.descriptor.seedVersion, descriptor.seedVersion);
-  assert.equal(requested.route, "/workspace/chrome-profile/snapshot");
-  assert.equal(requested.options.method, "POST");
+  assert.equal(requested, false);
 });
 
 test("rejects a corrupt current descriptor before provisioning", async () => {

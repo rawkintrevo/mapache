@@ -65,6 +65,16 @@ const conflicting = resolveRuntimeReservation(
     {enabled: true},
 );
 assert.strictEqual(conflicting.conflict, "session-a");
+const parallelAutomation = resolveRuntimeReservation(
+    {...workspace, agentRuntimeSessionId: null, agentRuntimeState: "stopped"},
+    [{...session, id: "auto-run-a", runtimeKind: "automation", automationRunId: "run-a"}],
+    {...session, id: "session-main", agentRuntimeGeneration: 0},
+    "session-main",
+    "operation-main",
+    {enabled: true},
+);
+assert.strictEqual(parallelAutomation.conflict, null);
+assert.strictEqual(parallelAutomation.workspaceUpdates.agentRuntimeSessionId, "session-main");
 assert.deepStrictEqual(runtimeStateUpdate(
     {...workspace, agentRuntimeSessionId: session.id},
     session,
