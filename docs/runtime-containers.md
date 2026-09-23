@@ -243,9 +243,15 @@ without claiming a shell sandbox: the ordinary shell/PTY process still shares
 the runner workspace. All browser clients list and open the same workspace
 transcripts, including their SDK-preserved IDs and branches. The runner creates
 a private per-boot token, uses it only for the local `/api/health` check, and
-never includes it in status or logs. Startup is bounded by local health; a
-startup failure or unexpected child exit is reported through runner activity
-with no automatic respawn. Before materialization, the runner acquires a unique
+never includes it in status or logs. Startup is bounded by local health with a
+90-second default budget (`MAPACHE_PI_WEB_UI_STARTUP_TIMEOUT_MS` can override
+it); a startup failure or unexpected child exit is reported through runner
+activity with no automatic respawn. The September 23, 2026 incident showed the
+prior 30-second budget was shorter than some real cold starts: failed boots
+timed out just after 30 seconds after Pi auth materialization, while later boots
+of the same service reached readiness. The longer budget remains below the
+300-second Cloud Run service timeout and is covered by a slow-cold-start test.
+Before materialization, the runner acquires a unique
 boot instance ID for the reserved runtime generation in the workspace/session
 coordination documents. Duplicate boots and stale generations remain fenced;
 the runner renews that admission with bounded Firestore transactions and checks
@@ -507,7 +513,7 @@ Cloud Run does not permit the nested PID/network namespaces Chromium's Linux pro
 
 The browser surface is protected by the same per-session HMAC browser token as the terminal and preview. `/browser/` serves authenticated noVNC, `/browser/status` reports safe desktop/CDP readiness, `/browser/activity` records meaningful agent browser actions, and the `/browser/vnc` WebSocket bridges only to loopback x11vnc. Browser runtime readiness requires a live CDP endpoint, all required desktop processes, and a reachable loopback VNC port; a later supervised process exit transitions the runtime away from `ready` until the desktop and both probes recover. A dropped VNC bridge is closed so noVNC can reconnect to a replacement x11vnc process. CDP and VNC ports are not public. `mapache-chrome-status` reports only readiness and browser version and exits nonzero when CDP is unavailable.
 
-Chrome profiles are not part of the visible workspace tree or the general home archive. Legacy/shared runners use the isolated archive target `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`; private automation runners use `/var/lib/mapache/runtimes/{identity}/chrome/profile` and do not publish the profile to the shared prefix. The runner stages and sanitizes legacy profiles before atomic restore, then serializes periodic and final snapshots. Profile extraction uses GNU-compatible ownership and permission guards, and reports the tar process error ahead of any secondary stream-close error. Cache, crash, download, lock, socket, and other transient paths are excluded. Shell sessions never create, restore, or overwrite the shared target.
+Chrome profiles are not part of the visible workspace tree or the general home archive. Legacy/shared runners use the isolated archive target `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`; private automation runners use `/var/lib/mapache/runtimes/{identity}/chrome/profile` and do not publish the profile to the shared prefix. The runner stages and sanitizes legacy profiles before restore, then serializes periodic and final snapshots. Profile replacement first preserves the current directory as a sibling backup; if an image-layer or overlay filesystem rejects either rename with `EXDEV`, it copies into the destination filesystem and removes the source only after the copy completes. An interrupted install removes the partial destination and restores the preserved profile; a failed copy leaves the original profile available for rollback. Profile extraction uses GNU-compatible ownership and permission guards, and reports the tar process error ahead of any secondary stream-close error. Cache, crash, download, lock, socket, and other transient paths are excluded. Shell sessions never create, restore, or overwrite the shared target.
 
 The Chrome DevTools MCP package is baked into both Chrome images at `chrome-devtools-mcp@1.6.0`. The runner materializes a reserved `chrome-devtools` MCP server with `--browser-url http://127.0.0.1:9222`, disables usage statistics/update checks, and attaches to the existing browser rather than launching another one. Chrome-image QA uses Playwright `connectOverCDP`; it closes only the temporary QA page and writes its normal reports under `$MAPACHE_QA_DIR`.
 

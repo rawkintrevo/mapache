@@ -236,7 +236,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     manualSaveBudgetMs: positiveNumber(process.env.MAPACHE_MANUAL_SAVE_BUDGET_MS, 120000),
     sigtermSaveBudgetMs: positiveNumber(process.env.MAPACHE_SIGTERM_SAVE_BUDGET_MS, 8000),
     piWebUiQuiesceTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_QUIESCE_TIMEOUT_MS, 5000),
-    piWebUiStartupTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STARTUP_TIMEOUT_MS, 30000),
+    piWebUiStartupTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STARTUP_TIMEOUT_MS, 90000),
     piWebUiStopTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_STOP_TIMEOUT_MS, 5000),
     piSessionStorageBucket,
     piSessionStoragePrefix,
