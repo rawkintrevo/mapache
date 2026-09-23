@@ -58,6 +58,18 @@ function parseRunnerCapabilities() {
   }
 }
 
+function parseJsonObject(value, fallback = null) {
+  const source = normalizeEnvString(value);
+  if (!source) return fallback;
+  try {
+    const parsed = JSON.parse(source);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
+  } catch (error) {
+    console.error("invalid JSON runner configuration, using fallback");
+    return fallback;
+  }
+}
+
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
@@ -130,6 +142,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
       privatePaths?.runtimeRoot || "/tmp",
       `google-mcp-token-${normalizeRuntimeIdentity(runtimeIdentity)}.sock`,
   ));
+  const chromeProfileSeedRaw = normalizeEnvString(process.env.MAPACHE_CHROME_PROFILE_SEED);
+  const chromeProfileSeed = parseJsonObject(chromeProfileSeedRaw);
 
   return {
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
@@ -170,6 +184,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     chromeDesktopRestartMaxAttempts: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_MAX_ATTEMPTS, 3) : 0,
     chromeNoVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_NOVNC_PORT, 6080) : 0,
     chromeProfileDir: chromeEnabled ? path.resolve(privatePaths?.chromeProfileDir || process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
+    chromeProfileInitialization: parseJsonObject(process.env.MAPACHE_CHROME_PROFILE_INITIALIZATION),
+    chromeProfileSeed,
+    chromeProfileSeedConfigError: chromeProfileSeedRaw && !chromeProfileSeed ? "chrome_profile_seed_descriptor_invalid" : "",
     chromeStartupTimeoutMs: chromeEnabled ? positiveNumber(process.env.CHROME_STARTUP_TIMEOUT_MS, 30000) : 0,
     chromeViewport: chromeEnabled ? {
       width: positiveNumber(process.env.CHROME_VIEWPORT_WIDTH, 1440),

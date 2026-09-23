@@ -162,6 +162,38 @@ Private agent state, credentials, Chrome profiles, and seeded skills stay outsid
 the source mount. The automation keeps its existing independent runtime authority
 and never acquires the main sync-writer lease.
 
+### One-way Chrome profile inheritance
+
+Chrome website-session inheritance uses a separate immutable seed namespace under
+`{workspace.storagePrefix}/.mapache-internal/chrome-profile-seeds/v1/`. The
+interactive workspace runner is the only publisher. It flushes the filesystem,
+captures the profile with the reviewed transient-path filter, compares a complete
+directory signature before and after the tar capture, and retries a bounded number
+of times when Chromium is still changing state. Cookies, local storage, IndexedDB,
+SQLite databases, and their WAL files remain eligible; caches, downloads, crash
+state, locks, sockets, and debugging endpoints do not. An immutable archive and
+descriptor are uploaded first; `current.json` advances only after both are
+complete. The descriptor records the schema, owning workspace, seed version,
+object generation, checksum, capture time, and browser compatibility metadata.
+
+When an automation is admitted, Functions requests a bounded fresh capture from
+the owning running Chrome session when one exists. A stopped workspace uses its
+last complete descriptor. The selected descriptor is validated and pinned to the
+run and session before Cloud Run provisioning; retries reuse that exact version.
+A workspace with no published profile is explicitly marked `fresh/no_seed`.
+Capture, object, checksum, ownership, or compatibility failures are explicit and
+never silently downgrade an inherited run to a fresh profile. Seed versions are
+retained while referenced by runs and the runner keeps a bounded recent history;
+workspace deletion removes the internal namespace with the workspace storage.
+
+The automation runner downloads and verifies only its pinned descriptor, restores
+into its private `/var/lib/mapache/runtimes/{runId}/chrome/profile` before
+Chromium starts, and never publishes its modified profile. Run history exposes
+only safe initialization state (mode, reason, capture time, and age), never the
+archive path, URL, cookies, or site storage. A copied browser session can still
+expire or be rejected by a site and may require signing in again in workspace
+Chrome before starting a new run.
+
 Private automation and Google token broker sockets use
 `session-runner/lib/unixSocketPath.helpers.js` to bound pathname byte length.
 Paths longer than 100 bytes resolve under a private `/tmp/mapache-ipc-{sha256}`

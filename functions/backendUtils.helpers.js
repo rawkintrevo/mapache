@@ -28,7 +28,24 @@ function serialize(value) {
 }
 
 function toClientDoc(doc) {
-  return {id: doc.id, ...serialize(doc.data())};
+  const data = serialize(doc.data());
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    delete data.chromeProfileSeed;
+    if (data.chromeProfileInitialization) {
+      data.chromeProfileInitialization = safeChromeProfileInitialization(data.chromeProfileInitialization);
+    }
+  }
+  return {id: doc.id, ...data};
+}
+
+function safeChromeProfileInitialization(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return {
+    mode: String(value.mode || "").slice(0, 32),
+    reason: String(value.reason || "").slice(0, 64),
+    capturedAt: value.capturedAt || null,
+    ageMs: Number.isFinite(value.ageMs) ? value.ageMs : null,
+  };
 }
 
 function sortByUpdatedAtDesc(left, right) {

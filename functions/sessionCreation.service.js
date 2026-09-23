@@ -140,6 +140,13 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
         runName: payload.name,
         timezone: payload.automationTimezone,
       }),
+      chromeProfileSeed: payload.chromeProfileSeed || null,
+      chromeProfileInitialization: payload.chromeProfileInitialization || {
+        mode: "fresh",
+        reason: "no_seed",
+        capturedAt: null,
+        ageMs: null,
+      },
     } : {}),
     workspaceStoragePrefix: workspace.storagePrefix,
     piSessionDir: piSessionDir(sessionRef.id),

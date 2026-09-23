@@ -8,6 +8,7 @@ const {automationSessionId, isAutomationRuntime} = require("./runtimePaths.helpe
 const {automationCloudRunServiceId} = require("./provisioning.helpers");
 const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
 const {isTerminalAutomationStatus, transitionAutomationRun} = require("./automationState.helpers");
+const {selectAutomationChromeProfileSeed} = require("./chromeProfileSeed.service");
 
 const AUTOMATION_PROVISIONING_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
@@ -21,6 +22,8 @@ function createAutomationProvisioningService(dependencies = {}) {
     provisionSessionService: dependencies.provisionSessionService,
     requireWorkspace: dependencies.requireWorkspace,
     sessionCollection: dependencies.sessionCollection,
+    requestRunnerJson: dependencies.requestRunnerJson,
+    storage: dependencies.storage,
   };
   if (typeof shared.createSession !== "function") {
     throw new Error("Automation provisioning requires a createSession dependency.");
@@ -83,9 +86,26 @@ async function provisionAutomationRun(runId, dependencies = {}) {
   let sessionRef;
   try {
     const workspace = await dependencies.requireWorkspace(run.ownerUid, run.workspaceId);
-    const session = await ensureAutomationSession(run, workspace, dependencies);
+    const chromeProfileSeed = await selectAutomationChromeProfileSeed({
+      requestRunnerJson: dependencies.requestRunnerJson,
+      run,
+      sessionCollection: dependencies.sessionCollection,
+      storage: dependencies.storage,
+      workspace: {...workspace, id: workspace.id || run.workspaceId},
+    });
+    const pinnedRun = {
+      ...run,
+      chromeProfileInitialization: {
+        mode: chromeProfileSeed.mode,
+        reason: chromeProfileSeed.reason,
+        capturedAt: chromeProfileSeed.descriptor?.capturedAt || null,
+        ageMs: chromeProfileSeed.ageMs,
+      },
+      ...(chromeProfileSeed.descriptor ? {chromeProfileSeed: chromeProfileSeed.descriptor} : {}),
+    };
+    const session = await ensureAutomationSession(pinnedRun, workspace, dependencies, chromeProfileSeed);
     sessionRef = dependencies.sessionCollection(run.workspaceId).doc(session.id);
-    const attached = await attachSessionToRun(runRef, run, session, dependencies);
+    const attached = await attachSessionToRun(runRef, pinnedRun, session, dependencies);
     if (!attached) return {skipped: "run_stopping", runId: normalizedRunId, sessionId: session.id};
 
     const currentSessionSnap = await sessionRef.get();
@@ -177,7 +197,7 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
   });
 }
 
-async function ensureAutomationSession(run, workspace, dependencies = {}) {
+async function ensureAutomationSession(run, workspace, dependencies = {}, chromeProfileSeed = null) {
   const sessionId = automationSessionId(run.runId);
   const sessionRef = dependencies.sessionCollection(run.workspaceId).doc(sessionId);
   const existingSnap = await sessionRef.get();
@@ -192,6 +212,13 @@ async function ensureAutomationSession(run, workspace, dependencies = {}) {
       runtimeKind: "automation",
       runId: run.runId,
       sessionType: "cloud",
+      chromeProfileSeed: chromeProfileSeed?.descriptor || run.chromeProfileSeed || null,
+      chromeProfileInitialization: run.chromeProfileInitialization || {
+        mode: chromeProfileSeed?.mode || "fresh",
+        reason: chromeProfileSeed?.reason || "no_seed",
+        capturedAt: chromeProfileSeed?.descriptor?.capturedAt || null,
+        ageMs: chromeProfileSeed?.ageMs ?? null,
+      },
     });
   }
 
@@ -212,6 +239,8 @@ async function attachSessionToRun(runRef, run, session, dependencies = {}) {
     if (current.sessionId === session.id && current.provisioningState === "provisioning") return true;
     transaction.update(runRef, {
       sessionId: session.id,
+      ...(run.chromeProfileInitialization ? {chromeProfileInitialization: run.chromeProfileInitialization} : {}),
+      ...(run.chromeProfileSeed ? {chromeProfileSeed: run.chromeProfileSeed} : {}),
       ...(session.automationStorage ? {workspaceOutput: session.automationStorage.output} : {}),
       provisioningState: "provisioning",
       provisioningClaim: {

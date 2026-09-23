@@ -714,6 +714,8 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "STORAGE_PREFIX", value: session.workspaceStoragePrefix || ""},
     {name: "WORKSPACE_STORAGE_MODE", value: session.workspaceStorageMode || ""},
     {name: "MAPACHE_AUTOMATION_OUTPUT_DIR", value: session.automationOutputDir || session.automationStorage?.output?.path || ""},
+    {name: "MAPACHE_CHROME_PROFILE_SEED", value: stringifyChromeProfileSeed(session.chromeProfileSeed)},
+    {name: "MAPACHE_CHROME_PROFILE_INITIALIZATION", value: stringifyChromeProfileInitialization(session.chromeProfileInitialization)},
     {name: "WORKSPACE_STORAGE_GENERATION", value: session.workspaceStorageGeneration || ""},
     {name: "WORKSPACE_STORAGE_READY_MARKER", value: session.workspaceStorageReadyMarker || ""},
     {name: "HOME_STORAGE_BUCKET", value: runtime.isPrivate ? "" : session.homeStorageBucket || session.workspaceStorageBucket || DEFAULT_BUCKET || ""},
@@ -894,6 +896,29 @@ function stringifySyncPolicyExclude(value) {
     return JSON.stringify(Array.isArray(value) ? value : []);
   } catch (error) {
     return "[]";
+  }
+}
+
+function stringifyChromeProfileSeed(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    return "";
+  }
+}
+
+function stringifyChromeProfileInitialization(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  try {
+    return JSON.stringify({
+      mode: String(value.mode || "").slice(0, 32),
+      reason: String(value.reason || "").slice(0, 64),
+      capturedAt: value.capturedAt || null,
+      ageMs: Number.isFinite(value.ageMs) ? value.ageMs : null,
+    });
+  } catch (error) {
+    return "";
   }
 }
 
@@ -1112,6 +1137,8 @@ module.exports = {
   runnerServiceAccountValue,
   sessionEnvironmentEntryIds,
   sessionRunnerEnv,
+  stringifyChromeProfileInitialization,
+  stringifyChromeProfileSeed,
   stringifyMcpConfig,
   stringifySyncPolicyExclude,
   terminalCommandEnv,
