@@ -266,8 +266,10 @@ function createAutomationExecutionService({
       if (AUTOMATION_TERMINAL_STATUSES.has(currentStatus)) return false;
       const cancellationCommitted = run.desiredOutcome === "canceled" ||
         (currentStatus === "stopping" && run.cancellationRequestedAt);
-      const effectiveStatus = cancellationCommitted ? "canceled" : status;
-      const normalizedError = errorCode ? normalizeFailureCode(errorCode, "automation_execution_failed") : null;
+      const interruptionCommitted = currentStatus === "stopping" && run.desiredOutcome === "interrupted";
+      const effectiveStatus = cancellationCommitted ? "canceled" : interruptionCommitted ? "interrupted" : status;
+      const outcomeError = interruptionCommitted && !cancellationCommitted ? run.interruptionReason || "automation_interrupted" : errorCode;
+      const normalizedError = outcomeError ? normalizeFailureCode(outcomeError, "automation_execution_failed") : null;
       const conversationId = cleanId(response?.conversationId) || execution.conversationId;
       const rawFinalResult = cleanId(response?.state?.finalResult || response?.finalResult).toLowerCase();
       const finalResult = ["success", "error"].includes(rawFinalResult) ? rawFinalResult : "";

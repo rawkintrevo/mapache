@@ -872,7 +872,7 @@ async function requestRunnerJson(session, routePath, options = {}) {
       if (response.status === 404 && options.notFoundError) {
         throw httpError(options.notFoundStatus || 503, options.notFoundError);
       }
-      throw httpError(
+      const error = httpError(
           response.status === 404 ? 503 : response.status,
           classifyRunnerResponseError({
             status: response.status,
@@ -881,6 +881,8 @@ async function requestRunnerJson(session, routePath, options = {}) {
             fallbackError: options.failureError || "runner_request_failed",
           }),
       );
+      error.runnerHttpStatus = response.status;
+      throw error;
     }
     return data;
   } catch (error) {

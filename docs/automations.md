@@ -59,6 +59,16 @@ standing storage service. Each admitted run uses one deterministic
   accepts neither the wildcard region nor a `filter` query parameter.
   The scheduled recovery Function binds the same GitHub/Google secrets and
   540-second timeout as provisioning because it can resume that work directly.
+- Reconciliation checks heartbeat freshness synchronously and only probes runners
+  after three minutes without a fresh heartbeat. Failed probes emit structured
+  run/session IDs, route, original HTTP status, duration, and a stable error code;
+  headers and response bodies are omitted to avoid logging credentials.
+  Shutdown preserves an already committed interruption and its reason instead of
+  relabeling it as user cancellation.
+- Transcript sanitization permits nonnegative integer token counts only in
+  known usage fields (including `message.usage.totalTokens`); credential-like
+  fields elsewhere remain rejected. This fix requires a rebuilt `pi-chrome`
+  image and new runner services; existing services require recreation.
 - Artifacts are immutable, sanitized, and written under
   `automation-runs/{runId}/v1/`; the manifest pointer is published only after
   checksum/size verification. Global history returns the snapshot and archived

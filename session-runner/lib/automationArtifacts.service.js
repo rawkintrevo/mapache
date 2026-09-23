@@ -261,7 +261,10 @@ function sanitizeValue(value, label = "artifact") {
   if (typeof value === "object") {
     const result = {};
     for (const [key, item] of Object.entries(value)) {
-      if (SENSITIVE_KEY.test(key)) throw artifactError("automation_artifact_sensitive_field", `Sensitive field is not allowed in ${label}: ${key}`);
+      const usageCount = label.endsWith(".usage") &&
+        ["totalTokens", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"].includes(key) &&
+        Number.isSafeInteger(item) && item >= 0;
+      if (SENSITIVE_KEY.test(key) && !usageCount) throw artifactError("automation_artifact_sensitive_field", `Sensitive field is not allowed in ${label}: ${key}`);
       result[String(key).slice(0, 200)] = sanitizeValue(item, `${label}.${key}`);
     }
     return result;

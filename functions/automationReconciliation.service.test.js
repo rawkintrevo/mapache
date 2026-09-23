@@ -231,3 +231,44 @@ test("orphan inventory uses the regional Cloud Run v2 request contract and skips
 });
 
 console.log("automation reconciliation service tests passed");
+
+test("fresh heartbeats never probe or clean up a running automation", async () => {
+  for (const field of ["executionHeartbeatAt", "startedAt", "updatedAt"]) {
+    const {calls, db, service} = harness([makeRun({[field]: "2026-09-20T09:59:59.000Z"})], {
+      healthProbe: async () => assert.fail("fresh run must not be probed"),
+      getCloudRunService: async () => assert.fail("fresh run must not be looked up"),
+    });
+    const result = await service.reconcile();
+    assert.equal(result.retained, 1);
+    assert.equal(result.errors, 0);
+    assert.equal(db.data.get("automationRuns/run-1").status, "running");
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("failed probes log original HTTP status and identifiers without response secrets", async () => {
+  const logger = require("firebase-functions/logger");
+  const originalWarn = logger.warn;
+  const warnings = [];
+  logger.warn = (...args) => warnings.push(args);
+  try {
+    const {service} = harness([makeRun()], {
+      healthProbe: async () => {
+        throw Object.assign(new Error("secret response body"), {
+          code: "runner_request_failed", status: 503, runnerHttpStatus: 404,
+        });
+      },
+    });
+    assert.equal((await service.reconcile()).interrupted, 1);
+    assert.equal(warnings.length, 1);
+    const details = warnings[0][1];
+    assert.equal(details.httpStatus, 404);
+    assert.equal(details.runId, "run-1");
+    assert.equal(details.route, "/healthz");
+    assert.equal(details.errorCode, "runner_request_failed");
+    assert.ok(details.durationMs >= 0);
+    assert.doesNotMatch(JSON.stringify(warnings), /secret response body|shutdown/);
+  } finally {
+    logger.warn = originalWarn;
+  }
+});

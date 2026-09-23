@@ -188,3 +188,16 @@ test("rejects a malformed JSONL tail before writing any artifact", async () => {
   );
   assert.equal(storage.objects.size, 0);
 });
+
+test("numeric token usage survives sanitization while credentials remain rejected", () => {
+  const {sanitizeValue} = require("./automationArtifacts.service");
+  const record = {message: {usage: {totalTokens: 100, inputTokens: 80, outputTokens: 20}}};
+  assert.deepEqual(sanitizeValue(record), record);
+  for (const value of [
+    {message: {usage: {totalTokens: "secret"}}},
+    {totalTokens: 100},
+    {message: {usage: {accessToken: 100}}},
+    {message: {usage: {totalTokens: -1}}},
+    {message: {usage: {totalTokens: {secret: "value"}}}},
+  ]) assert.throws(() => sanitizeValue(value), {code: "automation_artifact_sensitive_field"});
+});
