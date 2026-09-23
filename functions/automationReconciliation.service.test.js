@@ -264,11 +264,23 @@ test("failed probes log original HTTP status and identifiers without response se
     const details = warnings[0][1];
     assert.equal(details.httpStatus, 404);
     assert.equal(details.runId, "run-1");
-    assert.equal(details.route, "/healthz");
+    assert.equal(details.route, "/healthz/");
     assert.equal(details.errorCode, "runner_request_failed");
     assert.ok(details.durationMs >= 0);
     assert.doesNotMatch(JSON.stringify(warnings), /secret response body|shutdown/);
   } finally {
     logger.warn = originalWarn;
   }
+});
+
+test("runner health probes avoid the Cloud Run reserved bare healthz path", async () => {
+  const {service} = harness([makeRun()], {
+    healthProbe: undefined,
+    requestRunnerJson: async (session, route, options) => {
+      assert.equal(route, "/healthz/");
+      assert.equal(options.timeoutMs, 5000);
+      return {ok: true};
+    },
+  });
+  assert.equal((await service.reconcile()).healthy, 1);
 });
