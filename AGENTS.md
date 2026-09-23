@@ -39,6 +39,23 @@ Small copy edits, isolated styling tweaks, and mechanical dependency updates do 
 
 In general, keep docs edits focused on the current change. If the docs have become stale, repetitive, poorly organized, or would benefit from a broader restructure, call that out and prompt the user to instruct the agent to refactor the docs. Do not perform broad docs refactors unless the user asks for that explicitly.
 
+## Cloud Run Health Endpoint — Do Not Regress
+
+The canonical runner health endpoint is **`/runner/health`**. Both the runner
+handler and every client/probe must use that path.
+
+**Never serve, probe, alias, redirect, or fall back to `/healthz` or
+`/healthz/`.** Do not rename the health endpoint back to that conventional
+Kubernetes spelling. Cloud Run reserves some paths ending in `z`; bare
+`/healthz` returns a platform 404 without reaching container request logs.
+The trailing-slash workaround is explicitly rejected by the project owner.
+This has caused repeated regressions, including premature automation shutdowns.
+
+Keep the authenticated route and caller contract covered by regression tests.
+When changing health behavior, read the health-endpoint rule in
+`docs/runtime-containers.md`. See
+[Cloud Run reserved paths](https://docs.cloud.google.com/run/docs/known-issues#reserved-url-paths).
+
 ## Implementation Notes
 
 Keep changes scoped to the existing structure:

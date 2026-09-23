@@ -264,7 +264,7 @@ test("failed probes log original HTTP status and identifiers without response se
     const details = warnings[0][1];
     assert.equal(details.httpStatus, 404);
     assert.equal(details.runId, "run-1");
-    assert.equal(details.route, "/healthz/");
+    assert.equal(details.route, "/runner/health");
     assert.equal(details.errorCode, "runner_request_failed");
     assert.ok(details.durationMs >= 0);
     assert.doesNotMatch(JSON.stringify(warnings), /secret response body|shutdown/);
@@ -273,11 +273,11 @@ test("failed probes log original HTTP status and identifiers without response se
   }
 });
 
-test("runner health probes avoid the Cloud Run reserved bare healthz path", async () => {
+test("runner health probes use the canonical unreserved endpoint", async () => {
   const {service} = harness([makeRun()], {
     healthProbe: undefined,
     requestRunnerJson: async (session, route, options) => {
-      assert.equal(route, "/healthz/");
+      assert.equal(route, "/runner/health");
       assert.equal(options.timeoutMs, 5000);
       return {ok: true};
     },

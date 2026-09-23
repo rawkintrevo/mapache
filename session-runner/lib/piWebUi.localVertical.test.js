@@ -264,7 +264,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     const publicPort = gatewayServer.address().port;
     const publicOrigin = `http://127.0.0.1:${publicPort}`;
 
-    const health = await request(publicPort, `/healthz?mapache_access=${encodeURIComponent(accessToken)}`);
+    const health = await request(publicPort, `/runner/health?mapache_access=${encodeURIComponent(accessToken)}`);
     assert.equal(health.status, 200);
     assert.equal(health.body.agentRuntime.ready, true);
     assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "46880b3772591beac91c0c1792bdc79a6fe3671f");

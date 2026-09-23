@@ -168,8 +168,7 @@ async function probeRunner(session, dependencies = {}) {
   try {
     const health = typeof dependencies.healthProbe === "function" ?
       await dependencies.healthProbe(session) :
-      // Cloud Run intercepts bare /healthz; Express accepts the trailing slash.
-      await dependencies.requestRunnerJson(session, "/healthz/", {
+      await dependencies.requestRunnerJson(session, "/runner/health", {
         timeoutMs: dependencies.healthProbeTimeoutMs,
         unavailableError: "automation_runner_unreachable",
       });
@@ -179,7 +178,7 @@ async function probeRunner(session, dependencies = {}) {
     logger.warn("automation runner health probe failed", {
       runId: session.automationRunId || null,
       sessionId: session.id || null,
-      route: "/healthz/",
+      route: "/runner/health",
       httpStatus: Number.isInteger(error?.runnerHttpStatus) ? error.runnerHttpStatus : Number.isInteger(error?.status) ? error.status : null,
       durationMs: Date.now() - startedAt,
       errorCode,

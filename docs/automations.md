@@ -60,10 +60,11 @@ standing storage service. Each admitted run uses one deterministic
   The scheduled recovery Function binds the same GitHub/Google secrets and
   540-second timeout as provisioning because it can resume that work directly.
 - Reconciliation checks heartbeat freshness synchronously and only probes runners
-  after three minutes without a fresh heartbeat. Probes use `/healthz/`:
-  Cloud Run intercepts bare `/healthz` with a 404 before container logging;
-  Express accepts the trailing slash with the same authentication and handler.
-  See [Cloud Run reserved paths](https://docs.cloud.google.com/run/docs/known-issues#reserved-url-paths).
+  after three minutes without a fresh heartbeat. Probes use the authenticated
+  `/runner/health` endpoint. Never use `/healthz`, its trailing-slash variant,
+  or a fallback/alias: Cloud Run intercepts the bare reserved path before
+  container logging, and the trailing-slash workaround is not supported here.
+  See [the permanent endpoint rule](./runtime-containers.md#runner-health-endpoint).
   Failed probes emit structured
   run/session IDs, route, original HTTP status, duration, and a stable error code;
   headers and response bodies are omitted to avoid logging credentials.
