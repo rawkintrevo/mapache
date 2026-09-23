@@ -92,23 +92,57 @@ async function removeUnsafeSymlinks(rootDir, {fsImpl = fs} = {}, currentDir = ro
 async function replaceProfileDirectory(profileDir, stagingDir, {fsImpl = fs} = {}) {
   const previousDir = `${profileDir}.previous-${process.pid}`;
   await removePath(previousDir, {fsImpl});
+  let previousProfileExists = false;
   try {
-    await fsImpl.promises.rename(profileDir, previousDir);
+    await moveDirectory(profileDir, previousDir, {fsImpl});
+    previousProfileExists = true;
   } catch (error) {
     if (!error || error.code !== "ENOENT") throw error;
   }
   try {
-    await fsImpl.promises.rename(stagingDir, profileDir);
+    await moveDirectory(stagingDir, profileDir, {fsImpl});
   } catch (error) {
+    let rollbackError;
     try {
-      await fsImpl.promises.rename(previousDir, profileDir);
+      await removePath(profileDir, {fsImpl});
+      if (previousProfileExists) await moveDirectory(previousDir, profileDir, {fsImpl});
     } catch (restoreError) {
-      error.message = `${error.message}; previous profile restore also failed`;
+      rollbackError = restoreError;
+    }
+    if (rollbackError) {
+      error.message = `${error.message}; previous profile restore also failed: ${rollbackError.message}`;
     }
     throw error;
   }
   await removePath(previousDir, {fsImpl});
   await fsImpl.promises.chmod(profileDir, 0o700).catch(() => {});
+}
+
+/** Move directories even when the source and destination are on different
+ * filesystems (for example, an image-layer/overlay-backed profile). The
+ * caller has already made the destination safe to populate before invoking
+ * this helper. */
+async function moveDirectory(sourceDir, destinationDir, {fsImpl = fs} = {}) {
+  try {
+    await fsImpl.promises.rename(sourceDir, destinationDir);
+    return;
+  } catch (error) {
+    if (!error || error.code !== "EXDEV") throw error;
+  }
+
+  let copyStarted = false;
+  try {
+    copyStarted = true;
+    await fsImpl.promises.cp(sourceDir, destinationDir, {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+    });
+    await removePath(sourceDir, {fsImpl});
+  } catch (error) {
+    if (copyStarted) await removePath(destinationDir, {fsImpl}).catch(() => {});
+    throw error;
+  }
 }
 
 async function ensureProfileDirectory(profileDir, {fsImpl = fs} = {}) {
@@ -136,6 +170,8 @@ module.exports = {
   TRANSIENT_PROFILE_PATHS,
   compactProfileError,
   createChromeProfileService,
+  moveDirectory,
+  replaceProfileDirectory,
   removeUnsafeSymlinks,
   sanitizeChromeProfile,
 };

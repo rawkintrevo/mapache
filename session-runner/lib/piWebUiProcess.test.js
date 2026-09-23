@@ -351,6 +351,35 @@ test("retries transient health failures within a bounded startup", async () => {
   }
 });
 
+test("allows a slow cold start within the managed UI startup budget", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild();
+  let clock = 0;
+  let healthCalls = 0;
+  config.piWebUiHealthIntervalMs = 1_000;
+  config.piWebUiStartupTimeoutMs = 90_000;
+  try {
+    const process = createPiWebUiProcess(config, {
+      now: () => clock,
+      delay: async (delayMs) => { clock += delayMs; },
+      fetch: async () => {
+        healthCalls += 1;
+        if (clock < 31_000) return {ok: false, status: 503, json: async () => ({})};
+        return {ok: true, status: 200, json: async () => ({ok: true, engine: "pi"})};
+      },
+      spawn: () => child,
+    });
+
+    await process.start();
+    assert.equal(process.status().state, "ready");
+    assert.equal(clock >= 31_000, true);
+    assert.equal(healthCalls, 32);
+    await process.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("fails closed when the pinned runtime entry is missing", async () => {
   const {root, config} = await fixture();
   config.piWebUiRoot = path.join(root, "missing-runtime");
