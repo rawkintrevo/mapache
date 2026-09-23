@@ -76,7 +76,11 @@ function resolveRuntimeReservation(workspace = {}, sessions = [], session = {}, 
   const reservedSessionId = String(workspace.agentRuntimeSessionId || "").trim();
   const workspaceBusy = reservedSessionId && reservedSessionId !== sessionId &&
     ACTIVE_RUNTIME_WORKSPACE_STATES.has(String(workspace.agentRuntimeState || "").trim().toLowerCase());
-  const activeSession = sessions.find((candidate) => candidate.id !== sessionId && isActiveMarkedRuntimeSession(candidate));
+  // Automation admission is authoritative for whether an automation excludes
+  // the main runtime. Automation sessions have their own runtime authority and
+  // must not be mistaken for a second main session here.
+  const activeSession = sessions.find((candidate) => candidate.id !== sessionId &&
+    !isAutomationRuntime(candidate) && isActiveMarkedRuntimeSession(candidate));
   if (workspaceBusy || activeSession) {
     return {
       idempotent: false,

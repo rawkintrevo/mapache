@@ -244,6 +244,34 @@ function sessionRef(sessionsRef, id) {
   assert.equal(automation.state.sessions.get("auto-run-a").syncWriterRole, "none");
   assert.equal(automation.state.sessions.get("auto-run-b").syncWriterRole, "none");
 
+  const parallelMain = session("session-main", "operation-main");
+  await automationService.reserveChromeWorkspaceSession(
+      "workspace-1", sessionRef(automation.sessionsRef, parallelMain.id), parallelMain,
+      {newRuntime: true, runtimeOperationId: "operation-main", syncWriterEligible: true},
+  );
+  assert.equal(automation.state.sessions.size, 3);
+  assert.equal(automation.state.workspace.agentRuntimeSessionId, "session-main");
+
+  const exclusive = createFakeFirestore({
+    agentUiVersion: AGENT_UI_VERSION,
+    automationMainExclusionRunId: "run-exclusive",
+  }, {
+    "auto-run-exclusive": {
+      ...session("auto-run-exclusive", "run-exclusive", "running"),
+      runtimeKind: "automation",
+      automationRunId: "run-exclusive",
+    },
+  });
+  const exclusiveService = createWorkspaceSessionReservationService({db: exclusive.firestore, admin});
+  await assert.rejects(
+      exclusiveService.reserveChromeWorkspaceSession(
+          "workspace-1", sessionRef(exclusive.sessionsRef, "session-main"),
+          session("session-main", "operation-main"),
+          {newRuntime: true, runtimeOperationId: "operation-main", syncWriterEligible: true},
+      ),
+      (error) => error.status === 409 && error.publicMessage === "automation_requires_main_paused",
+  );
+
   console.log("workspace session reservation service tests passed");
 })().catch((error) => {
   console.error(error);

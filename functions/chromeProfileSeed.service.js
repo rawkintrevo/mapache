@@ -2,8 +2,7 @@
 
 const {DEFAULT_BUCKET} = require("./backendConfig");
 const {httpError} = require("./backendUtils.helpers");
-const {automationSessionId, isAutomationRuntime} = require("./runtimePaths.helpers");
-const {isChromeSession} = require("./chromeReservation.helpers");
+const {automationSessionId} = require("./runtimePaths.helpers");
 
 const CHROME_PROFILE_SEED_SCHEMA_VERSION = 1;
 const CHROME_PROFILE_SEED_STORAGE_DIR = "chrome-profile-seeds/v1";
@@ -79,7 +78,6 @@ function validateChromeProfileSeedDescriptor(value, options = {}) {
 }
 
 async function selectAutomationChromeProfileSeed({
-  requestRunnerJson,
   run = {},
   sessionCollection,
   storage,
@@ -121,29 +119,9 @@ async function selectAutomationChromeProfileSeed({
     throw seedError("chrome_profile_seed_unavailable");
   }
 
-  const sessions = await listWorkspaceSessions(sessionCollection, workspace.id || run.workspaceId);
-  const sourceSession = sessions.find((session) => isWorkspaceChromeSource(session));
-  if (sourceSession) {
-    if (typeof requestRunnerJson !== "function") throw seedError("chrome_profile_capture_unavailable");
-    let result;
-    try {
-      result = await requestRunnerJson(sourceSession, "/workspace/chrome-profile/snapshot", {
-        method: "POST",
-        body: {reason: "automation_admission"},
-        timeoutMs: 120000,
-        failureError: "chrome_profile_capture_failed",
-        unavailableError: "chrome_profile_capture_unavailable",
-      });
-    } catch (error) {
-      throw normalizeSeedError(error, "chrome_profile_capture_failed");
-    }
-    const descriptor = validateChromeProfileSeedDescriptor(
-        result && (result.seed || result.chromeProfileSeed), context,
-    );
-    await verifyChromeProfileSeedObject(descriptor, {storage});
-    return inheritedSeed(descriptor, "fresh_capture");
-  }
-
+  // Ordinary run startup selects the last complete immutable snapshot. Profile
+  // refresh is a separate runner operation, so a changing live browser cannot
+  // make automation provisioning fail or change the selected identity midway.
   const current = await readCurrentChromeProfileSeed({storage, ...context});
   if (!current) return {mode: "fresh", reason: "no_seed", descriptor: null, ageMs: null};
   return inheritedSeed(current, "latest_published");
@@ -202,20 +180,6 @@ async function verifyChromeProfileSeedObject(descriptor, {storage} = {}) {
     }
   }
   return descriptor;
-}
-
-function isWorkspaceChromeSource(session = {}) {
-  const status = String(session.status || "").trim().toLowerCase();
-  return !isAutomationRuntime(session) && isChromeSession(session) &&
-    status === "running" && session.serviceUrl && session.shutdownToken;
-}
-
-async function listWorkspaceSessions(sessionCollection, workspaceId) {
-  if (typeof sessionCollection !== "function") return [];
-  const collection = sessionCollection(workspaceId);
-  if (!collection || typeof collection.get !== "function") return [];
-  const snapshot = await collection.get();
-  return (snapshot.docs || []).map((doc) => ({id: doc.id, ...(doc.data() || {})}));
 }
 
 async function readExistingAutomationSelection(sessionCollection, workspaceId, runId) {

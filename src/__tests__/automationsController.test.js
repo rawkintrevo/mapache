@@ -211,6 +211,44 @@ describe("automationsController", () => {
     expect(fixture.state.automations.definitions).toEqual([]);
   });
 
+  test("keeps definitions and mutations scoped across A to B to A navigation", async () => {
+    const fixture = createFixture({
+      state: {
+        workspaces: [
+          {id: "workspace-1", sharedStorage: {configured: true, state: "ready"}},
+          {id: "workspace-2", sharedStorage: {configured: true, state: "ready"}},
+        ],
+      },
+      api: {
+        listDefinitions: vi.fn(async (workspaceId) => ({
+          automations: workspaceId === "workspace-1" ?
+            [{id: "automation-a", revision: 1, name: "Workspace A"}] :
+            [{id: "automation-b", revision: 1, name: "Workspace B"}],
+        })),
+      },
+    });
+    const controller = createAutomationsController({...fixture, setIntervalImpl: vi.fn()});
+
+    await controller.loadWorkspace("workspace-1");
+    expect(fixture.state.automations.definitions.map((item) => item.id)).toEqual(["automation-a"]);
+
+    fixture.state.selectedWorkspaceId = "workspace-2";
+    controller.setWorkspace("workspace-2");
+    expect(fixture.state.automations.definitions).toEqual([]);
+    await controller.loadWorkspace("workspace-2");
+    expect(fixture.state.automations.definitions.map((item) => item.id)).toEqual(["automation-b"]);
+    await controller.updateDefinition("automation-b", {enabled: true}, "workspace-2");
+    expect(fixture.api.updateDefinition).toHaveBeenLastCalledWith(
+        "workspace-2", "automation-b", {enabled: true, expectedRevision: 1},
+    );
+
+    fixture.state.selectedWorkspaceId = "workspace-1";
+    controller.setWorkspace("workspace-1");
+    expect(fixture.state.automations.definitions).toEqual([]);
+    await controller.loadWorkspace("workspace-1");
+    expect(fixture.state.automations.definitions.map((item) => item.id)).toEqual(["automation-a"]);
+  });
+
   test("refreshes a conflicted revision and preserves a visible conflict marker", async () => {
     const conflict = Object.assign(new Error("revision_conflict"), {code: "revision_conflict", status: 409});
     const fixture = createFixture({api: {

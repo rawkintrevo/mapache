@@ -22,7 +22,6 @@ function createAutomationProvisioningService(dependencies = {}) {
     provisionSessionService: dependencies.provisionSessionService,
     requireWorkspace: dependencies.requireWorkspace,
     sessionCollection: dependencies.sessionCollection,
-    requestRunnerJson: dependencies.requestRunnerJson,
     storage: dependencies.storage,
   };
   if (typeof shared.createSession !== "function") {
@@ -87,7 +86,6 @@ async function provisionAutomationRun(runId, dependencies = {}) {
   try {
     const workspace = await dependencies.requireWorkspace(run.ownerUid, run.workspaceId);
     const chromeProfileSeed = await selectAutomationChromeProfileSeed({
-      requestRunnerJson: dependencies.requestRunnerJson,
       run,
       sessionCollection: dependencies.sessionCollection,
       storage: dependencies.storage,

@@ -16,6 +16,24 @@ standing storage service. Each admitted run uses one deterministic
 
 ## Data and lifecycle
 
+### Authoritative transition map
+
+| Phase | Authoritative owner | Durable decision |
+| --- | --- | --- |
+| Schedule / Run now | `automationScheduler.service.js` / `automationRuns.service.js` | Create one immutable queued run; idempotency prevents a second occurrence. |
+| Queue / admit | `automationAdmission.service.js` | Hold concurrency and optional main exclusion in one transaction. Main runtime reservation ignores automation sessions and consults only this exclusion. |
+| Prepare inputs / start runner | `automationProvisioning.service.js` | Claim one deterministic session/service operation and pin saved workspace, browser-snapshot, credential, and output identities. |
+| Execute | `session-runner/lib/automationExecution.service.js` | Claim `executionStartedAt` before one prompt submission; a lost or uncertain claim is interrupted, never replayed. |
+| Persist result | runner artifact/checkpoint services | Publish immutable output/transcript pointers only after identity and checksum validation. |
+| Clean up | `automationCleanup.service.js` | Finalize truthful persistence state, confirm service absence, then release the admission slot. |
+| Recover | `automationReconciliation.service.js` | Retry the same provisioning or cleanup operations; never submit a prompt or invent a parallel transition path. |
+
+Failure handling stays with the phase owner. Provisioning records a stable failed
+outcome for cleanup, execution records a normalized terminal outcome, and cleanup
+retains capacity when deletion or persistence is uncertain. Reconciliation only
+resumes those operations, so duplicate delivery converges on the same operation,
+session, service, execution claim, or cleanup.
+
 - Definitions live at `workspaces/{workspaceId}/automations/{automationId}`.
   They are owner-scoped, revisioned, audit-recorded, and normalized by
   `functions/automationDefinitions.service.js`.
@@ -146,6 +164,12 @@ automatic merge into `/workspace`; the `/automations` tree is intentionally
 read-only in the main session. Workspace deletion retains its existing storage
 cleanup behavior.
 
+Main session creation and restart rebuild the storage bucket and prefix from the
+owner-checked workspace record before constructing the `/automations` mount.
+Persisted session storage fields are compatibility metadata and cannot override
+the owning workspace, preventing a stale descriptor from mounting a sibling
+workspace's output root.
+
 Cloud Run v2 volumes use `gcs: {bucket, readOnly, mountOptions}`. Automation
 input/output mounts and the main session's `/workspace` and `/automations`
 mounts are siblings, because Cloud Run does not support nested mounts.
@@ -176,12 +200,14 @@ descriptor are uploaded first; `current.json` advances only after both are
 complete. The descriptor records the schema, owning workspace, seed version,
 object generation, checksum, capture time, and browser compatibility metadata.
 
-When an automation is admitted, Functions requests a bounded fresh capture from
-the owning running Chrome session when one exists. A stopped workspace uses its
-last complete descriptor. The selected descriptor is validated and pinned to the
-run and session before Cloud Run provisioning; retries reuse that exact version.
+When an automation is admitted, Functions selects the workspace's last complete
+published descriptor without contacting the live browser. Periodic/final
+publication and the protected explicit snapshot route are separate refresh
+operations, so a changing profile cannot block ordinary startup. The selected
+descriptor is validated and pinned to the run and session before Cloud Run
+provisioning; retries reuse that exact version.
 A workspace with no published profile is explicitly marked `fresh/no_seed`.
-Capture, object, checksum, ownership, or compatibility failures are explicit and
+Object, checksum, ownership, or compatibility failures are explicit and
 never silently downgrade an inherited run to a fresh profile. Seed versions are
 retained while referenced by runs and the runner keeps a bounded recent history;
 workspace deletion removes the internal namespace with the workspace storage.

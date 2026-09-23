@@ -173,6 +173,8 @@ assert.strictEqual(isIdleSession({
     sourceRepoUrl: "https://github.com/example/stale.git",
     syncPolicyMode: "github-cache",
     syncPolicyExclude: [".git/"],
+    workspaceStorageBucket: "stale-bucket",
+    workspaceStoragePrefix: "workspaces/user-1/other-workspace",
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(currentSession.status, "provisioning");
@@ -186,6 +188,9 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].sourceRepoUrl, null);
   assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncPolicyMode, "blank");
   assert.deepStrictEqual(calls.find((call) => call.kind === "provisionService").args[2].syncPolicyExclude, []);
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].workspaceStorageBucket, workspace.bucket);
+  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].workspaceStoragePrefix, workspace.storagePrefix);
+  assert.strictEqual(currentSession.workspaceStoragePrefix, workspace.storagePrefix);
 
   calls.length = 0;
   currentSession = {
