@@ -54,6 +54,21 @@ assert.deepStrictEqual(toClientDoc({
   name: "Workspace",
   createdAt: "2026-06-17T12:34:56.000Z",
 });
+assert.deepStrictEqual(toClientDoc({
+  id: "automation-session",
+  data: () => ({
+    chromeProfileSeed: {objectPath: "private/path", sha256: "secret-ish"},
+    chromeProfileInitialization: {mode: "inherited", reason: "pinned", capturedAt: "2026-09-23T18:00:00.000Z", ageMs: 1000, extra: "omit"},
+  }),
+}), {
+  id: "automation-session",
+  chromeProfileInitialization: {
+    mode: "inherited",
+    reason: "pinned",
+    capturedAt: "2026-09-23T18:00:00.000Z",
+    ageMs: 1000,
+  },
+});
 
 assert.strictEqual(slugify(" My Workspace!! "), "my-workspace");
 assert.strictEqual(slugify(""), "workspace");

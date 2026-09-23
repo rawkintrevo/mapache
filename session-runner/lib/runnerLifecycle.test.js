@@ -30,6 +30,7 @@ function createLifecycleHarness(events, overrides = {}) {
     },
     admin: overrides.admin || {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
     chromeProfile: overrides.chromeProfile || service("restore", "chromeProfile.restore"),
+    chromeProfileSeed: overrides.chromeProfileSeed,
     chromeProfileSnapshots: overrides.chromeProfileSnapshots || {
       enabled: () => true,
       finalize: async () => events.push("chromeProfileSnapshots.finalize"),
@@ -87,6 +88,22 @@ test("startup runs ordered preparation before snapshots, sync, and listen", asyn
     "syncLoop.start",
     "server.listen",
   ]);
+});
+
+test("restores a pinned Chrome seed before the profile and browser start", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    chromeProfileSeed: {
+      restore: async () => {
+        events.push("chromeProfileSeed.restore");
+        return {restored: true, mode: "inherited"};
+      },
+    },
+  });
+
+  await lifecycle.start();
+  assert.equal(events.indexOf("chromeProfileSeed.restore") < events.indexOf("chromeRuntime.start"), true);
+  assert.equal(events.includes("chromeProfile.restore"), false);
 });
 
 test("startup failure prevents later lifecycle steps and listen", async () => {

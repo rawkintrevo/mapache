@@ -270,7 +270,22 @@ function validateRunId(value) {
 function toRunDto(source) {
   const id = source.id || source.runId;
   const data = typeof source.data === "function" ? source.data() || {} : source;
-  return serialize({id, ...data});
+  const safe = {...data};
+  delete safe.chromeProfileSeed;
+  if (safe.chromeProfileInitialization) {
+    safe.chromeProfileInitialization = safeChromeProfileInitialization(safe.chromeProfileInitialization);
+  }
+  return serialize({id, ...safe});
+}
+
+function safeChromeProfileInitialization(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return {
+    mode: String(value.mode || "").slice(0, 32),
+    reason: String(value.reason || "").slice(0, 64),
+    capturedAt: value.capturedAt || null,
+    ageMs: Number.isFinite(value.ageMs) ? value.ageMs : null,
+  };
 }
 
 function serverTimestamp(admin) {

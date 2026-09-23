@@ -15,6 +15,7 @@ const {createChromeRuntime} = require("./lib/chromeRuntime");
 const {createChromeDesktopService} = require("./lib/chromeDesktop");
 const {createChromeProfileService} = require("./lib/chromeProfile.service");
 const {createChromeProfileSnapshotService} = require("./lib/chromeProfileSnapshot.service");
+const {createChromeProfileSeedService} = require("./lib/chromeProfileSeed.service");
 const {createConfig} = require("./lib/config");
 const {createGitService} = require("./lib/git");
 const {createRunnerHarnessRegistry} = require("./lib/harnesses");
@@ -114,10 +115,14 @@ const workspaceSync = createWorkspaceSyncCoordinator({
   writerAuthority: workspaceAuthority,
 });
 const chromeProfile = createChromeProfileService({config, archives: workspace});
+const chromeProfileSeed = createChromeProfileSeedService({config, db, profile: chromeProfile, storage});
 const chromeProfileSnapshots = createChromeProfileSnapshotService({
   config,
   profile: chromeProfile,
-  snapshot: () => workspaceSync.syncUp({includeArchives: true}),
+  snapshot: ({final, requested}) => chromeProfileSeed.publish({
+    assertCurrentWriter: workspaceSync.assertCurrentWriter,
+    reason: requested ? "automation_admission" : final ? "shutdown" : "periodic",
+  }),
 });
 const pi = createPiService({config, syncUp: workspaceSync.syncUp});
 const piModelScope = createPiModelScopeService({admin, config, db});
@@ -200,6 +205,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   googleMcpTokenApi,
   automationExecution,
   chromeProfile,
+  chromeProfileSeed,
   chromeProfileSnapshots,
   chromeRuntime,
   checkpointScheduler,
@@ -233,6 +239,7 @@ registerBrowserRoutes({
   chromeRuntime,
   checkpointPublisher,
   config,
+  chromeProfileSeed,
   expressStatic: express.static,
   piWebUi,
   preview,
@@ -245,6 +252,7 @@ registerWorkspaceRoutes({
   app,
   hasRunnerAccess,
   shutdown: runnerLifecycle.shutdown,
+  snapshotChromeProfile: chromeProfileSnapshots.snapshot,
   workspaceSync,
 });
 registerQaFaultRoutes({app, faultHarness: qaFaultHarness, hasRunnerAccess});

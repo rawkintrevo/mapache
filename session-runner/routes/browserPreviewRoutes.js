@@ -6,6 +6,7 @@ function registerBrowserRoutes({
   browserVncWebSocketPath,
   checkpointPublisher,
   chromeRuntime,
+  chromeProfileSeed,
   config,
   activity,
   piWebUi,
@@ -37,6 +38,7 @@ function registerBrowserRoutes({
       lastCheckpointAt: checkpoint.lastCheckpointAt || null,
       checkpointError: checkpoint.checkpointError || null,
     };
+    if (chromeProfileSeed?.status) health.chromeProfileSeed = chromeProfileSeed.status();
     if (piWebUi) {
       health.agentRuntime = piWebUi.status?.() || null;
       health.agentActivity = await piWebUi.activity?.() || null;

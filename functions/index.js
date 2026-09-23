@@ -297,7 +297,9 @@ const automationProvisioningService = createAutomationProvisioningService({
   },
   provisionSessionService,
   requireWorkspace,
+  requestRunnerJson,
   sessionCollection,
+  storage,
 });
 const {
   handleAutomationRunEvent,

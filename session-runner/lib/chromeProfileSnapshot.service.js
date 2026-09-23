@@ -18,7 +18,7 @@ function createChromeProfileSnapshotService({
   return {
     enabled: () => enabled,
     start,
-    snapshot: () => runSnapshot(false),
+    snapshot: (options = {}) => runSnapshot(false, options),
     finalize: () => runFinalSnapshot(),
     stop,
     status,
@@ -36,12 +36,12 @@ function createChromeProfileSnapshotService({
     return status();
   }
 
-  async function runSnapshot(final) {
+  async function runSnapshot(final, options = {}) {
     if (!enabled) return {enabled: false, skipped: true};
     if (inFlight) return inFlight;
     inFlight = Promise.resolve().then(async () => {
       if (final && profile && typeof profile.sanitize === "function") await profile.sanitize();
-      const result = await snapshot({final});
+      const result = await snapshot({final, ...options});
       lastSnapshotAt = Date.now();
       lastError = null;
       return {enabled: true, final, result};

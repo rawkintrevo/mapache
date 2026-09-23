@@ -25,6 +25,7 @@ function createChromeProfileService({config, archives, fsImpl = fs, osImpl = os}
   return {
     enabled: () => enabled,
     restore,
+    restoreArchive,
     sanitize: (profileDir = config && config.chromeProfileDir) => sanitizeChromeProfile(profileDir, {fsImpl}),
   };
 
@@ -44,6 +45,12 @@ function createChromeProfileService({config, archives, fsImpl = fs, osImpl = os}
       return {enabled: true, restored: false, sanitized: true};
     }
 
+    return restoreArchive(archive);
+  }
+
+  async function restoreArchive(archive) {
+    const target = (archives.archiveSyncTargets || []).find((entry) => entry.mode === "chromeProfile");
+    if (!target || !target.localPath) throw new Error("Chrome profile archive target is not configured");
     const stagingDir = await fsImpl.promises.mkdtemp(path.join(
         path.dirname(target.localPath),
         `.mapache-chrome-profile-${osImpl.pid || process.pid}-`,

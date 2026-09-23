@@ -8,6 +8,7 @@ function createRunnerLifecycleCoordinator({
   admin,
   automationExecution,
   chromeProfile,
+  chromeProfileSeed,
   chromeProfileSnapshots,
   chromeRuntime,
   checkpointScheduler,
@@ -49,7 +50,8 @@ function createRunnerLifecycleCoordinator({
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       await piModelScope.restore();
-      await chromeProfile.restore();
+      const profileSeedRestore = await chromeProfileSeed?.restore?.();
+      if (!profileSeedRestore?.restored) await chromeProfile.restore();
       await chromeRuntime.start();
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
