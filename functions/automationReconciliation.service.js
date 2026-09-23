@@ -149,7 +149,7 @@ async function reconcileRun(run, dependencies = {}) {
   return "interrupted";
 }
 
-async function heartbeatIsStale(run, session, dependencies = {}) {
+function heartbeatIsStale(run, session, dependencies = {}) {
   const heartbeat = latestTimestamp(
       run.executionHeartbeatAt,
       session.automationExecutionHeartbeatAt,
@@ -164,16 +164,26 @@ async function probeRunner(session, dependencies = {}) {
   if (!session.serviceUrl || !session.shutdownToken) {
     return {ok: false, errorCode: "automation_runner_unreachable"};
   }
+  const startedAt = Date.now();
   try {
     const health = typeof dependencies.healthProbe === "function" ?
       await dependencies.healthProbe(session) :
-      await dependencies.requestRunnerJson(session, "/healthz", {
+      await dependencies.requestRunnerJson(session, "/runner/health", {
         timeoutMs: dependencies.healthProbeTimeoutMs,
         unavailableError: "automation_runner_unreachable",
       });
     return health && health.ok !== false ? {ok: true} : {ok: false, errorCode: "automation_runner_unhealthy"};
   } catch (error) {
-    return {ok: false, errorCode: stableReconciliationErrorCode(error, "automation_runner_unreachable")};
+    const errorCode = stableReconciliationErrorCode(error, "automation_runner_unreachable");
+    logger.warn("automation runner health probe failed", {
+      runId: session.automationRunId || null,
+      sessionId: session.id || null,
+      route: "/runner/health",
+      httpStatus: Number.isInteger(error?.runnerHttpStatus) ? error.runnerHttpStatus : Number.isInteger(error?.status) ? error.status : null,
+      durationMs: Date.now() - startedAt,
+      errorCode,
+    });
+    return {ok: false, errorCode};
   }
 }
 

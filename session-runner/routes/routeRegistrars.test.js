@@ -135,7 +135,7 @@ test("health route exposes checkpoint status without runner error details", asyn
     requireBrowserOrRunnerAccess: (req, res, next) => next(),
     renderTerminalPage: () => "",
   });
-  const route = app.routes.find(({method, path}) => method === "GET" && path === "/healthz");
+  const route = app.routes.find(({method, path}) => method === "GET" && path === "/runner/health");
   const response = createResponse();
   const request = {};
   route.handlers[0](request, response, () => {});
@@ -179,7 +179,7 @@ test("health route exposes safe managed-agent activity without browser sockets",
     requireBrowserOrRunnerAccess: (req, res, next) => next(),
     renderTerminalPage: () => "",
   });
-  const route = app.routes.find(({method, path}) => method === "GET" && path === "/healthz");
+  const route = app.routes.find(({method, path}) => method === "GET" && path === "/runner/health");
   const response = createResponse();
   await route.handlers[1]({}, response);
 
@@ -224,4 +224,28 @@ test("Google MCP status route requires runner access and returns safe status", a
   const authorized = createResponse();
   await route.handlers[0]({authorized: true}, authorized);
   assert.deepEqual(authorized.body, {ok: true, supported: true, servers: []});
+});
+
+test("canonical health endpoint requires authentication and reserved aliases do not exist", async (t) => {
+  const express = require("express");
+  const app = express();
+  const gate = (req, res, next) => req.get("x-shutdown-token") === "test-token" ?
+    next() : res.status(404).end();
+  registerBrowserRoutes({
+    app, config: {workspaceId: "workspace-1", sessionId: "session-1"},
+    requireBrowserAccess: gate, requireBrowserOrRunnerAccess: gate,
+    checkpointPublisher: {status: async () => ({lastCheckpointAt: "saved"})},
+  });
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(origin + "/runner/health")).status, 404);
+  const headers = {"x-shutdown-token": "test-token"};
+  const response = await fetch(origin + "/runner/health", {headers});
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).lastCheckpointAt, "saved");
+  for (const route of ["/healthz", "/healthz/"]) {
+    assert.equal((await fetch(origin + route, {headers})).status, 404);
+  }
 });

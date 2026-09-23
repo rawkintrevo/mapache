@@ -275,7 +275,26 @@ deterministic `mpauto-{runId-hash}` service after that request, confirms the
 service is absent, and only then releases the automation slot. A timeout or
 unclosed writer is retained as interrupted/partial persistence evidence.
 
-The one-minute automation reconciler uses `/healthz` with the runner shutdown
+### Runner health endpoint
+
+Use **`/runner/health`** for the authenticated runner health handler and all
+probes. Do not add `/healthz` or `/healthz/` routes, aliases, redirects, or
+fallback callers. This is a permanent deployment constraint, not a naming
+preference: Cloud Run reserves some paths ending in `z`, and the bare path
+returned platform 404s without reaching the container. A trailing-slash
+workaround was explicitly rejected after repeated regressions.
+See [Cloud Run reserved paths](https://docs.cloud.google.com/run/docs/known-issues#reserved-url-paths).
+
+The handler lives in `session-runner/routes/browserPreviewRoutes.js` and accepts
+the existing browser HMAC or runner shutdown-token authentication. The caller
+lives in `functions/automationReconciliation.service.js`.
+`functions/runnerHealthContract.test.js` prevents reserved-path references in
+production runner/Functions JavaScript; route and reconciler tests enforce the
+canonical endpoint. Rebuild/publish `pi-chrome` before deploying the caller.
+Existing runner services require recreation; do not restore an old-path
+fallback for compatibility.
+
+The one-minute automation reconciler uses `/runner/health` with the runner shutdown
 credential for stale-heartbeat probes. It may reconcile setup polling or
 cleanup, but it never restarts an automation prompt. Cloud Run orphan cleanup
 is limited to services carrying the automation label set and rechecks those
@@ -304,7 +323,7 @@ upload leaves the previous pointer unchanged. Workspace files on the marked
 runtime use the same publication boundary: each sync creates a versioned file
 manifest with content hashes and tombstones, and the committed manifest—not a
 delayed mutable upload or delete—is the authoritative file view. Unmarked
-workspaces retain the legacy flat writer. Protected `/healthz` exposes only the
+workspaces retain the legacy flat writer. Protected `/runner/health` exposes only the
 safe `lastCheckpointAt` timestamp and normalized `checkpointError` code. On the
 next marked boot, `agentCheckpointRestore.service.js` reads only the published
 pointer, validates the manifest identity, checksum, path, and JSON/JSONL content
@@ -493,7 +512,7 @@ The container runs `session-runner/server.js`.
 
 It starts an Express server on `PORT`, serves the terminal iframe page, and exposes a WebSocket at `/terminal`. The runner keeps one active `node-pty` process per container instance. Browser WebSocket connections attach to that PTY, and closing or recreating the browser iframe detaches only the socket instead of killing the process.
 
-Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/healthz`, and `/capabilities` is gated by short-lived HMAC tokens minted by the authenticated Cloud Functions API. The runner receives a per-session `SESSION_BROWSER_TOKEN_SECRET` environment variable and validates the `mapache_access` query parameter or the HttpOnly `mapache_access` cookie before serving those browser surfaces. The query token is used for the initial iframe load; the cookie lets preview pages load relative assets and lets the terminal WebSocket reconnect without exposing the internal runner management token. Backend-only lifecycle, sync, checkpoint, source-automation, and MCP/auth routes use the separate `SESSION_SHUTDOWN_TOKEN` header gate.
+Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/runner/health`, and `/capabilities` is gated by short-lived HMAC tokens minted by the authenticated Cloud Functions API. The runner receives a per-session `SESSION_BROWSER_TOKEN_SECRET` environment variable and validates the `mapache_access` query parameter or the HttpOnly `mapache_access` cookie before serving those browser surfaces. The query token is used for the initial iframe load; the cookie lets preview pages load relative assets and lets the terminal WebSocket reconnect without exposing the internal runner management token. Backend-only lifecycle, sync, checkpoint, source-automation, and MCP/auth routes use the separate `SESSION_SHUTDOWN_TOKEN` header gate.
 
 The runner stores a bounded raw-output replay buffer so a newly loaded iframe can redraw recent terminal output after reconnecting. The default replay limit is `1000000` characters and can be changed with `TERMINAL_REPLAY_LIMIT`. Automatic reconnects from the same iframe skip replay to avoid duplicating visible terminal content. If the shell process itself exits, the runner closes connected sockets and the next fresh iframe connection starts a new PTY.
 

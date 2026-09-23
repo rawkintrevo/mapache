@@ -256,3 +256,22 @@ test("runner shutdown cooperatively cancels submitted work and honors a committe
   assert.equal(db.data.get("automationRuns/run-1").status, "canceled");
   assert.equal(db.data.get("automationRuns/run-1").desiredOutcome, "canceled");
 });
+
+test("cleanup preserves a committed interruption instead of reporting user cancellation", async () => {
+  const {db, service} = setup({
+    adapter: {
+      automationStatus: async () => ({ok: true, runId: "run-1", status: "running"}),
+      startAutomation: async () => ({ok: true, runId: "run-1", status: "running"}),
+      cancelAutomation: async () => ({ok: true, runId: "run-1", status: "canceled"}),
+    },
+  });
+  await service.start();
+  Object.assign(db.data.get("automationRuns/run-1"), {
+    status: "stopping", desiredOutcome: "interrupted", interruptionReason: "runner_request_failed",
+  });
+  await service.stop({cancel: true});
+  const run = db.data.get("automationRuns/run-1");
+  assert.equal(run.status, "interrupted");
+  assert.equal(run.desiredOutcome, "interrupted");
+  assert.equal(run.executionErrorCode, "runner_request_failed");
+});
