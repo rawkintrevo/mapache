@@ -1,65 +1,30 @@
 ---
 name: mapache-preview-qa
-description: QA a Mapache preview with the runner-owned browser QA command, status checks, console logs, screenshots, and structured reports.
+description: Test a local app in managed Chrome using screenshots, console inspection, network checks, and user interactions.
 ---
 
-Use this skill after building a site or starting a preview server in a Mapache preview-capable session.
+# Local browser QA
 
-## Contract
+The skill name is retained for compatibility. Use the existing managed Chrome
+browser, not the former preview gateway or a separately launched browser.
 
-- Preview URL: $MAPACHE_PREVIEW_URL
-- Runner URL: $MAPACHE_RUNNER_URL
-- QA artifact directory: $MAPACHE_QA_DIR
-- Browser QA command: $MAPACHE_BROWSER_QA_COMMAND
-- Browser console/error logs: $MAPACHE_RUNNER_URL/preview/logs
-- Preview status: $MAPACHE_RUNNER_URL/preview/status
+1. Read `mapache-chrome`, run `mapache-chrome-status`, and discover the
+   `chrome-devtools` MCP tools.
+2. Start the app with its normal server command on an available localhost port
+   in a persistent terminal. Check its startup output and local HTTP readiness.
+3. Navigate managed Chrome to `http://localhost:<port>/`.
+4. Exercise the requested user flows with browser tools. Inspect console
+   errors, failed network requests, missing assets, and unexpected UI states.
+5. Capture useful screenshots and record the tested URL, steps, expected/actual
+   results, and remaining limitations under a workspace artifact directory
+   such as `artifacts/qa/`. In an automation, use its assigned output directory.
+6. Fix relevant failures and repeat the affected checks before claiming success.
 
-## QA Steps
+Check for blank screens, clipped layouts, broken navigation, unresponsive
+buttons, and forms that fail without useful feedback. Test relevant viewport
+sizes when supported. Treat console errors as actionable unless they are
+clearly unrelated noise documented in the report.
 
-1. Create the QA directory: mkdir -p "$MAPACHE_QA_DIR/latest"
-2. Confirm preview readiness: curl "$MAPACHE_RUNNER_URL/preview/status"
-3. Write a browser QA spec when interactions are needed.
-4. Run the supported browser command so the runner-owned QA contract launches Chromium, captures screenshots, and collects console/page/request failures.
-4. Check runner-side browser logs: curl "$MAPACHE_RUNNER_URL/preview/logs"
-5. Write findings to $MAPACHE_QA_DIR/latest/report.md and $MAPACHE_QA_DIR/latest/report.json.
-
-## Minimal Browser QA Run
-
-```bash
-$MAPACHE_BROWSER_QA_COMMAND
-```
-
-## Example Interaction Spec
-
-```json
-{
-  "steps": [
-    {"action": "waitFor", "selector": "body"},
-    {"action": "click", "selector": "button[type='submit']"},
-    {"action": "fill", "selector": "input[name='email']", "value": "qa@example.com"},
-    {"action": "press", "selector": "input[name='email']", "key": "Enter"},
-    {"action": "screenshot", "name": "after-submit"}
-  ]
-}
-```
-
-Run it with:
-
-```bash
-$MAPACHE_BROWSER_QA_COMMAND --spec /workspace/.mapache/qa/spec.json
-```
-
-## What To Look For
-
-- Blank screens or missing primary content.
-- Console errors, unhandled promise rejections, failed network requests, and broken assets.
-- Layout clipping or overlap at desktop and mobile viewport sizes.
-- Buttons and navigation that do not respond.
-- Forms that cannot be completed or fail without useful feedback.
-
-## Rules
-
-- Save screenshots and reports under $MAPACHE_QA_DIR/latest.
-- Prefer testing through $MAPACHE_PREVIEW_URL, not direct localhost upstream ports.
-- Use $MAPACHE_BROWSER_QA_COMMAND instead of embedding a one-off Playwright launch script.
-- Treat console errors as actionable unless they are clearly third-party noise and documented in the report.
+Do not use preview-gateway status/log endpoints or gateway URLs. A successful
+build or HTTP probe is not a browser test. Do not submit real purchases,
+messages, or destructive changes merely to test a flow without authorization.

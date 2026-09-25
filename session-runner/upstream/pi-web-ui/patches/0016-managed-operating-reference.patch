@@ -1,0 +1,205 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -71,6 +71,7 @@
+ import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
+ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
+ import { isManaged, managedMcpAdapterPath } from "./managed.js";
++import { withManagedReference } from "./managed-reference.js";
+ import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
+ import {
+ 	createAutomationRunState,
+@@ -1812,7 +1813,7 @@
+ 							name: "pi-webui-persona",
+ 							hidden: true,
+ 							factory: (pi) => {
+-								pi.on("before_agent_start", (event) => {
++								pi.on("before_agent_start", withManagedReference((event) => {
+ 									// 子代理模板 replace（无 SYSTEM.md 时）：默认分支拼好的提示词里
+ 									// 把灵魂段换成模板提示词，自动段保留；SYSTEM.md 情形已在
+ 									// systemPromptOverride 整体替换，此处边界不存在会自然跳过。
+@@ -1849,7 +1850,7 @@
+ 										})),
+ 									});
+ 									return rendered ? { systemPrompt: rendered } : undefined;
+-								});
++								}));
+ 							},
+ 						},
+ 					],
+diff --git a/server/managed-reference.ts b/server/managed-reference.ts
+new file mode 100644
+--- /dev/null
++++ b/server/managed-reference.ts
+@@ -0,0 +1,37 @@
++import { readFileSync } from "node:fs";
++import type { BeforeAgentStartEvent, BeforeAgentStartEventResult } from "@earendil-works/pi-coding-agent";
++import { isManaged } from "./managed.js";
++
++export const MAPACHE_REFERENCE_PATH = "/app/reference/mapache.md";
++
++type PromptHandler = (event: BeforeAgentStartEvent) => BeforeAgentStartEventResult | undefined;
++
++/** Wrap the persona hook, not APPEND_SYSTEM: custom composers may omit {{append}}.
++ * Each runtime (including resumed sessions and template subagents) loads its own
++ * image-owned reference. Never materialize instructions into the workspace.
++ */
++export function withManagedReference(
++	compose: PromptHandler,
++	env: NodeJS.ProcessEnv = process.env,
++	referencePath = MAPACHE_REFERENCE_PATH,
++): PromptHandler {
++	if (!isManaged(env)) return compose;
++	let reference: string;
++	try {
++		reference = readFileSync(referencePath, "utf8").trim();
++	} catch {
++		console.warn("[Mapache] Operating reference unavailable; keeping existing system prompt.");
++		return compose;
++	}
++	if (!reference) {
++		console.warn("[Mapache] Operating reference empty; keeping existing system prompt.");
++		return compose;
++	}
++	return (event) => {
++		const result = compose(event);
++		const prompt = result?.systemPrompt ?? event.systemPrompt;
++		// Repeated turns/reloads must not accumulate another copy.
++		if (prompt.includes(reference)) return result;
++		return { ...result, systemPrompt: `${prompt}\n\n${reference}` };
++	};
++}
+diff --git a/tests/unit/managed-reference.test.ts b/tests/unit/managed-reference.test.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/unit/managed-reference.test.ts
+@@ -0,0 +1,129 @@
++import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import {
++	DefaultResourceLoader,
++	ExtensionRunner,
++	SessionManager,
++	type BeforeAgentStartEvent,
++	type ModelRegistry,
++} from "@earendil-works/pi-coding-agent";
++import { MAPACHE_REFERENCE_PATH, withManagedReference } from "../../server/managed-reference.js";
++
++const reference = "# Mapache operating reference\nUse localhost:port in managed Chrome.";
++const original = "SYSTEM.md instructions\n\nAvailable tools: read\nProject AGENTS.md\nUser APPEND_SYSTEM.md";
++const event = (systemPrompt = original): BeforeAgentStartEvent => ({
++	type: "before_agent_start",
++	prompt: "user request",
++	systemPrompt,
++	systemPromptOptions: { cwd: root },
++});
++let root: string;
++let path: string;
++beforeEach(() => {
++	root = mkdtempSync(join(tmpdir(), "managed-reference-"));
++	path = join(root, "mapache.md");
++	writeFileSync(path, `\n${reference}\n`);
++});
++afterEach(() => {
++	vi.restoreAllMocks();
++	rmSync(root, { recursive: true, force: true });
++});
++
++function wrap(compose: Parameters<typeof withManagedReference>[0] = () => undefined) {
++	return withManagedReference(compose, { PI_WEB_MANAGED: "1" }, path);
++}
++
++describe("managed operating reference", () => {
++	it("appends exactly once while preserving all existing instructions and repeated turns", () => {
++		const handler = wrap();
++		const expected = `${original}\n\n${reference}`;
++		expect(handler(event())?.systemPrompt).toBe(expected);
++		expect(handler(event())?.systemPrompt).toBe(expected);
++		// No override needed when a chained prompt already includes the reference.
++		expect(handler(event(expected))).toBeUndefined();
++	});
++
++	it("appends after custom composition even when it omits the append token", () => {
++		const composed = "Custom composer instructions\nProject rules";
++		const message = { customType: "example", content: "retain", display: false };
++		const handler = wrap(() => ({ systemPrompt: composed, message }));
++		expect(handler(event())).toEqual({ systemPrompt: `${composed}\n\n${reference}`, message });
++	});
++
++	it.each(["append", "replace", "replace with SYSTEM.md", "empty template"])(
++		"preserves the existing %s template result",
++		(mode) => {
++			const composed = mode === "empty template" ? original : `${mode} role\nProject rules\nUser append`;
++			const handler = wrap(() => (mode === "empty template" ? undefined : { systemPrompt: composed }));
++			expect(handler(event())?.systemPrompt).toBe(`${composed}\n\n${reference}`);
++		},
++	);
++
++	it.each([{}, { PI_WEB_MANAGED: "0" }, { PI_WEB_MANAGED: "false" }])(
++		"does not read files or alter the composer when unmanaged/disabled: %j",
++		(env) => {
++			const compose = () => ({ systemPrompt: "unchanged" });
++			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
++			expect(withManagedReference(compose, env, join(root, "missing"))).toBe(compose);
++			expect(warn).not.toHaveBeenCalled();
++		},
++	);
++
++	it.each(["missing", "empty"])("keeps existing prompt for %s reference with a safe warning", (kind) => {
++		if (kind === "missing") rmSync(path);
++		else writeFileSync(path, " \n\t");
++		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
++		const compose = () => ({ systemPrompt: original });
++		expect(wrap(compose)).toBe(compose);
++		expect(warn).toHaveBeenCalledOnce();
++		expect(warn.mock.calls[0][0]).not.toContain(path);
++	});
++
++	it("loads fresh image content when a runtime is recreated/resumed", () => {
++		const first = wrap();
++		writeFileSync(path, "Updated image reference");
++		const resumed = wrap();
++		expect(first(event())?.systemPrompt).toContain(reference);
++		expect(resumed(event())?.systemPrompt).toBe(`${original}\n\nUpdated image reference`);
++	});
++
++	it("uses the supported SDK hook and preserves earlier extension instructions without a model call", async () => {
++		const loader = new DefaultResourceLoader({
++			cwd: root,
++			agentDir: root,
++			noExtensions: true,
++			noSkills: true,
++			noPromptTemplates: true,
++			extensionFactories: [
++				(pi) => {
++					pi.on("before_agent_start", (e) => ({ systemPrompt: `${e.systemPrompt}\nEarlier extension` }));
++					pi.on("before_agent_start", wrap());
++				},
++			],
++		});
++		await loader.reload();
++		const loaded = loader.getExtensions();
++		expect(loaded.errors).toEqual([]);
++		const runner = new ExtensionRunner(
++			loaded.extensions,
++			loaded.runtime,
++			root,
++			SessionManager.inMemory(root),
++			{} as ModelRegistry,
++		);
++		for (let turn = 0; turn < 2; turn++) {
++			const result = await runner.emitBeforeAgentStart("request", undefined, original, { cwd: root });
++			expect(result?.systemPrompt).toBe(`${original}\nEarlier extension\n\n${reference}`);
++		}
++	});
++
++	it("wraps the common runtime factory persona hook, covering ordinary, resumed and subagent creation", () => {
++		const source = readFileSync(new URL("../../server/agent-service.ts", import.meta.url), "utf8");
++		const factory = source.slice(source.indexOf("private makeRuntimeFactory("));
++		expect(factory).toContain('pi.on("before_agent_start", withManagedReference((event) => {');
++		expect(factory).toContain('name: "pi-webui-persona"');
++		expect(MAPACHE_REFERENCE_PATH).toBe("/app/reference/mapache.md");
++	});
++});

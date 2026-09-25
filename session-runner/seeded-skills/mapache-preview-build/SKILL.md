@@ -1,51 +1,31 @@
 ---
 name: mapache-preview-build
-description: Build static web output where the Mapache preview canvas can serve it.
+description: Build a local web app and serve it on a localhost port for the managed Chrome browser.
 ---
 
-Use this skill when building a static website or static frontend bundle in a Mapache preview-capable session.
+# Build and view a local web app
 
-## Contract
+The skill name is retained for compatibility. Local app viewing uses managed
+Chrome directly, not the former Mapache preview gateway.
 
-- The preview gateway serves static files from /workspace/build by default.
-- The preview is ready when /workspace/build/index.html exists.
-- Static apps must use relative asset URLs so bundled JavaScript, CSS, fonts, and images resolve under /preview/.
-- The browser preview URL is available as $MAPACHE_PREVIEW_URL.
-- The local runner control URL is available as $MAPACHE_RUNNER_URL.
+1. Inspect the project's package scripts and framework configuration.
+2. Run the normal build command. Keep its normal output directory and asset
+   base; do not force `/workspace/build`, `--base ./`, or a `/preview/` prefix.
+3. Start the project's development or production/static server on an available
+   localhost port in a persistent terminal. For a production build, serve its
+   actual output directory using the project's supported server.
+4. Check the local HTTP endpoint, then open `http://localhost:<port>/` in
+   managed Chrome through `chrome-devtools` MCP. Read `mapache-chrome` first.
+5. Check rendering, browser console errors, failed network requests, and the
+   relevant interactions. Report build results separately from browser QA.
 
-## Build Steps
-
-1. Configure the project to emit its final browser-loadable output into /workspace/build.
-2. Configure the project to use relative asset bases, such as ./, rather than root-relative / asset paths.
-3. Build or copy the final static site into /workspace/build.
-4. Make sure the entry point is /workspace/build/index.html.
-5. Check readiness with: curl "$MAPACHE_RUNNER_URL/preview/status"
-6. Open or QA the site at $MAPACHE_PREVIEW_URL.
-
-## Common Frameworks
-
-For Vite, prefer:
+For a Vite development server, when the project supports these options:
 
 ```bash
-npm run build -- --outDir build --base ./
+npm run dev -- --host 127.0.0.1 --port 3000
 ```
 
-or set both base and build.outDir in vite.config.js:
-
-```js
-export default defineConfig({
-  base: "./",
-  build: {outDir: "build"},
-});
-```
-
-For other frameworks, use the equivalent settings for:
-
-- output directory: /workspace/build
-- public/base path: ./ or another relative asset base
-
-## Rules
-
-- Do not put source files only in build; put the generated browser-loadable output there.
-- Do not assume dist, out, or public is visible in the preview.
-- Do not leave built HTML pointing at root-relative asset URLs like /assets/app.js or /assets/app.css.
+Then navigate managed Chrome to `http://localhost:3000/`. Use the actual port
+reported by the server if it selects a different one. No preview configuration
+file, gateway readiness probe, or gateway URL is needed. Keep the server running
+while the user or agent is testing; a runner stop ends the process.

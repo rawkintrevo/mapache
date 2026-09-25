@@ -25,6 +25,7 @@ COPY routes ./routes
 COPY automation-mcp ./automation-mcp
 COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
+COPY reference ./reference
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 RUN node /app/lib/patchPiMcpAdapter.js
 

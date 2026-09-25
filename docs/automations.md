@@ -137,6 +137,22 @@ managed main sessions as well as automation sessions; `mcpConfig.service.js`
 registers the server without replacing user entries, and
 `workspaceSkillCatalog.js` selects its guidance.
 
+The managed system prompt's image-owned operating reference directs natural
+language scheduling requests to
+`session-runner/seeded-skills/mapache-automations/SKILL.md`. The skill resolves
+recurrence and IANA timezone, prepares a self-contained run prompt, previews the
+schedule, and explicitly sets `enabled: true` when creating active work (the API
+default is a disabled draft). Only a successful save justifies confirming a
+schedule; missing model selection, feature gates, and ambiguous create failures
+must be handled explicitly. Existing revision fencing and run controls remain
+the management contract.
+
+The current API supports recurring cron schedules, not native one-time jobs.
+Agents must not silently interpret “at 5pm” as daily, promise self-deleting
+one-shot jobs, or substitute local cron/sleep for the platform scheduler. Run
+prompts must include output expectations because runs do not inherit the chat.
+This guidance changes neither the scheduler nor the product feature gate.
+
 The token broker and API share `functions/automationAgentAdmission.helpers.js`.
 Both require a live admitted session with matching owner, workspace, generation,
 and boot. Main sessions additionally match the workspace's current admitted
