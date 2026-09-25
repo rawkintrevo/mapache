@@ -82,3 +82,38 @@ test("scheduled automation config boots both real private broker sockets with a 
     for (const socketPath of sockets) await fs.rm(path.dirname(socketPath), {recursive: true, force: true});
   }
 });
+
+for (const source of ["blank", "github"]) {
+  test(`managed ${source} main materializes automation MCP with a private live socket`, async () => {
+    const root = await fs.mkdtemp("/tmp/mapache-main-mcp-");
+    const env = {
+      MAPACHE_RUNTIME_KIND: "main", MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
+      MAPACHE_AGENT_STATE_ROOT: root, MAPACHE_AUTOMATION_AGENT_SOCKET: "",
+      MAPACHE_RUNTIME_STORAGE_MODE: "legacy", WORKSPACE_STORAGE_MODE: "legacy",
+      WORKSPACE_SOURCE_TYPE: source,
+    };
+    const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+    let config;
+    try {
+      Object.assign(process.env, env);
+      config = createConfig();
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+    const service = createAutomationAgentApiService(config);
+    try {
+      const {runnerMcpConfig} = require("./mcpConfig.service");
+      const mcp = runnerMcpConfig(config).mcpServers["mapache-automations"];
+      assert.equal(mcp.env.MAPACHE_AUTOMATION_AGENT_SOCKET, path.join(root, "automation-agent.sock"));
+      await service.start();
+      assert.equal(service.status().listening, true);
+      assert.equal((await fs.stat(service.socketPath)).mode & 0o777, 0o600);
+    } finally {
+      await service.stop();
+      await fs.rm(root, {recursive: true, force: true});
+    }
+  });
+}

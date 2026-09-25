@@ -1,5 +1,7 @@
 "use strict";
 
+const {hasAutomationAgentAuthority} = require("./automationAgentAdmission.helpers");
+
 const {db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
 
@@ -116,7 +118,7 @@ async function assertCurrentAdmission(claims, dependencies) {
   const workspaceSnap = await firestore.collection("workspaces").doc(claims.workspaceId).get();
   const workspace = workspaceSnap.exists ? workspaceSnap.data() || {} : null;
   if (!session || !workspace || workspace.ownerUid !== claims.ownerUid || session.ownerUid !== claims.ownerUid ||
-      session.workspaceId !== claims.workspaceId || session.runtimeKind !== "automation" ||
+      session.workspaceId !== claims.workspaceId || !hasAutomationAgentAuthority(session, workspace) ||
       !LIVE_SESSION_STATUSES.has(String(session.status || "").trim().toLowerCase()) ||
       session.agentRuntimeAuthorityState !== "admitted" ||
       session.agentRuntimeSessionId !== claims.sessionId ||

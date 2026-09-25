@@ -135,9 +135,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const privateGitDir = workspaceStorageMode === SHARED_WORKSPACE_STORAGE_MODE && !isAutomationRuntime(runtimeKind) ?
     path.resolve(normalizeEnvString(process.env.MAPACHE_PRIVATE_GIT_DIR) || "/var/lib/mapache/git/repository") :
     privatePaths?.privateGitDir || "";
-  const automationAgentSocketPath = runtimeKind === "automation" ?
+  const automationAgentSocketPath = agentRuntimeEnabled || runtimeKind === "automation" ?
     boundedUnixSocketPath(normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_SOCKET) ||
-      path.join(privatePaths?.runtimeRoot || "/tmp", "automation-agent.sock")) : "";
+      path.join(privatePaths?.runtimeRoot || agentStateRoot, "automation-agent.sock")) : "";
   const googleMcpTokenSocketPath = boundedUnixSocketPath(path.join(
       privatePaths?.runtimeRoot || "/tmp",
       `google-mcp-token-${normalizeRuntimeIdentity(runtimeIdentity)}.sock`,

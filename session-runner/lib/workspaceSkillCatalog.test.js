@@ -62,3 +62,10 @@ test("resolves optional profiles into one canonical file-backed skill catalog", 
     runnerCapabilities: {},
   }).map((skill) => skill.name), ["mapache-automations"]);
 });
+
+for (const workspaceSourceMode of ["blank", "github"]) {
+  test(`managed ${workspaceSourceMode} main seeds automation guidance`, () => {
+    const skills = defaultWorkspaceSkills({agentRuntimeEnabled: true, runtimeKind: "main", workspaceSourceMode});
+    assert.equal(skills.filter((skill) => skill.name === "mapache-automations").length, 1);
+  });
+}

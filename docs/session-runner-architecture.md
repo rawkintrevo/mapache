@@ -132,7 +132,7 @@ auth, tokens, connector state, locks, sockets, and cache databases.
 The marked Pi runtime also exposes local mode-0600 sockets inside that private
 root. The runner uses one for quiesce/activity and browserless conversation
 controls (`startAutomation`, `automationStatus`, and `cancelAutomation`), and
-automation runtimes expose a second runner-owned HTTP Unix socket to the
+main and automation runtimes expose a second runner-owned HTTP Unix socket to the
 image-owned `mapache-automations` MCP server. That MCP server exposes only the
 bounded current-workspace automation API; the runner keeps bearer-token minting
 and refresh outside the child process. Automation creates one fresh persistent
