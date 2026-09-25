@@ -128,6 +128,31 @@ schemas and seeded guidance use these same bounds; revision fencing remains
 unchanged. Run history exposes the catch-up scheduled timestamp and retry
 family IDs/state/reason alongside the immutable recovery snapshot.
 
+## Automation tools in workspace chat
+
+All managed interactive workspaces (blank and GitHub-backed) and automation
+runners receive the image-owned `mapache-automations` MCP and guidance skill.
+`session-runner/lib/config.js` enables the private runner broker socket for
+managed main sessions as well as automation sessions; `mcpConfig.service.js`
+registers the server without replacing user entries, and
+`workspaceSkillCatalog.js` selects its guidance.
+
+The token broker and API share `functions/automationAgentAdmission.helpers.js`.
+Both require a live admitted session with matching owner, workspace, generation,
+and boot. Main sessions additionally match the workspace's current admitted
+session/generation/boot, so replacing the main revokes old tokens immediately.
+Automation sessions retain independent authority. Tokens remain runner-owned;
+tools can only manage definitions, settings, and runs within their own workspace.
+The existing product feature gate remains unchanged. The MCP Unix HTTP client
+sets the serialized JSON Content-Length explicitly, including DELETE requests;
+otherwise Node can omit the revision body and deletion fails with
+`automation_revision_required`.
+
+Deploy the `api` and `automationAgentToken` Functions, then rebuild and publish
+`pi-chrome`. Existing workspaces need a runner restart/recreation onto the new
+image revision to discover the tools and skill; new sessions receive them
+automatically. No repository files or per-workspace MCP setup are required.
+
 ## Read-only GCS inputs and isolated outputs
 
 The automation MVP reuses the workspace's existing bucket. It needs no prepared

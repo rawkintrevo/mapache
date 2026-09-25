@@ -29,7 +29,7 @@ function defaultWorkspaceSkillProfileIds(config = {}) {
   if (config.workspaceSourceMode === "github") profileIds.push("github");
   if (capabilities.chrome) profileIds.push("chrome");
   if (capabilities.preview) profileIds.push("web");
-  if (isAutomationRuntime(config)) profileIds.push("automations");
+  if (config.agentRuntimeEnabled || isAutomationRuntime(config)) profileIds.push("automations");
 
   return profileIds;
 }

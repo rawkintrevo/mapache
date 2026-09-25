@@ -1,0 +1,21 @@
+{
+  "id": "automation.workspace-mcp",
+  "title": "Interactive workspace chat manages automations through its managed MCP",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/automation.workspace-mcp",
+  "requires": {
+    "runnerImage": "pi-chrome revision containing issue 448",
+    "provider": "Existing QA OpenAI authentication entry; never capture credential responses",
+    "cleanup": "Delete only the recorded disposable workspace, automation definitions, and runs"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-448-mcp-{{timestamp}}", "workspaceEnv": "QA_CASE=automation-workspace-mcp"}},
+    {"assert": "main-runner-ready", "expected": "Start the disposable managed workspace with existing QA provider authentication and verify a main runtime on the new image revision."},
+    {"assert": "automation-mcp-discovery", "expected": "Normal Agent chat discovers mapache-automations tools and its seeded guidance without workspace MCP configuration."},
+    {"assert": "automation-chat-crud", "expected": "Ask chat to preview a schedule, create a disabled disposable automation, get and edit it using revisions, enable/disable it, inspect settings/history, and delete it. Verify tool results against the workspace API."},
+    {"assert": "automation-chat-safe-run", "expected": "Ask chat to run a harmless fixture that only replies with a known marker, verify its final status, and remove the fixture after completion."},
+    {"capture": "screenshot", "fileName": "automation-chat.png"},
+    {"assert": "fixture-cleanup", "expected": "Stop and delete the recorded disposable workspace and verify its runner service is absent; preserve pre-existing QA credentials."}
+  ]
+}

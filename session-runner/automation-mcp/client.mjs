@@ -65,8 +65,10 @@ function normalizeAgentPath(pathname) {
 }
 
 function requestJson({socketPath, path, method, headers, body}) {
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const framedHeaders = {...headers, ...(payload === undefined ? {} : {"content-length": Buffer.byteLength(payload)})};
   return new Promise((resolve, reject) => {
-    const request = http.request({socketPath, path, method, headers}, (response) => {
+    const request = http.request({socketPath, path, method, headers: framedHeaders}, (response) => {
       const chunks = [];
       let total = 0;
       response.on("data", (chunk) => {
@@ -100,7 +102,6 @@ function requestJson({socketPath, path, method, headers, body}) {
         "automation_agent_transport_failed",
         {status: 502, cause: error},
     )));
-    if (body !== undefined) request.write(JSON.stringify(body));
-    request.end();
+    request.end(payload);
   });
 }
