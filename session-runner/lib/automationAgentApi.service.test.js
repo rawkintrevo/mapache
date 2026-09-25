@@ -45,6 +45,10 @@ test("runner adapter refreshes in memory and never sends shutdown credentials to
   now += 280 * 1000;
   await service.call("/api/agent/automations");
   assert.equal(requests.filter((request) => request.url.endsWith("/token")).length, 2);
+
+  now += 600 * 1000;
+  await service.call("/api/agent/automations");
+  assert.equal(requests.filter((request) => request.url.endsWith("/token")).length, 3);
 });
 
 test("runner adapter rejects arbitrary local paths before making a remote request", async () => {
