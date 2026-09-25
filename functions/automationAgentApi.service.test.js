@@ -49,6 +49,8 @@ function setup(runtimeKind = "automation") {
   const db = new Db();
   if (runtimeKind === "main" || runtimeKind === "legacy-main") {
     const session = db.data.get("workspaces/workspace-1/sessions/session-1");
+    session.runnerSessionId = "session-1";
+    delete session.agentRuntimeSessionId;
     if (runtimeKind === "legacy-main") delete session.runtimeKind;
     else session.runtimeKind = "main";
     Object.assign(db.data.get("workspaces/workspace-1"), {
@@ -164,6 +166,7 @@ for (const [target, patch] of [
   ["workspace", {agentRuntimeGeneration: 8}],
   ["workspace", {agentRuntimeBootInstanceId: "new-boot"}],
   ["workspace", {agentRuntimeAuthorityState: "released"}],
+  ["session", {runnerSessionId: "replacement"}],
   ["session", {status: "stopped"}],
   ["session", {agentRuntimeAuthorityState: "released"}],
 ]) {

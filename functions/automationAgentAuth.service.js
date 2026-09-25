@@ -42,9 +42,9 @@ async function mintToken(request = {}, dependencies = {}) {
   const bootInstanceId = cleanId(session.agentRuntimeBootInstanceId);
   if (!workspace || workspace.ownerUid !== session.ownerUid ||
       !session.ownerUid || session.workspaceId !== workspaceId ||
-      !hasAutomationAgentAuthority(session, workspace) || !isLiveSession(session) ||
+      !hasAutomationAgentAuthority(session, workspace, sessionId) || !isLiveSession(session) ||
       session.agentRuntimeAuthorityState !== "admitted" ||
-      session.agentRuntimeSessionId !== sessionId || !generation || !bootInstanceId ||
+      !generation || !bootInstanceId ||
       workspace.deleted === true || isDeletedLifecycle(workspace.lifecycle || workspace.status)) {
     throw unauthorized();
   }
