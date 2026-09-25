@@ -54,6 +54,7 @@ const {createAutomationAgentApiService} = require("./lib/automationAgentApi.serv
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
+const {isAutomationRuntime} = require("./lib/runtimePaths");
 
 const config = createConfig(runnerEnvironment);
 const browserAccess = createBrowserAccessVerifier({
@@ -140,7 +141,7 @@ const terminalSession = createTerminalSession({
   onTerminalExit: async ({command, exitCode}) => {
     const executable = path.basename(String(command && command.file || ""));
     if (executable === "pi") {
-      await git.finalizeGithubAutomationBranch(exitCode);
+      if (isAutomationRuntime(config)) await git.finalizeGithubAutomationBranch(exitCode);
       await workspaceSync.syncUp({includeArchives: true});
       return;
     }

@@ -479,7 +479,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 - `terminal.js` owns PTY lifecycle, WebSocket replay, and the terminal iframe HTML.
 - `preview.js` owns static/proxy preview modes and the browser log buffer.
 - `workspace.js` composes workspace restore and sync behavior. Published checkpoint restore lives in `agentCheckpointRestore.service.js`; path filtering lives in `workspacePath.helpers.js`, archive target construction and tar upload/restore live in `workspaceArchives.service.js`, GitHub workspace reconstruction lives in `workspaceGithub.service.js`, harness-backed auth/home materialization and secret-file inventory live in `workspaceAuth.service.js`, and per-session Pi model-scope restore/persistence lives in `piModelScope.service.js`.
-- `git.js` composes runner Git behavior. Manual status/stage/commit/pull/push/PR preparation stays in the facade, while automatic Pi branch/commit/push/PR lifecycle lives in `gitAutomation.service.js`. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it. Preview log/SSE collection and static share export similarly live in `previewLog.service.js` and `previewShare.service.js`, leaving `preview.js` as the mode/config facade.
+- `git.js` composes runner Git behavior. Manual status/stage/commit/pull/push/PR preparation stays in the facade, while the explicitly enabled automation-runtime branch/commit/push/PR lifecycle lives in `gitAutomation.service.js`. Interactive GitHub runners do not invoke that lifecycle. Command execution, GitHub askpass auth, PR creation helpers, porcelain status parsing, and branch/path/payload validation live in focused `git*.js` modules beside it. Preview log/SSE collection and static share export similarly live in `previewLog.service.js` and `previewShare.service.js`, leaving `preview.js` as the mode/config facade.
 - `pi.js` composes only the startup-owned Pi seeded-skill materializer. Mapache
   package, skill, subagent, model, Goal, and Chat control services are not
   included in the runner.
@@ -490,11 +490,11 @@ The container entry point is still `session-runner/server.js`, but it is now a b
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`. The runner receives the fixed Pi harness contract; historical terminal metadata is not used to select a new runner family.
 
-For GitHub-backed Pi sessions, automatic branch preparation resets and cleans the worktree before harness-owned MCP and skill files are materialized. Keep generated `.mcp.json` creation after that destructive Git preparation step; otherwise `git clean -fd` removes the generated MCP configuration before Pi starts and the session reports zero registered servers.
+For explicitly enabled automation runtimes backed by GitHub, automatic branch preparation resets and cleans the worktree before harness-owned MCP and skill files are materialized. Keep generated `.mcp.json` creation after that destructive Git preparation step; otherwise `git clean -fd` removes the generated MCP configuration before Pi starts and the session reports zero registered servers. Interactive GitHub runners skip this preparation and preserve the requested or restored branch and worktree.
 
-GitHub restart restoration preserves the workspace cache before that cleanup. The `.git` archive is stored with workspace-relative `./.git/**` entries and must be extracted at the workspace root, not inside `/workspace/.git`, or it creates an invalid nested `.git/.git` repository. When a runner resumes the same session automation branch, it keeps that branch and its worktree unchanged. When it must create a new automation branch, it stashes restored tracked and untracked changes before resetting to the selected remote base and reapplies them after creating the branch. A stash conflict fails startup with the stash retained instead of silently replacing cached files.
+GitHub restart restoration preserves the workspace cache before any automation cleanup. The `.git` archive is stored with workspace-relative `./.git/**` entries and must be extracted at the workspace root, not inside `/workspace/.git`, or it creates an invalid nested `.git/.git` repository. Interactive runners retain the restored user branch, including modified, staged, and untracked files. An explicitly enabled automation runtime resumes the same session automation branch without resetting or cleaning; when it must create a new automation branch, it stashes restored tracked and untracked changes before resetting to the selected remote base and reapplies them after creating the branch. A stash conflict fails startup with the stash retained instead of silently replacing cached files.
 
-The `pi-chrome` Dockerfile packages `session-runner/lib/` and `session-runner/routes/` with `server.js`. Route modules are required startup dependencies; omitting either directory causes the container to exit before the Cloud Run startup probe can succeed. Changes under either shared directory require rebuilding `pi-chrome`, and existing session revisions retain their previously bundled files until recreated.
+The `pi-chrome` Dockerfile packages `session-runner/lib/` and `session-runner/routes/` with `server.js`. Route modules are required startup dependencies; omitting either directory causes the container to exit before the Cloud Run startup probe can succeed. Changes under either shared directory, including this lifecycle gate, require rebuilding `pi-chrome`; existing session revisions retain their previously bundled behavior until restarted or recreated with the new image revision.
 
 The runner exposes a backend-only `POST /workspace/sync-down` route protected by `SESSION_SHUTDOWN_TOKEN`. Functions calls this route after file-browser uploads or editor saves so newly written Cloud Storage objects materialize into the active `/workspace` filesystem that the terminal process sees. The existing periodic sync loop still uploads local terminal changes back to storage and preserves newer remote objects when it encounters them.
 
@@ -606,9 +606,12 @@ legacy Pi state, but it does not expose a Mapache model editor or model API.
 Current model selection and model metadata belong to the upstream Agent UI.
 
 For connected GitHub workspaces, the runner retains internal source
-reconstruction and the configured GitHub automation branch/PR flow. The
-embedded upstream Agent owns live Git browsing and editing; Mapache does not
-expose a competing parent Git manager or manual Git-control API.
+reconstruction. The configured automatic branch/PR flow is limited to explicit
+automation runtimes; interactive sessions preserve the requested/restored Git
+branch and rely on the embedded upstream Agent and explicit user/agent Git
+commands for branch and PR work. The embedded upstream Agent owns live Git
+browsing and editing; Mapache does not expose a competing parent Git manager
+or manual Git-control API.
 
 The browser terminal uses `@xterm/xterm` instead of a plain text `<div>`. This is important because PTY output includes ANSI escape sequences, cursor movement, alternate screen buffers, colors, and TUI control codes. Rendering raw PTY output as text caused artifacts such as `[0m[2m-`.
 
@@ -680,7 +683,7 @@ Agents can switch the preview gateway from static-file serving to a local app/AP
 
 Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP methods and paths to the upstream server, so a framework dev server, Express app, or function emulator can serve both browser routes and API routes through the same Preview canvas. Removing the file, or setting `mode` to `static`, returns the preview to static serving from `/workspace/build` or a valid `staticRoot` in `/workspace/.mapache/preview.json`.
 
-On startup, GitHub-backed workspaces select the shared `github` profile containing `mapache-github-issue`, the default workflow skill for actionable implementation requests. It reuses a supplied issue or creates one after duplicate search and clarification, confirms the base is current, preserves the runner-created `mapache/*` branch, implements and verifies the scoped change, and ends with a local commit for runner exit publication. An explicit `hotfix` or `directly on main` instruction instead authorizes a tested commit and push directly to `main` without automatic issue or PR creation. Blank workspaces do not select this profile. The runner copies selected catalog files into the active harness's native workspace path only when a workspace-local file is missing.
+On startup, GitHub-backed workspaces select the shared `github` profile containing `mapache-github-issue`, the default workflow skill for actionable implementation requests. It reuses a supplied issue or creates one after duplicate search and clarification, confirms the base is current, creates or uses the repository's collision-free task branch for interactive work, implements and verifies the scoped change, and ends with a local commit. Only explicitly enabled automation runtimes preserve a runner-created `mapache/*` branch for runner exit publication. An explicit `hotfix` or `directly on main` instruction instead authorizes a tested commit and push directly to `main` without automatic issue or PR creation. Blank workspaces do not select this profile. The runner copies selected catalog files into the active harness's native workspace path only when a workspace-local file is missing.
 
 On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 

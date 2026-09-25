@@ -6,6 +6,7 @@ const {
   createGithubAutomationPullRequest: defaultCreateGithubAutomationPullRequest,
 } = require("./gitPullRequest.service");
 const {normalizeBranchDescription} = require("./gitValidation.helpers");
+const {isAutomationRuntime} = require("./runtimePaths");
 const {compactErrorMessage, normalizeEnvString} = require("./utils");
 
 const CLEAN_WORKTREE_ARGS = Object.freeze([
@@ -33,7 +34,8 @@ function createGithubAutomationService({
   let automationPullRequest = null;
 
   function shouldAutomateGithubPullRequest() {
-    return config.workspaceSourceMode === "github" &&
+    return isAutomationRuntime(config) &&
+      config.workspaceSourceMode === "github" &&
       config.workspaceStorageMode !== "shared-gcsfuse-v1" &&
       config.workspaceStorageMode !== "automation-readonly-gcs-v1" &&
       config.harnessId === "pi" &&
