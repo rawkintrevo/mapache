@@ -143,7 +143,10 @@ and boot. Main sessions additionally match the workspace's current admitted
 session/generation/boot, so replacing the main revokes old tokens immediately.
 Automation sessions retain independent authority. Tokens remain runner-owned;
 tools can only manage definitions, settings, and runs within their own workspace.
-The existing product feature gate remains unchanged.
+The existing product feature gate remains unchanged. The MCP Unix HTTP client
+sets the serialized JSON Content-Length explicitly, including DELETE requests;
+otherwise Node can omit the revision body and deletion fails with
+`automation_revision_required`.
 
 Deploy the `api` and `automationAgentToken` Functions, then rebuild and publish
 `pi-chrome`. Existing workspaces need a runner restart/recreation onto the new
