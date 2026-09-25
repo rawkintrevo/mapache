@@ -89,7 +89,9 @@ test("seeds default runtime skills from Markdown files", async (t) => {
   );
   const previewSkill = await fs.readFile(previewSkillPath, "utf8");
   assert.match(previewSkill, /^---\nname: mapache-preview-build\n/m);
-  assert.match(previewSkill, /\/workspace\/build\/index\.html/);
+  assert.match(previewSkill, /http:\/\/localhost:<port>\//);
+  assert.match(previewSkill, /chrome-devtools/);
+  assert.doesNotMatch(previewSkill, /\$MAPACHE_PREVIEW_URL/);
 });
 
 test("default runtime skill catalog selects common and preview file-backed seeds", async () => {

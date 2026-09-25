@@ -1,63 +1,34 @@
 ---
 name: mapache-api-hosting
-description: Host an app or API behind the Mapache preview gateway.
+description: Run an app or API on a localhost port and access it directly in managed Chrome.
 ---
 
-Use this skill when a preview needs a running server, API routes, server-rendered app, or function emulator instead of only static files.
+# Local app and API servers
 
-## Contract
+Use the project's normal server command on an available localhost port. Keep
+long-running processes in a persistent terminal, inspect startup errors, and
+check readiness directly on that port.
 
-The runner can proxy /preview/* to a local HTTP server when the workspace contains /workspace/.mapache/preview.json:
-
-```json
-{
-  "mode": "proxy",
-  "upstream": "http://127.0.0.1:3000"
-}
-```
-
-Only localhost upstreams are accepted. Use 127.0.0.1 or localhost.
-
-## Server Steps
-
-1. Start the app or API server on a local port, usually 127.0.0.1:3000.
-2. Write /workspace/.mapache/preview.json with mode "proxy" and the upstream URL.
-3. Check readiness with: curl "$MAPACHE_RUNNER_URL/preview/status"
-4. Test through the gateway with: curl "$MAPACHE_PREVIEW_URL"
-
-## Examples
-
-Vite dev server:
+Examples, when supported by the project:
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 3000
 ```
 
-Express or Node API:
-
 ```bash
 HOST=127.0.0.1 PORT=3000 npm start
 ```
 
-Function framework:
+Open `http://localhost:3000/` (or the actual selected port) in the existing
+managed Chrome browser through `chrome-devtools` MCP. Read `mapache-chrome` for
+browser readiness and connection guidance. Test API endpoints directly using
+their local URL and inspect browser requests for frontend/API integration.
 
-```bash
-npx functions-framework --target=app --host=127.0.0.1 --port=3000
-```
-
-## Return To Static Mode
-
-Remove /workspace/.mapache/preview.json or write:
-
-```json
-{
-  "mode": "static",
-  "staticRoot": "build"
-}
-```
-
-## Rules
-
-- Keep servers bound to localhost.
-- Do not expose secret-bearing debug endpoints in the preview.
-- Use $MAPACHE_PREVIEW_URL for QA, because it exercises the same route the user sees in the Preview canvas.
+- Do not configure the former preview gateway or write `.mapache/preview.json`.
+- Do not rewrite asset bases or route prefixes just for Mapache.
+- Keep servers bound to loopback where supported; do not expose secrets in
+  debug responses or logs.
+- A local server is not a public deployment. The user's personal browser cannot
+  access the runner through its own localhost; use Mapache's managed Chrome.
+- Stopping the session stops the server. Report the actual port, server state,
+  and verification performed rather than claiming permanent hosting.

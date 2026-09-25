@@ -506,6 +506,41 @@ for cleanup only; no new SSH file-backed runner can be created.
 
 The `pi-chrome` image copies `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require a new `pi-chrome` revision; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
+### Agent operating reference
+
+`session-runner/reference/mapache.md` is the bounded, image-owned Mapache
+operating reference, bundled at `/app/reference/mapache.md`. Upstream patch
+`0016-managed-operating-reference.patch` wraps the common runtime factory's
+persona `before_agent_start` hook, appending after custom composition for main,
+resumed, subagent, and browserless automation conversations. It preserves the
+composed prompt and other hook results, skips identical duplicate content, and
+leaves unmanaged sessions unchanged. Missing/empty reference files produce a
+safe warning and retain the existing prompt rather than blocking startup.
+The integration does not rewrite repository `AGENTS.md`, user
+`SYSTEM.md`/`APPEND_SYSTEM.md`, or saved settings. It describes workspace and
+process lifetime, direct localhost access in managed Chrome, chat automation
+management through the existing MCP tools, credential boundaries, and paths to
+detailed image-bundled skills. It does not inject the developer wiki or any
+session credentials into prompts.
+
+The supported agent workflow for local apps is to start the project's normal
+server on an available port and navigate managed Chrome to
+`http://localhost:<port>/`. No preview gateway configuration, special build
+output directory, or asset-base rewrite is required. The preview-named skill
+files retain their names for compatibility but now teach direct localhost and
+Chrome MCP QA. Legacy preview infrastructure below remains documented as
+implementation context; it is not the recommended agent workflow and is not
+removed by this guidance change.
+
+Workspace skill seeding remains missing-only. Existing user-edited/older copies
+are not overwritten; the always-present reference points to current
+`/app/seeded-skills/` copies and explicitly supersedes obsolete gateway guidance.
+Rebuild/publish `pi-chrome` and recreate/revise existing runner services to get
+this reference and updated image-owned skills. Updating Markdown in a workspace
+or rebuilding an image tag alone does not update an already running revision.
+See [Scheduled Automations](./automations.md#automation-tools-in-workspace-chat)
+for the chat scheduling contract.
+
 ## Terminal Runtime
 
 The container runs `session-runner/server.js`.
@@ -626,7 +661,7 @@ The disposable `pi-web.failure-recovery` case has a deterministic fault harness.
 
 `GET /capabilities` includes preview QA capability metadata such as the command path, Chromium executable path, supported viewports, and supported actions. `GET /preview/status` now embeds a `qa` block whose `state` distinguishes `preview_not_running`, `browser_automation_unavailable`, `browser_ready`, and `qa_execution_failed`.
 
-The `pi-web` static preview serves generated output from `/workspace/build`. The seeded `mapache-preview-build` skill instructs agents to emit browser-loadable output there and to configure relative asset bases, such as Vite's `base: "./"`, so bundled assets resolve correctly under `/preview/`.
+The legacy `pi-web` static preview serves generated output from `/workspace/build` and expects asset URLs compatible with `/preview/`. Current seeded `mapache-preview-build` guidance instead uses the project's normal build/serve settings and direct localhost access in managed Chrome; it does not require that legacy output directory or asset base.
 
 Share Preview uses the same static preview root. The runner reads the active preview config, accepts only static mode, requires `/workspace/build/index.html` or the configured static root's `index.html`, skips symlinks, and uploads regular files under that root to the storage prefix supplied by the authenticated API. The V1 export is bounded to 1000 files and 100 MiB. It does not export proxy-mode upstream responses, the full workspace, hidden session state, auth material, environment variables, or archive-backed internal directories outside the static root.
 
@@ -653,7 +688,7 @@ On startup, `pi-web` also seeds three workspace-local Pi skills when they are mi
 - `mapache-api-hosting`
 - `mapache-preview-qa`
 
-These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-web` sessions. `mapache-preview-qa` now points agents at the supported `mapache-preview-qa` command instead of embedding an inline Playwright launch script. Existing user-edited skills with the same names are not overwritten.
+These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-web` sessions. Their compatibility names are retained, but current contents describe local build/serve commands and QA through managed Chrome MCP at `http://localhost:<port>/`, not gateway commands or a separate browser launch. Existing user-edited skills with the same names are not overwritten.
 
 Build and push the image with:
 

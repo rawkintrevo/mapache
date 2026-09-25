@@ -9,6 +9,8 @@ This runner already owns one persistent headed Chrome session. Attach to it thro
 
 Before browser work, run `mapache-chrome-status`. It checks the loopback DevTools endpoint and reports only readiness and version information.
 
+For a local app, start the project's server on an available port and keep it running in a persistent terminal. Navigate managed Chrome directly to `http://localhost:<port>/`, for example `http://localhost:3000/`. This address is local to the runner, not the user's computer. No preview gateway, `/workspace/build` convention, `.mapache/preview.json`, or special asset base is required. Use the project's normal build/serve settings and verify readiness on the chosen port.
+
 Use the browser tools for navigation, clicks, form entry, screenshots, console inspection, and network debugging. Browser state such as cookies, history, and local storage belongs to the workspace and persists across Pi Chrome sessions.
 
 The browser canvas URL is signed and user-facing. The local DevTools URL is for the runner-side MCP connection only. Never print, export, or request browser cookies, profile archives, access tokens, or the values of `SESSION_*` secrets.
