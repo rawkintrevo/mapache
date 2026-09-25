@@ -19,6 +19,8 @@ function createAutomationHarness({commitCount, status}) {
     githubRepoOwner: "rawkintrevo",
     githubRequestedBranch: "main",
     harnessId: "pi",
+    runtimeKind: "automation",
+    automationRunId: "run-1",
     sessionId: "session-1",
     sessionName: "Demo Session",
     workspaceSourceMode: "github",
@@ -173,11 +175,13 @@ test("automation cleanup reapplies restored tracked and untracked files after br
   const service = createGithubAutomationService({
     activity: {updateSessionActivity: async () => {}},
     config: {
+      automationRunId: "run-1",
       githubAutomationToken: "token",
       githubRepoName: "repo",
       githubRepoOwner: "owner",
       githubRequestedBranch: "main",
       harnessId: "pi",
+      runtimeKind: "automation",
       sessionId: "session-1",
       sessionName: "Restore Test",
       workspaceSourceMode: "github",
@@ -193,6 +197,62 @@ test("automation cleanup reapplies restored tracked and untracked files after br
   assert.equal(await fs.promises.readFile(path.join(workspaceDir, "untracked.txt"), "utf8"), "restored untracked\n");
   assert.match(runGit(workspaceDir, ["status", "--porcelain=1"]), /M tracked\.txt/);
   assert.match(runGit(workspaceDir, ["status", "--porcelain=1"]), /\?\? untracked\.txt/);
+});
+
+test("interactive GitHub sessions preserve the requested user branch and dirty worktree", async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mapache-interactive-github-"));
+  t.after(() => fs.promises.rm(root, {recursive: true, force: true}));
+  const remoteDir = path.join(root, "remote.git");
+  const seedDir = path.join(root, "seed");
+  const workspaceDir = path.join(root, "workspace");
+  await fs.promises.mkdir(seedDir, {recursive: true});
+
+  runGit(root, ["init", "--bare", remoteDir]);
+  runGit(seedDir, ["init", "--initial-branch=main"]);
+  runGit(seedDir, ["config", "user.name", "Test User"]);
+  runGit(seedDir, ["config", "user.email", "test@example.com"]);
+  await fs.promises.writeFile(path.join(seedDir, "tracked.txt"), "base\n");
+  runGit(seedDir, ["add", "tracked.txt"]);
+  runGit(seedDir, ["commit", "-m", "base"]);
+  runGit(seedDir, ["remote", "add", "origin", remoteDir]);
+  runGit(seedDir, ["push", "-u", "origin", "main"]);
+  runGit(root, ["clone", "--branch", "main", remoteDir, workspaceDir]);
+  runGit(workspaceDir, ["checkout", "-b", "user-branch"]);
+  await fs.promises.writeFile(path.join(workspaceDir, "tracked.txt"), "staged user change\n");
+  runGit(workspaceDir, ["add", "tracked.txt"]);
+  await fs.promises.writeFile(path.join(workspaceDir, "untracked.txt"), "untracked user change\n");
+
+  const commands = [];
+  const service = createGithubAutomationService({
+    activity: {updateSessionActivity: async () => {}},
+    config: {
+      githubAutomationToken: "token",
+      githubRepoName: "repo",
+      githubRepoOwner: "owner",
+      githubRequestedBranch: "main",
+      harnessId: "pi",
+      runtimeKind: "main",
+      sessionId: "session-1",
+      sessionName: "Interactive Session",
+      workspaceSourceMode: "github",
+    },
+    runGitCommand: async (args) => {
+      commands.push(args);
+      return runGit(workspaceDir, args);
+    },
+    withGithubAutomationAuth: (task) => task({}),
+  });
+
+  assert.equal(await service.prepareGithubAutomationBranch(), null);
+  assert.deepEqual(await service.finalizeGithubAutomationBranch(0), {
+    ok: true,
+    skipped: true,
+    reason: "github_automation_not_enabled",
+  });
+  assert.equal(runGit(workspaceDir, ["branch", "--show-current"]), "user-branch");
+  assert.match(runGit(workspaceDir, ["status", "--porcelain=1"]), /^M  tracked\.txt/m);
+  assert.match(runGit(workspaceDir, ["status", "--porcelain=1"]), /\?\? untracked\.txt/);
+  assert.deepEqual(commands, []);
 });
 
 function runGit(cwd, args) {

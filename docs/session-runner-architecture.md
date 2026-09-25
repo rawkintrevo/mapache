@@ -26,7 +26,9 @@ protected HTTP routes, and runs the ordered startup/shutdown lifecycle.
   `lib/piSeededSkills.service.js`: startup materialization that remains
   necessary for credentials, MCP, and image-owned runtime skills.
 - `lib/git.js` and `lib/gitAutomation.service.js`: workspace reconstruction and
-  internal GitHub automation. They are not a manual parent Git-control API.
+  explicitly enabled automation-runtime GitHub lifecycle. Interactive runners
+  preserve the requested/restored branch and do not invoke the automatic
+  branch/commit/PR path. They are not a manual parent Git-control API.
 - `lib/sshSession.js`: retained compatibility SSH terminal/port forwarding.
 
 ## Startup and lifecycle

@@ -11,6 +11,7 @@ function createLifecycleHarness(events, overrides = {}) {
     syncIntervalMs: 60_000,
     workspaceSourceMode: "blank",
     workspaceSyncPolicyMode: "archive",
+    runtimeKind: "main",
     ...overrides.config,
   };
   const service = (method, event) => ({
@@ -68,7 +69,7 @@ function createLifecycleHarness(events, overrides = {}) {
 
 test("startup runs ordered preparation before snapshots, sync, and listen", async () => {
   const events = [];
-  const lifecycle = createLifecycleHarness(events);
+  const lifecycle = createLifecycleHarness(events, {config: {runtimeKind: "automation"}});
 
   await lifecycle.start();
 
@@ -88,6 +89,15 @@ test("startup runs ordered preparation before snapshots, sync, and listen", asyn
     "syncLoop.start",
     "server.listen",
   ]);
+});
+
+test("interactive startup does not invoke automatic GitHub branch preparation", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events);
+
+  await lifecycle.start();
+
+  assert.equal(events.includes("git.prepareGithubAutomationBranch"), false);
 });
 
 test("restores a pinned Chrome seed before the profile and browser start", async () => {

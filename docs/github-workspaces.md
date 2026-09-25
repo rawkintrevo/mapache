@@ -216,11 +216,11 @@ The enforcement point should live in the backend. The frontend can show a better
 
 GitHub-backed live work now exposes repository browsing and edits through the upstream Agent application. The full-width Mapache shell has no left drawer and does not duplicate a Git manager or session controls. Connected GitHub App repositories push and create PRs through the in-memory runner token provider and its `mapache-git-credential`/`mapache-gh` wrappers; public URL workspaces retain anonymous read behavior and user-provided push credentials.
 
-For connected GitHub workspaces, Pi sessions also have an automatic branch/PR lifecycle. During runner startup, after repository/cache restore and before Pi starts, the runner uses the GitHub App installation token to fetch the selected base branch, reset the worktree to that remote branch, and create a unique `mapache/<session-name-kebab>-<session-id>` branch. This prevents the agent from working directly on the source branch while still starting from the latest base state. When the Pi terminal exits, the runner stages any remaining changes and commits them, or reuses commits already made on the automation branch. It then pushes the branch and opens a pull request. If the session exits without file changes or commits ahead of the base branch, no commit or PR is created. When Cloud Run rejects one of these protected runner requests before it reaches the container, such as a `429` no-instance response, the backend surfaces `runner_busy_or_unavailable` instead of the generic `runner_request_failed` code so the UI can distinguish runner capacity from Git/auth errors. Shell sessions remain manual so users can inspect or intervene without triggering automatic PR creation.
+Interactive connected GitHub workspaces restore the requested branch/commit on first startup and preserve the restored user branch on restart. They do not invoke the legacy automatic branch/commit/PR lifecycle, so modified, staged, and untracked files remain under the user's Git control and shutdown does not implicitly stage, commit, push, or open a PR. Explicit automation runtimes retain the automatic lifecycle: after repository/cache restore, the runner uses the GitHub App installation token to fetch the selected base branch, reset the worktree to that remote branch, and create a unique `mapache/<session-name-kebab>-<session-id>` branch. When that automation runtime exits, the runner stages any remaining changes and commits them, or reuses commits already made on the automation branch, then pushes the branch and opens a pull request. If it exits without file changes or commits ahead of the base branch, no commit or PR is created. When Cloud Run rejects one of these protected runner requests before it reaches the container, such as a `429` no-instance response, the backend surfaces `runner_busy_or_unavailable` instead of the generic `runner_request_failed` code so the UI can distinguish runner capacity from Git/auth errors. Shell sessions remain manual so users can inspect or intervene without triggering automatic PR creation.
 
 Shared GCS workspaces use a separate Git metadata boundary. The mounted `/workspace/.git` is a stable symlink to the runner-private `GIT_DIR`; `GIT_WORK_TREE=/workspace` is passed to the terminal and managed upstream Git UI, and `core.fileMode=false` accounts for synthetic mounted permissions. Shared startup restores the main private archive (or the migration seed) and never clones, checks out, or resets mounted files. An automation run receives a copy of the last published main archive in its own local Git root and archives its unpushed refs under a run-specific private object. Shared mode disables automatic branch creation, exit commits, pushes, and PR creation, while explicit Git operations remain available and can modify the shared worktree. Submodules and nested repositories are rejected with path-specific startup errors; `.git` metadata is never uploaded as a worktree tree.
 
-On restart, an existing automation branch for the same session is resumed without a reset or clean, preserving both commits and uncommitted work. If startup is instead creating a new automation branch, restored tracked and untracked worktree changes are stashed before the base checkout and reapplied afterward. Cleanup must never run against restored cache state before one of those preservation paths has secured it.
+On restart, an interactive session preserves its existing user branch and worktree without a reset or clean. An explicit automation runtime resumes an existing automation branch for the same session without a reset or clean, preserving both commits and uncommitted work. If automation startup is instead creating a new automation branch, restored tracked and untracked worktree changes are stashed before the base checkout and reapplied afterward. Cleanup must never run against restored cache state before one of those preservation paths has secured it.
 
 ## Runner Reconstruction Flow
 
@@ -295,11 +295,12 @@ The canonical agent workflow is the seeded
 [Mapache GitHub issue skill](../session-runner/seeded-skills/mapache-github-issue/SKILL.md).
 Maintain that source, not the installed `.pi/skills/mapache-github-issue/SKILL.md`.
 The default flow for every actionable implementation request reuses a supplied
-issue or creates a scoped issue before editing, works on the session's
-`mapache/*` branch, verifies the change, and ends with a local commit. Runner exit
-automation pushes that branch and opens the pull request. The automation branch
-is the required separate working branch; do not replace it with an issue-numbered
-branch or impose return-to-main cleanup that would disable exit automation.
+issue or creates a scoped issue before editing, creates or uses a collision-free
+task branch, verifies the change, and ends with a local commit. Interactive
+sessions do not implicitly create a generated `mapache/*` branch or publish on
+exit. An explicitly enabled automation runtime may use its generated branch and
+runner exit automation to push it and open the pull request; otherwise the
+normal manual publication flow applies.
 
 An explicit `hotfix` description or explicit request to work `directly on main`
 bypasses issue, working-branch, and PR creation. In that exception the agent
@@ -336,7 +337,7 @@ Expected control surface:
 - stage and unstage
 - commit message and commit
 
-For connected Pi sessions, runner exit automation stages, commits, pushes, and opens a PR only when Pi exits on the automation branch created for that session. If the user or agent switches to another branch or detached HEAD, exit automation records `skipped_branch_changed` and leaves that branch under manual Git control. Switching back to the session automation branch restores the automatic lifecycle.
+For explicitly enabled automation runtimes, runner exit automation stages, commits, pushes, and opens a PR only when Pi exits on the automation branch created for that session. If the user or agent switches to another branch or detached HEAD, exit automation records `skipped_branch_changed` and leaves that branch under manual Git control. Interactive sessions have no exit automation and remain fully manual.
 - fetch and pull
 - push
 - open pull request

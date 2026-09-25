@@ -1,5 +1,7 @@
 "use strict";
 
+const {isAutomationRuntime} = require("./runtimePaths");
+
 function createRunnerLifecycleCoordinator({
   activity,
   activeHarness,
@@ -55,7 +57,7 @@ function createRunnerLifecycleCoordinator({
       await chromeRuntime.start();
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
-      await git.prepareGithubAutomationBranch();
+      if (isAutomationRuntime(config)) await git.prepareGithubAutomationBranch();
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
       if (config.agentRuntimeEnabled) await piWebUi.start();

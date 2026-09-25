@@ -19,8 +19,10 @@ When working on Mapache itself, edit `session-runner/seeded-skills/mapache-githu
   `mapache-git-credential`; `$GITHUB_AUTOMATION_TOKEN` is only a startup compatibility
   value and must not be used as a long-lived agent contract.
 - If the token is absent, public repositories can still use unauthenticated GitHub API requests.
-- The runner may already be on a clean mapache/* branch for this session.
-- Connected GitHub workspaces may start on a fresh mapache/* automation branch whose base branch was fetched immediately before the agent started.
+- The runner restores the requested or previously selected Git branch for an
+  interactive session and preserves its worktree across restart.
+- Only explicitly enabled automation runtimes start on a fresh `mapache/*`
+  automation branch whose base branch was fetched immediately before the run.
 
 ## Choose The Workflow
 
@@ -30,9 +32,14 @@ For the normal workflow:
 
 1. Reuse a supplied issue after reading it and all comments.
 2. If no issue is supplied, inspect the relevant code/docs, search for duplicates, clarify ambiguous scope, and create a scoped issue before editing.
-3. Keep the runner-created `mapache/*` automation branch when present. Otherwise create a collision-free working branch from the updated default branch according to repository policy.
+3. In an explicitly enabled automation runtime, keep the runner-created
+   `mapache/*` automation branch. In an interactive session, create or use a
+   collision-free working branch from the updated default branch according to
+   repository policy; do not assume that startup created a generated branch.
 4. Implement, test, document, and commit the scoped work.
-5. Ensure the branch is pushed and a pull request is opened. On the active connected-session automation branch, runner exit automation may perform publication; when that automation is unavailable or the user requests immediate manual publication, follow the manual publication section.
+5. Ensure the branch is pushed and a pull request is opened. Runner exit
+   automation may perform publication only for an explicitly enabled automation
+   runtime; otherwise follow the manual publication section.
 
 For the explicit hotfix/direct-main exception, follow **Hotfix Or Direct Main** instead. Do not create an issue, working branch, or pull request unless separately requested.
 
@@ -130,7 +137,7 @@ Add `--label` only for verified existing labels. Record the returned issue URL/n
 
 ## Prepare The Repository
 
-Before editing, inspect `git status --short`, the current branch, and existing commits. Preserve unrelated work; do not stage or discard it. The normal connected-session flow uses the runner-created `mapache/*` branch: do not replace it with an issue-numbered branch or switch to `main` just to start or finish a normal task. The automation branch satisfies the separate-working-branch requirement.
+Before editing, inspect `git status --short`, the current branch, and existing commits. Preserve unrelated work; do not stage or discard it. Explicit automation runtimes use the runner-created `mapache/*` branch. Interactive sessions must create or use the task branch required by the normal repository workflow; do not switch to `main` just to start or finish a normal task.
 
 Before editing, make sure the base branch is current. Prefer the selected upstream branch, then `main`, then `master`.
 
@@ -191,7 +198,10 @@ If the issue is actionable without clarification, proceed without asking.
 - Update docs when the change affects architecture, workflow, runtime behavior, deployment assumptions, or recorded decisions.
 - Before finishing, run the smallest meaningful verification commands available in the repo.
 - End with a local Git commit containing the completed changes. Stage intentionally with `git add`, verify `git status --short`, and commit with a concise issue-focused message.
-- In connected Mapache GitHub workspaces on the active `mapache/*` automation branch, runner exit automation may push the branch and open the pull request. State clearly when publication is pending session exit. If exit automation is unavailable or the user requests immediate publication, publish manually and verify the PR.
+- In explicitly enabled automation runtimes on the active `mapache/*` automation
+  branch, runner exit automation may push the branch and open the pull request.
+  State clearly when publication is pending session exit. Interactive sessions
+  have no implicit exit publication; publish manually and verify the PR.
 - In the final response, mention the issue number, branch, commit, pull-request state, verification, and unresolved decisions.
 
 ## Hotfix Or Direct Main
@@ -204,14 +214,24 @@ Use this exception only when the user explicitly calls the implementation a `hot
 4. Commit the scoped files directly on `main` and push `main` to the canonical remote.
 5. Do not create an issue, branch, or pull request unless the user separately asks for one.
 6. Treat branch protection or a rejected non-fast-forward push as a blocker. Never force-push or bypass repository protections.
-7. In a connected session, switching away from the session automation branch intentionally causes runner exit PR automation to skip; report that expected state.
+7. In an explicitly enabled automation runtime, switching away from the session
+   automation branch intentionally causes runner exit PR automation to skip;
+   report that expected state. Interactive sessions have no such lifecycle.
 
 ## Manual Branch and Pull Request
 
 Use this section when exit automation is unavailable, the user requests immediate manual publication, or the workflow otherwise requires manual branch/push/PR operations. Normal work must still end with a verified pull request.
 
-1. Keep the current automation branch unless the user requested another branch. If creating one, use a descriptive name, inspect local and remote collisions, and never overwrite an existing branch. Start from the prepared task state. If unrelated changes/commits prevent a clean task branch, ask how to isolate them; a separate worktree is an option, not the default connected-session flow.
-2. Record the original branch. Switching the original workspace away from its session automation branch causes exit automation to skip (`skipped_branch_changed`). A separate worktree leaves the original automation branch active; it does not prevent the runner from later staging/publishing changes there. Do not terminate Pi to trigger publishing or switch branches merely to manipulate that lifecycle.
+1. Keep the current automation branch only in an explicitly enabled automation
+   runtime. In an interactive session, use a descriptive task branch, inspect
+   local and remote collisions, and never overwrite an existing branch. Start
+   from the prepared task state. If unrelated changes/commits prevent a clean
+   task branch, ask how to isolate them; a separate worktree is an option.
+2. Record the original branch. In an explicitly enabled automation runtime,
+   switching away from its session automation branch causes exit automation to
+   skip (`skipped_branch_changed`). Interactive sessions have no implicit exit
+   publication. Do not terminate Pi to trigger publishing or switch branches
+   merely to manipulate that lifecycle.
 3. Verify the intended base (`BASE_BRANCH` from preparation), current branch, scoped staged diff, and commit range. Stage named paths and commit; do not include unrelated edits, generated runtime files, or credentials. If a legitimate source file is ignored, inspect `git check-ignore -v path` before adding a narrow exception rather than force-adding ignored content.
 4. Authenticate the push with the installed `mapache-git-credential` helper. For GitHub CLI writes, use `mapache-gh`:
 
