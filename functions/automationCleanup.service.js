@@ -201,13 +201,43 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
 async function deliverRunSinks(runRef, runId, dependencies = {}) {
   const snap = await runRef.get();
   if (!snap.exists) return;
-  const run = snap.data() || {};
+  let run = {runId, ...snap.data()};
   for (const [key, sink] of Object.entries(run.sinkDelivery || {})) {
     if (sink.state === "delivered") continue;
     const declared = run.workspaceRunRequest?.sinks?.find((entry, index) => `${entry.kind}:${entry.reference || index}` === key);
-    const supported = declared && ["workspace_output", "ticket_result"].includes(declared.kind);
-    const next = recordSinkDeliveryAttempt(run, key, supported ? {state: "delivered"} : {state: "failed", error: "unsupported_sink"});
-    await runRef.update({sinkDelivery: next.sinkDelivery, updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
+    let delivery;
+    try {
+      if (!declared || !["workspace_output", "ticket_result"].includes(declared.kind)) {
+        throw cleanupError("unsupported_sink");
+      }
+      if (declared.kind === "workspace_output") {
+        if (!run.workspaceOutput?.prefix) throw cleanupError("workspace_output_not_published");
+        delivery = {workspaceOutputPublished: run.workspaceOutput};
+      } else {
+        const ticketId = String(declared.reference || run.ticketId || "").trim();
+        if (!ticketId || !dependencies.db) throw cleanupError("ticket_result_destination_missing");
+        await dependencies.db.collection("workspaceTickets").doc(ticketId).update({
+          status: run.status,
+          result: {
+            runId,
+            finalResult: run.finalResult || null,
+            artifactPointers: run.artifactPointers || {},
+            workspaceOutput: run.workspaceOutput || null,
+          },
+          resultPublishedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+          updatedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+        });
+        delivery = {ticketResultPublished: true};
+      }
+    } catch (error) {
+      const next = recordSinkDeliveryAttempt(run, key, {state: "failed", error: stableCleanupErrorCode(error)});
+      run = next;
+      await runRef.update({sinkDelivery: next.sinkDelivery, updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
+      continue;
+    }
+    const next = recordSinkDeliveryAttempt(run, key, {state: "delivered"});
+    run = {...next, ...delivery};
+    await runRef.update({sinkDelivery: next.sinkDelivery, ...delivery, updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
   }
 }
 

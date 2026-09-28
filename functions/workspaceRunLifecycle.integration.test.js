@@ -20,9 +20,16 @@ test("cleanup calls the durable sink delivery boundary without rerunning executi
   const data = {status: "succeeded", workspaceRunRequest: {sinks: [{kind: "ticket_result", reference: "ticket-1"}]}, sinkDelivery: {
     "ticket_result:ticket-1": {state: "pending", attempts: 0, lastError: null},
   }};
+  const ticket = {};
   const ref = {async get() { return {exists: true, data: () => data}; }, async update(value) { Object.assign(data, value); }};
-  await deliverRunSinks(ref, "run-1", {admin: {firestore: {FieldValue: {serverTimestamp: () => "now"}}}});
+  const dependencies = {
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "now"}}},
+    db: {collection() { return {doc() { return {update(value) { Object.assign(ticket, value); }}; }}; }},
+  };
+  await deliverRunSinks(ref, "run-1", dependencies);
   assert.equal(data.status, "succeeded");
   assert.equal(data.sinkDelivery["ticket_result:ticket-1"].state, "delivered");
   assert.equal(data.sinkDelivery["ticket_result:ticket-1"].attempts, 1);
+  assert.equal(ticket.result.runId, "run-1");
+  assert.equal(ticket.resultPublishedAt, "now");
 });
