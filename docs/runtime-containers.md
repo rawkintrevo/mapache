@@ -187,6 +187,8 @@ sockets, sessions, or API clients; the later automation subscription layer
 owns event delivery. Changes to this reducer require the same upstream build
 and a rebuilt `pi-chrome` revision.
 
+Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces. Both the Git credential helper and `/usr/local/bin/mapache-gh` are shipped with Node shebangs, so the image's direct command contract works without a per-command `node` prefix. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
+
 The runner's automation execution service starts only after private workspace
 materialization and runtime admission. It validates the owner/workspace/session
 assignment, claims `executionStartedAt` before sending the prompt once over the

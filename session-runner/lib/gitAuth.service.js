@@ -4,6 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const {normalizeEnvString} = require("./utils");
 
+const MAPACHE_GIT_CREDENTIAL_HELPER = "!/usr/local/bin/mapache-git-credential";
+
 function createGitAuthService({config, tokenProvider}) {
   async function withGitAskPassAuth({token, username, userEnvName, tokenEnvName, askPassFilePrefix}, task) {
     if (!token) {
@@ -31,6 +33,34 @@ function createGitAuthService({config, tokenProvider}) {
     } finally {
       await fs.promises.rm(askPassPath, {force: true}).catch(() => {});
     }
+  }
+
+  async function configureGithubCredentialHelper(runGitCommand) {
+    if (config.workspaceSourceMode !== "github" ||
+        !(config.githubAutomationToken || config.githubAutomationTokenRefreshUrl) ||
+        !config.githubRepoOwner || !config.githubRepoName) {
+      return {configured: false, skipped: true};
+    }
+
+    const configuredHelpers = String(await runGitCommand(
+        ["config", "--local", "--get-all", "credential.helper"],
+        {captureStdout: true},
+    ).catch(() => "")).split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+    const helperAdded = !configuredHelpers.includes(MAPACHE_GIT_CREDENTIAL_HELPER);
+    if (helperAdded) {
+      await runGitCommand(["config", "--local", "--add", "credential.helper", MAPACHE_GIT_CREDENTIAL_HELPER]);
+    }
+
+    const useHttpPath = String(await runGitCommand(
+        ["config", "--local", "--get", "credential.useHttpPath"],
+        {captureStdout: true},
+    ).catch(() => "")).trim().toLowerCase();
+    const useHttpPathUpdated = useHttpPath !== "true";
+    if (useHttpPathUpdated) {
+      await runGitCommand(["config", "--local", "credential.useHttpPath", "true"]);
+    }
+
+    return {configured: true, helperAdded, useHttpPathUpdated};
   }
 
   async function withGitCloneAuth(task) {
@@ -82,6 +112,7 @@ function createGitAuthService({config, tokenProvider}) {
   }
 
   return {
+    configureGithubCredentialHelper,
     withGitAskPassAuth,
     withGitCloneAuth,
     withGithubAutomationAuth,
@@ -91,5 +122,6 @@ function createGitAuthService({config, tokenProvider}) {
 }
 
 module.exports = {
+  MAPACHE_GIT_CREDENTIAL_HELPER,
   createGitAuthService,
 };

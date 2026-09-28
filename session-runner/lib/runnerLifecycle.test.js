@@ -100,6 +100,23 @@ test("interactive startup does not invoke automatic GitHub branch preparation", 
   assert.equal(events.includes("git.prepareGithubAutomationBranch"), false);
 });
 
+test("startup reapplies connected Git credential configuration after Git restore", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    git: {
+      prepareSharedWorkspaceGit: async () => events.push("git.prepareSharedWorkspaceGit"),
+      configureGithubCredentialHelper: async () => events.push("git.configureGithubCredentialHelper"),
+      prepareGithubAutomationBranch: async () => events.push("git.prepareGithubAutomationBranch"),
+    },
+  });
+
+  await lifecycle.start();
+
+  assert.equal(events.indexOf("workspace.prepareWorkspaceSource") < events.indexOf("git.configureGithubCredentialHelper"), true);
+  assert.equal(events.indexOf("git.configureGithubCredentialHelper") < events.indexOf("activity.updateSessionActivity"), true);
+  assert.equal(events.includes("git.prepareGithubAutomationBranch"), false);
+});
+
 test("restores a pinned Chrome seed before the profile and browser start", async () => {
   const events = [];
   const lifecycle = createLifecycleHarness(events, {

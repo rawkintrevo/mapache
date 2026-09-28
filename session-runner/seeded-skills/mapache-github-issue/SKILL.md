@@ -145,7 +145,8 @@ Use this shell shape:
 
 ```bash
 export GIT_TERMINAL_PROMPT=0
-git config credential.helper /usr/local/bin/mapache-git-credential
+git config --local --add credential.helper '!/usr/local/bin/mapache-git-credential'
+git config --local credential.useHttpPath true
 
 BASE_BRANCH="$GITHUB_REQUESTED_BRANCH"
 if [ -z "$BASE_BRANCH" ]; then

@@ -45,6 +45,7 @@ function createRunnerLifecycleCoordinator({
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
       await workspace.prepareWorkspaceSource();
       await git.prepareSharedWorkspaceGit?.();
+      await git.configureGithubCredentialHelper?.();
       await workspace.restoreCheckpoint?.();
       await authority.acquire();
       await activity.updateSessionActivity({
