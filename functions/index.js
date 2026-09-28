@@ -398,6 +398,7 @@ const workspaceTicketsService = createWorkspaceTicketsService({
 const workspaceRequestGrantsService = createWorkspaceRequestGrantsService({
   admin,
   db,
+  enqueueWorkspaceRun: automationRunsService.enqueueWorkspaceRun,
   ticketService: workspaceTicketsService,
 });
 const automationAgentAuthService = createAutomationAgentAuthService({

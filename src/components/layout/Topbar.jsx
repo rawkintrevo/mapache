@@ -18,6 +18,7 @@ export function Topbar({
   onOpenGenericEnvironment,
   onOpenGoogleWorkspace,
   onOpenMcpServers,
+  onOpenRequestGrants,
   onOpenPiAuthManage,
   onOpenWorkspaceEditModal,
   onOpenWorkspaceModal,
@@ -247,6 +248,7 @@ export function Topbar({
           onOpenGenericEnvironment={onOpenGenericEnvironment}
           onOpenGoogleWorkspace={onOpenGoogleWorkspace}
           onOpenMcpServers={onOpenMcpServers}
+          onOpenRequestGrants={onOpenRequestGrants}
           onOpenPiAuthManage={showManagePiAuth ? onOpenPiAuthManage : null}
           onOpenWorkspaceEditModal={onOpenWorkspaceEditModal}
           onOpenWorkspaceModal={onOpenWorkspaceModal}

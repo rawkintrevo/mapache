@@ -60,6 +60,11 @@ const OCCURRENCE = z.object({
 }).strict();
 
 const TOOL_NAMES = Object.freeze([
+  "workspace_request_targets",
+  "workspace_request_submit",
+  "workspace_request_get",
+  "workspace_request_reply",
+  "workspace_request_cancel",
   "automations_list",
   "automations_get",
   "automations_create",
@@ -73,11 +78,6 @@ const TOOL_NAMES = Object.freeze([
   "automation_runs_get",
   "automation_runs_stop",
   "automation_runs_restart",
-  "workspace_request_targets",
-  "workspace_request_submit",
-  "workspace_request_get",
-  "workspace_request_reply",
-  "workspace_request_cancel",
 ]);
 
 export function createAutomationMcpServer({client = createAutomationAgentClient()} = {}) {

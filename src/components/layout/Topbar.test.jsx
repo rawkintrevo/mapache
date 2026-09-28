@@ -118,16 +118,21 @@ test("uses one automation navigation entry for definitions and run history", asy
 test("opens labeled secondary actions from the More menu", async () => {
   const user = userEvent.setup();
   const onOpenWorkspaceModal = vi.fn();
+  const onOpenRequestGrants = vi.fn();
   const state = {
     ...createInitialState(),
     workspaces: [{id: "workspace-1", name: "A very long workspace name", source: {type: "blank"}}],
     selectedWorkspaceId: "workspace-1",
   };
-  render(<Topbar state={state} onDeleteWorkspace={vi.fn()} onOpenGenericEnvironment={vi.fn()} onOpenGoogleWorkspace={vi.fn()} onOpenMcpServers={vi.fn()} onOpenPiAuthManage={vi.fn()} onOpenWorkspaceEditModal={vi.fn()} onOpenWorkspaceModal={onOpenWorkspaceModal} onRefresh={vi.fn()} onSelectWorkspace={vi.fn()} onShowAdmin={vi.fn()} onShowLogs={vi.fn()} onShowProfile={vi.fn()} onSignOut={vi.fn()} onToggleWorkspace={vi.fn()} />);
+  render(<Topbar state={state} onDeleteWorkspace={vi.fn()} onOpenGenericEnvironment={vi.fn()} onOpenGoogleWorkspace={vi.fn()} onOpenMcpServers={vi.fn()} onOpenRequestGrants={onOpenRequestGrants} onOpenPiAuthManage={vi.fn()} onOpenWorkspaceEditModal={vi.fn()} onOpenWorkspaceModal={onOpenWorkspaceModal} onRefresh={vi.fn()} onSelectWorkspace={vi.fn()} onShowAdmin={vi.fn()} onShowLogs={vi.fn()} onShowProfile={vi.fn()} onSignOut={vi.fn()} onToggleWorkspace={vi.fn()} />);
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   expect(screen.getByRole("menu")).toBeInTheDocument();
   expect(screen.getByRole("menuitem", {name: "Create workspace"})).toBeInTheDocument();
   expect(screen.getByRole("menuitem", {name: "Delete workspace A very long workspace name"})).toHaveClass("topbar-more-item--destructive");
+  expect(screen.getByRole("menuitem", {name: "Workspace request access"})).toBeInTheDocument();
+  await user.click(screen.getByRole("menuitem", {name: "Workspace request access"}));
+  expect(onOpenRequestGrants).toHaveBeenCalledOnce();
+  await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   await user.click(screen.getByRole("menuitem", {name: "Create workspace"}));
   expect(onOpenWorkspaceModal).toHaveBeenCalledOnce();
 });

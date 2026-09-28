@@ -9,7 +9,9 @@ Interworkspace requests let an Agent in one workspace ask another workspace owne
 
 ## Configure access
 
-The source workspace is **X** and the target workspace is **Y**. Grant access only in the direction you need. The owner-managed API is:
+The source workspace is **X** and the target workspace is **Y**. Open **More → Workspace request access** in X, choose Y, select the individual permissions, and save. The current grants list lets you revoke access. Grant access only in the direction you need.
+
+For API clients, the owner-managed API is:
 
 ```http
 GET /api/workspaces/{owner-workspace-id}/request-grants

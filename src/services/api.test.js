@@ -45,6 +45,21 @@ describe("automation API client", () => {
     });
   });
 
+  test("manages workspace request grants with encoded directional paths", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse([{targetWorkspaceId: "target"}]))
+      .mockResolvedValueOnce(jsonResponse({targetWorkspaceId: "target"}));
+    vi.stubGlobal("fetch", fetch);
+    const client = createApiClient(async () => "firebase-token");
+
+    await client.getWorkspaceRequestGrants("source/workspace");
+    await client.saveWorkspaceRequestGrant("source/workspace", "target/workspace", {permissions: ["read"]});
+
+    expect(fetch.mock.calls[0][0]).toBe("/api/workspaces/source%2Fworkspace/request-grants");
+    expect(fetch.mock.calls[1][0]).toBe("/api/workspaces/source%2Fworkspace/request-grants/target%2Fworkspace");
+    expect(fetch.mock.calls[1][1]).toMatchObject({method: "PUT", body: JSON.stringify({permissions: ["read"]})});
+  });
+
   test("builds bounded history queries without leaking a client workspace override", async () => {
     const fetch = vi.fn().mockResolvedValue(jsonResponse({runs: []}));
     vi.stubGlobal("fetch", fetch);

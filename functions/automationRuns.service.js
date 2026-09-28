@@ -217,7 +217,7 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
   }
   const firestore = dependencies.firestore || dependencies.db || defaultDb;
   const admin = dependencies.firestoreAdmin || dependencies.admin || defaultAdmin;
-  const runId = `ticket-${ticketId}`;
+  const runId = input.runId || `ticket-${ticketId}`;
   const runRef = firestore.collection("automationRuns").doc(runId);
   const snapshot = normalizeRunSnapshot({
     name: "Workspace request",
@@ -253,7 +253,8 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
       runId,
       snapshot,
       status: "queued",
-      trigger: "http_ticket",
+      trigger: input.trigger || "http_ticket",
+      rootRunId: input.rootRunId || runId,
       now,
       workspaceId,
       workspaceRunRequest: admittedRequest,

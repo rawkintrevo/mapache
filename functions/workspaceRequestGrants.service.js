@@ -13,6 +13,7 @@ function createWorkspaceRequestGrantsService(dependencies = {}) {
     db: dependencies.db || defaultDb,
     admin: dependencies.admin || defaultAdmin,
     ticketService: dependencies.ticketService,
+    enqueueWorkspaceRun: dependencies.enqueueWorkspaceRun,
   };
   return {
     listGrants: (uid, sourceWorkspaceId) => listGrants(uid, sourceWorkspaceId, shared),
@@ -128,10 +129,34 @@ async function getRequest(claims, ticketId, dependencies) {
 async function replyRequest(claims, ticketId, body, dependencies) {
   const ticket = await getRequest(claims, ticketId, dependencies);
   await requirePermission(claims, ticket.workspaceId, "reply", dependencies);
-  if (!String(body?.message || body?.instructions || "").trim()) throw httpError(400, "request_reply_required");
-  if (!dependencies.db.collection("workspaceTickets").doc(ticketId).update) throw httpError(503, "workspace_request_unavailable");
-  await dependencies.db.collection("workspaceTickets").doc(ticketId).update({reply: {message: String(body.message || body.instructions).slice(0, 32768), at: dependencies.admin.firestore.FieldValue.serverTimestamp()}});
-  return getRequest(claims, ticketId, dependencies);
+  const message = String(body?.message || body?.instructions || "").trim();
+  if (!message) throw httpError(400, "request_reply_required");
+  if (typeof dependencies.enqueueWorkspaceRun !== "function") throw httpError(503, "workspace_request_unavailable");
+  const priorRequest = ticket.request || {};
+  const continuation = {
+    ...priorRequest,
+    instructions: `${String(priorRequest.instructions || "").slice(0, 32768)}\n\nFollow-up from the source workspace:\n${message}`.slice(0, 32768),
+    triggerKind: "http_ticket",
+    triggerReference: ticket.id,
+    source: priorRequest.source || {type: "workspace_agent", id: claims.workspaceId},
+    sinks: [{kind: "ticket_result", reference: ticket.id}],
+  };
+  const run = await dependencies.enqueueWorkspaceRun({
+    actor: {uid: ticket.ownerUid, type: "agent", sessionId: claims.sessionId},
+    wid: ticket.workspaceId,
+    ticketId: ticket.id,
+    runId: `ticket-${ticket.id}-reply-${crypto.randomUUID()}`,
+    rootRunId: ticket.runId || ticket.id,
+    trigger: "http_ticket",
+    runRequest: continuation,
+  });
+  await dependencies.db.collection("workspaceTickets").doc(ticket.id).update({
+    runId: run.id || run.runId,
+    reply: {message: message.slice(0, 32768), at: dependencies.admin.firestore.FieldValue.serverTimestamp()},
+    status: run.status,
+    updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return getRequest(claims, ticket.id, dependencies);
 }
 
 async function cancelRequest(claims, ticketId, dependencies) {

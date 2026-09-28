@@ -44,7 +44,8 @@ function setup() {
     },
     async cancelTicket() { return {}; },
   };
-  return {db, service: createWorkspaceRequestGrantsService({db, admin, ticketService})};
+  const enqueueWorkspaceRun = async (input) => ({id: input.runId, status: "queued"});
+  return {db, service: createWorkspaceRequestGrantsService({db, admin, enqueueWorkspaceRun, ticketService})};
 }
 
 const claims = {ownerUid: "owner", workspaceId: "source", sessionId: "session-1"};
@@ -65,6 +66,16 @@ test("agent request uses grant and returns a caller-safe projection", async () =
     result: null, reply: null, errorCode: null, createdAt: "now", updatedAt: "now",
   });
   assert.equal((await service.getRequest(claims, "ticket-1")).request, undefined);
+});
+
+test("reply creates a linked continuation run on the same ticket", async () => {
+  const {service, db} = setup();
+  await service.saveGrant("owner", "source", "target", {permissions: ["submit", "read", "reply"]});
+  await service.submitRequest({ownerUid: "owner", workspaceId: "source", sessionId: "session-1"}, {targetWorkspaceId: "target", request: "Initial request"}, {idempotencyKey: "reply-test"});
+  const result = await service.replyRequest({ownerUid: "owner", workspaceId: "source", sessionId: "session-1"}, "ticket-1", {message: "Please include one more example."});
+  assert.match(result.reply.message, /one more example/);
+  assert.match(result.runId, /^ticket-ticket-1-reply-/);
+  assert.equal(db.values.get("workspaceTickets/ticket-1").status, "queued");
 });
 
 test("revoked grant blocks new requests", async () => {

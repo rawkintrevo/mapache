@@ -17,6 +17,7 @@ Mapache owns the surrounding workspace/session shell and account connections.
 - React root and shell: `src/App.jsx`, `src/components/layout/`,
   `src/components/drawers/`, and `src/components/workspaces/`
 - Lifecycle workflows: `src/workflows/sessionLifecycle.js`
+- Workspace request grant management: `src/controllers/requestGrantsController.js`, `src/components/modals/WorkspaceRequestGrantsModal.jsx`, and `src/services/api.js`
 - Account/connection workflows: `src/workflows/piAuth.js`,
   `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
   `src/workflows/githubConnection.js`
@@ -131,7 +132,7 @@ embedded upstream application when that application is available.
 
 The landing, admin, profile, modal-stack, and runtime Logs surfaces are lazy-loaded because they are route- or action-specific. The workspace/session path remains eager so terminal and stateful Agent/Chrome canvases can mount without an extra feature request. Bundle measurements and the warning rationale are recorded in [Frontend bundle analysis](./frontend-bundle-analysis.md).
 
-`Topbar` owns the entry points for `PiAuthManageModal`,
+`Topbar`/More owns the entry point for `WorkspaceRequestGrantsModal`; it loads and mutates directional grants for the selected source workspace without starting a runner. `Topbar` owns the entry points for `PiAuthManageModal`,
 `GenericEnvironmentModal`, `McpServersModal`, and
 `GoogleWorkspaceManageModal`. `PiAuthManageModal` manages only saved
 credential selection and entry CRUD. It does not edit model files or expose
