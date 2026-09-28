@@ -70,12 +70,25 @@ test("agent request uses grant and returns a caller-safe projection", async () =
 
 test("reply creates a linked continuation run on the same ticket", async () => {
   const {service, db} = setup();
-  await service.saveGrant("owner", "source", "target", {permissions: ["submit", "read", "reply"]});
+  await service.saveGrant("owner", "source", "target", {permissions: ["submit", "reply"]});
   await service.submitRequest({ownerUid: "owner", workspaceId: "source", sessionId: "session-1"}, {targetWorkspaceId: "target", request: "Initial request"}, {idempotencyKey: "reply-test"});
   const result = await service.replyRequest({ownerUid: "owner", workspaceId: "source", sessionId: "session-1"}, "ticket-1", {message: "Please include one more example."});
   assert.match(result.reply.message, /one more example/);
   assert.match(result.runId, /^ticket-ticket-1-reply-/);
   assert.equal(db.values.get("workspaceTickets/ticket-1").status, "queued");
+});
+
+test("reply and cancel permissions do not implicitly require read access", async () => {
+  const {service} = setup();
+  await service.saveGrant("owner", "source", "target", {permissions: ["submit", "cancel"]});
+  await service.submitRequest(claims, {targetWorkspaceId: "target", request: "Cancel this"});
+  await service.cancelRequest(claims, "ticket-1");
+
+  const {service: replyService} = setup();
+  await replyService.saveGrant("owner", "source", "target", {permissions: ["submit", "reply"]});
+  await replyService.submitRequest(claims, {targetWorkspaceId: "target", request: "Reply to this"});
+  const result = await replyService.replyRequest(claims, "ticket-1", {message: "Follow up"});
+  assert.equal(result.status, "queued");
 });
 
 test("revoked grant blocks new requests", async () => {

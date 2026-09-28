@@ -120,15 +120,11 @@ async function submitRequest(claims, body = {}, options = {}, dependencies) {
 }
 
 async function getRequest(claims, ticketId, dependencies) {
-  const ticket = await readTicket(dependencies.db, ticketId);
-  if (!ticket || ticket.sourceOwnerUid !== claims.ownerUid || ticket.sourceWorkspaceId !== claims.workspaceId) throw httpError(404, "request_not_found");
-  await requirePermission(claims, ticket.workspaceId, "read", dependencies);
-  return callerSafeTicket(ticket);
+  return callerSafeTicket(await readAuthorizedTicket(claims, ticketId, "read", dependencies));
 }
 
 async function replyRequest(claims, ticketId, body, dependencies) {
-  const ticket = await getRequest(claims, ticketId, dependencies);
-  await requirePermission(claims, ticket.workspaceId, "reply", dependencies);
+  const ticket = await readAuthorizedTicket(claims, ticketId, "reply", dependencies);
   const message = String(body?.message || body?.instructions || "").trim();
   if (!message) throw httpError(400, "request_reply_required");
   if (typeof dependencies.enqueueWorkspaceRun !== "function") throw httpError(503, "workspace_request_unavailable");
@@ -156,14 +152,20 @@ async function replyRequest(claims, ticketId, body, dependencies) {
     status: run.status,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   });
-  return getRequest(claims, ticket.id, dependencies);
+  return callerSafeTicket(await readTicket(dependencies.db, ticket.id));
 }
 
 async function cancelRequest(claims, ticketId, dependencies) {
-  const ticket = await getRequest(claims, ticketId, dependencies);
-  await requirePermission(claims, ticket.workspaceId, "cancel", dependencies);
+  const ticket = await readAuthorizedTicket(claims, ticketId, "cancel", dependencies);
   await dependencies.ticketService.cancelTicket({uid: claims.ownerUid}, ticketId);
-  return getRequest(claims, ticketId, dependencies);
+  return callerSafeTicket(await readTicket(dependencies.db, ticketId));
+}
+
+async function readAuthorizedTicket(claims, ticketId, permission, dependencies) {
+  const ticket = await readTicket(dependencies.db, ticketId);
+  if (!ticket || ticket.sourceOwnerUid !== claims.ownerUid || ticket.sourceWorkspaceId !== claims.workspaceId) throw httpError(404, "request_not_found");
+  await requirePermission(claims, ticket.workspaceId, permission, dependencies);
+  return ticket;
 }
 
 async function requirePermission(claims, targetWorkspaceId, permission, dependencies) {
