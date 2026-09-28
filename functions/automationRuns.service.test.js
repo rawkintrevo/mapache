@@ -122,6 +122,10 @@ test("manual and cron enqueue capture immutable snapshots and deduplicate", asyn
   assert.equal(first.retryOfRunId, null);
   assert.deepEqual(first.snapshot.modelSelection, {modelId: "model-1", providerId: "provider-1"});
   assert.equal(first.snapshot.prompt, "Summarize the workspace");
+  assert.equal(first.workspaceRunRequest.targetWorkspaceId, "workspace-1");
+  assert.equal(first.workspaceRunRequest.triggerKind, "manual");
+  assert.equal(first.workspaceRunRequest.actor.id, "user-1");
+  assert.deepEqual(first.workspaceRunRequest.sinks, [{kind: "workspace_output", reference: "workspace-1"}]);
   await definition.update({prompt: "Edited later", revision: 4});
   assert.equal(runAt(db, first.id).snapshot.prompt, "Summarize the workspace");
 
