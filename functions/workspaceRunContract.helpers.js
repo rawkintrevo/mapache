@@ -69,13 +69,34 @@ function contextSnapshotRefsForWorkspace(workspace = {}) {
   persisted.forEach(([kind, descriptor, source]) => refs.push(descriptor ?
     {kind, version: descriptor.version || descriptor.generation || "latest", source, state: "available"} :
     {kind, version: "none", source, state: "unavailable", reason: "no_persisted_descriptor"}));
-  refs.push({kind: "connections", version: workspace.mcpConfig ? "configured" : "none", source: "workspace_brokers", state: "available"});
-  if (workspace.agentRuntimeSettings?.version) refs.push({kind: "agent_settings", version: String(workspace.agentRuntimeSettings.version), source: "workspace_settings", state: "available"});
+  const hasConnections = Boolean(workspace.mcpConfig || workspace.googleWorkspaceConnectionId || workspace.googleWorkspace);
+  refs.push(hasConnections ?
+    {kind: "connections", version: "configured", source: "workspace_brokers", state: "available"} :
+    {kind: "connections", version: "none", source: "workspace_brokers", state: "unavailable", reason: "not_configured"});
+  refs.push(workspace.agentRuntimeSettings?.version ?
+    {kind: "agent_settings", version: String(workspace.agentRuntimeSettings.version), source: "workspace_settings", state: "available"} :
+    {kind: "agent_settings", version: "none", source: "workspace_settings", state: "unavailable", reason: "no_persisted_descriptor"});
   const seed = workspace.chromeProfileSeed;
   refs.push(seed?.version || seed?.objectGeneration ?
     {kind: "browser_profile", version: String(seed.version || seed.objectGeneration), source: "browser_seed", state: "available", ...(seed.capturedAt ? {freshness: String(seed.capturedAt)} : {})} :
     {kind: "browser_profile", version: "none", source: "browser_seed", state: "unavailable", reason: "no_published_seed"});
   return refs;
+}
+
+function resolveWorkspaceRunContext(request = {}, workspace = {}) {
+  const refs = Array.isArray(request.contextSnapshotRefs) ? request.contextSnapshotRefs : [];
+  return refs.map((ref) => {
+    const kind = String(ref.kind || "");
+    const available = kind === "workspace_files" ? Boolean(workspace.agentRuntimeWorkspaceFiles?.manifest || ref.version === "empty") :
+      kind === "agent_settings" ? Boolean(workspace.agentRuntimeSettings?.version) :
+      kind === "browser_profile" ? Boolean(workspace.chromeProfileSeed?.version || workspace.chromeProfileSeed?.objectGeneration) :
+      kind === "connections" ? Boolean(workspace.mcpConfig || workspace.googleWorkspaceConnectionId || workspace.googleWorkspace) :
+      kind === "instructions" ? Boolean(workspace.instructions || workspace.workspaceInstructions) :
+      kind === "skills_extensions" ? Boolean(workspace.skillsSnapshot || workspace.extensionsSnapshot) :
+      kind === "durable_knowledge" ? Boolean(workspace.durableKnowledge || workspace.knowledgeSnapshot) :
+      kind === "conversation" ? Boolean(workspace.conversationSnapshot || workspace.agentRuntimeHistory) : false;
+    return {...ref, resolved: available, resolution: available ? "pinned" : (ref.reason || "context_not_available")};
+  });
 }
 
 function fromAutomationRun({workspaceId, ownerUid, trigger, occurrence, snapshot, workspace = {}, request = {}} = {}) {
@@ -181,5 +202,6 @@ module.exports = {
   TRIGGER_KINDS,
   contextSnapshotRefsForWorkspace,
   fromAutomationRun,
+  resolveWorkspaceRunContext,
   normalizeWorkspaceRunRequest,
 };
