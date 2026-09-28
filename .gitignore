@@ -81,3 +81,7 @@ functions/.env*
 !.agents/skills/issue-workflow/
 !.agents/skills/issue-workflow/**
 .codex/
+
+# Workspace-local Mapache runtime configuration and Pi skills
+/.mcp.json
+/.pi/
