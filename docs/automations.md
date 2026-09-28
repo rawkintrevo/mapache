@@ -45,7 +45,10 @@ At admission, saved workspace file snapshots, agent settings, and published
 browser seed descriptors are pinned as context references. The existing
 provisioner mounts source files read-only and creates the run-private writable
 runtime/output area. Ticket results point at the same immutable run artifacts;
-a sink or caller failure cannot resubmit the agent work.
+a sink or caller failure cannot resubmit the agent work. Sink delivery state is
+tracked independently (`pending`, `failed`, or `delivered`) and delivery retry
+updates only that state; `unknown` or interrupted agent outcomes are never
+blindly replayed.
 
 ### Authoritative transition map
 

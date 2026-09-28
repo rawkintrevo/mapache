@@ -54,30 +54,31 @@ function contextSnapshotRefsForWorkspace(workspace = {}) {
   const refs = [];
   const files = workspace.agentRuntimeWorkspaceFiles;
   if (files?.manifest) {
-    refs.push({
-      kind: "workspace_files",
-      version: String(files.manifest.generation || files.manifest.checksum || files.manifest.objectPath || "latest"),
-      source: "workspace_snapshot",
-      ...(files.manifest.createdAt ? {freshness: String(files.manifest.createdAt)} : {}),
-    });
+    refs.push({kind: "workspace_files", version: String(files.manifest.generation || files.manifest.checksum || files.manifest.objectPath || "latest"), source: "workspace_snapshot", state: "available", ...(files.manifest.createdAt ? {freshness: String(files.manifest.createdAt)} : {})});
   } else if (workspace.agentUiVersion === "pi-web-ui-v1") {
-    refs.push({kind: "workspace_files", version: "empty", source: "workspace_snapshot", freshness: "no_saved_snapshot"});
+    refs.push({kind: "workspace_files", version: "empty", source: "workspace_snapshot", freshness: "no_saved_snapshot", state: "available"});
+  } else {
+    refs.push({kind: "workspace_files", version: "none", source: "workspace_snapshot", state: "unavailable", reason: "no_saved_snapshot"});
   }
-  if (workspace.agentRuntimeSettings?.version) {
-    refs.push({kind: "agent_settings", version: String(workspace.agentRuntimeSettings.version), source: "workspace_settings"});
-  }
-  if (workspace.chromeProfileSeed?.version || workspace.chromeProfileSeed?.objectGeneration) {
-    refs.push({
-      kind: "browser_profile",
-      version: String(workspace.chromeProfileSeed.version || workspace.chromeProfileSeed.objectGeneration),
-      source: "browser_seed",
-      ...(workspace.chromeProfileSeed.capturedAt ? {freshness: String(workspace.chromeProfileSeed.capturedAt)} : {}),
-    });
-  }
+  const persisted = [
+    ["instructions", workspace.instructions || workspace.workspaceInstructions, "workspace_instructions"],
+    ["skills_extensions", workspace.skillsSnapshot || workspace.extensionsSnapshot, "workspace_runtime_snapshot"],
+    ["durable_knowledge", workspace.durableKnowledge || workspace.knowledgeSnapshot, "workspace_knowledge"],
+    ["conversation", workspace.conversationSnapshot || workspace.agentRuntimeHistory, "workspace_conversation"],
+  ];
+  persisted.forEach(([kind, descriptor, source]) => refs.push(descriptor ?
+    {kind, version: descriptor.version || descriptor.generation || "latest", source, state: "available"} :
+    {kind, version: "none", source, state: "unavailable", reason: "no_persisted_descriptor"}));
+  refs.push({kind: "connections", version: workspace.mcpConfig ? "configured" : "none", source: "workspace_brokers", state: "available"});
+  if (workspace.agentRuntimeSettings?.version) refs.push({kind: "agent_settings", version: String(workspace.agentRuntimeSettings.version), source: "workspace_settings", state: "available"});
+  const seed = workspace.chromeProfileSeed;
+  refs.push(seed?.version || seed?.objectGeneration ?
+    {kind: "browser_profile", version: String(seed.version || seed.objectGeneration), source: "browser_seed", state: "available", ...(seed.capturedAt ? {freshness: String(seed.capturedAt)} : {})} :
+    {kind: "browser_profile", version: "none", source: "browser_seed", state: "unavailable", reason: "no_published_seed"});
   return refs;
 }
 
-function fromAutomationRun({workspaceId, ownerUid, trigger, occurrence, snapshot, request = {}} = {}) {
+function fromAutomationRun({workspaceId, ownerUid, trigger, occurrence, snapshot, workspace = {}, request = {}} = {}) {
   return normalizeWorkspaceRunRequest({
     targetWorkspaceId: workspaceId,
     actor: request.actor || {type: "workspace_owner", id: ownerUid},
@@ -86,7 +87,7 @@ function fromAutomationRun({workspaceId, ownerUid, trigger, occurrence, snapshot
     triggerReference: request.triggerReference || occurrence?.local || null,
     instructions: request.instructions || snapshot?.prompt,
     input: request.input,
-    contextSnapshotRefs: request.contextSnapshotRefs || [],
+    contextSnapshotRefs: [...(request.contextSnapshotRefs || []), ...contextSnapshotRefsForWorkspace(workspace)],
     model: request.model === undefined ? snapshot?.modelSelection || null : request.model,
     resources: request.resources === undefined ? snapshot?.resources || null : request.resources,
     sinks: request.sinks || [{kind: "workspace_output", reference: workspaceId}],
@@ -114,6 +115,10 @@ function normalizeContextRefs(value) {
     if (entry.freshness !== undefined && entry.freshness !== null) {
       normalized.freshness = boundedString(entry.freshness, "context_freshness", MAX_REFERENCE_LENGTH);
     }
+    const state = entry.state === undefined ? "available" : boundedString(entry.state, "context_state", 32).toLowerCase();
+    if (!["available", "unavailable"].includes(state)) throw contractError("invalid_workspace_run_context_state");
+    normalized.state = state;
+    if (state === "unavailable") normalized.reason = boundedString(entry.reason || "not_persisted", "context_reason", MAX_REFERENCE_LENGTH);
     return normalized;
   });
 }

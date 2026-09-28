@@ -102,6 +102,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
       trigger,
       occurrence,
       snapshot,
+      workspace,
       request: input.runRequest,
     });
     const requestDigest = digestRequest({
@@ -245,22 +246,19 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
       return;
     }
     const now = serverTimestamp(admin);
-    const run = buildAutomationRun({}, {
+    const run = createRun({
+      actorUid,
       automationId: `ticket-${ticketId}`,
-      cleanupState: "pending",
-      createdAt: now,
       ownerUid: actorUid,
-      queuedAt: now,
       runId,
       snapshot,
       status: "queued",
       trigger: "http_ticket",
-      updatedAt: now,
+      now,
       workspaceId,
       workspaceRunRequest: admittedRequest,
     });
     run.ticketId = ticketId;
-    run.ownerUid = actorUid;
     transaction.set(runRef, run);
     response = toRunDto({id: runId, data: () => run});
   });

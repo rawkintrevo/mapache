@@ -398,6 +398,10 @@ function buildAutomationRun(payload = {}, server = {}) {
   const workspaceRunRequest = server.workspaceRunRequest || payload.workspaceRunRequest;
   if (workspaceRunRequest !== undefined) {
     run.workspaceRunRequest = normalizeWorkspaceRunRequest(workspaceRunRequest);
+    run.sinkDelivery = Object.fromEntries(run.workspaceRunRequest.sinks.map((sink, index) => [
+      `${sink.kind}:${sink.reference || index}`,
+      {state: "pending", attempts: 0, lastError: null},
+    ]));
   }
   return run;
 }
