@@ -24,11 +24,29 @@ async function handleRequest(request = {}, route = {}, dependencies = {}) {
   const runs = dependencies.runsService;
   const history = dependencies.historyService;
   const cleanup = dependencies.cleanupService;
+  const requests = dependencies.requestGrantsService;
   const body = request.body && typeof request.body === "object" ? request.body : {};
   const query = request.query && typeof request.query === "object" ? request.query : {};
   const actorContext = {actorType: "agent", sessionId: claims.sessionId};
 
   switch (`${route.resource}:${route.action}`) {
+    case "targets:list":
+      requireMethod(request, "GET");
+      return {body: {targets: await requests.discoverTargets(claims)}};
+    case "requests:create":
+      requireMethod(request, "POST");
+      return {status: 201, body: {request: await requests.submitRequest(claims, body, {
+        idempotencyKey: requestHeader(request, "idempotency-key") || body.idempotencyKey,
+      })}};
+    case "request:detail":
+      requireMethod(request, "GET");
+      return {body: {request: await requests.getRequest(claims, route.ticketId)}};
+    case "request:reply":
+      requireMethod(request, "POST");
+      return {body: {request: await requests.replyRequest(claims, route.ticketId, body)}};
+    case "request:cancel":
+      requireMethod(request, "POST");
+      return {body: {request: await requests.cancelRequest(claims, route.ticketId)}};
     case "definitions:list":
       if (request.method === "GET") {
         return {body: {automations: await definitions.listAutomations(claims.ownerUid, claims.workspaceId)}};
