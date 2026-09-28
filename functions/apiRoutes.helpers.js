@@ -98,12 +98,6 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "events") {
     return {name: "automationRunEvents", runId: parts[1]};
   }
-  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "tickets") {
-    return {name: "workspaceTickets", workspaceId: parts[1]};
-  }
-  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "tickets") {
-    return {name: "workspaceTicket", workspaceId: parts[1], ticketId: parts[3]};
-  }
   if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "automation-storage" && parts[3] === "prepare") {
     return {name: "automationStoragePrepare", workspaceId: parts[1]};
   }
