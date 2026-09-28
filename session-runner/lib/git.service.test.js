@@ -62,6 +62,52 @@ test("lists local and remote branches, checks out remote branches, creates branc
   }
 });
 
+test("configures the renewable repository credential helper idempotently without replacing custom helpers", async () => {
+  const {root, workspaceDir} = createHarness();
+  try {
+    git(workspaceDir, "config", "--local", "--add", "credential.helper", "custom-helper");
+    const service = createGitService({
+      activity: {updateSessionActivity: async () => {}, updateWorkspaceSourceState: async () => {}},
+      config: {
+        githubAutomationToken: "initial-token",
+        githubAutomationTokenRefreshUrl: "https://functions.example/token",
+        githubRepoName: "repo",
+        githubRepoOwner: "owner",
+        workspaceDir,
+        workspaceSourceMode: "github",
+      },
+    });
+
+    assert.deepEqual(await service.configureGithubCredentialHelper(), {
+      configured: true,
+      helperAdded: true,
+      useHttpPathUpdated: true,
+    });
+    assert.deepEqual(await service.configureGithubCredentialHelper(), {
+      configured: true,
+      helperAdded: false,
+      useHttpPathUpdated: false,
+    });
+    assert.deepEqual(git(workspaceDir, "config", "--local", "--get-all", "credential.helper").split(/\r?\n/), [
+      "custom-helper",
+      "!/usr/local/bin/mapache-git-credential",
+    ]);
+    assert.equal(git(workspaceDir, "config", "--local", "--get", "credential.useHttpPath"), "true");
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("public GitHub workspaces do not install the connected credential helper", async () => {
+  const {root, service, workspaceDir} = createHarness();
+  try {
+    assert.deepEqual(await service.configureGithubCredentialHelper(), {configured: false, skipped: true});
+    assert.throws(() => git(workspaceDir, "config", "--local", "--get-all", "credential.helper"));
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
 test("shared workspaces keep Git metadata private while Git commands use the mounted worktree", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-shared-git-service-"));
   try {

@@ -25,6 +25,7 @@ function createGitService({config, activity, storage}) {
   const runGitCommand = createGitCommandRunner({config});
   const sharedWorkspaceGit = createSharedWorkspaceGitService({config, runGitCommand, storage});
   const {
+    configureGithubCredentialHelper,
     withGitCloneAuth,
     withGitPushAuth,
     withGitPushPayloadAuth,
@@ -395,6 +396,7 @@ function createGitService({config, activity, storage}) {
   return {
     checkoutRequestedCommit,
     cloneGithubWorkspace,
+    configureGithubCredentialHelper: () => configureGithubCredentialHelper(runGitCommand),
     commitGitChanges,
     finalizeGithubAutomationBranch: automation.finalizeGithubAutomationBranch,
     getGitStatusSummary,
