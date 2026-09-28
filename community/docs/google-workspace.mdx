@@ -1,0 +1,68 @@
+---
+sidebar_position: 3
+---
+
+# Connect Google Workspace
+
+Connect a Google account to let the agent use the Google services you authorize
+for a Mapache workspace: Gmail, Drive, Docs, Sheets, Slides, and Calendar.
+
+If you already added your account but the agent cannot see it, confirm that the
+account is enabled for the selected workspace, then **restart the workspace**.
+Google connections load when its session starts. Refreshing the browser or
+starting a new chat does not apply a connection to an already-running session.
+
+## Add and Enable an Account
+
+1. Select the Mapache workspace where you want the agent to use Google services.
+2. Open **Manage Google Workspace** in the top navigation. On smaller screens,
+   look in the **More** menu.
+3. Choose **Add Google account**, select the services you need, and choose
+   **Read only** or **Read and write** access. Read-only access is the default.
+4. Select **Start Google authorization** and complete Google's consent flow in
+   the popup.
+5. Return to the account list. Use **Refresh Google Workspace** if the new account
+   has not appeared yet.
+6. Confirm that the account says **Authorized** and has a checkmark. The checkmark
+   means it is enabled for the selected workspace. If it shows an unplug icon,
+   click that toggle to enable it.
+
+Saved accounts can be reused across Mapache workspaces, but each workspace has
+its own account selection. An account appearing in the list does not by itself
+mean it is enabled for the workspace you are using.
+
+## Restart and Verify
+
+Finish any active agent task before restarting.
+
+1. Close the Google Workspace dialog.
+2. Click **Pause workspace** beside the workspace selector.
+3. Wait until the workspace has stopped, then click **Start workspace** (the Play
+   button).
+4. Wait for the Agent view to be ready, then ask the agent to use an authorized
+   Google service. For example, if you enabled Drive:
+
+   > Use the Google Workspace connection to list five recent files in my Google Drive.
+
+If the workspace was already off when you connected Google, just start it.
+Mapache loads the connection automatically as the `google-workspace` MCP server;
+you do not need to add a separate entry in **Manage MCP servers**.
+
+## If the Agent Still Cannot Access Google
+
+- **No Google tools are available:** Confirm you selected the correct Mapache
+  workspace, the account is enabled there, and you paused and started the
+  workspace after connecting or changing it.
+- **The account says Reconnect required:** Edit the account and complete Google
+  authorization again, then restart the workspace.
+- **A service or write operation is unavailable:** Edit the account, select the
+  required service and access level, complete authorization again, and restart.
+  Only the services and permissions you authorize are available to the agent.
+- **Tools appear but requests fail:** Keep the exact error from the agent. Google
+  account permissions or your organization's administrator restrictions may
+  prevent access. If the account remains authorized and enabled after a restart,
+  report the workspace name, affected service, and error for troubleshooting.
+
+Repeat the restart after changing the connected account, authorized services, or
+access level. Disabling the account for a workspace also requires restarting its
+active session to remove the loaded Google tools.
