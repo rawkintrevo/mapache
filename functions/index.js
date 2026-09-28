@@ -54,6 +54,7 @@ const {
   createAutomationProvisioningService,
 } = require("./automationProvisioning.service");
 const {createAutomationRunsService} = require("./automationRuns.service");
+const {createWorkspaceTicketsService} = require("./workspaceTickets.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
@@ -386,6 +387,13 @@ automationRetryService = createAutomationRetryService({
   enqueueRetryRun: automationRunsService.enqueueRun,
 });
 const automationHistoryService = createAutomationHistoryService({db, storage});
+const workspaceTicketsService = createWorkspaceTicketsService({
+  admin,
+  cancelQueuedRun: automationRunsService.cancelQueuedRun,
+  db,
+  enqueueWorkspaceRun: automationRunsService.enqueueWorkspaceRun,
+  getRun: automationHistoryService.getRun,
+});
 const automationAgentAuthService = createAutomationAgentAuthService({
   db,
   secret: () => secretValue(AUTOMATION_AGENT_TOKEN_SECRET),
@@ -437,6 +445,7 @@ const API_HANDLERS = createApiHandlers({
   automationDefinitionsService,
   automationHistoryService,
   automationRunsService,
+  workspaceTicketsService,
   environmentKeysService,
   openAiCodexAuthService,
   qaFaultHarnessService,

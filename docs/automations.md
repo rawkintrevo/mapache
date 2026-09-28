@@ -33,6 +33,20 @@ kind, source, version, and optional freshness; it is an availability/version
 claim, not a serialized copy of private workspace state. Trigger-specific
 idempotency and schedule occurrence rules remain above the shared contract.
 
+The HTTP adapter uses `POST /api/workspaces/{workspaceId}/tickets` with an
+`Idempotency-Key`, then reads `GET /api/workspaces/{workspaceId}/tickets/{id}`.
+The POST creates a durable ticket and queues a `http_ticket` run; it never
+injects work into the interactive session. Ticket status is a projection of the
+same run status and archived result/artifact pointers. `POST` on the ticket
+resource is best-effort cancellation for queued work. Authorization is checked
+against the target workspace and ticket owner on every operation.
+
+At admission, saved workspace file snapshots, agent settings, and published
+browser seed descriptors are pinned as context references. The existing
+provisioner mounts source files read-only and creates the run-private writable
+runtime/output area. Ticket results point at the same immutable run artifacts;
+a sink or caller failure cannot resubmit the agent work.
+
 ### Authoritative transition map
 
 | Phase | Authoritative owner | Durable decision |

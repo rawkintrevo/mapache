@@ -50,6 +50,33 @@ function normalizeWorkspaceRunRequest(input = {}) {
   };
 }
 
+function contextSnapshotRefsForWorkspace(workspace = {}) {
+  const refs = [];
+  const files = workspace.agentRuntimeWorkspaceFiles;
+  if (files?.manifest) {
+    refs.push({
+      kind: "workspace_files",
+      version: String(files.manifest.generation || files.manifest.checksum || files.manifest.objectPath || "latest"),
+      source: "workspace_snapshot",
+      ...(files.manifest.createdAt ? {freshness: String(files.manifest.createdAt)} : {}),
+    });
+  } else if (workspace.agentUiVersion === "pi-web-ui-v1") {
+    refs.push({kind: "workspace_files", version: "empty", source: "workspace_snapshot", freshness: "no_saved_snapshot"});
+  }
+  if (workspace.agentRuntimeSettings?.version) {
+    refs.push({kind: "agent_settings", version: String(workspace.agentRuntimeSettings.version), source: "workspace_settings"});
+  }
+  if (workspace.chromeProfileSeed?.version || workspace.chromeProfileSeed?.objectGeneration) {
+    refs.push({
+      kind: "browser_profile",
+      version: String(workspace.chromeProfileSeed.version || workspace.chromeProfileSeed.objectGeneration),
+      source: "browser_seed",
+      ...(workspace.chromeProfileSeed.capturedAt ? {freshness: String(workspace.chromeProfileSeed.capturedAt)} : {}),
+    });
+  }
+  return refs;
+}
+
 function fromAutomationRun({workspaceId, ownerUid, trigger, occurrence, snapshot, request = {}} = {}) {
   return normalizeWorkspaceRunRequest({
     targetWorkspaceId: workspaceId,
@@ -147,6 +174,7 @@ function isPlainObject(value) {
 
 module.exports = {
   TRIGGER_KINDS,
+  contextSnapshotRefsForWorkspace,
   fromAutomationRun,
   normalizeWorkspaceRunRequest,
 };
