@@ -5,6 +5,7 @@ import {
   createMcpServersState,
   createPiAuthState,
 } from "./initialState.js";
+import {createRequestGrantsState} from "./requestGrantsState.js";
 
 export function resetPiAuth(state) {
   state.piAuth = createPiAuthState();
@@ -12,6 +13,10 @@ export function resetPiAuth(state) {
 
 export function resetMcpServers(state) {
   state.mcpServers = createMcpServersState();
+}
+
+export function resetRequestGrants(state) {
+  state.requestGrants = createRequestGrantsState();
 }
 
 export function resetAdmin(state) {
@@ -31,6 +36,8 @@ export function resetSignedOutState(state) {
   state.googleWorkspaceManageModalOpen = false;
   state.googleWorkspaceModalOpen = false;
   state.googleWorkspaceReturnToManage = false;
+  state.requestGrantsModalOpen = false;
+  resetRequestGrants(state);
   state.workspaces = [];
   state.sessions = [];
   resetAdmin(state);

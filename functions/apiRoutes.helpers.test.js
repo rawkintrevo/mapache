@@ -90,6 +90,21 @@ assertRoute("/api/workspaces/workspace-1/automation-storage/prepare", {
   name: "automationStoragePrepare",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/request-grants", {
+  name: "workspaceRequestGrants",
+  workspaceId: "workspace-1",
+});
+assertRoute("/api/workspaces/workspace-1/request-grants/workspace-2", {
+  name: "workspaceRequestGrant",
+  sourceWorkspaceId: "workspace-1",
+  targetWorkspaceId: "workspace-2",
+});
+assertRoute("/api/agent/workspace-requests/targets", {
+  name: "workspaceRequestsAgent", resource: "targets", action: "list",
+});
+assertRoute("/api/agent/workspace-requests/ticket-1/reply", {
+  name: "workspaceRequestsAgent", resource: "request", action: "reply", ticketId: "ticket-1",
+});
 assertRoute("/api/workspaces/workspace-1/tickets", {
   name: "workspaceTickets",
   workspaceId: "workspace-1",

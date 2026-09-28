@@ -1,0 +1,17 @@
+{
+  "id": "workspace.request-grants",
+  "title": "Configure directional workspace request grants",
+  "description": "Create two disposable same-owner workspaces, open the owner grant UI, select the sibling target, save independent permissions, and revoke the grant.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.request-grants",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-request-source-{{timestamp}}", "workspaceEnv": "QA_CASE=workspace-request-grants"}},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-request-target-{{timestamp}}", "workspaceEnv": "QA_CASE=workspace-request-grants"}},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "qa-request-source-{{timestamp}}"}},
+    {"useScript": "scripts/workspace-request-grant-ui.json", "parameters": {"targetWorkspaceName": "qa-request-target-{{timestamp}}"}},
+    {"assert": "workspace-request-grant-saved", "expected": "Current grants lists the target with discover, submit, and read permissions."},
+    {"assert": "workspace-request-grant-revoked", "expected": "Current grants shows no workspace request grants."},
+    {"capture": "screenshot", "fileName": "workspace-request-grants.png"}
+  ]
+}

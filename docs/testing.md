@@ -41,7 +41,7 @@ End-to-end tests exercise the hosted app or local Firebase emulator plus browser
 Locations:
 
 - `e2e/` for Playwright or equivalent browser flows.
-- `e2e/qa/` for explicit Chrome DevTools-assisted QA manifests. These tests are opt-in only and should be run only when the user directly asks for QA, smoke, browser, or end-to-end testing.
+- `e2e/qa/` for explicit Chrome DevTools-assisted QA manifests. These tests are opt-in only and should be run only when the user directly asks for QA, smoke, browser, or end-to-end testing. `workspace-request-grants.json` covers the two-workspace owner grant UI path.
 - `docs/guides/*-regression-checklist.md` for human-readable scenario checklists that are not automated yet.
 
 Candidate flows:

@@ -1,3 +1,5 @@
+import {createRequestGrantsState} from "./requestGrantsState.js";
+
 export function createMcpServersState(overrides = {}) {
   return {
     loading: false,
@@ -154,6 +156,7 @@ export function createInitialState() {
     selectedSessionId: null,
     activePage: "workspace",
     mcpServers: createMcpServersState(),
+    requestGrants: createRequestGrantsState(),
     piAuth: createPiAuthState(),
     repoPicker: createRepoPickerState(),
     githubConnection: createGithubConnectionState(),
@@ -169,6 +172,7 @@ export function createInitialState() {
     piAuthManageModalOpen: false,
     genericEnvironmentModalOpen: false,
     mcpServersModalOpen: false,
+    requestGrantsModalOpen: false,
     googleWorkspaceManageModalOpen: false,
     googleWorkspaceModalOpen: false,
     googleWorkspaceReturnToManage: false,

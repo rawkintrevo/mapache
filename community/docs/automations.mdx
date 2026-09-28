@@ -1,0 +1,26 @@
+---
+title: Automations
+sidebar_position: 2
+---
+
+# Automations
+
+Automations run a saved prompt in an isolated worker on a recurring cron schedule or through **Run now**. Cron, manual runs, retries, and interworkspace requests use the same admission, provisioning, execution, artifact, and cleanup machinery.
+
+## Create and manage a schedule
+
+Open **Automations** from the workspace navigation, or ask the Agent to create one. For example:
+
+> Every weekday at 9:00 AM America/Los_Angeles, summarize the new support tickets from the configured connection and save a draft report in the automation output directory. Do not send anything.
+
+The Agent must resolve whether a request is recurring, choose an IANA timezone, preview the next occurrences, and save an enabled definition only after the user confirms. The platform supports recurring five-field cron, not native one-time jobs. **Run now** queues one occurrence without changing the schedule. Results and run history are available from the Automations page and the workspace's separate automation output area.
+
+The target workspace needs a saved model selection and any connections required by the prompt. Existing saved instructions and published context are used at admission. Unsaved chat edits are not inherited. Source files are mounted read-only to the worker; outputs are separate and can be collected by the main Agent from its read-only automation output view. External side effects still require the configured connection and target authority.
+
+## Runs and recovery
+
+A run may wait for workspace concurrency or for the main session when the definition disallows parallel execution. Stop distinguishes queued cancellation from cleanup of an active run. A failed known run can be restarted from its immutable snapshot; automatic retries are opt-in and must be marked replay-safe because they may repeat publication or sends. Missed schedules default to skip; the optional latest catch-up policy is bounded by its configured window.
+
+A stopped or restarted browser does not erase durable run IDs, history, or published artifacts. Keep the run ID when asking the Agent to inspect a delayed or failed run. A missing model, unavailable connection, or missing managed tool is actionable configuration/image-upgrade work rather than evidence that the schedule completed.
+
+For cross-workspace work, use the directional grant and request flow in [Interworkspace requests](./interworkspace-requests).

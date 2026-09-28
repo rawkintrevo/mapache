@@ -62,6 +62,14 @@
       ]
     },
     {
+      "collectionGroup": "workspaceRequestGrants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "sourceWorkspaceId", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "automations",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

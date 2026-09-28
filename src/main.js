@@ -18,6 +18,7 @@ import {friendlyGlobalError} from "./utils/friendlyErrors.js";
 import {
   resetGoogleWorkspace as resetGoogleWorkspaceState,
   resetMcpServers as resetMcpServersState,
+  resetRequestGrants as resetRequestGrantsState,
   resetSignedOutState,
 } from "./state/resetters.js";
 import {createAdminController} from "./controllers/adminController.js";
@@ -28,6 +29,7 @@ import {createWorkspaceController} from "./controllers/workspaceController.js";
 import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceController.js";
 import {createAutomationsController} from "./controllers/automationsController.js";
 import {createInstancesController} from "./controllers/instancesController.js";
+import {createRequestGrantsController} from "./controllers/requestGrantsController.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -67,6 +69,7 @@ const piPanelsController = createPiPanelsController({state, render});
 const googleWorkspaceController = createGoogleWorkspaceController({state, render});
 const automationsController = createAutomationsController({state, render});
 const instancesController = createInstancesController({state, render});
+const requestGrantsController = createRequestGrantsController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -82,6 +85,7 @@ const modalController = createModalController({
   loadGoogleWorkspace: googleWorkspaceController.loadGoogleWorkspace,
   loadMcpServers: piPanelsController.loadMcpServers,
   loadPiAuth: piPanelsController.loadPiAuth,
+  loadRequestGrants: requestGrantsController.load,
 });
 const workspaceController = createWorkspaceController({
   state,
@@ -131,6 +135,7 @@ const handlers = {
   },
   automations: automationsController,
   instances: instancesController,
+  requestGrants: requestGrantsController,
   workspaces: {
     ...workspaceController,
     selectWorkspace: async (workspaceId) => {
@@ -256,6 +261,7 @@ function resetGoogleWorkspace() {
 
 function resetWorkspaceScopedPanels({includeMcp = true} = {}) {
   if (includeMcp) resetMcpServers();
+  resetRequestGrantsState(state);
   resetGoogleWorkspace();
 }
 

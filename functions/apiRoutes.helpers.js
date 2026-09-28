@@ -98,6 +98,15 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "events") {
     return {name: "automationRunEvents", runId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "request-grants") {
+    return {name: "workspaceRequestGrants", workspaceId: parts[1]};
+  }
+  if (parts.length === 5 && parts[0] === "workspaces" && parts[2] === "request-grants") {
+    return {name: "workspaceRequestGrant", sourceWorkspaceId: parts[1], targetWorkspaceId: parts[3], action: parts[4]};
+  }
+  if (parts.length === 4 && parts[0] === "workspaces" && parts[2] === "request-grants") {
+    return {name: "workspaceRequestGrant", sourceWorkspaceId: parts[1], targetWorkspaceId: parts[3]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "tickets") {
     return {name: "workspaceTickets", workspaceId: parts[1]};
   }
@@ -109,6 +118,18 @@ function routeRequest(path) {
   }
   if (parts.length === 2 && parts[0] === "automation-runs") {
     return {name: "automationRunDetail", runId: parts[1]};
+  }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "workspace-requests" && parts[2] === "targets") {
+    return {name: "workspaceRequestsAgent", resource: "targets", action: "list"};
+  }
+  if (parts.length === 2 && parts[0] === "agent" && parts[1] === "workspace-requests") {
+    return {name: "workspaceRequestsAgent", resource: "requests", action: "create"};
+  }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "workspace-requests") {
+    return {name: "workspaceRequestsAgent", resource: "request", action: "detail", ticketId: parts[2]};
+  }
+  if (parts.length === 4 && parts[0] === "agent" && parts[1] === "workspace-requests" && ["reply", "cancel"].includes(parts[3])) {
+    return {name: "workspaceRequestsAgent", resource: "request", action: parts[3], ticketId: parts[2]};
   }
   if (parts.length === 2 && parts[0] === "agent" && parts[1] === "automations") {
     return {name: "automationAgent", resource: "definitions", action: "list"};

@@ -60,6 +60,11 @@ const OCCURRENCE = z.object({
 }).strict();
 
 const TOOL_NAMES = Object.freeze([
+  "workspace_request_targets",
+  "workspace_request_submit",
+  "workspace_request_get",
+  "workspace_request_reply",
+  "workspace_request_cancel",
   "automations_list",
   "automations_get",
   "automations_create",
@@ -85,6 +90,45 @@ export function createAutomationMcpServer({client = createAutomationAgentClient(
 }
 
 export function registerAutomationTools(server, client) {
+  server.registerTool("workspace_request_targets", {
+    description: "List workspaces this workspace is explicitly permitted to ask for work.",
+    inputSchema: z.object({}).strict(),
+  }, () => invoke(() => client.call("/api/agent/workspace-requests/targets")));
+
+  server.registerTool("workspace_request_submit", {
+    description: "Submit one request to a permitted workspace. Keep the returned request ID for later retrieval.",
+    inputSchema: z.object({
+      targetWorkspaceId: AUTOMATION_ID,
+      request: z.string().min(1).max(32768),
+      context: z.string().max(32768).optional(),
+      desiredOutput: z.string().max(32768).optional(),
+      model: MODEL_SELECTION.nullable().optional(),
+      resources: RESOURCES.nullable().optional(),
+      idempotencyKey: z.string().max(200).optional(),
+    }).strict(),
+  }, ({idempotencyKey, ...body}) => invoke(() => client.call("/api/agent/workspace-requests", {
+    method: "POST", body, idempotencyKey, retry: false,
+  })));
+
+  server.registerTool("workspace_request_get", {
+    description: "Retrieve the caller-safe status, result, and shared artifacts for a workspace request.",
+    inputSchema: z.object({ticketId: AUTOMATION_ID}),
+  }, ({ticketId}) => invoke(() => client.call(`/api/agent/workspace-requests/${encodeURIComponent(ticketId)}`)));
+
+  server.registerTool("workspace_request_reply", {
+    description: "Send a clarification or continuation message on an existing workspace request.",
+    inputSchema: z.object({ticketId: AUTOMATION_ID, message: z.string().min(1).max(32768)}).strict(),
+  }, ({ticketId, message}) => invoke(() => client.call(`/api/agent/workspace-requests/${encodeURIComponent(ticketId)}/reply`, {
+    method: "POST", body: {message}, retry: false,
+  })));
+
+  server.registerTool("workspace_request_cancel", {
+    description: "Cancel a permitted workspace request when cancellation is supported.",
+    inputSchema: z.object({ticketId: AUTOMATION_ID}).strict(),
+  }, ({ticketId}) => invoke(() => client.call(`/api/agent/workspace-requests/${encodeURIComponent(ticketId)}/cancel`, {
+    method: "POST", body: {}, retry: false,
+  })));
+
   server.registerTool("automations_list", {
     description: "List the current workspace's saved automations.",
     inputSchema: z.object({}).strict(),

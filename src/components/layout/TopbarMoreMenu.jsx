@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from "react";
-import {Blocks, BookOpen, Bot, Clock3, KeyRound, MoreHorizontal, Pencil, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, BookOpen, Bot, Clock3, KeyRound, MoreHorizontal, Pencil, PlugZap, Plus, RefreshCw, ScrollText, Shield, Trash2, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 
 export function TopbarMoreMenu({
@@ -9,6 +9,7 @@ export function TopbarMoreMenu({
   onOpenGenericEnvironment,
   onOpenGoogleWorkspace,
   onOpenMcpServers,
+  onOpenRequestGrants,
   onOpenPiAuthManage,
   onOpenWorkspaceEditModal,
   onOpenWorkspaceModal,
@@ -82,6 +83,7 @@ export function TopbarMoreMenu({
           <MenuItem icon={<Variable aria-hidden="true" />} label="Manage generic environment keys" onClick={onOpenGenericEnvironment} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<PlugZap aria-hidden="true" />} label="Manage MCP servers" onClick={onOpenMcpServers} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<Blocks aria-hidden="true" />} label="Manage Google Workspace" onClick={onOpenGoogleWorkspace} close={close} />
+          <MenuItem disabled={!selectedWorkspace} icon={<Shield aria-hidden="true" />} label="Workspace request access" onClick={onOpenRequestGrants} close={close} />
           <div className="topbar-more-divider" role="separator" />
           <a className="topbar-more-link" href="/community/blog" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Blog</a>
           <a className="topbar-more-link" href="/community/docs/intro/" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Docs</a>

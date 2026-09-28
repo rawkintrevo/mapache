@@ -413,11 +413,16 @@ Managed main and automation runtimes materialize the image-owned
 `/app/automation-mcp/server.mjs` as one managed MCP entry. It talks only to
 the runner's mode-0600 `MAPACHE_AUTOMATION_AGENT_SOCKET`; the child never
 receives the bearer token or `SESSION_SHUTDOWN_TOKEN`. The broker derives the
-current workspace from the admitted main or automation session and revalidates that
-session on every request. The managed entry is added without replacing user
-MCP entries; a collision uses a deterministic alternate server name. The
+current workspace/session from the admitted runner and revalidates that
+identity on every request. In addition to automation tools, the entry exposes
+`workspace_request_targets`, `workspace_request_submit`,
+`workspace_request_get`, `workspace_request_reply`, and
+`workspace_request_cancel`; the latter four require a directional grant and
+return caller-safe projections. The managed entry is added without replacing
+user MCP entries; a collision uses a deterministic alternate server name. The
 server and `mapache-automations` guidance skill are baked into the `pi-chrome`
-image, so startup performs no npm download.
+image, so startup performs no npm download. Rebuild and restart or recreate
+existing sessions before expecting the new request tools.
 
 ## Base Environment
 

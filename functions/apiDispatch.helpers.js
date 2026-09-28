@@ -71,6 +71,17 @@ const ROUTE_DISPATCHERS = Object.freeze({
       user, route.workspaceId, req.body || {}, {idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey},
     ))],
   ]),
+  workspaceRequestGrants: Object.freeze([
+    ["GET", "workspaceRequestGrants", jsonResult(({handlers, route, user}) => handlers.listWorkspaceRequestGrants(user.uid, route.workspaceId))],
+  ]),
+  workspaceRequestGrant: Object.freeze([
+    ["PUT", "workspaceRequestGrant", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceRequestGrant(
+      user.uid, route.sourceWorkspaceId, route.targetWorkspaceId, req.body || {},
+    ))],
+    ["DELETE", "workspaceRequestGrant", jsonResult(({handlers, route, user}) => handlers.revokeWorkspaceRequestGrant(
+      user.uid, route.sourceWorkspaceId, route.targetWorkspaceId,
+    ))],
+  ]),
   workspaceTicket: Object.freeze([
     ["GET", "workspaceTicket", jsonResult(({handlers, route, user}) => handlers.getWorkspaceTicket(user, route.ticketId))],
     ["POST", "workspaceTicket", jsonResult(({handlers, route, user}) => handlers.cancelWorkspaceTicket(user, route.ticketId))],

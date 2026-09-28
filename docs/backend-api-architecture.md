@@ -28,6 +28,7 @@ Cloud Run provisioning contract.
 - Scheduled automation lifecycle and release contract: [Scheduled Automations](./automations.md)
 - Trigger-neutral workspace-run request validation and compatibility mapping: `functions/workspaceRunContract.helpers.js`
 - Durable HTTP ticket adapter over shared runs: `functions/workspaceTickets.service.js`
+- Directional interworkspace grants and caller-safe broker requests: `functions/workspaceRequestGrants.service.js` and `functions/automationAgentApi.service.js`
 - Owner-wide active compute inventory: `functions/activeInstances.service.js`
 
 ## Current API boundary
@@ -146,7 +147,11 @@ fields. The corresponding due-definition, owner-history, queue, and cleanup
 query shapes are declared in `firestore.indexes.json`.
 
 The authenticated profile route accepts `PATCH /api/me` with only an IANA
-`timezone` field. `POST /api/automation-schedule-preview` validates a numeric
+`timezone` field. Owner-authenticated interworkspace grant routes manage
+same-owner directional permissions; the runner broker independently checks each
+permission for discovery, submission, read, reply, and cancellation. Agent
+request identity is derived from the short-lived admitted runner claims and is
+never accepted from request JSON. `POST /api/automation-schedule-preview` validates a numeric
 five-field cron expression and returns the next five `{utc, local, timezone}`
 occurrences using server time; the client cannot supply `nextRunAt` or preview
 time. Automation runners use the equivalent

@@ -26,7 +26,7 @@ async function createTicket(actor, workspaceId, body = {}, options = {}, depende
   const request = normalizeWorkspaceRunRequest({
     targetWorkspaceId,
     actor: {type: "user", id: uid},
-    source: {type: "http_ticket", id: String(options.idempotencyKey || "request").slice(0, 200)},
+    source: options.source || {type: "http_ticket", id: String(options.idempotencyKey || "request").slice(0, 200)},
     triggerKind: "http_ticket",
     triggerReference: options.idempotencyKey || null,
     instructions: body.request || body.instructions,

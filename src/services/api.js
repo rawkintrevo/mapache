@@ -151,6 +151,20 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/mcp`,
         {method: "PUT", body},
     ),
+    getWorkspaceRequestGrants: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/request-grants`,
+    ),
+    saveWorkspaceRequestGrant: (sourceWorkspaceId, targetWorkspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(sourceWorkspaceId)}/request-grants/${encodeURIComponent(targetWorkspaceId)}`,
+        {method: "PUT", body},
+    ),
+    revokeWorkspaceRequestGrant: (sourceWorkspaceId, targetWorkspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(sourceWorkspaceId)}/request-grants/${encodeURIComponent(targetWorkspaceId)}`,
+        {method: "DELETE"},
+    ),
     getGoogleWorkspaceServices: () => request(getToken, "/api/google/services"),
     getGoogleConnections: () => request(getToken, "/api/google/connections"),
     getGoogleConnection: (connectionId) => request(

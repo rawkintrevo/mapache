@@ -22,6 +22,9 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["automationStoragePrepare", ["POST"]],
   ["workspaceTickets", ["POST"]],
   ["workspaceTicket", ["GET", "POST"]],
+  ["workspaceRequestGrants", ["GET"]],
+  ["workspaceRequestGrant", ["PUT", "DELETE"]],
+  ["workspaceRequestsAgent", ["GET", "POST"]],
   ["automationAgent", ["GET", "POST", "PATCH", "DELETE"]],
   ["automationAgentSchedulePreview", ["POST"]],
   ["adminUsers", ["GET"]],
@@ -67,6 +70,7 @@ const SPECIAL_ROUTE_NAMES = Object.freeze([
   "publicPreview",
   "automationAgent",
   "automationAgentSchedulePreview",
+  "workspaceRequestsAgent",
 ]);
 
 module.exports = {ROUTE_METHODS, SPECIAL_ROUTE_NAMES};

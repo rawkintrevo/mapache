@@ -1,0 +1,65 @@
+---
+title: Interworkspace requests
+sidebar_position: 3
+---
+
+# Interworkspace requests
+
+Interworkspace requests let an Agent in one workspace ask another workspace owned by the same account to do bounded work. They use the same durable workspace-run machinery as scheduled automations; they do not start or inject a prompt into the target's interactive session.
+
+## Configure access
+
+The source workspace is **X** and the target workspace is **Y**. Open **More → Workspace request access** in X, choose Y, select the individual permissions, and save. The current grants list lets you revoke access. Grant access only in the direction you need.
+
+For API clients, the owner-managed API is:
+
+```http
+GET /api/workspaces/{owner-workspace-id}/request-grants
+PUT /api/workspaces/{source-workspace-id}/request-grants/{target-workspace-id}
+Content-Type: application/json
+
+{"permissions":["discover","submit","read","reply","cancel"],"enabled":true}
+```
+
+The grant is directional. Same ownership does not grant an Agent access to sibling workspaces. `DELETE` on the same grant path revokes it. Revocation blocks new discovery, submissions, reads, replies, and cancellations through the Agent broker; it does not delete already-created target data.
+
+Y must have its model, saved instructions/context, and permitted connections configured before a request is admitted. Connections are resolved by Mapache at target-runner provisioning time; do not copy bearer tokens or connection secrets into a prompt.
+
+## Ask from workspace X
+
+In X's normal Agent chat, ask:
+
+> Ask Customer Research to summarize onboarding complaints and return three supporting examples. Use only the permitted Customer Research workspace context and return the request ID so I can retrieve the result.
+
+The Agent should use the image-owned `workspace_request_targets` tool to resolve the permitted target, then `workspace_request_submit`. It must retain the returned request ID. If more than one target has a similar name, resolve the target before submitting; never guess a workspace ID.
+
+Use `workspace_request_get` to retrieve status and the caller-safe result/artifact projection. Use `workspace_request_reply` for a clarification or continuation and `workspace_request_cancel` for supported cancellation. Polling is bounded and should use backoff; a queued request may wait for target concurrency admission.
+
+## Paused workspaces and results
+
+The target's interactive session may be paused: admitted work starts an isolated target worker from saved state and does not require the interactive session to remain open. X may also pause or restart after submission; retain the request ID and retrieve it after restart. Unsaved live chat state is not inherited. Saved target context is pinned at admission, source files are read-only to the background worker, and results are written to the request's separate output/artifact sink.
+
+A request can be `queued`, `provisioning`, `running`, `stopping`, `succeeded`, `failed`, `canceled`, or `interrupted`. Queued cancellation is not a guarantee that already-running external work stopped. Sink delivery is separate from agent execution, so retrieving a result does not rerun the target agent.
+
+## Boundaries and troubleshooting
+
+- The source receives status, the final result, and explicitly shared artifacts—not the target transcript, credentials, private history, or unrelated tickets.
+- Missing tools usually mean the workspace needs a new/restarted `pi-chrome` runner image.
+- `request_permission_denied` means the directional grant is missing, disabled, or lacks the requested operation.
+- `request_target_not_found` means the target is no longer visible to the source owner.
+- Missing model or connection errors are target configuration problems; configure Y and submit a new request.
+- Delayed results normally indicate queue/concurrency admission or sink delivery; keep the request ID and check again.
+
+Scheduled automations and interworkspace requests are two triggers over the same run machinery. See [Automations](./automations) for schedules, Run now, cron/timezone behavior, saved context, outputs, and recovery.
+
+## Optional HTTP reference
+
+Owner-authenticated grant management uses the paths above. Agent calls use the short-lived runner-owned broker credential and these paths:
+
+- `GET /api/agent/workspace-requests/targets`
+- `POST /api/agent/workspace-requests` with `{targetWorkspaceId, request, context?, desiredOutput?, model?, resources?}`
+- `GET /api/agent/workspace-requests/{ticketId}`
+- `POST /api/agent/workspace-requests/{ticketId}/reply` with `{message}`
+- `POST /api/agent/workspace-requests/{ticketId}/cancel`
+
+These broker routes derive source workspace/session identity from the admitted runner. A user Firebase token is not a substitute, and callers must not send `ownerUid` or `sourceWorkspaceId` to authorize themselves. Use `Idempotency-Key` for submissions when a network failure could make the outcome ambiguous.

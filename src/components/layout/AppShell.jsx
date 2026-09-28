@@ -56,6 +56,7 @@ export function AppShell(props) {
   const hasOpenModal = state.authModalOpen ||
     state.genericEnvironmentModalOpen ||
     state.mcpServersModalOpen ||
+    state.requestGrantsModalOpen ||
     state.googleWorkspaceManageModalOpen ||
     state.googleWorkspaceModalOpen ||
     state.piAuthManageModalOpen ||
@@ -72,6 +73,7 @@ export function AppShell(props) {
         onOpenGenericEnvironment={modals.openGenericEnvironmentModal}
         onOpenGoogleWorkspace={modals.openGoogleWorkspaceManageModal}
         onOpenMcpServers={modals.openMcpServersModal}
+        onOpenRequestGrants={modals.openRequestGrantsModal}
         onOpenPiAuthManage={modals.openPiAuthManageModal}
         onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}

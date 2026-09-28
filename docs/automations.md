@@ -33,13 +33,24 @@ kind, source, version, and optional freshness; it is an availability/version
 claim, not a serialized copy of private workspace state. Trigger-specific
 idempotency and schedule occurrence rules remain above the shared contract.
 
-The HTTP adapter uses `POST /api/workspaces/{workspaceId}/tickets` with an
-`Idempotency-Key`, then reads `GET /api/workspaces/{workspaceId}/tickets/{id}`.
-The POST creates a durable ticket and queues a `http_ticket` run; it never
-injects work into the interactive session. Ticket status is a projection of the
-same run status and archived result/artifact pointers. `POST` on the ticket
-resource is best-effort cancellation for queued work. Authorization is checked
-against the target workspace and ticket owner on every operation.
+The owner-authenticated HTTP adapter uses `POST /api/workspaces/{workspaceId}/tickets`
+with an `Idempotency-Key`, then reads `GET /api/workspaces/{workspaceId}/tickets/{id}`.
+The POST creates a durable ticket and queues a `http_ticket` run; it never injects
+work into the interactive session. Ticket status is a projection of the same run
+status and archived result/artifact pointers. `POST` on the ticket resource is
+best-effort cancellation for queued work.
+
+Agent-to-agent requests use a separate short-lived runner credential and
+explicit directional grants stored in `workspaceRequestGrants`. Owners manage
+`GET /api/workspaces/{sourceWorkspaceId}/request-grants` and `PUT`/`DELETE`
+`/api/workspaces/{sourceWorkspaceId}/request-grants/{targetWorkspaceId}`. Grants
+contain independent `discover`, `submit`, `read`, `reply`, and `cancel`
+permissions; same-owner workspaces are not implicitly trusted. Broker routes
+are implemented by `workspaceRequestGrants.service.js` through
+`automationAgentApi.service.js`, derive source identity from admission claims,
+and return a caller-safe ticket projection rather than a full target run DTO.
+Revocation blocks subsequent broker operations without deleting existing target
+records. See [Interworkspace requests](../community/docs/interworkspace-requests.mdx).
 
 At admission, saved workspace file snapshots, agent settings, and published
 browser seed descriptors are pinned as context references. The existing

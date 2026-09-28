@@ -55,6 +55,7 @@ const {
 } = require("./automationProvisioning.service");
 const {createAutomationRunsService} = require("./automationRuns.service");
 const {createWorkspaceTicketsService} = require("./workspaceTickets.service");
+const {createWorkspaceRequestGrantsService} = require("./workspaceRequestGrants.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
@@ -394,6 +395,12 @@ const workspaceTicketsService = createWorkspaceTicketsService({
   enqueueWorkspaceRun: automationRunsService.enqueueWorkspaceRun,
   getRun: automationHistoryService.getRun,
 });
+const workspaceRequestGrantsService = createWorkspaceRequestGrantsService({
+  admin,
+  db,
+  enqueueWorkspaceRun: automationRunsService.enqueueWorkspaceRun,
+  ticketService: workspaceTicketsService,
+});
 const automationAgentAuthService = createAutomationAgentAuthService({
   db,
   secret: () => secretValue(AUTOMATION_AGENT_TOKEN_SECRET),
@@ -406,6 +413,7 @@ const automationAgentApiService = createAutomationAgentApiService({
   definitionsService: automationDefinitionsService,
   historyService: automationHistoryService,
   previewAutomationSchedule,
+  requestGrantsService: workspaceRequestGrantsService,
   runsService: automationRunsService,
   sessionCollection,
 });
@@ -446,6 +454,7 @@ const API_HANDLERS = createApiHandlers({
   automationHistoryService,
   automationRunsService,
   workspaceTicketsService,
+  workspaceRequestGrantsService,
   environmentKeysService,
   openAiCodexAuthService,
   qaFaultHarnessService,
@@ -511,7 +520,7 @@ exports.api = onRequest({
 
     const route = apiRouteRequest(req.path);
 
-    if (route.name === "automationAgent" || route.name === "automationAgentSchedulePreview") {
+    if (route.name === "automationAgent" || route.name === "automationAgentSchedulePreview" || route.name === "workspaceRequestsAgent") {
       const result = await automationAgentApiService.handleRequest(req, route);
       res.status(result.status || 200).json(result.body);
       return;

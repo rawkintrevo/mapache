@@ -7,6 +7,7 @@ import {McpServersModal} from "./McpServersModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
+import {WorkspaceRequestGrantsModal} from "./WorkspaceRequestGrantsModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
@@ -58,6 +59,19 @@ export function ModalStack(props) {
           onRefresh={pi.refreshMcpServers}
           onSave={pi.saveMcpServer}
           onUpdate={pi.updateMcpServerForm}
+        />
+      ) : null}
+      {state.requestGrantsModalOpen ? (
+        <WorkspaceRequestGrantsModal
+          grants={state.requestGrants}
+          onClose={modals.closeRequestGrantsModal}
+          onLoad={handlers.requestGrants.load}
+          onRevoke={handlers.requestGrants.revoke}
+          onSave={handlers.requestGrants.save}
+          onSetForm={handlers.requestGrants.setForm}
+          onTogglePermission={handlers.requestGrants.togglePermission}
+          selectedWorkspace={props.selectedWorkspace}
+          workspaces={state.workspaces}
         />
       ) : null}
       {state.googleWorkspaceModalOpen ? (
