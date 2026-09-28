@@ -26,6 +26,7 @@ Cloud Run provisioning contract.
 - Runner image contract: `functions/runnerCatalog.json` and
   `functions/runnerCatalog.helpers.js`
 - Scheduled automation lifecycle and release contract: [Scheduled Automations](./automations.md)
+- Trigger-neutral workspace-run request validation and compatibility mapping: `functions/workspaceRunContract.helpers.js`
 - Owner-wide active compute inventory: `functions/activeInstances.service.js`
 
 ## Current API boundary

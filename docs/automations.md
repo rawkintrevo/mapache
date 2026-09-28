@@ -16,6 +16,23 @@ standing storage service. Each admitted run uses one deterministic
 
 ## Data and lifecycle
 
+### Shared workspace-run contract
+
+All admitted background work uses the trigger-neutral `workspaceRunRequest`
+contract persisted on the compatible `automationRuns/{runId}` record. The
+contract identifies the target workspace, trusted actor/source, trigger kind and
+reference, instructions/input, model/resources, pinned context descriptors, and
+independent output sinks. Cron, Run now, retry/restart, and future HTTP tickets
+therefore share the same queue, worker claim, cleanup, and reservation fields;
+the existing automation collection and DTO names remain compatibility surfaces.
+
+Public request values are normalized and credential-like fields are rejected.
+Credentials are resolved by the existing workspace brokers at provisioning,
+not copied into the request or context references. A context descriptor records
+kind, source, version, and optional freshness; it is an availability/version
+claim, not a serialized copy of private workspace state. Trigger-specific
+idempotency and schedule occurrence rules remain above the shared contract.
+
 ### Authoritative transition map
 
 | Phase | Authoritative owner | Durable decision |

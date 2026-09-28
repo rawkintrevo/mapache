@@ -12,6 +12,7 @@ const {
   validateAutomationId,
   validateRunTrigger,
 } = require("./automationValidation.helpers");
+const {fromAutomationRun} = require("./workspaceRunContract.helpers");
 
 const TERMINAL_STATUSES = new Set([
   "succeeded", "failed", "canceled", "interrupted", "skipped",
@@ -94,6 +95,14 @@ async function enqueueRun(input = {}, dependencies = {}) {
 
     const snapshot = sourceRun ? normalizeRunSnapshot(sourceRun.snapshot) : buildSnapshot(definition, workspace);
     const occurrence = normalizeOccurrence(trigger, occurrenceInput, snapshot);
+    const workspaceRunRequest = fromAutomationRun({
+      workspaceId,
+      ownerUid: actorUid,
+      trigger,
+      occurrence,
+      snapshot,
+      request: input.runRequest,
+    });
     const requestDigest = digestRequest({
       actorUid,
       workspaceId,
@@ -104,6 +113,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
       retryOfRunId,
       attemptNumber: input.attemptNumber,
       snapshot,
+      workspaceRunRequest,
     });
 
     if (existingRunSnap.exists) {
@@ -148,6 +158,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
         workspaceId,
         skippedReason: "queue_full",
         requestDigest,
+        workspaceRunRequest,
       });
       transaction.set(runRef, skipped);
       if (requestRef) transaction.set(requestRef, buildRequestRecord({
@@ -173,6 +184,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
       now,
       workspaceId,
       requestDigest,
+      workspaceRunRequest,
     });
     transaction.set(runRef, queued);
     if (definitionSnap.exists && definition.deleted !== true) {
@@ -250,7 +262,7 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
   return response;
 }
 
-function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId, retryOfRunId, rootRunId, attemptNumber, runId, snapshot, status, trigger, now, workspaceId, skippedReason, requestDigest}) {
+function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId, retryOfRunId, rootRunId, attemptNumber, runId, snapshot, status, trigger, now, workspaceId, skippedReason, requestDigest, workspaceRunRequest}) {
   const run = buildAutomationRun({}, {
     automationId,
     cleanupState: status === "skipped" ? "complete" : "pending",
@@ -271,6 +283,7 @@ function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId
     updatedAt: now,
     workspaceId,
     skippedReason,
+    workspaceRunRequest,
   });
   run.ownerUid = actorUid;
   run.workspaceId = workspaceId;
