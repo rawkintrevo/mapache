@@ -16,6 +16,40 @@ standing storage service. Each admitted run uses one deterministic
 
 ## Data and lifecycle
 
+### Shared workspace-run contract
+
+All admitted background work uses the trigger-neutral `workspaceRunRequest`
+contract persisted on the compatible `automationRuns/{runId}` record. The
+contract identifies the target workspace, trusted actor/source, trigger kind and
+reference, instructions/input, model/resources, pinned context descriptors, and
+independent output sinks. Cron, Run now, retry/restart, and future HTTP tickets
+therefore share the same queue, worker claim, cleanup, and reservation fields;
+the existing automation collection and DTO names remain compatibility surfaces.
+
+Public request values are normalized and credential-like fields are rejected.
+Credentials are resolved by the existing workspace brokers at provisioning,
+not copied into the request or context references. A context descriptor records
+kind, source, version, and optional freshness; it is an availability/version
+claim, not a serialized copy of private workspace state. Trigger-specific
+idempotency and schedule occurrence rules remain above the shared contract.
+
+The HTTP adapter uses `POST /api/workspaces/{workspaceId}/tickets` with an
+`Idempotency-Key`, then reads `GET /api/workspaces/{workspaceId}/tickets/{id}`.
+The POST creates a durable ticket and queues a `http_ticket` run; it never
+injects work into the interactive session. Ticket status is a projection of the
+same run status and archived result/artifact pointers. `POST` on the ticket
+resource is best-effort cancellation for queued work. Authorization is checked
+against the target workspace and ticket owner on every operation.
+
+At admission, saved workspace file snapshots, agent settings, and published
+browser seed descriptors are pinned as context references. The existing
+provisioner mounts source files read-only and creates the run-private writable
+runtime/output area. Ticket results point at the same immutable run artifacts;
+a sink or caller failure cannot resubmit the agent work. Sink delivery state is
+tracked independently (`pending`, `failed`, or `delivered`) and delivery retry
+updates only that state; `unknown` or interrupted agent outcomes are never
+blindly replayed.
+
 ### Authoritative transition map
 
 | Phase | Authoritative owner | Durable decision |

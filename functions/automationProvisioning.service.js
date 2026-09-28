@@ -9,6 +9,7 @@ const {automationCloudRunServiceId} = require("./provisioning.helpers");
 const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
 const {isTerminalAutomationStatus, transitionAutomationRun} = require("./automationState.helpers");
 const {selectAutomationChromeProfileSeed} = require("./chromeProfileSeed.service");
+const {resolveWorkspaceRunContext} = require("./workspaceRunContract.helpers");
 
 const AUTOMATION_PROVISIONING_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
@@ -161,6 +162,7 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
       return {action: "skip", reason: `status_${String(run.status || "unknown").trim().toLowerCase()}`};
     }
 
+    const contextResolution = resolveWorkspaceRunContext(run.workspaceRunRequest, workspace);
     const operationId = run.provisioningOperationId || automationProvisioningOperationId(run.workspaceId, runId);
     const serviceId = run.provisioningServiceId || automationCloudRunServiceId(runId);
     if (run.provisioningOperationId && run.provisioningServiceId && run.provisioningClaim) {
@@ -181,6 +183,7 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
       provisioningServiceId: serviceId,
       provisioningState: "claimed",
       provisioningStartedAt: run.provisioningStartedAt || now,
+      contextResolution,
       updatedAt: now,
     });
     return {
@@ -190,6 +193,7 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
         provisioningClaim: claim,
         provisioningOperationId: operationId,
         provisioningServiceId: serviceId,
+        contextResolution,
       },
     };
   });
@@ -209,6 +213,7 @@ async function ensureAutomationSession(run, workspace, dependencies = {}, chrome
       automationTimezone: run.snapshot?.timezone,
       runtimeKind: "automation",
       runId: run.runId,
+      workspaceRunContext: run.contextResolution || [],
       sessionType: "cloud",
       chromeProfileSeed: chromeProfileSeed?.descriptor || run.chromeProfileSeed || null,
       chromeProfileInitialization: run.chromeProfileInitialization || {

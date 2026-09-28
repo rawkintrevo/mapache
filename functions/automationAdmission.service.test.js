@@ -171,6 +171,7 @@ function harness({limit = 1, mainStatus = "stopped", runs = []} = {}) {
       cleanupState: "pending",
       createdAt: run.createdAt || "2026-09-20T10:00:00.000Z",
       runId: run.runId,
+      trigger: run.trigger || "manual",
       snapshot: {allowParallelWithMain: run.allowParallelWithMain !== false},
     });
     db.data.set(`workspaces/workspace-1/automations/${run.automationId || "automation-1"}`, {
@@ -251,6 +252,21 @@ test("confirmed cleanup releases the slot and wakes the next eligible run", asyn
   assert.equal(released.released, true);
   assert.equal(db.read("automationRuns/run-next").status, "provisioning");
   assert.deepEqual(db.read("workspaces/workspace-1").automationActiveRunIds, ["run-next"]);
+});
+
+test("cron and HTTP ticket runs compete for the same admission slot", async () => {
+  const db = harness({limit: 1, runs: [
+    {runId: "cron-run", trigger: "cron"},
+    {runId: "ticket-run", trigger: "http_ticket", createdAt: "2026-09-20T10:01:00.000Z"},
+  ]});
+  const first = await admitNextEligibleRun("workspace-1", {db, admin});
+  assert.equal(first.runId, "cron-run");
+  const blocked = await admitNextEligibleRun("workspace-1", {db, admin});
+  assert.equal(blocked.reason, "concurrency_limit");
+  db.data.set("automationRuns/cron-run", {...db.read("automationRuns/cron-run"), status: "succeeded", cleanupState: "complete"});
+  const next = await releaseAfterCleanup("cron-run", {serviceAbsent: true}, {db, admin});
+  assert.equal(next.released, true);
+  assert.equal(db.read("automationRuns/ticket-run").status, "provisioning");
 });
 
 test("wakeQueue admits every run that fits without duplicating reservations", async () => {

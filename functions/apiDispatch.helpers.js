@@ -66,6 +66,15 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["POST", "automationStoragePrepare", acceptedJsonResult(({handlers, route, user}) =>
       handlers.prepareWorkspaceStorageMigration(user.uid, route.workspaceId))],
   ]),
+  workspaceTickets: Object.freeze([
+    ["POST", "workspaceTickets", acceptedJsonResult(({handlers, req, route, user}) => handlers.createWorkspaceTicket(
+      user, route.workspaceId, req.body || {}, {idempotencyKey: req.get?.("Idempotency-Key") || req.body?.idempotencyKey},
+    ))],
+  ]),
+  workspaceTicket: Object.freeze([
+    ["GET", "workspaceTicket", jsonResult(({handlers, route, user}) => handlers.getWorkspaceTicket(user, route.ticketId))],
+    ["POST", "workspaceTicket", jsonResult(({handlers, route, user}) => handlers.cancelWorkspaceTicket(user, route.ticketId))],
+  ]),
   admin: Object.freeze([
     ["GET", "adminUsers", jsonResult(({handlers, req, user}) => handlers.listAdminUsers(user, req.query || {}))],
     ["POST", "adminUserWhitelist", namedJsonResult("user", ({handlers, req, route, user}) => (

@@ -8,6 +8,7 @@ const {
 } = require("./automationState.helpers");
 const {automationSessionId} = require("./runtimePaths.helpers");
 const {validateAutomationId} = require("./automationValidation.helpers");
+const {recordSinkDeliveryAttempt} = require("./workspaceRunDelivery.helpers");
 
 const TERMINAL_OUTCOMES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
 
@@ -19,6 +20,7 @@ function createAutomationCleanupService(dependencies = {}) {
     releaseAutomationSlot: dependencies.releaseAutomationSlot || dependencies.releaseAfterCleanup,
     scheduleRetry: dependencies.scheduleRetry,
     sessionCollection: dependencies.sessionCollection,
+    deliverRunSinks: dependencies.deliverRunSinks || deliverRunSinks,
     wakeQueue: dependencies.wakeQueue,
   };
   if (typeof shared.deleteSessionService !== "function") {
@@ -175,6 +177,8 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   }, dependencies);
   if (!finalized) return {runId: normalizedRunId, skipped: "run_missing"};
 
+  await dependencies.deliverRunSinks(runRef, normalizedRunId, dependencies);
+
     try {
       const released = await dependencies.releaseAutomationSlot(normalizedRunId, {serviceAbsent: true});
     if (!released?.released && released?.workspaceId) {
@@ -191,6 +195,49 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   } catch (error) {
     await markCleanupError(runRef, normalizedRunId, {code: "automation_slot_release_failed"}, dependencies);
     return {runId: normalizedRunId, cleaned: false, error: "automation_slot_release_failed"};
+  }
+}
+
+async function deliverRunSinks(runRef, runId, dependencies = {}) {
+  const snap = await runRef.get();
+  if (!snap.exists) return;
+  let run = {runId, ...snap.data()};
+  for (const [key, sink] of Object.entries(run.sinkDelivery || {})) {
+    if (sink.state === "delivered") continue;
+    const declared = run.workspaceRunRequest?.sinks?.find((entry, index) => `${entry.kind}:${entry.reference || index}` === key);
+    let delivery;
+    try {
+      if (!declared || !["workspace_output", "ticket_result"].includes(declared.kind)) {
+        throw cleanupError("unsupported_sink");
+      }
+      if (declared.kind === "workspace_output") {
+        if (!run.workspaceOutput?.prefix) throw cleanupError("workspace_output_not_published");
+        delivery = {workspaceOutputPublished: run.workspaceOutput};
+      } else {
+        const ticketId = String(declared.reference || run.ticketId || "").trim();
+        if (!ticketId || !dependencies.db) throw cleanupError("ticket_result_destination_missing");
+        await dependencies.db.collection("workspaceTickets").doc(ticketId).update({
+          status: run.status,
+          result: {
+            runId,
+            finalResult: run.finalResult || null,
+            artifactPointers: run.artifactPointers || {},
+            workspaceOutput: run.workspaceOutput || null,
+          },
+          resultPublishedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+          updatedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+        });
+        delivery = {ticketResultPublished: true};
+      }
+    } catch (error) {
+      const next = recordSinkDeliveryAttempt(run, key, {state: "failed", error: stableCleanupErrorCode(error)});
+      run = next;
+      await runRef.update({sinkDelivery: next.sinkDelivery, updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
+      continue;
+    }
+    const next = recordSinkDeliveryAttempt(run, key, {state: "delivered"});
+    run = {...next, ...delivery};
+    await runRef.update({sinkDelivery: next.sinkDelivery, ...delivery, updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
   }
 }
 
@@ -309,6 +356,7 @@ function cleanupError(code) {
 
 module.exports = {
   cleanupAutomationRun,
+  deliverRunSinks,
   createAutomationCleanupService,
   handleAutomationRunEvent,
   stopRun,
