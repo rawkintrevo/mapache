@@ -12,7 +12,6 @@ const {
   validateAutomationId,
   validateRunTrigger,
 } = require("./automationValidation.helpers");
-const {contextSnapshotRefsForWorkspace, fromAutomationRun, normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
 
 const TERMINAL_STATUSES = new Set([
   "succeeded", "failed", "canceled", "interrupted", "skipped",
@@ -32,7 +31,6 @@ function createAutomationRunsService(dependencies = {}) {
   };
   return {
     enqueueRun: (input) => enqueueRun(input, shared),
-    enqueueWorkspaceRun: (input) => enqueueWorkspaceRun(input, shared),
     restartRun: (actor, runId, options = {}) => restartRun(actor, runId, options, shared),
     cancelQueuedRun: (actor, runId) => cancelQueuedRun(actor, runId, shared),
   };
@@ -96,14 +94,6 @@ async function enqueueRun(input = {}, dependencies = {}) {
 
     const snapshot = sourceRun ? normalizeRunSnapshot(sourceRun.snapshot) : buildSnapshot(definition, workspace);
     const occurrence = normalizeOccurrence(trigger, occurrenceInput, snapshot);
-    const workspaceRunRequest = fromAutomationRun({
-      workspaceId,
-      ownerUid: actorUid,
-      trigger,
-      occurrence,
-      snapshot,
-      request: input.runRequest,
-    });
     const requestDigest = digestRequest({
       actorUid,
       workspaceId,
@@ -114,7 +104,6 @@ async function enqueueRun(input = {}, dependencies = {}) {
       retryOfRunId,
       attemptNumber: input.attemptNumber,
       snapshot,
-      workspaceRunRequest,
     });
 
     if (existingRunSnap.exists) {
@@ -159,7 +148,6 @@ async function enqueueRun(input = {}, dependencies = {}) {
         workspaceId,
         skippedReason: "queue_full",
         requestDigest,
-        workspaceRunRequest,
       });
       transaction.set(runRef, skipped);
       if (requestRef) transaction.set(requestRef, buildRequestRecord({
@@ -185,7 +173,6 @@ async function enqueueRun(input = {}, dependencies = {}) {
       now,
       workspaceId,
       requestDigest,
-      workspaceRunRequest,
     });
     transaction.set(runRef, queued);
     if (definitionSnap.exists && definition.deleted !== true) {
@@ -203,72 +190,6 @@ async function enqueueRun(input = {}, dependencies = {}) {
     if (latest.exists) response = toRunDto(latest);
   }
 
-  return response;
-}
-
-async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
-  const actorUid = requireActorUid(input.actor);
-  const workspaceId = validateContextId(input.wid, "workspace_id");
-  const ticketId = validateContextId(input.ticketId, "ticket_id");
-  const request = input.runRequest;
-  if (!request || request.triggerKind !== "http_ticket" || request.targetWorkspaceId !== workspaceId) {
-    throw httpError(400, "invalid_workspace_run_request");
-  }
-  const firestore = dependencies.firestore || dependencies.db || defaultDb;
-  const admin = dependencies.firestoreAdmin || dependencies.admin || defaultAdmin;
-  const runId = `ticket-${ticketId}`;
-  const runRef = firestore.collection("automationRuns").doc(runId);
-  const snapshot = normalizeRunSnapshot({
-    name: "Workspace request",
-    prompt: request.instructions,
-    definitionRevision: 1,
-    cron: "ticket",
-    timezone: "UTC",
-    allowParallelWithMain: true,
-    modelSelection: request.model,
-    resources: request.resources,
-  });
-  let response;
-  await firestore.runTransaction(async (transaction) => {
-    const workspaceRef = firestore.collection("workspaces").doc(workspaceId);
-    const workspaceSnap = await transaction.get(workspaceRef);
-    if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-    const workspace = workspaceSnap.data() || {};
-    if (workspace.ownerUid !== actorUid) throw httpError(403, "workspace_forbidden");
-    const admittedRequest = normalizeWorkspaceRunRequest({
-      ...request,
-      contextSnapshotRefs: [...(request.contextSnapshotRefs || []), ...contextSnapshotRefsForWorkspace(workspace)],
-    });
-    const existing = await transaction.get(runRef);
-    if (existing.exists) {
-      response = toRunDto(existing);
-      return;
-    }
-    const now = serverTimestamp(admin);
-    const run = buildAutomationRun({}, {
-      automationId: `ticket-${ticketId}`,
-      cleanupState: "pending",
-      createdAt: now,
-      ownerUid: actorUid,
-      queuedAt: now,
-      runId,
-      snapshot,
-      status: "queued",
-      trigger: "http_ticket",
-      updatedAt: now,
-      workspaceId,
-      workspaceRunRequest: admittedRequest,
-    });
-    run.ticketId = ticketId;
-    run.ownerUid = actorUid;
-    transaction.set(runRef, run);
-    response = toRunDto({id: runId, data: () => run});
-  });
-  if (response?.status === "queued" && typeof dependencies.wakeQueue === "function") {
-    await dependencies.wakeQueue(workspaceId);
-    const latest = await runRef.get();
-    if (latest.exists) response = toRunDto(latest);
-  }
   return response;
 }
 
@@ -329,7 +250,7 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
   return response;
 }
 
-function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId, retryOfRunId, rootRunId, attemptNumber, runId, snapshot, status, trigger, now, workspaceId, skippedReason, requestDigest, workspaceRunRequest}) {
+function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId, retryOfRunId, rootRunId, attemptNumber, runId, snapshot, status, trigger, now, workspaceId, skippedReason, requestDigest}) {
   const run = buildAutomationRun({}, {
     automationId,
     cleanupState: status === "skipped" ? "complete" : "pending",
@@ -350,7 +271,6 @@ function createRun({actorUid, automationId, occurrence, ownerUid, restartOfRunId
     updatedAt: now,
     workspaceId,
     skippedReason,
-    workspaceRunRequest,
   });
   run.ownerUid = actorUid;
   run.workspaceId = workspaceId;
@@ -523,7 +443,6 @@ module.exports = {
   deterministicRetryRunId,
   deterministicCronRunId,
   enqueueRun,
-  enqueueWorkspaceRun,
   normalizeOccurrence,
   restartRun,
 };

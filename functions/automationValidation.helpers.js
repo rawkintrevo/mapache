@@ -1,7 +1,6 @@
 "use strict";
 
 const {normalizeSessionResources} = require("./sessionResources.helpers");
-const {normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
 
 const AUTOMATION_NAME_MAX_LENGTH = 120;
 const AUTOMATION_PROMPT_MAX_LENGTH = 32768;
@@ -54,10 +53,9 @@ const AUTOMATION_SERVER_FIELDS = Object.freeze([
   "trigger",
   "snapshot",
   "artifactPointers",
-  "workspaceRunRequest",
 ]);
 
-const AUTOMATION_RUN_TRIGGERS = Object.freeze(["cron", "manual", "http_ticket", "restart", "catch_up", "retry"]);
+const AUTOMATION_RUN_TRIGGERS = Object.freeze(["cron", "manual", "restart", "catch_up", "retry"]);
 const AUTOMATION_RUN_STATUSES = Object.freeze([
   "queued",
   "provisioning",
@@ -394,10 +392,6 @@ function buildAutomationRun(payload = {}, server = {}) {
   for (const field of ["retryPolicy", "maximumRetries", "replaySafe", "rootRunId", "retryOfRunId", "attemptNumber", "retryState", "retryNotBefore", "retryRunId"]) {
     const value = server[field] !== undefined ? server[field] : payload[field];
     if (value !== undefined) run[field] = value;
-  }
-  const workspaceRunRequest = server.workspaceRunRequest || payload.workspaceRunRequest;
-  if (workspaceRunRequest !== undefined) {
-    run.workspaceRunRequest = normalizeWorkspaceRunRequest(workspaceRunRequest);
   }
   return run;
 }
