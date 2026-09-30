@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
+import {createGoogleRestClient} from "./restClient.mjs";
 import {batchUpdateValues, insertDimension, registerSheetsWriteTools, updateValues} from "./sheetsWrites.mjs";
 
 function fakeServer() {
@@ -9,11 +10,36 @@ function fakeServer() {
 
 const WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
+function recordingSheetsClient(calls) {
+  return createGoogleRestClient({
+    env: {GOOGLE_MCP_ACCESS_TOKEN: "test-token"},
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return Response.json({totalUpdatedCells: 2, replies: [{}]});
+    },
+  });
+}
+
 test("registers Sheets writes only with the spreadsheet write scope", () => {
   const server = fakeServer();
   assert.equal(registerSheetsWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scope === WRITE_SCOPE}}).length, 3);
   const blocked = fakeServer();
   assert.deepEqual(registerSheetsWriteTools(blocked, {client: {}, config: {hasGrantedScope: () => false}}), []);
+});
+
+test("resolves Sheets value writes and dimension insertion through the Sheets API service endpoint", async () => {
+  const calls = [];
+  const client = recordingSheetsClient(calls);
+
+  await updateValues(client, {spreadsheetId: "sheet-1", range: "Sheet1!A1", values: [[1]]});
+  await batchUpdateValues(client, {spreadsheetId: "sheet-1", data: [{range: "Sheet1!A1", values: [[1]]}]});
+  await insertDimension(client, {spreadsheetId: "sheet-1", sheetId: 0, dimension: "ROWS", startIndex: 1, endIndex: 2});
+
+  assert.deepEqual(calls.map((url) => ({origin: new URL(url).origin, pathname: new URL(url).pathname})), [
+    {origin: "https://sheets.googleapis.com", pathname: "/v4/spreadsheets/sheet-1/values/Sheet1!A1"},
+    {origin: "https://sheets.googleapis.com", pathname: "/v4/spreadsheets/sheet-1/values:batchUpdate"},
+    {origin: "https://sheets.googleapis.com", pathname: "/v4/spreadsheets/sheet-1:batchUpdate"},
+  ]);
 });
 
 test("updates RAW and USER_ENTERED values with explicit ranges", async () => {
