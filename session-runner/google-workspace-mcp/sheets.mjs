@@ -1,7 +1,7 @@
 import * as z from "zod/v4";
 import {boundedItemLimit, pathSegment, queryParams, registerJsonTool, requiredText} from "./tools.mjs";
 
-const SHEETS_API = "/sheets/v4";
+const SHEETS_API = "https://sheets.googleapis.com/v4";
 const VALUE_RENDER_OPTIONS = ["FORMATTED_VALUE", "UNFORMATTED_VALUE", "FORMULA"];
 const DATE_RENDER_OPTIONS = ["SERIAL_NUMBER", "FORMATTED_STRING"];
 

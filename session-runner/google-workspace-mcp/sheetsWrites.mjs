@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import {hasGrantedScope} from "./config.mjs";
 import {pathSegment, queryParams, registerJsonTool, requiredText} from "./tools.mjs";
 
-const SHEETS_API = "/sheets/v4";
+const SHEETS_API = "https://sheets.googleapis.com/v4";
 const SPREADSHEETS_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const VALUE_INPUT_OPTIONS = ["RAW", "USER_ENTERED"];
 
