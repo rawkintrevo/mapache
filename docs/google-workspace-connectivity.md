@@ -12,6 +12,7 @@ This page documents the workspace-scoped Google account workflow added for issue
 - Running-session access-token broker: `functions/googleMcpTokenBroker.service.js` and the `googleMcpToken` Function export in `functions/index.js`
 - Authenticated API handlers and route registration: `functions/googleWorkspaceApi.service.js`, `functions/apiRouteManifest.js`, `functions/apiRoutes.helpers.js`, and `functions/apiDispatch.helpers.js`
 - Cloud Run environment and MCP injection: `functions/googleWorkspaceProvisioning.service.js` and `functions/cloudRun.service.js`
+- Runner MCP tool registration and Google REST writes: `session-runner/google-workspace-mcp/server.mjs`, `sheetsWrites.mjs`, `driveWrites.mjs`, and `restClient.mjs`
 - Frontend state, controller, workflow, navbar management modal, and connection editor: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/controllers/modalController.js`, `src/workflows/googleWorkspace.js`, `src/components/layout/Topbar.jsx`, `src/components/modals/GoogleWorkspaceManageModal.jsx`, and `src/components/modals/GoogleWorkspaceModal.jsx`
 - Runner token renewal, status, and persistence: `session-runner/lib/googleMcpTokenApi.service.js`, `session-runner/lib/googleMcpStatus.service.js`, and `session-runner/lib/workspaceArchives.service.js`
 
@@ -68,6 +69,13 @@ The local Gmail search and draft-list tools map the Gmail API's `threads` and `d
 Drive search and recent-file listing likewise pass `itemsKey: "files"` to the shared paginator because Drive v3 returns its collection under `files`; single-file metadata and permission calls use endpoint-specific field masks. Sheets metadata, values reads, values writes, batch updates, and dimension insertion use the dedicated `https://sheets.googleapis.com/v4` service endpoint rather than the shared `www.googleapis.com` host; the real REST-client regression tests assert the resolved host and paths for each operation. The local health tool performs bounded read-only probes for Gmail, Drive, and Calendar through the same REST client and reports Docs, Sheets, and Slides as unverified when no resource identifier is available. Deploying a Sheets REST-client or tool change requires rebuilding and publishing `pi-chrome`; existing workspaces need a restart through the normal lifecycle to receive the corrected runner revision. Reauthorizing the Google account alone does not update runner code.
 
 Drive read access includes a unified `drive_read_file` tool. It returns ordinary textual files as bounded UTF-8, exports Google Docs and Slides as plain text, exports Google Sheets as CSV, and preserves a bounded base64 fallback for binary files. Native export uses the existing Drive read-only scope, so users who enabled Drive can inspect native content without separately enabling the Docs, Sheets, or Slides service. The legacy `drive_download_file` tool remains available for callers that explicitly need base64 bytes and continues to reject Google-native files.
+
+Write-capable runner connections expose the following bounded creation contracts:
+
+- `sheets_create_spreadsheet` requires the Sheets write scope, calls the Sheets API's `spreadsheets.create` method with `{properties: {title}}`, and returns the created `spreadsheetId` plus an editable Google Sheets URL. The returned ID can be passed directly to the existing Sheets value and dimension tools.
+- `drive_create_file` treats `mimeType` as the destination type and optional `contentMimeType` as the uploaded media type. Ordinary text and binary files continue to use multipart uploads, defaulting the media type to `mimeType`. To import CSV into a native spreadsheet, set `mimeType` to `application/vnd.google-apps.spreadsheet`, set `contentMimeType` to `text/csv`, and provide non-empty content. To create a blank native spreadsheet through Drive, omit `content` and `contentMimeType`; this uses a metadata-only JSON request and never uploads empty media. Other Google-native destination types are rejected with an actionable validation error.
+
+These tools are registered only when the connection has the relevant write scope; read-only Drive or Sheets connections do not expose them.
 
 The required Functions configuration is:
 
@@ -126,7 +134,7 @@ firebase deploy --only functions --project pi-agents-cloud
 The runner status, Pi archive, and local Google REST client changes require rebuilt runner images. Build the affected standard images with the checked-in Cloud Build configuration and explicit project flag, then restart or recreate existing sessions before expecting them to use the new runtime. Token renewal specifically requires both the Function and runner revisions: an older session does not have the broker URL and connection metadata in its environment.
 
 ```bash
-gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
+gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
 ```
 
 Before production use, verify the three OAuth secrets, redirect URI, Google Cloud APIs, consent screen, and any Workspace administrator policy. The OAuth consent screen's Data Access configuration must include `https://www.googleapis.com/auth/calendar.events` before users connect Calendar with read/write access. After adding or changing scopes, users must reconnect the saved Google account and restart or recreate affected sessions to receive a token containing the new grant. If a rollout must be reversed, deploy the previous Functions commit/revision and its matching runner image tags, restart affected sessions, and revoke or delete the saved Google connections through the UI/API. Existing sessions retain their already-provisioned environment until they are stopped or restarted.

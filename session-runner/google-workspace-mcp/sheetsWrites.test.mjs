@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {createGoogleRestClient} from "./restClient.mjs";
-import {batchUpdateValues, insertDimension, registerSheetsWriteTools, updateValues} from "./sheetsWrites.mjs";
+import {batchUpdateValues, createSpreadsheet, insertDimension, registerSheetsWriteTools, updateValues} from "./sheetsWrites.mjs";
 
 function fakeServer() {
   const tools = new Map();
@@ -22,9 +22,31 @@ function recordingSheetsClient(calls) {
 
 test("registers Sheets writes only with the spreadsheet write scope", () => {
   const server = fakeServer();
-  assert.equal(registerSheetsWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scope === WRITE_SCOPE}}).length, 3);
+  assert.equal(registerSheetsWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scope === WRITE_SCOPE}}).length, 4);
+  assert.ok(server.tools.has("sheets_create_spreadsheet"));
   const blocked = fakeServer();
   assert.deepEqual(registerSheetsWriteTools(blocked, {client: {}, config: {hasGrantedScope: () => false}}), []);
+});
+
+test("creates a named spreadsheet through the Sheets REST endpoint", async () => {
+  const calls = [];
+  const client = createGoogleRestClient({
+    env: {GOOGLE_MCP_ACCESS_TOKEN: "test-token"},
+    fetchImpl: async (url, options) => {
+      calls.push({url, options});
+      return Response.json({spreadsheetId: "sheet-created", properties: {title: "Planning"}});
+    },
+  });
+
+  const result = await createSpreadsheet(client, {title: "Planning"});
+  assert.deepEqual(result, {
+    spreadsheetId: "sheet-created",
+    url: "https://docs.google.com/spreadsheets/d/sheet-created/edit",
+    title: "Planning",
+  });
+  assert.equal(calls[0].url, "https://sheets.googleapis.com/v4/spreadsheets");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {properties: {title: "Planning"}});
 });
 
 test("resolves Sheets value writes and dimension insertion through the Sheets API service endpoint", async () => {

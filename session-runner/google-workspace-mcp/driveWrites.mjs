@@ -8,6 +8,8 @@ const DRIVE_API = "/drive/v3";
 const UPLOAD_API = "/upload/drive/v3";
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const NATIVE_FILE_PREFIX = "application/vnd.google-apps.";
+const GOOGLE_SPREADSHEET_MIME_TYPE = "application/vnd.google-apps.spreadsheet";
+const CSV_MIME_TYPE = "text/csv";
 const FILE_FIELDS = "id,name,mimeType,description,modifiedTime,createdTime,webViewLink,size,parents,driveId,trashed";
 const NATIVE_TEXT_EXPORTS = Object.freeze({
   "application/vnd.google-apps.document": "text/plain",
@@ -46,8 +48,8 @@ export function registerDriveWriteTools(server, {client, config}) {
   }
   if (canWrite(config)) {
     registerJsonTool(server, "drive_create_file", {
-      description: "Create a small text or base64 Drive file.",
-      inputSchema: z.object({name: z.string().min(1).max(256), mimeType: z.string().min(1).max(256), content: z.string().max(2_000_000), encoding: z.enum(["text", "base64"]).optional(), parents: z.array(z.string().min(1).max(512)).max(20).optional()}),
+      description: "Create a Drive file. For ordinary files provide content; for a blank Google Sheet omit content, or import CSV content by setting contentMimeType to text/csv while keeping mimeType as the native spreadsheet type.",
+      inputSchema: z.object({name: z.string().min(1).max(256), mimeType: z.string().min(1).max(256), content: z.string().max(2_000_000).optional(), contentMimeType: z.string().min(1).max(256).optional(), encoding: z.enum(["text", "base64"]).optional(), parents: z.array(z.string().min(1).max(512)).max(20).optional()}),
     }, (input) => createFile(client, input));
     registerJsonTool(server, "drive_copy_file", {
       description: "Copy one Drive file within the authorized Drive scope.",
@@ -121,10 +123,36 @@ function isTextMimeType(mimeType) {
 export async function createFile(client, input = {}) {
   const name = requiredText(input.name, "name", 256);
   const mimeType = requiredText(input.mimeType, "mimeType", 256);
+  const contentMimeType = optionalMimeType(input.contentMimeType);
+  const sourceMimeType = optionalMimeType(input.sourceMimeType);
+  if (contentMimeType && sourceMimeType && contentMimeType !== sourceMimeType) {
+    const error = new Error("contentMimeType and sourceMimeType must match when both are provided.");
+    error.code = "conflicting_file_mime_types";
+    throw error;
+  }
+  const uploadMimeTypeInput = contentMimeType || sourceMimeType;
+  const contentProvided = input.content !== undefined && input.content !== null;
+  const hasContent = contentProvided && String(input.content).length > 0;
+  const metadata = {name, mimeType, ...(input.parents?.length ? {parents: input.parents} : {})};
+
+  if (mimeType.toLowerCase() === GOOGLE_SPREADSHEET_MIME_TYPE && !hasContent && !uploadMimeTypeInput) {
+    const result = await client.request(`${DRIVE_API}/files?${queryParams({fields: FILE_FIELDS})}`, {
+      method: "POST",
+      body: JSON.stringify(metadata),
+    });
+    return {file: compactFile(result)};
+  }
+
+  if (!contentProvided && !mimeType.toLowerCase().startsWith(NATIVE_FILE_PREFIX)) {
+    const error = new Error("content is required for ordinary Drive files; omit it only for a blank native spreadsheet.");
+    error.code = "file_content_required";
+    throw error;
+  }
+  const uploadMimeType = uploadMimeTypeInput || mimeType;
+  validateCreateFileCombination({mimeType, uploadMimeType, hasContent});
   const content = decodeContent(input.content, input.encoding || "text");
   const boundary = `mapache-${randomUUID()}`;
-  const metadata = {name, mimeType, ...(input.parents?.length ? {parents: input.parents} : {})};
-  const body = multipartBody(boundary, metadata, content);
+  const body = multipartBody(boundary, metadata, uploadMimeType, content);
   const result = await client.request(`${UPLOAD_API}/files?${queryParams({uploadType: "multipart", fields: FILE_FIELDS})}`, {
     method: "POST",
     headers: {"content-type": `multipart/related; boundary=${boundary}`},
@@ -163,7 +191,33 @@ function decodeContent(value, encoding) {
   }
 }
 
-function multipartBody(boundary, metadata, content) {
-  const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${metadata.mimeType}\r\n\r\n`;
+function optionalMimeType(value) {
+  if (value === undefined || value === null || String(value).trim() === "") return "";
+  return requiredText(value, "contentMimeType", 256).toLowerCase();
+}
+
+function validateCreateFileCombination({mimeType, uploadMimeType, hasContent}) {
+  const destination = mimeType.toLowerCase();
+  if (destination.startsWith(NATIVE_FILE_PREFIX)) {
+    if (destination !== GOOGLE_SPREADSHEET_MIME_TYPE) {
+      const error = new Error("Only blank Google spreadsheets and CSV imports can use a Google-native destination MIME type.");
+      error.code = "unsupported_native_file_type";
+      throw error;
+    }
+    if (uploadMimeType !== CSV_MIME_TYPE) {
+      const error = new Error("Google spreadsheet imports require contentMimeType=text/csv; omit content and contentMimeType for a blank spreadsheet.");
+      error.code = "unsupported_file_mime_combination";
+      throw error;
+    }
+    if (!hasContent) {
+      const error = new Error("CSV spreadsheet imports require non-empty content.");
+      error.code = "csv_content_required";
+      throw error;
+    }
+  }
+}
+
+function multipartBody(boundary, metadata, uploadMimeType, content) {
+  const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${uploadMimeType}\r\n\r\n`;
   return Buffer.concat([Buffer.from(prefix, "utf8"), content, Buffer.from(`\r\n--${boundary}--\r\n`, "utf8")]);
 }
