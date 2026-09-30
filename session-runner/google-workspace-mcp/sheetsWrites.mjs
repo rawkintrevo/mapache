@@ -5,9 +5,14 @@ import {pathSegment, queryParams, registerJsonTool, requiredText} from "./tools.
 const SHEETS_API = "https://sheets.googleapis.com/v4";
 const SPREADSHEETS_WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const VALUE_INPUT_OPTIONS = ["RAW", "USER_ENTERED"];
+const SPREADSHEETS_WEB_URL = "https://docs.google.com/spreadsheets/d/";
 
 export function registerSheetsWriteTools(server, {client, config}) {
   if (!canWrite(config)) return [];
+  registerJsonTool(server, "sheets_create_spreadsheet", {
+    description: "Create a named blank Google spreadsheet and return its ID and URL.",
+    inputSchema: z.object({title: z.string().min(1).max(256)}),
+  }, (input) => createSpreadsheet(client, input));
   registerJsonTool(server, "sheets_update_values", {
     description: "Update one bounded Google Sheets A1 range.",
     inputSchema: z.object({spreadsheetId: z.string().min(1).max(512), range: z.string().min(1).max(512), values: z.array(z.array(z.unknown()).min(1).max(100)).min(1).max(500), valueInputOption: z.enum(VALUE_INPUT_OPTIONS).optional()}),
@@ -20,7 +25,21 @@ export function registerSheetsWriteTools(server, {client, config}) {
     description: "Insert a bounded row or column range in Google Sheets.",
     inputSchema: z.object({spreadsheetId: z.string().min(1).max(512), sheetId: z.number().int().min(0), dimension: z.enum(["ROWS", "COLUMNS"]), startIndex: z.number().int().min(0), endIndex: z.number().int().min(1), inheritFromBefore: z.boolean().optional()}),
   }, (input) => insertDimension(client, input));
-  return ["sheets_update_values", "sheets_batch_update_values", "sheets_insert_dimension"];
+  return ["sheets_create_spreadsheet", "sheets_update_values", "sheets_batch_update_values", "sheets_insert_dimension"];
+}
+
+export async function createSpreadsheet(client, input = {}) {
+  const title = requiredText(input.title, "title", 256);
+  const result = await client.request(`${SHEETS_API}/spreadsheets`, {
+    method: "POST",
+    body: JSON.stringify({properties: {title}}),
+  });
+  const spreadsheetId = requiredText(result?.spreadsheetId, "spreadsheetId", 512);
+  return {
+    spreadsheetId,
+    url: `${SPREADSHEETS_WEB_URL}${encodeURIComponent(spreadsheetId)}/edit`,
+    title: result?.properties?.title || title,
+  };
 }
 
 export async function updateValues(client, input = {}) {

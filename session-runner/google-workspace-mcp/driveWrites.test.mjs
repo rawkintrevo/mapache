@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
+import {createGoogleRestClient} from "./restClient.mjs";
 import {downloadFile, readFile, registerDriveWriteTools, createFile} from "./driveWrites.mjs";
 
 function fakeServer() {
@@ -8,6 +9,16 @@ function fakeServer() {
 }
 
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+function recordingDriveClient(calls, response) {
+  return createGoogleRestClient({
+    env: {GOOGLE_MCP_ACCESS_TOKEN: "test-token"},
+    fetchImpl: async (url, options) => {
+      calls.push({url, options});
+      return Response.json(response);
+    },
+  });
+}
 
 test("gates Drive downloads and writes by their scopes", () => {
   const server = fakeServer();
@@ -69,13 +80,63 @@ test("rejects native files and returns bounded binary downloads", async () => {
   assert.equal(calls[1].options.responseType, "bytes");
 });
 
-test("creates multipart text content without embedding credentials", async () => {
+test("creates ordinary multipart text content with matching metadata and media MIME types", async () => {
   const calls = [];
-  const result = await createFile({request: async (url, options) => {
-    calls.push({url, options});
-    return {id: "file-1", name: "hello.txt", mimeType: "text/plain"};
-  }}, {name: "hello.txt", mimeType: "text/plain", content: "hello", encoding: "text"});
+  const result = await createFile(recordingDriveClient(calls, {id: "file-1", name: "hello.txt", mimeType: "text/plain"}), {name: "hello.txt", mimeType: "text/plain", content: "hello", encoding: "text"});
   assert.equal(result.file.id, "file-1");
-  assert.match(calls[0].options.headers["content-type"], /multipart\/related/);
+  assert.equal(calls[0].url.startsWith("https://www.googleapis.com/upload/drive/v3/files?"), true);
+  assert.equal(calls[0].options.method, "POST");
+  assert.match(calls[0].options.headers.get("content-type"), /multipart\/related/);
+  assert.match(calls[0].options.body.toString(), /Content-Type: text\/plain/);
   assert.match(calls[0].options.body.toString(), /hello/);
+
+  await createFile(recordingDriveClient(calls, {id: "file-2", name: "bytes.bin", mimeType: "application/octet-stream"}), {
+    name: "bytes.bin",
+    mimeType: "application/octet-stream",
+    content: "AP8=",
+    encoding: "base64",
+  });
+  assert.match(calls[1].options.body.toString(), /Content-Type: application\/octet-stream/);
+  assert.ok(Buffer.from(calls[1].options.body).includes(Buffer.from([0, 255])));
+});
+
+test("imports CSV into a native spreadsheet with distinct destination and media MIME types", async () => {
+  const calls = [];
+  await createFile(recordingDriveClient(calls, {id: "sheet-imported", name: "sales.csv", mimeType: "application/vnd.google-apps.spreadsheet"}), {
+    name: "sales.csv",
+    mimeType: "application/vnd.google-apps.spreadsheet",
+    contentMimeType: "text/csv",
+    content: "month,total\nJanuary,10\n",
+  });
+  assert.match(calls[0].url, /^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files\?uploadType=multipart/);
+  assert.equal(calls[0].options.method, "POST");
+  assert.match(calls[0].options.body.toString(), /\"mimeType\":\"application\/vnd\.google-apps\.spreadsheet\"/);
+  assert.match(calls[0].options.body.toString(), /Content-Type: text\/csv/);
+  assert.match(calls[0].options.body.toString(), /month,total/);
+});
+
+test("creates a blank native spreadsheet with metadata-only Drive REST JSON", async () => {
+  const calls = [];
+  const result = await createFile(recordingDriveClient(calls, {id: "sheet-blank", name: "Planning", mimeType: "application/vnd.google-apps.spreadsheet"}), {name: "Planning", mimeType: "application/vnd.google-apps.spreadsheet"});
+  assert.equal(result.file.id, "sheet-blank");
+  assert.match(calls[0].url, /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\?/);
+  assert.doesNotMatch(calls[0].url, /uploadType/);
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers.get("content-type"), "application/json");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {name: "Planning", mimeType: "application/vnd.google-apps.spreadsheet"});
+});
+
+test("rejects unsupported native MIME combinations with actionable errors", async () => {
+  await assert.rejects(
+      createFile({request: async () => ({})}, {name: "doc", mimeType: "application/vnd.google-apps.document", content: "hello"}),
+      (error) => error.code === "unsupported_native_file_type" && /blank Google spreadsheets/.test(error.message),
+  );
+  await assert.rejects(
+      createFile({request: async () => ({})}, {name: "sheet", mimeType: "application/vnd.google-apps.spreadsheet", content: "hello"}),
+      (error) => error.code === "unsupported_file_mime_combination" && /contentMimeType=text\/csv/.test(error.message),
+  );
+  await assert.rejects(
+      createFile({request: async () => ({})}, {name: "hello.txt", mimeType: "text/plain"}),
+      (error) => error.code === "file_content_required" && /content is required/.test(error.message),
+  );
 });
