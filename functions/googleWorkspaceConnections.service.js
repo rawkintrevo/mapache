@@ -152,6 +152,7 @@ function publicConnectionMetadata(data = {}) {
     grantedScopes: data.grantedScopes || [],
     enabledServices: data.enabledServices || [],
     oauthClientRef: data.oauthClientRef,
+    gmailPermanentDeleteEnabled: data.gmailPermanentDeleteEnabled === true,
     status: data.status,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,

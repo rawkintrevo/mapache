@@ -24,6 +24,9 @@
     {"assert": "snapshot-text", "expected": "Add Google account"},
     {"useScript": "scripts/connect-google-qa-account.json"},
     {"capture": "screenshot", "fileName": "workspace-a-account-a.png"},
+    {"useScript": "scripts/open-google-workspace-modal.json"},
+    {"useScript": "scripts/reconnect-google-qa-account.json"},
+    {"capture": "screenshot", "fileName": "workspace-a-account-a-permanent-delete.png"},
     {
       "useScript": "scripts/create-blank-workspace.json",
       "parameters": {

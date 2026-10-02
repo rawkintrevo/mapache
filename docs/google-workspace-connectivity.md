@@ -56,13 +56,19 @@ Workspace documents store only the binding:
 }
 ```
 
+Saved connection metadata also carries the explicit, default-off
+`gmailPermanentDeleteEnabled` setting. The setting is account-scoped, so every
+workspace binding for that account receives the same configured capability;
+the runner still requires the Gmail binding and the actual
+`https://mail.google.com/` grant before registering permanent-delete tools.
+
 Every read and mutation verifies the authenticated user owns the connection and workspace. Unbinding changes only that workspace. Deleting a saved connection revokes its Google token when possible, removes the private record, and removes bindings to that connection from every owned workspace; the UI displays the affected workspace count before deletion.
 
 ## OAuth and service catalog
 
 The backend starts authorization with a signed, short-lived, single-use state containing the user, workspace, nonce, reconnect intent, and requested services. Every authorization request includes the base `openid`, `email`, and `profile` scopes required to identify the connected account, in addition to the selected Workspace service scopes. It requests consent and account selection together so Google reliably returns the offline refresh token even when the user previously granted the OAuth client access but Mapache has no saved connection. Before exchanging the code, the callback atomically creates a nonce record at `users/{uid}/private/googleOAuthState/attempts/{nonce}` in Firestore. This makes replay protection durable across Functions instances and cold starts; a second callback is rejected before token exchange. These records contain no tokens and retain their signed expiry for cleanup. An explicit reconnect/change-account flow does not fall back to an old refresh token if Google omits a replacement.
 
-The catalog exposes Gmail, Drive, Docs, Sheets, Slides, and Calendar. Chat and People remain intentionally outside the supported product set. Read-only access is the default; write access is offered only for services whose catalog entry explicitly lists write scopes. Calendar write access requests the least-privilege `https://www.googleapis.com/auth/calendar.events` scope so its MCP server can create, update, respond to, and delete events. The local REST-backed path does not require Google's Developer Preview program or hosted MCP-service enablement. Google API enablement, OAuth consent-screen configuration, Workspace administrator restrictions, and user consent remain deployment prerequisites outside the app.
+The catalog exposes Gmail, Drive, Docs, Sheets, Slides, and Calendar. Chat and People remain intentionally outside the supported product set. Read-only access is the default; write access is offered only for services whose catalog entry explicitly lists write scopes. Gmail write access exposes named archive tools that remove only `INBOX`. Permanent message/thread deletion is a separate default-off Gmail permission in the connection editor. Selecting it requires Gmail write access, requests the restricted `https://mail.google.com/` scope, and records the opt-in in connection metadata; a previously granted broad scope does not enable it when the setting is false. Calendar write access requests the least-privilege `https://www.googleapis.com/auth/calendar.events` scope so its MCP server can create, update, respond to, and delete events. The local REST-backed path does not require Google's Developer Preview program or hosted MCP-service enablement. Google API enablement, OAuth consent-screen configuration, Workspace administrator restrictions, and user consent remain deployment prerequisites outside the app.
 
 The local Gmail search and draft-list tools map the Gmail API's `threads` and `drafts` response collections explicitly into the shared paginator. Keep those service-specific collection keys when changing pagination; the shared client defaults to an `items` collection, and using that default for Gmail silently produces empty connector results even when Google returned matches.
 
@@ -90,6 +96,10 @@ When a new Cloud Run session is created, or an existing session is restarted, Fu
 
 - local mode merges one `google-workspace` stdio entry running `/app/google-workspace-mcp/server.mjs`;
 - selected service keys and granted scopes are passed as non-secret `GOOGLE_MCP_ENABLED_SERVICES` and `GOOGLE_MCP_GRANTED_SCOPES` values;
+- the account's explicit Gmail deletion setting is passed as the default-false
+  `GOOGLE_MCP_GMAIL_PERMANENT_DELETE_ENABLED` value; the runner requires both
+  this value and the exact full Gmail scope before exposing permanent-delete
+  tools;
 - Google MCP entries request automatic modern/legacy protocol negotiation so Pi can connect to Google's stateless MCP endpoints instead of defaulting to the adapter's legacy-only handshake;
 - the refreshed access token is passed only as the `GOOGLE_MCP_ACCESS_TOKEN` Cloud Run environment value in either mode;
 - the runner receives the safe connection identifier and dedicated `googleMcpToken` Function URL for its private renewal adapter; the local MCP process receives only a mode-0600 Unix socket path and never receives the broker URL, connection identifier, or runner shutdown credential;
@@ -137,7 +147,7 @@ The runner status, Pi archive, and local Google REST client changes require rebu
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
 ```
 
-Before production use, verify the three OAuth secrets, redirect URI, Google Cloud APIs, consent screen, and any Workspace administrator policy. The OAuth consent screen's Data Access configuration must include `https://www.googleapis.com/auth/calendar.events` before users connect Calendar with read/write access. After adding or changing scopes, users must reconnect the saved Google account and restart or recreate affected sessions to receive a token containing the new grant. If a rollout must be reversed, deploy the previous Functions commit/revision and its matching runner image tags, restart affected sessions, and revoke or delete the saved Google connections through the UI/API. Existing sessions retain their already-provisioned environment until they are stopped or restarted.
+Before production use, verify the three OAuth secrets, redirect URI, Google Cloud APIs, consent screen, and any Workspace administrator policy. The OAuth consent screen's Data Access configuration must include `https://www.googleapis.com/auth/calendar.events` before users connect Calendar with read/write access and `https://mail.google.com/` before users opt into permanent Gmail deletion. Existing read/write connections continue without reauthorization; users who enable permanent deletion must reconnect the saved account to obtain the additional grant, then restart or recreate affected sessions to receive the new runner environment. Disabling the setting does not rely on revoking the broad scope: the persisted opt-in remains the independent gate. If a rollout must be reversed, deploy the previous Functions commit/revision and its matching runner image tags, restart affected sessions, and revoke or delete the saved Google connections through the UI/API. Existing sessions retain their already-provisioned environment until they are stopped or restarted.
 
 ## Verification
 

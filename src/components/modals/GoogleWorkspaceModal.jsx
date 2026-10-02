@@ -6,8 +6,8 @@ function serviceLabel(service) {
   return service.displayName || service.key;
 }
 
-export function GoogleWorkspaceModal({googleWorkspace, onClose, onStartConnection, onUpdateAccessLevel, onUpdateService}) {
-  const status = googleWorkspace || {connecting: false, saving: false, deleting: false, data: null, selectedServices: [], accessLevel: "read"};
+export function GoogleWorkspaceModal({googleWorkspace, onClose, onStartConnection, onUpdateAccessLevel, onUpdatePermanentDelete, onUpdateService}) {
+  const status = googleWorkspace || {connecting: false, saving: false, deleting: false, data: null, selectedServices: [], accessLevel: "read", gmailPermanentDeleteEnabled: false};
   const data = status.data || {};
   const services = Array.isArray(data.services) ? data.services : [];
   const accounts = Array.isArray(data.connections) ? data.connections : [];
@@ -15,6 +15,9 @@ export function GoogleWorkspaceModal({googleWorkspace, onClose, onStartConnectio
   const selected = new Set(status.selectedServices || []);
   const busy = status.connecting || status.saving || status.deleting;
   const canWrite = [...selected].every((key) => services.find((service) => service.key === key)?.accessLevels?.includes("write"));
+  const gmail = services.find((service) => service.key === "gmail");
+  const permanentDeletePermission = gmail?.optionalPermissions?.find((permission) => permission.key === "gmailPermanentDeleteEnabled");
+  const canSelectPermanentDelete = Boolean(permanentDeletePermission && selected.has("gmail") && status.accessLevel === "write" && canWrite);
 
   return (
     <ModalBackdrop onClose={onClose}>
@@ -59,6 +62,21 @@ export function GoogleWorkspaceModal({googleWorkspace, onClose, onStartConnectio
                 <option disabled={!canWrite} value="write">Read and write</option>
               </select>
             </label>
+            {permanentDeletePermission && selected.has("gmail") ? (
+              <label className="google-workspace-service">
+                <input
+                  aria-label="Allow permanent Gmail deletion"
+                  checked={status.gmailPermanentDeleteEnabled === true}
+                  disabled={busy || !canSelectPermanentDelete}
+                  type="checkbox"
+                  onChange={(event) => onUpdatePermanentDelete?.(event.target.checked)}
+                />
+                <span>
+                  <span>{permanentDeletePermission.displayName}</span>
+                  <span className="subtle">{permanentDeletePermission.description}</span>
+                </span>
+              </label>
+            ) : null}
           </div>
         ) : <p className="empty">Google Workspace services are unavailable.</p>}
         <div className="modal-actions">

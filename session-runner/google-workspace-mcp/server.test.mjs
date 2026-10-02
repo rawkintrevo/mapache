@@ -96,6 +96,40 @@ test("Gmail-only initialize exposes its read tools", async () => {
   }
 });
 
+test("Gmail write connections expose archive tools but not permanent deletion by default", async () => {
+  const server = await initializedServer({
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: '["https://www.googleapis.com/auth/gmail.readonly","https://www.googleapis.com/auth/gmail.compose","https://www.googleapis.com/auth/gmail.modify"]',
+  });
+  try {
+    const result = await server.request("tools/list");
+    const names = result.result.tools.map((tool) => tool.name);
+    assert.ok(names.includes("gmail_archive_message"));
+    assert.ok(names.includes("gmail_archive_thread"));
+    assert.equal(names.includes("gmail_permanently_delete_message"), false);
+    assert.equal(names.includes("gmail_permanently_delete_thread"), false);
+  } finally {
+    await server.close();
+  }
+});
+
+test("Gmail permanent deletion requires the configured opt-in and full scope", async () => {
+  const server = await initializedServer({
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: '["https://mail.google.com/"]',
+    GOOGLE_MCP_GMAIL_PERMANENT_DELETE_ENABLED: "true",
+  });
+  try {
+    const names = (await server.request("tools/list")).result.tools.map((tool) => tool.name);
+    assert.ok(names.includes("gmail_search_threads"));
+    assert.ok(names.includes("gmail_archive_message"));
+    assert.ok(names.includes("gmail_permanently_delete_message"));
+    assert.ok(names.includes("gmail_permanently_delete_thread"));
+  } finally {
+    await server.close();
+  }
+});
+
 test("tools/call returns the deterministic health payload", async () => {
   const server = await initializedServer();
   try {

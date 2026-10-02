@@ -4,6 +4,14 @@
 // configuration guide: https://developers.google.com/workspace/guides/configure-mcp-servers
 const {GOOGLE_SERVICE_KEYS} = require("./googleWorkspace.models");
 
+const GMAIL_FULL_SCOPE = "https://mail.google.com/";
+const GMAIL_PERMANENT_DELETE_PERMISSION = Object.freeze({
+  key: "gmailPermanentDeleteEnabled",
+  displayName: "Permanent Gmail deletion",
+  description: "Permanently delete messages or threads, bypassing Trash. This cannot be undone.",
+  scopes: Object.freeze([GMAIL_FULL_SCOPE]),
+});
+
 const READ_SCOPE = Object.freeze({
   gmail: ["https://www.googleapis.com/auth/gmail.readonly"],
   drive: ["https://www.googleapis.com/auth/drive.readonly"],
@@ -47,6 +55,7 @@ const CATALOG = Object.freeze(GOOGLE_SERVICE_KEYS.map((key) => Object.freeze({
   accessLevels: Object.freeze(WRITE_SCOPE[key].length ? ["read", "write"] : ["read"]),
   apiService: key === "calendar" ? "calendar-json.googleapis.com" : `${key}.googleapis.com`,
   mcpService: `${key}mcp.googleapis.com`,
+  optionalPermissions: Object.freeze(key === "gmail" ? [GMAIL_PERMANENT_DELETE_PERMISSION] : []),
 })));
 
 const CATALOG_BY_KEY = new Map(CATALOG.map((entry) => [entry.key, entry]));
@@ -57,6 +66,10 @@ function googleWorkspaceServiceCatalog() {
     readScopes: [...entry.readScopes],
     writeScopes: [...entry.writeScopes],
     accessLevels: [...entry.accessLevels],
+    optionalPermissions: entry.optionalPermissions.map((permission) => ({
+      ...permission,
+      scopes: [...permission.scopes],
+    })),
   }));
 }
 
@@ -67,18 +80,29 @@ function getGoogleWorkspaceService(key) {
     readScopes: [...entry.readScopes],
     writeScopes: [...entry.writeScopes],
     accessLevels: [...entry.accessLevels],
+    optionalPermissions: entry.optionalPermissions.map((permission) => ({
+      ...permission,
+      scopes: [...permission.scopes],
+    })),
   } : null;
 }
 
-function googleWorkspaceScopeSelection(serviceKeys = [], accessLevel = "read") {
+function googleWorkspaceScopeSelection(serviceKeys = [], accessLevel = "read", options = {}) {
   const level = accessLevel === "write" ? "write" : "read";
   return [...new Set(serviceKeys.flatMap((key) => {
     const service = getGoogleWorkspaceService(key);
-    return service ? [...service.readScopes, ...(level === "write" ? service.writeScopes : [])] : [];
+    if (!service) return [];
+    return [
+      ...service.readScopes,
+      ...(level === "write" ? service.writeScopes : []),
+      ...(service.key === "gmail" && options.gmailPermanentDeleteEnabled === true ? [GMAIL_FULL_SCOPE] : []),
+    ];
   }))];
 }
 
 module.exports = {
+  GMAIL_FULL_SCOPE,
+  GMAIL_PERMANENT_DELETE_PERMISSION,
   getGoogleWorkspaceService,
   googleWorkspaceScopeSelection,
   googleWorkspaceServiceCatalog,

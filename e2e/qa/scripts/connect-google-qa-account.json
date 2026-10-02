@@ -15,6 +15,7 @@
   "successSignals": [
     "The mocked OAuth popup completes and the account is bound to the selected workspace",
     "The selected Google service accepts the Read and write access level",
+    "The permanent Gmail deletion permission remains off by default",
     "The saved account returns to the management modal as ready"
   ]
 }

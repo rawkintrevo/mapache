@@ -1,0 +1,21 @@
+{
+  "id": "script.reconnectGoogleQaAccount",
+  "title": "Reconnect the current deterministic Google test account with permanent deletion",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Edit google-a@example.test"},
+    {"type": "waitForSnapshotText", "text": "Edit Google account", "timeoutMs": 5000},
+    {"type": "select", "label": "Access level", "value": "write"},
+    {"type": "click", "role": "checkbox", "name": "Allow permanent Gmail deletion"},
+    {"type": "click", "role": "button", "name": "Start Google authorization"},
+    {"type": "waitForSnapshotText", "text": "Complete Google authorization", "timeoutMs": 10000},
+    {"type": "click", "role": "button", "name": "Close"},
+    {"type": "waitForSnapshotText", "text": "Authorized", "timeoutMs": 10000},
+    {"assert": "snapshot-text", "expected": "Permanent Gmail deletion"},
+    {"type": "click", "role": "button", "name": "Done"}
+  ],
+  "successSignals": [
+    "The existing Google account reopens in the editor",
+    "Permanent Gmail deletion is explicitly selected during reconnect",
+    "The reconnect returns to account management without creating a second account"
+  ]
+}

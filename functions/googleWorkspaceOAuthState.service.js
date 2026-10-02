@@ -25,6 +25,7 @@ function issueGoogleOAuthState(input = {}, dependencies = {}) {
   const workspaceId = cleanContext(input.workspaceId, "invalid_google_oauth_state");
   const attemptId = cleanAttemptId(input.attemptId || crypto.randomUUID());
   const serviceKeys = normalizeServiceKeys(input.serviceKeys || []);
+  const accessLevel = input.accessLevel === "write" ? "write" : "read";
   const now = Number(dependencies.now ? dependencies.now() : Date.now());
   const expiresAt = now + Number(dependencies.ttlMs || DEFAULT_TTL_MS);
   if (!Number.isFinite(now) || !Number.isFinite(expiresAt) || expiresAt <= now) {
@@ -37,6 +38,8 @@ function issueGoogleOAuthState(input = {}, dependencies = {}) {
     attemptId,
     reconnect: Boolean(input.reconnect),
     serviceKeys,
+    accessLevel,
+    gmailPermanentDeleteEnabled: input.gmailPermanentDeleteEnabled === true,
     iat: now,
     exp: expiresAt,
     nonce: crypto.randomBytes(18).toString("base64url"),
@@ -76,6 +79,8 @@ async function consumeGoogleOAuthState(token, expected = {}, dependencies = {}) 
     attemptId: payload.attemptId,
     reconnect: payload.reconnect === true,
     serviceKeys: normalizeServiceKeys(payload.serviceKeys || []),
+    accessLevel: payload.accessLevel === "write" ? "write" : "read",
+    gmailPermanentDeleteEnabled: payload.gmailPermanentDeleteEnabled === true,
     issuedAt: payload.iat,
     expiresAt: payload.exp,
   };

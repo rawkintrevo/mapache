@@ -2,6 +2,7 @@
 
 const assert = require("assert");
 const {
+  GMAIL_FULL_SCOPE,
   getGoogleWorkspaceService,
   googleWorkspaceScopeSelection,
   googleWorkspaceServiceCatalog,
@@ -19,6 +20,15 @@ assert.deepStrictEqual(googleWorkspaceScopeSelection(["gmail"], "write"), [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.modify",
+]);
+assert.deepStrictEqual(googleWorkspaceScopeSelection(["gmail"], "write", {gmailPermanentDeleteEnabled: true}), [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
+  GMAIL_FULL_SCOPE,
+]);
+assert.deepStrictEqual(getGoogleWorkspaceService("gmail").optionalPermissions.map((permission) => permission.key), [
+  "gmailPermanentDeleteEnabled",
 ]);
 assert.deepStrictEqual(googleWorkspaceScopeSelection(["calendar"], "write"), [
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",

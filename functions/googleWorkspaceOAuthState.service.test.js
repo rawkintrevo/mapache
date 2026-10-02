@@ -46,6 +46,8 @@ function createFakeDb() {
     workspaceId: "workspace-a",
     attemptId: "attempt-a",
     serviceKeys: ["gmail", "drive", "gmail"],
+    accessLevel: "write",
+    gmailPermanentDeleteEnabled: true,
   });
   assert.deepStrictEqual(await service.consume(token, {uid: "user-a", workspaceId: "workspace-a"}), {
     uid: "user-a",
@@ -53,6 +55,8 @@ function createFakeDb() {
     attemptId: "attempt-a",
     reconnect: false,
     serviceKeys: ["gmail", "drive"],
+    accessLevel: "write",
+    gmailPermanentDeleteEnabled: true,
     issuedAt: now,
     expiresAt: now + 1000,
   });

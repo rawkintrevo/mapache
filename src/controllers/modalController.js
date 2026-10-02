@@ -54,7 +54,8 @@ export function createModalController({state, dispatch = () => {}, render, loadG
     const enabledServices = Array.isArray(connection?.enabledServices) ? connection.enabledServices : [];
     state.googleWorkspace = {
       ...state.googleWorkspace,
-      accessLevel: "read",
+      accessLevel: connection?.gmailPermanentDeleteEnabled === true ? "write" : "read",
+      gmailPermanentDeleteEnabled: connection?.gmailPermanentDeleteEnabled === true,
       editingConnectionId: connection?.connectionId || "",
       error: "",
       message: "",

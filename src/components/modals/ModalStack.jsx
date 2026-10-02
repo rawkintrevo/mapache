@@ -80,6 +80,7 @@ export function ModalStack(props) {
           onClose={modals.closeGoogleWorkspaceModal}
           onStartConnection={google.startConnection}
           onUpdateAccessLevel={google.updateAccessLevel}
+          onUpdatePermanentDelete={google.updatePermanentDelete}
           onUpdateService={google.updateService}
         />
       ) : null}

@@ -1,10 +1,11 @@
 import * as z from "zod/v4";
-import {hasGrantedScope} from "./config.mjs";
+import {hasGmailPermanentDeleteAccess, hasGrantedScope} from "./config.mjs";
 import {pathSegment, queryParams, registerJsonTool, requiredText} from "./tools.mjs";
 
 const GMAIL_API = "/gmail/v1/users/me";
 const COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose";
 const MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+const INBOX_LABEL = "INBOX";
 const DRAFT_SCHEMA = z.object({
   from: z.string().max(320).optional(),
   to: z.array(z.string().min(1).max(320)).min(1).max(100),
@@ -24,6 +25,9 @@ export function registerGmailWriteTools(server, {client, config}) {
   const registered = [];
   const canCompose = canScope(config, COMPOSE_SCOPE);
   const canModify = canScope(config, MODIFY_SCOPE);
+  const canPermanentlyDelete = config?.hasGmailPermanentDeleteAccess ?
+    config.hasGmailPermanentDeleteAccess() :
+    hasGmailPermanentDeleteAccess(config);
   if (canCompose) {
     registerJsonTool(server, "gmail_create_draft", {
       description: "Create a Gmail draft without sending it.",
@@ -52,7 +56,33 @@ export function registerGmailWriteTools(server, {client, config}) {
       description: "Remove labels from one Gmail thread.",
       inputSchema: z.object({threadId: z.string().min(1).max(512), labelIds: LABEL_SCHEMA}),
     }, (input) => modifyLabels(client, "thread", input, "removeLabelIds"));
-    registered.push("gmail_label_message", "gmail_unlabel_message", "gmail_label_thread", "gmail_unlabel_thread");
+    registerJsonTool(server, "gmail_archive_message", {
+      description: "Archive one Gmail message by removing only its INBOX label; all other labels and message contents are preserved.",
+      inputSchema: z.object({messageId: z.string().min(1).max(512)}),
+    }, (input) => archiveMessage(client, input));
+    registerJsonTool(server, "gmail_archive_thread", {
+      description: "Archive one Gmail thread by removing only its INBOX label; all other labels and message contents are preserved.",
+      inputSchema: z.object({threadId: z.string().min(1).max(512)}),
+    }, (input) => archiveThread(client, input));
+    registered.push(
+        "gmail_label_message",
+        "gmail_unlabel_message",
+        "gmail_label_thread",
+        "gmail_unlabel_thread",
+        "gmail_archive_message",
+        "gmail_archive_thread",
+    );
+  }
+  if (canPermanentlyDelete) {
+    registerJsonTool(server, "gmail_permanently_delete_message", {
+      description: "Permanently delete one Gmail message by explicit ID. This bypasses Trash and cannot be undone.",
+      inputSchema: z.object({messageId: z.string().min(1).max(512)}),
+    }, (input) => permanentlyDelete(client, "message", input));
+    registerJsonTool(server, "gmail_permanently_delete_thread", {
+      description: "Permanently delete one Gmail thread by explicit ID. This deletes its messages, bypasses Trash, and cannot be undone.",
+      inputSchema: z.object({threadId: z.string().min(1).max(512)}),
+    }, (input) => permanentlyDelete(client, "thread", input));
+    registered.push("gmail_permanently_delete_message", "gmail_permanently_delete_thread");
   }
   return registered;
 }
@@ -85,6 +115,21 @@ export async function modifyLabels(client, type, input = {}, operation = "addLab
     body: JSON.stringify({[operation]: labelIds}),
   });
   return {type, id: response?.id || input[idKey], addedLabelIds: operation === "addLabelIds" ? labelIds : [], removedLabelIds: operation === "removeLabelIds" ? labelIds : []};
+}
+
+export function archiveMessage(client, input = {}) {
+  return modifyLabels(client, "message", {...input, labelIds: [INBOX_LABEL]}, "removeLabelIds");
+}
+
+export function archiveThread(client, input = {}) {
+  return modifyLabels(client, "thread", {...input, labelIds: [INBOX_LABEL]}, "removeLabelIds");
+}
+
+export async function permanentlyDelete(client, type, input = {}) {
+  const idKey = type === "thread" ? "threadId" : "messageId";
+  const id = pathSegment(input[idKey], idKey);
+  await client.request(`${GMAIL_API}/${type}s/${id}`, {method: "DELETE"});
+  return {type, id: input[idKey], permanentlyDeleted: true};
 }
 
 export function encodeRfc2822(draft) {
