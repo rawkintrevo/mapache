@@ -8,6 +8,7 @@ const ACCESS_TOKEN_ENV = "GOOGLE_MCP_ACCESS_TOKEN";
 const CONNECTION_ID_ENV = "GOOGLE_MCP_CONNECTION_ID";
 const ENABLED_SERVICES_ENV = "GOOGLE_MCP_ENABLED_SERVICES";
 const GRANTED_SCOPES_ENV = "GOOGLE_MCP_GRANTED_SCOPES";
+const GMAIL_PERMANENT_DELETE_ENABLED_ENV = "GOOGLE_MCP_GMAIL_PERMANENT_DELETE_ENABLED";
 const TOKEN_REFRESH_URL_ENV = "GOOGLE_MCP_TOKEN_REFRESH_URL";
 const LOCAL_MCP_COMMAND = "node";
 const LOCAL_MCP_ARGS = Object.freeze(["/app/google-workspace-mcp/server.mjs"]);
@@ -38,6 +39,8 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
     binding.enabledServices.includes(service.key) && LOCAL_SERVICE_KEYS.has(service.key));
   if (!services.length) throw httpError(409, "google_service_binding_empty");
   const grantedScopes = normalizeGrantedScopes(connection.grantedScopes, services);
+  const gmailPermanentDeleteEnabled = connection.gmailPermanentDeleteEnabled === true &&
+    services.some((service) => service.key === "gmail");
   const tokenRefreshUrl = normalizeTokenRefreshUrl(dependencies.tokenRefreshUrl);
   return {
     mcpConfig: normalizeMcpConfigPayload({mcpServers: {
@@ -55,6 +58,7 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
       GOOGLE_MCP_ACCOUNT_NAME: connection.displayName || "",
       [ENABLED_SERVICES_ENV]: JSON.stringify(services.map((service) => service.key)),
       [GRANTED_SCOPES_ENV]: JSON.stringify(grantedScopes),
+      [GMAIL_PERMANENT_DELETE_ENABLED_ENV]: String(gmailPermanentDeleteEnabled),
       ...(tokenRefreshUrl ? {[TOKEN_REFRESH_URL_ENV]: tokenRefreshUrl} : {}),
     },
     connection: {
@@ -62,6 +66,7 @@ async function resolveGoogleMcpRuntime(uid, workspaceId, mcpConfig = {}, depende
       email: connection.email,
       displayName: connection.displayName,
       enabledServices: services.map((service) => service.key),
+      gmailPermanentDeleteEnabled,
     },
   };
 }
@@ -87,6 +92,7 @@ module.exports = {
   ACCESS_TOKEN_ENV,
   CONNECTION_ID_ENV,
   ENABLED_SERVICES_ENV,
+  GMAIL_PERMANENT_DELETE_ENABLED_ENV,
   GRANTED_SCOPES_ENV,
   LOCAL_MCP_ARGS,
   LOCAL_MCP_COMMAND,

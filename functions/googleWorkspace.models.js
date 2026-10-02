@@ -21,7 +21,7 @@ const OIDC_SCOPE_NAMES = new Set(["openid", "email", "profile"]);
 const SAFE_FIELD_NAMES = new Set([
   "connectionId", "id", "googleSubject", "subject", "email", "displayName",
   "grantedScopes", "scopes", "enabledServices", "serviceKeys", "oauthClientRef",
-  "status", "createdAt", "updatedAt", "lastRefreshedAt",
+  "gmailPermanentDeleteEnabled", "status", "createdAt", "updatedAt", "lastRefreshedAt",
 ]);
 
 function normalizeGoogleConnectionMetadata(input = {}) {
@@ -34,6 +34,7 @@ function normalizeGoogleConnectionMetadata(input = {}) {
   const displayName = optionalText(input.displayName, 256);
   const grantedScopes = normalizeScopes(input.grantedScopes || input.scopes);
   const enabledServices = normalizeServiceKeys(input.enabledServices || input.serviceKeys);
+  const gmailPermanentDeleteEnabled = normalizeGmailPermanentDeleteSetting(input.gmailPermanentDeleteEnabled);
   const oauthClientRef = requiredOauthClientRef(input.oauthClientRef);
   const status = String(input.status || "connected").trim().toLowerCase();
   if (!CONNECTION_STATUSES.has(status)) throw httpError(400, "invalid_google_connection_status");
@@ -46,6 +47,7 @@ function normalizeGoogleConnectionMetadata(input = {}) {
     grantedScopes,
     enabledServices,
     oauthClientRef,
+    gmailPermanentDeleteEnabled,
     status,
     createdAt: normalizeTimestamp(input.createdAt),
     updatedAt: normalizeTimestamp(input.updatedAt),
@@ -69,6 +71,7 @@ function normalizeGoogleConnectionSummary(input = {}) {
     email: metadata.email,
     displayName: metadata.displayName,
     enabledServices: metadata.enabledServices,
+    gmailPermanentDeleteEnabled: metadata.gmailPermanentDeleteEnabled,
     status: metadata.status,
     createdAt: metadata.createdAt,
     updatedAt: metadata.updatedAt,
@@ -92,6 +95,11 @@ function normalizeScopes(value) {
     throw httpError(400, "invalid_google_scopes");
   }
   return scopes;
+}
+
+function normalizeGmailPermanentDeleteSetting(value) {
+  if (value !== undefined && typeof value !== "boolean") throw httpError(400, "invalid_google_gmail_permanent_delete_setting");
+  return value === true;
 }
 
 function normalizeTimestamp(value) {

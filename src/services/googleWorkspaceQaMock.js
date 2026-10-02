@@ -1,5 +1,15 @@
 const GOOGLE_SERVICES = [
-  {key: "gmail", displayName: "Gmail", accessLevels: ["read", "write"]},
+  {
+    key: "gmail",
+    displayName: "Gmail",
+    accessLevels: ["read", "write"],
+    optionalPermissions: [{
+      key: "gmailPermanentDeleteEnabled",
+      displayName: "Permanent Gmail deletion",
+      description: "Permanently delete messages or threads, bypassing Trash. This cannot be undone.",
+      scopes: ["https://mail.google.com/"],
+    }],
+  },
   {key: "drive", displayName: "Google Drive", accessLevels: ["read", "write"]},
   {key: "docs", displayName: "Google Docs", accessLevels: ["read", "write"]},
   {key: "sheets", displayName: "Google Sheets", accessLevels: ["read", "write"]},
@@ -42,6 +52,7 @@ function createConnection(state) {
     connectionId: `qa-google-${state.nextAccount}`,
     email: `google-${suffix.toLowerCase()}@example.test`,
     displayName: `QA Google Account ${suffix}`,
+    gmailPermanentDeleteEnabled: false,
     status: "connected",
   };
   state.connections.push(connection);
@@ -79,7 +90,11 @@ export function createGoogleWorkspaceQaMock() {
       return {binding, connection, services: GOOGLE_SERVICES};
     },
     startGoogleConnection: async (workspaceId, body = {}) => {
-      const connection = createConnection(state);
+      const connection = body.reconnect && state.connections.length ?
+        state.connections[state.connections.length - 1] :
+        createConnection(state);
+      connection.gmailPermanentDeleteEnabled = body.gmailPermanentDeleteEnabled === true;
+      connection.enabledServices = Array.isArray(body.serviceKeys) && body.serviceKeys.length ? body.serviceKeys : ["gmail"];
       state.bindings[workspaceId] = {
         connectionId: connection.connectionId,
         enabledServices: Array.isArray(body.serviceKeys) && body.serviceKeys.length ? body.serviceKeys : ["gmail"],

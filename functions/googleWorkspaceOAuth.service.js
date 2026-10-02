@@ -57,6 +57,8 @@ async function startGoogleConnection(uid, workspaceId, payload = {}, dependencie
     attemptId,
     reconnect,
     serviceKeys: selection.serviceKeys,
+    accessLevel: selection.accessLevel,
+    gmailPermanentDeleteEnabled: selection.gmailPermanentDeleteEnabled,
   });
   const url = new URL(GOOGLE_AUTHORIZATION_URL);
   url.searchParams.set("client_id", dependencies.config.clientId);
@@ -84,7 +86,11 @@ async function completeGoogleConnection(query = {}, dependencies) {
   requireConfigured(dependencies.config, "callback");
   const tokenData = await exchangeAuthorizationCode(code, dependencies);
   const identity = await fetchGoogleIdentity(tokenData.access_token, dependencies.fetchImpl);
-  const selectedScopes = context.serviceKeys.length ? googleWorkspaceScopeSelection(context.serviceKeys, "read") : [];
+  const selectedScopes = context.serviceKeys.length ? googleWorkspaceScopeSelection(
+      context.serviceKeys,
+      context.accessLevel,
+      {gmailPermanentDeleteEnabled: context.gmailPermanentDeleteEnabled},
+  ) : [];
   const connectionId = `google-${crypto.createHash("sha256").update(`${context.uid}:${identity.sub}`).digest("hex").slice(0, 32)}`;
   const refreshToken = tokenData.refresh_token || (context.reconnect ? "" : await existingRefreshToken(context.uid, connectionId, dependencies));
   if (!refreshToken) throw httpError(502, "google_refresh_token_missing");
@@ -96,6 +102,7 @@ async function completeGoogleConnection(query = {}, dependencies) {
     displayName: cleanQueryValue(identity.name || identity.email),
     grantedScopes: grantedScopes.length ? grantedScopes : selectedScopes,
     enabledServices: context.serviceKeys,
+    gmailPermanentDeleteEnabled: context.gmailPermanentDeleteEnabled === true,
     oauthClientRef: dependencies.config.clientId,
     status: "connected",
     lastRefreshedAt: new Date().toISOString(),
@@ -214,10 +221,21 @@ function normalizeSelection(payload) {
   if (accessLevel === "write" && serviceKeys.some((key) => !getGoogleWorkspaceService(key).writeScopes.length)) {
     throw httpError(400, "google_write_access_unsupported");
   }
+  if (payload.gmailPermanentDeleteEnabled !== undefined && typeof payload.gmailPermanentDeleteEnabled !== "boolean") {
+    throw httpError(400, "invalid_google_gmail_permanent_delete_setting");
+  }
+  const gmailPermanentDeleteEnabled = payload.gmailPermanentDeleteEnabled === true;
+  if (gmailPermanentDeleteEnabled && (accessLevel !== "write" || !serviceKeys.includes("gmail"))) {
+    throw httpError(400, "google_gmail_permanent_delete_requires_write");
+  }
   return {
     serviceKeys,
     accessLevel,
-    scopes: [...GOOGLE_IDENTITY_SCOPES, ...googleWorkspaceScopeSelection(serviceKeys, accessLevel)],
+    gmailPermanentDeleteEnabled,
+    scopes: [
+      ...GOOGLE_IDENTITY_SCOPES,
+      ...googleWorkspaceScopeSelection(serviceKeys, accessLevel, {gmailPermanentDeleteEnabled}),
+    ],
   };
 }
 

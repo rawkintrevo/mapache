@@ -15,13 +15,25 @@ export function updateGoogleWorkspaceSelectionState(state, serviceKey, selected)
   const next = new Set(selectedServices(state));
   if (selected) next.add(serviceKey);
   else next.delete(serviceKey);
-  state.googleWorkspace = {...state.googleWorkspace, selectedServices: [...next]};
+  state.googleWorkspace = {
+    ...state.googleWorkspace,
+    selectedServices: [...next],
+    ...(serviceKey === "gmail" && !selected ? {gmailPermanentDeleteEnabled: false} : {}),
+  };
 }
 
 export function updateGoogleWorkspaceAccessState(state, accessLevel) {
   state.googleWorkspace = {
     ...state.googleWorkspace,
     accessLevel: accessLevel === "write" ? "write" : "read",
+    ...(accessLevel !== "write" ? {gmailPermanentDeleteEnabled: false} : {}),
+  };
+}
+
+export function updateGoogleWorkspacePermanentDeleteState(state, enabled) {
+  state.googleWorkspace = {
+    ...state.googleWorkspace,
+    gmailPermanentDeleteEnabled: enabled === true,
   };
 }
 
@@ -85,6 +97,7 @@ export async function startGoogleWorkspaceConnectionState({state, render, openPo
     const data = await state.api.startGoogleConnection(workspaceId, {
       serviceKeys: services,
       accessLevel: state.googleWorkspace.accessLevel || "read",
+      gmailPermanentDeleteEnabled: state.googleWorkspace.gmailPermanentDeleteEnabled === true,
       reconnect: Boolean(reconnect),
     });
     const popup = openPopup(data.authorizationUrl);

@@ -157,7 +157,14 @@ Browser QA login uses a Functions secret plus configured QA account params. Conf
 
 MCP management changes require both the Functions API revision and the `pi-chrome` runner revision. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. The runner image must be rebuilt when the baked `pi-mcp-adapter`, image-owned automation MCP server, or seeded guidance skill changes; existing Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents. The automation MCP broker route is feature-gated with the rest of the automation rollout and does not enable the product flag.
 
-Google Workspace MCP connectivity additionally requires the configured OAuth client ID/redirect URI and the `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_STATE_SECRET`, and `GOOGLE_OAUTH_ENCRYPTION_KEY` Functions secrets. Deploy the Functions API before testing OAuth or provisioning, then rebuild the affected runner image for runner status/archive changes. Existing sessions keep their previous environment until restart or recreation. The storage model, scope catalog, and rollback/revoke procedure are documented in [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
+Google Workspace MCP connectivity additionally requires the configured OAuth client ID/redirect URI and the `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_STATE_SECRET`, and `GOOGLE_OAUTH_ENCRYPTION_KEY` Functions secrets. Gmail permanent deletion is an explicit, default-off connection setting that adds the restricted `https://mail.google.com/` scope only during reconnect; ordinary read/write connections do not need reauthorization. Deploy the Functions API before testing OAuth or provisioning, then rebuild the affected runner image for the Gmail archive/delete tool changes. Existing sessions keep their previous environment until restart or recreation, and existing accounts must be reconnected plus their sessions restarted after enabling the additional Gmail scope. Use the explicit production commands:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+```
+
+The storage model, scope catalog, and rollback/revoke procedure are documented in [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
 
 Running-session Google token renewal also deploys the dedicated `googleMcpToken` Function. That Function must retain the OAuth client-secret and encryption-key bindings, while the runner receives only its URL, a safe connection ID, and the existing per-session shutdown credential. Rebuild `pi-chrome` after changing `session-runner/google-workspace-mcp/`. Restart or recreate existing sessions after the Functions and image rollout because old Cloud Run revisions do not contain the refresh URL or refreshed MCP wrapper.
 

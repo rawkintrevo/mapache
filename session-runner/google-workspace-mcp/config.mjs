@@ -1,4 +1,5 @@
 const GOOGLE_AUTH_SCOPE_PREFIX = "https://www.googleapis.com/auth/";
+export const GMAIL_FULL_SCOPE = "https://mail.google.com/";
 
 export const GOOGLE_WORKSPACE_SERVICES = Object.freeze([
   "calendar",
@@ -76,15 +77,18 @@ export class GoogleWorkspaceConfigError extends Error {
 export function createGoogleWorkspaceConfig({env = process.env} = {}) {
   const enabledServices = parseEnabledServices(env?.GOOGLE_MCP_ENABLED_SERVICES);
   const grantedScopes = parseGrantedScopes(env?.GOOGLE_MCP_GRANTED_SCOPES);
+  const gmailPermanentDeleteEnabled = parseBoolean(env?.GOOGLE_MCP_GMAIL_PERMANENT_DELETE_ENABLED);
   const config = Object.freeze({
     enabledServices,
     grantedScopes,
+    gmailPermanentDeleteEnabled,
   });
   return Object.freeze({
     ...config,
     isServiceEnabled: (serviceKey) => isServiceEnabled(config, serviceKey),
     hasReadScope: (serviceKey) => hasReadScope(config, serviceKey),
     hasWriteScope: (serviceKey) => hasWriteScope(config, serviceKey),
+    hasGmailPermanentDeleteAccess: () => hasGmailPermanentDeleteAccess(config),
   });
 }
 
@@ -99,7 +103,7 @@ export function parseEnabledServices(value) {
 
 export function parseGrantedScopes(value) {
   const scopes = dedupe(parseListValue(value, "google_granted_scopes_invalid").map((item) => String(item).trim()));
-  if (scopes.some((scope) => !IDENTITY_SCOPES.has(scope) && !SAFE_SCOPE_PATTERN.test(scope))) {
+  if (scopes.some((scope) => !IDENTITY_SCOPES.has(scope) && scope !== GMAIL_FULL_SCOPE && !SAFE_SCOPE_PATTERN.test(scope))) {
     throw new GoogleWorkspaceConfigError("google_granted_scope_invalid", "Google Workspace scope is invalid.");
   }
   return scopes;
@@ -113,17 +117,28 @@ export function isServiceEnabled(config, serviceKey) {
 export function hasReadScope(config, serviceKey) {
   const key = String(serviceKey || "").trim().toLowerCase();
   const required = GOOGLE_WORKSPACE_SCOPE_CATALOG[key]?.read || [];
-  return isServiceEnabled(config, key) && required.every((scope) => config.grantedScopes?.includes(scope));
+  return isServiceEnabled(config, key) && (hasFullGmailScope(config, key) || required.every((scope) => config.grantedScopes?.includes(scope)));
 }
 
 export function hasWriteScope(config, serviceKey) {
   const key = String(serviceKey || "").trim().toLowerCase();
   const required = GOOGLE_WORKSPACE_SCOPE_CATALOG[key]?.write || [];
-  return hasReadScope(config, key) && required.every((scope) => config.grantedScopes?.includes(scope));
+  return hasReadScope(config, key) && (hasFullGmailScope(config, key) || required.every((scope) => config.grantedScopes?.includes(scope)));
 }
 
 export function hasGrantedScope(config, serviceKey, scope) {
-  return isServiceEnabled(config, serviceKey) && config.grantedScopes?.includes(scope) === true;
+  const key = String(serviceKey || "").trim().toLowerCase();
+  const requestedScope = String(scope || "").trim();
+  return isServiceEnabled(config, key) && (
+    config.grantedScopes?.includes(requestedScope) === true ||
+    (hasFullGmailScope(config, key) && requestedScope.startsWith(GOOGLE_AUTH_SCOPE_PREFIX + "gmail."))
+  );
+}
+
+export function hasGmailPermanentDeleteAccess(config) {
+  return isServiceEnabled(config, "gmail") &&
+    config?.gmailPermanentDeleteEnabled === true &&
+    config.grantedScopes?.includes(GMAIL_FULL_SCOPE) === true;
 }
 
 function parseListValue(value, errorCode) {
@@ -143,4 +158,12 @@ function parseListValue(value, errorCode) {
 
 function dedupe(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function hasFullGmailScope(config, serviceKey) {
+  return serviceKey === "gmail" && config?.grantedScopes?.includes(GMAIL_FULL_SCOPE) === true;
+}
+
+function parseBoolean(value) {
+  return value === true || String(value || "").trim().toLowerCase() === "true";
 }

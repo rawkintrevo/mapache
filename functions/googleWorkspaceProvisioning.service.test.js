@@ -5,6 +5,7 @@ const {
   ACCESS_TOKEN_ENV,
   CONNECTION_ID_ENV,
   ENABLED_SERVICES_ENV,
+  GMAIL_PERMANENT_DELETE_ENABLED_ENV,
   GRANTED_SCOPES_ENV,
   LOCAL_MCP_ARGS,
   LOCAL_MCP_COMMAND,
@@ -28,6 +29,7 @@ const connections = {
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/drive.readonly",
       ],
+      gmailPermanentDeleteEnabled: true,
       status: "connected",
     }};
   },
@@ -62,6 +64,7 @@ const oauth = {
     GOOGLE_MCP_ACCOUNT_NAME: "Account A",
     [ENABLED_SERVICES_ENV]: "[\"gmail\",\"drive\"]",
     [GRANTED_SCOPES_ENV]: "[\"https://www.googleapis.com/auth/gmail.readonly\",\"https://www.googleapis.com/auth/drive.readonly\"]",
+    [GMAIL_PERMANENT_DELETE_ENABLED_ENV]: "true",
     [TOKEN_REFRESH_URL_ENV]: "https://us-central1-example.cloudfunctions.net/googleMcpToken",
   });
   assert.deepStrictEqual(await service.resolveGoogleMcpRuntime("user-a", "workspace-empty", {mcpServers: {custom: {command: "node"}}}), {
@@ -86,6 +89,7 @@ const oauth = {
   assert.equal(localRuntime.env[CONNECTION_ID_ENV], "connection-a");
   assert.equal(localRuntime.env[ENABLED_SERVICES_ENV], "[\"gmail\",\"drive\"]");
   assert.equal(localRuntime.env[GRANTED_SCOPES_ENV].includes("fake-access-token"), false);
+  assert.equal(localRuntime.env[GMAIL_PERMANENT_DELETE_ENABLED_ENV], "true");
   console.log("google workspace provisioning service tests passed");
 })().catch((error) => {
   console.error(error);

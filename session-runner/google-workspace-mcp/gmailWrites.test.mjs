@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {createDraft, encodeRfc2822, modifyLabels, registerGmailWriteTools} from "./gmailWrites.mjs";
+import {archiveMessage, archiveThread, createDraft, encodeRfc2822, modifyLabels, permanentlyDelete, registerGmailWriteTools} from "./gmailWrites.mjs";
+import {createGoogleWorkspaceConfig} from "./config.mjs";
 
 function fakeServer() {
   const tools = new Map();
@@ -13,7 +14,7 @@ test("gates drafts and labels independently by compose and modify scopes", () =>
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/gmail.modify",
   ]);
-  assert.equal(registerGmailWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scopes.has(scope)}}).length, 6);
+  assert.equal(registerGmailWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scopes.has(scope)}}).length, 8);
   const readOnly = fakeServer();
   assert.deepEqual(registerGmailWriteTools(readOnly, {client: {}, config: {hasGrantedScope: () => false}}), []);
   const composeOnly = fakeServer();
@@ -44,4 +45,44 @@ test("labels messages and threads with explicit IDs", async () => {
   assert.match(calls[0].url, /threads\/thread-1\/modify/);
   assert.deepEqual(JSON.parse(calls[0].options.body), {addLabelIds: ["STARRED"]});
   assert.equal(result.id, "thread-1");
+});
+
+test("archive helpers remove only the INBOX label for messages and threads", async () => {
+  const calls = [];
+  const client = {request: async (url, options) => {
+    calls.push({url, options});
+    return {id: "provider-id"};
+  }};
+  await archiveMessage(client, {messageId: "message-1"});
+  await archiveThread(client, {threadId: "thread-1"});
+  assert.deepEqual(calls.map(({url, options}) => ({url, method: options.method, body: JSON.parse(options.body)})), [
+    {url: "/gmail/v1/users/me/messages/message-1/modify", method: "POST", body: {removeLabelIds: ["INBOX"]}},
+    {url: "/gmail/v1/users/me/threads/thread-1/modify", method: "POST", body: {removeLabelIds: ["INBOX"]}},
+  ]);
+});
+
+test("permanent-delete tools require both the opt-in and full Gmail scope", async () => {
+  const fullScope = "https://mail.google.com/";
+  const withoutOptIn = fakeServer();
+  const withoutOptInConfig = createGoogleWorkspaceConfig({env: {
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: JSON.stringify([fullScope]),
+  }});
+  assert.equal(registerGmailWriteTools(withoutOptIn, {client: {}, config: withoutOptInConfig}).includes("gmail_permanently_delete_message"), false);
+
+  const optedIn = fakeServer();
+  const optedInConfig = createGoogleWorkspaceConfig({env: {
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: JSON.stringify([fullScope]),
+    GOOGLE_MCP_GMAIL_PERMANENT_DELETE_ENABLED: "true",
+  }});
+  assert.equal(registerGmailWriteTools(optedIn, {client: {}, config: optedInConfig}).includes("gmail_permanently_delete_message"), true);
+
+  const calls = [];
+  const result = await permanentlyDelete({request: async (url, options) => {
+    calls.push({url, options});
+    return null;
+  }}, "message", {messageId: "message/one"});
+  assert.deepEqual(result, {type: "message", id: "message/one", permanentlyDeleted: true});
+  assert.deepEqual(calls, [{url: "/gmail/v1/users/me/messages/message%2Fone", options: {method: "DELETE"}}]);
 });

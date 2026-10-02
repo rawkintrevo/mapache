@@ -96,7 +96,7 @@ function metadata(connectionId, email, services = ["gmail"]) {
     "a@example.com", "b@example.com",
   ]);
   assert.deepStrictEqual(await service.getGoogleConnection("user-a", "connection-a", {includePrivate: true}), {
-    metadata: {...accountA, googleSubject: "subject-connection-a", grantedScopes: ["https://www.googleapis.com/auth/gmail.readonly"], oauthClientRef: "client-ref"},
+    metadata: {...accountA, googleSubject: "subject-connection-a", grantedScopes: ["https://www.googleapis.com/auth/gmail.readonly"], oauthClientRef: "client-ref", gmailPermanentDeleteEnabled: false},
     encryptedCredentials: {ciphertext: "fake-a"},
   });
   await assert.rejects(service.getGoogleConnection("user-b", "connection-a"), (error) => error.publicMessage === "google_connection_not_found");

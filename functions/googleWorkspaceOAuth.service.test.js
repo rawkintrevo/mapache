@@ -37,6 +37,7 @@ function createFakeDb() {
   assert.deepStrictEqual(normalizeSelection({serviceKeys: ["gmail"], accessLevel: "write"}), {
     serviceKeys: ["gmail"],
     accessLevel: "write",
+    gmailPermanentDeleteEnabled: false,
     scopes: [
       "openid",
       "email",
@@ -46,6 +47,29 @@ function createFakeDb() {
       "https://www.googleapis.com/auth/gmail.modify",
     ],
   });
+  assert.deepStrictEqual(normalizeSelection({
+    serviceKeys: ["gmail"],
+    accessLevel: "write",
+    gmailPermanentDeleteEnabled: true,
+  }), {
+    serviceKeys: ["gmail"],
+    accessLevel: "write",
+    gmailPermanentDeleteEnabled: true,
+    scopes: [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.compose",
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://mail.google.com/",
+    ],
+  });
+  assert.throws(() => normalizeSelection({
+    serviceKeys: ["gmail"],
+    accessLevel: "read",
+    gmailPermanentDeleteEnabled: true,
+  }), /google_gmail_permanent_delete_requires_write/);
   assert.throws(() => normalizeSelection({serviceKeys: ["people"], accessLevel: "write"}), /invalid_google_service_selection/);
   assert.throws(() => normalizeSelection({serviceKeys: []}), /invalid_google_service_selection/);
 
@@ -82,6 +106,7 @@ function createFakeDb() {
   const state = createGoogleOAuthStateService({secret: "state-secret", now: () => 1000, ttlMs: 100000, db: createFakeDb()});
   const calls = [];
   let includeRefreshToken = true;
+  let grantedScope = "openid email profile https://www.googleapis.com/auth/gmail.readonly";
   const oauth = createGoogleWorkspaceOAuthService({
     clientId: "299764728235-example.apps.googleusercontent.com",
     clientSecret: "client-secret",
@@ -95,7 +120,7 @@ function createFakeDb() {
       if (url === "https://oauth2.googleapis.com/token") return response(200, {
         access_token: "access-fake",
         ...(includeRefreshToken ? {refresh_token: "refresh-fake"} : {}),
-        scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly",
+        scope: grantedScope,
       });
       return response(200, {sub: "subject-a", email: "a@example.com", name: "Account A"});
     },
@@ -115,8 +140,23 @@ function createFakeDb() {
   assert.strictEqual(calls[0].options.body.toString().includes("code-fake"), true);
   const stored = [...connections.values()][0];
   assert.deepStrictEqual(stored.metadata.grantedScopes.slice(0, 3), ["openid", "email", "profile"]);
+  assert.strictEqual(stored.metadata.gmailPermanentDeleteEnabled, false);
   assert.strictEqual(decryptSecret(stored.encryptedCredentials, "encryption-secret"), "refresh-fake");
   assert.strictEqual(JSON.stringify(stored.summary).includes("refresh-fake"), false);
+
+  const deletion = await oauth.startGoogleConnection("user-a", "workspace-a", {
+    serviceKeys: ["gmail"],
+    accessLevel: "write",
+    gmailPermanentDeleteEnabled: true,
+    reconnect: true,
+  });
+  const deletionParams = new URL(deletion.authorizationUrl).searchParams;
+  assert.strictEqual(deletionParams.get("scope").includes("https://mail.google.com/"), true);
+  grantedScope = "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.modify https://mail.google.com/";
+  await oauth.completeGoogleConnection({state: deletionParams.get("state"), code: "deletion-code"});
+  const deletionRecord = [...connections.values()][0];
+  assert.strictEqual(deletionRecord.metadata.gmailPermanentDeleteEnabled, true);
+  assert.strictEqual(deletionRecord.metadata.grantedScopes.includes("https://mail.google.com/"), true);
 
   calls.length = 0;
   const refreshed = await oauth.refreshGoogleConnection("user-a", stored.metadata.connectionId);

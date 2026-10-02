@@ -5,6 +5,7 @@ import {
   startGoogleWorkspaceConnectionState,
   unbindGoogleWorkspaceConnectionState,
   updateGoogleWorkspaceAccessState,
+  updateGoogleWorkspacePermanentDeleteState,
   updateGoogleWorkspaceSelectionState,
 } from "../workflows/googleWorkspace.js";
 import {resetGoogleWorkspace as resetGoogleWorkspaceState} from "../state/resetters.js";
@@ -21,6 +22,11 @@ export function createGoogleWorkspaceController({state, render}) {
 
   function updateAccessLevel(accessLevel) {
     updateGoogleWorkspaceAccessState(state, accessLevel);
+    render();
+  }
+
+  function updatePermanentDelete(enabled) {
+    updateGoogleWorkspacePermanentDeleteState(state, enabled);
     render();
   }
 
@@ -63,6 +69,7 @@ export function createGoogleWorkspaceController({state, render}) {
     startConnection,
     unbindConnection,
     updateAccessLevel,
+    updatePermanentDelete,
     updateService,
   };
 }

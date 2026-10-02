@@ -13,6 +13,7 @@ import {
 const GMAIL_READ = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_WRITE = "https://www.googleapis.com/auth/gmail.compose";
 const GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify";
+const GMAIL_FULL = "https://mail.google.com/";
 
 test("parses empty, JSON, CSV, and duplicate service configuration", () => {
   assert.deepEqual(parseEnabledServices(""), []);
@@ -30,7 +31,7 @@ test("rejects unsupported service keys including Chat and People", () => {
 });
 
 test("parses and validates granted scopes without accepting token values", () => {
-  assert.deepEqual(parseGrantedScopes(JSON.stringify(["openid", GMAIL_READ, GMAIL_READ])), ["openid", GMAIL_READ]);
+  assert.deepEqual(parseGrantedScopes(JSON.stringify(["openid", GMAIL_READ, GMAIL_FULL, GMAIL_READ])), ["openid", GMAIL_READ, GMAIL_FULL]);
   assert.throws(() => parseGrantedScopes(JSON.stringify(["access-token-value"])), (error) => error.code === "google_granted_scope_invalid");
   assert.throws(() => parseGrantedScopes(JSON.stringify(["https://evil.example/token"])), (error) => error.code === "google_granted_scope_invalid");
 });
@@ -49,4 +50,21 @@ test("exposes enabled/read/write scope helpers", () => {
   assert.equal(config.hasReadScope("drive"), false);
   assert.equal(config.hasWriteScope("drive"), false);
   assert.equal(config.isServiceEnabled("people"), false);
+});
+
+test("full Gmail scope satisfies existing Gmail capabilities without enabling permanent deletion", () => {
+  const config = createGoogleWorkspaceConfig({env: {
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: JSON.stringify([GMAIL_FULL]),
+  }});
+  assert.equal(config.hasReadScope("gmail"), true);
+  assert.equal(config.hasWriteScope("gmail"), true);
+  assert.equal(config.hasGmailPermanentDeleteAccess(), false);
+
+  const optedIn = createGoogleWorkspaceConfig({env: {
+    GOOGLE_MCP_ENABLED_SERVICES: '["gmail"]',
+    GOOGLE_MCP_GRANTED_SCOPES: JSON.stringify([GMAIL_FULL]),
+    GOOGLE_MCP_GMAIL_PERMANENT_DELETE_ENABLED: "true",
+  }});
+  assert.equal(optedIn.hasGmailPermanentDeleteAccess(), true);
 });

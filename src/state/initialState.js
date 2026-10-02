@@ -72,6 +72,7 @@ export function createGoogleWorkspaceState(overrides = {}) {
     data: null,
     attempted: false,
     accessLevel: "read",
+    gmailPermanentDeleteEnabled: false,
     editingConnectionId: "",
     selectedServices: [],
     ...overrides,

@@ -49,11 +49,16 @@ describe("createModalController", () => {
     };
     const controller = createModalController({state, render: vi.fn(), loadPiAuth: vi.fn()});
 
-    controller.openGoogleWorkspaceModal({connectionId: "connection-a", enabledServices: ["gmail", "calendar"]});
+    controller.openGoogleWorkspaceModal({
+      connectionId: "connection-a",
+      enabledServices: ["gmail", "calendar"],
+      gmailPermanentDeleteEnabled: true,
+    });
 
     expect(state.googleWorkspaceModalOpen).toBe(true);
     expect(state.googleWorkspace).toMatchObject({
-      accessLevel: "read",
+      accessLevel: "write",
+      gmailPermanentDeleteEnabled: true,
       editingConnectionId: "connection-a",
       error: "",
       selectedServices: ["gmail", "calendar"],
