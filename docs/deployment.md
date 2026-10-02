@@ -213,6 +213,47 @@ only managed-config rewrite is in the copied settings file: conflicting
 comparison report; the backup remains unchanged. Use `--verify-only` for
 cutover or rollback evidence, and pass `--execute` only for an isolated target.
 
+### Runner registry retention
+
+`scripts/runner-registry-cleanup.mjs` owns the cleanup policies for the
+`us-central1` Artifact Registry repository `pi-agents`. Recognized PR images
+expire two days after image creation; revision-tagged releases expire after
+seven days. Untagged images, custom QA tags, compatibility tags (including
+`pi-chrome` and `latest`), and unrelated packages are retained. Historical
+duplicate-variant tags are recognized. A keep rule overrides deletion for
+digests referenced by Cloud Run service templates, existing revisions, and jobs.
+An unresolved deployed image or incomplete inventory aborts the refresh.
+
+The native policy cannot query Cloud Run. The maintenance script inventories
+all service regions, resolves actual revision digests, and writes
+inventoried tag prefixes plus a digest keep list. Prefixes are limited to 64
+characters by Artifact Registry, so digest keep rules include `sha256:` and the
+first 57 hexadecimal characters; a matching prefix always retains the image.
+New builds enter cleanup on the next successful refresh. `.github/workflows/runner-registry-cleanup.yml`
+refreshes every six hours once merged into `main`; failed refreshes retain the
+previous policy. Watch workflow failures: stale policies retain old images and
+cannot discover deployments made after their snapshot. Before manually deploying
+an old PR/revision image, disable deletion with the dry-run command, deploy, then
+refresh/apply so the new deployment is protected. Normal new sessions use the
+protected compatibility tag. Do not reuse revision/PR tags for different digests.
+
+```bash
+node --test scripts/runner-registry-cleanup.test.mjs
+node scripts/runner-registry-cleanup.mjs --project=pi-agents-cloud --mode=plan
+node scripts/runner-registry-cleanup.mjs --project=pi-agents-cloud --mode=dry-run
+node scripts/runner-registry-cleanup.mjs --project=pi-agents-cloud --mode=apply
+```
+
+Plan mode is read-only and reports eligible digests with native prefix/age/keep
+semantics. Dry-run installs the policies without deletion; apply enables native
+background deletion and verifies the persisted rules. Google may take about a
+day to process either mode; a local plan is not Google's completed dry-run audit.
+Retention uses image creation time, not last pull or tag-update time. Keep the
+plan output as operational evidence. The workflow identity needs Cloud Run
+service/revision/job read access and Artifact Registry inventory and repository
+update permissions. No Functions deployment, runner rebuild, or service restart
+is needed. See [Google's cleanup policy documentation](https://docs.cloud.google.com/artifact-registry/docs/repositories/cleanup-policy).
+
 ## Invariants
 
 - Always pass `--project pi-agents-cloud` to remote Firebase/GCP commands.
