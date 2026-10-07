@@ -9,9 +9,11 @@ const dockerfiles = [
 ];
 
 for (const dockerfile of dockerfiles) {
-  test(`${dockerfile} provides and validates Python 3`, () => {
+  test(`${dockerfile} provides and validates Python 3 command aliases`, () => {
     const source = fs.readFileSync(path.join(runnerRoot, dockerfile), "utf8");
     assert.match(source, /apt-get install[^\n]*\bpython3\b/);
+    assert.match(source, /&& ln -s \/usr\/bin\/python3 \/usr\/local\/bin\/python/);
+    assert.match(source, /&& python --version \\/);
     assert.match(source, /&& python3 --version \\/);
   });
 }
