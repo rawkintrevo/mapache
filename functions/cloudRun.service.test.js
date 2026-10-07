@@ -639,6 +639,67 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(timeoutUpdates[0].status, "provision_failed");
   assert.match(timeoutUpdates[0].lastError, /timed out after 4000ms/);
 
+  const recoveredSession = {
+    ownerUid: "uid-1",
+    workspaceId: "workspace-1",
+    runnerSessionId: "session-recovered",
+    serviceId: "session-recovered",
+    region: "us-central1",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+    resources: {cpu: "1", memory: "1Gi"},
+    terminalKind: "pi",
+    serviceAccount: "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+    sessionType: "cloud",
+    capabilities: {terminal: true, preview: true, chrome: true},
+    status: "provisioning",
+    provisioningOperationId: "operation-recovered",
+    provisioningState: "running",
+    provisioningAttempt: 1,
+    provisioningCloudRunOperationName: "operations/recovered-create",
+  };
+  let recoveredDoc = {...recoveredSession};
+  let recoveredPostCount = 0;
+  const recoveredRef = {
+    get: async () => ({exists: true, data: () => recoveredDoc}),
+    update: async (updates) => Object.assign(recoveredDoc, updates),
+  };
+  const recoveredDb = {
+    runTransaction: async (callback) => callback({
+      get: async () => ({exists: true, data: () => recoveredDoc}),
+      update: (ref, updates) => Object.assign(recoveredDoc, updates),
+    }),
+  };
+  const recoveredClient = {
+    request: async ({url, method}) => {
+      if (method === "POST" && url.includes("/services?serviceId=")) {
+        recoveredPostCount += 1;
+        throw new Error("recovery must poll the recorded operation");
+      }
+      if (method === "GET" && url.endsWith("operations/recovered-create")) return {data: {done: true}};
+      if (method === "POST" && url.endsWith(":setIamPolicy")) return {data: {}};
+      if (method === "GET" && url.includes("/services/session-recovered")) {
+        return {data: {uri: "https://session-recovered.example.run.app"}};
+      }
+      throw new Error(`Unexpected recovered provisioning request: ${method} ${url}`);
+    },
+  };
+  const recoveredService = createCloudRunService({
+    auth: {getClient: async () => recoveredClient},
+    db: recoveredDb,
+    operationPollIntervalMs: 2000,
+    sleep: async () => {},
+  });
+  await recoveredService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, recoveredRef, recoveredSession);
+  assert.strictEqual(recoveredPostCount, 0);
+  assert.strictEqual(recoveredDoc.status, "running");
+  assert.strictEqual(recoveredDoc.serviceUrl, "https://session-recovered.example.run.app");
+  assert.strictEqual(recoveredDoc.provisioningState, "completed");
+
   const idempotentSession = {
     ownerUid: "uid-1",
     workspaceId: "workspace-1",

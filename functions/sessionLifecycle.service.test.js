@@ -266,11 +266,11 @@ assert.strictEqual(isIdleSession({
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
-    "deleteService", "reserveChrome", "provisionService",
+    "deleteService", "reserveChrome",
   ]);
   assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
   assert.strictEqual(currentSession.status, "provisioning");
-  assert.strictEqual(calls.find((call) => call.kind === "provisionService").args[2].agentRuntimeGeneration, 4);
+  assert.strictEqual(currentSession.provisioningState, "queued");
 
   calls.length = 0;
   currentSession = {
@@ -291,9 +291,10 @@ assert.strictEqual(isIdleSession({
   };
   await lifecycle.restartSession("user-1", "workspace-1", "session-1");
   assert.deepStrictEqual(calls.filter((call) => ["deleteService", "reserveChrome", "provisionService"].includes(call.kind)).map((call) => call.kind), [
-    "deleteService", "reserveChrome", "provisionService",
+    "deleteService", "reserveChrome",
   ]);
   assert.strictEqual(currentSession.status, "provisioning");
+  assert.strictEqual(currentSession.provisioningState, "queued");
 
   calls.length = 0;
   currentSession = {

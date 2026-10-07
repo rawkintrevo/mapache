@@ -864,11 +864,12 @@ The current runner implementation now does that reconciliation for GitHub worksp
 
 ## Provisioning
 
-When a session is created, `functions/index.js` validates the request, reserves
-the single workspace runner, writes the session record with
-`provisioningState: "queued"`, and returns without waiting for Cloud Run
-readiness. The `provisionQueuedSession` Firestore trigger provisions the
-server-selected `pi-chrome` image. Cloud Run request construction,
+When a session is created, or a marked managed runtime is restarted,
+`functions/index.js` validates the request, reserves the single workspace
+runner, writes the session record with `provisioningState: "queued"`, and
+returns without waiting for Cloud Run readiness. The
+`provisionQueuedSession` Firestore trigger provisions the server-selected
+`pi-chrome` image. Cloud Run request construction,
 service-account resolution, resource mapping, and runner environment assembly
 live in `functions/cloudRun.service.js`; credentials, Google/MCP materialization,
 and GitHub source/automation behavior remain in their focused services. The
@@ -879,7 +880,20 @@ a start/restart path.
 
 Session creation accepts `operationId` (with `provisioningOperationId` and `idempotencyKey` as compatibility aliases). The backend persists the canonical `provisioningOperationId` and derives the session document id from it, so repeated requests for one operation return the existing session instead of creating a second record. Provisioning also persists `provisioningAttempt`, `provisioningState`, timestamps, the Cloud Run operation name, and a safe retryability/error result. A transaction claims a pending or retryable attempt before the Cloud Run create request; concurrent calls with an active operation either wait on the recorded Cloud Run operation or return without issuing another create request. Completed operations return the stored session result.
 
-The `provisionQueuedSession` Firestore trigger watches `workspaces/{workspaceId}/sessions/{sessionId}` writes but only handles records explicitly marked `status: "provisioning"` and `provisioningState: "queued"`. It rejects unsupported historical or forged runner identities before loading any launch material, then loads the owning workspace and delegates to the same idempotent Cloud Run provisioning service. The API response contains the in-progress session; clients follow the session document until the worker writes `running`, `provision_failed`, or another terminal state.
+The `provisionQueuedSession` Firestore trigger watches
+`workspaces/{workspaceId}/sessions/{sessionId}` writes. It handles records
+explicitly marked `status: "provisioning"` and `provisioningState: "queued"`,
+plus the one-time transition that records a Cloud Run operation name while the
+session is still provisioning. That recovery event re-polls the recorded
+operation instead of creating another service, so an API process loss after
+Cloud Run creation cannot leave a healthy runner stuck behind a permanent
+transition state. Runtime heartbeat and checkpoint writes with the same
+operation are ignored. The trigger rejects unsupported historical or forged
+runner identities before loading any launch material, then loads the owning
+workspace and delegates to the same idempotent Cloud Run provisioning service.
+The API response contains the in-progress session; clients follow the session
+document until the worker writes `running`, `provision_failed`, or another
+terminal state.
 
 GitHub workspaces still enforce one active managed agent session at a time so
 two agents cannot race on cached Git state. Historical shell/SSH records may be

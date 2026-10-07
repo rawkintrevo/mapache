@@ -630,6 +630,7 @@ exports.automationAgentToken = onRequest({
 exports.provisionQueuedSession = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
   timeoutSeconds: 540,
+  retry: true,
   secrets: [
     GITHUB_APP_ID_SECRET,
     GITHUB_APP_PRIVATE_KEY_SECRET,
