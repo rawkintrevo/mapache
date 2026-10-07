@@ -444,7 +444,7 @@ Installed OS packages currently include:
 - `gh`, so agent sessions can use the GitHub CLI for issue, PR, and repository workflow commands without manual installation
 - `gzip`
 - `openssh-client`
-- `python3` as the shared Python runtime contract
+- `python3`, with `/usr/local/bin/python` symlinked to it for conventional Python tooling
 - `make`
 - `g++`
 - `ripgrep`
@@ -455,7 +455,7 @@ Installed OS packages currently include:
 
 `make` and `g++` are present because `node-pty` and terminal-adjacent dependencies may require native build support during image construction.
 
-The `pi-chrome` Dockerfile runs `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` verifies the supported image's build contract. The explicit command contract is `python3`; Mapache does not currently guarantee a bare `python` alias because repository workflows and tooling use `python3` directly.
+The `pi-chrome` Dockerfile runs both `python --version` and `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` verifies the supported image's build contract. Both commands invoke the installed Python 3 runtime; `python3.13` is not provided as a separate command name.
 
 The supported `pi-chrome` image installs Pi Agents with:
 
