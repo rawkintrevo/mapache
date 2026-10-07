@@ -37,7 +37,8 @@ async function provisionQueuedSession(event, dependencies) {
   if (!after || !after.exists) return {skipped: "deleted"};
 
   const session = {id: after.id, ...after.data()};
-  if (!isQueuedProvisioningSession(session)) return {skipped: "not_queued"};
+  const before = event.data.before;
+  if (!isProvisioningRecoveryEvent(session, before)) return {skipped: "not_queued"};
   if (isAutomationRuntime(session)) return {skipped: "automation_runtime"};
 
   if (!isSupportedProvisioningSession(session)) {
@@ -94,6 +95,22 @@ async function provisionQueuedSession(event, dependencies) {
   }
 }
 
+function isProvisioningRecoveryEvent(session = {}, beforeSnapshot) {
+  if (isQueuedProvisioningSession(session)) return true;
+  if (session.status !== "provisioning" || session.provisioningState !== "running" ||
+      !session.provisioningCloudRunOperationName) return false;
+  const before = beforeSnapshot && beforeSnapshot.exists ? beforeSnapshot.data() || {} : {};
+  return before.provisioningState !== "running" ||
+    before.provisioningCloudRunOperationName !== session.provisioningCloudRunOperationName;
+}
+
+function isProvisioningWorkerAttempt(session = {}, expectedSession = {}) {
+  if (isQueuedProvisioningSession(session)) return true;
+  return session.status === "provisioning" && session.provisioningState === "running" &&
+    session.provisioningCloudRunOperationName &&
+    session.provisioningCloudRunOperationName === expectedSession.provisioningCloudRunOperationName;
+}
+
 function isQueuedProvisioningSession(session = {}) {
   return session.status === "provisioning" && session.provisioningState === "queued";
 }
@@ -124,7 +141,7 @@ async function markProvisioningWorkerFailure(sessionRef, session, error, depende
       const snapshot = await transaction.get(sessionRef);
       if (!snapshot.exists) return false;
       const currentSession = {...session, ...snapshot.data()};
-      if (!isQueuedProvisioningSession(currentSession)) return false;
+      if (!isProvisioningWorkerAttempt(currentSession, session)) return false;
       await updateFailure(currentSession, (update) => transaction.update(sessionRef, update));
       return true;
     });
@@ -136,6 +153,7 @@ async function markProvisioningWorkerFailure(sessionRef, session, error, depende
 
 module.exports = {
   createProvisioningWorker,
+  isProvisioningRecoveryEvent,
   isQueuedProvisioningSession,
   markProvisioningWorkerFailure,
   provisionQueuedSession,

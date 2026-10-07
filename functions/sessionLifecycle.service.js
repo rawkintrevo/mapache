@@ -137,7 +137,9 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   if (isMarkedRuntimeSession(session)) {
     assertRuntimeRecreationAllowed(session);
     session = await stopSessionBeforeRecreation(sessionRef, session, dependencies);
-    return recreateSessionService(workspace, workspaceId, sessionRef, session, dependencies);
+    return recreateSessionService(workspace, workspaceId, sessionRef, session, dependencies, {
+      deferProvisioning: true,
+    });
   }
   if (normalizeSessionState(session.status) === "stop_failed") throw httpError(409, "session_stop_failed");
 
@@ -282,6 +284,7 @@ async function recreateSessionService(workspace, workspaceId, sessionRef, sessio
     ...(recoveryWarning ? {agentRuntimeRecoveryWarning: "interrupted"} : {}),
   });
   Object.assign(restartUpdate, initialProvisioningMetadata(restartOperationId));
+  if (options.deferProvisioning) restartUpdate.provisioningState = "queued";
 
   if (!Array.isArray(session.environmentEntryIds) && Array.isArray(session.genericEnvironmentEntryIds)) {
     restartUpdate.environmentEntryIds = [...new Set(session.genericEnvironmentEntryIds)];
@@ -319,11 +322,13 @@ async function recreateSessionService(workspace, workspaceId, sessionRef, sessio
     Object.assign(restartedSession, syncWriterUpdates);
   }
 
-  await dependencies.provisionSessionService(
-      workspace,
-      sessionRef,
-      await dependencies.prepareSessionForProvisioning(restartedSession),
-  );
+  if (!options.deferProvisioning) {
+    await dependencies.provisionSessionService(
+        workspace,
+        sessionRef,
+        await dependencies.prepareSessionForProvisioning(restartedSession),
+    );
+  }
   return toClientDoc(await sessionRef.get());
 }
 

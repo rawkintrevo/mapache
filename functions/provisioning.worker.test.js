@@ -3,12 +3,29 @@
 const assert = require("node:assert/strict");
 const {
   createProvisioningWorker,
+  isProvisioningRecoveryEvent,
   isQueuedProvisioningSession,
 } = require("./provisioning.worker");
 
 assert.strictEqual(isQueuedProvisioningSession({status: "provisioning", provisioningState: "queued"}), true);
 assert.strictEqual(isQueuedProvisioningSession({status: "provisioning", provisioningState: "running"}), false);
 assert.strictEqual(isQueuedProvisioningSession({status: "running", provisioningState: "queued"}), false);
+assert.strictEqual(isProvisioningRecoveryEvent({
+  status: "provisioning",
+  provisioningState: "running",
+  provisioningCloudRunOperationName: "operations/create",
+}, {
+  exists: true,
+  data: () => ({status: "provisioning", provisioningState: "running"}),
+}), true);
+assert.strictEqual(isProvisioningRecoveryEvent({
+  status: "provisioning",
+  provisioningState: "running",
+  provisioningCloudRunOperationName: "operations/create",
+}, {
+  exists: true,
+  data: () => ({status: "provisioning", provisioningState: "running", provisioningCloudRunOperationName: "operations/create"}),
+}), false);
 
 (async () => {
   const session = {
@@ -69,6 +86,44 @@ assert.strictEqual(isQueuedProvisioningSession({status: "running", provisioningS
   });
   assert.deepStrictEqual(ignored, {skipped: "not_queued"});
   assert.strictEqual(calls.length, 2);
+
+  const recoverySession = {
+    ...session,
+    provisioningState: "running",
+    provisioningCloudRunOperationName: "operations/create",
+  };
+  const recovered = await worker({
+    params: {workspaceId: "workspace-1", sessionId: "session-3"},
+    data: {
+      before: {
+        exists: true,
+        data: () => ({...recoverySession, provisioningCloudRunOperationName: null}),
+      },
+      after: {
+        id: "session-3",
+        ref: sessionRef,
+        exists: true,
+        data: () => recoverySession,
+      },
+    },
+  });
+  assert.deepStrictEqual(recovered, {provisioned: true, sessionId: "session-3"});
+  assert.strictEqual(calls.length, 4);
+
+  const heartbeat = await worker({
+    params: {workspaceId: "workspace-1", sessionId: "session-3"},
+    data: {
+      before: {exists: true, data: () => recoverySession},
+      after: {
+        id: "session-3",
+        ref: sessionRef,
+        exists: true,
+        data: () => ({...recoverySession, lastActivityAt: "later"}),
+      },
+    },
+  });
+  assert.deepStrictEqual(heartbeat, {skipped: "not_queued"});
+  assert.strictEqual(calls.length, 4);
 
   const failureUpdates = [];
   const failureRef = {update: async (update) => failureUpdates.push(update)};

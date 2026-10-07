@@ -76,6 +76,13 @@ lifecycle actions are rejected. Duplicate deliveries cannot overlap: a running
 claim is retried only after ten minutes, beyond the worker's 540-second limit.
 Deploy the worker before the API so accepted operations have a consumer.
 
+Marked managed-runtime restart requests use the same queued provisioning
+boundary rather than waiting for Cloud Run startup inside the authenticated API
+request. The session trigger owns the long-running create and records the Cloud
+Run operation name before polling it. A follow-up trigger delivery recognizes
+that operation-name transition and resumes polling if the API process is lost;
+ordinary runtime heartbeat writes do not start another provisioning attempt.
+
 Workspace documents carry owner, source, storage, sync, MCP, home-policy, and
 workspace-level resource metadata. They also carry a lazily populated
 `canonicalSessionId`; existing workspaces adopt an active child session first,
