@@ -12,7 +12,7 @@ This page documents the workspace-scoped Google account workflow added for issue
 - Running-session access-token broker: `functions/googleMcpTokenBroker.service.js` and the `googleMcpToken` Function export in `functions/index.js`
 - Authenticated API handlers and route registration: `functions/googleWorkspaceApi.service.js`, `functions/apiRouteManifest.js`, `functions/apiRoutes.helpers.js`, and `functions/apiDispatch.helpers.js`
 - Cloud Run environment and MCP injection: `functions/googleWorkspaceProvisioning.service.js` and `functions/cloudRun.service.js`
-- Runner MCP tool registration and Google REST writes: `session-runner/google-workspace-mcp/server.mjs`, `sheetsWrites.mjs`, `driveWrites.mjs`, and `restClient.mjs`
+- Runner MCP tool registration and Google REST writes: `session-runner/google-workspace-mcp/server.mjs`, `docsWrites.mjs`, `slidesWrites.mjs`, `sheetsWrites.mjs`, `driveWrites.mjs`, and `restClient.mjs`
 - Frontend state, controller, workflow, navbar management modal, and connection editor: `src/state/initialState.js`, `src/controllers/googleWorkspaceController.js`, `src/controllers/modalController.js`, `src/workflows/googleWorkspace.js`, `src/components/layout/Topbar.jsx`, `src/components/modals/GoogleWorkspaceManageModal.jsx`, and `src/components/modals/GoogleWorkspaceModal.jsx`
 - Runner token renewal, status, and persistence: `session-runner/lib/googleMcpTokenApi.service.js`, `session-runner/lib/googleMcpStatus.service.js`, and `session-runner/lib/workspaceArchives.service.js`
 
@@ -79,9 +79,17 @@ Drive read access includes a unified `drive_read_file` tool. It returns ordinary
 Write-capable runner connections expose the following bounded creation contracts:
 
 - `sheets_create_spreadsheet` requires the Sheets write scope, calls the Sheets API's `spreadsheets.create` method with `{properties: {title}}`, and returns the created `spreadsheetId` plus an editable Google Sheets URL. The returned ID can be passed directly to the existing Sheets value and dimension tools.
-- `drive_create_file` treats `mimeType` as the destination type and optional `contentMimeType` as the uploaded media type. Ordinary text and binary files continue to use multipart uploads, defaulting the media type to `mimeType`. To import CSV into a native spreadsheet, set `mimeType` to `application/vnd.google-apps.spreadsheet`, set `contentMimeType` to `text/csv`, and provide non-empty content. To create a blank native spreadsheet through Drive, omit `content` and `contentMimeType`; this uses a metadata-only JSON request and never uploads empty media. Other Google-native destination types are rejected with an actionable validation error.
+- `drive_create_file` treats `mimeType` as the destination type and optional `contentMimeType` as the uploaded media type. Ordinary text and binary files continue to use multipart uploads, defaulting the media type to `mimeType`. To import CSV into a native spreadsheet, set `mimeType` to `application/vnd.google-apps.spreadsheet`, set `contentMimeType` to `text/csv`, and provide non-empty content. To create a blank native spreadsheet through Drive, omit `content` and `contentMimeType`; this uses a metadata-only JSON request and never uploads empty media. Blank Docs (`application/vnd.google-apps.document`) and Slides (`application/vnd.google-apps.presentation`) use the same metadata-only path, including optional parent folders. Docs imports accept plain text, HTML, RTF, Word, or OpenDocument text; Slides imports accept PowerPoint or OpenDocument presentations. Set the source `contentMimeType` explicitly and use `encoding: "base64"` for binary uploads. Unsupported destinations and media combinations are rejected before making a request.
 
-These tools are registered only when the connection has the relevant write scope; read-only Drive or Sheets connections do not expose them.
+- `docs_create_document` and `slides_create_presentation` create named blank native files and return their IDs and editable URLs. Populate them with the existing bounded batch-update tools. They use the same service/scope gates as their respective edit tools; Drive-only connections can create native files through `drive_create_file`.
+
+These tools are registered only when the connection has the relevant write scope; read-only connections do not expose them.
+
+Docs reads, creation, and batch updates use `https://docs.googleapis.com/v1`; Slides uses `https://slides.googleapis.com/v1`. Do not route these operations to `www.googleapis.com/docs/v1` or `/slides/v1`, which can return HTML error pages. Drive metadata, copy, upload, and export keep their Drive v3 endpoints.
+
+The shared REST client preserves HTTP error classification and retryability even when Google returns HTML or plain text. MCP error results include `status`, `retryable`, and a bounded diagnostic excerpt with markup, script/style bodies, and credentials removed. A non-JSON success response still reports `google_invalid_json` with diagnostic text; successful byte downloads remain unchanged. The existing single 401 renewal/retry happens before interpreting the final response. Upstream diagnostic text is untrusted provider content, not agent instructions.
+
+Deploy these runner-only changes by rebuilding and publishing `pi-chrome`; existing sessions require restart/recreation to receive a new revision. No Functions deployment or new OAuth scopes are required. Read-only connections still need write authorization before creation is available.
 
 The required Functions configuration is:
 

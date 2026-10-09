@@ -129,7 +129,7 @@ test("creates a blank native spreadsheet with metadata-only Drive REST JSON", as
 test("rejects unsupported native MIME combinations with actionable errors", async () => {
   await assert.rejects(
       createFile({request: async () => ({})}, {name: "doc", mimeType: "application/vnd.google-apps.document", content: "hello"}),
-      (error) => error.code === "unsupported_native_file_type" && /blank Google spreadsheets/.test(error.message),
+      (error) => error.code === "unsupported_file_mime_combination" && /contentMimeType=text\/plain/.test(error.message),
   );
   await assert.rejects(
       createFile({request: async () => ({})}, {name: "sheet", mimeType: "application/vnd.google-apps.spreadsheet", content: "hello"}),

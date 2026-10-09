@@ -9,7 +9,11 @@ const UPLOAD_API = "/upload/drive/v3";
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const NATIVE_FILE_PREFIX = "application/vnd.google-apps.";
 const GOOGLE_SPREADSHEET_MIME_TYPE = "application/vnd.google-apps.spreadsheet";
-const CSV_MIME_TYPE = "text/csv";
+const NATIVE_IMPORT_TYPES = new Map([
+  [GOOGLE_SPREADSHEET_MIME_TYPE, ["text/csv"]],
+  ["application/vnd.google-apps.document", ["text/plain", "text/html", "application/rtf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.text"]],
+  ["application/vnd.google-apps.presentation", ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.oasis.opendocument.presentation"]],
+]);
 const FILE_FIELDS = "id,name,mimeType,description,modifiedTime,createdTime,webViewLink,size,parents,driveId,trashed";
 const NATIVE_TEXT_EXPORTS = Object.freeze({
   "application/vnd.google-apps.document": "text/plain",
@@ -48,7 +52,7 @@ export function registerDriveWriteTools(server, {client, config}) {
   }
   if (canWrite(config)) {
     registerJsonTool(server, "drive_create_file", {
-      description: "Create a Drive file. For ordinary files provide content; for a blank Google Sheet omit content, or import CSV content by setting contentMimeType to text/csv while keeping mimeType as the native spreadsheet type.",
+      description: "Create a Drive file, including Google Docs (application/vnd.google-apps.document), Sheets (application/vnd.google-apps.spreadsheet), and Slides (application/vnd.google-apps.presentation). Omit content and contentMimeType for blank native files. For imports set contentMimeType to the source type: text/plain or text/html for Docs, text/csv for Sheets, PowerPoint or OpenDocument presentation for Slides; use base64 encoding for binary content.",
       inputSchema: z.object({name: z.string().min(1).max(256), mimeType: z.string().min(1).max(256), content: z.string().max(2_000_000).optional(), contentMimeType: z.string().min(1).max(256).optional(), encoding: z.enum(["text", "base64"]).optional(), parents: z.array(z.string().min(1).max(512)).max(20).optional()}),
     }, (input) => createFile(client, input));
     registerJsonTool(server, "drive_copy_file", {
@@ -135,7 +139,7 @@ export async function createFile(client, input = {}) {
   const hasContent = contentProvided && String(input.content).length > 0;
   const metadata = {name, mimeType, ...(input.parents?.length ? {parents: input.parents} : {})};
 
-  if (mimeType.toLowerCase() === GOOGLE_SPREADSHEET_MIME_TYPE && !hasContent && !uploadMimeTypeInput) {
+  if (NATIVE_IMPORT_TYPES.has(mimeType.toLowerCase()) && !hasContent && !uploadMimeTypeInput) {
     const result = await client.request(`${DRIVE_API}/files?${queryParams({fields: FILE_FIELDS})}`, {
       method: "POST",
       body: JSON.stringify(metadata),
@@ -144,7 +148,7 @@ export async function createFile(client, input = {}) {
   }
 
   if (!contentProvided && !mimeType.toLowerCase().startsWith(NATIVE_FILE_PREFIX)) {
-    const error = new Error("content is required for ordinary Drive files; omit it only for a blank native spreadsheet.");
+    const error = new Error("content is required for ordinary Drive files; omit it only for a blank native Doc, Sheet, or Slides presentation.");
     error.code = "file_content_required";
     throw error;
   }
@@ -199,19 +203,20 @@ function optionalMimeType(value) {
 function validateCreateFileCombination({mimeType, uploadMimeType, hasContent}) {
   const destination = mimeType.toLowerCase();
   if (destination.startsWith(NATIVE_FILE_PREFIX)) {
-    if (destination !== GOOGLE_SPREADSHEET_MIME_TYPE) {
-      const error = new Error("Only blank Google spreadsheets and CSV imports can use a Google-native destination MIME type.");
+    const allowedTypes = NATIVE_IMPORT_TYPES.get(destination);
+    if (!allowedTypes) {
+      const error = new Error("Supported native destinations are Google Docs, Sheets, and Slides.");
       error.code = "unsupported_native_file_type";
       throw error;
     }
-    if (uploadMimeType !== CSV_MIME_TYPE) {
-      const error = new Error("Google spreadsheet imports require contentMimeType=text/csv; omit content and contentMimeType for a blank spreadsheet.");
+    if (!allowedTypes.includes(uploadMimeType)) {
+      const error = new Error(`Native imports require contentMimeType=${allowedTypes.join(" or ")}; omit content and contentMimeType for a blank native file.`);
       error.code = "unsupported_file_mime_combination";
       throw error;
     }
     if (!hasContent) {
-      const error = new Error("CSV spreadsheet imports require non-empty content.");
-      error.code = "csv_content_required";
+      const error = new Error("Native file imports require non-empty content.");
+      error.code = destination === GOOGLE_SPREADSHEET_MIME_TYPE ? "csv_content_required" : "file_content_required";
       throw error;
     }
   }

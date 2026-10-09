@@ -1,7 +1,7 @@
 import * as z from "zod/v4";
 import {boundedItemLimit, pathSegment, queryParams, registerJsonTool, requiredText} from "./tools.mjs";
 
-const SLIDES_API = "/slides/v1";
+const SLIDES_API = "https://slides.googleapis.com/v1";
 
 export function registerSlidesReadTools(server, {client, config}) {
   if (!config?.hasReadScope?.("slides")) return [];
