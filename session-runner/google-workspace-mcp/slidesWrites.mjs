@@ -2,17 +2,31 @@ import * as z from "zod/v4";
 import {hasGrantedScope} from "./config.mjs";
 import {pathSegment, registerJsonTool, requiredText} from "./tools.mjs";
 
-const SLIDES_API = "/slides/v1";
+const SLIDES_API = "https://slides.googleapis.com/v1";
 const PRESENTATIONS_WRITE_SCOPE = "https://www.googleapis.com/auth/presentations";
 const ALLOWED_REQUESTS = new Set(["createSlide", "deleteObject", "insertText", "deleteText", "replaceAllText"]);
 
 export function registerSlidesWriteTools(server, {client, config}) {
   if (!canWrite(config)) return [];
+  registerJsonTool(server, "slides_create_presentation", {
+    description: "Create a named blank Google presentation and return its ID and URL. Populate it with slides_batch_update.",
+    inputSchema: z.object({title: z.string().min(1).max(256)}),
+  }, (input) => createPresentation(client, input));
   registerJsonTool(server, "slides_batch_update", {
     description: "Apply bounded allowlisted updates to a Google presentation.",
     inputSchema: z.object({presentationId: z.string().min(1).max(512), requests: z.array(z.record(z.string(), z.unknown())).min(1).max(50)}),
   }, (input) => batchUpdate(client, input));
-  return ["slides_batch_update"];
+  return ["slides_create_presentation", "slides_batch_update"];
+}
+
+export async function createPresentation(client, input = {}) {
+  const title = requiredText(input.title, "title", 256);
+  const result = await client.request(`${SLIDES_API}/presentations`, {
+    method: "POST",
+    body: JSON.stringify({title}),
+  });
+  const presentationId = requiredText(result?.presentationId, "presentationId", 512);
+  return {presentationId, title: result?.title || title, url: `https://docs.google.com/presentation/d/${encodeURIComponent(presentationId)}/edit`};
 }
 
 export async function batchUpdate(client, input = {}) {

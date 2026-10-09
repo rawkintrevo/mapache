@@ -1,16 +1,30 @@
 import * as z from "zod/v4";
 import {pathSegment, registerJsonTool, requiredText} from "./tools.mjs";
 
-const DOCS_API = "/docs/v1";
+const DOCS_API = "https://docs.googleapis.com/v1";
 const ALLOWED_REQUESTS = new Set(["insertText", "deleteContentRange", "replaceAllText"]);
 
 export function registerDocsWriteTools(server, {client, config}) {
   if (!canWrite(config)) return [];
+  registerJsonTool(server, "docs_create_document", {
+    description: "Create a named blank Google document and return its ID and URL. Populate it with docs_batch_update.",
+    inputSchema: z.object({title: z.string().min(1).max(256)}),
+  }, (input) => createDocument(client, input));
   registerJsonTool(server, "docs_batch_update", {
     description: "Apply bounded allowlisted updates to a Google Doc.",
     inputSchema: z.object({documentId: z.string().min(1).max(512), requests: z.array(z.record(z.string(), z.unknown())).min(1).max(50), requiredRevisionId: z.string().max(512).optional()}),
   }, (input) => batchUpdate(client, input));
-  return ["docs_batch_update"];
+  return ["docs_create_document", "docs_batch_update"];
+}
+
+export async function createDocument(client, input = {}) {
+  const title = requiredText(input.title, "title", 256);
+  const result = await client.request(`${DOCS_API}/documents`, {
+    method: "POST",
+    body: JSON.stringify({title}),
+  });
+  const documentId = requiredText(result?.documentId, "documentId", 512);
+  return {documentId, title: result?.title || title, url: `https://docs.google.com/document/d/${encodeURIComponent(documentId)}/edit`};
 }
 
 export async function batchUpdate(client, input = {}) {

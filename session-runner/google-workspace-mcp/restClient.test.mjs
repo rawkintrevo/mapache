@@ -257,3 +257,53 @@ test("collects page-token results within page and item limits", async () => {
   assert.deepEqual(result, {items: [1, 2, 3], pages: 2, nextPageToken: "page-3", truncated: true});
   assert.deepEqual(calls, [{pageSize: 2}, {pageSize: 2, pageToken: "page-2"}]);
 });
+
+test("HTML and plain-text failures retain HTTP classification and safe diagnostic text through MCP", async () => {
+  const {registerJsonTool} = await import("./tools.mjs");
+  for (const [status, code] of [[401, "google_unauthorized"], [403, "google_forbidden"], [404, "google_not_found"], [429, "google_rate_limited"], [503, "google_upstream_unavailable"]]) {
+    for (const responseType of ["json", "bytes"]) {
+      const client = createGoogleRestClient({env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"}, fetchImpl: async () => new Response('<html><style>hidden CSS</style><script>hidden JS</script><h1>Access denied</h1><p>Enable Docs &amp; Slides &#65;PIs. secret-token Bearer other-secret access_token=other-token</p></html>', {status})});
+      let handler;
+      registerJsonTool({registerTool(_name, _config, fn) {handler = fn;}}, "test", {}, () => client.request("/drive/v3/files", {responseType}));
+      const result = await handler();
+      assert.equal(result.isError, true);
+      assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
+      assert.equal(result.structuredContent.code, code);
+      assert.equal(result.structuredContent.status, status);
+      assert.equal(result.structuredContent.retryable, status === 429 || status >= 500);
+      assert.match(result.structuredContent.message, /Enable Docs & Slides APIs/);
+      assert.doesNotMatch(result.structuredContent.message, /secret-token|other-secret|other-token|hidden|<html>/);
+    }
+  }
+  const client = createGoogleRestClient({env: {GOOGLE_MCP_ACCESS_TOKEN: "secret"}, fetchImpl: async () => new Response("Service temporarily unavailable", {status: 503})});
+  await assert.rejects(client.request("/drive/v3/files"), (error) => error.retryable && /Service temporarily unavailable/.test(error.message));
+});
+
+test("malformed success JSON includes bounded redacted diagnostics; valid byte downloads are untouched", async () => {
+  const body = '<h1>Sign in required</h1> secret-token ' + 'details '.repeat(500);
+  const client = createGoogleRestClient({env: {GOOGLE_MCP_ACCESS_TOKEN: "secret-token"}, fetchImpl: async () => new Response(body)});
+  await assert.rejects(client.request("/drive/v3/files"), (error) => {
+    assert.equal(error.code, "google_invalid_json");
+    assert.equal(error.status, 200);
+    assert.match(error.message, /Sign in required/);
+    assert.doesNotMatch(error.message, /secret-token/);
+    assert.ok(error.message.length < 1024);
+    return true;
+  });
+  assert.equal(new TextDecoder().decode(await client.request("/drive/v3/files", {responseType: "bytes"})), body);
+});
+
+test("HTML 401 still renews once before parsing the retried response", async () => {
+  let calls = 0;
+  const client = createGoogleRestClient({env: {
+    GOOGLE_MCP_ACCESS_TOKEN: "expired-token", GOOGLE_MCP_CONNECTION_ID: "connection-a",
+    GOOGLE_MCP_TOKEN_REFRESH_URL: "https://broker.example/google-token", WORKSPACE_ID: "workspace-a",
+    SESSION_ID: "session-a", SESSION_SHUTDOWN_TOKEN: "shutdown-secret",
+  }, fetchImpl: async (url) => {
+    if (url === "https://broker.example/google-token") return response({accessToken: "fresh-token"});
+    calls += 1;
+    return calls === 1 ? new Response("<p>Sign in</p>", {status: 401}) : response({ok: true});
+  }});
+  assert.deepEqual(await client.request("/drive/v3/files"), {ok: true});
+  assert.equal(calls, 2);
+});

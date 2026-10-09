@@ -1,7 +1,7 @@
 import * as z from "zod/v4";
 import {boundedItemLimit, pathSegment, queryParams, registerJsonTool} from "./tools.mjs";
 
-const DOCS_API = "/docs/v1";
+const DOCS_API = "https://docs.googleapis.com/v1";
 
 export function registerDocsReadTools(server, {client, config}) {
   if (!config?.hasReadScope?.("docs")) return [];

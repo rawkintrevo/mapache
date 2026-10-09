@@ -5,10 +5,11 @@ export function registerJsonTool(server, name, config, handler) {
     } catch (error) {
       const code = String(error?.code || "google_tool_failed");
       const message = safeToolMessage(error);
+      const details = Number.isInteger(error?.status) && error.status > 0 ? {status: error.status, retryable: error.retryable === true} : {};
       return {
         isError: true,
-        content: [{type: "text", text: JSON.stringify({code, message})}],
-        structuredContent: {code, message},
+        content: [{type: "text", text: JSON.stringify({code, message, ...details})}],
+        structuredContent: {code, message, ...details},
       };
     }
   });
@@ -23,7 +24,7 @@ export function jsonToolResult(value) {
 
 export function safeToolMessage(error) {
   const message = String(error?.message || "Google tool request failed.");
-  return message.replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]").slice(0, 240);
+  return message.replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]").slice(0, 1024);
 }
 
 export function boundedPageSize(value, fallback = 50, maximum = 100) {

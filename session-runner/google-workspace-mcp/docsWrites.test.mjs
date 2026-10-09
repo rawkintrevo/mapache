@@ -9,7 +9,7 @@ function fakeServer() {
 
 test("registers Docs batch update only with write scope", () => {
   const server = fakeServer();
-  assert.deepEqual(registerDocsWriteTools(server, {client: {}, config: {hasWriteScope: () => true}}), ["docs_batch_update"]);
+  assert.deepEqual(registerDocsWriteTools(server, {client: {}, config: {hasWriteScope: () => true}}), ["docs_create_document", "docs_batch_update"]);
   const blocked = fakeServer();
   assert.deepEqual(registerDocsWriteTools(blocked, {client: {}, config: {hasWriteScope: () => false}}), []);
 });

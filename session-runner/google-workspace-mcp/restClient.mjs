@@ -63,7 +63,17 @@ export function createGoogleRestClient({
       }
     }
     const bodyText = new TextDecoder().decode(result.bytes);
-    const body = responseType === "bytes" && result.response.ok ? null : parseJsonBody(bodyText, result.response.status);
+    let body = null;
+    if (responseType !== "bytes" || !result.response.ok) {
+      try {
+        body = parseJsonBody(bodyText, result.response.status);
+      } catch (error) {
+        if (error.code !== "google_invalid_json") throw error;
+        const message = safeProviderMessage({message: responseText(bodyText)}, token);
+        if (!result.response.ok) throw normalizedResponseError(result.response.status, {message}, token);
+        throw new GoogleRestError("google_invalid_json", `Google returned non-JSON (HTTP ${result.response.status}): ${message || "empty response"}`, {status: result.response.status});
+      }
+    }
     if (!result.response.ok) throw normalizedResponseError(result.response.status, body, token);
     if (responseType === "bytes") return result.bytes;
     return body;
@@ -314,7 +324,7 @@ function normalizedResponseError(status, body, token = "") {
   const code = STATUS_CODES[status] || (status >= 500 ? "google_upstream_unavailable" : "google_request_failed");
   const retryable = status === 429 || status >= 500;
   const providerMessage = safeProviderMessage(body, token);
-  const message = providerMessage ? `${code}: ${providerMessage}` : `${code}.`;
+  const message = `HTTP ${status} ${code}${providerMessage ? `: ${providerMessage}` : "."}`;
   return new GoogleRestError(code, message, {status, retryable});
 }
 
@@ -333,7 +343,25 @@ function safeProviderMessage(body, token) {
   return String(value)
       .replace(tokenPattern || /$a/, "[redacted]")
       .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
-      .slice(0, 200);
+      .replace(/((?:access_token|refresh_token|id_token|client_secret|key)\s*[=:]\s*)[^\s&"'<>]+/gi, "$1[redacted]")
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .slice(0, 800);
+}
+
+// Error pages are diagnostic text, never markup to render or instructions to run.
+function responseText(text) {
+  return String(text)
+      .replace(/<!--[^]*?-->/g, " ")
+      .replace(/<(script|style)\b[^>]*>[^]*?<\/\1\s*>/gi, " ")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, name) => {
+        if (name.startsWith("#")) {
+          const point = name[1].toLowerCase() === "x" ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+          return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : " ";
+        }
+        return {amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " "}[name.toLowerCase()] || entity;
+      })
+      .replace(/\s+/g, " ").trim();
 }
 
 function escapeRegExp(value) {

@@ -11,7 +11,7 @@ const WRITE_SCOPE = "https://www.googleapis.com/auth/presentations";
 
 test("registers Slides mutation support only with presentation write scope", () => {
   const server = fakeServer();
-  assert.deepEqual(registerSlidesWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scope === WRITE_SCOPE}}), ["slides_batch_update"]);
+  assert.deepEqual(registerSlidesWriteTools(server, {client: {}, config: {hasGrantedScope: (_service, scope) => scope === WRITE_SCOPE}}), ["slides_create_presentation", "slides_batch_update"]);
   const blocked = fakeServer();
   assert.deepEqual(registerSlidesWriteTools(blocked, {client: {}, config: {hasGrantedScope: () => false}}), []);
 });
