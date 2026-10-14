@@ -1,0 +1,3 @@
+#!/bin/sh
+# Compatibility for existing workspace skills. New instructions use gh directly.
+exec gh "$@"
