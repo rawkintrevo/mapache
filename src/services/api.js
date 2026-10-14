@@ -6,6 +6,9 @@ function encodePathQuery(value) {
 
 export function createApiClient(getToken) {
   const api = {
+    createWorkspaceUpload: (workspaceId, file) => request(getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/uploads`,
+        {method: "POST", body: {name: file.name, size: file.size}}),
     getMe: () => request(getToken, "/api/me"),
     updateUserTimezone: (timezone) => request(getToken, "/api/me", {method: "PATCH", body: {timezone}}),
     previewAutomationSchedule: (cron, timezone) => request(

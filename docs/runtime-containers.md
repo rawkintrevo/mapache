@@ -1093,3 +1093,10 @@ implemented in Cloud Functions and does not require a runner image rebuild.
 Creation, restart, resize, and recreation derive the bucket and prefix from the
 owner-checked workspace record and refresh the session metadata; stale session
 storage fields cannot select another workspace's `/automations` prefix.
+
+## Local file uploads
+
+The navbar Upload file action sends local files directly to Cloud Storage using
+resumable transfers. Main and automation sessions mount their workspace inputs
+read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
+ownership, lifecycle, restart requirements, and verification.

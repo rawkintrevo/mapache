@@ -6,7 +6,7 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Keep running, Agent, Logs, and workspace Automations controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Keep running, Agent, Logs, Upload file, and workspace Automations controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
 | `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, running instances, refresh, and sign-out actions. |
 | `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible responsive menu for workspace, connection, runtime, and documentation actions. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
@@ -15,6 +15,7 @@ This index maps significant React components to their current responsibilities.
 | `SessionDetail` | `src/components/sessions/SessionDetail.jsx` | Canonical runtime view with legacy terminal/Agent/Chrome and shell surfaces; marked-runtime lifecycle is controlled from the topbar. |
 | `ManagedAgentSurface` | `src/components/sessions/ManagedAgentSurface.jsx` | Borderless, full-height marked-runtime Agent or Persistent Chrome canvas. |
 | `PiWebUiCanvas` | `src/components/sessions/PiWebUiCanvas.jsx` | Full-height signed embedded upstream `/agent/` iframe plus exact-origin access-renewal and Chrome-navigation bridge. |
+| `WorkspaceUploadModal` | `src/components/modals/WorkspaceUploadModal.jsx` | Selects local files for resumable uploads to `/uploads`, with progress, retry, cancellation, and restart guidance. |
 | `SessionLogsModal` | `src/components/modals/SessionLogsModal.jsx` | Displays owner-scoped Cloud Run entries and the current recorded error for the canonical runtime. |
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Signed Persistent Chrome iframe and pop-out action. |
 | `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface, rendered in the top navbar for the selected canonical running cloud runtime. |

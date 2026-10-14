@@ -6,6 +6,7 @@
 const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["githubCallback", ["GET"]],
   ["googleCallback", ["GET"]],
+  ["workspaceUploads", ["POST"]],
   ["me", ["GET", "PATCH"]],
   ["automationSchedulePreview", ["POST"]],
   ["automations", ["GET", "POST"]],

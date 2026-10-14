@@ -63,6 +63,8 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["GET", "instances", jsonResult(({handlers, req, user}) => handlers.listActiveInstances(user.uid, req.query || {}))],
   ]),
   workspaceStorage: Object.freeze([
+    ["POST", "workspaceUploads", createdJsonResult(({handlers, req, route, user}) =>
+      handlers.createWorkspaceUpload(user.uid, route.workspaceId, req.body || {}, req.get?.("origin")))],
     ["POST", "automationStoragePrepare", acceptedJsonResult(({handlers, route, user}) =>
       handlers.prepareWorkspaceStorageMigration(user.uid, route.workspaceId))],
   ]),

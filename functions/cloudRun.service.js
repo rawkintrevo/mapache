@@ -1,5 +1,7 @@
 "use strict";
 
+const {buildUploadsStorageTemplate} = require("./workspaceUploads.service");
+
 const crypto = require("node:crypto");
 const logger = require("firebase-functions/logger");
 const {
@@ -358,7 +360,7 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
     const storageMask = Object.keys(sharedTemplate).length > 0 ?
       ",template.volumes,template.executionEnvironment,template.containers.env" : "";
-    const automationOutputMask = options.restart && isMarkedRuntimeSession(session) && session.workspaceStoragePrefix ?
+    const automationOutputMask = options.restart && (isMarkedRuntimeSession(session) || isAutomationRuntime(session)) && session.workspaceStoragePrefix ?
       ",template.volumes,template.executionEnvironment" : "";
     const updateMask = (options.restart ?
       "template.containers,template.serviceAccount" :
@@ -493,6 +495,8 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
   const storageTemplate = mergeStorageTemplates(
       sharedTemplate,
       automationOutputAccess ? buildAutomationOutputAccessTemplate(automationOutputAccess) : {},
+      (isMarkedRuntimeSession(session) || isAutomationRuntime(session)) && workspace?.storagePrefix ?
+        await buildUploadsStorageTemplate(workspace, dependencies.storage || storage) : {},
   );
   const trustedWorkspaceFields = automationStorage ? {
     runtimeStorageMode: "private",
@@ -542,6 +546,8 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
   const storageTemplate = mergeStorageTemplates(
       sharedTemplate,
       automationOutputAccess ? buildAutomationOutputAccessTemplate(automationOutputAccess) : {},
+      (isMarkedRuntimeSession(session) || isAutomationRuntime(session)) && session.workspaceStoragePrefix ?
+        await buildUploadsStorageTemplate(session, dependencies.storage || storage) : {},
   );
   const trustedWorkspaceFields = automationStorage ? {
     runtimeStorageMode: "private", workspaceStorageMode: AUTOMATION_STORAGE_MODE,

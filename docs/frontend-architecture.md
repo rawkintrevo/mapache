@@ -245,3 +245,14 @@ merely to inspect a past run.
 - [Runner harnesses](./runner-harnesses.md)
 - [Runtime containers](./runtime-containers.md)
 - [Deployment](./deployment.md)
+
+## Local file uploads
+
+The desktop navbar wraps when its controls need more room, keeping account
+actions visible alongside the added Upload file button. The responsive More
+menu also exposes Upload file.
+
+The navbar Upload file action sends local files directly to Cloud Storage using
+resumable transfers. Main and automation sessions mount their workspace inputs
+read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
+ownership, lifecycle, restart requirements, and verification.

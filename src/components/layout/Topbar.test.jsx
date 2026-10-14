@@ -17,6 +17,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
   const onOpenGoogleWorkspace = vi.fn();
   const onOpenMcpServers = vi.fn();
   const onShowAutomations = vi.fn();
+  const onShowUpload = vi.fn();
   const onSetSessionLongRunning = vi.fn();
   render(
     <Topbar
@@ -33,6 +34,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
       onSelectWorkspace={vi.fn()}
       onShowAdmin={vi.fn()}
       onShowAutomations={onShowAutomations}
+      onShowUpload={onShowUpload}
       onShowLogs={vi.fn()}
       onShowProfile={vi.fn()}
       onSignOut={vi.fn()}
@@ -48,6 +50,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
     onOpenPiAuthManage,
     onSetSessionLongRunning,
     onShowAutomations,
+    onShowUpload,
     onToggleWorkspace,
   };
 }
@@ -184,4 +187,14 @@ test("moves the managed runtime lifetime switch into the navbar", async () => {
 test("does not show the runtime lifetime switch for historical sessions", () => {
   renderTopbar({id: "session-1", status: "running"});
   expect(screen.queryByRole("group", {name: "Runtime lifetime"})).not.toBeInTheDocument();
+});
+
+test("upload is available before starting a workspace and in the More menu", async () => {
+  const user = userEvent.setup();
+  const {onShowUpload} = renderTopbar();
+  await user.click(screen.getByRole("button", {name: "Upload file"}));
+  expect(onShowUpload).toHaveBeenCalledOnce();
+  await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+  await user.click(screen.getByRole("menuitem", {name: "Upload file"}));
+  expect(onShowUpload).toHaveBeenCalledTimes(2);
 });

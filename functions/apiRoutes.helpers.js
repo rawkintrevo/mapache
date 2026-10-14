@@ -70,6 +70,9 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "workspaces") {
     return {name: "workspace", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "uploads") {
+    return {name: "workspaceUploads", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "automations") {
     return {name: "automations", workspaceId: parts[1]};
   }

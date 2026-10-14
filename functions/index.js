@@ -1,5 +1,7 @@
 "use strict";
 
+const {createWorkspaceUploadsService} = require("./workspaceUploads.service");
+
 const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
@@ -446,6 +448,8 @@ function googleMcpTokenRefreshUrl() {
   return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/googleMcpToken`;
 }
 
+const workspaceUploadsService = createWorkspaceUploadsService({requireWorkspace, storage});
+
 const API_HANDLERS = createApiHandlers({
   activeInstancesService,
   agentAuthService,
@@ -462,6 +466,7 @@ const API_HANDLERS = createApiHandlers({
   githubService,
   googleWorkspaceService: googleWorkspaceApiService,
   operations: {
+    createWorkspaceUpload: workspaceUploadsService.createUpload,
     userWithUsage,
     updateUserTimezone,
     previewAutomationSchedule,
@@ -554,6 +559,7 @@ exports.api = onRequest({
 
     const user = await requireUser(req);
 
+    if (route.name === "workspaceUploads") res.set("Cache-Control", "no-store");
     await dispatchApiRoute({route, req, res, user, handlers: API_HANDLERS});
   } catch (error) {
     logger.error("api request failed", error);
