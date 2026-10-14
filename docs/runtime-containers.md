@@ -692,6 +692,11 @@ Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP
 
 On startup, GitHub-backed workspaces select the shared `github` profile containing `mapache-github-issue`, the default workflow skill for actionable implementation requests. It reuses a supplied issue or creates one after duplicate search and clarification, confirms the base is current, creates or uses the repository's collision-free task branch for interactive work, implements and verifies the scoped change, and ends with a local commit. Only explicitly enabled automation runtimes preserve a runner-created `mapache/*` branch for runner exit publication. An explicit `hotfix` or `directly on main` instruction instead authorizes a tested commit and push directly to `main` without automatic issue or PR creation. Blank workspaces do not select this profile. The runner copies selected catalog files into the active harness's native workspace path only when a workspace-local file is missing.
 
+The `mapache-gh` authenticated wrapper normally scopes commands to the current
+GitHub workspace repository. It also allows `rawkintrevo/mapache` as a shared
+issue destination, so an agent can search and file Mapache product reports from
+any connected GitHub workspace. Other repository targets remain rejected.
+
 On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 
 - `mapache-preview-build`

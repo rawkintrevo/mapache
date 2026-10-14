@@ -18,6 +18,11 @@ When working on Mapache itself, edit `session-runner/seeded-skills/mapache-githu
 - Connected sessions provide renewable GitHub authentication through `mapache-gh` and
   `mapache-git-credential`; `$GITHUB_AUTOMATION_TOKEN` is only a startup compatibility
   value and must not be used as a long-lived agent contract.
+- For Mapache product bug reports or feature requests, the destination is
+  `rawkintrevo/mapache` even when the current workspace is another repository.
+  Use `mapache-gh --repo rawkintrevo/mapache issue list` to search and, when the
+  user asks to file, `mapache-gh --repo rawkintrevo/mapache issue create ...`.
+  The supported helper explicitly allows this repository across workspaces.
 - If the token is absent, public repositories can still use unauthenticated GitHub API requests.
 - The runner restores the requested or previously selected Git branch for an
   interactive session and preserves its worktree across restart.

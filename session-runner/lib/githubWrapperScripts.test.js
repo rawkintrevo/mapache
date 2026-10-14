@@ -75,6 +75,7 @@ test("mapache-git-credential executes directly, refreshes its token, and scopes 
     assert.match(accepted.stdout, /username=x-access-token/);
     assert.match(accepted.stdout, /password=refreshed-token/);
     assert.equal(fixture.requests.length, 1);
+
     assert.deepEqual(JSON.parse(fixture.requests[0].body), {
       workspaceId: "workspace-462",
       sessionId: "session-462",
@@ -133,6 +134,44 @@ test("mapache-gh executes directly, refreshes its token, and rejects other repos
     });
     assert.equal(fixture.requests.length, 1);
 
+    const mapacheIssueFromOtherWorkspace = await runProcess(GH_SCRIPT, ["--repo", "rawkintrevo/mapache", "issue", "create", "--title", "Test"], {
+      env: baseEnv({
+        GITHUB_REPO_OWNER: "another-owner",
+        GITHUB_REPO_NAME: "another-repo",
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        refreshUrl: fixture.url,
+      }),
+    });
+    assert.equal(mapacheIssueFromOtherWorkspace.code, 0);
+    assert.deepEqual(JSON.parse(fs.readFileSync(capturePath, "utf8")).args, ["--repo", "rawkintrevo/mapache", "issue", "create", "--title", "Test"]);
+    assert.equal(fixture.requests.length, 2);
+
+    const mapacheApiIssueFromOtherWorkspace = await runProcess(GH_SCRIPT, ["api", "repos/rawkintrevo/mapache/issues", "-f", "title=Test"], {
+      env: baseEnv({
+        GITHUB_REPO_OWNER: "another-owner",
+        GITHUB_REPO_NAME: "another-repo",
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        refreshUrl: fixture.url,
+      }),
+    });
+    assert.equal(mapacheApiIssueFromOtherWorkspace.code, 0);
+    assert.equal(fixture.requests.length, 3);
+
+    const mapachePullRequestFromOtherWorkspace = await runProcess(GH_SCRIPT, ["--repo", "rawkintrevo/mapache", "pr", "list"], {
+      env: baseEnv({
+        GITHUB_REPO_OWNER: "another-owner",
+        GITHUB_REPO_NAME: "another-repo",
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        refreshUrl: fixture.url,
+      }),
+    });
+    assert.equal(mapachePullRequestFromOtherWorkspace.code, 1);
+    assert.match(mapachePullRequestFromOtherWorkspace.stderr, /github_repository_not_allowed/);
+    assert.equal(fixture.requests.length, 3);
+
     const wrongFlagRepository = await runProcess(GH_SCRIPT, ["--repo", "owner/other-repo", "issue", "list"], {
       env: baseEnv({
         PATH: `${fakeBin}:${process.env.PATH}`,
@@ -142,7 +181,7 @@ test("mapache-gh executes directly, refreshes its token, and rejects other repos
     });
     assert.equal(wrongFlagRepository.code, 1);
     assert.match(wrongFlagRepository.stderr, /github_repository_not_allowed/);
-    assert.equal(fixture.requests.length, 1);
+    assert.equal(fixture.requests.length, 3);
 
     const wrongApiRepository = await runProcess(GH_SCRIPT, ["api", "repos/owner/other-repo/issues"], {
       env: baseEnv({
@@ -153,7 +192,7 @@ test("mapache-gh executes directly, refreshes its token, and rejects other repos
     });
     assert.equal(wrongApiRepository.code, 1);
     assert.match(wrongApiRepository.stderr, /github_repository_not_allowed/);
-    assert.equal(fixture.requests.length, 1);
+    assert.equal(fixture.requests.length, 3);
   } finally {
     await fixture.close();
     fs.rmSync(root, {recursive: true, force: true});
