@@ -25,7 +25,7 @@ function runProcess(file, args, {env, input = ""} = {}) {
   });
 }
 
-async function createRefreshFixture() {
+async function createRefreshFixture({status = 200, responseBody} = {}) {
   const requests = [];
   const server = http.createServer((request, response) => {
     const chunks = [];
@@ -36,8 +36,8 @@ async function createRefreshFixture() {
         method: request.method,
         shutdownToken: request.headers["x-shutdown-token"],
       });
-      const body = JSON.stringify({accessToken: "refreshed-token", expiresAt: "2099-01-01T00:00:00Z"});
-      response.writeHead(200, {"content-type": "application/json", "content-length": Buffer.byteLength(body)});
+      const body = responseBody || JSON.stringify({accessToken: "refreshed-token", expiresAt: "2099-01-01T00:00:00Z"});
+      response.writeHead(status, {"content-type": "application/json", "content-length": Buffer.byteLength(body)});
       response.end(body);
     });
   });
@@ -53,6 +53,9 @@ async function createRefreshFixture() {
 function baseEnv(extra = {}) {
   return {
     ...process.env,
+    GH_TOKEN: "",
+    GITHUB_AUTOMATION_TOKEN: "",
+    GITHUB_AUTOMATION_TOKEN_EXPIRES_AT: "",
     GITHUB_REPO_OWNER: "Owner",
     GITHUB_REPO_NAME: "Repo",
     GITHUB_AUTOMATION_USERNAME: "x-access-token",
@@ -193,6 +196,139 @@ test("mapache-gh executes directly, refreshes its token, and rejects other repos
     assert.equal(wrongApiRepository.code, 1);
     assert.match(wrongApiRepository.stderr, /github_repository_not_allowed/);
     assert.equal(fixture.requests.length, 3);
+  } finally {
+    await fixture.close();
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("mapache-gh uses an existing GitHub CLI credential for Mapache issue search and creation when refresh is unconfigured", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-gh-cli-auth-"));
+  const fakeBin = path.join(root, "bin");
+  const capturePath = path.join(root, "capture.json");
+  fs.mkdirSync(fakeBin);
+  const fakeGh = path.join(fakeBin, "gh");
+  fs.writeFileSync(fakeGh, [
+    "#!/usr/bin/env node",
+    "const fs = require('node:fs');",
+    "const args = process.argv.slice(2);",
+    "if (args[0] === 'auth' && args[1] === 'token') {",
+    "  if (!process.env.MAPACHE_GH_TEST_CLI_TOKEN) process.exit(1);",
+    "  process.stdout.write(process.env.MAPACHE_GH_TEST_CLI_TOKEN);",
+    "  process.exit(0);",
+    "}",
+    "fs.writeFileSync(process.env.MAPACHE_GH_CAPTURE, JSON.stringify({args, token: process.env.GH_TOKEN}));",
+  ].join("\n"));
+  fs.chmodSync(fakeGh, 0o755);
+
+  try {
+    const accepted = await runProcess(GH_SCRIPT, ["--repo", "rawkintrevo/mapache", "issue", "list"], {
+      env: baseEnv({
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        MAPACHE_GH_TEST_CLI_TOKEN: "selected-cli-token",
+        refreshUrl: "",
+      }),
+    });
+    assert.equal(accepted.code, 0);
+    assert.equal(accepted.stdout, "");
+    assert.equal(accepted.stderr, "");
+    assert.deepEqual(JSON.parse(fs.readFileSync(capturePath, "utf8")), {
+      args: ["--repo", "rawkintrevo/mapache", "issue", "list"],
+      token: "selected-cli-token",
+    });
+
+    const created = await runProcess(GH_SCRIPT, ["--repo", "rawkintrevo/mapache", "issue", "create", "--title", "Test"], {
+      env: baseEnv({
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        MAPACHE_GH_TEST_CLI_TOKEN: "selected-cli-token",
+        refreshUrl: "",
+      }),
+    });
+    assert.equal(created.code, 0);
+    assert.deepEqual(JSON.parse(fs.readFileSync(capturePath, "utf8")), {
+      args: ["--repo", "rawkintrevo/mapache", "issue", "create", "--title", "Test"],
+      token: "selected-cli-token",
+    });
+    assert.equal(accepted.stdout.includes("selected-cli-token"), false);
+    assert.equal(accepted.stderr.includes("selected-cli-token"), false);
+    assert.equal(created.stdout.includes("selected-cli-token"), false);
+    assert.equal(created.stderr.includes("selected-cli-token"), false);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("mapache-gh gives an actionable browser fallback when neither token path is configured", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-gh-no-auth-"));
+  const fakeBin = path.join(root, "bin");
+  const capturePath = path.join(root, "capture.json");
+  fs.mkdirSync(fakeBin);
+  const fakeGh = path.join(fakeBin, "gh");
+  fs.writeFileSync(fakeGh, [
+    "#!/usr/bin/env node",
+    "const fs = require('node:fs');",
+    "const args = process.argv.slice(2);",
+    "if (args[0] === 'auth' && args[1] === 'token') process.exit(1);",
+    "fs.writeFileSync(process.env.MAPACHE_GH_CAPTURE, JSON.stringify({args, token: process.env.GH_TOKEN}));",
+  ].join("\n"));
+  fs.chmodSync(fakeGh, 0o755);
+
+  try {
+    const result = await runProcess(GH_SCRIPT, ["--repo", "rawkintrevo/mapache", "issue", "create"], {
+      env: baseEnv({
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        refreshUrl: "",
+      }),
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /github_cli_auth_unavailable/);
+    assert.match(result.stderr, /Authentication Center/);
+    assert.match(result.stderr, /https:\/\/github\.com\/rawkintrevo\/mapache\/issues\/new\/choose/);
+    assert.equal(fs.existsSync(capturePath), false);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("mapache-gh does not fall back to CLI auth after a configured broker rejects renewal", async () => {
+  const fixture = await createRefreshFixture({
+    status: 403,
+    responseBody: JSON.stringify({error: "github_installation_access_denied"}),
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-gh-broker-error-"));
+  const fakeBin = path.join(root, "bin");
+  const capturePath = path.join(root, "capture.json");
+  fs.mkdirSync(fakeBin);
+  const fakeGh = path.join(fakeBin, "gh");
+  fs.writeFileSync(fakeGh, [
+    "#!/usr/bin/env node",
+    "const fs = require('node:fs');",
+    "const args = process.argv.slice(2);",
+    "if (args[0] === 'auth' && args[1] === 'token') {",
+    "  process.stdout.write(process.env.MAPACHE_GH_TEST_CLI_TOKEN || '');",
+    "  process.exit(process.env.MAPACHE_GH_TEST_CLI_TOKEN ? 0 : 1);",
+    "}",
+    "fs.writeFileSync(process.env.MAPACHE_GH_CAPTURE, JSON.stringify({args, token: process.env.GH_TOKEN}));",
+  ].join("\n"));
+  fs.chmodSync(fakeGh, 0o755);
+
+  try {
+    const result = await runProcess(GH_SCRIPT, ["--repo", "rawkintrevo/mapache", "issue", "list"], {
+      env: baseEnv({
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        MAPACHE_GH_CAPTURE: capturePath,
+        MAPACHE_GH_TEST_CLI_TOKEN: "selected-cli-token",
+        refreshUrl: fixture.url,
+      }),
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /github_token_refresh_failed:403:github_installation_access_denied/);
+    assert.equal(result.stderr.includes("selected-cli-token"), false);
+    assert.equal(fs.existsSync(capturePath), false);
+    assert.equal(fixture.requests.length, 1);
   } finally {
     await fixture.close();
     fs.rmSync(root, {recursive: true, force: true});

@@ -311,11 +311,15 @@ and branch protection must never be bypassed. This policy is recorded in
 
 The same skill documents issue creation and manual branch/push/PR operations
 when exit automation is unavailable or immediate publication is requested.
-GitHub CLI calls can map `GITHUB_AUTOMATION_TOKEN` to `GH_TOKEN`;
-HTTPS Git can use temporary askpass or invocation-local `gh auth git-credential`,
-without persisting the token. Manual PR creation is verified immediately.
-An explicitly chosen separate worktree does not disable exit automation in the
-original workspace.
+Authenticated GitHub CLI operations use `mapache-gh`: connected sessions use the
+renewable GitHub App token provider, and an unconfigured provider falls back to
+the session's already-selected or configured GitHub CLI credential for that
+invocation. Broker authorization failures do not switch credential paths; when
+no credential exists, the helper gives a browser issue-creation fallback.
+HTTPS Git uses the repository-scoped `mapache-git-credential` helper without
+persisting tokens. Manual PR creation is verified immediately. An explicitly
+chosen separate worktree does not disable exit automation in the original
+workspace.
 
 The source is packaged in the runner image and selected by
 `session-runner/lib/workspaceSkillCatalog.js`. Current materialization writes
