@@ -187,7 +187,7 @@ sockets, sessions, or API clients; the later automation subscription layer
 owns event delivery. Changes to this reducer require the same upstream build
 and a rebuilt `pi-chrome` revision.
 
-Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces. Both the Git credential helper and `/usr/local/bin/mapache-gh` are shipped with Node shebangs, so the image's direct command contract works without a per-command `node` prefix. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
+Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces. The Git credential helper ships with a Node shebang. `/usr/local/bin/mapache-gh` is only a compatibility shell script that executes native `gh` unchanged; new agent guidance uses `gh` directly. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
 
 The runner's automation execution service starts only after private workspace
 materialization and runtime admission. It validates the owner/workspace/session
@@ -692,10 +692,9 @@ Only localhost upstreams are accepted. In proxy mode, `/preview/*` forwards HTTP
 
 On startup, GitHub-backed workspaces select the shared `github` profile containing `mapache-github-issue`, the default workflow skill for actionable implementation requests. It reuses a supplied issue or creates one after duplicate search and clarification, confirms the base is current, creates or uses the repository's collision-free task branch for interactive work, implements and verifies the scoped change, and ends with a local commit. Only explicitly enabled automation runtimes preserve a runner-created `mapache/*` branch for runner exit publication. An explicit `hotfix` or `directly on main` instruction instead authorizes a tested commit and push directly to `main` without automatic issue or PR creation. Blank workspaces do not select this profile. The runner copies selected catalog files into the active harness's native workspace path only when a workspace-local file is missing.
 
-The `mapache-gh` authenticated wrapper normally scopes commands to the current
-GitHub workspace repository. It also allows `rawkintrevo/mapache` as a shared
-issue destination, so an agent can search and file Mapache product reports from
-any connected GitHub workspace. Other repository targets remain rejected.
+Agents use native `gh` with explicit repository arguments. Mapache product
+reports target `rawkintrevo/mapache`, including from other workspaces. Access is
+determined by GitHub and the configured CLI credential, with no runner allowlist.
 
 On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
 
@@ -841,7 +840,14 @@ without copying credentials into the shared worktree.
 
 GitHub CLI auth is app-managed rather than archive-managed. Users save a `github-cli` token in the Authentication Center and select it for a Pi session. The runner materializes that selected token to `$HOME/.config/gh/hosts.yml` with `0600` permissions, and removes that file when no GitHub CLI token is selected for the session. The `$HOME` archive excludes `.config/gh/hosts.yml`, so a manual `gh auth login` inside the terminal is not the durable credential source. This keeps GitHub CLI credentials scoped through the same saved-entry and per-session selection UI as other agent auth, avoids silently persisting terminal-entered tokens in workspace home archives, and lets users rotate or delete the saved token centrally. GitHub App workspace clone, push, and automatic PR flows still use short-lived installation tokens supplied by the backend and do not depend on the user's `gh` token.
 
-`mapache-gh` uses the session's current GitHub App token provider when available. If and only if the provider returns `github_token_refresh_unconfigured`, the wrapper reads the effective `github.com` token through `gh auth token` and passes it as invocation-scoped `GH_TOKEN`; this supports the selected Authentication Center credential and an already-configured CLI login without exposing the token to the Agent. A configured broker's expiry, revocation, permission, or repository-access errors are returned directly and never trigger a CLI credential switch. GitHub CLI failures are also returned without retrying through another credential. If neither path is configured, the wrapper reports `github_cli_auth_unavailable` with an Authentication Center action and, for Mapache issue commands, the browser issue-creation URL. The wrapper remains scoped to the selected workspace repository plus the explicitly allowed `rawkintrevo/mapache` issue operations.
+Manual issue and PR operations use ordinary `gh` and its native authentication
+configuration. The legacy `mapache-gh` name only runs `exec gh "$@"` for existing
+workspace instructions: no argument parsing, repository checks, broker calls,
+token extraction/injection, retries, or custom authentication errors. Native
+`gh` preserves its arguments, environment, I/O, exit status, and signal behavior.
+A selected GitHub CLI credential is required when no other native CLI login is
+configured; GitHub App workspace access alone does not authenticate manual `gh`.
+Internal Git automation and `mapache-git-credential` retain App token renewal.
 
 This behavior ships in the `pi-chrome` runner image. Rebuild and publish that image, then create a new Cloud Run revision or restart/recreate sessions to receive the wrapper change. No Functions deploy is needed. Seeded skill copies are written only when missing, so existing workspace copies require an explicit refresh before they receive the updated guidance; an image update alone does not replace them.
 
@@ -962,8 +968,8 @@ Usage reads depend on collection group indexes in `firestore.indexes.json`. The 
 
 GitHub source reconstruction and internal automation still use protected runner
 services and short-lived installation tokens. The in-memory token provider renews
-through the Functions broker, and the image-owned `mapache-gh` and
-`mapache-git-credential` commands scope credentials to the selected repository;
+through the Functions broker, and the image-owned `mapache-git-credential`
+command scopes Git credentials to the selected repository;
 the runner no longer exposes
 manual `/git/*` control routes. Live Git browsing and edits belong to the
 upstream Agent application. Likewise, there are no runner skill, subagent,

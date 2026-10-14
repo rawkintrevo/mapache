@@ -214,7 +214,7 @@ The enforcement point should live in the backend. The frontend can show a better
 
 ## Git Controls UI
 
-GitHub-backed live work now exposes repository browsing and edits through the upstream Agent application. The full-width Mapache shell has no left drawer and does not duplicate a Git manager or session controls. Connected GitHub App repositories push and create PRs through the in-memory runner token provider and its executable `mapache-git-credential`/`mapache-gh` wrappers. After clone or private `.git` archive restore, startup idempotently installs the repository-local credential helper and sets `credential.useHttpPath=true`; existing custom helpers remain intact, while the wrapper still rejects repositories outside the connected owner/repository. Public URL workspaces retain anonymous read behavior and user-provided push credentials.
+GitHub-backed live work now exposes repository browsing and edits through the upstream Agent application. The full-width Mapache shell has no left drawer and does not duplicate a Git manager or session controls. Connected GitHub App repositories push and create automatic PRs through the in-memory runner token provider and its executable `mapache-git-credential` helper. Manual issue and PR operations use native `gh` authentication. After clone or private `.git` archive restore, startup idempotently installs the repository-local credential helper and sets `credential.useHttpPath=true`; existing custom helpers remain intact, while the Git credential helper still rejects repositories outside the connected owner/repository. Public URL workspaces retain anonymous read behavior and user-provided push credentials.
 
 Interactive connected GitHub workspaces restore the requested branch/commit on first startup and preserve the restored user branch on restart. They do not invoke the legacy automatic branch/commit/PR lifecycle, so modified, staged, and untracked files remain under the user's Git control and shutdown does not implicitly stage, commit, push, or open a PR. Explicit automation runtimes retain the automatic lifecycle: after repository/cache restore, the runner uses the GitHub App installation token to fetch the selected base branch, reset the worktree to that remote branch, and create a unique `mapache/<session-name-kebab>-<session-id>` branch. When that automation runtime exits, the runner stages any remaining changes and commits them, or reuses commits already made on the automation branch, then pushes the branch and opens a pull request. If it exits without file changes or commits ahead of the base branch, no commit or PR is created. When Cloud Run rejects one of these protected runner requests before it reaches the container, such as a `429` no-instance response, the backend surfaces `runner_busy_or_unavailable` instead of the generic `runner_request_failed` code so the UI can distinguish runner capacity from Git/auth errors. Shell sessions remain manual so users can inspect or intervene without triggering automatic PR creation.
 
@@ -311,11 +311,11 @@ and branch protection must never be bypassed. This policy is recorded in
 
 The same skill documents issue creation and manual branch/push/PR operations
 when exit automation is unavailable or immediate publication is requested.
-Authenticated GitHub CLI operations use `mapache-gh`: connected sessions use the
-renewable GitHub App token provider, and an unconfigured provider falls back to
-the session's already-selected or configured GitHub CLI credential for that
-invocation. Broker authorization failures do not switch credential paths; when
-no credential exists, the helper gives a browser issue-creation fallback.
+Manual GitHub CLI operations use ordinary `gh` with the session's selected
+Authentication Center credential or existing CLI login. GitHub enforces that
+credential's permissions; there is no Mapache CLI repository allowlist or token
+injection. GitHub App workspace access alone does not authenticate `gh`.
+The legacy `mapache-gh` command simply executes `gh` unchanged for older skills.
 HTTPS Git uses the repository-scoped `mapache-git-credential` helper without
 persisting tokens. Manual PR creation is verified immediately. An explicitly
 chosen separate worktree does not disable exit automation in the original
