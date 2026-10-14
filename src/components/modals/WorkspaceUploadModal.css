@@ -1,0 +1,20 @@
+.workspace-upload-panel {
+  align-content: start;
+  align-self: center;
+  gap: 16px;
+}
+
+.workspace-upload-panel p {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.workspace-upload-panel input[type="file"] {
+  min-width: 0;
+  width: 100%;
+}
+
+.workspace-upload-panel progress {
+  width: 100%;
+}

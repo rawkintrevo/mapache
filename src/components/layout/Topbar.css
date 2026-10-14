@@ -1,5 +1,6 @@
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -20,7 +21,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  flex: 1 0 300px;
   justify-content: center;
   min-width: 0;
 }
@@ -69,6 +70,8 @@ h1 {
 
 .topbar-actions {
   display: flex;
+  flex-shrink: 0;
+  margin-left: auto;
   align-items: center;
   gap: 10px;
   min-width: 0;

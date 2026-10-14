@@ -12,6 +12,7 @@ import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
 const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: page}) => ({default: page})));
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
 const ProfilePage = lazy(() => import("../profile/ProfilePage.jsx").then(({ProfilePage: page}) => ({default: page})));
+const WorkspaceUploadModal = lazy(() => import("../modals/WorkspaceUploadModal.jsx").then(({WorkspaceUploadModal: modal}) => ({default: modal})));
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
 const AutomationManagementPage = lazy(() => import("../automations/AutomationManagementPage.jsx").then(({AutomationManagementPage: page}) => ({default: page})));
 const InstancesPage = lazy(() => import("../instances/InstancesPage.jsx").then(({InstancesPage: page}) => ({default: page})));
@@ -31,6 +32,7 @@ export function AppShell(props) {
     isMarkedRuntimeSession(selectedSession) ? "agent" : "terminal"
   ));
   const [logsOpen, setLogsOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const selectedSessionIsManaged = isMarkedRuntimeSession(selectedSession);
   const selectedWorkspaceIsSsh = selectedWorkspace?.source?.type === "ssh";
   const hasRunnerUrl = Boolean(selectedSession?.serviceUrl);
@@ -51,6 +53,7 @@ export function AppShell(props) {
   useEffect(() => {
     setActiveCanvas(selectedSessionIsManaged ? "agent" : "terminal");
     setLogsOpen(false);
+    setUploadOpen(false);
   }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
@@ -84,12 +87,16 @@ export function AppShell(props) {
         onShowAutomations={app.showAutomations}
         onShowInstances={app.showInstances}
         onShowLogs={() => setLogsOpen(true)}
+        onShowUpload={() => setUploadOpen(true)}
         onShowProfile={modals.showProfile}
         onSignOut={app.signOut}
         onSetSessionLongRunning={sessions.setSessionLongRunning}
         onToggleWorkspace={workspaces.toggleWorkspace}
         resourceMetrics={state.activePage === "workspace" && selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />
+      {uploadOpen && selectedWorkspace ? <Suspense fallback={<LazySurfaceFallback label="Loading upload..." />}>
+        <WorkspaceUploadModal key={selectedWorkspace.id} workspace={selectedWorkspace} api={state.api} onClose={() => setUploadOpen(false)} />
+      </Suspense> : null}
       <GlobalActionIndicator busy={busy} message={getPendingOperationMessage(state.pendingOperations)} />
       <main>
         {state.activePage === "admin" ? (

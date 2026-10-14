@@ -380,3 +380,10 @@ expiry with `Cache-Control: no-store`.
 - [Session runner architecture](./session-runner-architecture.md)
 - [Runner harnesses](./runner-harnesses.md)
 - [Deployment](./deployment.md)
+
+## Local file uploads
+
+The navbar Upload file action sends local files directly to Cloud Storage using
+resumable transfers. Main and automation sessions mount their workspace inputs
+read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
+ownership, lifecycle, restart requirements, and verification.

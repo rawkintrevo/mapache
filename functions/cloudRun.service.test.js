@@ -330,7 +330,7 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
   assert.equal(markedService.template.volumes[0].gcs.readOnly, true);
-  assert.deepStrictEqual(markedService.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}]);
+  assert.deepStrictEqual(markedService.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}, {name: "workspace-uploads", mountPath: "/uploads"}]);
 
   const sharedService = await buildCloudRunService({
     id: "workspace-1",
@@ -357,6 +357,7 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.deepStrictEqual(sharedService.template.containers[0].volumeMounts, [
     {name: "workspace", mountPath: "/workspace"},
     {name: "automation-outputs", mountPath: "/automations"},
+    {name: "workspace-uploads", mountPath: "/uploads"},
   ]);
   const sharedServiceEnv = envMap(sharedService.template.containers[0].env);
   assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
@@ -368,6 +369,8 @@ assert.deepStrictEqual(terminalCommandEnv({
   const automationWorkspace = {id: "workspace-1", bucket: "existing-bucket", storagePrefix: "workspaces/u/w", agentUiVersion: "pi-web-ui-v1"};
   const automationSession = {
     automationStorage: automationStorageForWorkspace(automationWorkspace),
+    workspaceStorageBucket: automationWorkspace.bucket,
+    workspaceStoragePrefix: automationWorkspace.storagePrefix,
     ownerUid: "uid-1",
     workspaceId: "workspace-1",
     runtimeKind: "automation",
@@ -434,7 +437,7 @@ assert.deepStrictEqual(terminalCommandEnv({
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
   }, {}, {storage: storageFixture().storage});
   assert.strictEqual(markedPatch.template.containers[0].resources.cpuIdle, false);
-  assert.deepStrictEqual(markedPatch.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}]);
+  assert.deepStrictEqual(markedPatch.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}, {name: "workspace-uploads", mountPath: "/uploads"}]);
 
   let operationPolls = 0;
   const delayedUpdates = [];

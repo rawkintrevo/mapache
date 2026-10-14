@@ -1,0 +1,19 @@
+{
+  "id": "workspace.uploads",
+  "title": "Local uploads appear in the workspace /uploads mount",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.uploads",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-uploads-{{timestamp}}", "workspaceEnv": "QA_CASE=workspace-uploads"}},
+    {"assert": "upload-local-file", "instructions": "Use the Upload file navbar button. Generate a deterministic 20 MiB local fixture named qa-upload.bin under artifacts/qa/workspace.uploads and select it with Chrome DevTools DOM.setFileInputFiles. Verify POST uploads is 201, direct GCS PUTs include multiple chunks and complete, and the dialog shows Uploaded to /uploads/qa-upload.bin. Capture no session URLs or tokens."},
+    {"capture": "screenshot", "fileName": "upload-complete.png"},
+    {"assert": "upload-mobile-entry", "instructions": "Close the dialog, set the viewport to 390x844, and open More workspace actions. Verify Upload file opens the same dialog. Restore the desktop viewport."},
+    {"capture": "screenshot", "fileName": "upload-mobile.png"},
+    {"assert": "mounted-upload", "instructions": "Start this disposable workspace through Play. Using its authenticated shell, verify /uploads/qa-upload.bin has the same size and SHA-256 as the local fixture and that /uploads is read-only. Pause/start and repeat the checksum check. Never execute checks in another workspace."},
+    {"assert": "upload-validation", "instructions": "Verify an oversized local File is rejected without an API call; in focused tests verify duplicate names, path traversal, ownership, interrupted transfer retries, and cancel behavior. Keep intentional error checks separate from the clean success-flow console evidence."},
+    {"useScript": "scripts/delete-selected-workspace.json"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

@@ -1,5 +1,5 @@
 import "./Topbar.css";
-import {Blocks, Bot, Clock3, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Variable} from "lucide-react";
+import {Blocks, Bot, Clock3, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Upload, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
@@ -29,6 +29,7 @@ export function Topbar({
   onShowAutomations,
   onShowInstances,
   onShowLogs,
+  onShowUpload,
   onShowProfile,
   onSignOut,
   onSetSessionLongRunning,
@@ -174,6 +175,10 @@ export function Topbar({
             <span aria-hidden="true" className="topbar-action-divider" />
           </>
         ) : null}
+        <Button aria-label="Upload file" icon title="Upload file" tooltip="Upload file" variant="secondary"
+          disabled={!selectedWorkspace || workspaceUnsupported} onClick={onShowUpload}>
+          <Upload aria-hidden="true" />
+        </Button>
         <Button
           aria-label="Automations"
           aria-pressed={state.activePage === "automations" || state.activePage === "automation-history"}
@@ -242,6 +247,7 @@ export function Topbar({
           onSelectCanvas={onSelectCanvas}
           onShowAutomations={onShowAutomations}
           onShowLogs={onShowLogs}
+          onShowUpload={workspaceUnsupported ? null : onShowUpload}
           showWorkspaceTools={showWorkspaceTools}
           managePiAuthLabel={managePiAuthLabel}
           onDeleteWorkspace={onDeleteWorkspace}
