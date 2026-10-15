@@ -116,6 +116,9 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["DELETE", "workspace", jsonResult(({handlers, route, user}) => handlers.deleteWorkspace(user.uid, route.workspaceId))],
     ["GET", "workspaceMcp", jsonResult(({handlers, route, user}) => handlers.getWorkspaceMcpConfig(user.uid, route.workspaceId))],
     ["PUT", "workspaceMcp", jsonResult(({handlers, req, route, user}) => handlers.saveWorkspaceMcpConfig(user.uid, route.workspaceId, req.body || {}))],
+    ["GET", "workspaceRuntimePolicy", jsonResult(({handlers, route, user}) => handlers.getWorkspaceRuntimePolicy(user.uid, route.workspaceId))],
+    ["PATCH", "workspaceRuntimePolicy", namedJsonResult("workspace", ({handlers, req, route, user}) =>
+      handlers.updateWorkspaceRuntimePolicy(user.uid, route.workspaceId, req.body || {}))],
   ]),
   sessions: Object.freeze([
     ["GET", "sessions", namedJsonResult("sessions", ({handlers, route, user}) => handlers.listSessions(user.uid, route.workspaceId))],

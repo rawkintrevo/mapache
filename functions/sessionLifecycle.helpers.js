@@ -21,7 +21,7 @@ const TRANSITIONS = Object.freeze({
   provision_failed: new Set(["provisioning", "restarting", "stopping", "deleting"]),
   update_failed: new Set(["running", "provisioning", "restarting", "resizing", "stopping", "deleting", "needs_service"]),
   stop_failed: new Set(["stopping", "deleting", "stopped"]),
-  delete_failed: new Set(["deleting", "stopped"]),
+  delete_failed: new Set(["deleting", "stopping", "stopped"]),
 });
 
 function normalizeSessionState(status) {

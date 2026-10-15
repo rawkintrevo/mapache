@@ -1,0 +1,25 @@
+{
+  "id": "script.saveDisabledRuntimeSchedule",
+  "title": "Save a schedule while keeping the runtime in idle mode",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Idle timeout"},
+    {"type": "select", "label": "Runtime policy mode", "value": "scheduled"},
+    {"type": "click", "role": "button", "name": "Mon"},
+    {"type": "click", "role": "button", "name": "Tue"},
+    {"type": "click", "role": "button", "name": "Wed"},
+    {"type": "click", "role": "button", "name": "Thu"},
+    {"type": "click", "role": "button", "name": "Fri"},
+    {"type": "fill", "label": "Schedule start time", "value": "09:00"},
+    {"type": "fill", "label": "Schedule end time", "value": "17:00"},
+    {"type": "fill", "label": "Schedule time zone", "value": "UTC"},
+    {"type": "select", "label": "Runtime policy mode", "value": "idle"},
+    {"type": "click", "role": "button", "name": "Save policy"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/runtime-policy", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 15000},
+    {"type": "click", "role": "button", "name": "Idle timeout"},
+    {"type": "waitForSnapshotText", "text": "Mon–Fri · 09:00–17:00 UTC", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "The workspace policy editor saves the weekday schedule through PATCH /runtime-policy",
+    "The saved schedule remains disabled in Idle timeout mode"
+  ]
+}

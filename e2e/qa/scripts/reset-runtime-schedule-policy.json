@@ -1,0 +1,11 @@
+{
+  "id": "script.resetRuntimeSchedulePolicy",
+  "title": "Clear the saved runtime schedule while leaving idle mode enabled",
+  "actions": [
+    {"type": "apiRequest", "method": "PATCH", "path": "/api/workspaces/{{selectedWorkspaceId}}/runtime-policy", "body": {"mode": "idle", "schedule": null}},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/runtime-policy", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 15000}
+  ],
+  "successSignals": [
+    "The runtime policy is reset to idle with no saved schedule"
+  ]
+}

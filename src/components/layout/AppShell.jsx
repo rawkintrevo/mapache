@@ -90,7 +90,7 @@ export function AppShell(props) {
         onShowUpload={() => setUploadOpen(true)}
         onShowProfile={modals.showProfile}
         onSignOut={app.signOut}
-        onSetSessionLongRunning={sessions.setSessionLongRunning}
+        onSetRuntimePolicy={sessions.setRuntimePolicy}
         onToggleWorkspace={workspaces.toggleWorkspace}
         resourceMetrics={state.activePage === "workspace" && selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />

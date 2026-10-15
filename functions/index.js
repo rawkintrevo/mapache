@@ -96,6 +96,7 @@ const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
 const {createQaAuthService} = require("./qaAuth.service");
 const {createSessionCreationService} = require("./sessionCreation.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
+const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSchedule.service");
 const {createSessionResizeService} = require("./sessionResize.service");
 const {createSessionLogsService} = require("./sessionLogs.service");
 const {
@@ -167,8 +168,9 @@ const {
   requireSession,
   resizeSession: performSessionResize,
   restartSession,
-  setSessionLongRunning,
   stopSession,
+  restartSessionForSchedule,
+  stopSessionForSchedule,
 } = sessionLifecycleService;
 const {enqueueResize: resizeSession, resizeQueuedSession} = createSessionResizeService({
   admin, db, requireSession, resizeSession: performSessionResize, normalizeRequestedSessionResources,
@@ -242,6 +244,22 @@ const sessionCreationService = createSessionCreationService({
   sessionCollection,
 });
 const {createSession} = sessionCreationService;
+const workspaceRuntimeScheduleService = createWorkspaceRuntimeScheduleService({
+  admin,
+  createSession,
+  db,
+  requireSession,
+  restartSession,
+  restartSessionForSchedule,
+  sessionCollection,
+  stopSession,
+  stopSessionForSchedule,
+});
+const {
+  getWorkspaceRuntimePolicy,
+  setSessionLongRunning: saveSessionLongRunningPolicy,
+  updatePolicy: updateWorkspaceRuntimePolicy,
+} = workspaceRuntimeScheduleService;
 const runnerImageFreshnessService = createRunnerImageFreshnessService();
 const {getCurrentRunnerImageDigest} = runnerImageFreshnessService;
 const getCurrentRunnerImageDigestForSession = (session) =>
@@ -477,8 +495,10 @@ const API_HANDLERS = createApiHandlers({
     renameSession,
     resizeSession,
     restartSession,
-    setSessionLongRunning,
+    setSessionLongRunning: saveSessionLongRunningPolicy,
     stopSession,
+    getWorkspaceRuntimePolicy,
+    updateWorkspaceRuntimePolicy,
     deleteSession,
     createSessionAccessUrls,
     listSessionLogs: sessionLogsService.listSessionLogs,
@@ -690,6 +710,12 @@ exports.dispatchAutomationSchedules = onSchedule("every 1 minutes", async (event
   logger.info("automation schedule tick complete", result);
   return result;
 });
+
+exports.reconcileWorkspaceRuntimeSchedules = onSchedule({
+  schedule: "every 1 minutes",
+  timeoutSeconds: 540,
+  maxInstances: 1,
+}, async (event) => workspaceRuntimeScheduleService.runTick(event));
 
 exports.reconcileAutomationRuns = onSchedule({
   schedule: "every 1 minutes",

@@ -1000,6 +1000,18 @@ Idle is defined by the latest runtime activity timestamp, not browser connection
 
 Cloud Run create, resize, and restart templates keep one instance allocated while the session lifecycle is active. Managed pi-web-ui services additionally use instance-based CPU allocation so explicitly enabled Long-running sessions can continue browser-independent work without an open request. Long-running defaults off; disabling it restores the normal idle policy, while enabling it records a `longRunning` bypass reason. Automatic pause uses the same protected quiesce, final checkpoint, confirmed deletion, and stopped transition as manual Pause, and manual Pause remains available in either state. Historical unmarked services retain the idle reaper and their final best-effort sync/delete behavior, but Functions does not launch replacements for them. Do not change the minimum instance count back to zero without adding durable PTY recovery and renewable startup credentials for private GitHub workspaces.
 
+The workspace runtime policy also supports recurring availability hours through
+the Functions-owned `reconcileWorkspaceRuntimeSchedules` minute trigger. It uses
+the normal provisioning, idle-reaper policy, and usage-accounting paths; no
+runner image change is required. At the configured closing boundary, Functions
+skips the runner `/shutdown`, quiesce, and final-checkpoint work, then requests
+Cloud Run service deletion directly. Active agent turns and shell jobs are
+interrupted without a grace period. After deletion is confirmed, the session is
+marked stopped and an interrupted-work warning is recorded; live process state
+is not resumed after the next scheduled startup. See
+[Session lifecycle](./guides/session-lifecycle.md) for the policy modes,
+manual-pause rule, retry behavior, and daylight-saving boundary resolution.
+
 ## Existing Sessions vs New Sessions
 
 Pushing a new `:latest` image affects new pulls, but existing Cloud Run services need a new revision to pick it up. For an existing session service, update the service image to create a fresh revision:

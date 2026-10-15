@@ -1,0 +1,35 @@
+{
+  "id": "workspace.runtime-schedule-policy",
+  "title": "Configure and save a disabled recurring runtime schedule",
+  "description": "Create a disposable marked workspace, save schedule configuration in Idle mode, then reset and delete the workspace without starting a runner.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.runtime-schedule-policy",
+  "parameters": {
+    "qaWorkspaceName": "qa-runtime-schedule-{{timestamp}}"
+  },
+  "requires": {
+    "chromeDevtools": true,
+    "devServer": "npm run dev",
+    "workspace": "A disposable workspace is created by this case; new workspaces are server-marked with agentUiVersion=pi-web-ui-v1",
+    "cleanup": "The case resets the schedule and deletes the disposable workspace; it does not create or start a Cloud Run session"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "{{qaWorkspaceName}}", "workspaceEnv": "QA_CASE=runtime-schedule-policy"}},
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 201},
+    {"assert": "snapshot-text", "expected": "Workspace is off"},
+    {"assert": "workspace-marker", "expected": "The selected record in the authenticated GET /api/workspaces response has agentUiVersion exactly pi-web-ui-v1"},
+    {"useScript": "scripts/save-disabled-runtime-schedule.json"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces/", "method": "PATCH", "expectedStatus": 200},
+    {"assert": "snapshot-text", "expected": "Mon–Fri · 09:00–17:00 UTC"},
+    {"capture": "screenshot", "fileName": "runtime-schedule-policy.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/reset-runtime-schedule-policy.json"},
+    {"useScript": "scripts/delete-selected-workspace.json"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces/", "method": "DELETE", "expectedStatus": 200}
+  ],
+  "cleanup": [
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaLogin", "mapache.qaSecret"]}
+  ]
+}

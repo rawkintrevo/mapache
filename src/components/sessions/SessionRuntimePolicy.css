@@ -1,0 +1,191 @@
+.session-runtime-policy {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.session-runtime-policy__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-panel);
+  color: var(--color-text-main);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.session-runtime-policy__trigger:hover {
+  border-color: var(--color-accent);
+}
+
+.session-runtime-policy__trigger:focus-visible,
+.session-runtime-policy__day:focus-visible,
+.session-runtime-policy__actions button:focus-visible {
+  outline: 3px solid rgba(20, 125, 100, 0.28);
+  outline-offset: 2px;
+}
+
+.session-runtime-policy__status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.session-runtime-policy__status--open {
+  background: #16865d;
+}
+
+.session-runtime-policy__status--manually_paused {
+  background: #cb7b1a;
+}
+
+.session-runtime-policy__status--closed {
+  background: var(--color-text-muted);
+}
+
+.session-runtime-policy__popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(75vh, 620px);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-panel);
+  box-shadow: 0 12px 32px rgba(16, 24, 32, 0.18);
+  color: var(--color-text-main);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.session-runtime-policy__field {
+  display: grid;
+  gap: 5px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.session-runtime-policy__field input,
+.session-runtime-policy__field select {
+  min-width: 0;
+  height: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-main);
+  font: inherit;
+  font-size: 12px;
+}
+
+.session-runtime-policy__schedule {
+  display: grid;
+  gap: 11px;
+  margin-top: 12px;
+}
+
+.session-runtime-policy__schedule fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.session-runtime-policy__schedule legend {
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.session-runtime-policy__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.session-runtime-policy__day {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 1px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-main);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+
+.session-runtime-policy__day[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-panel));
+  color: var(--color-text-main);
+  font-weight: 700;
+}
+
+.session-runtime-policy__times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.session-runtime-policy__summary,
+.session-runtime-policy__notice,
+.session-runtime-policy__error {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.session-runtime-policy__notice {
+  padding: 9px;
+  border-radius: 7px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-main);
+}
+
+.session-runtime-policy__error {
+  color: var(--color-danger, #a8342b);
+  font-weight: 600;
+}
+
+.session-runtime-policy__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.session-runtime-policy__actions button {
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.session-runtime-policy__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 620px) {
+  .session-runtime-policy__popover {
+    right: auto;
+    left: 0;
+  }
+}

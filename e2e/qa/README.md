@@ -47,13 +47,16 @@ Common action types inside scripts:
 
 Keep manifests deterministic. Do not put secrets in case or script files.
 
-Managed pi-web cases use `cases/pi-web-marked-workspace-setup.json`. Before
-running one, an operator must create a disposable workspace, record its exact
-owner/workspace IDs, mark only that workspace with the server-owned
+Managed pi-web session cases use `cases/pi-web-marked-workspace-setup.json`.
+Before running one, an operator must create a disposable workspace, record its
+exact owner/workspace IDs, mark only that workspace with the server-owned
 `agentUiVersion=pi-web-ui-v1`, and provide the workspace name as the case
 parameter. The browser case does not mark workspaces and does not select by a
-production display name. If the marker, provider, browser, Cloud Run service,
-or named fault harness is unavailable, record the case as blocked.
+production display name. `cases/runtime-schedule-policy.json` instead creates a
+fresh marked workspace, saves the schedule while leaving it disabled, resets
+the policy, and deletes that workspace without starting a runner. If the marker,
+provider, browser, Cloud Run service, or named fault harness is unavailable,
+record the case as blocked.
 
 The failure-recovery harness is available only on a disposable session created
 with `QA_CASE=pi-web-failure-recovery` and
@@ -70,6 +73,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/auth-timezone.json`: Authenticated profile timezone persistence and shell health.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-topbar.json`: Workspace, connection, account, and refresh controls in the top navigation.
+- `cases/runtime-schedule-policy.json`: Saves a weekday/timezone runtime schedule while leaving the workspace in Idle timeout mode; does not start a runner.
 - `cases/global-action-indicator.json`: Busy indicator during global refresh.
 - `cases/profile.json`: Profile and runner usage view.
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.

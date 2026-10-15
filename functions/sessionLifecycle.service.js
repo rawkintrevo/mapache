@@ -43,6 +43,7 @@ const {
   runtimeSessionStateUpdate,
   runtimeStateUpdate,
 } = require("./runtimeReservation.helpers");
+const {getRuntimeScheduleState} = require("./runtimeSchedule.helpers");
 
 function createSessionLifecycleService(dependencies = {}) {
   return {
@@ -56,7 +57,11 @@ function createSessionLifecycleService(dependencies = {}) {
     setSessionLongRunning: (uid, workspaceId, sessionId, payload) => setSessionLongRunning(uid, workspaceId, sessionId, payload, dependencies),
     resizeSession: (uid, workspaceId, sessionId, payload) => resizeSession(uid, workspaceId, sessionId, payload, dependencies),
     restartSession: (uid, workspaceId, sessionId) => restartSession(uid, workspaceId, sessionId, dependencies),
+    restartSessionForSchedule: (uid, workspaceId, sessionId) =>
+      restartSession(uid, workspaceId, sessionId, dependencies, {scheduled: true}),
     stopSession: (uid, workspaceId, sessionId) => stopSession(uid, workspaceId, sessionId, dependencies),
+    stopSessionForSchedule: (uid, workspaceId, sessionId) =>
+      stopSession(uid, workspaceId, sessionId, dependencies, {scheduled: true}),
   };
 }
 
@@ -119,7 +124,7 @@ async function resizeSession(uid, workspaceId, sessionId, payload, dependencies 
   return toClientDoc(await sessionRef.get());
 }
 
-async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
+async function restartSession(uid, workspaceId, sessionId, dependencies = {}, options = {}) {
   const workspace = await dependencies.requireWorkspace(uid, workspaceId);
   const sessionRef = dependencies.sessionCollection(workspaceId).doc(sessionId);
   const sessionSnap = await sessionRef.get();
@@ -199,6 +204,11 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}) {
   }
 
   await sessionRef.update(restartUpdate);
+  if (!options.scheduled && dependencies.db && typeof dependencies.db.collection === "function") {
+    await dependencies.db.collection("workspaces").doc(workspaceId).update({
+      runtimeScheduleManualPauseWindowKey: dependencies.admin.firestore.FieldValue.delete(),
+    });
+  }
 
   const serviceId = resolveCloudRunServiceId(sessionId, session.serviceId);
   const serviceName = isValidCloudRunServiceId(session.serviceId) && session.serviceName ?
@@ -394,19 +404,31 @@ function assertRuntimeRecreationAllowed(session) {
   if (status === "delete_failed") throw httpError(409, "session_delete_failed");
 }
 
-async function stopSession(uid, workspaceId, sessionId, dependencies = {}) {
-  const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
+async function stopSession(uid, workspaceId, sessionId, dependencies = {}, options = {}) {
+  const {sessionRef, sessionSnap, workspace} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
   assertMainSession(session);
   assertNoActiveResize(session);
+  const reason = options.scheduled ? "scheduled_hours_end" : "manual";
+  if (!options.scheduled && workspace.runtimePolicy?.mode === "scheduled" && workspace.runtimePolicy.schedule) {
+    const scheduleState = getRuntimeScheduleState(workspace.runtimePolicy.schedule, new Date());
+    if (scheduleState.active && dependencies.db && typeof dependencies.db.collection === "function") {
+      await dependencies.db.collection("workspaces").doc(workspaceId).update({
+        runtimeScheduleManualPauseWindowKey: scheduleState.windowKey,
+        runtimeScheduleError: null,
+        updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }
   await sessionRef.update(sessionStatusUpdate(session, "stopping", {
     ...runtimeSessionStateUpdate(session, "stopping"),
+    stopReason: reason,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   }));
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }
-  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason: "manual"});
+  const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason});
   if (!serviceDeleted) throw httpError(502, "session_stop_failed");
   return toClientDoc(await sessionRef.get());
 }
@@ -514,7 +536,7 @@ async function reapIdleSessions(dependencies = {}) {
   const snap = await dependencies.db.collectionGroup("sessions")
       .where("status", "==", "running")
       .get();
-  const now = Date.now();
+  const now = dependencies.now ? new Date(dependencies.now()).getTime() : Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const session = doc.data();
     if (isAutomationRuntime(session)) {
@@ -524,8 +546,20 @@ async function reapIdleSessions(dependencies = {}) {
         sessionId: doc.id,
       });
       if (assignment.active) return {bypassed: true, bypassReason: "automation_active_run"};
-    } else if (isMarkedRuntimeSession(session) && session.longRunning === true) {
-      return {bypassed: true, bypassReason: "long_running"};
+    } else if (isMarkedRuntimeSession(session)) {
+      const workspaceRef = doc.ref?.parent?.parent;
+      const workspaceSnap = workspaceRef && typeof workspaceRef.get === "function" ? await workspaceRef.get() : null;
+      const workspace = workspaceSnap?.exists ? workspaceSnap.data() || {} : {};
+      const mode = workspace.runtimePolicy?.mode;
+      if (session.longRunning === true && (!mode || mode === "keep-running")) {
+        return {bypassed: true, bypassReason: "long_running"};
+      }
+      if (mode === "scheduled" && workspace.runtimePolicy.schedule) {
+        const scheduleState = getRuntimeScheduleState(workspace.runtimePolicy.schedule, new Date(now));
+        if (scheduleState.active && workspace.runtimeScheduleManualPauseWindowKey !== scheduleState.windowKey) {
+          return {bypassed: true, bypassReason: "scheduled_hours"};
+        }
+      }
     }
     if (!isIdleSession(session, now)) return {idle: false};
     logger.info("stopping idle session", {

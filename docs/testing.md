@@ -54,6 +54,7 @@ Candidate flows:
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi provider handoff.
 - Native upstream Goal persistence and explicit paused/resume behavior inside the embedded Agent surface.
 - Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, Long-running persistence and idle-policy behavior, and deterministic failure-recovery assertions.
+- Runtime availability schedule boundaries and daylight-saving resolution, disabled/selected weekdays, manual-pause suppression, idle bypass during open windows, direct Cloud Run deletion without runner grace at close, lifecycle retries, and deletion/capacity fencing are covered by `functions/runtimeSchedule.helpers.test.js`, `functions/workspaceRuntimeSchedule.service.test.js`, `functions/sessionLifecycle.service.test.js`, and `functions/cloudRun.service.test.js`.
 
 Routine browser QA and standard session-creation validation focus on the supported `pi-chrome` runner. Historical runner records may be inspected for cleanup, but retired runner families are not launch targets.
 
@@ -197,7 +198,7 @@ Some sandboxed hosts still cannot launch a standalone local Chrome or Chromium C
 
 Chrome-image QA attaches to the runner-owned headed browser through CDP. It must verify that QA actions are visible in noVNC, that the shared browser and user tabs remain open after the run, and that reports stay under `$MAPACHE_QA_DIR` without cookies, response bodies, credentials, or profile paths. The checked-in `mapache-chrome` skill and `mapache-chrome-status` command are the supported diagnostics; QA must not launch a second Chromium instance.
 
-The initial QA catalog covers signed-in shell and empty states, top-navigation workspace and account controls, profile usage, blank and GitHub workspace creation, workspace Play/Pause lifecycle, auth and MCP dialogs, Pi auth selection, Google connections, embedded Agent/Chrome/Preview surfaces, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
+The initial QA catalog covers signed-in shell and empty states, top-navigation workspace and account controls, profile usage, blank and GitHub workspace creation, workspace Play/Pause lifecycle, runtime schedule policy editing while disabled, auth and MCP dialogs, Pi auth selection, Google connections, embedded Agent/Chrome/Preview surfaces, and a broad blank-workspace smoke case. High-cost or externally mutating cases declare `requires` blocks and should be curated before running.
 
 Guardrails:
 

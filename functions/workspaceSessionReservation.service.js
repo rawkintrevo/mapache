@@ -55,6 +55,11 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
 
     const workspace = workspaceSnap.data() || {};
+    if (workspace.deleted === true || ["deleting", "deleted"].includes(
+        cleanName(workspace.lifecycle || workspace.status).toLowerCase(),
+    )) {
+      throw httpError(409, "workspace_unavailable");
+    }
     assertWorkspaceStorageMigrationAllowed(workspace);
     const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
     const existing = sessions.find((candidate) => candidate.id === sessionRef.id) || null;

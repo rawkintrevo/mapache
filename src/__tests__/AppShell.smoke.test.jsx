@@ -191,7 +191,8 @@ describe("frontend shell ownership", () => {
     const topbar = screen.getByRole("banner");
 
     expect(await within(topbar).findByRole("button", {name: "Agent"})).toHaveAttribute("aria-pressed", "true");
-    expect(within(topbar).getByRole("switch", {name: "Keep running"})).not.toBeChecked();
+    const runtimePolicy = within(topbar).getByRole("group", {name: "Runtime policy"});
+    expect(within(runtimePolicy).getByRole("button", {name: /Idle timeout/})).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", {name: "Long-running"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Persistent Chrome"})).not.toBeInTheDocument();
     expect(within(topbar).getByRole("button", {name: "Logs"})).toBeInTheDocument();
@@ -199,8 +200,10 @@ describe("frontend shell ownership", () => {
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
     expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
 
-    await user.click(within(topbar).getByRole("switch", {name: "Keep running"}));
-    expect(handlers.sessions.setSessionLongRunning).toHaveBeenCalledWith(managedSession.id, true);
+    await user.click(within(runtimePolicy).getByRole("button", {name: /Idle timeout/}));
+    await user.selectOptions(within(runtimePolicy).getByRole("combobox", {name: "Runtime policy mode"}), "keep-running");
+    await user.click(within(runtimePolicy).getByRole("button", {name: "Save policy"}));
+    expect(handlers.sessions.setRuntimePolicy).toHaveBeenCalledWith({mode: "keep-running", schedule: null});
 
     await user.click(within(topbar).getByRole("button", {name: "Logs"}));
     expect(await screen.findByRole("dialog", {name: "Logs"})).toBeInTheDocument();

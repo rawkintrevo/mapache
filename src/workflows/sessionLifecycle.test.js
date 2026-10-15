@@ -1,5 +1,5 @@
 import {describe, expect, test, vi} from "vitest";
-import {editSessionState, retryProvisioningSessionState, setSessionLongRunningState} from "./sessionLifecycle.js";
+import {editSessionState, retryProvisioningSessionState, setSessionLongRunningState, setWorkspaceRuntimePolicyState} from "./sessionLifecycle.js";
 
 describe("session edit workflow", () => {
   test("renames and resizes only the fields that changed", async () => {
@@ -65,6 +65,31 @@ describe("session idle policy workflow", () => {
 
     expect(state.api.setSessionLongRunning).toHaveBeenCalledWith("workspace-1", "session-1", true);
     expect(state.sessions[0].longRunning).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith({type: expect.any(String), sessionId: "session-1"});
+  });
+
+  test("saves the workspace runtime policy and refreshes workspace and session state", async () => {
+    const dispatch = vi.fn();
+    const state = {
+      selectedWorkspaceId: "workspace-1",
+      selectedSessionId: "session-1",
+      workspaces: [{id: "workspace-1", name: "Demo"}],
+      sessions: [],
+      api: {
+        updateWorkspaceRuntimePolicy: vi.fn().mockResolvedValue({workspace: {
+          id: "workspace-1",
+          runtimePolicy: {mode: "scheduled", schedule: {days: [1], startTime: "09:00", endTime: "17:00", timezone: "UTC"}},
+        }}),
+        getSessions: vi.fn().mockResolvedValue({sessions: [{id: "session-1", longRunning: false}]}),
+      },
+    };
+    const policy = {mode: "scheduled", schedule: {days: [1], startTime: "09:00", endTime: "17:00", timezone: "UTC"}};
+
+    await setWorkspaceRuntimePolicyState(state, policy, dispatch);
+
+    expect(state.api.updateWorkspaceRuntimePolicy).toHaveBeenCalledWith("workspace-1", policy);
+    expect(state.workspaces[0].runtimePolicy).toEqual(policy);
+    expect(state.sessions[0].longRunning).toBe(false);
     expect(dispatch).toHaveBeenCalledWith({type: expect.any(String), sessionId: "session-1"});
   });
 });
