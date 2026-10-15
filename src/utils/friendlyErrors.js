@@ -42,6 +42,7 @@ export function friendlyMcpConfigError(error) {
 
 export function friendlyPiAuthError(error) {
   const message = error.message || "Could not update authentication.";
+  if (message === "invalid_custom_provider_endpoint") return "Enter an HTTP(S) server base URL without credentials, a query, or a fragment.";
   if (message === "invalid_pi_auth_provider") return "Choose a supported API key provider.";
   if (message === "invalid_pi_auth_key") return "Enter a valid API key value.";
   if (message === "invalid_pi_auth_entry") return "Choose a saved authentication entry.";

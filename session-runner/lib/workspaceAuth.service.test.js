@@ -158,7 +158,8 @@ test("managed Pi materialization ignores restored auth and replaces the fixed ag
 
   let remoteWrites = 0;
   const remoteData = {
-    providers: {openai: {type: "api_key", key: "canonical-secret"}},
+    providers: {openai: {type: "api_key", key: "canonical-secret"},
+      "custom-lab": {type: "api_key", key: "custom-key", mapacheBaseUrl: "https://lab.example/v1"}},
     entries: {
       "entry-openai": {
         id: "entry-openai",
@@ -200,6 +201,10 @@ test("managed Pi materialization ignores restored auth and replaces the fixed ag
     const result = await service.synchronizeAuth({materialize: true});
     const written = JSON.parse(await fs.promises.readFile(path.join(piAgentDir, "auth.json"), "utf8"));
     assert.equal(written.openai.key, "canonical-secret");
+    assert.equal(written["custom-lab"].mapacheBaseUrl, "https://lab.example/v1");
+    const models = JSON.parse(await fs.promises.readFile(path.join(piAgentDir, "models.json"), "utf8"));
+    assert.equal(models.providers["custom-lab"].api, "openai-completions");
+    assert.equal(JSON.stringify(models).includes("custom-key"), false);
     assert.equal(remoteWrites, 0);
     assert.equal(fs.existsSync(path.join(piAgentDir, "provider-keys.json")), false);
     assert.equal(JSON.stringify(result).includes("canonical-secret"), false);

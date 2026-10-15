@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const {isCustomPiProvider, materializeCustomModels} = require("./customPiModels");
 const path = require("path");
 const {compactErrorMessage} = require("./utils");
 const {resolveHarnessMetadata} = require("./harnesses/metadata");
@@ -55,6 +56,7 @@ function createWorkspaceAuthService({admin, config, db}) {
     await clearManagedCredentialShadowFiles();
     await writeGitHubCliAuth(auth);
     await writeLocalAuthFile(auth);
+    await materializeCustomModels(config.piAgentDir, auth);
     console.log(`${harness.id} auth materialized ${Object.keys(auth).length} selected provider(s) to ${authFilePath()}`);
     return {ok: true, appliedToRunner: true, providerCount: Object.keys(auth).length, secretFiles: secretFileInventory(config)};
   }
@@ -276,7 +278,7 @@ function mergeRemoteAuthData(agentData = {}) {
 function providersForHarness(providers, harness) {
   if (!harness.auth?.providerKeys || !Array.isArray(harness.auth.providerKeys)) return providers;
   return Object.entries(providers).reduce((acc, [providerKey, credential]) => {
-    if (harness.auth.providerKeys.includes(providerKey)) acc[providerKey] = credential;
+    if (harness.auth.providerKeys.includes(providerKey) || (harness.id === "pi" && isCustomPiProvider(providerKey))) acc[providerKey] = credential;
     return acc;
   }, {});
 }

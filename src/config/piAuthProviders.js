@@ -1,4 +1,7 @@
+export const isCustomPiProvider = (value) => /^custom-[a-z0-9][a-z0-9-]{0,62}$/.test(value || "");
+
 export const piAuthProviders = [
+  {key: "openai-compatible", label: "OpenAI-compatible (vLLM / custom server)"},
   {key: "anthropic", label: "Anthropic"},
   {key: "ant-ling", label: "Ant Ling"},
   {key: "azure-openai-responses", label: "Azure OpenAI Responses"},

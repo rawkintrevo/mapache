@@ -54,6 +54,7 @@
     "patches/0013-automation-run-state.patch",
     "patches/0014-automation-control.patch",
     "patches/0015-automation-control-timeout.patch",
-    "patches/0016-managed-operating-reference.patch"
+    "patches/0016-managed-operating-reference.patch",
+    "patches/0017-custom-provider-connections.patch"
   ]
 }

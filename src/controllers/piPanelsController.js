@@ -107,7 +107,7 @@ export function createPiPanelsController({state, render}) {
       apiKey,
       entryLabel,
     });
-    await savePiAuthProviderState({state, render});
+    return savePiAuthProviderState({state, render});
   }
 
   async function saveSessionPiAuthSelection(selection) {

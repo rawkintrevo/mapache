@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const {isCustomPiProvider, customPiCredential} = require("./customPiProviders.helpers");
 const {normalizeEnvironmentEntryIds} = require("./environmentKeys.service");
 const {cleanName, httpError} = require("./backendUtils.helpers");
 
@@ -62,7 +63,7 @@ async function savePiAuthProvider(uid, provider, payload, dependencies = {}) {
   const apiKey = normalizePiAuthApiKey(payload && payload.key);
   const credential = providerKey === "github-cli" ?
     await resolveGithubCliCredential(apiKey, dependencies) :
-    {type: "api_key", key: apiKey};
+    customPiCredential(providerKey, payload, apiKey);
   if (payload && payload.entryId) {
     await updatePiAuthCredential(
         uid,
@@ -382,7 +383,7 @@ function normalizePiAuthEntryId(value, options = {}) {
 
 function normalizePiAuthProviderKey(value) {
   const provider = normalizePiAuthStoredProviderKey(value);
-  if (!PI_AUTH_API_KEY_PROVIDERS.has(provider)) {
+  if (!PI_AUTH_API_KEY_PROVIDERS.has(provider) && !isCustomPiProvider(provider)) {
     throw httpError(400, "invalid_pi_auth_provider");
   }
   return provider;

@@ -279,7 +279,7 @@ function wait(ms) {
 }
 
 export async function savePiAuthProviderState({state, render}) {
-  const provider = String(state.piAuth.selectedProvider || "").trim();
+  const provider = String(state.piAuth.selectedProvider === "openai-compatible" ? state.piAuth.customProviderId || "" : state.piAuth.selectedProvider || "").trim();
   const apiKey = String(state.piAuth.apiKey || "").trim();
   if (!provider || !apiKey) {
     state.piAuth = {
@@ -305,6 +305,7 @@ export async function savePiAuthProviderState({state, render}) {
         apiKey,
         state.piAuth.entryLabel || "",
         state.piAuth.editEntryId || "",
+        provider.startsWith("custom-") ? {baseUrl: state.piAuth.baseUrl || ""} : {},
     );
     state.piAuth = {
       ...state.piAuth,
@@ -318,6 +319,7 @@ export async function savePiAuthProviderState({state, render}) {
       editEntryId: "",
       openAiCodexDevice: null,
     };
+    return true;
   } catch (error) {
     state.piAuth = {
       ...state.piAuth,
@@ -325,8 +327,9 @@ export async function savePiAuthProviderState({state, render}) {
       error: friendlyPiAuthError(error),
       message: "",
     };
+  } finally {
+    render();
   }
-  render();
 }
 
 export async function saveSessionPiAuthSelectionState({state, session, selection, render}) {

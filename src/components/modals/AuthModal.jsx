@@ -1,5 +1,5 @@
 import {Save, X} from "lucide-react";
-import {piAuthProviders} from "../../config/piAuthProviders.js";
+import {isCustomPiProvider, piAuthProviders} from "../../config/piAuthProviders.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
@@ -19,6 +19,7 @@ export function AuthModal({
   const editing = Boolean(piAuth.editEntryId);
   const isOpenAiCodex = selectedProvider === OPENAI_CODEX_PROVIDER;
   const isGitHubCli = selectedProvider === GITHUB_CLI_PROVIDER;
+  const isCustom = selectedProvider === "openai-compatible" || isCustomPiProvider(selectedProvider);
   const device = piAuth.openAiCodexDevice;
 
   return (
@@ -32,24 +33,25 @@ export function AuthModal({
         </div>
         <form
           className="modal-form"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
             if (isOpenAiCodex) {
               onStartOpenAiCodexDeviceLogin?.();
               return;
             }
-            onSave(selectedProvider, apiKey, entryLabel);
-            onClose();
+            if (await onSave(isCustom && !editing ? "openai-compatible" : selectedProvider, apiKey, entryLabel)) onClose();
           }}
         >
           <select
             className="auth-provider-select"
             disabled={editing}
             name="provider"
-            value={selectedProvider}
+            value={isCustom ? "openai-compatible" : selectedProvider}
             onChange={(event) => onUpdate?.({
               selectedProvider: event.target.value,
               apiKey: "",
+              customProviderId: "",
+              baseUrl: "",
               entryLabel: "",
               openAiCodexDevice: null,
             })}
@@ -64,6 +66,19 @@ export function AuthModal({
             value={entryLabel}
             onChange={(event) => onUpdate?.({entryLabel: event.target.value})}
           />
+          {isCustom ? (
+            <>
+              <label>Provider ID
+                <input name="customProviderId" placeholder="custom-lab" required pattern="custom-[a-z0-9][a-z0-9-]{0,62}" disabled={editing}
+                  value={piAuth.customProviderId || ""} onChange={(event) => onUpdate?.({customProviderId: event.target.value})} />
+              </label>
+              <label>Server base URL
+                <input name="baseUrl" placeholder="https://models.example.org/v1" type="url" required
+                  value={piAuth.baseUrl || ""} onChange={(event) => onUpdate?.({baseUrl: event.target.value})} />
+              </label>
+              <p className="subtle">Use this provider ID in Agent Settings → Models. Select the credential for your session, then restart the workspace. Configure model IDs and capabilities in the Agent. The server must be reachable from the cloud runner. For a server without authentication, enter a placeholder key.</p>
+            </>
+          ) : null}
           {isOpenAiCodex ? (
             <OpenAiCodexLoginFields
               device={device}

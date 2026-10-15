@@ -1,0 +1,12 @@
+{
+  "id": "script.rotateCustomProvider",
+  "title": "Rotate a named compatible connection without renaming its provider ID",
+  "actions": [
+    {"type": "click", "role": "button", "name": "Edit QA custom lab"},
+    {"type": "fill", "name": "entryLabel", "value": "QA custom lab rotated"},
+    {"type": "fill", "name": "apiKey", "value": "qa-rotated-placeholder"},
+    {"type": "submit", "buttonName": "Save changes"},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/auth/providers/custom-qa-lab", "method": "PUT", "expectedStatus": 200},
+    {"type": "waitForSnapshotText", "text": "QA custom lab rotated"}
+  ]
+}

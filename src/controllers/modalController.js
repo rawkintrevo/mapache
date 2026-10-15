@@ -96,6 +96,8 @@ export function createModalController({state, dispatch = () => {}, render, loadG
       selectedProvider: selectedProvider || state.piAuth.selectedProvider,
       editEntryId: entry?.id || "",
       entryLabel: entry?.label || "",
+      customProviderId: entry?.providerKey?.startsWith("custom-") ? entry.providerKey : "",
+      baseUrl: entry?.credential?.mapacheBaseUrl || "",
       apiKey: "",
       openAiCodexDevice: null,
       error: "",

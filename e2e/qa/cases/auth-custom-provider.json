@@ -1,0 +1,71 @@
+{
+  "id": "auth.custom-provider",
+  "title": "Named OpenAI-compatible credentials remain distinct and editable",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.custom-provider",
+  "steps": [
+    {
+      "useCase": "cases/login.json"
+    },
+    {
+      "useScript": "scripts/open-auth-management.json"
+    },
+    {
+      "useScript": "scripts/save-custom-provider.json",
+      "parameters": {
+        "providerId": "custom-qa-lab",
+        "entryLabel": "QA custom lab",
+        "baseUrl": "https://lab.example.invalid/v1"
+      }
+    },
+    {
+      "useScript": "scripts/save-custom-provider.json",
+      "parameters": {
+        "providerId": "custom-qa-gpu",
+        "entryLabel": "QA custom GPU",
+        "baseUrl": "https://gpu.example.invalid/v1"
+      }
+    },
+    {
+      "assert": "custom-connections-visible",
+      "description": "Both QA entries appear in Manage Pi Auth with distinct provider IDs; neither replaces OpenAI."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "custom-connections.png"
+    },
+    {
+      "useScript": "scripts/rotate-custom-provider.json"
+    },
+    {
+      "assert": "custom-provider-rotation",
+      "description": "Editing preserves the disabled custom-qa-lab ID and its endpoint, changes the label/key, and PUT returns 200 with the same entry ID."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "custom-rotated.png"
+    },
+    {
+      "useScript": "scripts/delete-auth-entry.json",
+      "parameters": {
+        "entryLabel": "QA custom lab rotated"
+      }
+    },
+    {
+      "useScript": "scripts/delete-auth-entry.json",
+      "parameters": {
+        "entryLabel": "QA custom GPU"
+      }
+    },
+    {
+      "assert": "custom-connections-deleted",
+      "description": "Neither QA custom entry remains; no workspace or runner was started."
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "capture": "network"
+    }
+  ]
+}

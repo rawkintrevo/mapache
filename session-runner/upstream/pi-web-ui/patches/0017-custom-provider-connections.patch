@@ -1,0 +1,250 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 1bcb0e4..f449032 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -3261,8 +3261,8 @@ export class ClientSession {
+ 	reloadModelsConfig(): Promise<void> {
+ 		return this.modelAdmin.reloadModelsConfig();
+ 	}
+-	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string): Promise<void> {
+-		return this.modelAdmin.fetchModelsList(reqId, baseUrl, apiKey, authHeader, api, () => this.getLang());
++	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string, providerId?: string): Promise<void> {
++		return this.modelAdmin.fetchModelsList(reqId, baseUrl, apiKey, authHeader, api, () => this.getLang(), providerId);
+ 	}
+ 	refreshProviderModels(providerId: string, reqId: number): Promise<void> {
+ 		return this.modelAdmin.refreshProviderModels(providerId, reqId, () => this.getLang());
+diff --git a/server/index.ts b/server/index.ts
+index 78029b9..85f9a0c 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -780,7 +780,7 @@ export interface DispatchSession {
+ 	addProviderKey(provider: string, apiKey: string, name?: string): Promise<void>;
+ 	activateProviderKey(provider: string, keyName: string): Promise<void>;
+ 	removeProviderKey(provider: string, keyName: string): Promise<void>;
+-	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string): Promise<void>;
++	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string, providerId?: string): Promise<void>;
+ 	refreshProviderModels(providerId: string, reqId: number): Promise<void>;
+ 	cloneProvider(provider: string, reqId: number): Promise<void>;
+ 	getTerminalManager(conversationId?: string): TerminalManagerLike | undefined;
+@@ -1260,7 +1260,7 @@ wss.on("connection", (ws) => {
+ 				void cs.listProviders();
+ 				break;
+ 			case "fetch_models":
+-				void cs.fetchModelsList(msg.reqId, msg.baseUrl, msg.apiKey, msg.authHeader, msg.api);
++				void cs.fetchModelsList(msg.reqId, msg.baseUrl, msg.apiKey, msg.authHeader, msg.api, msg.providerId);
+ 				break;
+ 			case "refresh_provider_models":
+ 				void cs.refreshProviderModels(msg.providerId, msg.reqId);
+diff --git a/server/mapache-provider-auth.ts b/server/mapache-provider-auth.ts
+new file mode 100644
+index 0000000..10d9b13
+--- /dev/null
++++ b/server/mapache-provider-auth.ts
+@@ -0,0 +1,30 @@
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++
++export const isMapacheCustomProvider = (id: string): boolean => /^custom-[a-z0-9][a-z0-9-]{0,62}$/.test(id);
++
++function endpoint(value: unknown): string {
++  const url = new URL(String(value || ""));
++  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
++    throw new Error("Invalid custom provider endpoint");
++  }
++  return url.href.replace(/\/+$/, "");
++}
++
++/** Credentials are resolved only by provider ID and the endpoint saved in Mapache. */
++export function mapacheProviderKey(agentDir: string, id: string, baseUrl: string, api?: string): string {
++  if (!isMapacheCustomProvider(id) || api !== "openai-completions") {
++    throw new Error("Select an OpenAI-compatible connection saved in Mapache");
++  }
++  let credential: {key?: string; mapacheBaseUrl?: string} | undefined;
++  try {
++    credential = JSON.parse(readFileSync(join(agentDir, "auth.json"), "utf8"))[id];
++  } catch { /* Missing auth is reported without exposing file contents. */ }
++  if (!credential?.key || !credential.mapacheBaseUrl) {
++    throw new Error("Select this connection in Mapache Authentication and restart the workspace");
++  }
++  if (endpoint(baseUrl) !== endpoint(credential.mapacheBaseUrl)) {
++    throw new Error("Endpoint differs from this connection in Mapache Authentication. Update the connection there first");
++  }
++  return credential.key;
++}
+diff --git a/server/model-admin.ts b/server/model-admin.ts
+index d443a5e..c11ae25 100644
+--- a/server/model-admin.ts
++++ b/server/model-admin.ts
+@@ -16,6 +16,7 @@ import { join } from "node:path";
+ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
+ import type { ServerMessage, UiModelConfigEntry, UiProviderConfig, ProviderKeyInfo } from "./protocol.js";
+ import { pick, type ServerLang } from "./i18n.js";
++import { isMapacheCustomProvider, mapacheProviderKey } from "./mapache-provider-auth.js";
+ import { managedCredentialRefusal } from "./managed.js";
+ 
+ /** ClientSession 提供给本服务的宿主能力（窄接口）。 */
+@@ -1024,6 +1025,7 @@ export class ModelAdminService {
+ 		api?: string,
+ 		/** 探测抛错文案语言（默认英文）；调用方可传 () => getLang() 实现跟随。 */
+ 		lang?: () => ServerLang,
++		providerId?: string,
+ 	): Promise<void> {
+ 		const emitError = (error: string) => this.host.emit({ type: "fetch_models_result", reqId, ok: false, error });
+ 		if (this.host.managed && hasNonEmptySecret(apiKey)) {
+@@ -1031,6 +1033,10 @@ export class ModelAdminService {
+ 			return;
+ 		}
+ 		try {
++			if (this.host.managed && providerId && isMapacheCustomProvider(providerId)) {
++				apiKey = mapacheProviderKey(this.host.agentDir, providerId, baseUrl, api);
++				authHeader = true;
++			}
+ 			const models = await ModelAdminService.probeModelsEndpoint(baseUrl, apiKey, authHeader, api, undefined, lang);
+ 			this.host.emit({ type: "fetch_models_result", reqId, ok: true, models });
+ 		} catch (err) {
+@@ -1094,7 +1100,7 @@ export class ModelAdminService {
+ 			const ac = new AbortController();
+ 			const timer = setTimeout(() => ac.abort(), 15000);
+ 			try {
+-				return await fetch(u, { headers, signal: ac.signal });
++				return await fetch(u, { headers, signal: ac.signal, redirect: "error" });
+ 			} catch (err) {
+ 				if ((err as Error).name === "AbortError") {
+ 					throw new Error(pick(l, "请求超时（15 秒）", "Request timed out (15s)", "models.fetch.timeout"));
+@@ -1120,7 +1126,7 @@ export class ModelAdminService {
+ 		if (!res.ok) {
+ 			let detail = "";
+ 			try {
+-				detail = (await res.text()).slice(0, 200);
++				await res.body?.cancel();
+ 			} catch {
+ 				// response body already consumed / not text — ignore
+ 			}
+@@ -1201,7 +1207,9 @@ export class ModelAdminService {
+ 			}
+ 			const fetched = await ModelAdminService.probeModelsEndpoint(
+ 				baseUrl,
+-				saved.apiKey,
++				this.host.managed && isMapacheCustomProvider(pid)
++					? mapacheProviderKey(this.host.agentDir, pid, baseUrl, saved.api)
++					: saved.apiKey,
+ 				saved.authHeader === true ? true : undefined,
+ 				saved.api,
+ 				saved.headers as Record<string, string> | undefined,
+@@ -1308,7 +1316,18 @@ export class ModelAdminService {
+ 							: {}),
+ 					}
+ 				: config;
++			if (this.host.managed && isMapacheCustomProvider(pid)) {
++				mapacheProviderKey(this.host.agentDir, pid, config.baseUrl || "", config.api);
++			}
+ 			providers[pid] = mergeProviderConfigEntry(previous, managedConfig, models);
++			if (this.host.managed && isMapacheCustomProvider(pid)) {
++				delete providers[pid].apiKey;
++				delete providers[pid].headers;
++				delete providers[pid].modelOverrides;
++				for (const model of providers[pid].models as Record<string, unknown>[]) {
++					for (const key of ["baseUrl", "apiKey", "headers", "api"]) delete model[key];
++				}
++			}
+ 			mkdirSync(this.host.agentDir, { recursive: true });
+ 			writeFileSync(this.modelsConfigPath(), JSON.stringify({ providers }, null, 2) + "\n");
+ 
+diff --git a/server/protocol.ts b/server/protocol.ts
+index 3826a1d..2ea49d6 100644
+--- a/server/protocol.ts
++++ b/server/protocol.ts
+@@ -467,6 +467,7 @@ export type ClientMessage =
+ 	 *  back in fetch_models_result so the UI can match concurrent requests. */
+ 	| {
+ 			type: "fetch_models";
++			providerId?: string;
+ 			reqId: number;
+ 			baseUrl: string;
+ 			apiKey?: string;
+diff --git a/tests/unit/mapache-custom-provider.test.ts b/tests/unit/mapache-custom-provider.test.ts
+new file mode 100644
+index 0000000..df0856f
+--- /dev/null
++++ b/tests/unit/mapache-custom-provider.test.ts
+@@ -0,0 +1,68 @@
++import {mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
++import {tmpdir} from "node:os";
++import {join} from "node:path";
++import {createServer} from "node:http";
++import type {AddressInfo} from "node:net";
++import {ModelRuntime} from "@earendil-works/pi-coding-agent";
++import {afterEach, expect, it} from "vitest";
++import {ModelAdminService, type ModelAdminHost} from "../../server/model-admin.js";
++import {mapacheProviderKey} from "../../server/mapache-provider-auth.js";
++import type {ServerMessage} from "../../server/protocol.js";
++
++const roots: string[] = [];
++afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
++
++it("uses canonical credentials for discovery and Pi streaming/tool calls without serializing secrets", async () => {
++  const dir = mkdtempSync(join(tmpdir(), "mapache-custom-")); roots.push(dir);
++  const requests: {url: string; key: string | undefined}[] = [];
++  const server = createServer((req, res) => {
++    requests.push({url: req.url || "", key: req.headers.authorization});
++    if (req.headers.authorization !== "Bearer test-only-key") { res.writeHead(401).end(); return; }
++    if (req.method === "GET") {
++      res.setHeader("content-type", "application/json");
++      res.end(JSON.stringify({data: [{id: "qwen", context_window: 32768}]})); return;
++    }
++    req.resume();
++    req.on("end", () => {
++      res.writeHead(200, {"content-type": "text/event-stream"});
++      res.write(`data: ${JSON.stringify({id: "chat-fixture", object: "chat.completion.chunk", created: 1, model: "qwen", choices: [{index: 0, delta: {role: "assistant", tool_calls: [{index: 0, id: "call-fixture", type: "function", function: {name: "echo", arguments: '{"text":"hello"}'}}]}, finish_reason: null}]})}\n\n`);
++      res.write(`data: ${JSON.stringify({id: "chat-fixture", object: "chat.completion.chunk", created: 1, model: "qwen", choices: [{index: 0, delta: {}, finish_reason: "tool_calls"}]})}\n\n`);
++      res.end("data: [DONE]\n\n");
++    });
++  });
++  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
++  try {
++    const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
++    const auth = {"custom-lab": {type: "api_key", key: "test-only-key", mapacheBaseUrl: baseUrl}, openai: {type: "api_key", key: "unrelated-key"}};
++    writeFileSync(join(dir, "auth.json"), JSON.stringify(auth));
++    writeFileSync(join(dir, "models.json"), JSON.stringify({providers: {"custom-lab": {baseUrl, api: "openai-completions", models: []}}}));
++    const runtime = await ModelRuntime.create({authPath: join(dir, "auth.json"), modelsPath: join(dir, "models.json"), modelsStorePath: join(dir, "cache.json"), allowModelNetwork: false});
++    const messages: ServerMessage[] = [];
++    const host: ModelAdminHost = {agentDir: dir, managed: true, modelRuntime: () => runtime, emit: (m) => messages.push(m), flushSnapshot() {}, isDisposed: () => false, invalidatePiConfig() {}, pushModels: async () => {}};
++    const admin = new ModelAdminService(host);
++    await admin.fetchModelsList(1, baseUrl, undefined, undefined, "openai-completions", undefined, "custom-lab");
++    expect(messages).toContainEqual(expect.objectContaining({type: "fetch_models_result", ok: true}));
++    await admin.refreshProviderModels("custom-lab", 2);
++    expect(messages).toContainEqual(expect.objectContaining({type: "refresh_provider_result", ok: true}));
++    await admin.saveModelConfig("custom-lab", {providerId: "custom-lab", baseUrl, api: "openai-completions", models: [{id: "qwen", contextWindow: 32768, maxTokens: 1024}]});
++    const model = runtime.getModel("custom-lab", "qwen");
++    expect(model).toBeDefined();
++    const result = await runtime.complete(model!, {messages: [{role: "user", content: "Call echo", timestamp: Date.now()}]});
++    expect(result.content).toContainEqual(expect.objectContaining({type: "toolCall", name: "echo", arguments: {text: "hello"}}));
++    expect(requests.some((r) => r.url === "/v1/chat/completions")).toBe(true);
++    expect(requests.every((r) => r.key === "Bearer test-only-key")).toBe(true);
++    expect(readFileSync(join(dir, "models.json"), "utf8")).not.toContain("test-only-key");
++    expect(JSON.stringify(messages)).not.toContain("test-only-key");
++    const before = requests.length;
++    await admin.fetchModelsList(3, "https://other.example/v1", undefined, undefined, "openai-completions", undefined, "custom-lab");
++    expect(requests).toHaveLength(before);
++    expect(messages).toContainEqual(expect.objectContaining({type: "fetch_models_result", reqId: 3, ok: false}));
++    expect(() => mapacheProviderKey(dir, "openai", baseUrl, "openai-completions")).toThrow();
++    expect(() => mapacheProviderKey(dir, "custom-missing", baseUrl, "openai-completions")).toThrow();
++    await admin.saveModelConfig("custom-lab", {providerId: "custom-lab", baseUrl: "https://other.example/v1", api: "openai-completions", models: [{id: "qwen"}]});
++    expect(JSON.parse(readFileSync(join(dir, "models.json"), "utf8")).providers["custom-lab"].baseUrl).toBe(baseUrl);
++  } finally {
++    server.closeAllConnections();
++    await new Promise<void>((resolve) => server.close(() => resolve()));
++  }
++}, 30000);
+diff --git a/web/src/components/ModelConfigModal.tsx b/web/src/components/ModelConfigModal.tsx
+index c25c54a..f9edc0c 100644
+--- a/web/src/components/ModelConfigModal.tsx
++++ b/web/src/components/ModelConfigModal.tsx
+@@ -150,6 +150,7 @@ export function ModelConfigModal({
+ 		setFetchReqId(reqId);
+ 		appSend({
+ 			type: "fetch_models",
++			providerId: editing.providerId.trim(),
+ 			reqId,
+ 			baseUrl: base,
+ 			...(managed ? {} : { apiKey: editing.apiKey.trim() || undefined, authHeader: editing.authHeader }),

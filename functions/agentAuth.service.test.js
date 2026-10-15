@@ -130,6 +130,18 @@ function createFakeDependencies() {
 }
 
 (async () => {
+  const customDependencies = createFakeDependencies();
+  const customService = createAgentAuthService(customDependencies);
+  const first = await customService.savePiAuthProvider("owner", "custom-lab", {key: "first-key", label: "Lab", baseUrl: "https://lab.example/v1/"});
+  const customEntryId = Object.keys(first.entries)[0];
+  assert.equal(first.entries[customEntryId].credential.mapacheBaseUrl, "https://lab.example/v1");
+  const rotated = await customService.savePiAuthProvider("owner", "custom-lab", {key: "second-key", label: "Renamed lab", entryId: customEntryId, baseUrl: "https://lab.example/v1"});
+  assert.deepStrictEqual(Object.keys(rotated.entries), [customEntryId]);
+  assert.equal(rotated.entries[customEntryId].credential.key, "second-key");
+  await assert.rejects(() => customService.savePiAuthProvider("owner", "custom-other", {key: "bad", entryId: customEntryId, baseUrl: "https://other.example/v1"}), /pi_auth_entry_not_found/);
+  assert.deepStrictEqual((await customService.getPiAuth("different-owner")).entries, {});
+  await customService.deletePiAuthEntry("owner", customEntryId);
+  assert.deepStrictEqual((await customService.getPiAuth("owner")).entries, {});
   assert.deepStrictEqual(await resolveGithubCliCredential("github_pat_test", {
     githubClient: {
       requestGithubJson: async (url, token, options) => {

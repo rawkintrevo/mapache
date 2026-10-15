@@ -1112,3 +1112,13 @@ The navbar Upload file action sends local files directly to Cloud Storage using
 resumable transfers. Main and automation sessions mount their workspace inputs
 read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
 ownership, lifecycle, restart requirements, and verification.
+
+### Custom provider metadata checkpoints
+
+The runner projects custom OpenAI-compatible entries from `models.json` into
+`pi/mapache-models.json` during checkpoint capture. Raw model configuration remains
+on the secret exclusion list. After restore, canonical auth materialization
+revalidates this metadata and reconstructs custom providers before Pi starts.
+This applies to the managed `pi-chrome` runtime and requires a rebuilt image/new
+revision for existing services. See [Named OpenAI-compatible connections](./runner-harnesses.md#named-openai-compatible-connections)
+for supported fields, ownership, and credential refresh behavior.

@@ -1,5 +1,6 @@
 "use strict";
 
+const {METADATA_FILE, sanitizeCustomModels, parseModelConfig} = require("./customPiModels");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -138,6 +139,20 @@ async function captureAgentSnapshot({
       uploadReferences,
       records,
     });
+
+    // Capture a safe projection, never the raw secret-bearing models.json.
+    if (config.piAgentDir) {
+      const sourcePath = path.join(config.piAgentDir, "models.json");
+      let stat;
+      try { stat = await fsImpl.promises.lstat(sourcePath); } catch (error) { if (error.code !== "ENOENT") throw error; }
+      if (stat?.isFile() && !stat.isSymbolicLink() && stat.size <= 2 * 1024 * 1024) {
+        const read = await readStableFile(fsImpl, sourcePath);
+        const content = Buffer.from(JSON.stringify(sanitizeCustomModels(parseModelConfig(read.content.toString("utf8")))) + "\n");
+        const relative = `pi/${METADATA_FILE}`;
+        await writeStagedFile(fsImpl, destination, relative, content, 0o600);
+        sources.push({...manifestFile({path: relative, kind: "pi-setting", content, stat}), sourcePath, sourceSignature: read.signature});
+      }
+    }
 
     await captureReferencedUploads({
       fsImpl,
