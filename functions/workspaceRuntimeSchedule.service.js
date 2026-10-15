@@ -161,7 +161,7 @@ async function listScheduledWorkspaceDocs(now, dependencies = {}) {
   let wrapped = false;
   let nextCursorPath = cursorPath;
   while (pages < maxPages) {
-    let query = firestore.collectionGroup("workspaces")
+    let query = firestore.collection("workspaces")
         .where("runtimePolicy.mode", "==", "scheduled")
         .limit(PAGE_SIZE);
     if (queryCursor && typeof query.startAfter === "function") query = query.startAfter(queryCursor);

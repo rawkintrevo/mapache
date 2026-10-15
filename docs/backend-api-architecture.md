@@ -111,6 +111,14 @@ main-session reservation, automation exclusion, and a deletion tombstone check
 make duplicate ticks and lifecycle races converge without resurrecting deleted
 workspaces. Firestore rules deny client writes to runtime-policy state.
 
+Schedule discovery queries the root `workspaces` collection by
+`runtimePolicy.mode`, using its automatic collection index. Do not replace this
+with a collection-group query: workspaces are root documents, and group queries
+require a separate index. A missing discovery index fails the entire tick before
+workspace-level errors can be recorded. After deploying the reconciler, verify
+an actual scheduled tick completes and checks the configured workspaces; saving
+a policy only exercises direct reconciliation and does not validate discovery.
+
 Manual Pause records the local date of the open window and suppresses scheduled
 restart until the next selected-day opening. A manual Start clears that marker;
 outside scheduled hours it follows the existing idle policy. Switching away from

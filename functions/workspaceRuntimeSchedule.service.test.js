@@ -11,7 +11,27 @@ function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [
   const workspace = {...initialWorkspace};
   const sessions = new Map(initialSessions.map((session) => [session.id, {...session}]));
   const workspaceRef = makeRef("workspace-1", () => workspace, (updates) => applyUpdates(workspace, updates));
-  const workspaceCollection = {doc: () => workspaceRef};
+  const cursor = {};
+  const cursorRef = {
+    get: async () => ({exists: true, data: () => ({...cursor})}),
+    set: async (updates) => Object.assign(cursor, updates),
+  };
+  const workspaceCollection = {
+    doc: () => workspaceRef,
+    where: (field, operator, value) => {
+      assert.equal(field, "runtimePolicy.mode");
+      assert.equal(operator, "==");
+      assert.equal(value, "scheduled");
+      return {
+        limit: () => ({get: async () => ({
+          docs: workspace.runtimePolicy?.mode === value ? [{
+            id: workspaceRef.id,
+            ref: {path: `workspaces/${workspaceRef.id}`, parent: {id: "workspaces", parent: null}},
+          }] : [],
+        })}),
+      };
+    },
+  };
   const sessionCollection = () => ({
     doc: (sessionId) => makeRef(sessionId, () => sessions.get(sessionId), (updates) => {
       const session = sessions.get(sessionId);
@@ -23,6 +43,10 @@ function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [
   });
   const db = {
     collection: (name) => {
+      if (name === "appConfig") return {doc: (id) => {
+        assert.equal(id, "runtimeScheduleCursor");
+        return cursorRef;
+      }};
       assert.equal(name, "workspaces");
       return workspaceCollection;
     },
@@ -66,7 +90,7 @@ function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [
       if (onStop) await onStop({sessions, workspace, args: [uid, workspaceId, sessionId]});
     },
   });
-  return {service, workspace, sessions, started, restarted, stopped};
+  return {service, workspace, sessions, started, restarted, stopped, cursor};
 }
 
 function makeRef(id, read, write) {
@@ -98,6 +122,29 @@ function workspace(overrides = {}) {
 }
 
 (async () => {
+  // Exercise discovery through runTick, without injecting listScheduledWorkspaces.
+  // Root workspaces use automatic collection indexes; a collection-group query
+  // requires a separate index and previously failed before any reconciliation.
+  for (const [mode, now, initialStatus, expectedAction] of [
+    ["scheduled", FIXED_NOW, "stopped", "opened"],
+    ["scheduled", new Date("2026-10-19T23:00:00.000Z"), "running", "closed"],
+    ["idle", FIXED_NOW, "stopped", null],
+  ]) {
+    const harness = makeHarness({
+      workspace: workspace({runtimePolicy: {mode, schedule: SCHEDULE}}),
+      sessions: [{id: "session-1", status: initialStatus, ownerUid: "user-1"}],
+      now,
+    });
+    const result = await harness.service.runTick();
+    assert.equal(result.checked, expectedAction ? 1 : 0);
+    assert.equal(result.failed, 0);
+    assert.equal(result.opened, expectedAction === "opened" ? 1 : 0);
+    assert.equal(result.closed, expectedAction === "closed" ? 1 : 0);
+    assert.equal(harness.restarted.length, result.opened);
+    assert.equal(harness.stopped.length, result.closed);
+    assert.equal(harness.cursor.lastWorkspacePath, "", "a completed scan resets the cursor");
+  }
+
   {
     const harness = makeHarness({
       workspace: workspace(),
