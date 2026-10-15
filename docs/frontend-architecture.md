@@ -17,6 +17,7 @@ Mapache owns the surrounding workspace/session shell and account connections.
 - React root and shell: `src/App.jsx`, `src/components/layout/`,
   `src/components/drawers/`, and `src/components/workspaces/`
 - Lifecycle workflows: `src/workflows/sessionLifecycle.js`
+- Workspace runtime availability policy editor: `src/components/sessions/SessionRuntimePolicy.jsx`
 - Workspace request grant management: `src/controllers/requestGrantsController.js`, `src/components/modals/WorkspaceRequestGrantsModal.jsx`, and `src/services/api.js`
 - Account/connection workflows: `src/workflows/piAuth.js`,
   `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
@@ -49,12 +50,14 @@ documentation, and marked-runtime actions are available from the keyboard-access
 labeled More menu. The meters remain mounted across Agent, Chrome, Logs,
 profile, and admin surfaces; they are read-only and show unavailable or
 reconnecting state instead of stale readings. Google Workspace account management opens in a modal from its topbar
-icon. Marked runtimes also show a compact **Keep running** switch in the top
-navigation; its help popover summarizes the stored idle timeout, and changing
-it persists the explicit Long-running policy through
-`setSessionLongRunningState`. The shell no longer reserves either sidebar column. GitHub
-account/repository connection controls remain in the profile and workspace
-creation flows.
+icon. The workspace runtime policy editor offers mutually exclusive **Idle
+timeout**, **Keep running**, and **Scheduled hours** modes. It saves the
+workspace policy through `PATCH /api/workspaces/{workspaceId}/runtime-policy`,
+shows the effective schedule and next start/stop, and explains interruption at
+the strict closing boundary. It is available before a first session so an
+enabled schedule can start a stopped workspace without an open browser. The
+shell no longer reserves either sidebar column. GitHub account/repository
+connection controls remain in the profile and workspace creation flows.
 
 Workspace **Automations** is a lazy management surface opened from the topbar or
 responsive More menu. It combines workspace-scoped definition management with

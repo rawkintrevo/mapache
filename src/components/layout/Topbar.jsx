@@ -8,7 +8,7 @@ import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} 
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 import {ResourceUtilization} from "../sessions/ResourceUtilization.jsx";
-import {SessionIdlePolicy} from "../sessions/SessionIdlePolicy.jsx";
+import {SessionRuntimePolicy} from "../sessions/SessionRuntimePolicy.jsx";
 
 export function Topbar({
   activeCanvas,
@@ -32,7 +32,7 @@ export function Topbar({
   onShowUpload,
   onShowProfile,
   onSignOut,
-  onSetSessionLongRunning,
+  onSetRuntimePolicy,
   onToggleWorkspace,
   resourceMetrics,
 }) {
@@ -58,6 +58,8 @@ export function Topbar({
   const showManagePiAuth = sessionSupportsAuth(canonicalSession);
   const managePiAuthLabel = authHarness?.manageTitle || "Manage Auth";
   const showWorkspaceTools = isMarkedRuntimeSession(canonicalSession);
+  const showRuntimePolicy = Boolean(selectedWorkspace) && selectedWorkspace.source?.type !== "ssh" &&
+    (selectedWorkspace.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(canonicalSession));
 
   return (
     <header className="topbar">
@@ -136,11 +138,12 @@ export function Topbar({
           sample={resourceMetrics.sample}
         />
       ) : null}
-      {showWorkspaceTools ? (
-        <SessionIdlePolicy
+      {showRuntimePolicy ? (
+        <SessionRuntimePolicy
           disabled={busy}
-          onChange={(enabled) => onSetSessionLongRunning?.(canonicalSession.id, enabled)}
+          onSave={(policy) => onSetRuntimePolicy?.(policy)}
           session={canonicalSession}
+          workspace={selectedWorkspace}
         />
       ) : null}
       <div className="topbar-actions">

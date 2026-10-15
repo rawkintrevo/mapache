@@ -10,6 +10,16 @@ export async function setSessionLongRunningState(state, sessionId, enabled, disp
   await refreshSessionsForSelectedWorkspace(state, sessionId, dispatch);
 }
 
+export async function setWorkspaceRuntimePolicyState(state, policy, dispatch) {
+  const workspaceId = state.selectedWorkspaceId;
+  const result = await state.api.updateWorkspaceRuntimePolicy(workspaceId, policy);
+  if (result.workspace) {
+    state.workspaces = state.workspaces.map((workspace) => workspace.id === workspaceId ?
+      {...workspace, ...result.workspace} : workspace);
+  }
+  await refreshSessionsForSelectedWorkspace(state, state.selectedSessionId, dispatch);
+}
+
 export async function editSessionState(state, sessionId, {name, resources}, dispatch) {
   const currentSession = state.sessions.find((session) => session.id === sessionId);
   if (!currentSession) return;

@@ -184,7 +184,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,
-    longRunning: runtimeKind === "automation" ? true : false,
+    longRunning: runtimeKind === "automation" ? true : workspace.runtimePolicy?.mode === "keep-running",
     lastActivityAt: now,
     lastConnectedAt: null,
     lastDisconnectedAt: null,
@@ -218,6 +218,11 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
       await workspaceRef.update({
         canonicalSessionId: sessionRef.id,
         updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    if (!payload.runtimeScheduleStart) {
+      await workspaceRef.update({
+        runtimeScheduleManualPauseWindowKey: dependencies.admin.firestore.FieldValue.delete(),
       });
     }
   }

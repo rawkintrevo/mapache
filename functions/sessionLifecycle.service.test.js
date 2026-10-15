@@ -422,6 +422,42 @@ assert.strictEqual(isIdleSession({
   });
   assert.strictEqual(reaperDeleted, 2);
 
+  const scheduleNow = new Date("2026-10-19T18:00:00.000Z");
+  const scheduledWorkspace = {
+    runtimePolicy: {mode: "scheduled", schedule: {
+      days: [1, 2, 3, 4, 5], startTime: "08:00", endTime: "18:00", timezone: "America/Chicago",
+    }},
+  };
+  const scheduledReaperDoc = {
+    id: "scheduled-session",
+    ref: {
+      update: async () => { throw new Error("open scheduled session should not be reaped for idle"); },
+      parent: {parent: {get: async () => ({exists: true, data: () => scheduledWorkspace})}},
+    },
+    data: () => ({
+      ownerUid: "user-1",
+      workspaceId: "workspace-1",
+      agentUiVersion: "pi-web-ui-v1",
+      longRunning: false,
+      status: "running",
+      lastActivityAt: scheduleNow.getTime() - 2 * 60 * 60 * 1000,
+    }),
+  };
+  const scheduledReaper = createSessionLifecycleService({
+    admin,
+    now: () => scheduleNow,
+    db: {collectionGroup: () => ({where: () => ({get: async () => ({docs: [scheduledReaperDoc], size: 1})})})},
+    deleteSessionService: async () => { throw new Error("open scheduled session should remain available"); },
+  });
+  assert.deepStrictEqual(await scheduledReaper.reapIdleSessions(), {
+    checked: 1,
+    eligible: 0,
+    bypassed: 1,
+    bypassedByReason: {scheduled_hours: 1},
+    stopped: 0,
+    failed: 0,
+  });
+
   const automationReaperDoc = {
     id: "auto-run-1",
     ref: {update: async () => { throw new Error("admitted automation should be bypassed"); }},

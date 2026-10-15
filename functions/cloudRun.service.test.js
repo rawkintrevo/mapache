@@ -873,6 +873,45 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(deleteCalled, true);
   assert.strictEqual(shutdownUpdates[0].agentRuntimeRecoveryWarning, "interrupted");
   assert.strictEqual(shutdownUpdates[0].lastError, "runtime_interrupted_checkpoint_recovery_required");
+
+  let scheduledShutdownRequests = 0;
+  let scheduledDeleteRequests = 0;
+  const scheduledUpdates = [];
+  const scheduledClient = {
+    request: async ({url, method}) => {
+      if (method === "DELETE") {
+        scheduledDeleteRequests++;
+        return {data: {name: "operations/scheduled-close-delete"}};
+      }
+      if (method === "GET" && url.endsWith("operations/scheduled-close-delete")) return {data: {done: true}};
+      if (method === "GET" && url.includes("/services/scheduled-close")) {
+        const error = new Error("missing");
+        error.response = {status: 404, data: {error: {code: 404}}};
+        throw error;
+      }
+      throw new Error(`Unexpected scheduled close request: ${method} ${url}`);
+    },
+  };
+  global.fetch = async () => {
+    scheduledShutdownRequests++;
+    return {ok: true, status: 200};
+  };
+  const scheduledCloseService = createCloudRunService({
+    auth: {getClient: async () => scheduledClient},
+    markSessionStopped: async () => {},
+  });
+  const scheduledStopped = await scheduledCloseService.deleteSessionService({
+    update: async (updates) => scheduledUpdates.push(updates),
+  }, {
+    serviceName: "projects/p/locations/us-central1/services/scheduled-close",
+    serviceUrl: "https://runner.example",
+    shutdownToken: "shutdown-token",
+    status: "stopping",
+  }, {reason: "scheduled_hours_end"});
+  assert.strictEqual(scheduledStopped, true);
+  assert.strictEqual(scheduledShutdownRequests, 0, "scheduled close skips runner shutdown and checkpoint waits");
+  assert.strictEqual(scheduledDeleteRequests, 1);
+  assert.strictEqual(scheduledUpdates[0].agentRuntimeRecoveryWarning, "interrupted");
   global.fetch = originalFetch;
 
   if (originalProject === undefined) delete process.env.GCLOUD_PROJECT;

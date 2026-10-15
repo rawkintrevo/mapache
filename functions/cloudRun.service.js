@@ -406,10 +406,16 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
 
   let shutdownResult = {ok: true, skipped: true};
   try {
-    shutdownResult = await requestRunnerShutdown(session, {
-      requireAcknowledgement: false,
-      timeoutMs: dependencies.shutdownTimeoutMs,
-    });
+    if (options.reason === "scheduled_hours_end") {
+      // Scheduled close is a hard boundary: do not wait for agent turns,
+      // shell jobs, or the runner's cooperative checkpoint path.
+      shutdownResult = {ok: false, skipped: true};
+    } else {
+      shutdownResult = await requestRunnerShutdown(session, {
+        requireAcknowledgement: false,
+        timeoutMs: dependencies.shutdownTimeoutMs,
+      });
+    }
     if (await consumeQaFault(sessionRef, session, "uncertain-replacement", {
       db: dependencies.db || db,
       workspace: {agentUiVersion: session.agentUiVersion},

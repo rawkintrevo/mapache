@@ -95,6 +95,31 @@ runtimes. New blank and GitHub workspaces receive the server-owned
 `agentUiVersion: "pi-web-ui-v1"` marker. New sessions use the workspace resource setting and resolve the curated
 `pi-chrome` image and Pi harness regardless of browser payloads.
 
+Runtime availability scheduling is separate from scheduled Agent automations.
+`functions/runtimeSchedule.helpers.js` validates one same-day weekday window and
+resolves its boundaries in the selected IANA timezone, including DST gaps and
+repeated hours. `functions/workspaceRuntimeSchedule.service.js` owns the
+owner-checked `PATCH /api/workspaces/{workspaceId}/runtime-policy` contract and
+the minute reconciler. It stores one of `idle`, `keep-running`, or `scheduled`
+on the workspace, starts stopped main sessions through normal session creation
+or restart, and closes them through normal service deletion, with scheduled
+close bypassing the runner's cooperative shutdown path. The
+reconciler retries failed startup while the current window is open and records
+safe error codes for the owner-visible policy UI. A per-workspace lease,
+deterministic initial provisioning ID, existing runtime generation fencing,
+main-session reservation, automation exclusion, and a deletion tombstone check
+make duplicate ticks and lifecycle races converge without resurrecting deleted
+workspaces. Firestore rules deny client writes to runtime-policy state.
+
+Manual Pause records the local date of the open window and suppresses scheduled
+restart until the next selected-day opening. A manual Start clears that marker;
+outside scheduled hours it follows the existing idle policy. Switching away from
+scheduled mode does not stop an active session. Editing an enabled schedule
+reconciles immediately, including stopping a running session when the edited
+window is closed at the current time. At scheduled close, Functions skips the
+runner's cooperative shutdown and checkpoint path and deletes the Cloud Run
+service directly; after deletion it records that live work was interrupted.
+
 The workspace authority transaction admits one managed runtime and sync writer.
 Generation and boot-instance fencing prevent a stale Cloud Run container from
 publishing checkpoints or being mistaken for its replacement. The provisioning

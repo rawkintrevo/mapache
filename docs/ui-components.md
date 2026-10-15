@@ -6,7 +6,7 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, marked-runtime Keep running, Agent, Logs, Upload file, and workspace Automations controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, workspace runtime policy, marked-runtime Agent and Logs, Upload file, and workspace Automations controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
 | `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, running instances, refresh, and sign-out actions. |
 | `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible responsive menu for workspace, connection, runtime, and documentation actions. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
@@ -20,7 +20,7 @@ This index maps significant React components to their current responsibilities.
 | `BrowserCanvas` | `src/components/sessions/BrowserCanvas.jsx` | Signed Persistent Chrome iframe and pop-out action. |
 | `ResourceUtilization` | `src/components/sessions/ResourceUtilization.jsx` | Read-only CPU/RAM metrics surface, rendered in the top navbar for the selected canonical running cloud runtime. |
 | `SessionRuntimeStatus` | `src/components/sessions/SessionRuntimeStatus.jsx` | Server-reported runtime/checkpoint/lifecycle status and access errors. |
-| `SessionIdlePolicy` | `src/components/sessions/SessionIdlePolicy.jsx` | Compact top-navigation Keep running switch with an idle-timeout help popover; persists the managed runtime's Long-running automatic-pause policy. |
+| `SessionRuntimePolicy` | `src/components/sessions/SessionRuntimePolicy.jsx` | Top-navigation selector for Idle timeout, Keep running, or Scheduled hours; edits weekdays, same-day local times, and timezone, and shows the next transition and strict shutdown behavior. |
 | `SessionList` | `src/components/sessions/SessionList.jsx` | Session list for the selected workspace. |
 | `SessionResourceSelector` | `src/components/sessions/SessionResourceSelector.jsx` | Shared priced resource presets and advanced CPU/memory fields. |
 | `ModalStack` | `src/components/modals/ModalStack.jsx` | Coordinates retained workspace/session/auth/connection dialogs. |

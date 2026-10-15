@@ -115,6 +115,14 @@ async function main() {
     await assertFails(updateDoc(doc(alice, "workspaces/workspace-a"), {
       automationMaxConcurrency: 99,
     }));
+    await assertFails(updateDoc(doc(alice, "workspaces/workspace-a"), {
+      runtimePolicy: {mode: "scheduled", schedule: {days: [1], startTime: "08:00", endTime: "18:00", timezone: "UTC"}},
+    }));
+    await assertFails(setDoc(doc(alice, "workspaces/client-created"), {
+      ownerUid: "alice",
+      userPath: "users/alice",
+      runtimePolicy: {mode: "scheduled", schedule: {}},
+    }));
   } finally {
     await testEnv.cleanup();
   }

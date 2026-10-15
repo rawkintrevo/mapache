@@ -4,10 +4,10 @@ import {describe, expect, test, vi} from "vitest";
 import {Topbar} from "./Topbar.jsx";
 import {createInitialState} from "../../state/initialState.js";
 
-function renderTopbar(session = null, resourceMetrics = null) {
+function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides = {}) {
   const state = {
     ...createInitialState(),
-    workspaces: [{id: "workspace-1", name: "HubSpot", source: {type: "blank"}, canonicalSessionId: session?.id || null}],
+    workspaces: [{id: "workspace-1", name: "HubSpot", source: {type: "blank"}, canonicalSessionId: session?.id || null, ...workspaceOverrides}],
     selectedWorkspaceId: "workspace-1",
     sessions: session ? [session] : [],
   };
@@ -18,7 +18,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
   const onOpenMcpServers = vi.fn();
   const onShowAutomations = vi.fn();
   const onShowUpload = vi.fn();
-  const onSetSessionLongRunning = vi.fn();
+  const onSetRuntimePolicy = vi.fn();
   render(
     <Topbar
       state={state}
@@ -38,7 +38,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
       onShowLogs={vi.fn()}
       onShowProfile={vi.fn()}
       onSignOut={vi.fn()}
-      onSetSessionLongRunning={onSetSessionLongRunning}
+      onSetRuntimePolicy={onSetRuntimePolicy}
       onToggleWorkspace={onToggleWorkspace}
       resourceMetrics={resourceMetrics}
     />,
@@ -48,7 +48,7 @@ function renderTopbar(session = null, resourceMetrics = null) {
     onOpenGoogleWorkspace,
     onOpenMcpServers,
     onOpenPiAuthManage,
-    onSetSessionLongRunning,
+    onSetRuntimePolicy,
     onShowAutomations,
     onShowUpload,
     onToggleWorkspace,
@@ -94,7 +94,13 @@ describe("Topbar workspace lifecycle", () => {
   test("starts a workspace with no existing session", () => {
     renderTopbar();
     expect(screen.getByRole("button", {name: "Start workspace"})).toBeEnabled();
+  expect(screen.queryByRole("group", {name: "Runtime policy"})).not.toBeInTheDocument();
   });
+
+test("shows the runtime policy for a marked workspace before its first session", () => {
+  renderTopbar(null, null, {agentUiVersion: "pi-web-ui-v1"});
+  expect(screen.getByRole("group", {name: "Runtime policy"})).toBeInTheDocument();
+});
 });
 
 test("uses one automation navigation entry for definitions and run history", async () => {
@@ -162,9 +168,9 @@ test("renders live resource meters between workspace controls and actions", () =
   expect(screen.getByText("1 GiB/2 GiB")).toBeInTheDocument();
 });
 
-test("moves the managed runtime lifetime switch into the navbar", async () => {
+test("lets users select and save a scheduled runtime policy", async () => {
   const user = userEvent.setup();
-  const {onSetSessionLongRunning} = renderTopbar({
+  const {onSetRuntimePolicy} = renderTopbar({
     id: "session-1",
     status: "running",
     agentUiVersion: "pi-web-ui-v1",
@@ -172,21 +178,28 @@ test("moves the managed runtime lifetime switch into the navbar", async () => {
     longRunning: false,
   });
 
-  const lifetime = screen.getByRole("group", {name: "Runtime lifetime"});
-  const toggle = within(lifetime).getByRole("switch", {name: "Keep running"});
-  expect(toggle).not.toBeChecked();
-  await user.click(toggle);
-  expect(onSetSessionLongRunning).toHaveBeenCalledWith("session-1", true);
+  const policy = screen.getByRole("group", {name: "Runtime policy"});
+  await user.click(within(policy).getByRole("button", {name: /Idle timeout/}));
+  await user.selectOptions(within(policy).getByRole("combobox", {name: "Runtime policy mode"}), "scheduled");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri"]) {
+    await user.click(within(policy).getByRole("button", {name: day}));
+  }
+  await user.clear(within(policy).getByRole("textbox", {name: "Schedule time zone"}));
+  await user.type(within(policy).getByRole("textbox", {name: "Schedule time zone"}), "America/Chicago");
+  await user.type(within(policy).getByLabelText("Schedule start time"), "08:00");
+  await user.type(within(policy).getByLabelText("Schedule end time"), "18:00");
+  expect(within(policy).getByText(/active agent turns and shell jobs are interrupted/i)).toBeInTheDocument();
+  await user.click(within(policy).getByRole("button", {name: "Save policy"}));
 
-  await user.click(within(lifetime).getByRole("button", {name: "About Keep running"}));
-  expect(within(lifetime).getByRole("tooltip")).toHaveTextContent(
-      "On keeps background work active. Off pauses after 60 min idle.",
-  );
+  expect(onSetRuntimePolicy).toHaveBeenCalledWith(expect.objectContaining({
+    mode: "scheduled",
+    schedule: expect.objectContaining({days: [1, 2, 3, 4, 5], startTime: "08:00", endTime: "18:00", timezone: "America/Chicago"}),
+  }));
 });
 
-test("does not show the runtime lifetime switch for historical sessions", () => {
+test("does not show the runtime policy editor for historical sessions", () => {
   renderTopbar({id: "session-1", status: "running"});
-  expect(screen.queryByRole("group", {name: "Runtime lifetime"})).not.toBeInTheDocument();
+  expect(screen.queryByRole("group", {name: "Runtime policy"})).not.toBeInTheDocument();
 });
 
 test("upload is available before starting a workspace and in the More menu", async () => {

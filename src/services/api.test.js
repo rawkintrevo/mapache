@@ -72,3 +72,17 @@ describe("automation API client", () => {
     );
   });
 });
+
+describe("workspace runtime policy API client", () => {
+  test("updates the selected workspace runtime policy", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({workspace: {id: "workspace-1"}}));
+    vi.stubGlobal("fetch", fetch);
+    const client = createApiClient(async () => "firebase-token");
+    const policy = {mode: "scheduled", schedule: {days: [1, 2, 3, 4, 5], startTime: "08:00", endTime: "18:00", timezone: "America/Chicago"}};
+
+    await client.updateWorkspaceRuntimePolicy("workspace/1", policy);
+
+    expect(fetch.mock.calls[0][0]).toBe("/api/workspaces/workspace%2F1/runtime-policy");
+    expect(fetch.mock.calls[0][1]).toMatchObject({method: "PATCH", body: JSON.stringify(policy)});
+  });
+});

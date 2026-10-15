@@ -165,6 +165,9 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "mcp") {
     return {name: "workspaceMcp", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "runtime-policy") {
+    return {name: "workspaceRuntimePolicy", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "sessions") {
     return {name: "sessions", workspaceId: parts[1]};
   }

@@ -31,3 +31,38 @@ default to `longRunning: false` and follow this policy. Users may explicitly ena
 Long-running to bypass automatic pause for browser-independent agent work; the
 reaper records the bypass reason and manual Pause still releases the runtime in
 either state.
+
+## Workspace runtime policy
+
+The top-navigation runtime policy is workspace-scoped and has three exclusive
+modes: **Idle timeout**, **Keep running**, and **Scheduled hours**. Existing
+workspaces without a saved mode continue to use their session's existing
+`longRunning` value, so adding the feature does not change their behavior.
+Scheduled hours store selected ISO weekdays (Monday is 1), one same-day start
+and end time, and an explicit IANA timezone. Overnight windows are rejected.
+
+`reconcileWorkspaceRuntimeSchedules` runs every minute without a browser or
+active runner. It starts a stopped main session on selected days, bypasses idle
+reaping only while its window is open, and retries a failed or blocked start
+until that window closes. Capacity limits and main/automation reservations still
+apply. Failures are stored as safe error codes on the workspace and shown in the
+policy editor. A manual Pause during an open window is remembered for that
+local date, so retries do not undo the user's pause; the next selected opening
+can start the session again. A manual Start clears the pause marker and uses the
+ordinary idle timeout outside scheduled hours.
+
+Enabling or editing an enabled schedule reconciles immediately. If the current
+time falls outside the edited window, the normal stop lifecycle runs at once.
+Disabling scheduling returns to idle-timeout behavior and does not stop a
+currently running session. At a closing boundary, Functions keeps the existing
+usage-accounting path but skips the runner's cooperative `/shutdown`, quiesce,
+and final-checkpoint work. It requests Cloud Run service deletion
+directly, so active agent turns and shell jobs are interrupted without a grace
+period. After deletion is confirmed, the session is marked stopped and an
+interrupted-work warning is recorded. Live process state is not preserved or
+resumed after shutdown.
+
+Schedule boundaries use local wall-clock time in the selected timezone. A
+nonexistent spring-forward boundary resolves to the first valid instant after
+the gap. Repeated fall-back hours remain one continuous window, using the first
+matching instant for opening and the last matching instant for closing.

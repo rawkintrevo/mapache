@@ -40,13 +40,33 @@ service cloud.firestore {
       allow create: if signedIn() &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.userPath == "users/" + request.auth.uid &&
-        !request.resource.data.keys().hasAny(["automationMaxConcurrency"]);
+        !request.resource.data.keys().hasAny([
+          "automationMaxConcurrency",
+          "runtimePolicy",
+          "runtimePolicyRevision",
+          "runtimeScheduleStatus",
+          "runtimeScheduleNextEvent",
+          "runtimeScheduleError",
+          "runtimeScheduleManualPauseWindowKey",
+          "runtimeScheduleLease",
+          "runtimeScheduleLastAction",
+          "runtimeScheduleReconciledAt"
+        ]);
       allow update: if signedIn() &&
         resource.data.ownerUid == request.auth.uid &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.userPath == "users/" + request.auth.uid &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          "automationMaxConcurrency"
+          "automationMaxConcurrency",
+          "runtimePolicy",
+          "runtimePolicyRevision",
+          "runtimeScheduleStatus",
+          "runtimeScheduleNextEvent",
+          "runtimeScheduleError",
+          "runtimeScheduleManualPauseWindowKey",
+          "runtimeScheduleLease",
+          "runtimeScheduleLastAction",
+          "runtimeScheduleReconciledAt"
         ]);
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 

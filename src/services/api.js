@@ -154,6 +154,15 @@ export function createApiClient(getToken) {
         `/api/workspaces/${workspaceId}/mcp`,
         {method: "PUT", body},
     ),
+    getWorkspaceRuntimePolicy: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/runtime-policy`,
+    ),
+    updateWorkspaceRuntimePolicy: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/runtime-policy`,
+        {method: "PATCH", body},
+    ),
     getWorkspaceRequestGrants: (workspaceId) => request(
         getToken,
         `/api/workspaces/${encodeURIComponent(workspaceId)}/request-grants`,

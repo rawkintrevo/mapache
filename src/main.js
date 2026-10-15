@@ -42,6 +42,7 @@ import {
   editSessionState,
   resizeSessionState,
   setSessionLongRunningState,
+  setWorkspaceRuntimePolicyState,
   retryProvisioningSessionState,
   restartSessionState,
   stopSessionState,
@@ -127,6 +128,7 @@ const handlers = {
     getSessionLogs,
     resizeSession,
     setSessionLongRunning,
+    setRuntimePolicy,
     retryProvisioningSession,
     restartSession,
     shareSessionPreview,
@@ -373,6 +375,19 @@ async function setSessionLongRunning(sessionId, enabled) {
       "Saving runtime policy...",
       OPERATION_KEYS.SESSION_IDLE_POLICY,
   );
+}
+
+async function setRuntimePolicy(policy) {
+  let saved = false;
+  await runBusy(
+      async () => {
+        await setWorkspaceRuntimePolicyState(state, policy, dispatch);
+        saved = true;
+      },
+      "Saving runtime policy...",
+      OPERATION_KEYS.SESSION_IDLE_POLICY,
+  );
+  return saved;
 }
 
 async function editSession(sessionId, payload) {
