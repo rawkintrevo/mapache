@@ -259,3 +259,11 @@ The navbar Upload file action sends local files directly to Cloud Storage using
 resumable transfers. Main and automation sessions mount their workspace inputs
 read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
 ownership, lifecycle, restart requirements, and verification.
+
+Named OpenAI-compatible connections use the existing Authentication modal and
+Pi auth workflow. `AuthModal` collects a stable `custom-…` ID and endpoint in
+addition to the label/key, keeps failed saves visible, and disables ID changes
+while editing. `PiAuthManageModal` includes owned custom entries alongside the
+catalog providers, with one selected credential per provider ID. Model editing
+stays in the embedded Agent. See [Named OpenAI-compatible connections](./runner-harnesses.md#named-openai-compatible-connections)
+for the endpoint binding and persistence contract.

@@ -1,0 +1,5 @@
+{
+  "id": "script.openAuthManagement",
+  "title": "Open saved credential selection",
+  "actions": [{"type": "click", "role": "button", "name": "Manage Pi Auth"}]
+}

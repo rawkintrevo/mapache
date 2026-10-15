@@ -96,6 +96,7 @@ test("captures complete history, safe settings, UI state, and referenced uploads
   assert.deepEqual(
       result.manifest.files.map((file) => file.path),
       [
+        "pi/mapache-models.json",
         "pi/settings.json",
         "sessions/chat.jsonl",
         "ui/shortcuts/current.json",

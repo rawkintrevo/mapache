@@ -101,10 +101,10 @@ export function createApiClient(getToken) {
         {method: "POST", body: {whitelisted}},
     ),
     getPiAuth: () => request(getToken, "/api/auth"),
-    savePiAuthProvider: (provider, key, label = "", entryId = "") => request(
+    savePiAuthProvider: (provider, key, label = "", entryId = "", connection = {}) => request(
         getToken,
         `/api/auth/providers/${encodeURIComponent(provider)}`,
-        {method: "PUT", body: {key, label, entryId}},
+        {method: "PUT", body: {key, label, entryId, ...connection}},
     ),
     deletePiAuthProvider: (provider) => request(
         getToken,

@@ -87,6 +87,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/pi-web-functional.json`: Managed Agent turns, read-only MCP/auth probes, native history, shell coexistence, Chrome/Preview, and native Goal assertions.
 - `cases/pi-web-long-running-policy.json`: Managed runtime Long-running switch, persisted policy across reload, automatic-pause messaging, and cleanup.
 - `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
+- `cases/auth-custom-provider.json`: Named compatible connection creation, immutable provider ID, endpoint-preserving key rotation, and cleanup. Uses placeholder keys and starts no runner.
 - `cases/auth-provider-api-key.json`: Authentication Center API-key save/delete.
 - `cases/auth-github-cli-token.json`: Authentication Center GitHub CLI token save/delete.
 - `cases/mcp-servers-crud.json`: Navbar MCP server modal save path for selected workspaces.

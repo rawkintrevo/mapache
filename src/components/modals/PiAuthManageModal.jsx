@@ -1,6 +1,6 @@
 import {useMemo, useState} from "react";
 import {Pencil, Plus, Trash2, X} from "lucide-react";
-import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
+import {isCustomPiProvider, piAuthProviderLabel} from "../../config/piAuthProviders.js";
 import {sessionAuthHarness} from "../../utils/sessionHarnesses.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
@@ -41,7 +41,7 @@ export function PiAuthManageModal({piAuth, session, onAdd, onClose, onDelete, on
   const entries = useMemo(() => {
     const allEntries = normalizeEntries(piAuth);
     if (!authHarness?.providerKeys?.length) return allEntries;
-    return allEntries.filter((entry) => authHarness.providerKeys.includes(entry.providerKey));
+    return allEntries.filter((entry) => authHarness.providerKeys.includes(entry.providerKey) || (authHarness.id === "pi" && isCustomPiProvider(entry.providerKey)));
   }, [authHarness, piAuth]);
   const groupedEntries = useMemo(() => groupEntries(entries), [entries]);
   const [selection, setSelection] = useState(() => initialSelection(session, groupedEntries));

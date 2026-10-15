@@ -91,3 +91,56 @@ the server-owned credential boundary.
 - [Frontend architecture](./frontend-architecture.md)
 - [Runtime containers](./runtime-containers.md)
 - [Session runner architecture](./session-runner-architecture.md)
+
+## Named OpenAI-compatible connections
+
+Mapache Authentication accepts provider IDs in the reserved `custom-` namespace
+(lowercase letters, digits, and hyphens; up to 70 characters including the prefix).
+`functions/customPiProviders.helpers.js` owns API validation; the existing
+owner-private auth entries and session selection retain separate credentials for
+multiple custom providers alongside built-ins. IDs are immutable on edit; labels
+and keys can change. The base URL is stored with each credential as
+`mapacheBaseUrl`, normalized without a trailing slash, and must be HTTP(S) without
+URL credentials, query parameters, or fragments. Supply a placeholder key for an
+endpoint without authentication. Custom headers and custom OAuth are not supported
+by this connection type.
+
+The UI collects the ID, endpoint, label, and key, but models remain upstream-owned.
+Select the connection in Manage Pi Auth and restart the workspace. In Agent
+Settings → Models, edit the matching provider to fetch or enter served model IDs,
+context/output limits, reasoning, and input capabilities. The initial API is
+`openai-completions` (Chat Completions). Endpoints must be reachable from the runner;
+localhost refers to the cloud container, not the user's computer.
+
+`session-runner/lib/customPiModels.js` seeds matching provider metadata after
+checkpoint restore and canonical auth materialization. A changed endpoint clears
+its old model list so the user discovers/configures models for the new server.
+Deselection retains non-secret metadata but removes the provider's canonical
+credential. Credential edits/deletion/selection require a workspace restart to
+invalidate any upstream in-memory auth overrides.
+
+Patch `0017-custom-provider-connections.patch` makes both edit-form discovery and
+saved-provider refresh resolve the custom key from server-side `auth.json` using
+the provider ID and the bound endpoint. Metadata saves cannot redirect that
+credential to another endpoint or model-specific endpoint. Discovery does not
+follow redirects or expose upstream error response bodies. Existing built-in
+provider behavior and managed credential-entry restrictions remain in place.
+
+Raw `models.json` remains excluded from checkpoints. Snapshot capture writes a
+validated projection to `pi/mapache-models.json`; startup revalidates it and
+reconstructs the custom entries. The projection includes only custom provider
+IDs, base URLs, Chat Completions API, names, model IDs, capabilities, limits,
+cost metadata, and explicitly supported compatibility flags/enums. It drops
+inline keys, headers, commands, model-specific endpoints, and unknown fields.
+Advanced sampling/templates and arbitrary provider extensions are not part of
+this persistence contract. Built-in provider overrides retain the existing
+snapshot behavior. Metadata is workspace-scoped; connection credentials are
+user-scoped. An automation must receive the appropriate workspace agent
+checkpoint and current credential selection; this change does not add custom
+models to the generated automation catalog or a separate automation setup UI.
+
+Verify with the custom-provider Functions tests, runner `customPiModels.test.js`,
+upstream `mapache-custom-provider.test.ts` (authenticated discovery and streamed
+tool call through the pinned SDK), and `e2e/qa/cases/auth-custom-provider.json`.
+Deploy the API and rebuild `pi-chrome`; existing sessions need a new revision
+before the custom connection runtime behavior is available.

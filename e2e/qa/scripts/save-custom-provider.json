@@ -1,0 +1,50 @@
+{
+  "id": "script.saveCustomProvider",
+  "title": "Save one named compatible connection using a non-secret fixture key",
+  "actions": [
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Add authentication provider"
+    },
+    {
+      "type": "select",
+      "name": "provider",
+      "value": "openai-compatible"
+    },
+    {
+      "type": "fill",
+      "name": "entryLabel",
+      "value": "{{entryLabel}}"
+    },
+    {
+      "type": "fill",
+      "name": "customProviderId",
+      "value": "{{providerId}}"
+    },
+    {
+      "type": "fill",
+      "name": "baseUrl",
+      "value": "{{baseUrl}}"
+    },
+    {
+      "type": "fill",
+      "name": "apiKey",
+      "value": "qa-placeholder-key"
+    },
+    {
+      "type": "submit",
+      "buttonName": "Save"
+    },
+    {
+      "type": "waitForNetwork",
+      "requestUrlIncludes": "/api/auth/providers/{{providerId}}",
+      "method": "PUT",
+      "expectedStatus": 200
+    },
+    {
+      "type": "waitForSnapshotText",
+      "text": "{{entryLabel}}"
+    }
+  ]
+}
