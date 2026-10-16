@@ -92,7 +92,10 @@ result.
 
 ## Ask another workspace
 
-Use the image-owned `workspace_request_targets` tool to discover only explicitly permitted target workspaces. Resolve the target before submitting; do not invent a workspace ID or copy a Firebase/bearer token. Submit one request with `workspace_request_submit`, retain its returned request ID, and use `workspace_request_get` for bounded status/result polling. Use `workspace_request_reply` for clarification and `workspace_request_cancel` only when the target grant permits it. The source receives a caller-safe result/artifact projection, never target credentials, transcripts, or unrelated ticket history. See the bundled Interworkspace requests guide for the complete setup and limits.
+For information, answers, summaries, or delegated work from another workspace,
+read `/app/seeded-skills/mapache-workspace-requests/SKILL.md`. Discover the
+existing `workspace_request_*` tools on this MCP server and start with
+`workspace_request_targets`; these requests do not require a schedule.
 
 ## Runs and recovery
 

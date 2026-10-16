@@ -19,7 +19,7 @@ test("operating reference stays bounded and all detailed skill paths ship in the
   const manifest = JSON.parse(fs.readFileSync(path.join(runnerRoot, "upstream", "pi-web-ui", "manifest.json"), "utf8"));
   assert.ok(manifest.patches.includes("patches/0016-managed-operating-reference.patch"));
   const links = [...reference.matchAll(/`\/app\/(seeded-skills\/[^`]+\/SKILL\.md)`/g)];
-  assert.equal(links.length, 6);
+  assert.equal(new Set(links.map(([, relativePath]) => relativePath)).size, 7);
   for (const [, relativePath] of links) {
     assert.ok(fs.existsSync(path.join(runnerRoot, relativePath)), relativePath);
   }
@@ -54,4 +54,19 @@ test("browser skills teach direct localhost access rather than gateway commands"
     assert.match(guidance, /chrome-devtools/, name);
     assert.doesNotMatch(guidance, /\$MAPACHE_PREVIEW_URL|\$MAPACHE_BROWSER_QA_COMMAND|\/preview\/status|\/preview\/logs/, name);
   }
+});
+
+test("information requests route from the operating reference to a discoverable skill", () => {
+  const guidance = skill("mapache-workspace-requests");
+  assert.match(reference, /get this information from workspace X/);
+  assert.match(reference, /mapache-workspace-requests\/SKILL\.md/);
+  assert.match(guidance, /^description: .*Get information.*another Mapache workspace/m);
+  assert.match(guidance, /mapache-automations/);
+  assert.match(guidance, /workspace_request_targets/);
+  assert.match(guidance, /workspace_request_submit/);
+  assert.match(guidance, /workspace_request_get/);
+  assert.match(guidance, /request_permission_denied/);
+  assert.match(guidance, /Workspace request access/);
+  assert.match(guidance, /do not add edits, sends/);
+  assert.match(skill("mapache-automations"), /mapache-workspace-requests\/SKILL\.md/);
 });

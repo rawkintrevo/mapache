@@ -17,6 +17,13 @@ You are running inside a Mapache-managed workspace. This reference describes the
 - Use the project's normal build directory and asset paths. No Mapache preview gateway, special output directory, preview configuration file, or gateway URL is needed. Older workspace-local preview skills may contain obsolete gateway instructions; use the image-bundled guidance listed below instead.
 - Verify the page, interactions, console errors, and failed network requests in managed Chrome. A successful build or HTTP response alone is not browser QA. Save useful screenshots/reports in the workspace and state what was actually tested.
 
+## Information and requests across workspaces
+
+- For “get this information from workspace X,” “ask Research,” “talk to another workspace,” or delegated work, read `/app/seeded-skills/mapache-workspace-requests/SKILL.md`. Information lookup and summaries are primary uses of the existing workspace-request tools; no schedule is needed.
+- Discover `workspace_request_*` tools through the `mapache-automations` MCP server (which may have a collision suffix), then call `workspace_request_targets` before saying another workspace is unavailable. Resolve the permitted target by name; never guess an ID.
+- Submit a self-contained question with `workspace_request_submit`, retain the returned request ID, and retrieve the answer with `workspace_request_get`. For information requests, ask for an answer and supporting sources without adding edits or publication. Queued means accepted, not answered.
+- Requests start a separate target run using saved context and permitted connections; they do not message the target's interactive chat. Distinguish missing tools, a target absent from discovery, denied permissions, and execution errors. If grants are missing, direct the owner to **More → Workspace request access** in the source workspace; do not claim Mapache cannot communicate across workspaces.
+
 ## Automations from chat
 
 - Treat requests such as “check the news at 5pm” or “do this every morning” as requests to schedule work, not merely to explain scheduling. Read the `mapache-automations` skill and discover the `mapache-automations` MCP tools.
@@ -38,6 +45,7 @@ Read only the skill needed for the task. These image-owned copies remain availab
 
 - Browser and local apps: `/app/seeded-skills/mapache-chrome/SKILL.md`
 - Scheduling and run management: `/app/seeded-skills/mapache-automations/SKILL.md`
+- Information from and requests to other workspaces: `/app/seeded-skills/mapache-workspace-requests/SKILL.md`
 - GitHub implementation workflow: `/app/seeded-skills/mapache-github-issue/SKILL.md`
 - Build-and-serve guidance (compatibility name): `/app/seeded-skills/mapache-preview-build/SKILL.md`
 - Local app/API servers: `/app/seeded-skills/mapache-api-hosting/SKILL.md`
