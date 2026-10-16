@@ -1,0 +1,21 @@
+{
+  "id": "script.openWorkspaceRequestAccess",
+  "title": "Open workspace request access dialog",
+  "actions": [
+    {
+      "type": "click",
+      "role": "button",
+      "name": "More workspace actions"
+    },
+    {
+      "type": "click",
+      "role": "menuitem",
+      "name": "Workspace request access"
+    },
+    {
+      "type": "waitForSnapshotText",
+      "text": "Target workspace",
+      "timeoutMs": 10000
+    }
+  ]
+}

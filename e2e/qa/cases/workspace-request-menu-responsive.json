@@ -1,0 +1,79 @@
+{
+  "id": "workspace.request-menu-responsive",
+  "title": "Workspace request access is reachable on desktop and mobile",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.request-menu-responsive",
+  "steps": [
+    {
+      "useCase": "cases/login.json"
+    },
+    {
+      "useScript": "scripts/create-blank-workspace.json",
+      "parameters": {
+        "workspaceName": "qa-request-menu-{{timestamp}}",
+        "workspaceEnv": "QA_CASE=workspace-request-menu"
+      }
+    },
+    {
+      "assert": "responsive-menu-visible",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "expected": "Set Chrome DevTools viewport to the specified size. More workspace actions is visible and inside the viewport; document has no horizontal overflow."
+    },
+    {
+      "useScript": "scripts/open-workspace-request-access.json"
+    },
+    {
+      "assert": "request-grant-dialog-visible",
+      "expected": "Workspace request access dialog opens with Target workspace and Allowed operations; request-grants GET succeeds."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "desktop-request-access.png"
+    },
+    {
+      "useScript": "scripts/close-workspace-request-access.json"
+    },
+    {
+      "assert": "responsive-menu-visible",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "expected": "Set Chrome DevTools viewport to the specified size. More workspace actions is visible and inside the viewport; document has no horizontal overflow."
+    },
+    {
+      "useScript": "scripts/open-workspace-request-access.json"
+    },
+    {
+      "assert": "request-grant-dialog-visible",
+      "expected": "Workspace request access dialog opens with Target workspace and Allowed operations; request-grants GET succeeds."
+    },
+    {
+      "capture": "screenshot",
+      "fileName": "mobile-request-access.png"
+    },
+    {
+      "useScript": "scripts/close-workspace-request-access.json"
+    },
+    {
+      "assert": "restore-desktop-viewport",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "expected": "Set Chrome DevTools viewport to desktop before cleanup."
+    },
+    {
+      "useScript": "scripts/delete-selected-workspace.json"
+    },
+    {
+      "capture": "console"
+    },
+    {
+      "capture": "network"
+    }
+  ]
+}
