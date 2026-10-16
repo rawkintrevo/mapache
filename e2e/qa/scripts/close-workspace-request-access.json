@@ -1,0 +1,11 @@
+{
+  "id": "script.closeWorkspaceRequestAccess",
+  "title": "Close workspace request access dialog",
+  "actions": [
+    {
+      "type": "click",
+      "role": "button",
+      "name": "Close"
+    }
+  ]
+}

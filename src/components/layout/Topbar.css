@@ -79,7 +79,7 @@ h1 {
 
 .topbar-more-menu {
   position: relative;
-  display: none;
+  display: block;
 }
 
 .topbar-more-popover {
@@ -283,7 +283,6 @@ h1 {
   .topbar-workspace-secondary,
   .topbar-link,
   .topbar-refresh-button { display: none; }
-  .topbar-more-menu { display: block; }
   .topbar-more-trigger,
   .topbar-actions > .button,
   .topbar-user-button,
