@@ -138,3 +138,42 @@ test("retries a lost response with the same idempotency key", async () => {
       /automation_agent_invalid_path/,
   );
 });
+
+test("workspace information request guidance uses existing discovery, submission and result contracts", async () => {
+  const server = fakeServer();
+  const calls = [];
+  registerAutomationTools(server, {
+    async call(path, options = {}) {
+      calls.push({path, options});
+      if (path.endsWith("/targets")) return {targets: [{workspaceId: "research", name: "Customer Research"}]};
+      if (options.method === "POST") return {id: "answer-1", status: "queued"};
+      return {id: "answer-1", status: "succeeded", result: {summary: "Three onboarding themes"}};
+    },
+  });
+  const invoke = (name, input) => {
+    const tool = server.tools.get(name);
+    return tool.handler(tool.config.inputSchema.parse(input));
+  };
+  const targets = await invoke("workspace_request_targets", {});
+  const targetWorkspaceId = targets.structuredContent.targets[0].workspaceId;
+  const submitted = await invoke("workspace_request_submit", {
+    targetWorkspaceId,
+    request: "Summarize onboarding complaints from last month.",
+    desiredOutput: "Main themes and three supporting examples with sources.",
+    idempotencyKey: "information-question-1",
+  });
+  assert.equal(submitted.structuredContent.status, "queued");
+  assert.equal(calls[1].options.body.targetWorkspaceId, "research");
+  assert.equal(calls[1].options.idempotencyKey, "information-question-1");
+  const answer = await invoke("workspace_request_get", {ticketId: submitted.structuredContent.id});
+  assert.equal(calls[2].path, "/api/agent/workspace-requests/answer-1");
+  assert.equal(answer.structuredContent.result.summary, "Three onboarding themes");
+
+  const denied = fakeServer();
+  registerAutomationTools(denied, {async call() {
+    throw Object.assign(new Error("Denied"), {code: "request_permission_denied"});
+  }});
+  const failure = await denied.tools.get("workspace_request_submit").handler({targetWorkspaceId, request: "Question"});
+  assert.equal(failure.isError, true);
+  assert.equal(failure.structuredContent.error, "request_permission_denied");
+});

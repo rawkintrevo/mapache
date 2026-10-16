@@ -124,3 +124,29 @@ test("default runtime skill catalog selects common and preview file-backed seeds
   }).map(resolveSeededSkillContent));
   assert.ok(contents.every((content) => content.startsWith("---\nname: ")));
 });
+
+for (const runtimeKind of ["main", "automation"]) {
+  test(`seeds workspace request discovery for ${runtimeKind} without replacing existing guidance`, async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-request-skills-"));
+    t.after(() => fs.rm(root, {recursive: true, force: true}));
+    const config = {
+      workspaceDir: root,
+      piAgentDir: path.join(root, "private-agent"),
+      agentRuntimeEnabled: true,
+      runtimeKind,
+      ...(runtimeKind === "automation" ? {automationOutputDir: path.join(root, "output")} : {}),
+    };
+    const skillsDir = runtimeKind === "automation" ? path.join(config.piAgentDir, "skills") : path.join(root, ".pi", "skills");
+    const oldSkill = path.join(skillsDir, "mapache-automations", "SKILL.md");
+    await fs.mkdir(path.dirname(oldSkill), {recursive: true});
+    await fs.writeFile(oldSkill, "User-edited scheduling guidance");
+    const service = createPiSeededSkillService({config, defaultRuntimeSkills});
+    await service.seedDefaultRuntimeSkills();
+    const requestPath = path.join(skillsDir, "mapache-workspace-requests", "SKILL.md");
+    assert.match(await fs.readFile(requestPath, "utf8"), /description: Get information/);
+    assert.equal(await fs.readFile(oldSkill, "utf8"), "User-edited scheduling guidance");
+    await fs.writeFile(requestPath, "User-edited request guidance");
+    await service.seedDefaultRuntimeSkills();
+    assert.equal(await fs.readFile(requestPath, "utf8"), "User-edited request guidance");
+  });
+}

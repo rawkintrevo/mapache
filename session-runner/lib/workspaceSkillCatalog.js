@@ -19,6 +19,7 @@ const WORKSPACE_SKILL_PROFILES = Object.freeze({
   ]),
   automations: Object.freeze([
     "mapache-automations",
+    "mapache-workspace-requests",
   ]),
 });
 

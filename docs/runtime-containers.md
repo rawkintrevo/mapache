@@ -526,7 +526,8 @@ safe warning and retain the existing prompt rather than blocking startup.
 The integration does not rewrite repository `AGENTS.md`, user
 `SYSTEM.md`/`APPEND_SYSTEM.md`, or saved settings. It describes workspace and
 process lifetime, direct localhost access in managed Chrome, chat automation
-management through the existing MCP tools, credential boundaries, and paths to
+management and information requests to other workspaces through the existing
+MCP tools, credential boundaries, and paths to
 detailed image-bundled skills. It does not inject the developer wiki or any
 session credentials into prompts.
 
@@ -547,6 +548,8 @@ this reference and updated image-owned skills. Updating Markdown in a workspace
 or rebuilding an image tag alone does not update an already running revision.
 See [Scheduled Automations](./automations.md#automation-tools-in-workspace-chat)
 for the chat scheduling contract.
+See [Workspace requests](./workspace-requests.md#agent-discovery-and-guidance)
+for the dedicated information-request skill and discovery behavior.
 
 ## Terminal Runtime
 

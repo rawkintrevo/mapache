@@ -14,7 +14,33 @@ Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`;
 
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
 
-## Image contract
+## Agent discovery and guidance
+
+Information retrieval (for example, “get the onboarding findings from Customer
+Research”) is a primary use of the existing request flow. The always-loaded
+`session-runner/reference/mapache.md` routes information, conversation, and
+delegation requests to the dedicated `mapache-workspace-requests` skill in
+`session-runner/seeded-skills/`. `workspaceSkillCatalog.js` seeds it alongside
+automation guidance for managed interactive and automation runtimes. The
+scheduling skill cross-links it, but no schedule is required to ask a question.
+
+Agents discover the existing tools on `mapache-automations`, resolve the target
+with `workspace_request_targets`, submit a self-contained question, and retrieve
+the answer by request ID. Guidance distinguishes missing tools, absent targets,
+permission failures, and execution/configuration errors. Information requests
+do not authorize added edits or publication. This is an instruction/discovery
+change; tool schemas, grants, and execution behavior are unchanged.
+
+The current image-bundled skill path remains authoritative when workspace-local
+copies are older. Seeding creates missing skills without replacing user edits.
+Rebuild/publish `pi-chrome` and recreate/revise existing sessions to receive the
+operating reference and new skill; a repository docs edit or image tag update
+alone does not refresh a running revision. No Functions deploy is needed for
+this guidance-only change. Verify two live workspaces after rollout: an ordinary
+information request should discover/submit/retrieve, and an ungranted target
+should produce setup guidance rather than a blanket unsupported claim.
+
+## Image tools
 
 `session-runner/automation-mcp/server.mjs` exposes:
 
