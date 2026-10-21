@@ -1,5 +1,7 @@
 "use strict";
 
+const {boundedUnixSocketPath} = require("./unixSocketPath.helpers");
+
 const fs = require("fs");
 const path = require("path");
 const {randomBytes} = require("node:crypto");
@@ -128,6 +130,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     await fsImpl.promises.mkdir(config.piWebUiSessionDir, {recursive: true, mode: 0o700});
     if (stopping) throw publicError("pi_web_ui_start_cancelled");
 
+    if (process.platform !== "win32") {
+      await ensurePrivateRuntimeDirectory(path.dirname(controlSocketPath(config)), {fsImpl});
+    }
     privateToken = makePrivateToken(randomBytesImpl);
     let next;
     try {
@@ -391,6 +396,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       PI_CODING_AGENT_SESSION_DIR: config.piWebUiSessionDir,
       PI_WEB_CWD: config.automationOutputDir || config.workspaceDir,
       PI_WEB_DATA_DIR: config.piWebUiDataDir,
+      PI_WEB_CONTROL_PATH: controlSocketPath(config),
       PI_WEB_ENGINE: "pi",
       PI_WEB_HOST: config.piWebUiHost || "127.0.0.1",
       PI_WEB_MANAGED: "1",
@@ -405,7 +411,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   }
 
   function controlRequest(command, timeoutMs, payload = {}) {
-    const controlPath = config.piWebUiControlPath || controlSocketPath(config);
+    const controlPath = controlSocketPath(config);
     return new Promise((resolve) => {
       let socket;
       let settled = false;
@@ -508,7 +514,7 @@ function safeActivity(value) {
 function controlSocketPath(config) {
   return process.platform === "win32"
     ? `\\\\.\\pipe\\pi-web-ui-${config.piWebUiPort || 8787}`
-    : path.join(config.piWebUiDataDir, "pi-web-ui.sock");
+    : boundedUnixSocketPath(config.piWebUiControlPath || path.join(config.piWebUiDataDir, "pi-web-ui.sock"));
 }
 
 function validatePiMcpAdapter(fsImpl, adapterPath, expectedVersion) {
