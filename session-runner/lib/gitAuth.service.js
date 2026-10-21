@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const {normalizeEnvString} = require("./utils");
+const {isAutomationStorageMode} = require("./automationStorage.helpers");
 
 const MAPACHE_GIT_CREDENTIAL_HELPER = "!/usr/local/bin/mapache-git-credential";
 
@@ -36,7 +37,9 @@ function createGitAuthService({config, tokenProvider}) {
   }
 
   async function configureGithubCredentialHelper(runGitCommand) {
-    if (config.workspaceSourceMode !== "github" ||
+    // Read-only automation inputs intentionally have no writable repository metadata.
+    if (isAutomationStorageMode(config.workspaceStorageMode) ||
+        config.workspaceSourceMode !== "github" ||
         !(config.githubAutomationToken || config.githubAutomationTokenRefreshUrl) ||
         !config.githubRepoOwner || !config.githubRepoName) {
       return {configured: false, skipped: true};

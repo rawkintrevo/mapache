@@ -150,6 +150,7 @@ async function replyRequest(claims, ticketId, body, dependencies) {
     runId: run.id || run.runId,
     reply: {message: message.slice(0, 32768), at: dependencies.admin.firestore.FieldValue.serverTimestamp()},
     status: run.status,
+    errorCode: null,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   });
   return callerSafeTicket(await readTicket(dependencies.db, ticket.id));

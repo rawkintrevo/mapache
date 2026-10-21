@@ -72,8 +72,10 @@ test("reply creates a linked continuation run on the same ticket", async () => {
   const {service, db} = setup();
   await service.saveGrant("owner", "source", "target", {permissions: ["submit", "reply"]});
   await service.submitRequest({ownerUid: "owner", workspaceId: "source", sessionId: "session-1"}, {targetWorkspaceId: "target", request: "Initial request"}, {idempotencyKey: "reply-test"});
+  db.values.get("workspaceTickets/ticket-1").errorCode = "automation_provisioning_failed";
   const result = await service.replyRequest({ownerUid: "owner", workspaceId: "source", sessionId: "session-1"}, "ticket-1", {message: "Please include one more example."});
   assert.match(result.reply.message, /one more example/);
+  assert.equal(result.errorCode, null);
   assert.match(result.runId, /^ticket-ticket-1-reply-/);
   assert.equal(db.values.get("workspaceTickets/ticket-1").status, "queued");
 });

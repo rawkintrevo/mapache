@@ -177,3 +177,27 @@ test("shared workspaces keep Git metadata private while Git commands use the mou
     fs.rmSync(root, {recursive: true, force: true});
   }
 });
+
+for (const workspaceStorageMode of ["automation-readonly-gcs-v1", "private"]) {
+  test(`credential startup with no repository in ${workspaceStorageMode}`, async (t) => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-git-input-"));
+    t.after(() => fs.rmSync(workspaceDir, {recursive: true, force: true}));
+    fs.writeFileSync(path.join(workspaceDir, "README.md"), "snapshot input\n");
+    const service = createGitService({
+      activity: {},
+      config: {
+        workspaceDir, workspaceStorageMode, workspaceSourceMode: "github",
+        runtimeKind: workspaceStorageMode === "private" ? "main" : "automation",
+        githubAutomationTokenRefreshUrl: "https://functions.example/token",
+        githubRepoOwner: "owner", githubRepoName: "repo",
+      },
+    });
+    await service.prepareSharedWorkspaceGit();
+    if (workspaceStorageMode === "automation-readonly-gcs-v1") {
+      assert.deepEqual(await service.configureGithubCredentialHelper(), {configured: false, skipped: true});
+      assert.deepEqual(fs.readdirSync(workspaceDir), ["README.md"]);
+    } else {
+      await assert.rejects(service.configureGithubCredentialHelper(), /--local can only be used inside a git repository/);
+    }
+  });
+}
