@@ -65,6 +65,7 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
   const child = fakeChild();
   const spawnCalls = [];
   const logs = [];
+  config.piWebUiControlPath = "/var/lib/mapache/runtimes/auto-ticket-" + "a".repeat(64) + "/agent-state/ui/pi-web-ui.sock";
   config.automationAgentSocketPath = "/var/lib/mapache/runtimes/run-1/automation-agent.sock";
   try {
     const process = createPiWebUiProcess(config, {
@@ -85,6 +86,8 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(spawnCalls[0].args[0], path.join(config.piWebUiRoot, "dist", "server", "index.js"));
     assert.equal(spawnCalls[0].options.cwd, config.workspaceDir);
     assert.equal(spawnCalls[0].options.detached, true);
+    assert.equal(Buffer.byteLength(spawnCalls[0].options.env.PI_WEB_CONTROL_PATH) <= 100, true);
+    assert.match(spawnCalls[0].options.env.PI_WEB_CONTROL_PATH, /^\/tmp\/mapache-ipc-/);
     assert.equal(spawnCalls[0].options.env.PI_WEB_HOST, "127.0.0.1");
     assert.equal(spawnCalls[0].options.env.PI_WEB_PORT, "8787");
     assert.equal(spawnCalls[0].options.env.PI_WEB_MANAGED, "1");
@@ -206,8 +209,9 @@ test("quiesces through the local control socket and reports activity without a b
     const started = await managed.startAutomation({runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"});
     const automation = await managed.automationStatus("run-1");
     const canceled = await managed.cancelAutomation("run-1");
-    assert.deepEqual(commands, ["quiesce", "status", "startAutomation", "automationStatus", "cancelAutomation"]);
+    assert.deepEqual(commands, ["quiesce", "status", "status", "startAutomation", "automationStatus", "cancelAutomation"]);
     assert.deepEqual(requests.slice(2), [
+      {cmd: "status"},
       {cmd: "startAutomation", runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"},
       {cmd: "automationStatus", runId: "run-1"},
       {cmd: "cancelAutomation", runId: "run-1"},
@@ -223,6 +227,47 @@ test("quiesces through the local control socket and reports activity without a b
       activeTools: 1,
       pendingMessages: 0,
     });
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("waits for the private Pi control socket before submitting automation", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild();
+  const commands = [];
+  let connectionAttempts = 0;
+  config.piWebUiAutomationStartTimeoutMs = 100;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      fetch: healthyFetch(),
+      processKill: (_pid, signal) => child.kill(signal),
+      spawn: () => child,
+      controlConnect: () => {
+        connectionAttempts += 1;
+        if (connectionAttempts < 3) throw Object.assign(new Error("not listening"), {code: "ENOENT"});
+        const socket = new EventEmitter();
+        socket.destroy = () => {};
+        socket.write = (line) => {
+          const request = JSON.parse(String(line));
+          commands.push(request.cmd);
+          const body = request.cmd === "startAutomation" ?
+            {ok: true, runId: request.runId, conversationId: "c1", status: "running"} :
+            {ok: true, quiesced: false, connectedClients: 0, activeConversations: 0, activeTools: 0, pendingMessages: 0};
+          setImmediate(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")));
+        };
+        setImmediate(() => socket.emit("connect"));
+        return socket;
+      },
+    });
+
+    await managed.start();
+    const started = await managed.startAutomation({runId: "run-1", prompt: "run it"});
+
+    assert.equal(started.ok, true);
+    assert.equal(connectionAttempts, 4);
+    assert.deepEqual(commands, ["status", "startAutomation"]);
     await managed.stop();
   } finally {
     await fs.rm(root, {recursive: true, force: true});
@@ -268,14 +313,14 @@ test("allows automation initialization to outlive the shutdown control deadline"
         socket.destroy = () => {};
         socket.write = (line) => {
           const request = JSON.parse(String(line));
-          if (request.cmd === "startAutomation") {
-            setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify({
+          const body = request.cmd === "startAutomation" ? {
               ok: true,
               runId: request.runId,
               conversationId: "conversation-1",
               status: "running",
-            }) + "\n")), 20);
-          }
+            } : {ok: true, quiesced: false};
+          const delayMs = request.cmd === "startAutomation" ? 20 : 0;
+          setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")), delayMs);
         };
         setImmediate(() => socket.emit("connect"));
         return socket;

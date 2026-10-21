@@ -16,7 +16,12 @@ try {
     provider,
     Object.fromEntries(Object.values(models).sort((a, b) => a.id.localeCompare(b.id, "en")).map(({id, name}) => [id, name])),
   ]));
-  await writeFile(join(root, "src/config/automationModelCatalog.json"), `${JSON.stringify({source: {package: packed.name, version: packed.version, integrity: packed.integrity}, providers}, null, 2)}\n`);
+  const modelOverrides = {"openai-codex": {"gpt-6-astra": "GPT-6 Astra"}};
+  for (const [provider, models] of Object.entries(modelOverrides)) {
+    providers[provider] ||= {};
+    for (const [id, name] of Object.entries(models)) providers[provider][id] ||= name;
+  }
+  await writeFile(join(root, "src/config/automationModelCatalog.json"), `${JSON.stringify({source: {package: packed.name, version: packed.version, integrity: packed.integrity, modelOverrides: ["openai-codex/gpt-6-astra"]}, providers}, null, 2)}\n`);
   console.log(`Generated automation picker catalog from ${packed.id} (${Object.keys(providers).length} providers).`);
 } finally {
   await rm(directory, {recursive: true, force: true});

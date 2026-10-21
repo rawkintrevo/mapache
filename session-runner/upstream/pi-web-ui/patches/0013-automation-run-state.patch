@@ -28,6 +28,7 @@ index 0000000..9abd748
 +	interactionRequired: boolean;
 +	finalResult: "success" | "error" | null;
 +	finalError: string | null;
++	finalAnswer: string | null;
 +	terminal: AutomationTerminal | null;
 +	seenEventIds: string[];
 +}
@@ -41,7 +42,7 @@ index 0000000..9abd748
 +export type AutomationRunEvent =
 +	| (BaseEvent & { type: "started" })
 +	| (BaseEvent & { type: "model_end"; error?: string; retryable?: boolean })
-+	| (BaseEvent & { type: "agent_end"; result?: "success" | "error"; error?: string; willRetry?: boolean })
++	| (BaseEvent & { type: "agent_end"; result?: "success" | "error"; error?: string; answer?: string; willRetry?: boolean })
 +	| (BaseEvent & { type: "tool_start"; taskId: string })
 +	| (BaseEvent & { type: "tool_end"; taskId: string; isError?: boolean; error?: string })
 +	| (BaseEvent & { type: "subagent_start"; taskId: string })
@@ -64,6 +65,12 @@ index 0000000..9abd748
 +function cleanError(value: unknown): string | null {
 +	const error = String(value ?? "").trim();
 +	return error || null;
++}
++
++function cleanAnswer(value: unknown): string | null {
++	if (typeof value !== "string") return null;
++	const answer = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
++	return answer ? answer.slice(0, 32768) : null;
 +}
 +
 +function pendingWork(state: AutomationRunState): boolean {
@@ -102,6 +109,7 @@ index 0000000..9abd748
 +		interactionRequired: false,
 +		finalResult: null,
 +		finalError: null,
++		finalAnswer: null,
 +		terminal: null,
 +		seenEventIds: [],
 +	};
@@ -201,6 +209,7 @@ index 0000000..9abd748
 +					agentEnded: true,
 +					finalResult: event.result || (event.error ? "error" : "success"),
 +					finalError: cleanError(event.error) || state.finalError,
++					finalAnswer: event.result === "error" || event.error ? null : cleanAnswer(event.answer),
 +				};
 +			}
 +			break;
@@ -311,4 +320,29 @@ index 0000000..73a070d
 +
 +	state = apply(createAutomationRunState("run-1"), event("started"), event("input_requested", {requestId: "question-1"}), event("agent_end", {result: "success"}));
 +	assert.equal(state.terminal, "interaction_required");
++});
++
++test("stores a bounded final assistant answer without exposing a failed answer", () => {
++	const answer = "Workspace purpose: social media planning.";
++	const success = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "success", answer}),
++	);
++	assert.equal(success.finalAnswer, answer);
++	assert.equal(success.terminal, "succeeded");
++
++	const failed = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "error", error: "provider failed", answer}),
++	);
++	assert.equal(failed.finalAnswer, null);
++
++	const bounded = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "success", answer: "x".repeat(40000)}),
++	);
++	assert.equal(bounded.finalAnswer?.length, 32768);
 +});

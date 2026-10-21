@@ -177,6 +177,14 @@ reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
 
+The pinned Pi SDK catalog predates `openai-codex/gpt-6-astra`, which can be
+stored in a workspace's selected model state. `piModelCatalogOverrides.json`
+adds only that model's non-secret metadata to the embedded SDK at image build
+time, and `generate:automation-models` exposes the same entry in the automation
+model picker. This avoids changing the SDK dependency graph while allowing an
+isolated run to resolve the workspace's saved model; rebuild `pi-chrome` after
+changing the override.
+
 The pinned patch series also contains `server/automation-run-state.ts`, a pure
 reducer for one unattended automation run. It scopes events to the run and
 conversation, deduplicates event and task IDs, requires a final non-retry agent
@@ -187,7 +195,16 @@ sockets, sessions, or API clients; the later automation subscription layer
 owns event delivery. Changes to this reducer require the same upstream build
 and a rebuilt `pi-chrome` revision.
 
-Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces. The Git credential helper ships with a Node shebang. `/usr/local/bin/mapache-gh` is only a compatibility shell script that executes native `gh` unchanged; new agent guidance uses `gh` directly. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
+The runner waits for the Pi UI's private Unix control socket to answer a status
+request before it submits an automation prompt. The Pi HTTP health route can
+become ready before that socket is listening; treating HTTP health alone as
+automation readiness could reject the run immediately after starting the UI.
+The status probe is read-only, retries only within the bounded automation start
+window, and submits the prompt once after the socket responds. Changes to this
+startup path require a rebuilt `pi-chrome` revision; existing Cloud Run services
+need recreation to receive it.
+
+Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces and `automation-readonly-gcs-v1` inputs. Read-only automation snapshots intentionally omit repository metadata; `gitAuth.service.js` must skip repository-local credential configuration in this mode, while ordinary Git-backed startup still fails on invalid repositories. The Git credential helper ships with a Node shebang. `/usr/local/bin/mapache-gh` is only a compatibility shell script that executes native `gh` unchanged; new agent guidance uses `gh` directly. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
 
 The runner's automation execution service starts only after private workspace
 materialization and runtime admission. It validates the owner/workspace/session
@@ -234,6 +251,11 @@ runner restores the published checkpoint after source/archive preparation and
 before writer admission, credential materialization, and harness startup. It
 then starts exactly one supervised child from
 `/opt/mapache/pi-web-ui/dist/server/index.js`.
+Automation sessions additionally pin the workspace's published Agent
+checkpoint when Functions creates the session. Before the isolated client
+starts, checkpoint restore copies only `ui/client-state.json` from that source
+pointer; it does not import the main runner's transcript, Pi settings, or
+uploads. Later checkpoints are owned by the automation session itself.
 The child is fixed to loopback `127.0.0.1:8787`, runs with `/workspace` as its
 fixed upstream cwd, uses `/var/lib/mapache/agent/pi` for non-secret Pi
 configuration, `/var/lib/mapache/agent/sessions` as the explicit flat

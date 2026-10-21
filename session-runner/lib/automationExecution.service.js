@@ -5,6 +5,7 @@ const {automationPrompt} = require("./automationStorage.helpers");
 const AUTOMATION_ACTIVE_RUN_STATUSES = new Set(["provisioning", "running", "stopping"]);
 const AUTOMATION_ACTIVE_SESSION_STATUSES = new Set(["provisioning", "running", "restarting", "resizing"]);
 const AUTOMATION_TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled", "interrupted", "skipped"]);
+const MAX_AUTOMATION_FINAL_ANSWER_LENGTH = 32768;
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
@@ -273,6 +274,8 @@ function createAutomationExecutionService({
       const conversationId = cleanId(response?.conversationId) || execution.conversationId;
       const rawFinalResult = cleanId(response?.state?.finalResult || response?.finalResult).toLowerCase();
       const finalResult = ["success", "error"].includes(rawFinalResult) ? rawFinalResult : "";
+      const finalAnswer = effectiveStatus === "succeeded" && finalResult === "success" ?
+        normalizeFinalAnswer(response?.state?.finalAnswer) : null;
       const runUpdates = {
         cleanupState: "pending",
         desiredOutcome: effectiveStatus,
@@ -283,6 +286,7 @@ function createAutomationExecutionService({
         executionState: effectiveStatus,
         ...(conversationId ? {conversationId, executionConversationId: conversationId} : {}),
         ...(finalResult ? {finalResult} : {}),
+        ...(finalAnswer ? {finalAnswer} : {}),
         ...(normalizedError ? {executionErrorCode: normalizedError, lastError: normalizedError} : {}),
         status: effectiveStatus,
         updatedAt: timestamp,
@@ -448,7 +452,11 @@ function normalizeOutcome(response = {}) {
     return {errorCode: "automation_interaction_required", response, status: "failed"};
   }
   if (terminal === "failed" || status === "failed") {
-    return {errorCode: "automation_agent_failed", response, status: "failed"};
+    return {
+      errorCode: classifyAutomationFailure(state.finalError),
+      response,
+      status: "failed",
+    };
   }
   if (terminal === "canceled" || status === "canceled") {
     return {errorCode: "automation_canceled", response, status: "canceled"};
@@ -467,6 +475,12 @@ function modelReference(selection) {
   return providerId && modelId ? `${providerId}/${modelId}` : "";
 }
 
+function normalizeFinalAnswer(value) {
+  if (typeof value !== "string") return null;
+  const answer = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+  return answer ? answer.slice(0, MAX_AUTOMATION_FINAL_ANSWER_LENGTH) : null;
+}
+
 function positiveGeneration(value) {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
@@ -483,7 +497,35 @@ function cleanId(value) {
 
 function normalizeFailureCode(value, fallback) {
   const candidate = cleanId(value).toLowerCase();
+  const wrappedStartFailure = /^automation_start_failed:([a-z][a-z0-9_]{2,127})$/.exec(candidate);
+  if (wrappedStartFailure) return wrappedStartFailure[1];
   return /^[a-z][a-z0-9_]{2,127}$/.test(candidate) ? candidate : fallback;
+}
+
+function classifyAutomationFailure(value) {
+  const message = cleanId(value).toLowerCase();
+  if (!message) return "automation_agent_failed";
+  const explicitCode = normalizeFailureCode(message, "");
+  if (explicitCode && explicitCode.startsWith("automation_")) return explicitCode;
+  if (/^(?:automation_)?(?:model_unavailable|model_not_found|unknown_model|provider_model_unavailable)$/.test(message)) {
+    return "automation_model_unavailable";
+  }
+  if (/\b(401|unauthori[sz]ed|unauthenticated|invalid[_ -]?grant|api[_ -]?key|credential|authentication)\b/.test(message)) {
+    return "automation_provider_auth_failed";
+  }
+  if (/\b(429|rate[_ -]?limit|too many requests|quota|resource exhausted)\b/.test(message)) {
+    return "automation_provider_rate_limited";
+  }
+  if (/\b(model|provider)\b.{0,48}\b(unavailable|not found|unknown|does not exist|unsupported)\b|\bunknown model\b/.test(message)) {
+    return "automation_model_unavailable";
+  }
+  if (/\b(timeout|timed out|econn|enotfound|network|socket|fetch failed|connection refused)\b/.test(message)) {
+    return "automation_provider_network_failed";
+  }
+  if (/\b(400|bad request|invalid request|request rejected|unsupported request)\b/.test(message)) {
+    return "automation_provider_request_rejected";
+  }
+  return "automation_agent_failed";
 }
 
 function automationError(code) {

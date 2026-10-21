@@ -79,6 +79,14 @@ retains capacity when deletion or persistence is uncertain. Reconciliation only
 resumes those operations, so duplicate delivery converges on the same operation,
 session, service, execution claim, or cleanup.
 
+Browserless execution gives each run a fresh private Agent client and transcript,
+including `http_ticket` workspace requests; it does not inject prompts into the
+interactive conversation. An explicit run model takes precedence. If the run has
+no model, the client inherits the model and provider-key choice from the most
+recently used client for `/workspace` in the restored UI state. Startup and final
+agent failures are reduced to safe execution codes; raw provider error text is
+not written to run records.
+
 - Definitions live at `workspaces/{workspaceId}/automations/{automationId}`.
   They are owner-scoped, revisioned, audit-recorded, and normalized by
   `functions/automationDefinitions.service.js`.
@@ -316,11 +324,23 @@ limits. Rebuild and publish `pi-chrome` for this fix; existing services require
 restart/recreation to receive the new socket configuration.
 
 Automations can run alongside main and each other. They see saved input selected
-at admission/provisioning, not unsaved main-session edits. They cannot overwrite
+at admission/provisioning, not unsaved main-session edits. Each new automation
+session pins the workspace's latest managed Agent checkpoint pointer and restores
+only `ui/client-state.json` from it. That file carries the saved project model and
+provider-key selection; interactive transcripts, Pi settings, and uploads are
+not copied into the new automation session. After startup, the automation runner
+publishes and restores its own full checkpoint independently. They cannot overwrite
 one another's outputs through these mounts. This is a filesystem write boundary,
 not a new IAM sandbox: the mandated runner service account keeps its existing
 GCS permissions. Direct cloud API access is still governed by existing account
 and application authorization.
+
+Before submitting a prompt, the runner also waits for the embedded Pi UI's private
+control socket to answer a status request. HTTP health can succeed before the
+socket is listening, so this bounded probe prevents a startup race from ending an
+otherwise admitted run before execution begins. The prompt is sent once after the
+control channel responds. This runner change requires a new `pi-chrome` image and
+new automation services; existing main sessions keep their current revision.
 
 The legacy shared-storage preparation/recovery endpoints remain maintenance
 surfaces for previously configured workspaces; they are not part of automation

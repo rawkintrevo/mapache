@@ -158,4 +158,50 @@ test("cleanup errors do not recursively delete services and reconciliation can r
   assert.equal(calls.length, 3); // two deletion attempts and one slot release
 });
 
+test("ticket results include only a bounded answer from successful agent completion", async () => {
+  const answer = "Workspace purpose: social media planning.";
+  const {db, service} = harness({runData: run({
+    status: "succeeded",
+    finalResult: "success",
+    finalAnswer: answer,
+    ticketId: "ticket-1",
+    workspaceRunRequest: {sinks: [{kind: "ticket_result"}]},
+    sinkDelivery: {"ticket_result:0": {state: "pending", attempts: 0}},
+  })});
+  db.data.set("workspaceTickets/ticket-1", {});
+
+  await service.cleanupAutomationRun("run-1");
+
+  const result = db.data.get("workspaceTickets/ticket-1").result;
+  assert.equal(result.answer, answer);
+  assert.equal(result.finalResult, "success");
+  assert.equal(JSON.stringify(result).includes("private transcript"), false);
+});
+
 console.log("automation cleanup service tests passed");
+
+for (const [status, failure, expected] of [
+  ["failed", {provisioningErrorCode: "automation_provisioning_failed"}, "automation_provisioning_failed"],
+  ["failed", {executionErrorCode: "automation_agent_failed"}, "automation_agent_failed"],
+  ["interrupted", {interruptionReason: "automation_runner_unreachable"}, "automation_runner_unreachable"],
+  ["failed", {provisioningErrorCode: "secret https://private.example/token"}, "automation_execution_failed"],
+  ["failed", {lastError: "private transcript"}, "automation_execution_failed"],
+  ["succeeded", {executionErrorCode: "old_error"}, null],
+  ["canceled", {provisioningErrorCode: "old_error"}, null],
+]) {
+  test(`ticket delivery projects safe failure code: ${status} ${JSON.stringify(failure)}`, async () => {
+    const {db, service} = harness({runData: run({
+      status, ...failure, ticketId: "ticket-1",
+      workspaceRunRequest: {sinks: [{kind: "ticket_result"}]},
+      sinkDelivery: {"ticket_result:0": {state: "pending", attempts: 0}},
+    })});
+    db.data.set("workspaceTickets/ticket-1", {errorCode: "previous_attempt_error"});
+    await service.cleanupAutomationRun("run-1");
+    const ticket = db.data.get("workspaceTickets/ticket-1");
+    assert.equal(ticket.status, status);
+    assert.equal(ticket.errorCode, expected);
+    assert.equal(ticket.result.finalResult, null);
+    assert.equal(ticket.lastError, undefined);
+    assert.equal(db.data.get("automationRuns/run-1").sinkDelivery["ticket_result:0"].state, "delivered");
+  });
+}

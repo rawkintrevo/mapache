@@ -12,7 +12,40 @@ This page owns the agent-to-agent request boundary. It is distinct from the owne
 
 Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`; it does not create a second queue or provisioning path. The target run remains a `http_ticket` shared run. Idempotency keys are namespaced by source workspace before the existing ticket key is generated. Target context and model/resource requests are validated by the existing workspace-run contract and target credentials are resolved at provisioning.
 
+The request runs in a fresh, isolated automation client so it cannot alter the
+target's active conversation and can run under the existing admission/cleanup
+rules. An explicit request model wins; if omitted, the target runner inherits
+the model and provider-key choice most recently saved for `/workspace`. This
+selection is restored from the target's pinned UI checkpoint. Only
+`ui/client-state.json` is restored; the target's interactive transcript, Pi
+settings, and uploads stay private to its main runner. See
+[Scheduled Automations](./automations.md#shared-workspace-run-contract) for the
+shared browserless execution lifecycle.
+
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
+
+For successful `ticket_result` runs, `result.answer` contains the bounded text
+from the target's final assistant message (up to 32 KiB), alongside the final
+result, explicitly shared artifact pointers, and workspace-output location. It
+does not include the conversation transcript or tool output. A successful run
+status without this answer field is not evidence that the caller received the
+requested information.
+
+Failed/interrupted result delivery copies a bounded structured provisioning,
+execution, or interruption code to the ticket's `errorCode`; raw errors and
+private transcripts are never used as diagnostic fallbacks. Successful and
+canceled delivery, and newly queued replies, clear earlier failure codes.
+This is owned by `automationCleanup.service.js` and
+`workspaceRequestGrants.service.js`.
+
+Requests always launch separate automation runners, including when the target
+main session is running. GitHub snapshot inputs use read-only automation storage
+and skip repository-local Git credential configuration. Deploy Functions and
+rebuild/publish `pi-chrome` for this fix; new request runners receive the new
+image. Existing services retain their revision until recreated. The runner passes a bounded, per-runtime Unix control-socket path to the embedded
+UI via `PI_WEB_CONTROL_PATH`; long ticket session IDs must not exceed Unix socket
+path limits. Runtime data and persisted workspace identities remain unchanged. Previously
+failed requests are not replayed or retroactively rewritten.
 
 ## Agent discovery and guidance
 

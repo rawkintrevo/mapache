@@ -218,9 +218,11 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
         if (!ticketId || !dependencies.db) throw cleanupError("ticket_result_destination_missing");
         await dependencies.db.collection("workspaceTickets").doc(ticketId).update({
           status: run.status,
+          errorCode: ticketFailureCode(run),
           result: {
             runId,
             finalResult: run.finalResult || null,
+            answer: run.status === "succeeded" && run.finalResult === "success" ? callerSafeFinalAnswer(run.finalAnswer) : null,
             artifactPointers: run.artifactPointers || {},
             workspaceOutput: run.workspaceOutput || null,
           },
@@ -239,6 +241,20 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
     run = {...next, ...delivery};
     await runRef.update({sinkDelivery: next.sinkDelivery, ...delivery, updatedAt: serverTimestamp(dependencies.admin || defaultAdmin)});
   }
+}
+
+// Only structured failure codes cross the workspace boundary; never raw errors.
+function ticketFailureCode(run) {
+  if (!["failed", "interrupted"].includes(run.status)) return null;
+  const fallback = run.status === "interrupted" ? "automation_interrupted" : "automation_execution_failed";
+  const code = run.provisioningErrorCode || run.executionErrorCode || run.interruptionReason;
+  return typeof code === "string" && /^[a-z][a-z0-9_]{2,127}$/.test(code) ? code : fallback;
+}
+
+function callerSafeFinalAnswer(value) {
+  if (typeof value !== "string") return null;
+  const answer = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+  return answer ? answer.slice(0, 32768) : null;
 }
 
 async function finalizeRun(runRef, runId, {persistenceWarning = false} = {}, dependencies = {}) {

@@ -130,6 +130,17 @@ index 27951e5..4ba595b 100644
 +	return state.terminal ?? (state.submitted ? "running" : "submitted");
 +}
 +
++function automationAnswer(message: { content?: unknown } | undefined): string | undefined {
++	const content = message?.content;
++	const text = typeof content === "string" ? content : Array.isArray(content)
++		? content.filter((part) => (part as { type?: unknown })?.type === "text")
++			.map((part) => String((part as { text?: unknown })?.text ?? ""))
++			.join("\n")
++		: "";
++	const answer = text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
++	return answer ? answer.slice(0, 32768) : undefined;
++}
++
  export class AgentService {
  	/** index.ts 注入：SDK 工具执行事件的插件转发钩子，attach 时拷贝到每个新会话。 */
  	onToolEvent: ((ev: PluginToolEvent) => void) | undefined = undefined;
@@ -275,7 +286,7 @@ index 27951e5..4ba595b 100644
 +			const messages = toolEvent.messages ?? [];
 +			const lastAssistant = [...messages].reverse().find((message) => {
 +				return (message as { role?: unknown })?.role === "assistant";
-+			}) as { stopReason?: unknown; errorMessage?: unknown } | undefined;
++			}) as { stopReason?: unknown; errorMessage?: unknown; content?: unknown } | undefined;
 +			const stopReason = String(lastAssistant?.stopReason ?? "");
 +			const isError = stopReason === "error" || stopReason === "aborted" || Boolean(lastAssistant?.errorMessage);
 +			this.reduceAutomationEvent(handle, {
@@ -283,6 +294,7 @@ index 27951e5..4ba595b 100644
 +				type: "agent_end",
 +				result: isError ? "error" : "success",
 +				error: isError ? String(lastAssistant?.errorMessage ?? stopReason) : undefined,
++				answer: isError ? undefined : automationAnswer(lastAssistant),
 +				willRetry: toolEvent.willRetry,
 +				eventId: `agent-end:${handle.runId}:${handle.state.seenEventIds.length}`,
 +			});

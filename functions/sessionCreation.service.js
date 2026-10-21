@@ -134,6 +134,10 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...(runtimeKind === "automation" ? {
       runtimeKind,
       automationRunId,
+      ...(workspace.agentRuntimeCheckpoint?.manifest && String(workspace.agentRuntimeSessionId || workspace.canonicalSessionId || "").trim() ? {
+        agentRuntimeSourceCheckpoint: workspace.agentRuntimeCheckpoint,
+        agentRuntimeSourceSessionId: String(workspace.agentRuntimeSessionId || workspace.canonicalSessionId || "").trim() || null,
+      } : {}),
       automationStorage: automationStorageForWorkspace({...workspace, id: workspaceId}, {
         runAt: payload.automationRunAt,
         runId: automationRunId,
