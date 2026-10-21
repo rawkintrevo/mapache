@@ -14,6 +14,20 @@ Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`;
 
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
 
+Failed/interrupted result delivery copies a bounded structured provisioning,
+execution, or interruption code to the ticket's `errorCode`; raw errors and
+private transcripts are never used as diagnostic fallbacks. Successful and
+canceled delivery, and newly queued replies, clear earlier failure codes.
+This is owned by `automationCleanup.service.js` and
+`workspaceRequestGrants.service.js`.
+
+Requests always launch separate automation runners, including when the target
+main session is running. GitHub snapshot inputs use read-only automation storage
+and skip repository-local Git credential configuration. Deploy Functions and
+rebuild/publish `pi-chrome` for this fix; new request runners receive the new
+image. Existing services retain their revision until recreated. Previously
+failed requests are not replayed or retroactively rewritten.
+
 ## Agent discovery and guidance
 
 Information retrieval (for example, “get the onboarding findings from Customer
