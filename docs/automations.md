@@ -335,6 +335,13 @@ not a new IAM sandbox: the mandated runner service account keeps its existing
 GCS permissions. Direct cloud API access is still governed by existing account
 and application authorization.
 
+Before submitting a prompt, the runner also waits for the embedded Pi UI's private
+control socket to answer a status request. HTTP health can succeed before the
+socket is listening, so this bounded probe prevents a startup race from ending an
+otherwise admitted run before execution begins. The prompt is sent once after the
+control channel responds. This runner change requires a new `pi-chrome` image and
+new automation services; existing main sessions keep their current revision.
+
 The legacy shared-storage preparation/recovery endpoints remain maintenance
 surfaces for previously configured workspaces; they are not part of automation
 setup. The Automations panel describes separate outputs and provides no storage

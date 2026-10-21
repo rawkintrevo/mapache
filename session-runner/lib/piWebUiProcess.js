@@ -229,6 +229,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   /** Start or re-acknowledge the one browserless automation conversation. */
   async function startAutomation(input = {}) {
     if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
+    if (!await waitForControlReady(automationStartTimeoutMs)) {
+      throw publicError("pi_web_ui_automation_unavailable");
+    }
     const response = await controlRequest("startAutomation", automationStartTimeoutMs, {
       runId: input.runId,
       prompt: input.prompt,
@@ -236,6 +239,21 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     });
     if (!response) throw publicError("pi_web_ui_automation_unavailable");
     return response;
+  }
+
+  async function waitForControlReady(timeoutMs) {
+    const deadline = now() + Math.max(1, timeoutMs);
+    while (now() <= deadline) {
+      if (!child || stopping || state === "error") return false;
+      const remaining = deadline - now();
+      const response = await controlRequest("status", Math.max(1, Math.min(quiesceTimeoutMs, remaining)));
+      if (response?.ok === true) return true;
+      if (!child || stopping || state === "error") return false;
+      const delayMs = deadline - now();
+      if (delayMs <= 0) break;
+      await delayImpl(Math.min(healthIntervalMs, delayMs));
+    }
+    return false;
   }
 
   /** Read the private automation run state without exposing a public HTTP route. */

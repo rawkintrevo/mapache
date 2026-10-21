@@ -187,6 +187,15 @@ sockets, sessions, or API clients; the later automation subscription layer
 owns event delivery. Changes to this reducer require the same upstream build
 and a rebuilt `pi-chrome` revision.
 
+The runner waits for the Pi UI's private Unix control socket to answer a status
+request before it submits an automation prompt. The Pi HTTP health route can
+become ready before that socket is listening; treating HTTP health alone as
+automation readiness could reject the run immediately after starting the UI.
+The status probe is read-only, retries only within the bounded automation start
+window, and submits the prompt once after the socket responds. Changes to this
+startup path require a rebuilt `pi-chrome` revision; existing Cloud Run services
+need recreation to receive it.
+
 Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces and `automation-readonly-gcs-v1` inputs. Read-only automation snapshots intentionally omit repository metadata; `gitAuth.service.js` must skip repository-local credential configuration in this mode, while ordinary Git-backed startup still fails on invalid repositories. The Git credential helper ships with a Node shebang. `/usr/local/bin/mapache-gh` is only a compatibility shell script that executes native `gh` unchanged; new agent guidance uses `gh` directly. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
 
 The runner's automation execution service starts only after private workspace
