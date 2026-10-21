@@ -1,0 +1,56 @@
+diff --git a/server/control-socket.ts b/server/control-socket.ts
+--- a/server/control-socket.ts
++++ b/server/control-socket.ts
+@@ -51,7 +51,7 @@
+ 
+ /** Socket path (POSIX) or pipe name (Windows). */
+ export function controlPath(dataDir: string, port: number): string {
+-	return process.platform === "win32" ? `\\\\.\\pipe\\pi-web-ui-${port}` : join(dataDir, "pi-web-ui.sock");
++	return process.env.PI_WEB_CONTROL_PATH || (process.platform === "win32" ? `\\\\.\\pipe\\pi-web-ui-${port}` : join(dataDir, "pi-web-ui.sock"));
+ }
+ 
+ export interface ControlCommand {
+diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
+--- a/tests/unit/control-socket.test.ts
++++ b/tests/unit/control-socket.test.ts
+@@ -1,12 +1,13 @@
+ import { existsSync, mkdtempSync, rmSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+-import { afterEach, describe, expect, it } from "vitest";
++import { afterEach, describe, expect, it, vi } from "vitest";
+ import { sendControlCommand, startControlServer } from "../../server/control-socket.js";
+ 
+ const tempDirs: string[] = [];
+ 
+ afterEach(() => {
++	vi.unstubAllEnvs();
+ 	for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+ });
+ 
+@@ -15,6 +16,25 @@
+ }
+ 
+ describe("local control socket", () => {
++	it.skipIf(process.platform === "win32")("uses the runner control path for long ticket runtime directories", async () => {
++		const socketDir = mkdtempSync(join(tmpdir(), "pi-control-short-"));
++		tempDirs.push(socketDir);
++		const dataDir = "/var/lib/mapache/runtimes/auto-ticket-" + "a".repeat(64) + "/agent-state/ui";
++		vi.stubEnv("PI_WEB_CONTROL_PATH", join(socketDir, "agent.sock"));
++		const service = {
++			serviceStatus: () => ({pid: process.pid, version: "test", cwd: "/workspace", quiesced: false,
++				connectedClients: 0, activeConversations: 0, activeTools: 0, pendingMessages: 0}),
++			quiesce: async () => ({ok: true}), unquiesce: () => {},
++			startAutomation: async () => ({ok: true, runId: "ticket-run", status: "running"}),
++		};
++		const stop = startControlServer({service, dataDir, port: 9880});
++		try {
++			await waitForSocket(join(socketDir, "agent.sock"));
++			expect(await sendControlCommand(dataDir, 9880, "startAutomation", {runId: "ticket-run", prompt: "fixture"}))
++				.toMatchObject({ok: true, runId: "ticket-run", status: "running"});
++		} finally { stop(); }
++	});
++
+ 	it.skipIf(process.platform === "win32")("does not acknowledge quiesce until the drain completes", async () => {
+ 		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-control-"));
+ 		tempDirs.push(dataDir);

@@ -25,7 +25,9 @@ Requests always launch separate automation runners, including when the target
 main session is running. GitHub snapshot inputs use read-only automation storage
 and skip repository-local Git credential configuration. Deploy Functions and
 rebuild/publish `pi-chrome` for this fix; new request runners receive the new
-image. Existing services retain their revision until recreated. Previously
+image. Existing services retain their revision until recreated. The runner passes a bounded, per-runtime Unix control-socket path to the embedded
+UI via `PI_WEB_CONTROL_PATH`; long ticket session IDs must not exceed Unix socket
+path limits. Runtime data and persisted workspace identities remain unchanged. Previously
 failed requests are not replayed or retroactively rewritten.
 
 ## Agent discovery and guidance
