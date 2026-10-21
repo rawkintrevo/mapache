@@ -30,11 +30,19 @@ function configFor(root) {
   };
 }
 
-function createStore(config, workspaceFields = {}) {
+function createStore(config, workspaceFields = {}, sessionFields = {}) {
   const workspace = {workspaceId: config.workspaceId, ...workspaceFields};
+  const session = {sessionId: config.sessionId, ...sessionFields};
   const workspaceRef = {
     async get() {
       return {exists: true, data: () => workspace};
+    },
+    collection(name) {
+      assert.equal(name, "sessions");
+      return {doc: (id) => {
+        assert.equal(id, config.sessionId);
+        return {async get() { return {exists: true, data: () => session}; }};
+      }};
     },
   };
   return {
@@ -47,6 +55,7 @@ function createStore(config, workspaceFields = {}) {
         }};
       },
     },
+    session,
     workspace,
   };
 }
@@ -211,6 +220,48 @@ test("restores workspace files, history, settings, UI state, attachments, and sa
   );
   assert.equal(await fs.readFile(path.join(config.piWebUiDataDir, "uploads/client-1/note.txt"), "utf8"), "attachment\n");
   assert.equal(await fs.readlink(path.join(config.piWebUiDataDir, "shortcut.json")), "client-state.json");
+});
+
+test("automation restores only the source workspace client state from its pinned checkpoint", async (t) => {
+  const {config, storage, store} = await makeFixture(t);
+  const sourceCheckpoint = store.workspace.agentRuntimeCheckpoint;
+  const automationConfig = {...config, runtimeKind: "automation", sessionId: "automation-1"};
+  const automationStore = createStore(automationConfig, {}, {
+    agentRuntimeSourceCheckpoint: sourceCheckpoint,
+    agentRuntimeSourceSessionId: config.sessionId,
+  });
+  const restore = createAgentCheckpointRestoreService({
+    config: automationConfig,
+    db: automationStore.db,
+    storage,
+  });
+
+  const result = await restore.restoreAgentState();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.agent.fileCount, 1);
+  assert.equal(await fs.readFile(path.join(config.piWebUiDataDir, "client-state.json"), "utf8"), "{\"active\":\"chat\"}\n");
+  await assert.rejects(fs.access(path.join(config.piSessionDir, "chat.jsonl")), {code: "ENOENT"});
+  await assert.rejects(fs.access(path.join(config.piAgentDir, "settings.json")), {code: "ENOENT"});
+  await assert.rejects(fs.access(path.join(config.piWebUiDataDir, "uploads/client-1/note.txt")), {code: "ENOENT"});
+});
+
+test("automation rejects a source checkpoint whose manifest session does not match the pinned source", async (t) => {
+  const {config, storage, store} = await makeFixture(t);
+  const automationConfig = {...config, runtimeKind: "automation", sessionId: "automation-1"};
+  const automationStore = createStore(automationConfig, {}, {
+    agentRuntimeSourceCheckpoint: store.workspace.agentRuntimeCheckpoint,
+    agentRuntimeSourceSessionId: "different-source-session",
+  });
+  const restore = createAgentCheckpointRestoreService({
+    config: automationConfig,
+    db: automationStore.db,
+    storage,
+  });
+
+  await assert.rejects(restore.restoreAgentState(), (error) => error.code === "checkpoint_generation_mismatch");
+  assert.equal(await fs.readFile(path.join(config.piWebUiDataDir, "old-state.json"), "utf8"), "old ui");
+  await assert.rejects(fs.access(path.join(config.piWebUiDataDir, "client-state.json")), {code: "ENOENT"});
 });
 
 test("does not partially replace good local state when a published object is corrupt or missing", async (t) => {

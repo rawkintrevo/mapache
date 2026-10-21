@@ -234,6 +234,11 @@ runner restores the published checkpoint after source/archive preparation and
 before writer admission, credential materialization, and harness startup. It
 then starts exactly one supervised child from
 `/opt/mapache/pi-web-ui/dist/server/index.js`.
+Automation sessions additionally pin the workspace's published Agent
+checkpoint when Functions creates the session. Before the isolated client
+starts, checkpoint restore copies only `ui/client-state.json` from that source
+pointer; it does not import the main runner's transcript, Pi settings, or
+uploads. Later checkpoints are owned by the automation session itself.
 The child is fixed to loopback `127.0.0.1:8787`, runs with `/workspace` as its
 fixed upstream cwd, uses `/var/lib/mapache/agent/pi` for non-secret Pi
 configuration, `/var/lib/mapache/agent/sessions` as the explicit flat

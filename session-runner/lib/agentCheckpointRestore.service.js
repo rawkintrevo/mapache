@@ -124,6 +124,8 @@ async function restorePublishedCheckpoint({
       config,
       fsImpl,
       pointer: pointers.agent,
+      sourceWorkspaceCheckpoint: pointers.agentSource === "workspace",
+      sourceSessionId: pointers.agentSourceSessionId,
       stageDir: agentStage,
       storage,
     }) : null;
@@ -149,7 +151,7 @@ async function restorePublishedCheckpoint({
   }
 }
 
-async function buildAgentPlan({config, fsImpl, pointer, stageDir, storage}) {
+async function buildAgentPlan({config, fsImpl, pointer, sourceWorkspaceCheckpoint = false, sourceSessionId, stageDir, storage}) {
   const manifest = await downloadManifest({
     config,
     expectedKind: "mapache-agent-state-snapshot",
@@ -157,7 +159,7 @@ async function buildAgentPlan({config, fsImpl, pointer, stageDir, storage}) {
     pointer,
     storage,
   });
-  validatePointerIdentity(manifest, pointer, config, "agent");
+  validatePointerIdentity(manifest, pointer, config, "agent", sourceWorkspaceCheckpoint ? sourceSessionId : config.sessionId);
   if (pointer.fileCount !== undefined && Number(pointer.fileCount) !== manifest.files.length) {
     throw restoreError("checkpoint_manifest_invalid", "Agent checkpoint file count does not match its pointer");
   }
@@ -167,6 +169,10 @@ async function buildAgentPlan({config, fsImpl, pointer, stageDir, storage}) {
     const relativePath = validateRelativePath(entry.path, "agent snapshot file");
     if (seen.has(relativePath)) throw restoreError("checkpoint_manifest_invalid", "Agent checkpoint contains duplicate paths");
     seen.add(relativePath);
+    // A new automation run needs the target's saved model/provider selection,
+    // not its interactive transcripts, settings, or uploads. Its own later
+    // checkpoints restore the complete automation state on a same-run restart.
+    if (sourceWorkspaceCheckpoint && relativePath !== "ui/client-state.json") continue;
     const root = agentRootForPath(config, relativePath, entry.kind, stageDir);
     const objectPath = expectedObjectPath(pointer, manifest, relativePath, entry.kind);
     const targetPath = path.resolve(root.targetRoot, root.relativePath);
@@ -409,7 +415,8 @@ async function readPublishedPointers({config, db}) {
   }
   const workspaceRef = db.collection("workspaces").doc(config.workspaceId);
   if (typeof workspaceRef.get !== "function") throw restoreError("checkpoint_coordination_unavailable", "Checkpoint workspace reads are not configured");
-  const authorityRef = isAutomationRuntime(config) ? workspaceRef.collection("sessions").doc(config.sessionId) : workspaceRef;
+  const automationRuntime = isAutomationRuntime(config);
+  const authorityRef = automationRuntime ? workspaceRef.collection("sessions").doc(config.sessionId) : workspaceRef;
   let snapshot;
   try {
     snapshot = await authorityRef.get();
@@ -418,11 +425,19 @@ async function readPublishedPointers({config, db}) {
   }
   if (!snapshot?.exists) throw restoreError("checkpoint_coordination_missing", "Checkpoint workspace document is missing");
   const data = snapshot.data() || {};
-  return {agent: data.agentRuntimeCheckpoint || null, workspace: data.agentRuntimeWorkspaceFiles || null};
+  const ownAgentCheckpoint = data.agentRuntimeCheckpoint || null;
+  const sourceAgentCheckpoint = automationRuntime ? data.agentRuntimeSourceCheckpoint || null : null;
+  const useSourceCheckpoint = !ownAgentCheckpoint && Boolean(sourceAgentCheckpoint);
+  return {
+    agent: ownAgentCheckpoint || sourceAgentCheckpoint,
+    agentSource: useSourceCheckpoint ? "workspace" : "runtime",
+    agentSourceSessionId: useSourceCheckpoint ? String(data.agentRuntimeSourceSessionId || "").trim() : config.sessionId,
+    workspace: data.agentRuntimeWorkspaceFiles || null,
+  };
 }
 
-function validatePointerIdentity(manifest, pointer, config, kind) {
-  if (manifest.workspaceId !== config.workspaceId || manifest.sessionId !== config.sessionId ||
+function validatePointerIdentity(manifest, pointer, config, kind, expectedSessionId = config.sessionId) {
+  if (manifest.workspaceId !== config.workspaceId || manifest.sessionId !== expectedSessionId ||
       positiveGeneration(manifest.generation) !== positiveGeneration(pointer.generation) ||
       String(manifest.bootInstanceId || "") !== String(pointer.bootInstanceId || "")) {
     throw restoreError("checkpoint_generation_mismatch", `Published ${kind} checkpoint identity does not match its pointer`);

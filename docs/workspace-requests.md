@@ -16,7 +16,9 @@ The request runs in a fresh, isolated automation client so it cannot alter the
 target's active conversation and can run under the existing admission/cleanup
 rules. An explicit request model wins; if omitted, the target runner inherits
 the model and provider-key choice most recently saved for `/workspace`. This
-selection is restored from the target's UI checkpoint. See
+selection is restored from the target's pinned UI checkpoint. Only
+`ui/client-state.json` is restored; the target's interactive transcript, Pi
+settings, and uploads stay private to its main runner. See
 [Scheduled Automations](./automations.md#shared-workspace-run-contract) for the
 shared browserless execution lifecycle.
 

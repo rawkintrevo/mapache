@@ -324,7 +324,12 @@ limits. Rebuild and publish `pi-chrome` for this fix; existing services require
 restart/recreation to receive the new socket configuration.
 
 Automations can run alongside main and each other. They see saved input selected
-at admission/provisioning, not unsaved main-session edits. They cannot overwrite
+at admission/provisioning, not unsaved main-session edits. Each new automation
+session pins the workspace's latest managed Agent checkpoint pointer and restores
+only `ui/client-state.json` from it. That file carries the saved project model and
+provider-key selection; interactive transcripts, Pi settings, and uploads are
+not copied into the new automation session. After startup, the automation runner
+publishes and restores its own full checkpoint independently. They cannot overwrite
 one another's outputs through these mounts. This is a filesystem write boundary,
 not a new IAM sandbox: the mandated runner service account keeps its existing
 GCS permissions. Direct cloud API access is still governed by existing account

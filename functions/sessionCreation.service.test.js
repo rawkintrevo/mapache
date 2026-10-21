@@ -145,9 +145,18 @@ async function createWithWorkspace(workspace, payload) {
       (error) => error.status === 400 && error.publicMessage === "unsupported_session_type",
   );
 
+  const automationSourceCheckpoint = {
+    captureId: "source-capture",
+    generation: 6,
+    bootInstanceId: "main-boot",
+    manifest: {bucketName: "bucket", objectPath: "agent-state/manifest.json", byteLength: 120, sha256: "a".repeat(64)},
+  };
   const automation = await createWithWorkspace({
     ownerUid: "user-1",
     agentUiVersion: AGENT_UI_VERSION,
+    canonicalSessionId: "main-session",
+    agentRuntimeSessionId: "main-session",
+    agentRuntimeCheckpoint: automationSourceCheckpoint,
     bucket: "bucket",
     storagePrefix: "workspaces/user-1/automation",
     source: {type: "blank"},
@@ -163,6 +172,8 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(automation.id, "auto-run-123");
   assert.strictEqual(automation.runtimeKind, "automation");
   assert.strictEqual(automation.automationRunId, "run-123");
+  assert.deepStrictEqual(automation.agentRuntimeSourceCheckpoint, automationSourceCheckpoint);
+  assert.strictEqual(automation.agentRuntimeSourceSessionId, "main-session");
   assert.match(automation.serviceId, /^mpauto-[a-f0-9]{40}$/);
   assert.match(automation.automationStorage.output.agentPath,
       /^\/automations\/daily-report-2026-09-22-15-40-50-run123$/);
