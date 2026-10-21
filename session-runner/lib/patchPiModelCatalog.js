@@ -8,7 +8,13 @@ const DEFAULT_OVERRIDES_PATH = path.join(__dirname, "piModelCatalogOverrides.jso
 function applyPiModelCatalogOverrides(piWebUiRoot, options = {}) {
   const root = String(piWebUiRoot || "").trim();
   if (!root) throw new Error("pi_web_ui_root_required");
-  const packagePath = path.join(root, "node_modules", "@earendil-works", "pi-ai", "dist", "providers", "data", "openai-codex.json");
+  const catalogRelativePath = path.join("dist", "providers", "data", "openai-codex.json");
+  const packagePaths = [
+    path.join(root, "node_modules", "@earendil-works", "pi-ai", catalogRelativePath),
+    path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "node_modules", "@earendil-works", "pi-ai", catalogRelativePath),
+  ];
+  const packagePath = packagePaths.find((candidate) => fs.existsSync(candidate));
+  if (!packagePath) throw new Error("pi_model_catalog_not_found");
   const overridesPath = options.overridesPath || DEFAULT_OVERRIDES_PATH;
   const catalog = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const overrides = JSON.parse(fs.readFileSync(overridesPath, "utf8"));

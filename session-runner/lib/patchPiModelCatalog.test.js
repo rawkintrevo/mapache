@@ -7,10 +7,21 @@ const path = require("node:path");
 const test = require("node:test");
 const {applyPiModelCatalogOverrides} = require("./patchPiModelCatalog");
 
-test("adds only absent pinned model metadata to the Pi AI provider catalog", (t) => {
+test("adds only absent model metadata to the nested Pi AI provider catalog", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-pi-model-catalog-"));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
-  const packageRoot = path.join(root, "node_modules", "@earendil-works", "pi-ai", "dist", "providers", "data");
+  const packageRoot = path.join(
+    root,
+    "node_modules",
+    "@earendil-works",
+    "pi-coding-agent",
+    "node_modules",
+    "@earendil-works",
+    "pi-ai",
+    "dist",
+    "providers",
+    "data",
+  );
   fs.mkdirSync(packageRoot, {recursive: true});
   const packagePath = path.join(packageRoot, "openai-codex.json");
   const existing = {id: "gpt-5.5", name: "GPT-5.5"};
