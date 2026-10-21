@@ -170,6 +170,44 @@ test("a failed status cannot be promoted to success", async () => {
   assert.equal(db.data.get("automationRuns/run-1").executionOutcome, "failed");
 });
 
+test("keeps the safe model error code from a wrapped automation startup failure", async () => {
+  const {db, service} = setup({
+    adapter: {
+      startAutomation: async () => ({
+        ok: false,
+        error: "automation_start_failed:automation_model_unavailable",
+      }),
+    },
+  });
+
+  await assert.rejects(() => service.start(), /automation_model_unavailable/);
+  const run = db.data.get("automationRuns/run-1");
+  assert.equal(run.executionErrorCode, "automation_model_unavailable");
+  assert.equal(run.lastError, "automation_model_unavailable");
+});
+
+test("classifies terminal provider failures without persisting their raw messages", async () => {
+  const privateError = "HTTP 401 invalid API key: do not persist this private detail";
+  const {db, service} = setup({
+    adapter: {
+      automationStatus: async () => ({
+        ok: true,
+        runId: "run-1",
+        status: "failed",
+        state: {terminal: "failed", finalResult: "error", finalError: privateError},
+      }),
+      startAutomation: async () => ({ok: true, runId: "run-1", status: "running"}),
+    },
+  });
+
+  await service.start();
+  await service.pollOnce();
+  const run = db.data.get("automationRuns/run-1");
+  assert.equal(run.executionErrorCode, "automation_provider_auth_failed");
+  assert.equal(run.lastError, "automation_provider_auth_failed");
+  assert.equal(JSON.stringify(run).includes(privateError), false);
+});
+
 test("a claimed run interrupted during submit is never replayed", async () => {
   let submissions = 0;
   const first = setup({

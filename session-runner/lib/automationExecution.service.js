@@ -448,7 +448,11 @@ function normalizeOutcome(response = {}) {
     return {errorCode: "automation_interaction_required", response, status: "failed"};
   }
   if (terminal === "failed" || status === "failed") {
-    return {errorCode: "automation_agent_failed", response, status: "failed"};
+    return {
+      errorCode: classifyAutomationFailure(state.finalError),
+      response,
+      status: "failed",
+    };
   }
   if (terminal === "canceled" || status === "canceled") {
     return {errorCode: "automation_canceled", response, status: "canceled"};
@@ -483,7 +487,35 @@ function cleanId(value) {
 
 function normalizeFailureCode(value, fallback) {
   const candidate = cleanId(value).toLowerCase();
+  const wrappedStartFailure = /^automation_start_failed:([a-z][a-z0-9_]{2,127})$/.exec(candidate);
+  if (wrappedStartFailure) return wrappedStartFailure[1];
   return /^[a-z][a-z0-9_]{2,127}$/.test(candidate) ? candidate : fallback;
+}
+
+function classifyAutomationFailure(value) {
+  const message = cleanId(value).toLowerCase();
+  if (!message) return "automation_agent_failed";
+  const explicitCode = normalizeFailureCode(message, "");
+  if (explicitCode && explicitCode.startsWith("automation_")) return explicitCode;
+  if (/^(?:automation_)?(?:model_unavailable|model_not_found|unknown_model|provider_model_unavailable)$/.test(message)) {
+    return "automation_model_unavailable";
+  }
+  if (/\b(401|unauthori[sz]ed|unauthenticated|invalid[_ -]?grant|api[_ -]?key|credential|authentication)\b/.test(message)) {
+    return "automation_provider_auth_failed";
+  }
+  if (/\b(429|rate[_ -]?limit|too many requests|quota|resource exhausted)\b/.test(message)) {
+    return "automation_provider_rate_limited";
+  }
+  if (/\b(model|provider)\b.{0,48}\b(unavailable|not found|unknown|does not exist|unsupported)\b|\bunknown model\b/.test(message)) {
+    return "automation_model_unavailable";
+  }
+  if (/\b(timeout|timed out|econn|enotfound|network|socket|fetch failed|connection refused)\b/.test(message)) {
+    return "automation_provider_network_failed";
+  }
+  if (/\b(400|bad request|invalid request|request rejected|unsupported request)\b/.test(message)) {
+    return "automation_provider_request_rejected";
+  }
+  return "automation_agent_failed";
 }
 
 function automationError(code) {

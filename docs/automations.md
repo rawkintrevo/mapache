@@ -79,6 +79,14 @@ retains capacity when deletion or persistence is uncertain. Reconciliation only
 resumes those operations, so duplicate delivery converges on the same operation,
 session, service, execution claim, or cleanup.
 
+Browserless execution gives each run a fresh private Agent client and transcript,
+including `http_ticket` workspace requests; it does not inject prompts into the
+interactive conversation. An explicit run model takes precedence. If the run has
+no model, the client inherits the model and provider-key choice from the most
+recently used client for `/workspace` in the restored UI state. Startup and final
+agent failures are reduced to safe execution codes; raw provider error text is
+not written to run records.
+
 - Definitions live at `workspaces/{workspaceId}/automations/{automationId}`.
   They are owner-scoped, revisioned, audit-recorded, and normalized by
   `functions/automationDefinitions.service.js`.

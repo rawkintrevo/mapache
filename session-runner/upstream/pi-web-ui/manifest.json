@@ -56,6 +56,7 @@
     "patches/0015-automation-control-timeout.patch",
     "patches/0016-managed-operating-reference.patch",
     "patches/0017-custom-provider-connections.patch",
-    "patches/0018-bounded-control-socket.patch"
+    "patches/0018-bounded-control-socket.patch",
+    "patches/0019-automation-model-inheritance.patch"
   ]
 }

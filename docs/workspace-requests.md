@@ -12,6 +12,14 @@ This page owns the agent-to-agent request boundary. It is distinct from the owne
 
 Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`; it does not create a second queue or provisioning path. The target run remains a `http_ticket` shared run. Idempotency keys are namespaced by source workspace before the existing ticket key is generated. Target context and model/resource requests are validated by the existing workspace-run contract and target credentials are resolved at provisioning.
 
+The request runs in a fresh, isolated automation client so it cannot alter the
+target's active conversation and can run under the existing admission/cleanup
+rules. An explicit request model wins; if omitted, the target runner inherits
+the model and provider-key choice most recently saved for `/workspace`. This
+selection is restored from the target's UI checkpoint. See
+[Scheduled Automations](./automations.md#shared-workspace-run-contract) for the
+shared browserless execution lifecycle.
+
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
 
 Failed/interrupted result delivery copies a bounded structured provisioning,

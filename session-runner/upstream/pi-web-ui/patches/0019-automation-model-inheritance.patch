@@ -1,0 +1,173 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index f449032..cc1de84 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -1666,6 +1666,7 @@ export class ClientSession {
+ 		modelRef?: string,
+ 	): Promise<ClientSession> {
+ 		const agentDir = process.env.PI_CODING_AGENT_DIR ?? getAgentDir();
++		const workspaceSelection = stateStore.getMostRecentlySelectedProjectSelection(managedWorkspaceRoot() ?? cwd);
+ 		const cs = new ClientSession(clientId, cwd, agentDir, stateStore);
+ 		const conversationId = cs.nextConversationId();
+ 		const terminals = cs.makeTerminalManager(conversationId, cwd);
+@@ -1686,16 +1687,21 @@ export class ClientSession {
+ 			}
+ 		}
+ 		await cs.bindSession();
+-		if (modelRef) await cs.selectAutomationModel(modelRef, cwd);
++		const selectedModel = modelRef || workspaceSelection?.modelId;
++		if (selectedModel) await cs.selectAutomationModel(selectedModel, cwd, workspaceSelection?.providerKeys);
+ 		return cs;
+ 	}
+ 
+-	private async selectAutomationModel(modelRef: string, cwd: string): Promise<void> {
++	private async selectAutomationModel(
++		modelRef: string,
++		cwd: string,
++		projectProviderKeys?: Record<string, string>,
++	): Promise<void> {
+ 		const slash = modelRef.indexOf("/");
+ 		if (slash <= 0 || slash === modelRef.length - 1) throw new Error("automation_model_invalid");
+ 		const model = this.sharedModelRuntime?.getModel(modelRef.slice(0, slash), modelRef.slice(slash + 1));
+ 		if (!model) throw new Error("automation_model_unavailable");
+-		await this.restoreKeyForModel(modelRef, cwd);
++		await this.restoreKeyForModel(modelRef, cwd, projectProviderKeys);
+ 		await this.session.setModel(model);
+ 	}
+ 
+@@ -3325,11 +3331,15 @@ export class ClientSession {
+ 
+ 	/** When a model is set, ensure its provider's per-project key is restored.
+ 	 *  Silent + self-healing like the bulk restore above. */
+-	private async restoreKeyForModel(modelId: string, cwd: string): Promise<void> {
++	private async restoreKeyForModel(
++		modelId: string,
++		cwd: string,
++		projectProviderKeys?: Record<string, string>,
++	): Promise<void> {
+ 		const slash = modelId.indexOf("/");
+ 		if (slash <= 0) return;
+ 		const provider = modelId.slice(0, slash);
+-		const saved = this.stateStore.getProjectProviderKey(this.clientId, cwd, provider);
++		const saved = projectProviderKeys?.[provider] || this.stateStore.getProjectProviderKey(this.clientId, cwd, provider);
+ 		if (!saved) return;
+ 		const cur = this.modelAdmin.getActiveKeyName(provider);
+ 		if (cur === saved) return;
+diff --git a/server/client-state.ts b/server/client-state.ts
+index 26efc04..c450bd5 100644
+--- a/server/client-state.ts
++++ b/server/client-state.ts
+@@ -270,6 +270,8 @@ export interface ClientState {
+ 	 *  Together with projectProviderKeys it makes the whole {model, key} pair
+ 	 *  project-bound, so switching back restores both right away. */
+ 	projectModels?: Record<string, string>;
++	/** Timestamp of the last model selection for each project. */
++	projectModelUpdatedAt?: Record<string, number>;
+ 	/** 内置标记工具开关（全局 + 按 marker 禁用）。 */
+ 	markers?: MarkerSettings;
+ 	/** Browser UI locale code as reported by hello/set_locale (e.g. "zh",
+@@ -657,11 +659,40 @@ export class ClientStateStore {
+ 		return this.load()[clientId]?.projectModels?.[cwd];
+ 	}
+ 
++	/** Get the model and provider-key choices from the client that most recently
++	 * selected a model for this project. Browserless runs use their own client ID, so they cannot use
++	 * the per-client getter above to inherit the workspace's saved selection. */
++	getMostRecentlySelectedProjectSelection(cwd: string): {
++		modelId: string;
++		providerKeys: Record<string, string>;
++	} | undefined {
++		const candidates = Object.entries(this.load()).flatMap(([clientId, state], index) => {
++			if (clientId === "__settings__") return [];
++			const modelId = state.projectModels?.[cwd]?.trim();
++			if (!modelId) return [];
++			const projectLastUsed = state.projects?.find((project) => project.path === cwd)?.lastUsed;
++			const modelLastSelected = state.projectModelUpdatedAt?.[cwd];
++			const recency = typeof modelLastSelected === "number" && Number.isFinite(modelLastSelected)
++				? modelLastSelected
++				: typeof projectLastUsed === "number" && Number.isFinite(projectLastUsed) ? projectLastUsed : 0;
++			return [{
++				modelId,
++				providerKeys: state.projectProviderKeys?.[cwd] ?? {},
++				lastUsed: recency,
++				index,
++			}];
++		});
++		candidates.sort((left, right) => right.lastUsed - left.lastUsed || right.index - left.index);
++		const selected = candidates[0];
++		return selected ? {modelId: selected.modelId, providerKeys: selected.providerKeys} : undefined;
++	}
++
+ 	/** Remember the model last selected in a project (immediate, not after a turn). */
+ 	saveProjectModel(clientId: string, cwd: string, modelId: string): void {
+ 		const all = this.load();
+ 		const state = (all[clientId] ??= { projects: [] });
+ 		(state.projectModels ??= {})[cwd] = modelId;
++		(state.projectModelUpdatedAt ??= {})[cwd] = Date.now();
+ 		this.save();
+ 	}
+ 
+@@ -673,6 +704,11 @@ export class ClientStateStore {
+ 		if (!map || !(cwd in map)) return;
+ 		delete map[cwd];
+ 		if (Object.keys(map).length === 0) delete all[clientId]!.projectModels;
++		const timestamps = all[clientId]?.projectModelUpdatedAt;
++		if (timestamps) {
++			delete timestamps[cwd];
++			if (Object.keys(timestamps).length === 0) delete all[clientId]!.projectModelUpdatedAt;
++		}
+ 		this.save();
+ 	}
+ 
+diff --git a/tests/unit/automation-project-model.test.ts b/tests/unit/automation-project-model.test.ts
+new file mode 100644
+index 0000000..d4a8ccd
+--- /dev/null
++++ b/tests/unit/automation-project-model.test.ts
+@@ -0,0 +1,46 @@
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { describe, expect, it } from "vitest";
++import { ClientStateStore } from "../../server/client-state.js";
++
++describe("automation workspace model selection", () => {
++  it("inherits the model and provider key from the client that most recently selected a model", () => {
++    const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-automation-model-"));
++    try {
++      const filePath = join(dir, "client-state.json");
++      writeFileSync(filePath, JSON.stringify({
++        "older-client": {
++          projects: [{ path: "/workspace", lastUsed: 100 }],
++          projectModels: { "/workspace": "openai/gpt-4.1" },
++          projectProviderKeys: { "/workspace": { openai: "older-key" } },
++          projectModelUpdatedAt: { "/workspace": 300 },
++        },
++        "newer-client": {
++          projects: [{ path: "/workspace", lastUsed: 200 }],
++          projectModels: { "/workspace": "openai/gpt-5" },
++          projectProviderKeys: { "/workspace": { openai: "current-key" } },
++          projectModelUpdatedAt: { "/workspace": 250 },
++        },
++      }));
++
++      expect(new ClientStateStore(filePath).getMostRecentlySelectedProjectSelection("/workspace")).toEqual({
++        modelId: "openai/gpt-4.1",
++        providerKeys: { openai: "older-key" },
++      });
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++
++  it("returns no inherited selection when the workspace has no saved model", () => {
++    const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-automation-model-"));
++    try {
++      const filePath = join(dir, "client-state.json");
++      writeFileSync(filePath, JSON.stringify({ "other-client": { projects: [] } }));
++      expect(new ClientStateStore(filePath).getMostRecentlySelectedProjectSelection("/workspace")).toBeUndefined();
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++});
