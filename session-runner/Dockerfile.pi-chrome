@@ -29,7 +29,8 @@ COPY google-workspace-mcp ./google-workspace-mcp
 COPY seeded-skills ./seeded-skills
 COPY reference ./reference
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
-RUN node /app/lib/patchPiMcpAdapter.js
+RUN node /app/lib/patchPiMcpAdapter.js \
+  && node /app/lib/patchPiModelCatalog.js /opt/mapache/pi-web-ui
 
 RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js /app/bin/mapache-gh /app/bin/mapache-git-credential.js \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \

@@ -158,6 +158,26 @@ test("cleanup errors do not recursively delete services and reconciliation can r
   assert.equal(calls.length, 3); // two deletion attempts and one slot release
 });
 
+test("ticket results include only a bounded answer from successful agent completion", async () => {
+  const answer = "Workspace purpose: social media planning.";
+  const {db, service} = harness({runData: run({
+    status: "succeeded",
+    finalResult: "success",
+    finalAnswer: answer,
+    ticketId: "ticket-1",
+    workspaceRunRequest: {sinks: [{kind: "ticket_result"}]},
+    sinkDelivery: {"ticket_result:0": {state: "pending", attempts: 0}},
+  })});
+  db.data.set("workspaceTickets/ticket-1", {});
+
+  await service.cleanupAutomationRun("run-1");
+
+  const result = db.data.get("workspaceTickets/ticket-1").result;
+  assert.equal(result.answer, answer);
+  assert.equal(result.finalResult, "success");
+  assert.equal(JSON.stringify(result).includes("private transcript"), false);
+});
+
 console.log("automation cleanup service tests passed");
 
 for (const [status, failure, expected] of [

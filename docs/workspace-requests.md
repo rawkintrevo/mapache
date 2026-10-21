@@ -24,6 +24,13 @@ shared browserless execution lifecycle.
 
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
 
+For successful `ticket_result` runs, `result.answer` contains the bounded text
+from the target's final assistant message (up to 32 KiB), alongside the final
+result, explicitly shared artifact pointers, and workspace-output location. It
+does not include the conversation transcript or tool output. A successful run
+status without this answer field is not evidence that the caller received the
+requested information.
+
 Failed/interrupted result delivery copies a bounded structured provisioning,
 execution, or interruption code to the ticket's `errorCode`; raw errors and
 private transcripts are never used as diagnostic fallbacks. Successful and

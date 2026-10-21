@@ -2,7 +2,10 @@
   "source": {
     "package": "@earendil-works/pi-ai",
     "version": "0.84.4",
-    "integrity": "sha512-AClAZxf5+c4RRu44NJPS6wyQy+Nmq+Mzyyrdvm4ZVMNuixelO02RZX4G4Aq1F145Yzp43wnM5S+hLlSI7ypfVw=="
+    "integrity": "sha512-AClAZxf5+c4RRu44NJPS6wyQy+Nmq+Mzyyrdvm4ZVMNuixelO02RZX4G4Aq1F145Yzp43wnM5S+hLlSI7ypfVw==",
+    "modelOverrides": [
+      "openai-codex/gpt-6-astra"
+    ]
   },
   "providers": {
     "amazon-bedrock": {
@@ -603,7 +606,8 @@
       "gpt-5.5": "GPT-5.5",
       "gpt-5.6-luna": "GPT-5.6 Luna",
       "gpt-5.6-sol": "GPT-5.6 Sol",
-      "gpt-5.6-terra": "GPT-5.6 Terra"
+      "gpt-5.6-terra": "GPT-5.6 Terra",
+      "gpt-6-astra": "GPT-6 Astra"
     },
     "opencode": {
       "big-pickle": "Big Pickle",

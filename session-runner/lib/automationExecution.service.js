@@ -5,6 +5,7 @@ const {automationPrompt} = require("./automationStorage.helpers");
 const AUTOMATION_ACTIVE_RUN_STATUSES = new Set(["provisioning", "running", "stopping"]);
 const AUTOMATION_ACTIVE_SESSION_STATUSES = new Set(["provisioning", "running", "restarting", "resizing"]);
 const AUTOMATION_TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled", "interrupted", "skipped"]);
+const MAX_AUTOMATION_FINAL_ANSWER_LENGTH = 32768;
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_STATUS_TIMEOUT_MS = 5_000;
@@ -273,6 +274,8 @@ function createAutomationExecutionService({
       const conversationId = cleanId(response?.conversationId) || execution.conversationId;
       const rawFinalResult = cleanId(response?.state?.finalResult || response?.finalResult).toLowerCase();
       const finalResult = ["success", "error"].includes(rawFinalResult) ? rawFinalResult : "";
+      const finalAnswer = effectiveStatus === "succeeded" && finalResult === "success" ?
+        normalizeFinalAnswer(response?.state?.finalAnswer) : null;
       const runUpdates = {
         cleanupState: "pending",
         desiredOutcome: effectiveStatus,
@@ -283,6 +286,7 @@ function createAutomationExecutionService({
         executionState: effectiveStatus,
         ...(conversationId ? {conversationId, executionConversationId: conversationId} : {}),
         ...(finalResult ? {finalResult} : {}),
+        ...(finalAnswer ? {finalAnswer} : {}),
         ...(normalizedError ? {executionErrorCode: normalizedError, lastError: normalizedError} : {}),
         status: effectiveStatus,
         updatedAt: timestamp,
@@ -469,6 +473,12 @@ function modelReference(selection) {
   const providerId = cleanId(selection.providerId);
   const modelId = cleanId(selection.modelId);
   return providerId && modelId ? `${providerId}/${modelId}` : "";
+}
+
+function normalizeFinalAnswer(value) {
+  if (typeof value !== "string") return null;
+  const answer = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+  return answer ? answer.slice(0, MAX_AUTOMATION_FINAL_ANSWER_LENGTH) : null;
 }
 
 function positiveGeneration(value) {

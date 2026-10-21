@@ -124,7 +124,7 @@ test("claims and submits once, then records a normalized terminal outcome", asyn
         runId: "run-1",
         conversationId: "conversation-1",
         status: "succeeded",
-        state: {terminal: "succeeded", finalResult: "success"},
+        state: {terminal: "succeeded", finalResult: "success", finalAnswer: "Workspace purpose: social media planning."},
       }),
       startAutomation: async (input) => {
         calls.push(input);
@@ -140,6 +140,7 @@ test("claims and submits once, then records a normalized terminal outcome", asyn
   await service.pollOnce();
   assert.equal(db.data.get("automationRuns/run-1").status, "succeeded");
   assert.equal(db.data.get("automationRuns/run-1").finalResult, "success");
+  assert.equal(db.data.get("automationRuns/run-1").finalAnswer, "Workspace purpose: social media planning.");
   assert.equal(db.data.get("automationRuns/run-1").cleanupState, "pending");
 });
 

@@ -222,6 +222,7 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
           result: {
             runId,
             finalResult: run.finalResult || null,
+            answer: run.status === "succeeded" && run.finalResult === "success" ? callerSafeFinalAnswer(run.finalAnswer) : null,
             artifactPointers: run.artifactPointers || {},
             workspaceOutput: run.workspaceOutput || null,
           },
@@ -248,6 +249,12 @@ function ticketFailureCode(run) {
   const fallback = run.status === "interrupted" ? "automation_interrupted" : "automation_execution_failed";
   const code = run.provisioningErrorCode || run.executionErrorCode || run.interruptionReason;
   return typeof code === "string" && /^[a-z][a-z0-9_]{2,127}$/.test(code) ? code : fallback;
+}
+
+function callerSafeFinalAnswer(value) {
+  if (typeof value !== "string") return null;
+  const answer = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+  return answer ? answer.slice(0, 32768) : null;
 }
 
 async function finalizeRun(runRef, runId, {persistenceWarning = false} = {}, dependencies = {}) {

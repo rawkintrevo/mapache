@@ -17,6 +17,8 @@ describe("automation model selection", () => {
   test("uses the runner's pinned model catalog", () => {
     expect(catalog.source.version).toBe(runner.piSdk.version);
     expect(catalog.providers.openai["gpt-4.1"]).toBeTruthy();
+    expect(catalog.providers["openai-codex"]["gpt-6-astra"]).toBe("GPT-6 Astra");
+    expect(catalog.source.modelOverrides).toContain("openai-codex/gpt-6-astra");
     expect(catalog.providers["github-cli"]).toBeUndefined();
   });
 

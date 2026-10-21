@@ -177,6 +177,14 @@ reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
 
+The pinned Pi SDK catalog predates `openai-codex/gpt-6-astra`, which can be
+stored in a workspace's selected model state. `piModelCatalogOverrides.json`
+adds only that model's non-secret metadata to the embedded SDK at image build
+time, and `generate:automation-models` exposes the same entry in the automation
+model picker. This avoids changing the SDK dependency graph while allowing an
+isolated run to resolve the workspace's saved model; rebuild `pi-chrome` after
+changing the override.
+
 The pinned patch series also contains `server/automation-run-state.ts`, a pure
 reducer for one unattended automation run. It scopes events to the run and
 conversation, deduplicates event and task IDs, requires a final non-retry agent
