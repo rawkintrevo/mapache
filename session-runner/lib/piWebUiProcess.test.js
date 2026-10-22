@@ -492,3 +492,60 @@ test("automation child and Pi tools use the persistent output directory as cwd",
   assert.notEqual(options.cwd, config.workspaceDir);
   await managed.stop();
 });
+
+for (const acknowledgmentMs of [120_000, 180_000, 300_001]) {
+  test(`automation acknowledgment after ${acknowledgmentMs}ms respects the default startup budget`, async () => {
+    const {root, config} = await fixture();
+    const child = fakeChild();
+    const timers = new Map();
+    let clock = 0;
+    let automationSocket;
+    const commands = [];
+    try {
+      const managed = createPiWebUiProcess(config, {
+        fetch: healthyFetch(),
+        spawn: () => child,
+        processKill: (_pid, signal) => child.kill(signal),
+        setTimeout: (callback, delay) => {
+          const timer = {};
+          timers.set(timer, {callback, at: clock + delay});
+          return timer;
+        },
+        clearTimeout: (timer) => timers.delete(timer),
+        controlConnect: () => {
+          const socket = new EventEmitter();
+          socket.destroy = () => {};
+          socket.write = (line) => {
+            const request = JSON.parse(String(line));
+            commands.push(request.cmd);
+            if (request.cmd === "startAutomation") automationSocket = socket;
+            else socket.emit("data", Buffer.from('{"ok":true}\n'));
+          };
+          setImmediate(() => socket.emit("connect"));
+          return socket;
+        },
+      });
+      await managed.start();
+      const pending = managed.startAutomation({runId: "slow-run", prompt: "run once"});
+      for (let i = 0; i < 10 && !automationSocket; i++) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      assert.ok(automationSocket, "startup command was sent");
+      clock = acknowledgmentMs;
+      for (const [timer, {callback, at}] of timers) {
+        if (at <= clock) {
+          timers.delete(timer);
+          callback();
+        }
+      }
+      automationSocket.emit("data", Buffer.from('{"ok":true,"status":"running"}\n'));
+      const response = await pending;
+      if (acknowledgmentMs <= 300_000) assert.equal(response.ok, true);
+      else assert.deepEqual(response, {ok: false, error: "control_timeout"});
+      assert.equal(commands.filter((cmd) => cmd === "startAutomation").length, 1);
+      await managed.stop();
+    } finally {
+      await fs.rm(root, {recursive: true, force: true});
+    }
+  });
+}
