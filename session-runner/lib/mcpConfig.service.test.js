@@ -43,6 +43,7 @@ assert.deepStrictEqual(automationMcp.mcpServers["mapache-automations"], {
   command: "node",
   args: [AUTOMATION_MCP_SERVER_PATH],
   env: {MAPACHE_AUTOMATION_AGENT_SOCKET: "/var/lib/mapache/runtimes/run-1/automation-agent.sock"},
+  requestTimeoutMs: 615000,
 });
 const collisionMcp = runnerMcpConfig({
   automationAgentSocketPath: "/tmp/automation.sock",

@@ -22,24 +22,26 @@ answer, not a schedule or a request to change anything.
    using the guidance below. Do not infer that workspace communication is
    unsupported merely because you cannot directly access another workspace.
 
-## Request information and retrieve the answer
+## Request information and wait for the answer
 
-1. Write a self-contained `request` for `workspace_request_submit`, using the
-   discovered `targetWorkspaceId`. Include the question, relevant scope/date
+1. Write a self-contained `request` for `workspace_request_ask`, using the
+   discovered `targetWorkspaceId` and exact `targetWorkspaceName`. Include the question, relevant scope/date
    range and context supplied by the user. Use `desiredOutput` to request a
    concise answer with supporting sources where available. The target does not
    inherit this chat. For information requests, do not add edits, sends,
    publication, or other external changes. Delegated work stays within the
    user's requested scope and the target's existing authority.
-2. Submit once and retain the returned request ID. Report its actual status;
-   `queued` is accepted work, not a completed answer. If submission times out,
-   do not blindly create another request; use the same `idempotencyKey` and
-   identical payload for a retry when a key was supplied, or report uncertainty.
-3. Use `workspace_request_get` with `ticketId` to retrieve status and the
-   result. Use bounded polling with backoff, not a tight loop. If still pending,
-   retain/report the ID for later retrieval; do not promise automatic chat
-   resumption. Summarize the returned answer and supporting sources, clearly
+2. Supply a stable `idempotencyKey` for this question and retain it in the tool
+   call. `workspace_request_ask` submits once, keeps this turn active, and waits
+   up to ten minutes on the same durable ticket. If the tool call is interrupted,
+   call it again with the identical payload and idempotency key; this resumes
+   waiting without creating duplicate target work.
+3. When an expired wait returns a `ticketId`, call `workspace_request_wait` with
+   that ID. Do not return control to the user merely because the request is
+   queued or running. Summarize the final answer and supporting sources, clearly
    separating missing information or failed execution from an empty finding.
+   Use `workspace_request_get` only for a single status inspection when the user
+   explicitly asks for status.
 4. Use `workspace_request_reply` with `ticketId` and `message` for clarification
    or continuation when permitted. Use `workspace_request_cancel` when the user
    asks to cancel and the grant permits it; report the returned status.

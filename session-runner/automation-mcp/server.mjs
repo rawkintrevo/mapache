@@ -61,8 +61,10 @@ const OCCURRENCE = z.object({
 
 const TOOL_NAMES = Object.freeze([
   "workspace_request_targets",
+  "workspace_request_ask",
   "workspace_request_submit",
   "workspace_request_get",
+  "workspace_request_wait",
   "workspace_request_reply",
   "workspace_request_cancel",
   "automations_list",
@@ -95,6 +97,33 @@ export function registerAutomationTools(server, client) {
     inputSchema: z.object({}).strict(),
   }, () => invoke(() => client.call("/api/agent/workspace-requests/targets")));
 
+  server.registerTool("workspace_request_ask", {
+    description: "Submit one request to a permitted workspace and wait for its final answer. Prefer this for user-facing information requests so the turn stays active until completion.",
+    inputSchema: z.object({
+      targetWorkspaceId: AUTOMATION_ID,
+      targetWorkspaceName: z.string().min(1).max(120).optional(),
+      request: z.string().min(1).max(32768),
+      context: z.string().max(32768).optional(),
+      desiredOutput: z.string().max(32768).optional(),
+      model: MODEL_SELECTION.nullable().optional(),
+      resources: RESOURCES.nullable().optional(),
+      idempotencyKey: z.string().min(1).max(200),
+      timeoutSeconds: z.number().int().min(1).max(600).default(600),
+    }).strict(),
+  }, ({idempotencyKey, timeoutSeconds, targetWorkspaceName, ...body}, context) => invoke(async () => {
+    const submitted = await client.call("/api/agent/workspace-requests", {
+      method: "POST",
+      body,
+      idempotencyKey,
+    });
+    const request = requestFromResponse(submitted);
+    if (!request?.id) return submitted;
+    return waitForWorkspaceRequest(client, request.id, timeoutSeconds, {
+      initialRequest: request,
+      onProgress: workspaceRequestProgress(context, targetWorkspaceName || body.targetWorkspaceId, timeoutSeconds),
+    });
+  }));
+
   server.registerTool("workspace_request_submit", {
     description: "Submit one request to a permitted workspace. Keep the returned request ID for later retrieval.",
     inputSchema: z.object({
@@ -114,6 +143,20 @@ export function registerAutomationTools(server, client) {
     description: "Retrieve the caller-safe status, result, and shared artifacts for a workspace request.",
     inputSchema: z.object({ticketId: AUTOMATION_ID}),
   }, ({ticketId}) => invoke(() => client.call(`/api/agent/workspace-requests/${encodeURIComponent(ticketId)}`)));
+
+  server.registerTool("workspace_request_wait", {
+    description: "Wait for an existing workspace request to finish. Use the same ticket ID after a wait or transport interruption; this never submits target work again.",
+    inputSchema: z.object({
+      ticketId: AUTOMATION_ID,
+      targetWorkspaceName: z.string().min(1).max(120).optional(),
+      timeoutSeconds: z.number().int().min(1).max(600).default(600),
+    }).strict(),
+  }, ({ticketId, targetWorkspaceName, timeoutSeconds}, context) => invoke(() => waitForWorkspaceRequest(
+      client,
+      ticketId,
+      timeoutSeconds,
+      {onProgress: workspaceRequestProgress(context, targetWorkspaceName || ticketId, timeoutSeconds)},
+  )));
 
   server.registerTool("workspace_request_reply", {
     description: "Send a clarification or continuation message on an existing workspace request.",
@@ -227,6 +270,51 @@ export function registerAutomationTools(server, client) {
   })));
 
   return server;
+}
+
+const TERMINAL_REQUEST_STATUSES = new Set(["succeeded", "failed", "canceled", "interrupted", "skipped"]);
+
+export async function waitForWorkspaceRequest(client, ticketId, timeoutSeconds, {
+  initialRequest = null,
+  now = Date.now,
+  onProgress = async () => {},
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+} = {}) {
+  const startedAt = now();
+  const deadline = startedAt + timeoutSeconds * 1000;
+  const path = `/api/agent/workspace-requests/${encodeURIComponent(ticketId)}`;
+  let request = initialRequest;
+  while (true) {
+    if (!request) request = requestFromResponse(await client.call(path));
+    if (!request) return {request: null, error: "workspace_request_invalid_response", ticketId};
+    await onProgress({elapsedSeconds: Math.floor((now() - startedAt) / 1000), status: request.status});
+    if (TERMINAL_REQUEST_STATUSES.has(request.status)) return {request};
+    const remaining = deadline - now();
+    if (remaining <= 0) return {request, waitExpired: true, ticketId};
+    await sleep(Math.min(5000, remaining));
+    request = null;
+  }
+}
+
+function workspaceRequestProgress(context, target, timeoutSeconds) {
+  const progressToken = context?.mcpReq?._meta?.progressToken;
+  if (progressToken === undefined) return async () => {};
+  return async ({elapsedSeconds, status}) => {
+    await context.mcpReq.notify({
+      method: "notifications/progress",
+      params: {
+        progressToken,
+        progress: elapsedSeconds,
+        total: timeoutSeconds,
+        message: `Waiting for ${target}: ${status || "pending"} · ${elapsedSeconds}s elapsed`,
+      },
+    }).catch(() => {});
+  };
+}
+
+function requestFromResponse(response) {
+  if (response?.request && typeof response.request === "object") return response.request;
+  return response && typeof response === "object" ? response : null;
 }
 
 function stringifyQuery(query) {

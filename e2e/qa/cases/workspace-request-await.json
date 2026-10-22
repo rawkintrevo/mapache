@@ -1,0 +1,32 @@
+{
+  "id": "workspace.request-await",
+  "title": "Workspace request waits and returns the answer automatically",
+  "description": "Verify the managed Agent discovers a granted target, submits once, remains active, and returns the target answer without a user reminder.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/workspace.request-await",
+  "parameters": {
+    "qaWorkspaceName": "qa-pi-web-marked-{{timestamp}}",
+    "targetWorkspaceName": "qa-request-target-{{timestamp}}"
+  },
+  "requires": {
+    "chromeDevtools": true,
+    "runnerImage": "The source session uses the issue #511 pi-chrome image revision",
+    "targetWorkspace": "A same-owner disposable target with a saved working model/provider selection",
+    "turnBudget": "One source turn and one target automation turn, each read-only and bounded to ten minutes"
+  },
+  "steps": [
+    {"useCase": "cases/pi-web-marked-workspace-setup.json", "parameters": {"qaWorkspaceName": "{{qaWorkspaceName}}"}},
+    {"useScript": "scripts/workspace-request-grant-save.json", "parameters": {"targetWorkspaceName": "{{targetWorkspaceName}}"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-workspace-request-await-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=workspace-request-await"}},
+    {"useScript": "scripts/wait-session-running.json"},
+    {"assert": "agent-ui-ready", "expected": "The embedded Agent UI is ready and exposes workspace_request_ask and workspace_request_wait through the managed automation MCP server."},
+    {"useScript": "scripts/pi-web-workspace-request-turn.json", "parameters": {"targetWorkspaceName": "{{targetWorkspaceName}}"}},
+    {"assert": "workspace-request-single-submit", "expected": "The source used one stable idempotency key and the target has exactly one ticket/run for this question."},
+    {"assert": "workspace-request-answer-without-reminder", "expected": "WORKSPACE_REQUEST_OK is visible in the originating conversation and no second user message was sent."},
+    {"capture": "screenshot", "fileName": "workspace-request-answer.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"useScript": "scripts/delete-selected-session.json"},
+    {"useScript": "scripts/workspace-request-grant-revoke.json"}
+  ]
+}

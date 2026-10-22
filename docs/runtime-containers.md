@@ -440,9 +440,9 @@ receives the bearer token or `SESSION_SHUTDOWN_TOKEN`. The broker derives the
 current workspace/session from the admitted runner and revalidates that
 identity on every request. In addition to automation tools, the entry exposes
 `workspace_request_targets`, `workspace_request_submit`,
-`workspace_request_get`, `workspace_request_reply`, and
-`workspace_request_cancel`; the latter four require a directional grant and
-return caller-safe projections. The managed entry is added without replacing
+`workspace_request_ask`, `workspace_request_get`, `workspace_request_wait`, `workspace_request_reply`, and
+`workspace_request_cancel`; request operations require their directional grant
+permission and return caller-safe projections. The managed entry is added without replacing
 user MCP entries; a collision uses a deterministic alternate server name. The
 server and `mapache-automations` guidance skill are baked into the `pi-chrome`
 image, so startup performs no npm download. Rebuild and restart or recreate
@@ -630,7 +630,7 @@ TERMINAL_COMMAND=pi
 TERMINAL_ARGS=["--session-dir","<per-session-pi-dir>","-c"]
 ```
 
-Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is not durable; restart resumes from the last completed Pi session entry.
+Pi conversations are scoped to the Mapache session, not to the user or workspace. New Cloud sessions receive an empty per-session Pi session directory and start a fresh Pi JSONL conversation. The session document stores the session-specific Pi storage prefix and, after Pi creates it, the bound JSONL path. If the same Cloud session is opened from another tab/device or its Cloud Run instance restarts, the runner restores that per-session archive and resumes that Cloud session's Pi conversation. Mid-turn process, stream, or PTY state is generally not durable; restart resumes from the last completed Pi session entry. The narrow exception is an interrupted `workspace_request_ask`: graceful shutdown records its trusted Pi session file, and the next client attach reopens that conversation and retries the same persisted payload and idempotency key so it waits on the existing ticket.
 
 Pi's native model settings remain part of the restored upstream state. The
 runner may normalize the session-owned `enabledModels` scope while restoring

@@ -78,6 +78,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/profile.json`: Profile and runner usage view.
 - `cases/admin.json`: Admin-only user table with whitelist and cost columns.
 - `cases/workspace-create-delete.json`: Blank workspace creation and deletion.
+- `cases/workspace-request-await.json`: Managed Agent submits one granted cross-workspace request, stays active, and returns its answer without a reminder.
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
 - `cases/session-create-all-runners.json`: Blank workspace plus the supported `pi-chrome` session creation.

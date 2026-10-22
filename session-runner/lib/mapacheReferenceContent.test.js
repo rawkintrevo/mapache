@@ -63,8 +63,9 @@ test("information requests route from the operating reference to a discoverable 
   assert.match(guidance, /^description: .*Get information.*another Mapache workspace/m);
   assert.match(guidance, /mapache-automations/);
   assert.match(guidance, /workspace_request_targets/);
-  assert.match(guidance, /workspace_request_submit/);
+  assert.match(guidance, /workspace_request_ask/);
   assert.match(guidance, /workspace_request_get/);
+  assert.match(guidance, /workspace_request_wait/);
   assert.match(guidance, /request_permission_denied/);
   assert.match(guidance, /Workspace request access/);
   assert.match(guidance, /do not add edits, sends/);

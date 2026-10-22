@@ -2,6 +2,12 @@
 
 This page owns the agent-to-agent request boundary. It is distinct from the owner-authenticated HTTP ticket compatibility adapter.
 
+The caller can use one bounded ask-and-wait tool call for ordinary information
+requests. The target work remains a durable ticket, so an interrupted wait can
+resume against that ticket without executing the target prompt again. See
+[workspace request continuation](./plans/workspace-request-continuation.md) for
+the remaining conversation-level delivery design.
+
 ## Ownership and authorization
 
 `functions/workspaceRequestGrants.service.js` stores one owner-scoped directional grant per source/target workspace pair. The owner must explicitly grant each operation: `discover`, `submit`, `read`, `reply`, and `cancel`. Grant writes require both workspaces to belong to the authenticated owner and reject self-grants. Revocation disables the grant and increments its revision; it does not delete ticket/run data.
@@ -58,11 +64,23 @@ automation guidance for managed interactive and automation runtimes. The
 scheduling skill cross-links it, but no schedule is required to ask a question.
 
 Agents discover the existing tools on `mapache-automations`, resolve the target
-with `workspace_request_targets`, submit a self-contained question, and retrieve
-the answer by request ID. Guidance distinguishes missing tools, absent targets,
+with `workspace_request_targets`, and use `workspace_request_ask` with a stable
+idempotency key to submit a self-contained question and wait as part of the same
+turn. The managed MCP server polls the existing caller-safe request endpoint at
+five-second intervals for up to ten minutes. Its MCP request deadline is longer
+than that bounded wait. MCP progress notifications show the target, current
+ticket status, and elapsed seconds in the Agent UI. A terminal result is returned directly; an expired wait
+returns the durable ticket ID for `workspace_request_wait`. Repeating the ask
+with the same payload and key reuses the ticket rather than creating target work.
+If a runner restart interrupts the wait, the Pi UI records the originating
+session file as part of its existing interrupted-conversation state. On the
+next client attach it reopens each recorded workspace-request conversation and
+injects a hidden continuation that retries the same ask and idempotency key.
+Other interrupted turns retain the existing manual-resume behavior.
+Guidance distinguishes missing tools, absent targets,
 permission failures, and execution/configuration errors. Information requests
 do not authorize added edits or publication. This is an instruction/discovery
-change; tool schemas, grants, and execution behavior are unchanged.
+and caller-wait change; grants and target execution behavior are unchanged.
 
 The current image-bundled skill path remains authoritative when workspace-local
 copies are older. Seeding creates missing skills without replacing user edits.
@@ -78,8 +96,10 @@ should produce setup guidance rather than a blanket unsupported claim.
 `session-runner/automation-mcp/server.mjs` exposes:
 
 - `workspace_request_targets`
+- `workspace_request_ask`
 - `workspace_request_submit`
 - `workspace_request_get`
+- `workspace_request_wait`
 - `workspace_request_reply`
 - `workspace_request_cancel`
 
