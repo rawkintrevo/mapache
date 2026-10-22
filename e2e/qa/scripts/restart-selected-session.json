@@ -2,7 +2,8 @@
   "id": "script.restartSelectedSession",
   "title": "Restart selected session",
   "actions": [
-    {"type": "click", "role": "button", "name": "Restart"},
+    {"type": "click", "role": "button", "nameIncludes": "Workspace power controls"},
+    {"type": "click", "role": "menuitem", "name": "Restart workspace"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/restart", "method": "POST", "expectedStatus": 200, "timeoutMs": 60000}
   ],
   "successSignals": [

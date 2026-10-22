@@ -2,7 +2,8 @@
   "id": "script.openSessionLogs",
   "title": "Open runtime Logs from the top navigation",
   "actions": [
-    {"type": "click", "role": "button", "name": "Logs"},
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "name": "Logs"},
     {"type": "waitForSnapshotText", "text": "Logs", "timeoutMs": 10000},
     {"type": "waitForNetwork", "requestUrlIncludes": "/logs", "method": "GET", "expectedStatus": 200, "timeoutMs": 30000}
   ],

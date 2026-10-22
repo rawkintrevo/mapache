@@ -21,7 +21,7 @@
         "width": 1440,
         "height": 900
       },
-      "expected": "One accessible Automations button with a visible Clock3 icon, no Run history navigation button, and the unchanged Blocks icon for Manage Google Workspace."
+      "expected": "One accessible More workspace actions button; its menu contains Automations with Clock3 and Manage Google Workspace with Blocks, with no Run history entry."
     },
     {
       "capture": "screenshot",
@@ -30,6 +30,11 @@
     {
       "type": "click",
       "role": "button",
+      "name": "More workspace actions"
+    },
+    {
+      "type": "click",
+      "role": "menuitem",
       "name": "Automations"
     },
     {

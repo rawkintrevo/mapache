@@ -1,8 +1,9 @@
 import "./Topbar.css";
-import {Blocks, Bot, Clock3, KeyRound, Pause, Pencil, Play, PlugZap, Plus, RefreshCw, ScrollText, Trash2, Upload, Variable} from "lucide-react";
+import {Bot} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
+import {TopbarPowerMenu} from "./TopbarPowerMenu.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
@@ -23,6 +24,7 @@ export function Topbar({
   onOpenWorkspaceEditModal,
   onOpenWorkspaceModal,
   onRefresh,
+  onRestartWorkspace,
   onSelectCanvas,
   onSelectWorkspace,
   onShowAdmin,
@@ -53,10 +55,11 @@ export function Topbar({
     Boolean(canonicalSession && hasSessionImageMetadata && normalizeSessionImageKey(canonicalSession) !== "pi-chrome");
   const workspaceStartBlocked = workspaceUnsupported && !workspaceOn;
   const workspaceStopUncertain = isRuntimeStopUncertain(canonicalSession || {});
-  const workspaceActionLabel = workspaceOn ? "Pause workspace" : "Start workspace";
+  const workspaceActionDisabled = busy || !selectedWorkspace || workspaceTransitioning || workspaceStartBlocked || workspaceStopUncertain;
+  const workspaceRestartDisabled = workspaceActionDisabled || !canonicalSession || !workspaceOn || workspaceUnsupported;
   const authHarness = sessionAuthHarness(canonicalSession);
   const showManagePiAuth = sessionSupportsAuth(canonicalSession);
-  const managePiAuthLabel = authHarness?.manageTitle || "Manage Auth";
+  const managePiAuthLabel = authHarness?.manageTitle || "Manage Pi Auth";
   const showWorkspaceTools = isMarkedRuntimeSession(canonicalSession);
   const showRuntimePolicy = Boolean(selectedWorkspace) && selectedWorkspace.source?.type !== "ssh" &&
     (selectedWorkspace.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(canonicalSession));
@@ -84,66 +87,27 @@ export function Topbar({
             <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
           ))}
         </select>
-        <Button
-          aria-label={workspaceActionLabel}
-          disabled={busy || !selectedWorkspace || workspaceTransitioning || workspaceStartBlocked || workspaceStopUncertain}
-          icon
-          title={workspaceStartBlocked ? "This historical runtime cannot be started" : workspaceStopUncertain ? "Workspace stop is still being confirmed" : workspaceTransitioning ? "Workspace is changing state" : workspaceActionLabel}
-          tooltip={workspaceStartBlocked ? "This historical runtime cannot be started" : workspaceStopUncertain ? "Workspace stop is still being confirmed" : workspaceTransitioning ? "Workspace is changing state" : workspaceActionLabel}
-          variant="secondary"
-          onClick={onToggleWorkspace}
-        >
-          {workspaceOn ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-        </Button>
-        <div className="topbar-workspace-secondary">
-          <Button
-            aria-label="Create workspace"
+        <TopbarPowerMenu
+          actionDisabled={workspaceActionDisabled}
+          onRestart={onRestartWorkspace}
+          onToggle={onToggleWorkspace}
+          restartDisabled={workspaceRestartDisabled}
+          workspaceOn={workspaceOn}
+        />
+        {showRuntimePolicy ? (
+          <SessionRuntimePolicy
             disabled={busy}
-            icon
-            title="Create workspace"
-            tooltip="Create workspace"
-            variant="secondary"
-            onClick={onOpenWorkspaceModal}
-          >
-            <Plus aria-hidden="true" />
-          </Button>
-          <Button
-            aria-label={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
-            disabled={busy || !selectedWorkspace}
-            icon
-            title={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
-            tooltip={selectedWorkspace ? `Edit workspace ${selectedWorkspace.name}` : "Edit selected workspace"}
-            variant="secondary"
-            onClick={onOpenWorkspaceEditModal}
-          >
-            <Pencil aria-hidden="true" />
-          </Button>
-          <Button
-            aria-label={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
-            disabled={busy || !selectedWorkspace}
-            icon
-            title={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
-            tooltip={selectedWorkspace ? `Delete workspace ${selectedWorkspace.name}` : "Delete selected workspace"}
-            variant="secondary"
-            onClick={() => onDeleteWorkspace(selectedWorkspace?.id)}
-          >
-            <Trash2 aria-hidden="true" />
-          </Button>
-        </div>
+            onSave={(policy) => onSetRuntimePolicy?.(policy)}
+            session={canonicalSession}
+            workspace={selectedWorkspace}
+          />
+        ) : null}
       </div>
       {resourceMetrics ? (
         <ResourceUtilization
           connectionState={resourceMetrics.connectionState}
           navbar
           sample={resourceMetrics.sample}
-        />
-      ) : null}
-      {showRuntimePolicy ? (
-        <SessionRuntimePolicy
-          disabled={busy}
-          onSave={(policy) => onSetRuntimePolicy?.(policy)}
-          session={canonicalSession}
-          workspace={selectedWorkspace}
         />
       ) : null}
       <div className="topbar-actions">
@@ -165,83 +129,8 @@ export function Topbar({
             >
               <Bot aria-hidden="true" />
             </Button>
-            <Button
-              aria-label="Logs"
-              icon
-              title="Logs"
-              tooltip="Logs"
-              variant="secondary"
-              onClick={onShowLogs}
-            >
-              <ScrollText aria-hidden="true" />
-            </Button>
-            <span aria-hidden="true" className="topbar-action-divider" />
           </>
         ) : null}
-        <Button aria-label="Upload file" icon title="Upload file" tooltip="Upload file" variant="secondary"
-          disabled={!selectedWorkspace || workspaceUnsupported} onClick={onShowUpload}>
-          <Upload aria-hidden="true" />
-        </Button>
-        <Button
-          aria-label="Automations"
-          aria-pressed={state.activePage === "automations" || state.activePage === "automation-history"}
-          icon
-          title="Automations"
-          tooltip="Automations"
-          variant={state.activePage === "automations" ? "primary" : "secondary"}
-          onClick={onShowAutomations}
-        >
-          <Clock3 aria-hidden="true" />
-        </Button>
-        <span aria-hidden="true" className="topbar-action-divider" />
-        {showManagePiAuth ? (
-          <Button
-            aria-label={managePiAuthLabel}
-            disabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenPiAuthManage}
-            icon
-            title={managePiAuthLabel}
-            tooltip={managePiAuthLabel}
-            variant="secondary"
-            onClick={onOpenPiAuthManage}
-          >
-            <KeyRound aria-hidden="true" />
-          </Button>
-        ) : null}
-        <Button
-          aria-label="Manage generic environment keys"
-          disabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenGenericEnvironment}
-          icon
-          title="Manage generic environment keys"
-          tooltip="Manage generic environment keys"
-          variant="secondary"
-          onClick={onOpenGenericEnvironment}
-        >
-          <Variable aria-hidden="true" />
-        </Button>
-        <Button
-          aria-label="Manage MCP servers"
-          disabled={!selectedWorkspace || state.mcpServers?.loading || state.mcpServers?.saving || !onOpenMcpServers}
-          icon
-          title="Manage MCP servers"
-          tooltip="Manage MCP servers"
-          variant="secondary"
-          onClick={onOpenMcpServers}
-        >
-          <PlugZap aria-hidden="true" />
-        </Button>
-        <Button
-          aria-label="Manage Google Workspace"
-          disabled={!selectedWorkspace || state.googleWorkspace?.loading || state.googleWorkspace?.saving || !onOpenGoogleWorkspace}
-          icon
-          title="Manage Google Workspace"
-          tooltip="Manage Google Workspace"
-          variant="secondary"
-          onClick={onOpenGoogleWorkspace}
-        >
-          <Blocks aria-hidden="true" />
-        </Button>
-        <a className="topbar-link" href="/community/blog">Blog</a>
-        <a className="topbar-link" href="/community/docs/intro/">Docs</a>
         </div>
         <TopbarMoreMenu
           activeCanvas={activeCanvas}
@@ -253,27 +142,20 @@ export function Topbar({
           onShowUpload={workspaceUnsupported ? null : onShowUpload}
           showWorkspaceTools={showWorkspaceTools}
           managePiAuthLabel={managePiAuthLabel}
+          genericEnvironmentDisabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenGenericEnvironment}
+          googleWorkspaceDisabled={state.googleWorkspace?.loading || state.googleWorkspace?.saving || !onOpenGoogleWorkspace}
+          mcpServersDisabled={state.mcpServers?.loading || state.mcpServers?.saving || !onOpenMcpServers}
+          piAuthDisabled={state.piAuth?.loading || state.piAuth?.saving || !showManagePiAuth || !onOpenPiAuthManage}
           onDeleteWorkspace={onDeleteWorkspace}
           onOpenGenericEnvironment={onOpenGenericEnvironment}
           onOpenGoogleWorkspace={onOpenGoogleWorkspace}
           onOpenMcpServers={onOpenMcpServers}
           onOpenRequestGrants={onOpenRequestGrants}
-          onOpenPiAuthManage={showManagePiAuth ? onOpenPiAuthManage : null}
+          onOpenPiAuthManage={onOpenPiAuthManage}
           onOpenWorkspaceEditModal={onOpenWorkspaceEditModal}
           onOpenWorkspaceModal={onOpenWorkspaceModal}
           selectedWorkspace={selectedWorkspace}
         />
-        <Button
-          aria-label="Refresh app state"
-          className="topbar-refresh-button"
-          disabled={busy}
-          icon
-          title={busy ? "Working..." : "Refresh"}
-          variant="secondary"
-          onClick={onRefresh}
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>
         <TopbarUserMenu
           state={state}
           onRefresh={onRefresh}

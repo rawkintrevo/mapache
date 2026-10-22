@@ -3,7 +3,8 @@
   "title": "Delete the selected workspace",
   "actions": [
     {"type": "confirmDialog", "action": "accept"},
-    {"type": "click", "role": "button", "nameIncludes": "Delete workspace"},
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "nameIncludes": "Delete workspace"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces/", "method": "DELETE", "expectedStatus": 200, "timeoutMs": 20000}
   ],
   "successSignals": [

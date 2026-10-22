@@ -1,6 +1,6 @@
 # Workspace uploads
 
-The navbar Upload file action beside Logs (also in the responsive More menu)
+The navbar Upload file action in the workspace actions menu
 accepts one local file of 1 byte through 1 GiB. Files appear at
 `/uploads/<filename>` in main and automation runtimes. The directory is read-only
 inside runners; users and agents copy inputs into their writable working directory

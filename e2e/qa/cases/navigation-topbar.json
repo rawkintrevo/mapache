@@ -1,18 +1,22 @@
 {
   "id": "navigation.topbar",
   "title": "Top navigation controls",
-  "description": "Exercise top navigation workspace, connection, account, and refresh controls without a left sidebar.",
+  "description": "Exercise the workspace power and consolidated actions menus across desktop, tablet, and phone layouts.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/navigation.topbar",
   "steps": [
     {"useCase": "cases/login.json"},
     {"assert": "accessible-button-absent", "name": "Expand drawer"},
-    {"assert": "button-present", "name": "Manage Pi Auth"},
-    {"assert": "button-present", "name": "Manage MCP servers"},
-    {"assert": "button-present", "name": "Manage Google Workspace"},
+    {"assert": "button-present", "nameIncludes": "Workspace power controls"},
     {"assert": "button-present", "name": "More workspace actions"},
     {"assert": "button-present", "nameIncludes": "Open user menu for"},
-    {"useScript": "scripts/refresh-app-state.json"},
-    {"capture": "screenshot", "fileName": "topbar.png"}
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"assert": "workspace-actions-menu", "expected": "New workspace and Edit workspace appear first; Logs, Upload file, and Automations follow the first divider; Manage Pi Auth, generic environment keys, MCP servers, Google Workspace, and Workspace request access follow the second divider; Delete workspace is the final separated destructive item. Items unavailable in the current workspace state are disabled rather than omitted."},
+    {"assert": "workspace-actions-keyboard", "expected": "The first available item receives focus. Arrow Down/Up and Home/End move among enabled menu items. Escape closes the menu and returns focus to More workspace actions."},
+    {"assert": "topbar-responsive-layout", "viewports": [{"width": 1024, "height": 768}, {"width": 768, "height": 1024}, {"width": 390, "height": 844}, {"width": 375, "height": 812}, {"width": 320, "height": 568}], "expected": "At each viewport, workspace selection and both menu triggers remain visible with at least 44x44 touch targets, long workspace names stay clipped within the selector, no page-level horizontal overflow occurs, and the phone topbar uses two rows without the live meters."},
+    {"capture": "screenshot", "fileName": "topbar-responsive.png"},
+    {"assert": "workspace-power-menu", "expected": "Open Workspace power controls. A stopped workspace offers Start and disables Restart when no canonical runtime exists; a running workspace offers Stop and Restart. The menu supports arrow keys and Escape focus return."},
+    {"capture": "screenshot", "fileName": "topbar-power-menu.png"},
+    {"useScript": "scripts/refresh-app-state.json"}
   ]
 }

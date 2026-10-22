@@ -34,7 +34,7 @@ export function ManagedAgentSurface({
           unavailableMessage ? (
             <div className="terminal-placeholder runtime-status-card" role="status">
               <strong>{unavailableMessage}</strong>
-              <span>{unavailableMessage.includes("historical") ? "This runtime cannot be started." : "Press Play in the navigation bar to start the runtime."}</span>
+              <span>{unavailableMessage.includes("historical") ? "This runtime cannot be started." : "Open Workspace power controls and choose Start workspace."}</span>
             </div>
           ) : (
             <div className="terminal-placeholder"><p>Agent access is not ready.<br /><code>{accessError || session.lastError || session.status}</code></p></div>

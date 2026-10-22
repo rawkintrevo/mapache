@@ -38,19 +38,21 @@ missing profile timezone from the browser's IANA timezone (falling back to
 `UTC`) through `PATCH /api/me`. Existing saved timezones are never overwritten;
 the schedule preview API remains server-authoritative.
 
-The signed-in shell has no left drawer. Its top navigation contains workspace
-Play/Pause lifecycle control beside the workspace selector, followed by the
-selected canonical cloud runtime's live CPU and memory meters, then
-marked-runtime Agent and Logs icons, workspace Automations, and compact actions for Pi auth, generic
-environment keys, workspace MCP servers, and Google Workspace, plus an avatar
-icon for the user menu. At tablet and phone widths the shell becomes a two-row
-header: brand/avatar/More on the first row and a shrinkable workspace selector
-plus lifecycle control on the second. Secondary workspace, connection,
-documentation, and marked-runtime actions are available from the keyboard-accessible
-labeled More menu. The meters remain mounted across Agent, Chrome, Logs,
+The signed-in shell has no left drawer. Its top navigation contains the workspace
+selector, a state-aware power menu for Start, Stop, and Restart, the runtime
+policy control, the selected canonical cloud runtime's live CPU and memory
+meters, a marked-runtime Agent shortcut, the complete workspace actions menu,
+and an avatar menu. The workspace actions menu owns New, Edit, Logs, Upload,
+Automations, Pi auth, generic environment keys, workspace MCP servers, Google
+Workspace, request access, documentation, refresh, and destructive Delete.
+Both action menus support initial focus, arrow/Home/End traversal, Escape focus
+return, and outside-click dismissal. At tablet and phone widths the shell becomes
+a two-row header: brand/avatar/actions on the first row and a shrinkable workspace
+selector plus power and runtime-policy controls on the second. Live meters are
+hidden at phone widths to preserve workspace canvas height. The meters remain mounted across Agent, Chrome, Logs,
 profile, and admin surfaces; they are read-only and show unavailable or
-reconnecting state instead of stale readings. Google Workspace account management opens in a modal from its topbar
-icon. The workspace runtime policy editor offers mutually exclusive **Idle
+reconnecting state instead of stale readings. Google Workspace account management opens in a modal from the workspace
+actions menu. The workspace runtime policy editor offers mutually exclusive **Idle
 timeout**, **Keep running**, and **Scheduled hours** modes. It saves the
 workspace policy through `PATCH /api/workspaces/{workspaceId}/runtime-policy`,
 shows the effective schedule and next start/stop, and explains interruption at
@@ -59,8 +61,8 @@ enabled schedule can start a stopped workspace without an open browser. The
 shell no longer reserves either sidebar column. GitHub account/repository
 connection controls remain in the profile and workspace creation flows.
 
-Workspace **Automations** is a lazy management surface opened from the topbar or
-responsive More menu. It combines workspace-scoped definition management with
+Workspace **Automations** is a lazy management surface opened from the workspace
+actions menu. It combines workspace-scoped definition management with
 owner-wide run history and run details in one page; there is no separate top-level
 Run history entry. Opening it never starts a runner. The definition section owns
 selection/editing, provider/model selection, max-concurrency edits,
@@ -135,7 +137,7 @@ embedded upstream application when that application is available.
 
 The landing, admin, profile, modal-stack, and runtime Logs surfaces are lazy-loaded because they are route- or action-specific. The workspace/session path remains eager so terminal and stateful Agent/Chrome canvases can mount without an extra feature request. Bundle measurements and the warning rationale are recorded in [Frontend bundle analysis](./frontend-bundle-analysis.md).
 
-`Topbar`/More owns the entry point for `WorkspaceRequestGrantsModal`; it loads and mutates directional grants for the selected source workspace without starting a runner. `Topbar` owns the entry points for `PiAuthManageModal`,
+`TopbarMoreMenu` owns the entry point for `WorkspaceRequestGrantsModal`; it loads and mutates directional grants for the selected source workspace without starting a runner. It also owns the entry points for `PiAuthManageModal`,
 `GenericEnvironmentModal`, `McpServersModal`, and
 `GoogleWorkspaceManageModal`. `PiAuthManageModal` manages only saved
 credential selection and entry CRUD. It does not edit model files or expose
@@ -149,8 +151,9 @@ access URL derives the authenticated `/metrics` socket URL; changing workspace,
 session, or signed URL tears down the prior socket and ignores late events.
 Metrics are enabled only for running runtimes and do not attach to the PTY or
 update activity. `loadSelectedSessionAccess` in `src/main.js` remains narrow and
-is keyed by the workspace's canonical runtime. Workspace Play/Pause delegates to
-the retained session lifecycle API internally; users do not select, create,
+is keyed by the workspace's canonical runtime. Workspace Start/Stop delegates to
+the retained session lifecycle API internally, while Restart calls the canonical
+session restart operation; users do not select, create,
 rename, resize, restart, stop, or delete sibling sessions from the Mapache shell. Compute size
 is edited from the workspace edit modal and stored on the workspace. The API
 resize call also recovers marked runtimes in `provision_failed`, `update_failed`,
@@ -251,11 +254,8 @@ merely to inspect a past run.
 
 ## Local file uploads
 
-The desktop navbar wraps when its controls need more room, keeping account
-actions visible alongside the added Upload file button. The responsive More
-menu also exposes Upload file.
-
-The navbar Upload file action sends local files directly to Cloud Storage using
+The navbar keeps its workspace and account actions in one labeled workspace
+actions menu at every viewport size. Its Upload file action sends local files directly to Cloud Storage using
 resumable transfers. Main and automation sessions mount their workspace inputs
 read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
 ownership, lifecycle, restart requirements, and verification.

@@ -4,7 +4,10 @@ import {Button} from "../common/Button.jsx";
 
 export function TopbarMoreMenu({
   disabled = false,
+  genericEnvironmentDisabled = false,
+  googleWorkspaceDisabled = false,
   managePiAuthLabel = "Manage Auth",
+  mcpServersDisabled = false,
   onDeleteWorkspace,
   onOpenGenericEnvironment,
   onOpenGoogleWorkspace,
@@ -18,6 +21,7 @@ export function TopbarMoreMenu({
   onShowAutomations,
   onShowLogs,
   onShowUpload,
+  piAuthDisabled = false,
   selectedWorkspace,
   showWorkspaceTools = false,
 }) {
@@ -37,7 +41,17 @@ export function TopbarMoreMenu({
         event.preventDefault();
         setOpen(false);
         triggerRef.current?.focus();
+        return;
       }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      const items = [...menuRef.current.querySelectorAll("[role='menuitem']:not(:disabled)")];
+      if (!items.length) return;
+      event.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement);
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 :
+        event.key === "ArrowDown" ? (currentIndex + 1) % items.length :
+          (currentIndex <= 0 ? items.length - 1 : currentIndex - 1);
+      items[nextIndex]?.focus();
     }
     document.addEventListener("pointerdown", closeOnOutsideClick);
     document.addEventListener("keydown", handleKeyDown);
@@ -68,29 +82,27 @@ export function TopbarMoreMenu({
       </Button>
       {open ? (
         <div aria-label="More workspace actions" className="topbar-more-popover" role="menu">
-          {showWorkspaceTools ? <>
-            <MenuItem firstItemRef={firstItemRef} icon={<Bot aria-hidden="true" />} label="Agent" onClick={() => onSelectCanvas?.("agent")} close={close} />
-            <MenuItem icon={<ScrollText aria-hidden="true" />} label="Logs" onClick={onShowLogs} close={close} />
-            <div className="topbar-more-divider" role="separator" />
-          </> : null}
-            <MenuItem disabled={!selectedWorkspace || !onShowUpload} icon={<Upload aria-hidden="true" />} label="Upload file" onClick={onShowUpload} close={close} />
-          <MenuItem icon={<Clock3 aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} />
-          <div className="topbar-more-divider" role="separator" />
-          <MenuItem firstItemRef={firstItemRef} icon={<Plus aria-hidden="true" />} label="Create workspace" onClick={onOpenWorkspaceModal} close={close} />
+          <MenuItem firstItemRef={firstItemRef} icon={<Plus aria-hidden="true" />} label="New workspace" onClick={onOpenWorkspaceModal} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<Pencil aria-hidden="true" />} label={`Edit workspace ${workspaceLabel}`} onClick={onOpenWorkspaceEditModal} close={close} />
           <div className="topbar-more-divider" role="separator" />
-          <MenuItem disabled={!selectedWorkspace} icon={<Trash2 aria-hidden="true" />} label={`Delete workspace ${workspaceLabel}`} onClick={() => onDeleteWorkspace?.(selectedWorkspace?.id)} close={close} destructive />
+          {showWorkspaceTools ? <>
+            <MenuItem icon={<Bot aria-hidden="true" />} label="Agent" onClick={() => onSelectCanvas?.("agent")} close={close} />
+          </> : null}
+          <MenuItem disabled={!showWorkspaceTools || !onShowLogs} icon={<ScrollText aria-hidden="true" />} label="Logs" onClick={onShowLogs} close={close} />
+          <MenuItem disabled={!selectedWorkspace || !onShowUpload} icon={<Upload aria-hidden="true" />} label="Upload file" onClick={onShowUpload} close={close} />
+          <MenuItem icon={<Clock3 aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} />
           <div className="topbar-more-divider" role="separator" />
-          {onOpenPiAuthManage ? <MenuItem icon={<KeyRound aria-hidden="true" />} label={managePiAuthLabel} onClick={onOpenPiAuthManage} close={close} /> : null}
-          <MenuItem icon={<Variable aria-hidden="true" />} label="Manage generic environment keys" onClick={onOpenGenericEnvironment} close={close} />
-          <MenuItem disabled={!selectedWorkspace} icon={<PlugZap aria-hidden="true" />} label="Manage MCP servers" onClick={onOpenMcpServers} close={close} />
-          <MenuItem disabled={!selectedWorkspace} icon={<Blocks aria-hidden="true" />} label="Manage Google Workspace" onClick={onOpenGoogleWorkspace} close={close} />
+          <MenuItem disabled={piAuthDisabled} icon={<KeyRound aria-hidden="true" />} label={managePiAuthLabel} onClick={onOpenPiAuthManage} close={close} />
+          <MenuItem disabled={genericEnvironmentDisabled} icon={<Variable aria-hidden="true" />} label="Manage generic environment keys" onClick={onOpenGenericEnvironment} close={close} />
+          <MenuItem disabled={!selectedWorkspace || mcpServersDisabled} icon={<PlugZap aria-hidden="true" />} label="Manage MCP servers" onClick={onOpenMcpServers} close={close} />
+          <MenuItem disabled={!selectedWorkspace || googleWorkspaceDisabled} icon={<Blocks aria-hidden="true" />} label="Manage Google Workspace" onClick={onOpenGoogleWorkspace} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<Shield aria-hidden="true" />} label="Workspace request access" onClick={onOpenRequestGrants} close={close} />
           <div className="topbar-more-divider" role="separator" />
           <a className="topbar-more-link" href="/community/blog" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Blog</a>
           <a className="topbar-more-link" href="/community/docs/intro/" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Docs</a>
-          <div className="topbar-more-divider" role="separator" />
           <MenuItem icon={<RefreshCw aria-hidden="true" />} label="Refresh" onClick={onRefresh} close={close} />
+          <div className="topbar-more-divider" role="separator" />
+          <MenuItem disabled={!selectedWorkspace} icon={<Trash2 aria-hidden="true" />} label={`Delete workspace ${workspaceLabel}`} onClick={() => onDeleteWorkspace?.(selectedWorkspace?.id)} close={close} destructive />
         </div>
       ) : null}
     </div>

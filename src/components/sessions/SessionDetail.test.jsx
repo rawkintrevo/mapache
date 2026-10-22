@@ -143,7 +143,7 @@ describe("SessionDetail Chrome workflow", () => {
         {busy: false},
     );
 
-    expect(screen.getByText("Use Play in the navigation bar to restart the workspace runtime.")).toBeInTheDocument();
+    expect(screen.getByText("Open Workspace power controls and choose Start workspace to retry the runtime.")).toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Retry provisioning"})).not.toBeInTheDocument();
   });
 
@@ -224,7 +224,7 @@ test("does not place runtime lifetime controls above the managed agent surface",
 test("uses a compact stopped status for an unavailable managed runtime", () => {
   renderDetail({agentUiVersion: "pi-web-ui-v1", status: "stopped", serviceUrl: null});
   expect(screen.getByRole("status")).toHaveTextContent("Workspace is stopped");
-  expect(screen.getByRole("status")).toHaveTextContent("Press Play in the navigation bar");
+  expect(screen.getByRole("status")).toHaveTextContent("Open Workspace power controls");
 });
 
 test("explains that historical runtimes cannot be started", () => {

@@ -81,6 +81,7 @@ export function AppShell(props) {
         onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
+        onRestartWorkspace={() => selectedSession ? sessions.restartSession(selectedSession.id) : undefined}
         onSelectCanvas={setActiveCanvas}
         onSelectWorkspace={workspaces.selectWorkspace}
         onShowAdmin={admin.showAdmin}

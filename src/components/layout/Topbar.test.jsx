@@ -12,6 +12,7 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
     sessions: session ? [session] : [],
   };
   const onToggleWorkspace = vi.fn();
+  const onRestartWorkspace = vi.fn();
   const onOpenPiAuthManage = vi.fn();
   const onOpenGenericEnvironment = vi.fn();
   const onOpenGoogleWorkspace = vi.fn();
@@ -30,6 +31,7 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
       onOpenWorkspaceEditModal={vi.fn()}
       onOpenWorkspaceModal={vi.fn()}
       onRefresh={vi.fn()}
+      onRestartWorkspace={onRestartWorkspace}
       onSelectCanvas={vi.fn()}
       onSelectWorkspace={vi.fn()}
       onShowAdmin={vi.fn()}
@@ -48,6 +50,7 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
     onOpenGoogleWorkspace,
     onOpenMcpServers,
     onOpenPiAuthManage,
+    onRestartWorkspace,
     onSetRuntimePolicy,
     onShowAutomations,
     onShowUpload,
@@ -59,42 +62,49 @@ describe("Topbar workspace lifecycle", () => {
   test("starts an off workspace", async () => {
     const user = userEvent.setup();
     const {onToggleWorkspace} = renderTopbar({id: "session-1", status: "stopped"});
-    await user.click(screen.getByRole("button", {name: "Start workspace"}));
+    await user.click(screen.getByRole("button", {name: "Workspace power controls: stopped"}));
+    await user.click(screen.getByRole("menuitem", {name: "Start workspace"}));
     expect(onToggleWorkspace).toHaveBeenCalledOnce();
   });
 
-  test("opens Pi auth, environment, MCP, and Google Workspace management from icon buttons", async () => {
+  test("opens Pi auth, environment, MCP, and Google Workspace management from the workspace menu", async () => {
     const user = userEvent.setup();
     const handlers = renderTopbar({id: "session-1", status: "running", terminalKind: "pi"});
 
-    const piAuthButton = screen.getByRole("button", {name: "Manage Pi Auth"});
-    const environmentButton = screen.getByRole("button", {name: "Manage generic environment keys"});
-    const mcpButton = screen.getByRole("button", {name: "Manage MCP servers"});
-    const googleButton = screen.getByRole("button", {name: "Manage Google Workspace"});
-    expect(piAuthButton).toHaveAttribute("title", "Manage Pi Auth");
-    expect(environmentButton).toHaveAttribute("title", "Manage generic environment keys");
-    expect(mcpButton).toHaveAttribute("title", "Manage MCP servers");
-    expect(googleButton).toHaveAttribute("title", "Manage Google Workspace");
-
-    await user.click(piAuthButton);
-    await user.click(environmentButton);
-    await user.click(mcpButton);
-    await user.click(googleButton);
+    for (const [label, handler] of [
+      ["Manage Pi Auth", handlers.onOpenPiAuthManage],
+      ["Manage generic environment keys", handlers.onOpenGenericEnvironment],
+      ["Manage MCP servers", handlers.onOpenMcpServers],
+      ["Manage Google Workspace", handlers.onOpenGoogleWorkspace],
+    ]) {
+      await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+      await user.click(screen.getByRole("menuitem", {name: label}));
+      expect(handler).toHaveBeenCalledOnce();
+    }
     expect(handlers.onOpenPiAuthManage).toHaveBeenCalledOnce();
     expect(handlers.onOpenGenericEnvironment).toHaveBeenCalledOnce();
     expect(handlers.onOpenMcpServers).toHaveBeenCalledOnce();
     expect(handlers.onOpenGoogleWorkspace).toHaveBeenCalledOnce();
   });
 
-  test("pauses a running workspace", () => {
-    renderTopbar({id: "session-1", status: "running"});
-    expect(screen.getByRole("button", {name: "Pause workspace"})).toBeEnabled();
+  test("stops or restarts a running workspace from the power menu", async () => {
+    const user = userEvent.setup();
+    const {onRestartWorkspace, onToggleWorkspace} = renderTopbar({id: "session-1", status: "running"});
+    await user.click(screen.getByRole("button", {name: "Workspace power controls: running"}));
+    expect(screen.getByRole("menuitem", {name: "Stop workspace"})).toBeEnabled();
+    expect(screen.getByRole("menuitem", {name: "Restart workspace"})).toBeEnabled();
+    await user.click(screen.getByRole("menuitem", {name: "Restart workspace"}));
+    expect(onRestartWorkspace).toHaveBeenCalledOnce();
+    expect(onToggleWorkspace).not.toHaveBeenCalled();
   });
 
-  test("starts a workspace with no existing session", () => {
+  test("starts a workspace with no existing session and disables restart", async () => {
+    const user = userEvent.setup();
     renderTopbar();
-    expect(screen.getByRole("button", {name: "Start workspace"})).toBeEnabled();
-  expect(screen.queryByRole("group", {name: "Runtime policy"})).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Workspace power controls: stopped"}));
+    expect(screen.getByRole("menuitem", {name: "Start workspace"})).toBeEnabled();
+    expect(screen.getByRole("menuitem", {name: "Restart workspace"})).toBeDisabled();
+    expect(screen.queryByRole("group", {name: "Runtime policy"})).not.toBeInTheDocument();
   });
 
 test("shows the runtime policy for a marked workspace before its first session", () => {
@@ -107,20 +117,13 @@ test("uses one automation navigation entry for definitions and run history", asy
   const user = userEvent.setup();
   const {onShowAutomations} = renderTopbar();
 
-  const automationsButton = screen.getByRole("button", {name: "Automations"});
-  expect(automationsButton).toBeEnabled();
-  expect(automationsButton).toHaveAttribute("title", "Automations");
   expect(screen.queryByRole("button", {name: "Run history"})).not.toBeInTheDocument();
-  automationsButton.focus();
-  await user.keyboard("{Enter}");
-  expect(onShowAutomations).toHaveBeenCalledOnce();
-
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   expect(screen.getByRole("menuitem", {name: "Automations"})).toBeInTheDocument();
   expect(screen.queryByRole("menuitem", {name: "Run history"})).not.toBeInTheDocument();
   screen.getByRole("menuitem", {name: "Automations"}).focus();
   await user.keyboard("{Enter}");
-  expect(onShowAutomations).toHaveBeenCalledTimes(2);
+  expect(onShowAutomations).toHaveBeenCalledOnce();
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 });
 
@@ -136,19 +139,24 @@ test("opens labeled secondary actions from the More menu", async () => {
   render(<Topbar state={state} onDeleteWorkspace={vi.fn()} onOpenGenericEnvironment={vi.fn()} onOpenGoogleWorkspace={vi.fn()} onOpenMcpServers={vi.fn()} onOpenRequestGrants={onOpenRequestGrants} onOpenPiAuthManage={vi.fn()} onOpenWorkspaceEditModal={vi.fn()} onOpenWorkspaceModal={onOpenWorkspaceModal} onRefresh={vi.fn()} onSelectWorkspace={vi.fn()} onShowAdmin={vi.fn()} onShowLogs={vi.fn()} onShowProfile={vi.fn()} onSignOut={vi.fn()} onToggleWorkspace={vi.fn()} />);
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   expect(screen.getByRole("menu")).toBeInTheDocument();
-  expect(screen.getByRole("menuitem", {name: "Create workspace"})).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", {name: "New workspace"})).toBeInTheDocument();
   expect(screen.getByRole("menuitem", {name: "Delete workspace A very long workspace name"})).toHaveClass("topbar-more-item--destructive");
+  const labels = screen.getAllByRole("menuitem").map((item) => item.getAttribute("aria-label") || item.textContent);
+  expect(labels.indexOf("Manage Google Workspace")).toBeLessThan(labels.indexOf("Delete workspace A very long workspace name"));
   expect(screen.getByRole("menuitem", {name: "Workspace request access"})).toBeInTheDocument();
   await user.click(screen.getByRole("menuitem", {name: "Workspace request access"}));
   expect(onOpenRequestGrants).toHaveBeenCalledOnce();
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
-  await user.click(screen.getByRole("menuitem", {name: "Create workspace"}));
+  await user.click(screen.getByRole("menuitem", {name: "New workspace"}));
   expect(onOpenWorkspaceModal).toHaveBeenCalledOnce();
 });
 
-test("disables lifecycle actions while an asynchronous resize is queued", () => {
+test("disables lifecycle actions while an asynchronous resize is queued", async () => {
+  const user = userEvent.setup();
   renderTopbar({id: "session-1", status: "running", resizeOperationState: "queued"});
-  expect(screen.getByRole("button", {name: "Pause workspace"})).toBeDisabled();
+  await user.click(screen.getByRole("button", {name: "Workspace power controls: running"}));
+  expect(screen.getByRole("menuitem", {name: "Stop workspace"})).toBeDisabled();
+  expect(screen.getByRole("menuitem", {name: "Restart workspace"})).toBeDisabled();
 });
 
 test("renders live resource meters between workspace controls and actions", () => {
@@ -205,9 +213,23 @@ test("does not show the runtime policy editor for historical sessions", () => {
 test("upload is available before starting a workspace and in the More menu", async () => {
   const user = userEvent.setup();
   const {onShowUpload} = renderTopbar();
-  await user.click(screen.getByRole("button", {name: "Upload file"}));
-  expect(onShowUpload).toHaveBeenCalledOnce();
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   await user.click(screen.getByRole("menuitem", {name: "Upload file"}));
-  expect(onShowUpload).toHaveBeenCalledTimes(2);
+  expect(onShowUpload).toHaveBeenCalledOnce();
+});
+
+test("supports arrow-key navigation and Escape in workspace menus", async () => {
+  const user = userEvent.setup();
+  renderTopbar({id: "session-1", status: "running", terminalKind: "pi"});
+
+  const moreTrigger = screen.getByRole("button", {name: "More workspace actions"});
+  await user.click(moreTrigger);
+  expect(screen.getByRole("menuitem", {name: "New workspace"})).toHaveFocus();
+  await user.keyboard("{ArrowDown}");
+  expect(screen.getByRole("menuitem", {name: "Edit workspace HubSpot"})).toHaveFocus();
+  await user.keyboard("{End}");
+  expect(screen.getByRole("menuitem", {name: "Delete workspace HubSpot"})).toHaveFocus();
+  await user.keyboard("{Escape}");
+  expect(moreTrigger).toHaveFocus();
+  expect(screen.queryByRole("menu", {name: "More workspace actions"})).not.toBeInTheDocument();
 });

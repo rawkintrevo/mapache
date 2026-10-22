@@ -2,7 +2,8 @@
   "id": "script.openAuthModal",
   "title": "Open the Authentication Provider modal",
   "actions": [
-    {"type": "click", "role": "button", "name": "Manage Pi Auth"},
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "name": "Manage Pi Auth"},
     {"type": "click", "role": "button", "name": "Add authentication provider"},
     {"type": "waitForSnapshotText", "text": "Add Authentication Provider", "timeoutMs": 5000}
   ],
