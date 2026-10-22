@@ -2,12 +2,14 @@
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
+const {Readable} = require("node:stream");
 const test = require("node:test");
 const {
   chromeProfileSeedObjectPath,
   readCurrentChromeProfileSeed,
   selectAutomationChromeProfileSeed,
   validateChromeProfileSeedDescriptor,
+  verifyChromeProfileSeedObject,
 } = require("./chromeProfileSeed.service");
 
 const bucketName = "workspace-bucket";
@@ -45,6 +47,7 @@ function storageFor(descriptor, options = {}) {
           if (!objects.has(name)) throw Object.assign(new Error("missing"), {code: 404});
           return [objects.get(name)];
         },
+        createReadStream: () => Readable.from([objects.get(name)]),
         getMetadata: async () => [{
           generation: descriptor.objectGeneration,
           size: String(objects.get(name)?.length || 0),
@@ -149,4 +152,45 @@ test("reuses an existing automation session seed before considering a newer curr
   });
   assert.equal(selected.reason, "pinned");
   assert.equal(selected.descriptor.seedVersion, descriptor.seedVersion);
+});
+
+test("validates a large Chrome profile as a generation-pinned stream without downloading a buffer", async () => {
+  const chunk = Buffer.alloc(64 * 1024, 7);
+  const chunks = 2048; // 128 MiB archive, only one 64 KiB fixture buffer.
+  const hash = crypto.createHash("sha256");
+  for (let i = 0; i < chunks; i++) hash.update(chunk);
+  const descriptor = seedDescriptor({byteLength: chunk.length * chunks, sha256: hash.digest("hex")});
+  let requestedGeneration;
+  const storage = {bucket: () => ({file: (_path, options) => {
+    requestedGeneration = options.generation;
+    return {
+      download: () => { throw new Error("must not buffer profile"); },
+      getMetadata: async () => [{generation: "7", size: descriptor.byteLength}],
+      createReadStream: () => Readable.from((function* () {
+        for (let i = 0; i < chunks; i++) yield chunk;
+      })()),
+    };
+  }})};
+  await verifyChromeProfileSeedObject(descriptor, {storage});
+  assert.equal(requestedGeneration, "7");
+});
+
+for (const content of [Buffer.from("short"), Buffer.from("profile-seed-extra")]) {
+  test(`rejects a stream whose byte count differs from its descriptor (${content.length})`, async () => {
+    const descriptor = seedDescriptor();
+    const storage = {bucket: () => ({file: () => ({
+      getMetadata: async () => [{generation: "7", size: descriptor.byteLength}],
+      createReadStream: () => Readable.from([content]),
+    })})};
+    await assert.rejects(verifyChromeProfileSeedObject(descriptor, {storage}), /chrome_profile_seed_checksum_mismatch/);
+  });
+}
+
+test("stream failures remain visible instead of accepting an unverified Chrome profile", async () => {
+  const descriptor = seedDescriptor();
+  const storage = {bucket: () => ({file: () => ({
+    getMetadata: async () => [{generation: "7", size: descriptor.byteLength}],
+    createReadStream: () => Readable.from((async function* () { throw new Error("transport failed"); })()),
+  })})};
+  await assert.rejects(verifyChromeProfileSeedObject(descriptor, {storage}), /chrome_profile_seed_unavailable/);
 });

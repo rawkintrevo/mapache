@@ -53,6 +53,48 @@ UI via `PI_WEB_CONTROL_PATH`; long ticket session IDs must not exceed Unix socke
 path limits. Runtime data and persisted workspace identities remain unchanged. Previously
 failed requests are not replayed or retroactively rewritten.
 
+## Resource sizing and OOM recovery
+
+An omitted request size inherits the target workspace's configured primary-runner
+CPU and memory automatically. `automationRuns.service.js` pins this resolved pair
+in the queued run snapshot and request contract; explicit `resources` overrides
+win. A workspace without saved resources uses the normal Small default (1 CPU,
+2 GiB). No sizing question is required. Requests still use `pi-chrome`, including
+the complete saved browser profile when one is available.
+
+`automationOomRecovery.service.js` reads only Cloud Run **platform system**
+memory-limit events for the run's deterministic service since its provisioning
+attempt began. Generic timeouts, exit 137, and application log messages are not
+OOM evidence. The recovery workers require the existing API identity's
+`roles/logging.viewer` access. A failed log lookup retains recoverable cleanup
+state rather than publishing a potentially incorrect terminal result.
+
+Only a confirmed OOM **before the durable execution claim** can automatically
+retry a workspace request. Cleanup first confirms service absence, then a
+transaction rechecks cancellation, workspace ownership/deletion, the ticket's
+current run, and the execution claim. It queues one deterministic linked attempt
+with the next supported memory size, increasing CPU only if needed for that
+memory. At most two OOM retries are allowed, capped at the catalog's 8 GiB.
+The original attempt and its configuration remain in history; Chrome seed and
+context descriptors are preserved. The ticket points atomically at the queued
+attempt, and old sink delivery cannot overwrite the newer result. Cleanup
+releases the old slot through the existing admission path.
+
+Once `executionStartedAt` (or equivalent execution state) exists, an OOM returns
+`automation_execution_oom` to the caller and **never automatically replays**, even
+if the run still says `provisioning` or otherwise opts into safe workflow retries.
+An exhausted provisioning retry returns `automation_provisioning_oom`; the run
+records whether the retry count or resource ceiling prevented escalation.
+A user cancellation always takes precedence. Historical completed failures are
+not retroactively replayed.
+
+The provisioning Functions have their own memory allocation, independent of
+runner resources. They do not dynamically resize themselves: deployment gives
+the automation provisioning/recovery workers 1 GiB and concurrency 1. Chrome
+profile verification streams the generation-pinned archive through SHA-256 and
+byte-count checks instead of buffering the archive. This preserves the full
+profile and validation. See [Deployment](./deployment.md) for rollout details.
+
 ## Agent discovery and guidance
 
 Information retrieval (for example, “get the onboarding findings from Customer

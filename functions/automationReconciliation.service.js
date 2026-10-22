@@ -40,6 +40,7 @@ function createAutomationReconciliationService(dependencies = {}) {
     heartbeatMaxAgeMs: positiveNumber(dependencies.heartbeatMaxAgeMs, DEFAULT_HEARTBEAT_MAX_AGE_MS),
     healthProbe: dependencies.healthProbe,
     healthProbeTimeoutMs: positiveNumber(dependencies.healthProbeTimeoutMs, DEFAULT_HEALTH_PROBE_TIMEOUT_MS),
+    inspectOom: dependencies.inspectOom,
     listCloudRunServices: dependencies.listCloudRunServices,
     listRuns: dependencies.listRuns,
     now: dependencies.now || (() => Date.now()),
@@ -116,6 +117,12 @@ async function reconcile(dependencies = {}) {
 
 async function reconcileRun(run, dependencies = {}) {
   const status = normalize(run.status);
+  if (typeof dependencies.inspectOom === "function" &&
+      (status !== "running" || heartbeatIsStale(run, {}, dependencies)) &&
+      await dependencies.inspectOom(run.runId)) {
+    await dependencies.cleanupAutomationRun(run.runId);
+    return "interrupted";
+  }
   if (status === "provisioning") {
     if (typeof dependencies.provisionAutomationRun !== "function") return "retained";
     await dependencies.provisionAutomationRun(run.runId);

@@ -19,6 +19,8 @@ function createAutomationCleanupService(dependencies = {}) {
     deleteSessionService: dependencies.deleteSessionService,
     releaseAutomationSlot: dependencies.releaseAutomationSlot || dependencies.releaseAfterCleanup,
     scheduleRetry: dependencies.scheduleRetry,
+    inspectOom: dependencies.inspectOom,
+    retryOomAfterDeletion: dependencies.retryOomAfterDeletion,
     sessionCollection: dependencies.sessionCollection,
     deliverRunSinks: dependencies.deliverRunSinks || deliverRunSinks,
     wakeQueue: dependencies.wakeQueue,
@@ -143,6 +145,15 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   if (!isTerminalAutomationStatus(run.status) && normalize(run.status) !== "stopping") {
     return {skipped: "run_not_stopping", runId: normalizedRunId};
   }
+  if (typeof dependencies.inspectOom === "function") {
+    try {
+      await dependencies.inspectOom(normalizedRunId);
+    } catch (error) {
+      // Retain the cleanup intent until the failure can be classified. Do not
+      // publish a terminal result before deciding whether startup can recover.
+      return markCleanupError(runRef, normalizedRunId, {code: "automation_oom_lookup_failed"}, dependencies);
+    }
+  }
 
   const sessionId = String(run.sessionId || automationSessionId(normalizedRunId)).trim();
   const sessionRef = dependencies.sessionCollection(run.workspaceId).doc(sessionId);
@@ -169,6 +180,14 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
   if (details.serviceAbsent !== true) {
     return markCleanupError(runRef, normalizedRunId, {code: "automation_service_delete_failed"}, dependencies);
+  }
+
+  if (typeof dependencies.retryOomAfterDeletion === "function") {
+    try {
+      await dependencies.retryOomAfterDeletion(normalizedRunId);
+    } catch (error) {
+      return markCleanupError(runRef, normalizedRunId, {code: "automation_oom_recovery_failed"}, dependencies);
+    }
   }
 
   const finalized = await finalizeRun(runRef, normalizedRunId, {
@@ -216,18 +235,27 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
       } else {
         const ticketId = String(declared.reference || run.ticketId || "").trim();
         if (!ticketId || !dependencies.db) throw cleanupError("ticket_result_destination_missing");
-        await dependencies.db.collection("workspaceTickets").doc(ticketId).update({
-          status: run.status,
-          errorCode: ticketFailureCode(run),
-          result: {
-            runId,
-            finalResult: run.finalResult || null,
-            answer: run.status === "succeeded" && run.finalResult === "success" ? callerSafeFinalAnswer(run.finalAnswer) : null,
-            artifactPointers: run.artifactPointers || {},
-            workspaceOutput: run.workspaceOutput || null,
-          },
-          resultPublishedAt: serverTimestamp(dependencies.admin || defaultAdmin),
-          updatedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+        const ticketRef = dependencies.db.collection("workspaceTickets").doc(ticketId);
+        await dependencies.db.runTransaction(async (transaction) => {
+          const ticketSnap = await transaction.get(ticketRef);
+          if (!ticketSnap.exists) throw cleanupError("ticket_result_destination_missing");
+          // A recovered attempt or reply owns the ticket now. Old cleanup must
+          // never overwrite the new attempt's status or result.
+          if (ticketSnap.data().runId && ticketSnap.data().runId !== runId) return;
+          if (ticketSnap.data().status === "canceled" && run.status !== "canceled") return;
+          transaction.update(ticketRef, {
+            status: run.status,
+            errorCode: ticketFailureCode(run),
+            result: {
+              runId,
+              finalResult: run.finalResult || null,
+              answer: run.status === "succeeded" && run.finalResult === "success" ? callerSafeFinalAnswer(run.finalAnswer) : null,
+              artifactPointers: run.artifactPointers || {},
+              workspaceOutput: run.workspaceOutput || null,
+            },
+            resultPublishedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+            updatedAt: serverTimestamp(dependencies.admin || defaultAdmin),
+          });
         });
         delivery = {ticketResultPublished: true};
       }

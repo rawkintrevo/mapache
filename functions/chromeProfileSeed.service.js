@@ -154,7 +154,7 @@ async function readCurrentChromeProfileSeed({storage, bucketName, workspaceId, w
 
 async function verifyChromeProfileSeedObject(descriptor, {storage} = {}) {
   if (!storage) throw seedError("chrome_profile_seed_unavailable");
-  const file = storage.bucket(descriptor.bucketName).file(descriptor.objectPath);
+  const file = storage.bucket(descriptor.bucketName).file(descriptor.objectPath, {generation: descriptor.objectGeneration});
   let metadata;
   try {
     [metadata] = await file.getMetadata();
@@ -166,18 +166,20 @@ async function verifyChromeProfileSeedObject(descriptor, {storage} = {}) {
       Number(metadata.size) !== descriptor.byteLength) {
     throw seedError("chrome_profile_seed_checksum_mismatch");
   }
-  if (typeof file.download === "function") {
-    let content;
-    try {
-      [content] = await file.download();
-    } catch (error) {
-      if (isNotFound(error)) throw seedError("chrome_profile_seed_object_missing", error);
-      throw normalizeSeedError(error, "chrome_profile_seed_unavailable");
+  const hash = require("node:crypto").createHash("sha256");
+  let byteLength = 0;
+  try {
+    for await (const chunk of file.createReadStream()) {
+      byteLength += chunk.length;
+      if (byteLength > descriptor.byteLength) throw seedError("chrome_profile_seed_checksum_mismatch");
+      hash.update(chunk);
     }
-    if (content.length !== descriptor.byteLength ||
-        require("node:crypto").createHash("sha256").update(content).digest("hex") !== descriptor.sha256) {
-      throw seedError("chrome_profile_seed_checksum_mismatch");
-    }
+  } catch (error) {
+    if (isNotFound(error)) throw seedError("chrome_profile_seed_object_missing", error);
+    throw normalizeSeedError(error, "chrome_profile_seed_unavailable");
+  }
+  if (byteLength !== descriptor.byteLength || hash.digest("hex") !== descriptor.sha256) {
+    throw seedError("chrome_profile_seed_checksum_mismatch");
   }
   return descriptor;
 }

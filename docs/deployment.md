@@ -19,6 +19,21 @@ Read this before changing Firebase config, deployment workflows, Cloud Functions
 
 ## Current Behavior
 
+Workspace-request OOM recovery is a Functions-only change. Deploy `api`,
+`provisionAutomationRun`, `cleanupAutomationRun`,
+`reconcileAutomationSessionProvisioning`, and `reconcileAutomationRuns` together.
+The four automation workers explicitly use 1 GiB and concurrency 1 so Chrome
+seed verification and parallel event delivery cannot exhaust the former 256 MiB
+allocation. Seed verification streams the complete generation-pinned archive;
+Chrome remains in the runner. OOM classification uses the API service account's
+existing Logging Viewer permission. No runner image rebuild or main-session
+revision is required. Recovered request attempts create new services with larger
+resources; existing completed failures are not replayed.
+
+```bash
+firebase deploy --only functions:api,functions:provisionAutomationRun,functions:cleanupAutomationRun,functions:reconcileAutomationSessionProvisioning,functions:reconcileAutomationRuns --project pi-agents-cloud
+```
+
 Asynchronous runtime resize uses the `resizeQueuedSession` Firestore-triggered
 function in addition to `api`. Deploy `functions:resizeQueuedSession` before
 `functions:api`, then Hosting, when introducing this queue. The worker inherits

@@ -47,6 +47,7 @@ const {previewAutomationSchedule} = require("./automationSchedule.helpers");
 const {createActiveInstancesService} = require("./activeInstances.service");
 const {createAutomationAdmissionService} = require("./automationAdmission.service");
 const {createAutomationCleanupService} = require("./automationCleanup.service");
+const {createAutomationOomRecoveryService} = require("./automationOomRecovery.service");
 const {createAutomationDefinitionsService} = require("./automationDefinitions.service");
 const {createAutomationHistoryService} = require("./automationHistory.service");
 const {createAutomationReconciliationService} = require("./automationReconciliation.service");
@@ -328,10 +329,13 @@ const {
   handleAutomationSessionEvent,
 } = automationProvisioningService;
 
+const automationOomRecoveryService = createAutomationOomRecoveryService({admin, auth, db, sessionCollection});
 const automationCleanupService = createAutomationCleanupService({
   admin,
   db,
   deleteSessionService,
+  inspectOom: automationOomRecoveryService.inspectRun,
+  retryOomAfterDeletion: automationOomRecoveryService.retryAfterDeletion,
   releaseAutomationSlot: automationAdmissionService.releaseAutomationSlot,
   scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
   sessionCollection,
@@ -343,6 +347,7 @@ const {
 const automationReconciliationService = createAutomationReconciliationService({
   admin,
   auth,
+  inspectOom: automationOomRecoveryService.inspectRun,
   cleanupAutomationRun: automationCleanupService.cleanupAutomationRun,
   db,
   featureEnabled: async () => {
@@ -668,6 +673,8 @@ exports.provisionQueuedSession = onDocumentWritten({
 
 exports.provisionAutomationRun = onDocumentWritten({
   document: "automationRuns/{runId}",
+  memory: "1GiB",
+  concurrency: 1,
   timeoutSeconds: 540,
   retry: true,
   secrets: [
@@ -681,6 +688,8 @@ exports.provisionAutomationRun = onDocumentWritten({
 
 exports.cleanupAutomationRun = onDocumentWritten({
   document: "automationRuns/{runId}",
+  memory: "1GiB",
+  concurrency: 1,
   timeoutSeconds: 540,
   retry: true,
   secrets: [
@@ -694,6 +703,8 @@ exports.cleanupAutomationRun = onDocumentWritten({
 
 exports.reconcileAutomationSessionProvisioning = onDocumentWritten({
   document: "workspaces/{workspaceId}/sessions/{sessionId}",
+  memory: "1GiB",
+  concurrency: 1,
   timeoutSeconds: 540,
   retry: true,
   secrets: [
@@ -719,6 +730,8 @@ exports.reconcileWorkspaceRuntimeSchedules = onSchedule({
 
 exports.reconcileAutomationRuns = onSchedule({
   schedule: "every 1 minutes",
+  memory: "1GiB",
+  concurrency: 1,
   timeoutSeconds: 540,
   secrets: [
     GITHUB_APP_ID_SECRET,
