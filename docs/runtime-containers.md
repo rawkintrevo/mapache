@@ -1054,6 +1054,15 @@ Existing services created before idle shutdown support do not have `SESSION_SHUT
 
 Existing services created before warm active-session allocation keep `minInstanceCount: 0` until they are restarted, resized, or recreated through the updated Functions deployment. Existing revisions also need a rebuilt runner image before bootstrap failures can transition a stale `running` record to `update_failed`.
 
+During queued creation or recreation, a transient Cloud Run operation-poll
+failure does not release runtime authority while the service remains pending.
+The provisioning worker retries the recorded operation and releases the
+reservation only after a terminal failure or confirmed absence. Otherwise the
+runner can observe the premature release, exit with
+`workspace_runtime_authority_denied`, and surface as the generic Cloud Run
+port-8080 startup error. This retry contract is a Functions-only behavior; see
+[Deployment](./deployment.md).
+
 The same rule applies to the dedicated runner service account, source/sync/home
 materialization variables, workspace/session variables, preview behavior, and
 terminal defaults. Existing Cloud Run services do not automatically gain the

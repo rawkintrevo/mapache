@@ -130,6 +130,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     await markChromeWorkspaceSessionRunning(sessionRef, claimedSession, dependencies);
   } catch (error) {
     let provisioningError = error;
+    const provisioningTimedOut = isCloudRunOperationTimeout(error);
     if (client && isGoogleAlreadyExists(error)) {
       try {
         const service = await waitForCloudRunServiceReady(
@@ -154,7 +155,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
         provisioningError = reconciliationError;
       }
     }
-    if (client && isCloudRunOperationTimeout(error)) {
+    if (client && provisioningTimedOut) {
       const service = await reconcileProvisioningTimeout(client, serviceName, claimedSession);
       if (service) {
         try {
@@ -174,6 +175,33 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
         } catch (reconciliationError) {
           provisioningError = reconciliationError;
         }
+      }
+    }
+    if (client && operationName && !provisioningTimedOut) {
+      const reconciliation = await reconcileProvisioningError(
+          client,
+          serviceName,
+          claimedSession,
+          provisioningError,
+      );
+      if (reconciliation?.service) {
+        const service = reconciliation.service;
+        assertCloudRunServiceIdentity(service, claimedSession);
+        await setPublicInvoker(client, serviceName);
+        const runnerImageMetadata = await deployedRunnerImageMetadata(client, serviceName, claimedSession, service, dependencies);
+        await sessionRef.update(sessionStatusUpdate(claimedSession, "running", {
+          ...runtimeSessionStateUpdate(claimedSession, "running"),
+          serviceUrl: service.uri,
+          lastError: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...runnerImageMetadata,
+          ...provisioningCompletionUpdates(claimedSession, operationName),
+        }, {reconciliationReason: "cloud_run_interruption_reconciled"}));
+        await markChromeWorkspaceSessionRunning(sessionRef, claimedSession, dependencies);
+        return;
+      }
+      if (reconciliation?.pending) {
+        throw provisioningPendingError(provisioningError);
       }
     }
     await sessionRef.update(sessionStatusUpdate(claimedSession, "provision_failed", {
@@ -312,6 +340,35 @@ async function reconcileProvisioningTimeout(client, serviceName, session = {}) {
     }
   }
   return null;
+}
+
+async function reconcileProvisioningError(client, serviceName, session = {}, error) {
+  try {
+    const service = await getCloudRunService(client, serviceName);
+    if (isCloudRunServiceReady(service)) return {service};
+    const terminalState = String(service?.terminalCondition?.state || "").trim().toUpperCase();
+    if (terminalState === "CONDITION_FAILED") return {pending: false};
+    return {pending: true};
+  } catch (reconciliationError) {
+    if (isGoogleNotFound(reconciliationError)) {
+      return {pending: error?.code !== "cloud_run_operation_failed"};
+    }
+    if (isRetryableProvisioningError(reconciliationError) || isRetryableProvisioningError(error)) {
+      logger.warn("Cloud Run provisioning state remains ambiguous; retaining runtime reservation", {
+        serviceId: session.serviceId,
+        error: publicGoogleError(reconciliationError),
+      });
+      return {pending: true};
+    }
+    return {pending: false};
+  }
+}
+
+function provisioningPendingError(cause) {
+  const error = new Error("Cloud Run provisioning is still pending after a control-plane interruption.");
+  error.code = "cloud_run_provisioning_pending";
+  error.cause = cause;
+  return error;
 }
 
 function isCloudRunServiceReady(service) {
@@ -1041,7 +1098,10 @@ async function waitForOperation(client, operation, options = {}) {
     const response = await client.request({url, method: "GET"});
     if (response.data && response.data.done) {
       if (response.data.error) {
-        throw new Error(JSON.stringify(response.data.error));
+        const error = new Error(JSON.stringify(response.data.error));
+        error.code = "cloud_run_operation_failed";
+        error.operationError = response.data.error;
+        throw error;
       }
       return response.data;
     }

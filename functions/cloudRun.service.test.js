@@ -703,6 +703,55 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(recoveredDoc.serviceUrl, "https://session-recovered.example.run.app");
   assert.strictEqual(recoveredDoc.provisioningState, "completed");
 
+  const interruptedSession = {
+    ...recoveredSession,
+    runnerSessionId: "session-interrupted",
+    serviceId: "session-interrupted",
+    provisioningOperationId: "operation-interrupted",
+    provisioningCloudRunOperationName: "operations/interrupted-create",
+  };
+  let interruptedDoc = {...interruptedSession};
+  let interruptedReleases = 0;
+  const interruptedRef = {
+    get: async () => ({exists: true, data: () => interruptedDoc}),
+    update: async (updates) => Object.assign(interruptedDoc, updates),
+  };
+  const interruptedDb = {
+    runTransaction: async (callback) => callback({
+      get: async () => ({exists: true, data: () => interruptedDoc}),
+      update: (ref, updates) => Object.assign(interruptedDoc, updates),
+    }),
+  };
+  const interruptedClient = {
+    request: async ({url, method}) => {
+      if (method === "GET" && url.endsWith("operations/interrupted-create")) {
+        return {data: {done: true, error: {code: 9, message: "revision startup interrupted"}}};
+      }
+      if (method === "GET" && url.includes("/services/session-interrupted")) {
+        return {data: {terminalCondition: {state: "CONDITION_PENDING"}}};
+      }
+      throw new Error(`Unexpected interrupted provisioning request: ${method} ${url}`);
+    },
+  };
+  const interruptedService = createCloudRunService({
+    auth: {getClient: async () => interruptedClient},
+    db: interruptedDb,
+    releaseChromeWorkspaceSession: async () => {
+      interruptedReleases += 1;
+    },
+  });
+  await assert.rejects(
+      interruptedService.provisionSessionService({
+        id: "workspace-1",
+        bucket: "bucket-1",
+        storagePrefix: "workspaces/uid-1/demo",
+      }, interruptedRef, interruptedSession),
+      (error) => error.code === "cloud_run_provisioning_pending",
+  );
+  assert.strictEqual(interruptedDoc.status, "provisioning");
+  assert.strictEqual(interruptedDoc.provisioningState, "running");
+  assert.strictEqual(interruptedReleases, 0);
+
   const idempotentSession = {
     ownerUid: "uid-1",
     workspaceId: "workspace-1",

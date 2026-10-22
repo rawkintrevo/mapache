@@ -158,6 +158,35 @@ assert.strictEqual(isProvisioningRecoveryEvent({
   assert.strictEqual(failureUpdates[0].provisioningRetryable, false);
   assert.strictEqual(failureUpdates[0].lastError, "workspace lookup failed");
 
+  let pendingReleases = 0;
+  const pendingWorker = createProvisioningWorker({
+    db: failureDb,
+    requireWorkspace: async () => workspace,
+    provisionSessionService: async () => {
+      const error = new Error("still pending");
+      error.code = "cloud_run_provisioning_pending";
+      throw error;
+    },
+    releaseChromeWorkspaceSession: async () => {
+      pendingReleases += 1;
+    },
+  }).provisionQueuedSession;
+  await assert.rejects(
+      pendingWorker({
+        params: {workspaceId: "workspace-1", sessionId: "session-pending"},
+        data: {
+          after: {
+            id: "session-pending",
+            ref: failureRef,
+            exists: true,
+            data: () => session,
+          },
+        },
+      }),
+      (error) => error.code === "cloud_run_provisioning_pending",
+  );
+  assert.strictEqual(pendingReleases, 0);
+
   const unsupportedRef = {update: async (update) => failureUpdates.push(update)};
   const unsupported = await worker({
     params: {workspaceId: "workspace-1", sessionId: "session-unsupported"},

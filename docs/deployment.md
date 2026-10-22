@@ -105,6 +105,17 @@ session to create a Cloud Run revision with the mount:
 firebase deploy --only functions --project pi-agents-cloud
 ```
 
+Queued session provisioning retains the workspace runtime reservation when a
+Cloud Run operation poll is interrupted while the service still reports a
+pending terminal condition. The Firestore-triggered provisioning worker
+propagates that pending result so Eventarc retries the recorded operation; it
+must not mark the session failed or release authority until Cloud Run confirms
+a terminal failure or absence. This prevents an ambiguous control-plane read
+from making the starting runner fail its own authority check before binding
+port 8080. This behavior is owned by `functions/cloudRun.service.js` and
+`functions/provisioning.worker.js` and requires a Functions deployment; it does
+not require rebuilding `pi-chrome`.
+
 The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash
