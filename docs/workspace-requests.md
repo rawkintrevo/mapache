@@ -2,6 +2,8 @@
 
 This page owns the agent-to-agent request boundary. It is distinct from the owner-authenticated HTTP ticket compatibility adapter.
 
+Automatic caller continuation across restarts is planned in [workspace request continuation](./plans/workspace-request-continuation.md); it is not part of the current request tool contract.
+
 ## Ownership and authorization
 
 `functions/workspaceRequestGrants.service.js` stores one owner-scoped directional grant per source/target workspace pair. The owner must explicitly grant each operation: `discover`, `submit`, `read`, `reply`, and `cancel`. Grant writes require both workspaces to belong to the authenticated owner and reject self-grants. Revocation disables the grant and increments its revision; it does not delete ticket/run data.
