@@ -142,6 +142,10 @@ do not become the workspace canonical session, do not claim the workspace
 singleton runtime or sync-writer lease, and are excluded from the main session
 listing, user lifecycle controls, and idle reaper. Missing `runtimeKind`
 continues to mean `main` for legacy sessions.
+GitHub workspace create/restart and reservation guards count only active main
+sessions; provisioning or running automation sessions do not consume that main
+session slot. Exclusive automation still blocks main startup through the
+separate automation admission rule.
 
 Agent access is a short-lived signed URL/cookie flow with an `agent` audience,
 session identity, and current runtime generation. The runner gateway, not the

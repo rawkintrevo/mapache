@@ -194,6 +194,10 @@ Cloud Run discovery or offers bulk/forced termination, and logout clears the
 inventory and stops its polling lifecycle.
 
 The automation editor is a controlled component owned by the automation workflow.
+`WorkspacePanel` displays global action errors above an existing session as well
+as in the empty workspace view, so a rejected Start remains visible when the
+canonical session is stopped.
+
 `AutomationEditor` keeps edits, expected revisions, and save/error retention in the
 parent controller; `ScheduleControls` converts daily and weekly selections to
 canonical numeric five-field cron while preserving arbitrary advanced expressions.
