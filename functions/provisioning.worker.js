@@ -63,6 +63,7 @@ async function provisionQueuedSession(event, dependencies) {
     await dependencies.provisionSessionService(workspace, after.ref, provisioningSession);
     return {provisioned: true, sessionId: after.id};
   } catch (error) {
+    if (error?.code === "cloud_run_provisioning_pending") throw error;
     const markedFailure = await markProvisioningWorkerFailure(after.ref, session, error, dependencies);
     if (markedFailure && typeof dependencies.releaseChromeWorkspaceSession === "function") {
       try {
