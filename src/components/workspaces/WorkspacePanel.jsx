@@ -13,6 +13,7 @@ export function WorkspacePanel({
   if (selectedSession) {
     return (
       <section className={`workspace${isMarkedRuntimeSession(selectedSession) ? " workspace--managed-agent" : ""}`}>
+        {state.error ? <div className="error" role="alert">{state.error}</div> : null}
         <SessionDetail
           activeCanvas={activeCanvas}
           access={access}

@@ -38,6 +38,9 @@ test("classifies terminal and failure states", () => {
 
 test("classifies active GitHub sessions for workspace reservations", () => {
   assert.equal(isActiveGithubWorkspaceSession({status: "running"}), true);
+  assert.equal(isActiveGithubWorkspaceSession({runtimeKind: "main", status: "provisioning"}), true);
+  assert.equal(isActiveGithubWorkspaceSession({runtimeKind: "automation", status: "provisioning"}), false);
+  assert.equal(isActiveGithubWorkspaceSession({runtimeKind: "automation", status: "running"}), false);
   assert.equal(isActiveGithubWorkspaceSession({status: "update_failed"}), true);
   assert.equal(isActiveGithubWorkspaceSession({status: "stopped"}), false);
   assert.equal(isActiveGithubWorkspaceSession({status: "needs_image"}), false);

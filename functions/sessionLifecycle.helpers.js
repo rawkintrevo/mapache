@@ -1,5 +1,7 @@
 "use strict";
 
+const {isMainRuntime} = require("./runtimePaths.helpers");
+
 const SESSION_STATES = Object.freeze([
   "provisioning", "running", "restarting", "resizing", "stopping", "stopped",
   "deleting", "needs_image", "needs_service", "provision_failed", "update_failed",
@@ -41,6 +43,7 @@ function isSessionFailure(status) {
 }
 
 function isActiveGithubWorkspaceSession(session) {
+  if (!isMainRuntime(session || {})) return false;
   const status = normalizeSessionState(session && session.status);
   return !isSessionTerminal(status) && status !== "provision_failed";
 }
