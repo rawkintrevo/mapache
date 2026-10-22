@@ -200,7 +200,12 @@ request before it submits an automation prompt. The Pi HTTP health route can
 become ready before that socket is listening; treating HTTP health alone as
 automation readiness could reject the run immediately after starting the UI.
 The status probe is read-only, retries only within the bounded automation start
-window, and submits the prompt once after the socket responds. Changes to this
+window, and submits the prompt once after the socket responds. The runner allows
+five minutes (300 seconds) for the `startAutomation` acknowledgment, accommodating
+observed 120–180-second initialization. The upstream control socket idle deadline
+is 330 seconds so it does not truncate that wait. This is a bounded acknowledgment
+wait, not a task execution deadline or permission to replay timed-out work. Cloud
+Run startup limits still apply to the entire container boot. Changes to this
 startup path require a rebuilt `pi-chrome` revision; existing Cloud Run services
 need recreation to receive it.
 
