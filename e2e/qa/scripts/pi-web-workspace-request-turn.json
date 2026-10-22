@@ -1,0 +1,19 @@
+{
+  "id": "script.piWebWorkspaceRequestTurn",
+  "title": "Ask another workspace and wait for its answer",
+  "parameters": {
+    "targetWorkspaceName": "qa-request-target-{{timestamp}}"
+  },
+  "actions": [
+    {"type": "fill", "placeholder": "Ask Pi anything…", "value": "Get this exact information from workspace {{targetWorkspaceName}}: reply with WORKSPACE_REQUEST_OK. Wait for its response and then give me the answer. Do not ask me to remind you to check."},
+    {"type": "submit", "buttonName": "Send"},
+    {"type": "waitForSnapshotText", "text": "Pi is working…", "timeoutMs": 15000},
+    {"type": "waitForSnapshotNotText", "text": "Pi is working…", "timeoutMs": 615000},
+    {"type": "waitForSnapshotText", "text": "WORKSPACE_REQUEST_OK", "timeoutMs": 15000}
+  ],
+  "successSignals": [
+    "The source turn stays active while the target request is queued or running",
+    "The source returns WORKSPACE_REQUEST_OK without another user message",
+    "Exactly one target request and one source answer are observed"
+  ]
+}

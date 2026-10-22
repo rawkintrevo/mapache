@@ -42,6 +42,9 @@ Locations:
 
 - `e2e/` for Playwright or equivalent browser flows.
 - `e2e/qa/` for explicit Chrome DevTools-assisted QA manifests. These tests are opt-in only and should be run only when the user directly asks for QA, smoke, browser, or end-to-end testing. `workspace-request-grants.json` covers the two-workspace owner grant UI path.
+- `e2e/qa/cases/workspace-request-await.json` covers the managed Agent's
+  single-submit, active wait, and automatic answer path against a disposable
+  same-owner target after the updated runner image is available.
 - `docs/guides/*-regression-checklist.md` for human-readable scenario checklists that are not automated yet.
 
 Candidate flows:

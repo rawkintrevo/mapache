@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {AutomationAgentError, createAutomationAgentClient} from "./client.mjs";
-import {registerAutomationTools, TOOL_NAMES} from "./server.mjs";
+import {registerAutomationTools, TOOL_NAMES, waitForWorkspaceRequest} from "./server.mjs";
 
 function fakeServer() {
   const tools = new Map();
@@ -176,4 +176,59 @@ test("workspace information request guidance uses existing discovery, submission
   const failure = await denied.tools.get("workspace_request_submit").handler({targetWorkspaceId, request: "Question"});
   assert.equal(failure.isError, true);
   assert.equal(failure.structuredContent.error, "request_permission_denied");
+});
+
+test("workspace request ask submits once and waits for the durable ticket result", async () => {
+  const server = fakeServer();
+  const calls = [];
+  const notifications = [];
+  registerAutomationTools(server, {
+    async call(path, options = {}) {
+      calls.push({path, options});
+      if (options.method === "POST") return {request: {id: "ticket-1", status: "queued"}};
+      return {request: {id: "ticket-1", status: "succeeded", result: {answer: "Ready"}}};
+    },
+  });
+  const tool = server.tools.get("workspace_request_ask");
+  const result = await tool.handler(tool.config.inputSchema.parse({
+    targetWorkspaceId: "research",
+    targetWorkspaceName: "Customer Research",
+    request: "Summarize the findings.",
+    idempotencyKey: "research-summary-1",
+    timeoutSeconds: 1,
+  }), {mcpReq: {_meta: {progressToken: "progress-1"}, notify: async (notification) => notifications.push(notification)}});
+  assert.equal(result.structuredContent.request.result.answer, "Ready");
+  assert.equal(calls.filter(({options}) => options.method === "POST").length, 1);
+  assert.equal(calls[0].options.idempotencyKey, "research-summary-1");
+  assert.equal(calls[0].options.body.targetWorkspaceName, undefined);
+  assert.equal(calls[1].path, "/api/agent/workspace-requests/ticket-1");
+  assert.match(notifications[0].params.message, /Waiting for Customer Research: queued · 0s elapsed/);
+  assert.equal(notifications.at(-1).params.progressToken, "progress-1");
+});
+
+test("workspace request wait preserves the ticket when its deadline expires", async () => {
+  let clock = 0;
+  const result = await waitForWorkspaceRequest({async call() {
+    return {request: {id: "ticket-1", status: "running"}};
+  }}, "ticket-1", 5, {
+    now: () => clock,
+    sleep: async (ms) => { clock += ms; },
+  });
+  assert.deepEqual(result, {
+    request: {id: "ticket-1", status: "running"},
+    waitExpired: true,
+    ticketId: "ticket-1",
+  });
+});
+
+test("workspace request wait returns terminal failures without resubmission", async () => {
+  const result = await waitForWorkspaceRequest({async call(path) {
+    assert.equal(path, "/api/agent/workspace-requests/ticket-1");
+    return {request: {id: "ticket-1", status: "failed", errorCode: "automation_execution_failed"}};
+  }}, "ticket-1", 600);
+  assert.deepEqual(result.request, {
+    id: "ticket-1",
+    status: "failed",
+    errorCode: "automation_execution_failed",
+  });
 });

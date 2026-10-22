@@ -53,6 +53,7 @@ function runnerMcpConfig(config = {}) {
       command: "node",
       args: [AUTOMATION_MCP_SERVER_PATH],
       env: {MAPACHE_AUTOMATION_AGENT_SOCKET: config.automationAgentSocketPath},
+      requestTimeoutMs: 615000,
     };
   }
   if (!config.chromeEnabled && !config.runnerCapabilities?.chrome) return {mcpServers};
@@ -88,7 +89,7 @@ function piMcpConfig(mcpConfig = {}) {
 
 function piMcpServer(server = {}) {
   const result = {};
-  for (const key of ["command", "args", "env", "url", "cwd", "headers", "lifecycle", "directTools", "protocolVersion"]) {
+  for (const key of ["command", "args", "env", "url", "cwd", "headers", "lifecycle", "directTools", "protocolVersion", "requestTimeoutMs"]) {
     if (server[key] != null) result[key] = server[key];
   }
   if (server.authMode === "oauth2") {

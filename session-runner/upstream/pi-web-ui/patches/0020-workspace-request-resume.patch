@@ -1,0 +1,224 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 0216d57..132d09c 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -73,6 +73,7 @@ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } fro
+ import { isManaged, managedMcpAdapterPath } from "./managed.js";
+ import { withManagedReference } from "./managed-reference.js";
+ import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
++import {shouldResumeInterruptedWorkspaceRequest} from "./workspace-request-resume.js";
+ import {
+ 	createAutomationRunState,
+ 	reduceAutomationRunState,
+@@ -1975,24 +1976,88 @@ export class ClientSession {
+ 
+ 	/** Summaries of conversations currently streaming — captured at shutdown
+ 	 *  so the next attach can tell the user their run was interrupted. */
+-	streamingSummaries(): { title: string; cwd: string }[] {
+-		const out: { title: string; cwd: string }[] = [];
++	streamingSummaries(): { title: string; cwd: string; sessionFile?: string; workspaceRequest?: boolean }[] {
++		const out: { title: string; cwd: string; sessionFile?: string; workspaceRequest?: boolean }[] = [];
+ 		for (const conv of this.convs.values()) {
+-			if (conv.session.isStreaming) out.push({ title: conv.title, cwd: conv.cwd });
++			if (conv.session.isStreaming) out.push({
++				title: conv.title,
++				cwd: conv.cwd,
++				sessionFile: conv.session.sessionFile,
++				workspaceRequest: shouldResumeInterruptedWorkspaceRequest(conv.session.agent.state.messages),
++			});
+ 		}
+ 		return out;
+ 	}
+ 
+ 	/** Tell the user about runs lost to the last server restart (once). */
+-	notifyInterrupted(list: { title: string; cwd: string; at: number }[] | undefined): void {
++	notifyInterrupted(list: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[] | undefined): void {
+ 		if (!list || list.length === 0) return;
+-		const names = list.map((r) => `「${r.title}」（${r.cwd}）`).join("、");
+-		this.pendingNotices.push({
+-			type: "notice",
+-			level: "warning",
+-			text: `上次服务重启时有 ${list.length} 个进行中的对话被中断：${names}。可在历史对话中恢复继续。`,
+-			textEn: `${list.length} running conversation(s) were interrupted by the last restart: ${names}. Resume them from History.`,
+-		});
++		const automatic = list.filter((entry) => entry.workspaceRequest);
++		const manual = list.filter((entry) => !entry.workspaceRequest);
++		if (automatic.length > 0) {
++			this.pendingNotices.push({
++				type: "notice",
++				level: "info",
++				text: `正在自动恢复 ${automatic.length} 个被中断的工作区请求。`,
++				textEn: `Automatically resuming ${automatic.length} interrupted workspace request(s).`,
++			});
++		}
++		if (manual.length > 0) {
++			const names = manual.map((r) => `「${r.title}」（${r.cwd}）`).join("、");
++			this.pendingNotices.push({
++				type: "notice",
++				level: "warning",
++				text: `上次服务重启时有 ${manual.length} 个进行中的对话被中断：${names}。可在历史对话中恢复继续。`,
++				textEn: `${manual.length} running conversation(s) were interrupted by the last restart: ${names}. Resume them from History.`,
++			});
++		}
++	}
++
++	/** Resume only a request wait that was interrupted by runner replacement.
++	 * The original tool arguments, including its required idempotency key, are
++	 * already persisted in the conversation. The model retries that exact call,
++	 * which resolves to the existing durable ticket instead of new target work. */
++	async resumeInterruptedWorkspaceRequest(): Promise<boolean> {
++		const conv = this.conv;
++		if (conv.session.isStreaming || this.quiesceBlocked()) return false;
++		try {
++			if (!shouldResumeInterruptedWorkspaceRequest(conv.session.agent.state.messages)) return false;
++		} catch {
++			return false;
++		}
++		conv.pendingTask = "Resume the interrupted workspace request wait";
++		await conv.session.sendCustomMessage(
++			{
++				customType: "mapache-workspace-request-resume",
++				content: [{
++					type: "text",
++					text: "The workspace request wait was interrupted by a runner restart. Retry workspace_request_ask with the exact same payload and idempotencyKey from the preceding tool call, wait for its terminal result, and then answer the user. Do not submit with a new key.",
++				}],
++				display: false,
++			},
++			{ triggerTurn: true },
++		);
++		conv.promptedSinceActive = true;
++		conv.lastActiveAt = Date.now();
++		conv.lastSdkEventAt = Date.now();
++		conv.stallNoticed = false;
++		this.flushSnapshot();
++		return true;
++	}
++
++	async resumeInterruptedWorkspaceRequests(
++		list: {sessionFile?: string; workspaceRequest?: boolean}[] | undefined,
++	): Promise<number> {
++		let resumed = 0;
++		for (const entry of list ?? []) {
++			if (!entry.workspaceRequest || !entry.sessionFile) continue;
++			const activeFile = this.conv.session.sessionFile;
++			if (!activeFile || resolve(activeFile) !== resolve(entry.sessionFile)) {
++				await this.switchSession(entry.sessionFile);
++			}
++			if (await this.resumeInterruptedWorkspaceRequest()) resumed++;
++		}
++		return resumed;
+ 	}
+ 
+ 	/** Add a socket to this client's broadcast set; flushes buffered startup notices. */
+@@ -6129,7 +6194,8 @@ export class AgentService {
+ 		// First attach after a restart: report runs that were interrupted when
+ 		// the previous process shut down (consumed once, then cleared). Queue
+ 		// BEFORE attachSink so the notice rides the initial pending-notice flush.
+-		cs.notifyInterrupted(this.stateStore.takeInterrupted(clientId));
++		const interrupted = this.stateStore.takeInterrupted(clientId);
++		cs.notifyInterrupted(interrupted);
+ 		cs.attachSink(send);
+ 		// Forward hooks (set once by index.ts) to every session.
+ 		cs.onQuit = this.onQuit;
+@@ -6141,6 +6207,11 @@ export class AgentService {
+ 		cs.pluginBgTasksProvider = this.pluginBgTasksProvider;
+ 		cs.pluginStopBgTask = this.pluginStopBgTask;
+ 		cs.isQuiesced = () => this.quiesced;
++		if (interrupted?.some((entry) => entry.workspaceRequest)) {
++			void cs.resumeInterruptedWorkspaceRequests(interrupted).catch((error) => {
++				console.error(`[agent-service] workspace request resume failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
++			});
++		}
+ 		// 插件宿主工作区跟随：初次接入也同步一次（恢复的 lastCwd 可能≠服务启动目录），
+ 		// notifyCwd 幂等去重；此后 set_cwd 成功时由 cs.onCwdChanged 继续驱动。
+ 		cs.onCwdChanged = (abs) => this.onClientCwdChanged?.(abs);
+diff --git a/server/client-state.ts b/server/client-state.ts
+index c450bd5..a035d09 100644
+--- a/server/client-state.ts
++++ b/server/client-state.ts
+@@ -253,7 +253,7 @@ export interface ClientState {
+ 	/** Conversations that were STILL STREAMING when the server last shut down
+ 	 *  (SIGTERM / self-update restart). Consumed once on the next attach so
+ 	 *  the user learns a run was lost instead of wondering where it went. */
+-	interrupted?: { title: string; cwd: string; at: number }[];
++	interrupted?: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[];
+ 	/** Workspaces the user explicitly removed from the recent list. Kept as
+ 	 *  tombstones so cwds re-discovered from session files stay hidden until
+ 	 *  the workspace is opened again. */
+@@ -437,7 +437,7 @@ export class ClientStateStore {
+ 
+ 	/** Remember conversations that were still streaming at shutdown (best-
+ 	 *  effort; called during the graceful-shutdown path). */
+-	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number }[]): void {
++	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[]): void {
+ 		if (list.length === 0) return;
+ 		const all = this.load();
+ 		const state = (all[clientId] ??= { projects: [] });
+diff --git a/server/workspace-request-resume.ts b/server/workspace-request-resume.ts
+new file mode 100644
+index 0000000..17748d3
+--- /dev/null
++++ b/server/workspace-request-resume.ts
+@@ -0,0 +1,19 @@
++export function shouldResumeInterruptedWorkspaceRequest(messages: unknown[]): boolean {
++	for (let index = messages.length - 1; index >= 0; index--) {
++		const message = messages[index] as {role?: unknown; content?: unknown};
++		if (message.role === "assistant" && Array.isArray(message.content)) {
++			for (const part of message.content) {
++				if (!part || typeof part !== "object" || (part as {type?: unknown}).type !== "toolCall") continue;
++				let encoded = "";
++				try {
++					encoded = JSON.stringify(part);
++				} catch {
++					continue;
++				}
++				if (encoded.includes("workspace_request_ask") && encoded.includes("idempotencyKey")) return true;
++			}
++		}
++		if (message.role === "user") return false;
++	}
++	return false;
++}
+diff --git a/tests/unit/workspace-request-resume.test.ts b/tests/unit/workspace-request-resume.test.ts
+new file mode 100644
+index 0000000..b596a42
+--- /dev/null
++++ b/tests/unit/workspace-request-resume.test.ts
+@@ -0,0 +1,37 @@
++import assert from "node:assert/strict";
++import {test} from "vitest";
++import {shouldResumeInterruptedWorkspaceRequest} from "../../server/workspace-request-resume.js";
++
++test("resumes a persisted ask with its stable idempotency key", () => {
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "Ask Research"},
++		{role: "assistant", content: [{type: "toolCall", name: "mcp", arguments: {
++			tool: "workspace_request_ask",
++			args: {targetWorkspaceId: "research", idempotencyKey: "research-1"},
++		}}]},
++		{role: "toolResult", content: "runner stopped"},
++	]), true);
++});
++
++test("does not resume unrelated or incomplete request calls", () => {
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "List targets"},
++		{role: "assistant", content: [{type: "toolCall", name: "workspace_request_targets"}]},
++	]), false);
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "Ask Research"},
++		{role: "assistant", content: [{type: "toolCall", name: "workspace_request_ask"}]},
++	]), false);
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "Explain the implementation"},
++		{role: "assistant", content: "workspace_request_ask requires idempotencyKey"},
++	]), false);
++});
++
++test("does not cross into an earlier user turn", () => {
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "assistant", content: "workspace_request_ask idempotencyKey"},
++		{role: "user", content: "Do something else"},
++		{role: "assistant", content: "interrupted"},
++	]), false);
++});
