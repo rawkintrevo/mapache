@@ -155,6 +155,13 @@ not written to run records.
   failed attempt snapshot. Canceled, interrupted, unknown-outcome, and cleanup
   failures never retry; queue contention keeps the retry intent durable.
 
+Confirmed OOM recovery is phase-specific and takes precedence over ordinary
+workflow retry policy. Execution OOMs never replay automatically. Workspace
+requests may retry a provisioning OOM with a larger runner only before any
+execution claim; cleanup and reconciliation share the same recovery service.
+See [Workspace request sizing and OOM recovery](./workspace-requests.md#resource-sizing-and-oom-recovery)
+for limits, ticket continuity, and caller-visible error codes.
+
 `GET /api/instances` is the owner-wide active-instance inventory. It merges
 persisted main session and automation-run records, reports only
 `provisioning`, `running`, `stopping`, or `cleanup-error`, de-duplicates an

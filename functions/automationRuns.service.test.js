@@ -7,6 +7,7 @@ const {
   cancelQueuedRun,
   deterministicCronRunId,
   enqueueRun,
+  enqueueWorkspaceRun,
   restartRun,
 } = require("./automationRuns.service");
 
@@ -138,6 +139,27 @@ test("manual and cron enqueue capture immutable snapshots and deduplicate", asyn
     actor: {uid: "user-1"}, aid: "automation-1", occurrence, trigger: "cron", wid: "workspace-1",
   }, {admin, db});
   assert.equal(duplicate.id, cron.id);
+});
+
+test("workspace requests pin target sizing by default and honor explicit overrides", async () => {
+  const {admin, db, workspace} = harness();
+  const request = {
+    targetWorkspaceId: "workspace-1", actor: {type: "user", id: "user-1"},
+    source: {type: "workspace_agent", id: "source"}, triggerKind: "http_ticket",
+    instructions: "Use Chrome to read the report", sinks: [{kind: "ticket_result"}],
+  };
+  const enqueue = (ticketId, resources) => enqueueWorkspaceRun({actor: {uid: "user-1"},
+    wid: "workspace-1", ticketId, runRequest: {...request, resources}}, {db, admin});
+  const inherited = await enqueue("inherited", null);
+  assert.deepEqual(inherited.snapshot.resources, {cpu: "2", memory: "4Gi"});
+  assert.deepEqual(inherited.workspaceRunRequest.resources, inherited.snapshot.resources);
+  const explicit = await enqueue("explicit", {cpu: "4", memory: "8Gi"});
+  assert.deepEqual(explicit.snapshot.resources, {cpu: "4", memory: "8Gi"});
+  await workspace.update({resources: {cpu: "1", memory: "2Gi"}});
+  assert.deepEqual((await enqueue("inherited", null)).snapshot.resources, {cpu: "2", memory: "4Gi"});
+  await workspace.update({resources: null});
+  assert.deepEqual((await enqueue("fallback", null)).snapshot.resources, {cpu: "1", memory: "2Gi"});
+  await assert.rejects(enqueue("invalid", {cpu: "1", memory: "8Gi"}), /invalid_session_resources|invalid_automation_resources/);
 });
 
 test("queue admission skips cron work but rejects manual and restart work", async () => {

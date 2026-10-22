@@ -13,6 +13,7 @@ const {
   validateRunTrigger,
 } = require("./automationValidation.helpers");
 const {contextSnapshotRefsForWorkspace, fromAutomationRun, normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
+const {normalizeSessionResources} = require("./sessionResources.helpers");
 
 const TERMINAL_STATUSES = new Set([
   "succeeded", "failed", "canceled", "interrupted", "skipped",
@@ -236,8 +237,10 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const workspace = workspaceSnap.data() || {};
     if (workspace.ownerUid !== actorUid) throw httpError(403, "workspace_forbidden");
+    const resources = normalizeSessionResources(request.resources || workspace.resources || {});
     const admittedRequest = normalizeWorkspaceRunRequest({
       ...request,
+      resources,
       contextSnapshotRefs: [...(request.contextSnapshotRefs || []), ...contextSnapshotRefsForWorkspace(workspace)],
     });
     const existing = await transaction.get(runRef);
@@ -251,7 +254,7 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
       automationId: `ticket-${ticketId}`,
       ownerUid: actorUid,
       runId,
-      snapshot,
+      snapshot: {...snapshot, resources},
       status: "queued",
       trigger: input.trigger || "http_ticket",
       rootRunId: input.rootRunId || runId,
@@ -519,6 +522,7 @@ module.exports = {
   buildSnapshot,
   cancelQueuedRun,
   createAutomationRunsService,
+  createRun,
   deterministicRetryRunId,
   deterministicCronRunId,
   enqueueRun,

@@ -112,6 +112,14 @@ test("healthy stale runners are retained without replaying work", async () => {
   assert.equal(db.data.get("automationRuns/run-1").reconciliationLastAction, "healthy");
 });
 
+test("confirmed OOM goes through cleanup before provisioning can be resumed", async () => {
+  const {calls, service} = harness([makeRun({status: "provisioning"})], {
+    inspectOom: async () => true,
+  });
+  await service.reconcile();
+  assert.deepEqual(calls, [{action: "cleanup", runId: "run-1"}]);
+});
+
 test("unreachable runners are interrupted only after the Cloud Run lookup succeeds", async () => {
   const {calls, db, service} = harness([makeRun()], {
     healthProbe: async () => { throw Object.assign(new Error("gone"), {code: "runner_unavailable"}); },

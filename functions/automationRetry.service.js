@@ -135,6 +135,8 @@ async function claimRetry(runRef, dependencies = {}) {
 }
 
 function retryEligibility(run = {}) {
+  // OOM policy is phase-specific, even for workflows that otherwise opt into retries.
+  if (run.oomPhase) return {eligible: false, reason: "oom_recovery_policy"};
   const policy = normalize(run.retryPolicy || run.snapshot?.retryPolicy);
   const maximumRetries = Number.isSafeInteger(run.maximumRetries) ? run.maximumRetries :
     Number.isSafeInteger(run.snapshot?.maximumRetries) ? run.snapshot.maximumRetries : 0;
