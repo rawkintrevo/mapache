@@ -30,7 +30,7 @@ export function WorkspacePanel({
       {state.error ? <div className="error">{state.error}</div> : null}
       <div className="workspace-off-state" role="status">
         <strong>Workspace is off</strong>
-        <span>Press Play in the navigation bar to start its runtime.</span>
+        <span>Open Workspace power controls and choose Start workspace.</span>
       </div>
     </section>
   );

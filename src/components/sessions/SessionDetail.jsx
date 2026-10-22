@@ -112,7 +112,7 @@ export function SessionDetail({
       {!isManagedAgentSurface && isProvisioningFailure ? (
         <div aria-live="polite" className="provisioning-status provisioning-status--failure">
           <strong>Provisioning failed</strong>
-          <span>Use Play in the navigation bar to restart the workspace runtime.</span>
+          <span>Open Workspace power controls and choose Start workspace to retry the runtime.</span>
         </div>
       ) : null}
       {!isManagedAgentSurface && imageFreshness.state !== "unknown" ? (
@@ -139,7 +139,7 @@ export function SessionDetail({
         <div className="canvas-shell runtime-status-shell">
           <div className="terminal-placeholder runtime-status-card" role="status">
             <strong>{unavailableMessage}</strong>
-            <span>{isHistoricalRuntime ? "This runtime cannot be started." : "Press Play in the navigation bar to start the runtime."}</span>
+            <span>{isHistoricalRuntime ? "This runtime cannot be started." : "Open Workspace power controls and choose Start workspace."}</span>
           </div>
         </div>
       ) : <div className="canvas-shell">

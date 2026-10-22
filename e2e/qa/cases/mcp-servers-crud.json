@@ -13,7 +13,8 @@
         "workspaceEnv": "QA_CASE=mcp-servers-crud"
       }
     },
-    {"type": "click", "role": "button", "name": "Manage MCP servers"},
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "name": "Manage MCP servers"},
     {"assert": "snapshot-text", "expected": "MCP Servers"},
     {
       "useScript": "scripts/save-mcp-server.json",

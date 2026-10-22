@@ -84,18 +84,23 @@ function renderShell(stateOverrides = {}) {
 }
 
 describe("frontend shell ownership", () => {
-  test("removes the left drawer while exposing workspace lifecycle and the user menu in the top navigation", () => {
-    renderShell({selectedSessionId: session.id});
+  test("removes the left drawer while exposing workspace lifecycle and the user menu in the top navigation", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell({selectedSessionId: session.id});
 
     expect(screen.queryByRole("heading", {name: "Navigation"})).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "Sessions"})).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Expand drawer"})).not.toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Pause workspace"})).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Manage Pi Auth"})).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Manage generic environment keys"})).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Manage MCP servers"})).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: "Manage Google Workspace"})).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Workspace power controls: running"}));
+    expect(screen.getByRole("menuitem", {name: "Stop workspace"})).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", {name: "Restart workspace"}));
+    expect(handlers.sessions.restartSession).toHaveBeenCalledWith(session.id);
+    await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+    expect(screen.getByRole("menuitem", {name: "Manage Pi Auth"})).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", {name: "Manage generic environment keys"})).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", {name: "Manage MCP servers"})).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", {name: "Manage Google Workspace"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Open user menu for Ada"})).toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "Authentication Center"})).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", {name: "MCP Servers"})).not.toBeInTheDocument();
@@ -109,10 +114,10 @@ describe("frontend shell ownership", () => {
     const user = userEvent.setup();
     const {handlers} = renderShell({selectedSessionId: session.id});
 
-    await user.click(screen.getByRole("button", {name: "Manage Pi Auth"}));
-    await user.click(screen.getByRole("button", {name: "Manage generic environment keys"}));
-    await user.click(screen.getByRole("button", {name: "Manage MCP servers"}));
-    await user.click(screen.getByRole("button", {name: "Manage Google Workspace"}));
+    for (const label of ["Manage Pi Auth", "Manage generic environment keys", "Manage MCP servers", "Manage Google Workspace"]) {
+      await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+      await user.click(screen.getByRole("menuitem", {name: label}));
+    }
 
     expect(handlers.modals.openPiAuthManageModal).toHaveBeenCalledOnce();
     expect(handlers.modals.openGenericEnvironmentModal).toHaveBeenCalledOnce();
@@ -195,7 +200,8 @@ describe("frontend shell ownership", () => {
     expect(within(runtimePolicy).getByRole("button", {name: /Idle timeout/})).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", {name: "Long-running"})).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Persistent Chrome"})).not.toBeInTheDocument();
-    expect(within(topbar).getByRole("button", {name: "Logs"})).toBeInTheDocument();
+    await user.click(within(topbar).getByRole("button", {name: "More workspace actions"}));
+    expect(within(topbar).getByRole("menuitem", {name: "Logs"})).toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "Preview"})).not.toBeInTheDocument();
     expect(screen.getByTitle("Agent Pi smoke")).toBeInTheDocument();
     expect(screen.queryByRole("region", {name: "Agent runtime status"})).not.toBeInTheDocument();
@@ -205,7 +211,8 @@ describe("frontend shell ownership", () => {
     await user.click(within(runtimePolicy).getByRole("button", {name: "Save policy"}));
     expect(handlers.sessions.setRuntimePolicy).toHaveBeenCalledWith({mode: "keep-running", schedule: null});
 
-    await user.click(within(topbar).getByRole("button", {name: "Logs"}));
+    await user.click(within(topbar).getByRole("button", {name: "More workspace actions"}));
+    await user.click(within(topbar).getByRole("menuitem", {name: "Logs"}));
     expect(await screen.findByRole("dialog", {name: "Logs"})).toBeInTheDocument();
     expect(await screen.findByText("workspace_runtime_authority_denied")).toBeInTheDocument();
     expect(handlers.sessions.getSessionLogs).toHaveBeenCalledWith(workspace.id, managedSession.id);
@@ -226,7 +233,8 @@ describe("frontend shell ownership", () => {
     const user = userEvent.setup();
     const {handlers} = renderShell();
 
-    await user.click(screen.getByRole("button", {name: "Create workspace"}));
+    await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+    await user.click(screen.getByRole("menuitem", {name: "New workspace"}));
     expect(handlers.modals.openWorkspaceModal).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", {name: "Create session"})).not.toBeInTheDocument();
   });

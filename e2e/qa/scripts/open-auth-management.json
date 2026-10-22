@@ -1,5 +1,8 @@
 {
   "id": "script.openAuthManagement",
   "title": "Open saved credential selection",
-  "actions": [{"type": "click", "role": "button", "name": "Manage Pi Auth"}]
+  "actions": [
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "name": "Manage Pi Auth"}
+  ]
 }

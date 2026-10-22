@@ -59,6 +59,7 @@ Use the following Lucide icons for common action buttons:
 | Stop | `Square` | Stop a running terminal session; keeps the terminal/process-stop semantics of the old solid square. |
 | Delete | `Trash2` | Delete sessions, providers, or other destructive removals. Prefer this over `X`, which is reserved for close/cancel. |
 | Restart | `RotateCcw` | Restart sessions or retry/reset a running operation. |
+| Workspace power | `Power` | Open the selected workspace's Start, Stop, and Restart menu; communicate running/stopped state in the trigger label and styling. |
 | Update | `Download` | Fetch or install updated package/workspace bits. |
 
 Adjacent controls should use:
@@ -79,6 +80,9 @@ Buttons must maintain consistent height, border-radius, and interactive states.
 *   **Variants:** `primary` (default), `secondary`, `danger`, `icon-button` (compact).
 *   **States:** Ensure explicit `hover`, `focus`, `disabled`, and `active` states.
 *   **Icon Buttons:** All icon-only buttons must provide a descriptive `aria-label` and `title`/tooltip string for the button's action (e.g., 'New Session', 'Refresh Files'). Use the native/browser tooltip behavior from `title`; do not create custom tooltip/popover surfaces for simple button labels, including black-background/white-text tooltip elements.
+
+### Top navigation menus
+Keep workspace lifecycle commands in the power menu and workspace/configuration actions in the workspace actions menu. Menus must focus their first available item when opened, support Arrow Up/Down and Home/End traversal, close on Escape or outside click, and return focus to the trigger after Escape. Preserve 44px touch targets on responsive layouts and keep Delete as the final separated destructive item.
 
 ### Drawers
 Drawers should share a unified structure.

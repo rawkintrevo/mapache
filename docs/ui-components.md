@@ -6,9 +6,10 @@ This index maps significant React components to their current responsibilities.
 | --- | --- | --- |
 | `App` | `src/App.jsx` | Routes landing, fatal-error, and signed-in app states. |
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
-| `Topbar` | `src/components/layout/Topbar.jsx` | Workspace selection and lifecycle, selected-runtime CPU/RAM meters, workspace runtime policy, marked-runtime Agent and Logs, Upload file, and workspace Automations controls, auth/connection actions, user menu, refresh, and documentation links. Responsive layouts delegate secondary actions to `TopbarMoreMenu`. |
+| `Topbar` | `src/components/layout/Topbar.jsx` | Composes workspace selection, power/runtime-policy controls, selected-runtime CPU/RAM meters, the marked-runtime Agent shortcut, workspace actions menu, and user menu. |
+| `TopbarPowerMenu` | `src/components/layout/TopbarPowerMenu.jsx` | State-aware power trigger and keyboard-accessible Start, Stop, and Restart menu for the selected workspace runtime. |
 | `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, running instances, refresh, and sign-out actions. |
-| `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible responsive menu for workspace, connection, runtime, and documentation actions. |
+| `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible workspace menu for New/Edit, Logs/Upload/Automations, Pi auth/environment/MCP/Google/request-access management, documentation, refresh, and destructive Delete. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
 | `WorkspaceHeader` | `src/components/workspaces/WorkspaceHeader.jsx` | Workspace name and source summary. |

@@ -17,6 +17,11 @@
     {
       "type": "click",
       "role": "button",
+      "name": "More workspace actions"
+    },
+    {
+      "type": "click",
+      "role": "menuitem",
       "name": "Automations"
     },
     {

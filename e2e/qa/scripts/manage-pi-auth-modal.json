@@ -2,7 +2,8 @@
   "id": "script.managePiAuthModal",
   "title": "Open and save Manage Pi Auth selections",
   "actions": [
-    {"type": "click", "role": "button", "name": "Manage Pi Auth"},
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "name": "Manage Pi Auth"},
     {"type": "waitForSnapshotText", "text": "Manage Pi Auth", "timeoutMs": 5000},
     {"type": "click", "role": "button", "name": "Save"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/pi-auth-selection", "method": "POST", "expectedStatus": 200, "timeoutMs": 10000}
