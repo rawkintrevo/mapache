@@ -27,6 +27,17 @@ Mapache owns the surrounding workspace/session shell and account connections.
 
 ## Current behavior
 
+`PiWebUiCanvas` bounds initial Agent iframe bootstrap with a 20-second readiness
+deadline. A document that never emits the authenticated `mapache.agent.ready`
+bridge message (for example a Cloud Run 429 page) is remounted up to twice using
+the latest signed URL, with access refresh requested through the existing hook.
+After three failed attempts it shows **Retry Agent**, which starts a fresh bounded
+cycle. Readiness cancels the deadline; ordinary token renewal preserves the
+loaded iframe. Timers are removed on unmount. This recovers transient bootstrap
+failures without restarting the runner or hiding persistent failures. Browser
+coverage lives in `e2e/qa/cases/agent-bootstrap-recovery.json` and uses local
+HTTP-failure fixtures rather than injecting faults into production workspaces.
+
 `src/main.js` initializes Firebase Auth, creates the API client, maintains the
 store facade, subscribes to workspace sessions, and passes grouped handlers to
 React. The subscription resolves the workspace's canonical runtime; access URLs
