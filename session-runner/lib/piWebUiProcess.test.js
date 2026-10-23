@@ -8,6 +8,7 @@ const path = require("node:path");
 const {PassThrough} = require("node:stream");
 const test = require("node:test");
 const {createPiWebUiProcess} = require("./piWebUiProcess");
+const {createConfig} = require("./config");
 
 function fakeChild(pid = 4242) {
   const child = new EventEmitter();
@@ -493,9 +494,16 @@ test("automation child and Pi tools use the persistent output directory as cwd",
   await managed.stop();
 });
 
-for (const acknowledgmentMs of [120_000, 180_000, 300_001]) {
+for (const acknowledgmentMs of [120_000, 130_000, 180_000, 300_001]) {
   test(`automation acknowledgment after ${acknowledgmentMs}ms respects the default startup budget`, async () => {
     const {root, config} = await fixture();
+    const previousTimeout = process.env.MAPACHE_PI_WEB_UI_AUTOMATION_START_TIMEOUT_MS;
+    delete process.env.MAPACHE_PI_WEB_UI_AUTOMATION_START_TIMEOUT_MS;
+    try {
+      config.piWebUiAutomationStartTimeoutMs = createConfig().piWebUiAutomationStartTimeoutMs;
+    } finally {
+      if (previousTimeout !== undefined) process.env.MAPACHE_PI_WEB_UI_AUTOMATION_START_TIMEOUT_MS = previousTimeout;
+    }
     const child = fakeChild();
     const timers = new Map();
     let clock = 0;
