@@ -2,12 +2,14 @@
 
 const assert = require("assert");
 const {createSessionCreationService} = require("./sessionCreation.service");
+const {sessionRunnerEnv} = require("./cloudRun.service");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 const serverTimestamp = () => "SERVER_TIMESTAMP";
 const admin = {firestore: {FieldValue: {serverTimestamp}}};
 const reservations = [];
 let storedSession = null;
+let mainSession = null;
 const sessionRef = {
   id: "operation-test-session",
   async get() {
@@ -53,7 +55,9 @@ const dependencies = {
     mcpConfig: {},
   }),
   runnerServiceAccountValue: () => "runner@example.iam.gserviceaccount.com",
-  sessionCollection: () => ({doc: (id) => ({...sessionRef, id})}),
+  sessionCollection: () => ({doc: (id) => id === "main-session" ? {
+    get: async () => ({exists: mainSession !== null, data: () => mainSession}),
+  } : ({...sessionRef, id})}),
 };
 const service = createSessionCreationService(dependencies);
 
@@ -179,6 +183,77 @@ async function createWithWorkspace(workspace, payload) {
       /^\/automations\/daily-report-2026-09-22-15-40-50-run123$/);
   assert.strictEqual(automation.longRunning, true);
   assert.strictEqual(reservations[0].args[3].singleRunner, false);
+
+  const targetWorkspace = {
+    ownerUid: "user-1", canonicalSessionId: "main-session", bucket: "bucket",
+    storagePrefix: "workspaces/user-1/target", source: {type: "blank"},
+    environmentEntryIds: ["workspace-default"],
+  };
+  const requestPayload = {
+    runtimeKind: "automation", runId: "credential-run", operationId: "credential-run",
+    environmentEntryIds: ["caller-entry"], authSelection: {harness: "pi", providers: {openai: "caller-provider"}},
+  };
+  mainSession = {
+    ownerUid: "user-1", workspaceId: "workspace-1", status: "stopped",
+    environmentEntryIds: ["hubspot-token", "apollo-token"],
+    authSelection: {harness: "pi", providers: {openai: "target-provider"}},
+    shutdownToken: "must-not-copy", transcript: "must-not-copy",
+  };
+  const inherited = await createWithWorkspace(targetWorkspace, requestPayload);
+  assert.deepStrictEqual(inherited.environmentEntryIds, ["hubspot-token", "apollo-token"]);
+  assert.deepStrictEqual(inherited.authSelection, mainSession.authSelection);
+  assert.notStrictEqual(inherited.shutdownToken, mainSession.shutdownToken);
+  assert.strictEqual(inherited.transcript, undefined);
+  const runnerEnv = await sessionRunnerEnv(inherited, {}, {
+    buildGenericEnvironmentEnv: async (session, ids) => {
+      assert.strictEqual(session.ownerUid, "user-1");
+      assert.deepStrictEqual(ids, ["hubspot-token", "apollo-token"]);
+      return {HUBSPOT_ACCESS_TOKEN: "fresh-owner-store-value"};
+    },
+  });
+  assert.ok(runnerEnv.some((entry) => entry.name === "HUBSPOT_ACCESS_TOKEN" &&
+    entry.value === "fresh-owner-store-value"));
+  assert.ok(!JSON.stringify(storedSession).includes("fresh-owner-store-value"));
+  mainSession.environmentEntryIds = [];
+  // A repeated create preserves the original selection instead of rewriting a live run.
+  const repeated = await service.createSession("user-1", "workspace-1", requestPayload);
+  assert.deepStrictEqual(repeated.environmentEntryIds, inherited.environmentEntryIds);
+  mainSession.authSelection.providers = {};
+  const cleared = await createWithWorkspace(targetWorkspace, requestPayload);
+  assert.deepStrictEqual(cleared.environmentEntryIds, []);
+  assert.deepStrictEqual(cleared.authSelection, {harness: "pi", providers: {}});
+  delete mainSession.environmentEntryIds;
+  delete mainSession.authSelection;
+  mainSession.genericEnvironmentEntryIds = ["legacy-token"];
+  const legacy = await createWithWorkspace(targetWorkspace, requestPayload);
+  assert.deepStrictEqual(legacy.environmentEntryIds, ["legacy-token"]);
+  assert.strictEqual(legacy.authSelection, undefined);
+  delete mainSession.genericEnvironmentEntryIds;
+  assert.deepStrictEqual((await createWithWorkspace(targetWorkspace, requestPayload)).environmentEntryIds,
+      ["workspace-default"]);
+  mainSession.ownerUid = "another-owner";
+  await assert.rejects(createWithWorkspace(targetWorkspace, requestPayload),
+      (error) => error.publicMessage === "automation_credential_source_forbidden");
+  mainSession.ownerUid = "user-1";
+  mainSession.workspaceId = "other-workspace";
+  await assert.rejects(createWithWorkspace(targetWorkspace, requestPayload),
+      (error) => error.publicMessage === "automation_credential_source_forbidden");
+  mainSession.workspaceId = "workspace-1";
+  mainSession.runtimeKind = "automation";
+  await assert.rejects(createWithWorkspace(targetWorkspace, requestPayload),
+      (error) => error.publicMessage === "automation_credential_source_forbidden");
+  mainSession = null;
+  assert.deepStrictEqual((await createWithWorkspace(targetWorkspace, requestPayload)).environmentEntryIds,
+      ["workspace-default"]);
+  assert.deepStrictEqual((await createWithWorkspace({...targetWorkspace, canonicalSessionId: null}, requestPayload))
+      .environmentEntryIds, ["workspace-default"]);
+  mainSession = {ownerUid: "user-1", environmentEntryIds: ["runtime-target"]};
+  assert.deepStrictEqual((await createWithWorkspace({
+    ...targetWorkspace, canonicalSessionId: null, agentRuntimeSessionId: "main-session",
+  }, requestPayload)).environmentEntryIds, ["runtime-target"]);
+  mainSession.authSelection = {harness: "pi", providers: {openai: {token: "must-not-copy"}}};
+  await assert.rejects(createWithWorkspace(targetWorkspace, requestPayload),
+      (error) => error.publicMessage === "automation_credential_selection_invalid");
 
   console.log("session creation service tests passed");
 })().catch((error) => {
