@@ -68,6 +68,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     startAutomation,
     automationStatus,
     cancelAutomation,
+    startWorkspaceRequest,
+    workspaceRequestStatus,
+    cancelWorkspaceRequest,
     upstreamHeaders() {
       return privateToken ? {"x-pi-token": privateToken} : {};
     },
@@ -268,6 +271,37 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
     const response = await controlRequest("cancelAutomation", quiesceTimeoutMs, {runId});
     if (!response) throw publicError("pi_web_ui_automation_unavailable");
+    return response;
+  }
+
+  /** Start a durable, user-visible workspace request in the normal runtime. */
+  async function startWorkspaceRequest(input = {}) {
+    if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
+    if (!await waitForControlReady(automationStartTimeoutMs)) {
+      throw publicError("pi_web_ui_workspace_request_unavailable");
+    }
+    const response = await controlRequest("startWorkspaceRequest", automationStartTimeoutMs, {
+      conversationTitle: input.conversationTitle,
+      modelRef: input.modelRef,
+      prompt: input.prompt,
+      runId: input.runId,
+      sourceWorkspaceId: input.sourceWorkspaceId,
+      ticketId: input.ticketId,
+    });
+    if (!response) throw publicError("pi_web_ui_workspace_request_unavailable");
+    return response;
+  }
+
+  async function workspaceRequestStatus(runId) {
+    if (!enabled || !child) return {ok: false, error: "pi_web_ui_not_ready"};
+    const response = await controlRequest("workspaceRequestStatus", quiesceTimeoutMs, {runId});
+    return response || {ok: false, error: "pi_web_ui_workspace_request_unavailable"};
+  }
+
+  async function cancelWorkspaceRequest(runId) {
+    if (!enabled || !child) throw publicError("pi_web_ui_not_ready");
+    const response = await controlRequest("cancelWorkspaceRequest", quiesceTimeoutMs, {runId});
+    if (!response) throw publicError("pi_web_ui_workspace_request_unavailable");
     return response;
   }
 

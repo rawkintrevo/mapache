@@ -1,0 +1,11 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -561,6 +561,8 @@
+  */
+ interface Conversation {
+ 	id: string;
++	/** Durable request metadata used by the runner control plane and history UI. */
++	workspaceRequest?: { runId: string; ticketId?: string; sourceWorkspaceId?: string };
+ 	/** Display title: first user prompt (truncated) or the default. */
+ 	title: string;
+ 	/** 这是子代理对话（左栏带「子代理」徽标；inMemory session，不进历史/resume）。 */

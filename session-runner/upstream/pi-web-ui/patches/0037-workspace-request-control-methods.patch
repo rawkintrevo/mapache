@@ -1,0 +1,167 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -6144,9 +6234,164 @@
+ 		return this.automationResponse(handle);
+ 	}
+ 
++	private workspaceRequestResponse(handle: WorkspaceRequestHandle): AutomationControlResponse {
++		return {
++			ok: true,
++			runId: handle.runId,
++			conversationId: handle.conversationId,
++			status: automationStatus(handle.state),
++			state: handle.state,
++		};
++	}
++
++	private reduceWorkspaceRequestEvent(handle: WorkspaceRequestHandle, event: AutomationRunEvent): void {
++		if (this.workspaceRequests.get(handle.runId) !== handle) return;
++		handle.state = reduceAutomationRunState(handle.state, event);
++	}
++
++	private handleWorkspaceRequestEvent(handle: WorkspaceRequestHandle, conversationId: string, event: AgentSessionEvent): void {
++		if (this.workspaceRequests.get(handle.runId) !== handle || conversationId !== handle.conversationId) return;
++		const base = { runId: handle.runId, conversationId };
++		const details = event as {
++			toolCallId?: string;
++			toolName?: string;
++			isError?: boolean;
++			willRetry?: boolean;
++			messages?: unknown[];
++		};
++		if (event.type === "tool_execution_start" && details.toolCallId) {
++			this.reduceWorkspaceRequestEvent(handle, {
++				...base,
++				type: "tool_start",
++				taskId: details.toolCallId,
++				eventId: `start:${details.toolCallId}`,
++			} as AutomationRunEvent);
++			return;
++		}
++		if (event.type === "tool_execution_end" && details.toolCallId) {
++			this.reduceWorkspaceRequestEvent(handle, {
++				...base,
++				type: "tool_end",
++				taskId: details.toolCallId,
++				isError: details.isError,
++				eventId: `end:${details.toolCallId}`,
++			} as AutomationRunEvent);
++			return;
++		}
++		if (event.type === "auto_retry_start") {
++			this.reduceWorkspaceRequestEvent(handle, {
++				...base,
++				type: "model_end",
++				error: String((event as { errorMessage?: unknown }).errorMessage ?? "model_retry"),
++				retryable: true,
++				eventId: `retry:${(event as { attempt?: number }).attempt ?? 0}`,
++			} as AutomationRunEvent);
++			return;
++		}
++		if (event.type === "agent_end") {
++			const messages = details.messages ?? [];
++			const lastAssistant = [...messages].reverse().find((message) => (message as { role?: unknown })?.role === "assistant") as
++				{ stopReason?: unknown; errorMessage?: unknown; content?: unknown } | undefined;
++			const stopReason = String(lastAssistant?.stopReason ?? "");
++			const isError = stopReason === "error" || stopReason === "aborted" || Boolean(lastAssistant?.errorMessage);
++			this.reduceWorkspaceRequestEvent(handle, {
++				...base,
++				type: "agent_end",
++				result: isError ? "error" : "success",
++				error: isError ? String(lastAssistant?.errorMessage ?? stopReason) : undefined,
++				answer: isError ? undefined : automationAnswer(lastAssistant),
++				willRetry: details.willRetry,
++				eventId: `agent-end:${handle.runId}:${handle.state.seenEventIds.length}`,
++			} as AutomationRunEvent);
++		}
++	}
++
++	private async requestClient(): Promise<ClientSession> {
++		const existing = this.uniqueClients()[0];
++		if (existing) return existing;
++		if (this.internalRequestClient) return this.internalRequestClient;
++		this.internalRequestClient = await ClientSession.create(
++			AgentService.INTERNAL_REQUEST_CLIENT_ID,
++			this.cwd,
++			this.stateStore,
++		);
++		return this.internalRequestClient;
++	}
++
++	async startWorkspaceRequest(input: {
++		runId: string;
++		ticketId?: string;
++		sourceWorkspaceId?: string;
++		conversationTitle?: string;
++		modelRef?: string;
++		prompt: string;
++	}): Promise<AutomationControlResponse> {
++		const runId = String(input?.runId ?? "").trim();
++		if (!runId) return { ok: false, error: "workspace_request_run_id_required" };
++		const existing = this.workspaceRequests.get(runId);
++		if (existing) return this.workspaceRequestResponse(existing);
++		if (this.quiesced) return { ok: false, error: "server_quiesced" };
++		let client: ClientSession;
++		try {
++			client = await this.requestClient();
++			const response = await client.startWorkspaceRequest(input);
++			if (!response.ok || !response.conversationId) return response;
++			const handle: WorkspaceRequestHandle = {
++				workspaceRequest: true,
++				runId,
++				client,
++				conversationId: response.conversationId,
++				state: createAutomationRunState(runId),
++				startPromise: null,
++				disposePromise: null,
++			};
++			this.workspaceRequests.set(runId, handle);
++			client.onAutomationEvent = (conversationId, event) => {
++				const request = [...this.workspaceRequests.values()].find((entry) => entry.conversationId === conversationId);
++				if (request) this.handleWorkspaceRequestEvent(request, conversationId, event);
++			};
++			this.reduceWorkspaceRequestEvent(handle, {
++				type: "started",
++				runId,
++				conversationId: response.conversationId,
++				eventId: "started",
++			});
++			return this.workspaceRequestResponse(handle);
++		} catch (error) {
++			return { ok: false, error: `workspace_request_start_failed:${automationError(error)}` };
++		}
++	}
++
++	workspaceRequestStatus(runId: string): AutomationControlResponse {
++		const handle = this.workspaceRequests.get(String(runId ?? "").trim());
++		return handle ? this.workspaceRequestResponse(handle) : { ok: false, error: "workspace_request_not_found" };
++	}
++
++	async cancelWorkspaceRequest(runId: string): Promise<AutomationControlResponse> {
++		const handle = this.workspaceRequests.get(String(runId ?? "").trim());
++		if (!handle) return { ok: false, error: "workspace_request_not_found" };
++		if (!handle.state.terminal) {
++			this.reduceWorkspaceRequestEvent(handle, {
++				type: "canceled",
++				runId: handle.runId,
++				conversationId: handle.conversationId,
++				error: "canceled",
++				eventId: `canceled:${handle.runId}`,
++			});
++			await handle.client.cancelWorkspaceRequest(handle.runId).catch(() => {});
++		}
++		return this.workspaceRequestResponse(handle);
++	}
++
+ 	/** Get or create the session for a client, racing attach calls safely. */
+ 	async attach(clientId: string, send: (msg: ServerMessage) => void): Promise<ClientSession> {
+ 		let cs = this.clients.get(clientId);
++		if (!cs && this.internalRequestClient && clientId !== AgentService.INTERNAL_REQUEST_CLIENT_ID) {
++			// The first browser attaches to the same normal client that accepted
++			// browserless requests, so its request chats and results are visible here.
++			cs = this.internalRequestClient;
++			this.clients.set(clientId, cs);
++		}
+ 		if (!cs) {
+ 			const inflight = this.pending.get(clientId);
+ 			if (inflight) {

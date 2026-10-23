@@ -1,0 +1,45 @@
+--- a/tests/unit/control-socket.test.ts	2026-10-23 10:51:40.542451673 -0500
++++ b/tests/unit/control-socket.test.ts	2026-10-23 10:51:18.091595690 -0500
+@@ -152,4 +152,42 @@
+ 			stop();
+ 		}
+ 	});
++
++	it.skipIf(process.platform === "win32")("routes visible workspace request commands", async () => {
++		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-workspace-request-control-"));
++		tempDirs.push(dataDir);
++		const calls: Array<{ command: string; value?: unknown }> = [];
++		const service = {
++			serviceStatus: () => ({ pid: process.pid, version: "test", cwd: "/workspace", quiesced: false, connectedClients: 0, activeConversations: 0, activeTools: 0, pendingMessages: 0 }),
++			quiesce: async () => ({ ok: true }),
++			unquiesce: () => {},
++			startWorkspaceRequest: async (input: { runId: string; ticketId?: string; sourceWorkspaceId?: string; conversationTitle?: string; modelRef?: string; prompt: string }) => {
++				calls.push({ command: "start", value: input });
++				return { ok: true, runId: input.runId, conversationId: "c-request", status: "running" };
++			},
++			workspaceRequestStatus: (runId: string) => {
++				calls.push({ command: "status", value: runId });
++				return { ok: true, runId, conversationId: "c-request", status: "succeeded" };
++			},
++			cancelWorkspaceRequest: async (runId: string) => {
++				calls.push({ command: "cancel", value: runId });
++				return { ok: true, runId, conversationId: "c-request", status: "canceled" };
++			},
++		};
++		const stop = startControlServer({ service, dataDir, port: 9879 });
++		try {
++			await waitForSocket(join(dataDir, "pi-web-ui.sock"));
++			expect(await sendControlCommand(dataDir, 9879, "startWorkspaceRequest", {
++				runId: "run-2", ticketId: "ticket-2", sourceWorkspaceId: "source", conversationTitle: "Request", modelRef: "openai/gpt-5", prompt: "hello",
++			})).toMatchObject({ ok: true, runId: "run-2", status: "running" });
++			expect(await sendControlCommand(dataDir, 9879, "workspaceRequestStatus", { runId: "run-2" })).toMatchObject({ ok: true, status: "succeeded" });
++			expect(await sendControlCommand(dataDir, 9879, "cancelWorkspaceRequest", { runId: "run-2" })).toMatchObject({ ok: true, status: "canceled" });
++			expect(calls).toHaveLength(3);
++			expect(calls[0]).toEqual({ command: "start", value: {
++				runId: "run-2", ticketId: "ticket-2", sourceWorkspaceId: "source", conversationTitle: "Request", modelRef: "openai/gpt-5", prompt: "hello",
++			} });
++		} finally {
++			stop();
++		}
++	});
+ });

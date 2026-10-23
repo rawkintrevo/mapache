@@ -1,0 +1,17 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -6245,12 +6490,12 @@
+ 
+ 	/** 插件斜杠命令集合变化时由 index.ts 触发：重推各客户端的命令目录。 */
+ 	applyPluginCommandCatalog(): void {
+-		for (const cs of this.clients.values()) void cs.pushSlashCommands();
++		for (const cs of this.uniqueClients()) void cs.pushSlashCommands();
+ 	}
+ 
+ 	/** 插件常驻后台任务变化时由 index.ts 触发：重推各客户端的 bg_servers。 */
+ 	refreshBackgroundServers(): void {
+-		for (const cs of this.clients.values()) cs.refreshBgTasks();
++		for (const cs of this.uniqueClients()) cs.refreshBgTasks();
+ 	}
+ 
+ 	/** Remove a socket from a client's broadcast set (called on socket close). */

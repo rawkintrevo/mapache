@@ -14,6 +14,10 @@ const {
 } = require("./automationValidation.helpers");
 const {contextSnapshotRefsForWorkspace, fromAutomationRun, normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
+const {
+  SHARED_RUNTIME_EXECUTION_ROUTE,
+  isSharedWorkspaceRequest,
+} = require("./workspaceRequestRuntime.service");
 
 const TERMINAL_STATUSES = new Set([
   "succeeded", "failed", "canceled", "interrupted", "skipped",
@@ -28,6 +32,7 @@ function createAutomationRunsService(dependencies = {}) {
   const shared = {
     firestore,
     firestoreAdmin,
+    cancelWorkspaceRequest: dependencies.cancelWorkspaceRequest,
     requireWorkspace: dependencies.requireWorkspace,
     wakeQueue: dependencies.wakeAutomationQueue || dependencies.wakeQueue,
   };
@@ -263,6 +268,10 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
       workspaceRunRequest: admittedRequest,
     });
     run.ticketId = ticketId;
+    run.executionRoute = SHARED_RUNTIME_EXECUTION_ROUTE;
+    run.requestRuntimeState = "queued";
+    run.dispatchState = "not_started";
+    run.status = "provisioning";
     transaction.set(runRef, run);
     response = toRunDto({id: runId, data: () => run});
   });
@@ -298,6 +307,7 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
   const admin = dependencies.firestoreAdmin || dependencies.admin || defaultAdmin;
   const runRef = firestore.collection("automationRuns").doc(normalizedRunId);
   let response;
+  let sharedCancellationRequested = false;
   await firestore.runTransaction(async (transaction) => {
     const runSnap = await transaction.get(runRef);
     if (!runSnap.exists) throw httpError(404, "automation_run_not_found");
@@ -308,7 +318,23 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
     const workspaceSnap = await transaction.get(workspaceRef);
     const definitionSnap = await transaction.get(definitionRef);
     assertWorkspace(workspaceSnap, actorUid, run.workspaceId);
-    if (String(run.status || "").toLowerCase() !== "queued") {
+    const status = String(run.status || "").toLowerCase();
+    if (isSharedWorkspaceRequest(run) && ["provisioning", "running", "stopping"].includes(status)) {
+      const now = serverTimestamp(admin);
+      const updates = {
+        desiredOutcome: "canceled",
+        cancellationReason: run.cancellationReason || "user_canceled",
+        cancellationRequestedAt: run.cancellationRequestedAt || now,
+        requestRuntimeState: "cancel_requested",
+        cleanupState: "pending",
+        updatedAt: now,
+      };
+      transaction.update(runRef, updates);
+      response = toRunDto({id: normalizedRunId, data: () => ({...run, ...updates})});
+      sharedCancellationRequested = true;
+      return;
+    }
+    if (status !== "queued") {
       response = toRunDto(runSnap);
       return;
     }
@@ -327,6 +353,11 @@ async function cancelQueuedRun(actor, runId, dependencies = {}) {
   });
   if (response?.status === "canceled" && typeof dependencies.wakeQueue === "function") {
     await dependencies.wakeQueue(run.workspaceId);
+  }
+  if (sharedCancellationRequested && typeof dependencies.cancelWorkspaceRequest === "function") {
+    await dependencies.cancelWorkspaceRequest(normalizedRunId);
+    const latest = await runRef.get();
+    if (latest.exists) response = toRunDto(latest);
   }
   return response;
 }

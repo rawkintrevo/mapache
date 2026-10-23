@@ -35,10 +35,11 @@ idempotency and schedule occurrence rules remain above the shared contract.
 
 The owner-authenticated HTTP adapter uses `POST /api/workspaces/{workspaceId}/tickets`
 with an `Idempotency-Key`, then reads `GET /api/workspaces/{workspaceId}/tickets/{id}`.
-The POST creates a durable ticket and queues a `http_ticket` run; it never injects
-work into the interactive session. Ticket status is a projection of the same run
-status and archived result/artifact pointers. `POST` on the ticket resource is
-best-effort cancellation for queued work.
+The POST creates a durable ticket and queues a `http_ticket` run; execution is
+sent to a fresh visible conversation in the target's normal runtime rather
+than injected into the browser's active conversation. Ticket status is a
+projection of the same run status and archived result/artifact pointers. `POST`
+on the ticket resource is best-effort cancellation for queued or active work.
 
 Agent-to-agent requests use a separate short-lived runner credential and
 explicit directional grants stored in `workspaceRequestGrants`. Owners manage
@@ -53,9 +54,11 @@ Revocation blocks subsequent broker operations without deleting existing target
 records. See [Interworkspace requests](../community/docs/interworkspace-requests.mdx).
 
 At admission, saved workspace file snapshots, agent settings, and published
-browser seed descriptors are pinned as context references. The existing
-provisioner mounts source files read-only and creates the run-private writable
-runtime/output area. Ticket results point at the same immutable run artifacts;
+browser seed descriptors are pinned as context references. Scheduled automation
+uses the existing provisioner to mount source files read-only and create the
+run-private writable runtime/output area. Workspace requests keep the same
+context references but execute in the target's normal runtime. Ticket results
+point at the same immutable run artifacts;
 a sink or caller failure cannot resubmit the agent work. Sink delivery state is
 tracked independently (`pending`, `failed`, or `delivered`) and delivery retry
 updates only that state; `unknown` or interrupted agent outcomes are never
@@ -79,13 +82,14 @@ retains capacity when deletion or persistence is uncertain. Reconciliation only
 resumes those operations, so duplicate delivery converges on the same operation,
 session, service, execution claim, or cleanup.
 
-Browserless execution gives each run a fresh private Agent client and transcript,
-including `http_ticket` workspace requests; it does not inject prompts into the
-interactive conversation. An explicit run model takes precedence. If the run has
-no model, the client inherits the model and provider-key choice from the most
-recently used client for `/workspace` in the restored UI state. Startup and final
-agent failures are reduced to safe execution codes; raw provider error text is
-not written to run records.
+Scheduled automation gives each run a fresh private Agent client and transcript.
+`http_ticket` workspace requests use the separate `shared-runtime-v1` route and
+create one persisted listed conversation in the target's normal runtime, so the
+new chat and final result are visible through the ordinary UI. An explicit run
+model takes precedence. If a request has no model, the target runtime applies
+its normal saved model/provider-key selection. Startup and final agent failures
+are reduced to safe execution codes; raw provider error text is not written to
+run records.
 
 - Definitions live at `workspaces/{workspaceId}/automations/{automationId}`.
   They are owner-scoped, revisioned, audit-recorded, and normalized by

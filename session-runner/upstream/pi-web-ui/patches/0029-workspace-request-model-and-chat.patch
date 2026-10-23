@@ -1,0 +1,86 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -1698,12 +1700,82 @@
+ 		cwd: string,
+ 		projectProviderKeys?: Record<string, string>,
+ 	): Promise<void> {
++		await this.selectModelForSession(this.session, modelRef, cwd, projectProviderKeys);
++	}
++
++	private async selectModelForSession(
++		session: AgentSession,
++		modelRef: string,
++		cwd: string,
++		projectProviderKeys?: Record<string, string>,
++	): Promise<void> {
+ 		const slash = modelRef.indexOf("/");
+ 		if (slash <= 0 || slash === modelRef.length - 1) throw new Error("automation_model_invalid");
+ 		const model = this.sharedModelRuntime?.getModel(modelRef.slice(0, slash), modelRef.slice(slash + 1));
+ 		if (!model) throw new Error("automation_model_unavailable");
+ 		await this.restoreKeyForModel(modelRef, cwd, projectProviderKeys);
+-		await this.session.setModel(model);
++		await session.setModel(model);
++	}
++
++	/** Create a durable, user-visible chat without changing the browser's active chat. */
++	async startWorkspaceRequest(input: {
++		runId: string;
++		ticketId?: string;
++		sourceWorkspaceId?: string;
++		conversationTitle?: string;
++		modelRef?: string;
++		prompt: string;
++	}): Promise<AutomationControlResponse> {
++		const runId = String(input?.runId ?? "").trim();
++		const prompt = String(input?.prompt ?? "");
++		if (!runId) return { ok: false, error: "workspace_request_run_id_required" };
++		if (!prompt.trim()) return { ok: false, error: "workspace_request_prompt_required" };
++		if (this.quiesceBlocked()) return { ok: false, error: "server_quiesced" };
++
++		const conversationId = this.nextConversationId();
++		const terminals = this.makeTerminalManager(conversationId, this.cwd);
++		let runtime: AgentSessionRuntime | undefined;
++		try {
++			runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, conversationId), {
++				cwd: this.cwd,
++				agentDir: this.agentDir,
++				sessionManager: SessionManager.create(this.cwd, piSessionsRoot()),
++			});
++			const conv = this.makeConversation(runtime, conversationId, terminals);
++			conv.workspaceRequest = {
++				runId,
++				ticketId: input.ticketId,
++				sourceWorkspaceId: input.sourceWorkspaceId,
++			};
++			conv.title = String(input.conversationTitle || `Workspace request ${runId}`).slice(0, 160);
++			conv.listed = true;
++			conv.promptedSinceActive = true;
++			this.convs.set(conv.id, conv);
++			await this.bindConversation(conv);
++			if (input.modelRef) await this.selectModelForSession(conv.session, input.modelRef, this.cwd);
++			this.invalidateSessionInfos();
++			this.emitConversations();
++			// Defer the prompt until the control response has been returned so the
++			// AgentService can install the run-state reducer before SDK events arrive.
++			setImmediate(() => {
++				void conv.session.sendUserMessage(prompt).catch((error) => {
++					console.error(`[agent-service] workspace request ${runId} failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
++				});
++			});
++			return { ok: true, runId, conversationId, status: "running" };
++		} catch (error) {
++			terminals.killAll();
++			if (runtime) await runtime.dispose().catch(() => {});
++			return { ok: false, error: `workspace_request_start_failed:${automationError(error)}` };
++		}
++	}
++
++	async cancelWorkspaceRequest(runId: string): Promise<AutomationControlResponse> {
++		const requested = String(runId ?? "").trim();
++		const conv = [...this.convs.values()].find((entry) => entry.workspaceRequest?.runId === requested);
++		if (!conv) return { ok: false, error: "workspace_request_not_found" };
++		if (conv.session.isStreaming) await this.interruptRun(conv, "Workspace request canceled");
++		return { ok: true, runId: requested, conversationId: conv.id, status: "canceled" };
+ 	}
+ 
+ 	/**

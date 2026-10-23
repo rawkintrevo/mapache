@@ -10,6 +10,7 @@ const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
 const {isTerminalAutomationStatus, transitionAutomationRun} = require("./automationState.helpers");
 const {selectAutomationChromeProfileSeed} = require("./chromeProfileSeed.service");
 const {resolveWorkspaceRunContext} = require("./workspaceRunContract.helpers");
+const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
 
 const AUTOMATION_PROVISIONING_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
@@ -24,6 +25,7 @@ function createAutomationProvisioningService(dependencies = {}) {
     requireWorkspace: dependencies.requireWorkspace,
     sessionCollection: dependencies.sessionCollection,
     storage: dependencies.storage,
+    workspaceRequestRuntime: dependencies.workspaceRequestRuntime,
   };
   if (typeof shared.createSession !== "function") {
     throw new Error("Automation provisioning requires a createSession dependency.");
@@ -74,15 +76,20 @@ async function handleAutomationSessionEvent(event, dependencies = {}) {
 
 async function provisionAutomationRun(runId, dependencies = {}) {
   const normalizedRunId = normalizeRunId(runId);
-  if (typeof dependencies.featureEnabled === "function" && !(await dependencies.featureEnabled())) {
+  const runRef = dependencies.db.collection("automationRuns").doc(normalizedRunId);
+  const existingRunSnap = await runRef.get();
+  const sharedRequest = existingRunSnap.exists && isSharedWorkspaceRequest(existingRunSnap.data() || {});
+  if (!sharedRequest && typeof dependencies.featureEnabled === "function" && !(await dependencies.featureEnabled())) {
     return {skipped: "disabled", runId: normalizedRunId};
   }
 
-  const runRef = dependencies.db.collection("automationRuns").doc(normalizedRunId);
   const claim = await claimAutomationRun(runRef, normalizedRunId, dependencies);
   if (claim.action !== "provision") return {skipped: claim.reason, runId: normalizedRunId};
 
   const run = claim.run;
+  if (isSharedWorkspaceRequest(run) && typeof dependencies.workspaceRequestRuntime?.provision === "function") {
+    return dependencies.workspaceRequestRuntime.provision(normalizedRunId);
+  }
   let sessionRef;
   try {
     const workspace = await dependencies.requireWorkspace(run.ownerUid, run.workspaceId);

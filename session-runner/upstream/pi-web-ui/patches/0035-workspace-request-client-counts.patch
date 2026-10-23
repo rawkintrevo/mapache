@@ -1,0 +1,11 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -5902,7 +5992,7 @@
+ 	/** Aggregate across every client session: conversations with in-flight runs. */
+ 	activeConversations(): number {
+ 		let n = 0;
+-		for (const cs of this.clients.values()) n += cs.activeConversations();
++		for (const cs of this.uniqueClients()) n += cs.activeConversations();
+ 		if (this.automation) n += this.automation.client.activeConversations();
+ 		return n;
+ 	}

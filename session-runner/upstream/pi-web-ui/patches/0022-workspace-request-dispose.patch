@@ -1,0 +1,17 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -6279,11 +6524,13 @@
+ 				// best effort — never block shutdown on bookkeeping
+ 			}
+ 		}
+-		const all = [...this.clients.values()];
++		const all = this.uniqueClients();
+ 		this.clients.clear();
+ 		await Promise.all(all.map((cs) => cs.dispose()));
+ 		const automation = this.automation;
+ 		this.automation = null;
+ 		if (automation) await automation.client.dispose().catch(() => {});
++		this.internalRequestClient = null;
++		this.workspaceRequests.clear();
+ 	}
+ }

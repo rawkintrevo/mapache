@@ -18,9 +18,10 @@ the remaining conversation-level delivery design.
 
 Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`; it does not create a second queue or provisioning path. The target run remains a `http_ticket` shared run. Idempotency keys are namespaced by source workspace before the existing ticket key is generated. Target context and model/resource requests are validated by the existing workspace-run contract and target credentials are resolved at provisioning.
 
-The request runs in a fresh, isolated automation client so it cannot alter the
-target's active conversation and can run under the existing admission/cleanup
-rules. An explicit request model wins; if omitted, the target runner inherits
+The request is admitted into the target workspace's normal `runtimeKind: main`
+session. If that session does not exist it is created through the normal session
+lifecycle; if it is stopped, the existing restart path is used. An explicit
+request model wins; if omitted, the target runner inherits
 the model and provider-key choice most recently saved for `/workspace`. This
 selection is restored from the target's pinned UI checkpoint. Only
 `ui/client-state.json` is restored; the target's interactive transcript, Pi
@@ -41,10 +42,10 @@ deleted entries are not resurrected from snapshots. The source must belong to
 the target owner/workspace and must not be another automation. Existing run
 sessions keep their pinned selections on repeated provisioning calls.
 
-This inheritance fix requires deploying `api`, `provisionAutomationRun`,
-`reconcileAutomationSessionProvisioning`, and `reconcileAutomationRuns` to
-`pi-agents-cloud`. No runner rebuild or main-session restart is required. It
-applies to newly created worker sessions; completed requests are not replayed.
+The shared-runtime route is feature-gated independently from scheduled
+automation admission. Deploy the Functions change before accepting new
+requests; existing target sessions need the rebuilt `pi-chrome` revision before
+they can accept the runner control route.
 
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
 
@@ -62,14 +63,24 @@ canceled delivery, and newly queued replies, clear earlier failure codes.
 This is owned by `automationCleanup.service.js` and
 `workspaceRequestGrants.service.js`.
 
-Requests always launch separate automation runners, including when the target
-main session is running. GitHub snapshot inputs use read-only automation storage
-and skip repository-local Git credential configuration. Deploy Functions and
-rebuild/publish `pi-chrome` for this fix; new request runners receive the new
-image. Existing services retain their revision until recreated. The runner passes a bounded, per-runtime Unix control-socket path to the embedded
-UI via `PI_WEB_CONTROL_PATH`; long ticket session IDs must not exceed Unix socket
-path limits. Runtime data and persisted workspace identities remain unchanged. Previously
-failed requests are not replayed or retroactively rewritten.
+Each request creates one fresh persisted conversation in that normal runtime,
+marks it as listed, and sends the prompt to that conversation without changing
+the browser's active chat. The conversation title, transcript, tool activity,
+and final answer are therefore visible through the ordinary new-chat/history
+UI. A request client is reused when the browser is disconnected; the first
+browser attach adopts that same client so the request chat does not appear in a
+second runtime. Requests remain in the normal runtime after completion and do
+not delete the target session or consume an automation slot.
+
+The runner exposes the request control contract only behind the authenticated
+shutdown-token route: `POST /workspace/requests`, `GET
+/workspace/requests/{runId}`, and `POST /workspace/requests/{runId}/cancel`.
+Dispatch claims are durable. If the control response is ambiguous after a
+claim, the run is interrupted rather than blindly replayed. Cancellation is
+recorded before the runner interrupt and is safe to repeat. Scheduled
+automations retain their separate private-runner lifecycle and are not routed
+through these endpoints. GitHub request context remains read-only, while the
+normal workspace sync and credential boundaries remain authoritative.
 
 ## Resource sizing and OOM recovery
 
@@ -77,8 +88,10 @@ An omitted request size inherits the target workspace's configured primary-runne
 CPU and memory automatically. `automationRuns.service.js` pins this resolved pair
 in the queued run snapshot and request contract; explicit `resources` overrides
 win. A workspace without saved resources uses the normal Small default (1 CPU,
-2 GiB). No sizing question is required. Requests still use `pi-chrome`, including
-the complete saved browser profile when one is available.
+2 GiB). No sizing question is required. Normal request sessions still use
+`pi-chrome`, including the complete saved browser profile when one is available.
+Concurrent requests create separate persisted conversations in the same target
+runtime; they do not create sibling Cloud Run services.
 
 `automationOomRecovery.service.js` reads only Cloud Run **platform system**
 memory-limit events for the run's deterministic service since its provisioning
@@ -139,8 +152,9 @@ injects a hidden continuation that retries the same ask and idempotency key.
 Other interrupted turns retain the existing manual-resume behavior.
 Guidance distinguishes missing tools, absent targets,
 permission failures, and execution/configuration errors. Information requests
-do not authorize added edits or publication. This is an instruction/discovery
-and caller-wait change; grants and target execution behavior are unchanged.
+do not authorize added edits or publication. The grant and caller-wait contracts
+remain unchanged; only target execution now uses the normal target runtime and
+visible chat lifecycle.
 
 The current image-bundled skill path remains authoritative when workspace-local
 copies are older. Seeding creates missing skills without replacing user edits.
