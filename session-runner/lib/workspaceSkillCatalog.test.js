@@ -60,7 +60,11 @@ test("resolves optional profiles into one canonical file-backed skill catalog", 
     runtimeKind: "automation",
     workspaceSourceMode: "blank",
     runnerCapabilities: {},
-  }).map((skill) => skill.name), ["mapache-automations", "mapache-workspace-requests"]);
+  }).map((skill) => skill.name), [
+    "mapache-automations",
+    "mapache-workspace-requests",
+    "mapache-installation",
+  ]);
 });
 
 for (const workspaceSourceMode of ["blank", "github"]) {

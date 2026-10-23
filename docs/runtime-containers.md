@@ -539,7 +539,7 @@ The container entry point is still `session-runner/server.js`, but it is now a b
   included in the runner.
 - `harnesses/index.js` and `harnesses/metadata.js` resolve the active runner
   harness and define the retained auth/MCP startup contract.
-- `workspaceSkillCatalog.js` selects harness-neutral `github` and `web` skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/` and is materialized into the Pi workspace path.
+- `workspaceSkillCatalog.js` selects harness-neutral `github`, `web`, and managed-runtime skill profiles from workspace source mode and runner capabilities. Canonical skill Markdown lives under `session-runner/seeded-skills/` and is materialized into the Pi workspace path.
 - `activity.js`, `config.js`, `processes.js`, `services.js`, and `utils.js` hold shared runner plumbing.
 
 Route paths, environment variables, storage paths, and startup order remain controlled by `server.js`. The runner receives the fixed Pi harness contract; historical terminal metadata is not used to select a new runner family.
@@ -593,6 +593,19 @@ are not overwritten; the always-present reference points to current
 Rebuild/publish `pi-chrome` and recreate/revise existing runner services to get
 this reference and updated image-owned skills. Updating Markdown in a workspace
 or rebuilding an image tag alone does not update an already running revision.
+The managed-runtime catalog also seeds `mapache-installation`, which requires an
+agent to ask separately about install lifetime (this session or across workspace
+restarts) and scope (this workspace or all of the user's workspaces) before
+installing when those choices are not already explicit. It directs agents to
+inspect `HOME`, `HOME_SYNC_MODE`, `WORKSPACE_STORAGE_MODE`, and actual filesystem
+capabilities before choosing a path. Legacy persistent-home installs and
+shared-workspace private-ephemeral-home installs are intentionally treated
+differently; shared GCS FUSE workspaces do not currently have a generic restore
+hook for arbitrary tools into private `$HOME`, and all-workspace or OS-level
+requests require explicit image/bootstrap or account support. The skill also
+requires separate executable and credential/configuration checks, fresh-process
+verification, and actual stop/start verification when restart persistence is
+requested.
 See [Scheduled Automations](./automations.md#automation-tools-in-workspace-chat)
 for the chat scheduling contract.
 See [Workspace requests](./workspace-requests.md#agent-discovery-and-guidance)
@@ -746,13 +759,14 @@ Agents use native `gh` with explicit repository arguments. Mapache product
 reports target `rawkintrevo/mapache`, including from other workspaces. Access is
 determined by GitHub and the configured CLI credential, with no runner allowlist.
 
-On startup, `pi-web` also seeds three workspace-local Pi skills when they are missing:
+On startup, managed Pi sessions also seed selected Pi skills when they are missing:
 
 - `mapache-preview-build`
 - `mapache-api-hosting`
 - `mapache-preview-qa`
+- `mapache-installation` for managed main and automation runtimes
 
-These files are written under `/workspace/.pi/skills/{skill-name}/SKILL.md` after workspace restore and before the Pi terminal process starts, so Pi can discover them in new `pi-web` sessions. Their compatibility names are retained, but current contents describe local build/serve commands and QA through managed Chrome MCP at `http://localhost:<port>/`, not gateway commands or a separate browser launch. Existing user-edited skills with the same names are not overwritten.
+Managed main sessions write selected skills under `/workspace/.pi/skills/{skill-name}/SKILL.md`; automation sessions write them under the private agent skill path. Materialization happens after workspace restore and before the Pi process starts, so Pi can discover the files in new sessions. The three preview-named skills retain their compatibility names, but their current contents describe local build/serve commands and QA through managed Chrome MCP at `http://localhost:<port>/`, not gateway commands or a separate browser launch. Existing user-edited skills with the same names are not overwritten.
 
 Build and push the image with:
 
