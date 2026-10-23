@@ -1,6 +1,8 @@
---- a/tests/unit/control-socket.test.ts	2026-10-23 10:51:40.542451673 -0500
-+++ b/tests/unit/control-socket.test.ts	2026-10-23 10:51:18.091595690 -0500
-@@ -152,4 +152,42 @@
+diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
+index a78a2041..d82b9bdd 100644
+--- a/tests/unit/control-socket.test.ts
++++ b/tests/unit/control-socket.test.ts
+@@ -152,4 +152,42 @@ describe("local control socket", () => {
  			stop();
  		}
  	});

@@ -18,7 +18,13 @@ answer, not a schedule or a request to change anything.
 2. Call `workspace_request_targets` to find permitted target names and IDs.
    Resolve the requested workspace from that response. Ask a focused question
    if names are ambiguous; never invent a workspace ID.
-3. If tools or the target are unavailable, report the specific discovery result
+3. Call `workspace_request_models` with the chosen target ID before submitting
+   work. Match the user's model name against the returned friendly `name`,
+   `providerId`, and `modelId`. If exactly one available entry matches, pass
+   its exact `{providerId, modelId}` pair. If there are multiple matches, ask
+   the user to choose; never invent a model ID or copy credentials. Omit the
+   model only when the target's saved/default model is acceptable.
+4. If tools or the target are unavailable, report the specific discovery result
    using the guidance below. Do not infer that workspace communication is
    unsupported merely because you cannot directly access another workspace.
 
@@ -73,9 +79,10 @@ supporting examples with source references. This is an information request.”
 ## Existing execution boundary
 
 Both workspaces must belong to the same owner with an explicit directional
-grant. A request starts a separate target worker using available saved context
-and permitted connections, even when its interactive session is paused. It does
-not inject a message into that session or inherit unsaved live chat state.
+grant. A request starts a separate persisted conversation in the target's normal
+runtime using available saved context and permitted connections, even when its
+interactive session is paused. It does not inject a message into the active
+chat or inherit unsaved live chat state.
 The source receives only the caller-safe result and explicitly shared artifacts,
 not target credentials, transcripts, private history, or unrelated requests.
 Use the provided tools; do not bypass them with database writes or copied tokens.

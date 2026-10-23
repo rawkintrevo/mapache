@@ -18,6 +18,36 @@ the remaining conversation-level delivery design.
 
 Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`; it does not create a second queue or provisioning path. The target run remains a `http_ticket` shared run. Idempotency keys are namespaced by source workspace before the existing ticket key is generated. Target context and model/resource requests are validated by the existing workspace-run contract and target credentials are resolved at provisioning.
 
+### Model discovery and selection
+
+`GET /api/agent/workspace-requests/models?targetWorkspaceId=...` is the
+grant-gated discovery boundary. It starts or reuses the target's normal
+`pi-chrome` runtime when possible and returns only safe catalog metadata:
+`providerId`, `modelId`, display `name`, supported input hints, and an
+`available` flag based on whether the target runtime has provider
+authentication configured. The flag is evidence of configured credentials, not
+proof that the provider account is entitled to every model. Stopped or
+unreachable targets return `workspace_request_model_discovery_unavailable`;
+the broker never invents a model from a stale catalog.
+
+`workspace_request_ask` and `workspace_request_submit` accept either an exact
+`{providerId, modelId}` pair, a friendly `name`, or a plain model-name string.
+The broker resolves friendly names against the target catalog, rejects
+ambiguous names, and stores only the canonical exact pair. An omitted model
+uses the target runner's most recently saved normal-chat selection (read from
+the restored `client-state.json` checkpoint); if that selection is stale, the
+request fails with `workspace_request_model_unavailable` instead of silently
+switching provider or billing route. A configured provider without usable
+authentication returns `workspace_request_provider_auth_required`.
+
+The target runner revalidates the canonical pair at dispatch, so a model
+removed after discovery fails before prompt execution. The run records the
+requested and resolved model identity without credentials; the target's
+normal chat selection and other conversations are not mutated. The model
+catalog is therefore also the repair path for existing stale selections:
+discover, choose a currently available exact pair, and submit a new request
+with a new idempotency key.
+
 The request is admitted into the target workspace's normal `runtimeKind: main`
 session. If that session does not exist it is created through the normal session
 lifecycle; if it is stopped, the existing restart path is used. An explicit
@@ -57,8 +87,12 @@ status without this answer field is not evidence that the caller received the
 requested information.
 
 Failed/interrupted result delivery copies a bounded structured provisioning,
-execution, or interruption code to the ticket's `errorCode`; raw errors and
-private transcripts are never used as diagnostic fallbacks. Successful and
+execution, or interruption code to the ticket's `errorCode`, plus a safe
+`error` object with a bounded explanation and corrective `action`; raw
+errors, credential-bearing URLs, and private transcripts are never used as
+diagnostic fallbacks. Nested runner `state.finalError`, top-level runner
+errors, model unavailability, provider-account incompatibility, and
+interaction-required states are classified separately. Successful and
 canceled delivery, and newly queued replies, clear earlier failure codes.
 This is owned by `automationCleanup.service.js` and
 `workspaceRequestGrants.service.js`.
@@ -73,7 +107,7 @@ second runtime. Requests remain in the normal runtime after completion and do
 not delete the target session or consume an automation slot.
 
 The runner exposes the request control contract only behind the authenticated
-shutdown-token route: `POST /workspace/requests`, `GET
+shutdown-token route: `GET /workspace/models`, `POST /workspace/requests`, `GET
 /workspace/requests/{runId}`, and `POST /workspace/requests/{runId}/cancel`.
 Dispatch claims are durable. If the control response is ambiguous after a
 claim, the run is interrupted rather than blindly replayed. Cancellation is
@@ -137,9 +171,12 @@ automation guidance for managed interactive and automation runtimes. The
 scheduling skill cross-links it, but no schedule is required to ask a question.
 
 Agents discover the existing tools on `mapache-automations`, resolve the target
-with `workspace_request_targets`, and use `workspace_request_ask` with a stable
-idempotency key to submit a self-contained question and wait as part of the same
-turn. The managed MCP server polls the existing caller-safe request endpoint at
+with `workspace_request_targets`, then call `workspace_request_models` for
+that target before choosing a model. A friendly name is submitted only after
+it resolves to one available canonical provider/model pair. They then use
+`workspace_request_ask` with a stable idempotency key to submit a self-contained
+question and wait as part of the same turn. The managed MCP server polls the
+existing caller-safe request endpoint at
 five-second intervals for up to ten minutes. Its MCP request deadline is longer
 than that bounded wait. MCP progress notifications show the target, current
 ticket status, and elapsed seconds in the Agent UI. A terminal result is returned directly; an expired wait
@@ -159,17 +196,20 @@ visible chat lifecycle.
 The current image-bundled skill path remains authoritative when workspace-local
 copies are older. Seeding creates missing skills without replacing user edits.
 Rebuild/publish `pi-chrome` and recreate/revise existing sessions to receive the
-operating reference and new skill; a repository docs edit or image tag update
-alone does not refresh a running revision. No Functions deploy is needed for
-this guidance-only change. Verify two live workspaces after rollout: an ordinary
-information request should discover/submit/retrieve, and an ungranted target
-should produce setup guidance rather than a blanket unsupported claim.
+operating reference, model discovery tool, and new skill; a repository docs edit
+or image tag update alone does not refresh a running revision. Deploy Functions
+before the image because the broker owns grant checks and model resolution.
+Verify two live workspaces after rollout: an ordinary information request should
+discover models, submit/retrieve, and report the selected model, while an
+ungranted target should produce setup guidance rather than a blanket unsupported
+claim.
 
 ## Image tools
 
 `session-runner/automation-mcp/server.mjs` exposes:
 
 - `workspace_request_targets`
+- `workspace_request_models`
 - `workspace_request_ask`
 - `workspace_request_submit`
 - `workspace_request_get`

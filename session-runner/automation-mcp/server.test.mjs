@@ -178,6 +178,26 @@ test("workspace information request guidance uses existing discovery, submission
   assert.equal(failure.structuredContent.error, "request_permission_denied");
 });
 
+test("workspace request model discovery returns the target catalog before submission", async () => {
+  const server = fakeServer();
+  const calls = [];
+  registerAutomationTools(server, {
+    async call(path, options = {}) {
+      calls.push({path, options});
+      return {
+        targetWorkspaceId: "research",
+        savedModelSelection: {providerId: "openai", modelId: "gpt-5"},
+        models: [{providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true}],
+      };
+    },
+  });
+  const tool = server.tools.get("workspace_request_models");
+  const result = await tool.handler(tool.config.inputSchema.parse({targetWorkspaceId: "research"}));
+  assert.deepEqual(result.structuredContent.savedModelSelection, {providerId: "openai", modelId: "gpt-5"});
+  assert.equal(result.structuredContent.models[0].name, "GPT-5");
+  assert.equal(calls[0].path, "/api/agent/workspace-requests/models?targetWorkspaceId=research");
+});
+
 test("workspace request ask submits once and waits for the durable ticket result", async () => {
   const server = fakeServer();
   const calls = [];

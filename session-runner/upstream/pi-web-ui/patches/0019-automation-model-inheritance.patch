@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index f449032..cc1de84 100644
+index 3582bac4..41150eb0 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -1666,6 +1666,7 @@ export class ClientSession {
+@@ -1989,6 +1989,7 @@ export class ClientSession {
  		modelRef?: string,
  	): Promise<ClientSession> {
  		const agentDir = process.env.PI_CODING_AGENT_DIR ?? getAgentDir();
@@ -10,7 +10,7 @@ index f449032..cc1de84 100644
  		const cs = new ClientSession(clientId, cwd, agentDir, stateStore);
  		const conversationId = cs.nextConversationId();
  		const terminals = cs.makeTerminalManager(conversationId, cwd);
-@@ -1686,16 +1687,21 @@ export class ClientSession {
+@@ -2009,16 +2010,21 @@ export class ClientSession {
  			}
  		}
  		await cs.bindSession();
@@ -35,7 +35,7 @@ index f449032..cc1de84 100644
  		await this.session.setModel(model);
  	}
  
-@@ -3325,11 +3331,15 @@ export class ClientSession {
+@@ -3787,11 +3793,15 @@ export class ClientSession {
  
  	/** When a model is set, ensure its provider's per-project key is restored.
  	 *  Silent + self-healing like the bulk restore above. */
@@ -54,7 +54,7 @@ index f449032..cc1de84 100644
  		const cur = this.modelAdmin.getActiveKeyName(provider);
  		if (cur === saved) return;
 diff --git a/server/client-state.ts b/server/client-state.ts
-index 26efc04..c450bd5 100644
+index 26efc04f..c450bd56 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
 @@ -270,6 +270,8 @@ export interface ClientState {
@@ -121,7 +121,7 @@ index 26efc04..c450bd5 100644
  
 diff --git a/tests/unit/automation-project-model.test.ts b/tests/unit/automation-project-model.test.ts
 new file mode 100644
-index 0000000..d4a8ccd
+index 00000000..d4a8ccd4
 --- /dev/null
 +++ b/tests/unit/automation-project-model.test.ts
 @@ -0,0 +1,46 @@

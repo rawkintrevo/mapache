@@ -437,6 +437,7 @@ const workspaceTicketsService = createWorkspaceTicketsService({
 const workspaceRequestGrantsService = createWorkspaceRequestGrantsService({
   admin,
   db,
+  discoverWorkspaceModels: workspaceRequestRuntimeService.discoverModels,
   enqueueWorkspaceRun: automationRunsService.enqueueWorkspaceRun,
   ticketService: workspaceTicketsService,
 });
@@ -604,6 +605,10 @@ exports.api = onRequest({
     logger.error("api request failed", error);
     const status = error.status || 500;
     const body = {error: error.publicMessage || "internal_error"};
+    if (error.requestError && typeof error.requestError === "object") {
+      body.message = String(error.requestError.message || "").slice(0, 240);
+      body.action = String(error.requestError.action || "").slice(0, 240);
+    }
     if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(String(error.pendingRunId || ""))) {
       body.pendingRunId = String(error.pendingRunId);
     }

@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 48642df4..365f7d41 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -6245,12 +6490,12 @@
+@@ -7015,12 +7015,12 @@ export class AgentService {
  
  	/** 插件斜杠命令集合变化时由 index.ts 触发：重推各客户端的命令目录。 */
  	applyPluginCommandCatalog(): void {

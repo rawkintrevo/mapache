@@ -23,7 +23,7 @@ that the user separately chose every transport parameter.
 
 ## Engineering defaults — implement without reopening design
 
-- Pin upstream commit `46880b3772591beac91c0c1792bdc79a6fe3671f`, package version `0.79.0`. Use a checked-in lock/patch manifest and a reproducible fetched source build under the runner build context. No Git submodule or whole upstream source vendoring; no startup downloads. Use Node 24 and retain license attribution.
+- Pin upstream commit `4470926eb0e7619e9d555f8d86061c562e23e605`, package version `0.85.0`. Use a checked-in lock/patch manifest and a reproducible fetched source build under the runner build context. No Git submodule or whole upstream source vendoring; no startup downloads. Use Node 24 and retain license attribution.
 - Keep upstream React in an iframe. Serve it at `/agent/` through the existing runner gateway to `127.0.0.1:8787`. Use upstream subpath helpers where available. Disable its service worker for the embedded managed build.
 - Keep Pi as the only upstream engine. No DSH exposure. Keep managed update/plugin-marketplace restrictions; ordinary agent skills/extensions remain configurable through upstream's supported settings.
 - Keep the existing pi-mcp-adapter path for Mapache MCP connections, including configured remote transports and Google token refresh. Disable upstream's separate MCP bridge and connection editors. Pin a compatible adapter version after source/package inspection; a broken adapter is a compatibility blocker, not permission to redesign connectors.

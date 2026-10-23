@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 1043c5c2..581ad633 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -5902,7 +5992,7 @@
+@@ -6493,7 +6493,7 @@ export class AgentService {
  	/** Aggregate across every client session: conversations with in-flight runs. */
  	activeConversations(): number {
  		let n = 0;

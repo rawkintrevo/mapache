@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 1671bb57..a428148e 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -2113,7 +2185,11 @@
+@@ -2517,7 +2517,11 @@ export class ClientSession {
  
  	/** (Re)attach event plumbing to the ACTIVE conversation's session. */
  	private async bindSession(): Promise<void> {

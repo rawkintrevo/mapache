@@ -1,6 +1,6 @@
 diff --git a/tests/unit/embedded-agent-bridge.test.ts b/tests/unit/embedded-agent-bridge.test.ts
 new file mode 100644
-index 0000000..0ce60ba
+index 00000000..0ce60ba7
 --- /dev/null
 +++ b/tests/unit/embedded-agent-bridge.test.ts
 @@ -0,0 +1,36 @@
@@ -41,10 +41,10 @@ index 0000000..0ce60ba
 +	});
 +});
 diff --git a/web/src/App.tsx b/web/src/App.tsx
-index bdab3cb..119202e 100644
+index a931f192..1926260a 100644
 --- a/web/src/App.tsx
 +++ b/web/src/App.tsx
-@@ -47,6 +47,7 @@ import { projectNameFromCwd, useProjectTitle } from "./title-settings";
+@@ -50,6 +50,7 @@ import { projectNameFromCwd, useProjectTitle } from "./title-settings";
  import { notify } from "./notify";
  import { useTheme } from "./theme";
  import { useWallpaperEffect } from "./wallpaper";
@@ -52,7 +52,7 @@ index bdab3cb..119202e 100644
  
  export interface PendingAttachment {
  	path: string;
-@@ -170,6 +171,7 @@ export function App() {
+@@ -175,6 +176,7 @@ export function App() {
  	const t = useT();
  	const { locale } = useI18n();
  	const { chat, send, dismissNotice, pushNotice, terminal } = useChat();
@@ -62,7 +62,7 @@ index bdab3cb..119202e 100644
  	// （settings.quickPhrasesSeeded，非浏览器 localStorage）——clientId 在
 diff --git a/web/src/embedded-agent-bridge.ts b/web/src/embedded-agent-bridge.ts
 new file mode 100644
-index 0000000..29bac43
+index 00000000..29bac43a
 --- /dev/null
 +++ b/web/src/embedded-agent-bridge.ts
 @@ -0,0 +1,123 @@
@@ -190,7 +190,7 @@ index 0000000..29bac43
 +	return () => window.removeEventListener("message", onMessage);
 +}
 diff --git a/web/src/use-chat.ts b/web/src/use-chat.ts
-index b54b530..c2bab1f 100644
+index 3f8aeb95..4beec3cb 100644
 --- a/web/src/use-chat.ts
 +++ b/web/src/use-chat.ts
 @@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
@@ -201,7 +201,7 @@ index b54b530..c2bab1f 100644
  import type {
  	ClientMessage,
  	BgServer,
-@@ -834,6 +835,7 @@ export function useChat() {
+@@ -836,6 +837,7 @@ export function useChat() {
  	const bridgeRef = useRef(makeTerminalBridge());
  	/** Reconnect backoff counter — ref so it never causes re-renders. */
  	const retryRef = useRef(0);
@@ -209,7 +209,7 @@ index b54b530..c2bab1f 100644
  	/** Pending reconnect timer. */
  	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
  	/** False once the hook is unmounted/cleaned up — stops stale onclose handlers from reconnecting. */
-@@ -1256,7 +1258,7 @@ export function useChat() {
+@@ -1305,7 +1307,7 @@ export function useChat() {
  			}
  		};
  
@@ -218,7 +218,7 @@ index b54b530..c2bab1f 100644
  			if (wsRef.current === ws) wsRef.current = null;
  			// Terminals died with the server-side PTYs — drop writers/buffers.
  			bridgeRef.current.clear();
-@@ -1266,6 +1268,13 @@ export function useChat() {
+@@ -1315,6 +1317,13 @@ export function useChat() {
  			// this socket's close) — do not spawn a third connection that would
  			// shadow the live one and drop its incoming messages.
  			if (wsRef.current && wsRef.current !== ws) return;
@@ -232,7 +232,7 @@ index b54b530..c2bab1f 100644
  			dispatch({ type: "status", status: "closed" });
  			// Reconnect with exponential backoff (1s → 2s → 4s → … capped at 10s).
  			const delay = Math.min(1000 * 2 ** retryRef.current, 10_000);
-@@ -1284,6 +1293,34 @@ export function useChat() {
+@@ -1333,6 +1342,34 @@ export function useChat() {
  		};
  	}, []);
  

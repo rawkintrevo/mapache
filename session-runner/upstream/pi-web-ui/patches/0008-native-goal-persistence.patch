@@ -1,8 +1,8 @@
 diff --git a/locales/de.json b/locales/de.json
-index 4d278da409d29118bffcb71e19d48555e6c27449..2c9d1b573685a256502f6b831894f9e940250011 100644
+index d10f61ee..a778ca79 100644
 --- a/locales/de.json
 +++ b/locales/de.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "Maximale Zahl der Prüf- und Überarbeitungsrunden; 0 oder leer = unbegrenzt (wird überarbeitet, bis die Prüfung bestanden ist)",
      "goalBarUnlimitedShort": "Unbegrenzt",
      "goalBarReviewing": "Wird geprüft…",
@@ -12,10 +12,10 @@ index 4d278da409d29118bffcb71e19d48555e6c27449..2c9d1b573685a256502f6b831894f9e9
      "goalBarActive": "Ziel aktiv",
      "goalBarPassed": "Bestanden",
 diff --git a/locales/es.json b/locales/es.json
-index dbc3be7e3593e9021b124f9ca91f955998069678..3fcc7712e6f750aacb544a0900680f39c992d80d 100644
+index 17024516..cd5843ea 100644
 --- a/locales/es.json
 +++ b/locales/es.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "Rondas máximas de revisión y corrección; 0 o vacío = ilimitado (continúa hasta aprobar)",
      "goalBarUnlimitedShort": "Ilimitado",
      "goalBarReviewing": "Revisando…",
@@ -25,10 +25,10 @@ index dbc3be7e3593e9021b124f9ca91f955998069678..3fcc7712e6f750aacb544a0900680f39
      "goalBarActive": "Objetivo activo",
      "goalBarPassed": "Superado",
 diff --git a/locales/fr.json b/locales/fr.json
-index 1487fb1bff2e77fb6488902fd6e20f2b5f9ef17e..f24229a1e9344ef943946b109ed5905bba2bb5b4 100644
+index e140eca8..4cb38feb 100644
 --- a/locales/fr.json
 +++ b/locales/fr.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "Nombre max de tours de révision/reprise ; 0 ou vide = illimité (jusqu'à validation)",
      "goalBarUnlimitedShort": "Illimité",
      "goalBarReviewing": "Révision en cours…",
@@ -38,10 +38,10 @@ index 1487fb1bff2e77fb6488902fd6e20f2b5f9ef17e..f24229a1e9344ef943946b109ed5905b
      "goalBarActive": "Objectif actif",
      "goalBarPassed": "Validé",
 diff --git a/locales/it.json b/locales/it.json
-index 152a3223d97392a2989419e1f944c45c266e873f..de96620931a6082c7f679fa26f06074c2454582b 100644
+index 3ddd9b49..6241fbe9 100644
 --- a/locales/it.json
 +++ b/locales/it.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "Round massimi di revisione-correzione; 0 o vuoto = illimitati (continua a correggere finché non passa)",
      "goalBarUnlimitedShort": "Illimitati",
      "goalBarReviewing": "Revisione…",
@@ -51,10 +51,10 @@ index 152a3223d97392a2989419e1f944c45c266e873f..de96620931a6082c7f679fa26f06074c
      "goalBarActive": "Obiettivo attivo",
      "goalBarPassed": "Superato",
 diff --git a/locales/ja.json b/locales/ja.json
-index 6e69f9e1e4b13ca2be0d382a66654c566392c1aa..c082d1cfab786c6cadf10d1172a592fce42876d8 100644
+index cca9e7f9..11463f98 100644
 --- a/locales/ja.json
 +++ b/locales/ja.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "最大レビュー・修正ラウンド数。0 または空欄＝無制限（通過するまで修正を続けます）",
      "goalBarUnlimitedShort": "無制限",
      "goalBarReviewing": "レビュー中…",
@@ -64,10 +64,10 @@ index 6e69f9e1e4b13ca2be0d382a66654c566392c1aa..c082d1cfab786c6cadf10d1172a592fc
      "goalBarActive": "ゴールが有効です",
      "goalBarPassed": "合格です",
 diff --git a/locales/ko.json b/locales/ko.json
-index 91b48d9465aaeed5fd772fd44a63801faacdc5f9..621f45c6b9570c624f1940360f23d7c7c47bcaa1 100644
+index 5caed098..46f0a63d 100644
 --- a/locales/ko.json
 +++ b/locales/ko.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "검토 후 다시 고치는 최대 라운드 수예요. 0 또는 비워 두면 무제한이에요 (통과할 때까지 계속 수정해요)",
      "goalBarUnlimitedShort": "무제한",
      "goalBarReviewing": "검토 중…",
@@ -77,10 +77,10 @@ index 91b48d9465aaeed5fd772fd44a63801faacdc5f9..621f45c6b9570c624f1940360f23d7c7
      "goalBarActive": "목표가 적용 중이에요",
      "goalBarPassed": "통과했어요",
 diff --git a/locales/pt.json b/locales/pt.json
-index 471e1da9d921fcb91d26ab17f2a58ba343305abe..493872c9eb63c76321d2be29323b6b91a9a38901 100644
+index c61a1f6f..1e474310 100644
 --- a/locales/pt.json
 +++ b/locales/pt.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "Máximo de rodadas de revisão/ajuste; 0 ou vazio = sem limite (ajusta até passar)",
      "goalBarUnlimitedShort": "Sem limite",
      "goalBarReviewing": "Revisando…",
@@ -90,10 +90,10 @@ index 471e1da9d921fcb91d26ab17f2a58ba343305abe..493872c9eb63c76321d2be29323b6b91
      "goalBarActive": "Objetivo ativo",
      "goalBarPassed": "Aprovado",
 diff --git a/locales/ru.json b/locales/ru.json
-index 43524adea795792d489b64246d0c1c82f97110ed..4f21aff0b6432c98849661266fa5cd9dbd1df4d3 100644
+index abfd41fb..0954d92e 100644
 --- a/locales/ru.json
 +++ b/locales/ru.json
-@@ -686,6 +686,8 @@
+@@ -689,6 +689,8 @@
      "goalBarMaxRoundsTip": "Максимальное число раундов проверки и доработки; 0 или пусто = без ограничений (дорабатывать до прохождения)",
      "goalBarUnlimitedShort": "Без ограничений",
      "goalBarReviewing": "Проверка…",
@@ -103,10 +103,10 @@ index 43524adea795792d489b64246d0c1c82f97110ed..4f21aff0b6432c98849661266fa5cd9d
      "goalBarActive": "Цель активна",
      "goalBarPassed": "Пройдено",
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 67dc6c6b1cf8a11f600ab0566113e862005c85cc..6706c39ff8b6e882a06afab8f3b5fea7678d6583 100644
+index 131b2397..2f3040be 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -1851,7 +1851,7 @@ export class ClientSession {
+@@ -2179,7 +2179,7 @@ export class ClientSession {
  
  	/** Wrap a fresh runtime as a new conversation record. */
  	private makeConversation(runtime: AgentSessionRuntime, id: string, terminals: TerminalManager): Conversation {
@@ -115,7 +115,7 @@ index 67dc6c6b1cf8a11f600ab0566113e862005c85cc..6706c39ff8b6e882a06afab8f3b5fea7
  			id,
  			title: conversationTitle(runtime.session),
  			isSubagent: false,
-@@ -1883,6 +1883,8 @@ export class ClientSession {
+@@ -2215,6 +2215,8 @@ export class ClientSession {
  			toolStartTimes: new Map(),
  			toolWatchdogs: new Map(),
  		};
@@ -124,7 +124,7 @@ index 67dc6c6b1cf8a11f600ab0566113e862005c85cc..6706c39ff8b6e882a06afab8f3b5fea7
  	}
  
  	/** Summaries of conversations currently streaming — captured at shutdown
-@@ -5382,6 +5384,10 @@ export class ClientSession {
+@@ -5881,6 +5883,10 @@ export class ClientSession {
  		return this.goalSvc.setGoalPrefs(opts);
  	}
  
@@ -136,7 +136,7 @@ index 67dc6c6b1cf8a11f600ab0566113e862005c85cc..6706c39ff8b6e882a06afab8f3b5fea7
  		return this.goalSvc.clearGoal();
  	}
 diff --git a/server/client-state.ts b/server/client-state.ts
-index 6dfbbf4726f6ae816a03f00dde8366dec009aad0..26efc04f5b5e0f4e2436c0d3eb86ec612467d8d2 100644
+index 6dfbbf47..26efc04f 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
 @@ -1,7 +1,8 @@
@@ -249,10 +249,10 @@ index 6dfbbf4726f6ae816a03f00dde8366dec009aad0..26efc04f5b5e0f4e2436c0d3eb86ec61
  	 *  effort; called during the graceful-shutdown path). */
  	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number }[]): void {
 diff --git a/server/dsh/dsh-agent-service.ts b/server/dsh/dsh-agent-service.ts
-index 98912a3b440aec230ab24e868316ffa44386245a..d61840b078c2b4e2987354c8aa3db54817c07899 100644
+index f87295ff..8bfe9884 100644
 --- a/server/dsh/dsh-agent-service.ts
 +++ b/server/dsh/dsh-agent-service.ts
-@@ -2915,6 +2915,11 @@ export class DshClientSession {
+@@ -2928,6 +2928,11 @@ export class DshClientSession {
  		this.flushSnapshot();
  	}
  
@@ -265,7 +265,7 @@ index 98912a3b440aec230ab24e868316ffa44386245a..d61840b078c2b4e2987354c8aa3db548
  		text: string,
  		opts?: { wizardModel?: string; maxRounds?: number; locked?: boolean },
 diff --git a/server/goal-service.ts b/server/goal-service.ts
-index 1ae69542c9fb5a2e5efd372b57f235c4b60c06c3..355cc1ec7bf7f4c8035fdc1ebefcf9d2e0fe3043 100644
+index 1ae69542..355cc1ec 100644
 --- a/server/goal-service.ts
 +++ b/server/goal-service.ts
 @@ -23,7 +23,7 @@ import {
@@ -565,10 +565,10 @@ index 1ae69542c9fb5a2e5efd372b57f235c4b60c06c3..355cc1ec7bf7f4c8035fdc1ebefcf9d2
  	}
  }
 diff --git a/server/index.ts b/server/index.ts
-index 9cb6c6cad4640d3a004bb9f3853572ebadab12f1..a28a88f9b131c859982e0aab019188372736033d 100644
+index a1d51a47..76990ff0 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -771,6 +771,7 @@ export interface DispatchSession {
+@@ -783,6 +783,7 @@ export interface DispatchSession {
  	saveCommands(commands: CommandDef[]): Promise<void>;
  	setGoal(goal: string, opts?: { reviewModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
  	clearGoal(): Promise<void>;
@@ -576,7 +576,7 @@ index 9cb6c6cad4640d3a004bb9f3853572ebadab12f1..a28a88f9b131c859982e0aab01918837
  	startGoalWizard(text: string, opts?: { wizardModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
  	setGoalPrefs(opts?: { reviewModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
  	pushSettings(): void;
-@@ -1297,6 +1298,9 @@ wss.on("connection", (ws) => {
+@@ -1352,6 +1353,9 @@ wss.on("connection", (ws) => {
  			case "clear_goal":
  				void cs.clearGoal();
  				break;
@@ -587,10 +587,10 @@ index 9cb6c6cad4640d3a004bb9f3853572ebadab12f1..a28a88f9b131c859982e0aab01918837
  				void cs.startGoalWizard(msg.text, {
  					wizardModel: msg.wizardModel,
 diff --git a/server/protocol.ts b/server/protocol.ts
-index 536423ee340b1e0046ccf86bb355c7e236baca92..3826a1d67a0a29b3a87049f6e3abbee720ee6ef9 100644
+index facb5892..c31ed069 100644
 --- a/server/protocol.ts
 +++ b/server/protocol.ts
-@@ -493,6 +493,9 @@ export type ClientMessage =
+@@ -519,6 +519,9 @@ export type ClientMessage =
  	 *  a different model for the reviewer. */
  	| { type: "set_goal"; goal: string; reviewModel?: string; maxRounds: number; locked: boolean }
  	| { type: "clear_goal" }
@@ -600,7 +600,7 @@ index 536423ee340b1e0046ccf86bb355c7e236baca92..3826a1d67a0a29b3a87049f6e3abbee7
  	/** Start the collaborative target wizard: a user requirement goes into an
  	 *  ISOLATED wizard session which questions the user (multiple-choice + free
  	 *  text bridges) to scope details, then AUTO-SETS the refined goal. `text` is
-@@ -831,6 +834,9 @@ export interface GoalStatus {
+@@ -868,6 +871,9 @@ export interface GoalStatus {
  	locked: boolean;
  	/** True while a review is running right now. */
  	reviewing: boolean;
@@ -612,7 +612,7 @@ index 536423ee340b1e0046ccf86bb355c7e236baca92..3826a1d67a0a29b3a87049f6e3abbee7
  	/** Human-readable status line (e.g. "审查中", "已通过", "本轮不通过"). UI locale at emit time (zh default). */
 diff --git a/tests/unit/goal-persistence.test.ts b/tests/unit/goal-persistence.test.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..05a908762c384174ad631e8ad7d982f8a8deda0e
+index 00000000..05a90876
 --- /dev/null
 +++ b/tests/unit/goal-persistence.test.ts
 @@ -0,0 +1,137 @@
@@ -754,7 +754,7 @@ index 0000000000000000000000000000000000000000..05a908762c384174ad631e8ad7d982f8
 +	});
 +});
 diff --git a/web/src/components/GoalBar.tsx b/web/src/components/GoalBar.tsx
-index 01b58f585151ff3bafda3ddb91961574d7ac0d4e..cf03850e2ec6fe4096bd0aab642063be77f01763 100644
+index 01b58f58..cf03850e 100644
 --- a/web/src/components/GoalBar.tsx
 +++ b/web/src/components/GoalBar.tsx
 @@ -9,6 +9,7 @@ import { Dropdown, DropdownItem } from "./Dropdown";
@@ -799,10 +799,10 @@ index 01b58f585151ff3bafda3ddb91961574d7ac0d4e..cf03850e2ec6fe4096bd0aab642063be
  						type="button"
  						className="goalbar-x"
 diff --git a/web/src/i18n.tsx b/web/src/i18n.tsx
-index 516ff3fd6ccda12aa87d7f142cb9245aed6cf0ce..e2a0f67c56e5b212f32c11ab45acf58236aa8267 100644
+index 69a3a589..1ac4f6fb 100644
 --- a/web/src/i18n.tsx
 +++ b/web/src/i18n.tsx
-@@ -782,6 +782,8 @@ export const zh = {
+@@ -786,6 +786,8 @@ export const zh = {
  	goalBarUnlimitedShort: "不限",
  
  	goalBarReviewing: "审查中…",
@@ -811,7 +811,7 @@ index 516ff3fd6ccda12aa87d7f142cb9245aed6cf0ce..e2a0f67c56e5b212f32c11ab45acf582
  	goalBarRound: "第 {n} 轮",
  	goalBarActive: "目标生效中",
  	goalBarPassed: "已通过",
-@@ -1867,6 +1869,8 @@ const en: Record<keyof typeof zh, string> = {
+@@ -1915,6 +1917,8 @@ const en: Record<keyof typeof zh, string> = {
  	goalBarMaxRoundsTip: "Max review-revision rounds; 0 or empty = unlimited (keep revising until it passes)",
  	goalBarUnlimitedShort: "Unlimited",
  	goalBarReviewing: "Reviewing…",
@@ -821,10 +821,10 @@ index 516ff3fd6ccda12aa87d7f142cb9245aed6cf0ce..e2a0f67c56e5b212f32c11ab45acf582
  	goalBarActive: "Goal active",
  	goalBarPassed: "Passed",
 diff --git a/web/src/styles.css b/web/src/styles.css
-index 48a586c827f35b77bd7142ffa1e43ec2076c102e..3a60a4127eaa6a490cf962a6a27c0332d63b622d 100644
+index 1a0ca73d..08c672ef 100644
 --- a/web/src/styles.css
 +++ b/web/src/styles.css
-@@ -6686,6 +6686,11 @@ div.chead[role="button"]:focus-visible,
+@@ -6731,6 +6731,11 @@ div.chead[role="button"]:focus-visible,
  	color: #fff;
  }
  

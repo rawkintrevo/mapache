@@ -40,8 +40,9 @@ of an interrupted tool process or an unsaved model turn after a container crash.
 
 ## Upstream baseline and maintenance
 
-Reviewed [pi-web-ui](https://github.com/xing-shuyin/pi-web-ui) at commit
-`46880b3772591beac91c0c1792bdc79a6fe3671f` (package version `0.79.0`). It uses
+Reviewed [pi-web-ui](https://github.com/xing-shuyin/pi-web-ui) at the validated
+compatibility point commit
+`4470926eb0e7619e9d555f8d86061c562e23e605` (package version `0.85.0`). It uses
 the Pi SDK in process, a React app, and an HTTP/WebSocket server. Mapache uses
 React 19 while the reviewed upstream uses React 18; an iframe keeps their builds
 and global state independent.

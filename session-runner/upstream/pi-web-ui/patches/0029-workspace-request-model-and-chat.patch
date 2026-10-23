@@ -1,9 +1,12 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index cd3eb79f..1671bb57 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -1698,12 +1700,82 @@
+@@ -2022,13 +2022,83 @@ export class ClientSession {
+ 		modelRef: string,
  		cwd: string,
  		projectProviderKeys?: Record<string, string>,
- 	): Promise<void> {
++	): Promise<void> {
 +		await this.selectModelForSession(this.session, modelRef, cwd, projectProviderKeys);
 +	}
 +
@@ -12,7 +15,7 @@
 +		modelRef: string,
 +		cwd: string,
 +		projectProviderKeys?: Record<string, string>,
-+	): Promise<void> {
+ 	): Promise<void> {
  		const slash = modelRef.indexOf("/");
  		if (slash <= 0 || slash === modelRef.length - 1) throw new Error("automation_model_invalid");
  		const model = this.sharedModelRuntime?.getModel(modelRef.slice(0, slash), modelRef.slice(slash + 1));

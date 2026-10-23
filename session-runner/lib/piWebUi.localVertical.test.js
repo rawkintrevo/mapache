@@ -267,7 +267,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     const health = await request(publicPort, `/runner/health?mapache_access=${encodeURIComponent(accessToken)}`);
     assert.equal(health.status, 200);
     assert.equal(health.body.agentRuntime.ready, true);
-    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "46880b3772591beac91c0c1792bdc79a6fe3671f");
+    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "4470926eb0e7619e9d555f8d86061c562e23e605");
     assert.equal((await request(publicPort, `/capabilities?mapache_access=${encodeURIComponent(accessToken)}`)).body.browser.state, "ready");
     assert.equal((await request(publicPort, `/preview/status?mapache_access=${encodeURIComponent(accessToken)}`)).body.ok, true);
     const bootstrap = await request(publicPort, `/agent/?mapache_access=${encodeURIComponent(accessToken)}`);

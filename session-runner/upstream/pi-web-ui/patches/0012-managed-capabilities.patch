@@ -1,5 +1,5 @@
 diff --git a/server/managed.ts b/server/managed.ts
-index becb07f..88a5f06 100644
+index becb07f9..88a5f060 100644
 --- a/server/managed.ts
 +++ b/server/managed.ts
 @@ -24,17 +24,8 @@
@@ -23,7 +23,7 @@ index becb07f..88a5f06 100644
  export type ManagedMessage = (typeof MANAGED_MESSAGES)[number];
  
 diff --git a/tests/unit/managed.test.ts b/tests/unit/managed.test.ts
-index 93c6483..97d5240 100644
+index 93c64830..97d52407 100644
 --- a/tests/unit/managed.test.ts
 +++ b/tests/unit/managed.test.ts
 @@ -36,23 +36,12 @@ describe("managed instances", () => {
@@ -54,7 +54,7 @@ index 93c6483..97d5240 100644
  		for (const type of ["prompt", "scm_status", "terminal_create", "plugins_reload", "plugin_catalog_remove"]) {
  			expect(managedRefusal(type, true), type).toBeNull();
 diff --git a/web/src/components/PiSetupModal.tsx b/web/src/components/PiSetupModal.tsx
-index 74e32df..d94fd66 100644
+index 74e32df8..d94fd665 100644
 --- a/web/src/components/PiSetupModal.tsx
 +++ b/web/src/components/PiSetupModal.tsx
 @@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
@@ -92,10 +92,10 @@ index 74e32df..d94fd66 100644
  						<div className="setup-done">{t("installFailed")}</div>
  						<pre className="setup-detail">{installResult.detail}</pre>
 diff --git a/web/src/components/SettingsModal.tsx b/web/src/components/SettingsModal.tsx
-index ef5f92c..4a37089 100644
+index 75a12baa..f9a38c55 100644
 --- a/web/src/components/SettingsModal.tsx
 +++ b/web/src/components/SettingsModal.tsx
-@@ -1607,16 +1607,7 @@ export function SettingsModal({ chat, terminal, onSwitchToTerminal, onClose }: S
+@@ -1615,16 +1615,7 @@ export function SettingsModal({ chat, terminal, onSwitchToTerminal, onClose }: S
  						)}
  
  						{/* ---- 插件市场（可一键安装的插件列表） ------------------------ */}
@@ -114,10 +114,10 @@ index ef5f92c..4a37089 100644
  								<div className="set-section-title">
  									<FiPackage className="set-section-icon" />
 diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
-index cd5f722..10eada4 100644
+index d5c463b8..c6c57671 100644
 --- a/web/src/components/TopBar.tsx
 +++ b/web/src/components/TopBar.tsx
-@@ -493,10 +493,7 @@ export function TopBar({
+@@ -528,10 +528,7 @@ export function TopBar({
  						))}
  					</Dropdown>
  
@@ -129,7 +129,7 @@ index cd5f722..10eada4 100644
  							trigger={
  								<>
  									<FiDownload />
-@@ -527,11 +524,9 @@ export function TopBar({
+@@ -562,11 +559,9 @@ export function TopBar({
  							<div className="dd-header">{t("update")}</div>
  							{renderUpdateBody()}
  							{renderAllUpdatesBody()}
@@ -143,7 +143,7 @@ index cd5f722..10eada4 100644
  							className="chip github"
  							href="https://github.com/xing-shuyin/pi-web-ui"
  							target="_blank"
-@@ -539,8 +534,7 @@ export function TopBar({
+@@ -574,8 +569,7 @@ export function TopBar({
  							title={t("githubRepo")}
  						>
  							<FiGithub />
@@ -153,7 +153,7 @@ index cd5f722..10eada4 100644
  				</div>
  
  				<button
-@@ -630,9 +624,7 @@ export function TopBar({
+@@ -665,9 +659,7 @@ export function TopBar({
  								{locale === "zh" ? th.name : (th.nameEn ?? th.name)}
  							</DropdownItem>
  						))}
@@ -164,7 +164,7 @@ index cd5f722..10eada4 100644
  								{renderUpdateBody()}
  								{renderAllUpdatesBody()}
  								<a
-@@ -643,8 +635,6 @@ export function TopBar({
+@@ -678,8 +670,6 @@ export function TopBar({
  								>
  									<FiGithub /> {t("githubRepo")}
  								</a>

@@ -1,7 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
+index e1c7a258..3897ac90 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -71,6 +71,7 @@
+@@ -73,6 +73,7 @@ import {
  import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
  import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
  import { isManaged, managedMcpAdapterPath } from "./managed.js";
@@ -9,7 +10,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
  import {
  	createAutomationRunState,
-@@ -1812,7 +1813,7 @@
+@@ -2135,7 +2136,7 @@ export class ClientSession {
  							name: "pi-webui-persona",
  							hidden: true,
  							factory: (pi) => {
@@ -18,7 +19,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  									// 子代理模板 replace（无 SYSTEM.md 时）：默认分支拼好的提示词里
  									// 把灵魂段换成模板提示词，自动段保留；SYSTEM.md 情形已在
  									// systemPromptOverride 整体替换，此处边界不存在会自然跳过。
-@@ -1849,7 +1850,7 @@
+@@ -2172,7 +2173,7 @@ export class ClientSession {
  										})),
  									});
  									return rendered ? { systemPrompt: rendered } : undefined;
@@ -29,6 +30,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  					],
 diff --git a/server/managed-reference.ts b/server/managed-reference.ts
 new file mode 100644
+index 00000000..596696ad
 --- /dev/null
 +++ b/server/managed-reference.ts
 @@ -0,0 +1,37 @@
@@ -71,6 +73,7 @@ new file mode 100644
 +}
 diff --git a/tests/unit/managed-reference.test.ts b/tests/unit/managed-reference.test.ts
 new file mode 100644
+index 00000000..7afd55b9
 --- /dev/null
 +++ b/tests/unit/managed-reference.test.ts
 @@ -0,0 +1,129 @@

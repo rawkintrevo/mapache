@@ -1,7 +1,8 @@
 diff --git a/server/index.ts b/server/index.ts
+index 6f132905..04ecd062 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -217,10 +217,10 @@ function installAuthMiddleware(): void {
+@@ -219,7 +219,8 @@ if (AUTH_TOKEN) {
  }
  
  /** 引擎选择：PI_WEB_ENGINE=pi|dsh（默认 pi）。重启生效。 */
@@ -11,6 +12,11 @@ diff --git a/server/index.ts b/server/index.ts
  
  /** PI_WEB_MANAGED=1: this instance is updated by whoever deploys it. */
  const MANAGED = isManaged();
+@@ -230,6 +231,7 @@ const MANAGED = isManaged();
+ const ORIGIN = launchOrigin();
+ /** 下发给浏览器的服务信息（null = 没有 supervisor）。 */
+ const SERVICE_INFO = toServiceInfo(ORIGIN);
 +const ENGINE: "pi" | "dsh" = MANAGED ? "pi" : process.env.PI_WEB_ENGINE === "dsh" ? "dsh" : "pi";
  /** PI_WEB_TABS: the tabs this instance offers. null = all of them, as before. */
  const TABS = parseTabs();
+ 

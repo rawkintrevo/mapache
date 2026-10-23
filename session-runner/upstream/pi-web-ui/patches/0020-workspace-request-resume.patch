@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 0216d57..132d09c 100644
+index 41150eb0..61ce4064 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -73,6 +73,7 @@ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } fro
+@@ -75,6 +75,7 @@ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } fro
  import { isManaged, managedMcpAdapterPath } from "./managed.js";
  import { withManagedReference } from "./managed-reference.js";
  import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
@@ -10,7 +10,7 @@ index 0216d57..132d09c 100644
  import {
  	createAutomationRunState,
  	reduceAutomationRunState,
-@@ -1975,24 +1976,88 @@ export class ClientSession {
+@@ -2307,24 +2308,88 @@ export class ClientSession {
  
  	/** Summaries of conversations currently streaming — captured at shutdown
  	 *  so the next attach can tell the user their run was interrupted. */
@@ -110,7 +110,7 @@ index 0216d57..132d09c 100644
  	}
  
  	/** Add a socket to this client's broadcast set; flushes buffered startup notices. */
-@@ -6129,7 +6194,8 @@ export class AgentService {
+@@ -6654,7 +6719,8 @@ export class AgentService {
  		// First attach after a restart: report runs that were interrupted when
  		// the previous process shut down (consumed once, then cleared). Queue
  		// BEFORE attachSink so the notice rides the initial pending-notice flush.
@@ -120,7 +120,7 @@ index 0216d57..132d09c 100644
  		cs.attachSink(send);
  		// Forward hooks (set once by index.ts) to every session.
  		cs.onQuit = this.onQuit;
-@@ -6141,6 +6207,11 @@ export class AgentService {
+@@ -6666,6 +6732,11 @@ export class AgentService {
  		cs.pluginBgTasksProvider = this.pluginBgTasksProvider;
  		cs.pluginStopBgTask = this.pluginStopBgTask;
  		cs.isQuiesced = () => this.quiesced;
@@ -133,7 +133,7 @@ index 0216d57..132d09c 100644
  		// notifyCwd 幂等去重；此后 set_cwd 成功时由 cs.onCwdChanged 继续驱动。
  		cs.onCwdChanged = (abs) => this.onClientCwdChanged?.(abs);
 diff --git a/server/client-state.ts b/server/client-state.ts
-index c450bd5..a035d09 100644
+index c450bd56..a035d092 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
 @@ -253,7 +253,7 @@ export interface ClientState {
@@ -156,7 +156,7 @@ index c450bd5..a035d09 100644
  		const state = (all[clientId] ??= { projects: [] });
 diff --git a/server/workspace-request-resume.ts b/server/workspace-request-resume.ts
 new file mode 100644
-index 0000000..17748d3
+index 00000000..17748d3c
 --- /dev/null
 +++ b/server/workspace-request-resume.ts
 @@ -0,0 +1,19 @@
@@ -181,7 +181,7 @@ index 0000000..17748d3
 +}
 diff --git a/tests/unit/workspace-request-resume.test.ts b/tests/unit/workspace-request-resume.test.ts
 new file mode 100644
-index 0000000..b596a42
+index 00000000..b596a42a
 --- /dev/null
 +++ b/tests/unit/workspace-request-resume.test.ts
 @@ -0,0 +1,37 @@

@@ -50,6 +50,24 @@ function registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace}) {
     }
   }
 
+  async function handleWorkspaceRequestModels(req, res) {
+    if (!hasRunnerAccess(req)) {
+      res.status(404).json({error: "not_found"});
+      return;
+    }
+    try {
+      const result = await piWebUi.workspaceRequestModels();
+      if (result?.error === "pi_web_ui_not_ready") {
+        res.status(503).json(result);
+        return;
+      }
+      res.json(result);
+    } catch (error) {
+      console.error("workspace request model discovery failed", error);
+      res.status(500).json({error: error.publicMessage || "workspace_request_model_discovery_failed"});
+    }
+  }
+
   async function handleWorkspaceRequestCancel(req, res) {
     if (!hasRunnerAccess(req)) {
       res.status(404).json({error: "not_found"});
@@ -64,6 +82,7 @@ function registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace}) {
   }
 
   app.post("/workspace/requests", handleWorkspaceRequest);
+  app.get("/workspace/models", handleWorkspaceRequestModels);
   app.get("/workspace/requests/:runId", handleWorkspaceRequestStatus);
   app.post("/workspace/requests/:runId/cancel", handleWorkspaceRequestCancel);
 }

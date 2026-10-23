@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const {db: defaultDb, admin: defaultAdmin} = require("./backendContext");
 const {httpError, serialize} = require("./backendUtils.helpers");
 const {normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
+const {errorDescriptor} = require("./workspaceRequestErrors.helpers");
 
 function createWorkspaceTicketsService(dependencies = {}) {
   const shared = {
@@ -70,7 +71,13 @@ async function createTicket(actor, workspaceId, body = {}, options = {}, depende
     await ticketRef.update(update);
     return serialize({...ticket, ...update});
   } catch (error) {
-    await ticketRef.update({status: "failed", errorCode: String(error.publicMessage || error.code || "ticket_submission_failed"), updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp()});
+    const errorCode = String(error.publicMessage || error.code || "ticket_submission_failed");
+    await ticketRef.update({
+      status: "failed",
+      errorCode,
+      error: errorDescriptor(errorCode, error.message),
+      updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
+    });
     throw error;
   }
 }
@@ -102,7 +109,7 @@ async function cancelTicket(actor, ticketId, dependencies = {}) {
   if (ticket.runId && typeof dependencies.cancelQueuedRun === "function") {
     await dependencies.cancelQueuedRun(actor, ticket.runId);
   }
-  await ref.update({status: "canceled", updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp()});
+  await ref.update({status: "canceled", errorCode: null, error: null, updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp()});
   return getTicket(actor, ticketId, dependencies);
 }
 

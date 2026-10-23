@@ -103,4 +103,22 @@ test("does not replay a claimed dispatch after an ambiguous runner failure", asy
   assert.equal(db.values.get("automationRuns/run-1").status, "interrupted");
 });
 
+test("classifies nested provider/model failures with safe corrective fields", async () => {
+  const {db, service} = setup({
+    runner: (_session, route) => route === "/workspace/requests" ?
+      {ok: true, conversationId: "conversation-1", status: "running"} :
+      {ok: true, request: {
+        status: "failed",
+        state: {finalError: "Codex error: The gpt-5.5 model is not supported for this account."},
+      }},
+  });
+  await service.provision("run-1");
+  await service.reconcile("run-1");
+  const run = db.values.get("automationRuns/run-1");
+  assert.equal(run.executionErrorCode, "workspace_request_model_auth_incompatible");
+  assert.match(run.executionErrorMessage, /model is not supported/);
+  assert.match(run.executionErrorAction, /available model/);
+  assert.equal(run.status, "failed");
+});
+
 console.log("workspace request runtime service tests passed");

@@ -167,15 +167,27 @@ their bundled startup behavior until restarted or recreated.
 
 The `pi-chrome` build also packages the pinned pi-web-ui runtime under
 `/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` fetches
-commit `46880b3772591beac91c0c1792bdc79a6fe3671f` (package `0.79.0`), verifies
+the validated compatibility point commit
+`4470926eb0e7619e9d555f8d86061c562e23e605` (package `0.85.0`), verifies
 the source archive and package/license hashes, applies the checked-in patch
 series, runs the upstream typecheck/tests/build, and copies only generated
-runtime files plus `build-info.json` into the image. The build pins Pi SDK
-`0.84.4` and `pi-mcp-adapter` `2.32.1`; it does not download or install anything
+runtime files plus `build-info.json` into the image. The build pins the
+Pi SDK `0.85.1` for both the image CLI and the pi-web-ui lockfile. The
+managed MCP policy remains pinned to `pi-mcp-adapter` `2.32.1` because its
+checked-in mutation patch is version/anchor strict; the image build fails
+closed if those anchors or versions drift. It does not download or install anything
 at runner startup. The generated health descriptor is safe for runtime status
 reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
+
+The workspace-request model catalog is served by the same pi-web-ui model
+runtime used by normal chat. It reports catalog metadata and configured-provider
+availability, not provider entitlement. It also reports the most recently
+saved target model from `client-state.json`, allowing Functions to reject a
+stale saved selection or pin it explicitly for a request. The catalog is
+available only while the authenticated target runtime is ready; a stopped or
+offline target must be retried after startup.
 
 The pinned Pi SDK catalog predates `openai-codex/gpt-6-astra`, which can be
 stored in a workspace's selected model state. `piModelCatalogOverrides.json`

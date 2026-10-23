@@ -69,6 +69,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     automationStatus,
     cancelAutomation,
     startWorkspaceRequest,
+    workspaceRequestModels,
     workspaceRequestStatus,
     cancelWorkspaceRequest,
     upstreamHeaders() {
@@ -295,6 +296,12 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   async function workspaceRequestStatus(runId) {
     if (!enabled || !child) return {ok: false, error: "pi_web_ui_not_ready"};
     const response = await controlRequest("workspaceRequestStatus", quiesceTimeoutMs, {runId});
+    return response || {ok: false, error: "pi_web_ui_workspace_request_unavailable"};
+  }
+
+  async function workspaceRequestModels() {
+    if (!enabled || !child) return {ok: false, error: "pi_web_ui_not_ready"};
+    const response = await controlRequest("workspaceRequestModels", quiesceTimeoutMs);
     return response || {ok: false, error: "pi_web_ui_workspace_request_unavailable"};
   }
 

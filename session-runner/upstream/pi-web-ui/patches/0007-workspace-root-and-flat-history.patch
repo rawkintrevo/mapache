@@ -1,70 +1,8 @@
-diff --git a/server/index.ts b/server/index.ts
---- a/server/index.ts
-+++ b/server/index.ts
-@@ -8,13 +8,17 @@
-  *
-  * Env:
-  *   PI_WEB_PORT     HTTP port (default 8787)
-- *   PI_WEB_CWD      workspace the agent operates in (default: process.cwd())
-+ *   PI_WEB_CWD      workspace the agent operates in (default: process.cwd(),
-+ *                   forced to /workspace by managed runners)
-  *   PI_WEB_DATA_DIR where per-client UI state is stored (client-state.json,
-  *   default: <home>/.pi-web). Chat sessions are NOT stored here — they live
-- *   in the pi agent's global TUI session dir (~/.pi/agent/sessions/--<cwd>--/)
-- *   via the SDK default, so this web UI, the dev instance, and the pi CLI/TUI
-- *   all share one conversation list per project.
-+ *   in the pi agent session directory. Managed instances use the explicit flat
-+ *   PI_CODING_AGENT_SESSION_DIR root; ordinary runs retain the SDK's default
-+ *   per-project layout, so this web UI, the dev instance, and the pi CLI/TUI
-+ *   all share one conversation list for the same history root.
-  *   PI_CODING_AGENT_DIR  pi config dir (auth/models/skills) — passed to the SDK
-+ *   PI_CODING_AGENT_SESSION_DIR  explicit flat transcript root; required by
-+ *                   managed runners so all browser clients share one history
-  */
- import { existsSync, readFileSync } from "node:fs";
- import { stat } from "node:fs/promises";
-@@ -37,6 +40,7 @@
- import { ensureWindowsBash, windowsBashDir } from "./ensure-bash.js";
- import { listThemes, resolveThemeFile } from "./themes.js";
- import { isManaged, managedCredentialRefusal, managedRefusal } from "./managed.js";
-+import { managedWorkspaceRoot } from "./managed-workspace.js";
- import { parseTabs, tabsRefusal } from "./tabs.js";
- import {
- 	installPack,
-@@ -77,7 +81,10 @@
- }
- 
- const PORT = Number(cliFlag("--port") ?? process.env.PI_WEB_PORT ?? 8787);
--const CWD = resolve(cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
-+// Managed runners expose the Mapache workspace only. Ignore stale client or
-+// command-line cwd values here; per-client project changes are checked again
-+// against the same canonical root in AgentService.
-+const CWD = resolve(managedWorkspaceRoot() ?? cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
- const DATA_DIR = resolve(cliFlag("--data-dir") ?? process.env.PI_WEB_DATA_DIR ?? join(homedir(), ".pi-web"));
- 
- /** Bind address. Default is loopback ONLY — the service is a local personal
-@@ -126,10 +133,13 @@
- 	}
- 	return appVersionCache;
- }
--// Root of the SDK default per-project session dirs — chat transcripts live in
--// <SESSION_DIR_ROOT>/--<cwd>--/, shared with the pi CLI/TUI (getAgentDir
--// honors PI_CODING_AGENT_DIR).
--const SESSION_DIR_ROOT = join(getAgentDir(), "sessions");
-+// Explicitly configured transcript root. Managed runners require this flat
-+// root so every browser client discovers the same history regardless of its
-+// client-local display state; ordinary runs keep the SDK default layout.
-+const SESSION_DIR_ROOT = resolve(process.env.PI_CODING_AGENT_SESSION_DIR?.trim() || join(getAgentDir(), "sessions"));
-+if (isManaged() && !process.env.PI_CODING_AGENT_SESSION_DIR?.trim()) {
-+	throw new Error("managed_session_dir_missing");
-+}
- 
- // Windows 轻量 bash 兜底：把 <home>/.pi-web/bin 前置到 PATH（SDK 的 bash 工具经
- // findBashOnPath 会找到其中的 bash.exe），并在无 Git Bash 时后台下载 busybox-w32。
 diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 7a5dca61..131b2397 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -17,7 +17,7 @@
+@@ -17,7 +17,7 @@ import "./patch-remote-catalog.js";
  import { spawn } from "node:child_process";
  import { randomUUID } from "node:crypto";
  import { createRequire } from "node:module";
@@ -73,8 +11,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  import { basename, delimiter, dirname, join, resolve, sep } from "node:path";
  import { fileURLToPath } from "node:url";
  import {
-@@ -71,6 +71,7 @@
- } from "./client-state.js";
+@@ -73,6 +73,7 @@ import {
  import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
  import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
  import { isManaged, managedMcpAdapterPath } from "./managed.js";
@@ -82,7 +19,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  
  import {
  	applyHeadTail,
-@@ -802,6 +803,25 @@
+@@ -1085,6 +1086,25 @@ export function piSessionsRoot(): string | undefined {
  	return process.env.PI_CODING_AGENT_SESSION_DIR || undefined;
  }
  
@@ -108,7 +45,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  export class ClientSession {
  	readonly clientId: string;
  	/** Set by AgentService.attach: reflects the SERVICE-wide quiesce flag
-@@ -1573,10 +1593,9 @@
+@@ -1896,10 +1916,9 @@ export class ClientSession {
  		const runtime = await createAgentSessionRuntime(cs.makeRuntimeFactory(terminals, undefined, conversationId), {
  			cwd,
  			agentDir,
@@ -122,7 +59,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  		});
  		// First conversation = the resumed session; it also seeds the shared
  		// ModelRuntime that every later conversation reuses.
-@@ -3927,7 +3946,7 @@
+@@ -4391,7 +4410,7 @@ export class ClientSession {
  			const runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(conv.terminals, undefined, conv.id), {
  				cwd: conv.cwd,
  				agentDir: this.agentDir,
@@ -131,7 +68,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			});
  			conv.runtime = runtime;
  			conv.session = runtime.session;
-@@ -4004,7 +4023,7 @@
+@@ -4473,7 +4492,7 @@ export class ClientSession {
  			const runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, conversationId), {
  				cwd: this.cwd,
  				agentDir: this.agentDir,
@@ -140,7 +77,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			});
  			const conv = this.makeConversation(runtime, conversationId, terminals);
  			this.convs.set(conv.id, conv);
-@@ -4249,9 +4268,8 @@
+@@ -4747,9 +4766,8 @@ export class ClientSession {
  		if (!this.sessionsRequested) return;
  		if (!this.sessionsRequested) return;
  		try {
@@ -152,7 +89,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			const infos = await this.loadSessionInfos();
  
  			const sessions = new Map<string, SessionSummary>();
-@@ -4290,19 +4308,9 @@
+@@ -4788,19 +4806,9 @@ export class ClientSession {
  	 */
  	async deleteSession(path: string): Promise<void> {
  		try {
@@ -174,7 +111,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			// A live conversation may hold the target transcript. A BACKGROUND
  			// conversation must still block deletion outright, but when the ACTIVE
  			// conversation holds it the request can be satisfied by switching away
-@@ -4382,18 +4390,8 @@
+@@ -4880,18 +4888,8 @@ export class ClientSession {
  		try {
  			const trimmed = (name ?? "").trim();
  			if (!trimmed) return;
@@ -195,7 +132,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			mgr.appendSessionInfo(trimmed);
  			this.setConversationTitleForFile(abs, trimmed);
  			this.invalidateSessionInfos();
-@@ -4419,7 +4417,7 @@
+@@ -4917,7 +4915,7 @@ export class ClientSession {
  			conv.title = trimmed;
  			try {
  				const file = conv.session.sessionFile;
@@ -204,7 +141,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			} catch {
  				// in-memory title still updated; transcript write is best-effort
  			}
-@@ -4855,7 +4853,7 @@
+@@ -5354,7 +5352,7 @@ export class ClientSession {
  		let openedRuntime: AgentSessionRuntime | null = null;
  		let openedTerminals: TerminalManager | null = null;
  		try {
@@ -213,7 +150,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  
  			// A session may already be open in the running-conversation map. Reuse it
  			// instead of creating a second writer for the same JSONL transcript.
-@@ -4867,8 +4865,11 @@
+@@ -5366,8 +5364,11 @@ export class ClientSession {
  				}
  			}
  
@@ -226,7 +163,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			const conversationId = this.nextConversationId();
  			openedTerminals = this.makeTerminalManager(conversationId, targetCwd);
  			openedRuntime = await createAgentSessionRuntime(
-@@ -5058,11 +5059,14 @@
+@@ -5557,11 +5558,14 @@ export class ClientSession {
  		try {
  			const saved = this.stateStore.get(this.clientId);
  			const removedProjects = new Set(this.stateStore.getRemovedProjects(this.clientId));
@@ -243,7 +180,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  					const t = s.modified.getTime();
  					const prev = map.get(s.cwd);
  					if (prev === undefined || t > prev) map.set(s.cwd, t);
-@@ -5072,7 +5076,7 @@
+@@ -5571,7 +5575,7 @@ export class ClientSession {
  			// is useless in the picker. Tombstoned entries (explicitly removed by
  			// the user) stay hidden even though session files still mention them.
  			const projects: ProjectSummary[] = [...map.entries()]
@@ -252,7 +189,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  				.map(([path, lastUsed]) => ({ path, lastUsed }))
  				.sort((a, b) => b.lastUsed - a.lastUsed)
  				.slice(0, 20);
-@@ -5199,7 +5203,7 @@
+@@ -5698,7 +5702,7 @@ export class ClientSession {
  			}
  			// Windows 裸盘符（"C:"）：resolve 会按该盘当前目录解析，必须显式指到盘根；
  			// 仅 win32 生效——posix 下 "C:" 仍是普通相对路径，避免误伤同名目录。
@@ -261,7 +198,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  				process.platform === "win32" && /^[A-Za-z]:$/.test(trimmed)
  					? `${trimmed.toUpperCase()}${sep}`
  					: resolve(trimmed);
-@@ -5207,6 +5211,10 @@
+@@ -5706,6 +5710,10 @@ export class ClientSession {
  			if (!st.isDirectory()) {
  				throw new Error("路径不是目录");
  			}
@@ -272,7 +209,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  			if (abs === this.cwd) {
  				this.emit({
  					type: "notice",
-@@ -5245,7 +5253,7 @@
+@@ -5744,7 +5752,7 @@ export class ClientSession {
  					{
  						cwd: abs,
  						agentDir: this.agentDir,
@@ -281,7 +218,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  					},
  				);
  				const conv = this.makeConversation(newRuntime, conversationId, terminals);
-@@ -5645,14 +5653,15 @@
+@@ -6170,14 +6178,15 @@ export class AgentService {
  				// otherwise fall back to the server's configured default cwd.
  				let cwd = this.cwd;
  				const saved = this.stateStore.get(clientId);
@@ -301,6 +238,7 @@ diff --git a/server/agent-service.ts b/server/agent-service.ts
  					this.pending.delete(clientId);
  				});
 diff --git a/server/files-service.ts b/server/files-service.ts
+index a9fe58b0..a88be23c 100644
 --- a/server/files-service.ts
 +++ b/server/files-service.ts
 @@ -6,11 +6,12 @@
@@ -317,7 +255,7 @@ diff --git a/server/files-service.ts b/server/files-service.ts
  
  export const IS_WIN32 = process.platform === "win32";
  
-@@ -896,8 +897,8 @@
+@@ -896,8 +897,8 @@ export class FilesService {
  
  	/**
  	 * Create a folder. Accepts absolute, ~-prefixed or session-relative paths
@@ -328,7 +266,7 @@ diff --git a/server/files-service.ts b/server/files-service.ts
  	 * with a notice; the picker refreshes its listing on its own.
  	 */
  	async makeDir(input: string): Promise<void> {
-@@ -916,6 +917,10 @@
+@@ -916,6 +917,10 @@ export class FilesService {
  				expanded = resolve(this.host.getCwd(), expanded);
  			}
  			const abs = resolve(expanded);
@@ -338,7 +276,8 @@ diff --git a/server/files-service.ts b/server/files-service.ts
 +			}
  			await fs.mkdir(abs, { recursive: true });
  			this.host.emit({
-@@ -947,6 +952,7 @@
+ 				type: "notice",
+@@ -947,6 +952,7 @@ export class FilesService {
  			const cwd = this.host.getCwd();
  			const isWin = IS_WIN32;
  			const rawInput = input.trim();
@@ -346,7 +285,7 @@ diff --git a/server/files-service.ts b/server/files-service.ts
  			if (rawInput === "") {
  				empty();
  				return;
-@@ -954,12 +960,20 @@
+@@ -954,12 +960,20 @@ export class FilesService {
  
  			// ---- 机器根（此电脑/盘符列表）----
  			if (rawInput === MACHINE_ROOT || rawInput === MACHINE_ROOT + "/") {
@@ -367,7 +306,7 @@ diff --git a/server/files-service.ts b/server/files-service.ts
  				const letter = rawInput[0].toUpperCase();
  				const drive = `${letter}:`;
  				let st: { isDirectory(): boolean };
-@@ -1019,6 +1033,10 @@
+@@ -1019,6 +1033,10 @@ export class FilesService {
  			const lastSlash = Math.max(expanded.lastIndexOf("/"), expanded.lastIndexOf("\\"));
  			const dirPart = lastSlash >= 0 ? expanded.slice(0, lastSlash + 1) : "";
  			const prefix = lastSlash >= 0 ? expanded.slice(lastSlash + 1) : expanded;
@@ -378,8 +317,73 @@ diff --git a/server/files-service.ts b/server/files-service.ts
  
  			const dirents = await fs.readdir(dirPart, { withFileTypes: true }).catch(() => null);
  			if (!dirents) {
+diff --git a/server/index.ts b/server/index.ts
+index 4e7a9f8e..a1d51a47 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -8,13 +8,17 @@
+  *
+  * Env:
+  *   PI_WEB_PORT     HTTP port (default 8787)
+- *   PI_WEB_CWD      workspace the agent operates in (default: process.cwd())
++ *   PI_WEB_CWD      workspace the agent operates in (default: process.cwd(),
++ *                   forced to /workspace by managed runners)
+  *   PI_WEB_DATA_DIR where per-client UI state is stored (client-state.json,
+  *   default: <home>/.pi-web). Chat sessions are NOT stored here — they live
+- *   in the pi agent's global TUI session dir (~/.pi/agent/sessions/--<cwd>--/)
+- *   via the SDK default, so this web UI, the dev instance, and the pi CLI/TUI
+- *   all share one conversation list per project.
++ *   in the pi agent session directory. Managed instances use the explicit flat
++ *   PI_CODING_AGENT_SESSION_DIR root; ordinary runs retain the SDK's default
++ *   per-project layout, so this web UI, the dev instance, and the pi CLI/TUI
++ *   all share one conversation list for the same history root.
+  *   PI_CODING_AGENT_DIR  pi config dir (auth/models/skills) — passed to the SDK
++ *   PI_CODING_AGENT_SESSION_DIR  explicit flat transcript root; required by
++ *                   managed runners so all browser clients share one history
+  */
+ import { existsSync, readFileSync } from "node:fs";
+ import { stat } from "node:fs/promises";
+@@ -38,6 +42,7 @@ import { ensureWindowsBash, windowsBashDir } from "./ensure-bash.js";
+ import { listThemes, resolveThemeFile } from "./themes.js";
+ import { isManaged, managedCredentialRefusal, managedRefusal } from "./managed.js";
+ import { launchOrigin, toServiceInfo } from "./launch-origin.js";
++import { managedWorkspaceRoot } from "./managed-workspace.js";
+ import { parseTabs, tabsRefusal } from "./tabs.js";
+ import {
+ 	installPack,
+@@ -79,7 +84,10 @@ function cliFlag(name: string): string | undefined {
+ }
+ 
+ const PORT = Number(cliFlag("--port") ?? process.env.PI_WEB_PORT ?? 8787);
+-const CWD = resolve(cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
++// Managed runners expose the Mapache workspace only. Ignore stale client or
++// command-line cwd values here; per-client project changes are checked again
++// against the same canonical root in AgentService.
++const CWD = resolve(managedWorkspaceRoot() ?? cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
+ const DATA_DIR = resolve(cliFlag("--data-dir") ?? process.env.PI_WEB_DATA_DIR ?? join(homedir(), ".pi-web"));
+ 
+ /** Bind address. Default is loopback ONLY — the service is a local personal
+@@ -128,10 +136,13 @@ function appVersion(): string {
+ 	}
+ 	return appVersionCache;
+ }
+-// Root of the SDK default per-project session dirs — chat transcripts live in
+-// <SESSION_DIR_ROOT>/--<cwd>--/, shared with the pi CLI/TUI (getAgentDir
+-// honors PI_CODING_AGENT_DIR).
+-const SESSION_DIR_ROOT = join(getAgentDir(), "sessions");
++// Explicitly configured transcript root. Managed runners require this flat
++// root so every browser client discovers the same history regardless of its
++// client-local display state; ordinary runs keep the SDK default layout.
++const SESSION_DIR_ROOT = resolve(process.env.PI_CODING_AGENT_SESSION_DIR?.trim() || join(getAgentDir(), "sessions"));
++if (isManaged() && !process.env.PI_CODING_AGENT_SESSION_DIR?.trim()) {
++	throw new Error("managed_session_dir_missing");
++}
+ 
+ // Windows 轻量 bash 兜底：把 <home>/.pi-web/bin 前置到 PATH（SDK 的 bash 工具经
+ // findBashOnPath 会找到其中的 bash.exe），并在无 Git Bash 时后台下载 busybox-w32。
 diff --git a/server/managed-workspace.ts b/server/managed-workspace.ts
 new file mode 100644
+index 00000000..95325b76
 --- /dev/null
 +++ b/server/managed-workspace.ts
 @@ -0,0 +1,34 @@
@@ -419,6 +423,7 @@ new file mode 100644
 +}
 diff --git a/tests/unit/managed-workspace.test.ts b/tests/unit/managed-workspace.test.ts
 new file mode 100644
+index 00000000..00ef7235
 --- /dev/null
 +++ b/tests/unit/managed-workspace.test.ts
 @@ -0,0 +1,103 @@

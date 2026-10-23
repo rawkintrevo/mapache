@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index daf206d3..2aae1ef6 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -5827,6 +5907,10 @@
+@@ -6408,6 +6408,10 @@ export class AgentService {
  	private socketCount = 0;
  	private pending = new Map<string, Promise<ClientSession>>();
  	private stateStore: ClientStateStore;
