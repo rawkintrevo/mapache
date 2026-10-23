@@ -2,10 +2,14 @@ import {useCallback, useEffect, useRef, useState} from "react";
 
 const BRIDGE_VERSION = 1;
 const ACCESS_MESSAGE = "mapache.agent.access";
+export const AGENT_BOOTSTRAP_TIMEOUT_MS = 20_000;
+const MAX_BOOTSTRAP_RETRIES = 2;
 
 export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefreshNeeded, onOpenChrome}) {
   const frameRef = useRef(null);
-  const initialUrlRef = useRef(url);
+  const latestUrlRef = useRef(url);
+  const bootstrapTimerRef = useRef(null);
+  const [bootstrap, setBootstrap] = useState({url, key: 0, retries: 0});
   const origin = getAgentOrigin(url);
   const readyRef = useRef(false);
   const lastSentUrlRef = useRef(null);
@@ -15,6 +19,33 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
   const visibleError = accessError || error;
 
   callbacksRef.current = {onAccessRefreshNeeded, onOpenChrome};
+  latestUrlRef.current = url;
+
+  const retryBootstrap = useCallback((manual = false) => {
+    readyRef.current = false;
+    lastSentUrlRef.current = null;
+    setError("");
+    setStatus("loading");
+    setBootstrap((current) => ({
+      url: latestUrlRef.current,
+      key: current.key + 1,
+      retries: manual ? 0 : current.retries + 1,
+    }));
+    callbacksRef.current.onAccessRefreshNeeded?.();
+  }, []);
+
+  useEffect(() => {
+    if (!origin || readyRef.current) return undefined;
+    bootstrapTimerRef.current = window.setTimeout(() => {
+      if (readyRef.current) return;
+      if (bootstrap.retries < MAX_BOOTSTRAP_RETRIES) retryBootstrap();
+      else {
+        setError("agent_load_timeout");
+        setStatus("error");
+      }
+    }, AGENT_BOOTSTRAP_TIMEOUT_MS);
+    return () => window.clearTimeout(bootstrapTimerRef.current);
+  }, [bootstrap, origin, retryBootstrap]);
 
   const sendAccess = useCallback((accessUrl = url) => {
     const frame = frameRef.current;
@@ -46,6 +77,7 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
       const message = parseBridgeMessage(event.data);
       if (!message) return;
       if (message.type === "mapache.agent.ready") {
+        window.clearTimeout(bootstrapTimerRef.current);
         readyRef.current = true;
         setError("");
         setStatus("ready");
@@ -99,16 +131,22 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
     <div className="pi-web-ui-canvas">
       <div className="pi-web-ui-canvas__frame-wrap">
         <iframe
+          key={bootstrap.key}
           ref={frameRef}
           allow="clipboard-read; clipboard-write; fullscreen"
           className="pi-web-ui-canvas__frame"
-          src={initialUrlRef.current}
+          src={bootstrap.url}
           title={`Agent ${sessionName}`}
         />
         {status !== "ready" ? (
           <div aria-live="polite" className={`pi-web-ui-canvas__status pi-web-ui-canvas__status--${status}`} role="status">
-            <strong>{accessError ? "Agent access error" : status === "renewing" ? "Refreshing Agent access" : status === "error" ? "Agent access error" : "Loading Agent"}</strong>
-            {status === "error" || accessError ? <code>{visibleError || "agent_access_refresh_failed"}</code> : <span>The embedded workspace is connecting.</span>}
+            <strong>{error === "agent_load_timeout" ? "Agent did not load" : accessError ? "Agent access error" : status === "renewing" ? "Refreshing Agent access" : status === "error" ? "Agent access error" : "Loading Agent"}</strong>
+            {error === "agent_load_timeout" ? (
+              <>
+                <span>The workspace could not connect. Retry to load it again.</span>
+                <button type="button" onClick={() => retryBootstrap(true)}>Retry Agent</button>
+              </>
+            ) : status === "error" || accessError ? <code>{visibleError || "agent_access_refresh_failed"}</code> : <span>{bootstrap.retries ? "Retrying the workspace connection…" : "The embedded workspace is connecting."}</span>}
           </div>
         ) : null}
       </div>

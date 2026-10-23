@@ -1,10 +1,53 @@
-import {fireEvent, render, screen} from "@testing-library/react";
-import {describe, expect, test, vi} from "vitest";
-import {PiWebUiCanvas, getAgentOrigin, parseBridgeMessage} from "./PiWebUiCanvas.jsx";
+import {act, cleanup, fireEvent, render, screen} from "@testing-library/react";
+import {afterEach, describe, expect, test, vi} from "vitest";
+import {AGENT_BOOTSTRAP_TIMEOUT_MS, PiWebUiCanvas, getAgentOrigin, parseBridgeMessage} from "./PiWebUiCanvas.jsx";
 
 const firstUrl = "https://runner.example/agent/?mapache_access=first";
 
 describe("PiWebUiCanvas", () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+  test("recovers a bootstrap that never sends readiness using the latest URL", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    const {rerender} = render(<PiWebUiCanvas sessionName="Recovery" url={firstUrl} onAccessRefreshNeeded={refresh} />);
+    const failedFrame = screen.getByTitle("Agent Recovery");
+    const renewedUrl = "https://runner.example/agent/?mapache_access=renewed";
+    rerender(<PiWebUiCanvas sessionName="Recovery" url={renewedUrl} onAccessRefreshNeeded={refresh} />);
+    act(() => vi.advanceTimersByTime(AGENT_BOOTSTRAP_TIMEOUT_MS));
+    const recoveredFrame = screen.getByTitle("Agent Recovery");
+    expect(recoveredFrame).not.toBe(failedFrame);
+    expect(recoveredFrame).toHaveAttribute("src", renewedUrl);
+    expect(refresh).toHaveBeenCalledOnce();
+    fireEvent(window, new MessageEvent("message", {
+      data: {type: "mapache.agent.ready", version: 1},
+      origin: "https://runner.example", source: recoveredFrame.contentWindow,
+    }));
+    act(() => vi.advanceTimersByTime(5 * AGENT_BOOTSTRAP_TIMEOUT_MS));
+    expect(screen.getByTitle("Agent Recovery")).toBe(recoveredFrame);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  test("bounds failed bootstrap retries and allows a fresh manual attempt", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    const {unmount} = render(<PiWebUiCanvas sessionName="Recovery" url={firstUrl} onAccessRefreshNeeded={refresh} />);
+    for (let i = 0; i < 3; i++) act(() => vi.advanceTimersByTime(AGENT_BOOTSTRAP_TIMEOUT_MS));
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Agent did not load")).toBeInTheDocument();
+    const failedFrame = screen.getByTitle("Agent Recovery");
+    act(() => vi.advanceTimersByTime(5 * AGENT_BOOTSTRAP_TIMEOUT_MS));
+    expect(screen.getByTitle("Agent Recovery")).toBe(failedFrame);
+    fireEvent.click(screen.getByRole("button", {name: "Retry Agent"}));
+    expect(screen.getByTitle("Agent Recovery")).not.toBe(failedFrame);
+    expect(screen.getByText("Loading Agent")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledTimes(3);
+    unmount();
+    act(() => vi.advanceTimersByTime(5 * AGENT_BOOTSTRAP_TIMEOUT_MS));
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
   test("sends access once on readiness and once for a new URL", () => {
     const {rerender} = render(<PiWebUiCanvas sessionName="Agent smoke" url={firstUrl} />);
     const frame = screen.getByTitle("Agent Agent smoke");
