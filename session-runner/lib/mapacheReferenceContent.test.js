@@ -19,7 +19,7 @@ test("operating reference stays bounded and all detailed skill paths ship in the
   const manifest = JSON.parse(fs.readFileSync(path.join(runnerRoot, "upstream", "pi-web-ui", "manifest.json"), "utf8"));
   assert.ok(manifest.patches.includes("patches/0016-managed-operating-reference.patch"));
   const links = [...reference.matchAll(/`\/app\/(seeded-skills\/[^`]+\/SKILL\.md)`/g)];
-  assert.equal(new Set(links.map(([, relativePath]) => relativePath)).size, 7);
+  assert.equal(new Set(links.map(([, relativePath]) => relativePath)).size, 8);
   for (const [, relativePath] of links) {
     assert.ok(fs.existsSync(path.join(runnerRoot, relativePath)), relativePath);
   }
@@ -44,6 +44,7 @@ test("chat scheduling guidance uses existing tools and states scheduling limitat
     const names = defaultWorkspaceSkills({agentRuntimeEnabled: true, runtimeKind: "main", workspaceSourceMode})
         .map((entry) => entry.name);
     assert.equal(names.filter((name) => name === "mapache-automations").length, 1);
+    assert.equal(names.filter((name) => name === "mapache-installation").length, 1);
   }
 });
 
@@ -70,4 +71,28 @@ test("information requests route from the operating reference to a discoverable 
   assert.match(guidance, /Workspace request access/);
   assert.match(guidance, /do not add edits, sends/);
   assert.match(skill("mapache-automations"), /mapache-workspace-requests\/SKILL\.md/);
+});
+
+test("software installation guidance is discoverable and covers runtime persistence boundaries", () => {
+  const guidance = skill("mapache-installation");
+  assert.match(reference, /Software installation and persistence:.*mapache-installation\/SKILL\.md/);
+  for (const phrase of [
+    "current running session only",
+    "across restarts in this workspace",
+    "this project/workspace",
+    "all of your",
+    "WORKSPACE_STORAGE_MODE",
+    "HOME_SYNC_MODE",
+    "HOME_STORAGE_BUCKET",
+    "HOME_STORAGE_PREFIX",
+    "MAPACHE_RUNTIME_ROOT",
+    "shared-gcsfuse-v1",
+    "gcloud auth list",
+    "fresh login shell",
+    "actual runner stop/start",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "Do not equate",
+  ]) assert.ok(guidance.toLowerCase().includes(phrase.toLowerCase()), phrase);
+  assert.match(guidance, /all-workspace|all workspaces/i);
+  assert.match(guidance, /OS-level|OS package/i);
 });

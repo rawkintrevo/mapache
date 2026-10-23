@@ -46,6 +46,7 @@ Read only the skill needed for the task. These image-owned copies remain availab
 - Browser and local apps: `/app/seeded-skills/mapache-chrome/SKILL.md`
 - Scheduling and run management: `/app/seeded-skills/mapache-automations/SKILL.md`
 - Information from and requests to other workspaces: `/app/seeded-skills/mapache-workspace-requests/SKILL.md`
+- Software installation and persistence: `/app/seeded-skills/mapache-installation/SKILL.md`
 - GitHub implementation workflow: `/app/seeded-skills/mapache-github-issue/SKILL.md`
 - Build-and-serve guidance (compatibility name): `/app/seeded-skills/mapache-preview-build/SKILL.md`
 - Local app/API servers: `/app/seeded-skills/mapache-api-hosting/SKILL.md`
