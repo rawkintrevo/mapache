@@ -317,7 +317,19 @@ credential's permissions; there is no Mapache CLI repository allowlist or token
 injection. GitHub App workspace access alone does not authenticate `gh`.
 The legacy `mapache-gh` command simply executes `gh` unchanged for older skills.
 HTTPS Git uses the repository-scoped `mapache-git-credential` helper without
-persisting tokens. Manual PR creation is verified immediately. An explicitly
+persisting tokens. In the managed Agent process, the helper uses the mode-0600
+`MAPACHE_GITHUB_TOKEN_SOCKET` supplied by the runner.
+`session-runner/lib/githubTokenApi.service.js` owns the in-memory token cache
+and refresh calls; `runnerLifecycle.js` starts it before the Agent and stops it
+on startup failure or shutdown. The child receives neither the shutdown
+credential nor the direct refresh URL. Repository matching still happens in
+the helper, and the backend verifies the session/source binding. Native `gh`
+authentication remains independent: successful `gh auth status` does not test
+managed Git renewal. A `github_token_refresh_failed:404:not_found` from the
+direct broker can mean a missing/mismatched session shutdown credential, not
+only a missing connection. Rebuild/publish `pi-chrome` and restart or recreate
+existing sessions to receive this socket-based renewal path. No Functions
+deployment is needed for this runner-only change. Manual PR creation is verified immediately. An explicitly
 chosen separate worktree does not disable exit automation in the original
 workspace.
 

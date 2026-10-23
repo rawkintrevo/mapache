@@ -9,6 +9,7 @@ const test = require("node:test");
 const {boundedUnixSocketPath} = require("./unixSocketPath.helpers");
 const {createConfig} = require("./config");
 const {createAutomationAgentApiService} = require("./automationAgentApi.service");
+const {createGithubTokenApiService} = require("./githubTokenApi.service");
 const {createGoogleMcpTokenApiService} = require("./googleMcpTokenApi.service");
 
 test("socket paths preserve short names and bound byte length without identity collisions", () => {
@@ -29,7 +30,7 @@ test("socket paths preserve short names and bound byte length without identity c
   });
 });
 
-test("scheduled automation config boots both real private broker sockets with a 64-character run ID", async () => {
+test("scheduled automation config boots all real private broker sockets with a 64-character run ID", async () => {
   const runId = crypto.randomBytes(32).toString("hex");
   const runtimeId = `auto-${runId}`;
   const env = {
@@ -59,11 +60,16 @@ test("scheduled automation config boots both real private broker sockets with a 
     workspaceId: "test-workspace",
     shutdownToken: "test-only",
   });
-  const sockets = [config.automationAgentSocketPath, config.googleMcpTokenSocketPath];
+  const github = createGithubTokenApiService({...config,
+    githubAutomationTokenRefreshUrl: "https://unused.invalid/token",
+    shutdownToken: "test-only",
+  });
+  const sockets = [config.automationAgentSocketPath, config.googleMcpTokenSocketPath, config.githubTokenSocketPath];
   assert.notEqual(sockets[0], sockets[1]);
   try {
     await automation.start();
     await google.start();
+    await github.start();
     for (const socketPath of sockets) {
       assert.ok(Buffer.byteLength(socketPath) <= 100);
       assert.equal((await fs.stat(socketPath)).mode & 0o777, 0o600);
@@ -79,6 +85,7 @@ test("scheduled automation config boots both real private broker sockets with a 
   } finally {
     await automation.stop();
     await google.stop();
+    await github.stop();
     for (const socketPath of sockets) await fs.rm(path.dirname(socketPath), {recursive: true, force: true});
   }
 });

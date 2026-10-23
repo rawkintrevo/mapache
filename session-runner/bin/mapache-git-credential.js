@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
+const {getGithubSocketToken} = require("../lib/githubTokenApi.service");
 const readline = require("readline");
 const {createConfig} = require("../lib/config");
 const {createGithubTokenProvider} = require("../lib/githubTokenProvider.service");
@@ -14,7 +15,9 @@ async function main() {
   const path = String(values.path || "").replace(/^\/+|\/+$/g, "").replace(/\.git$/, "");
   const expected = `${config.githubRepoOwner}/${config.githubRepoName}`.toLowerCase();
   if (host !== "github.com" || path !== expected) return;
-  const token = await createGithubTokenProvider({config}).getToken();
+  const token = process.env.MAPACHE_GITHUB_TOKEN_SOCKET ?
+    await getGithubSocketToken(process.env.MAPACHE_GITHUB_TOKEN_SOCKET) :
+    await createGithubTokenProvider({config}).getToken();
   process.stdout.write(`protocol=https\nhost=github.com\nusername=${config.githubAutomationUsername || "x-access-token"}\npassword=${token}\n\n`);
 }
 

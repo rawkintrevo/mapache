@@ -165,3 +165,43 @@ test("seeded GitHub guidance uses native gh and the image installs the compatibi
   const dockerfile = fs.readFileSync(path.join(runnerRoot, "Dockerfile.pi-chrome"), "utf8");
   assert.match(dockerfile, /ln -sf \/app\/bin\/mapache-gh \/usr\/local\/bin\/mapache-gh/);
 });
+
+test("managed helper renews through the runner socket without shutdown credentials", async () => {
+  const {createGithubTokenApiService} = require("./githubTokenApi.service");
+  const fixture = await createRefreshFixture();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "github-broker-"));
+  const socketPath = path.join(root, "token.sock");
+  const broker = createGithubTokenApiService({
+    githubTokenSocketPath: socketPath,
+    githubAutomationTokenRefreshUrl: fixture.url,
+    shutdownToken: "runner-only-secret", workspaceId: "w", sessionId: "s",
+  });
+  try {
+    await broker.start();
+    assert.equal(fs.statSync(socketPath).mode & 0o777, 0o600);
+    const env = baseEnv({MAPACHE_GITHUB_TOKEN_SOCKET: socketPath});
+    delete env.SESSION_SHUTDOWN_TOKEN;
+    delete env.GITHUB_AUTOMATION_TOKEN_REFRESH_URL;
+    const input = "protocol=https\nhost=github.com\npath=owner/repo.git\n\n";
+    const results = await Promise.all(Array.from({length: 3}, () => runProcess(CREDENTIAL_SCRIPT, ["get"], {env, input})));
+    for (const result of results) {
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /password=refreshed-token/);
+      assert.doesNotMatch(result.stdout + result.stderr, /runner-only-secret/);
+    }
+    assert.equal(fixture.requests.length, 1, "runner caches and coalesces helper refreshes");
+    assert.equal(fixture.requests[0].shutdownToken, "runner-only-secret");
+    assert.deepEqual(JSON.parse(fixture.requests[0].body), {workspaceId: "w", sessionId: "s"});
+    const wrongRepo = await runProcess(CREDENTIAL_SCRIPT, ["get"], {env, input: input.replace("owner/repo", "owner/other")});
+    assert.equal(wrongRepo.stdout, "");
+    assert.equal(fixture.requests.length, 1);
+    await broker.stop();
+    const unavailable = await runProcess(CREDENTIAL_SCRIPT, ["get"], {env, input});
+    assert.equal(unavailable.code, 1);
+    assert.equal(unavailable.stdout, "");
+  } finally {
+    await broker.stop();
+    await fixture.close();
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+});

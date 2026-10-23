@@ -44,6 +44,7 @@ function createLifecycleHarness(events, overrides = {}) {
     },
     checkpointScheduler: overrides.checkpointScheduler,
     automationExecution: overrides.automationExecution,
+    githubTokenApi: overrides.githubTokenApi,
     config,
     git: overrides.git || service("prepareGithubAutomationBranch", "git.prepareGithubAutomationBranch"),
     listen: overrides.listen || (() => events.push("server.listen")),
@@ -315,4 +316,34 @@ test("shutdown syncs archives directly for non-Chrome runners", async () => {
     "workspaceSync.syncUp",
     "activity.updateSessionActivity",
   ]);
+});
+
+
+test("GitHub token socket starts before workspace commands and closes on startup failure", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    githubTokenApi: {
+      start: async () => events.push("github.start"),
+      stop: async () => events.push("github.stop"),
+    },
+    workspace: {ensureWorkspace: async () => {
+      events.push("workspace.fail");
+      throw new Error("fixture failure");
+    }},
+  });
+  await assert.rejects(lifecycle.start(), /fixture failure/);
+  assert.deepEqual(events, ["github.start", "workspace.fail", "github.stop", "activity.markRuntimeStartupFailure"]);
+});
+
+test("GitHub token socket closes even when final checkpoint fails", async () => {
+  let stopped = false;
+  const lifecycle = createLifecycleHarness([], {
+    githubTokenApi: {stop: async () => { stopped = true; }},
+    chromeProfileSnapshots: {
+      enabled: () => true, stop: async () => {},
+      finalize: async () => { throw new Error("checkpoint failed"); },
+    },
+  });
+  await assert.rejects(lifecycle.shutdown(), /checkpoint failed/);
+  assert.equal(stopped, true);
 });

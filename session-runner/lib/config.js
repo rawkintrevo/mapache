@@ -215,6 +215,10 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     googleMcpConnectionId: normalizeEnvString(process.env.GOOGLE_MCP_CONNECTION_ID),
     googleMcpTokenRefreshUrl: normalizeEnvString(process.env.GOOGLE_MCP_TOKEN_REFRESH_URL),
     googleMcpTokenSocketPath,
+    githubTokenSocketPath: boundedUnixSocketPath(path.join(
+        privatePaths?.runtimeRoot || agentStateRoot,
+        `github-token-${normalizeRuntimeIdentity(runtimeIdentity)}.sock`,
+    )),
     harnessId,
     homeArchiveName,
     homeDir,

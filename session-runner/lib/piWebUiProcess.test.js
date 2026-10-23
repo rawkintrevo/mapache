@@ -133,12 +133,17 @@ test("private managed child loads MCP config from its local Pi state root", asyn
   }
 });
 
-test("keeps Google renewal inputs in the runner and passes only its socket path", async () => {
+test("keeps GitHub and Google renewal inputs in the runner and passes only its socket path", async () => {
   const {root, config} = await fixture();
   const child = fakeChild(4444);
+  config.githubTokenSocketPath = "/var/lib/mapache/github-token.sock";
   config.googleMcpTokenSocketPath = "/var/lib/mapache/google-token.sock";
   const env = {
     PATH: "/usr/bin",
+    GITHUB_AUTOMATION_TOKEN_REFRESH_URL: "https://functions.example/githubAutomationToken",
+    GITHUB_AUTOMATION_TOKEN: "installation-token",
+    GITHUB_CLONE_TOKEN: "clone-token",
+    MAPACHE_GITHUB_TOKEN_SOCKET: "/unsafe/github.sock",
     GOOGLE_MCP_TOKEN_REFRESH_URL: "https://functions.example/googleMcpToken",
     GOOGLE_MCP_CONNECTION_ID: "connection-a",
     GOOGLE_MCP_TOKEN_SOCKET_PATH: "/unsafe/direct-path.sock",
@@ -156,6 +161,10 @@ test("keeps Google renewal inputs in the runner and passes only its socket path"
     });
     await managed.start();
     assert.equal(childEnvironment.SESSION_SHUTDOWN_TOKEN, undefined);
+    assert.equal(childEnvironment.GITHUB_AUTOMATION_TOKEN_REFRESH_URL, undefined);
+    assert.equal(childEnvironment.GITHUB_AUTOMATION_TOKEN, undefined);
+    assert.equal(childEnvironment.GITHUB_CLONE_TOKEN, undefined);
+    assert.equal(childEnvironment.MAPACHE_GITHUB_TOKEN_SOCKET, config.githubTokenSocketPath);
     assert.equal(childEnvironment.GOOGLE_MCP_TOKEN_REFRESH_URL, undefined);
     assert.equal(childEnvironment.GOOGLE_MCP_CONNECTION_ID, undefined);
     assert.equal(childEnvironment.GOOGLE_MCP_TOKEN_SOCKET_PATH, undefined);
