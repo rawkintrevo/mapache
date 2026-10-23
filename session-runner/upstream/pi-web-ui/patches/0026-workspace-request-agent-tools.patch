@@ -1,0 +1,11 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -6221,7 +6466,7 @@
+ 
+ 	/** 插件 AI 工具集合变化（注册/注销）时由 index.ts 触发：推送到所有客户端的全部会话。 */
+ 	applyPluginAgentTools(): void {
+-		for (const cs of this.clients.values()) cs.refreshPluginTools();
++		for (const cs of this.uniqueClients()) cs.refreshPluginTools();
+ 	}
+ 
+ 	/** Browser UI locale report (hello.locale / set_locale): persist per client

@@ -1,0 +1,35 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -5910,28 +6000,28 @@
+ 	/** Aggregate across every client session: messages queued in the SDK. */
+ 	pendingMessages(): number {
+ 		let n = 0;
+-		for (const cs of this.clients.values()) n += cs.pendingMessages();
++		for (const cs of this.uniqueClients()) n += cs.pendingMessages();
+ 		if (this.automation) n += this.automation.client.pendingMessages();
+ 		return n;
+ 	}
+ 
+ 	activeTools(): number {
+ 		let n = 0;
+-		for (const cs of this.clients.values()) n += cs.activeTools();
++		for (const cs of this.uniqueClients()) n += cs.activeTools();
+ 		if (this.automation) n += this.automation.client.activeTools();
+ 		return n;
+ 	}
+ 
+ 	completedTurns(): number {
+ 		let n = 0;
+-		for (const cs of this.clients.values()) n += cs.completedTurnCount();
++		for (const cs of this.uniqueClients()) n += cs.completedTurnCount();
+ 		return n;
+ 	}
+ 
+ 	/** 插件用：全客户端最近活跃对话的快照（at 最大者即“当前打开的对话”）。 */
+ 	readConversationForPlugins(): PluginConversationSnapshot | null {
+ 		let best: PluginConversationSnapshot | null = null;
+-		for (const cs of this.clients.values()) {
++		for (const cs of this.uniqueClients()) {
+ 			try {
+ 				const s = cs.readConversationForPlugins();
+ 				if (s && (!best || s.at > best.at)) best = s;

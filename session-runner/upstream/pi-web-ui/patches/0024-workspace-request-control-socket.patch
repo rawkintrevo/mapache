@@ -1,0 +1,68 @@
+--- a/server/control-socket.ts	2026-10-23 10:51:40.542451673 -0500
++++ b/server/control-socket.ts	2026-10-23 10:50:25.456933420 -0500
+@@ -14,6 +14,9 @@
+  *   → {"cmd":"startAutomation",...} ← private run admission/status
+  *   → {"cmd":"automationStatus",...} ← private run state
+  *   → {"cmd":"cancelAutomation",...} ← private run cancellation
++	 *   → {"cmd":"startWorkspaceRequest",...} ← durable normal-runtime chat
++	 *   → {"cmd":"workspaceRequestStatus",...} ← durable request state
++	 *   → {"cmd":"cancelWorkspaceRequest",...} ← durable request cancellation
+  *   → anything else           ← {"ok":false,"error":"..."}
+  *
+  * Idle connections are closed after a short timeout so a stuck CLI never
+@@ -41,6 +44,9 @@
+ 	startAutomation?: (input: { runId: string; prompt: string; modelRef?: string }) => Promise<ControlStatus>;
+ 	automationStatus?: (runId: string) => ControlStatus;
+ 	cancelAutomation?: (runId: string) => Promise<ControlStatus>;
++	startWorkspaceRequest?: (input: { runId: string; ticketId?: string; sourceWorkspaceId?: string; conversationTitle?: string; modelRef?: string; prompt: string }) => Promise<ControlStatus>;
++	workspaceRequestStatus?: (runId: string) => ControlStatus;
++	cancelWorkspaceRequest?: (runId: string) => Promise<ControlStatus>;
+ };
+ 
+ /** How long a control connection may sit idle before the server closes it. */
+@@ -55,8 +61,11 @@
+ }
+ 
+ export interface ControlCommand {
+-	cmd: "status" | "quiesce" | "unquiesce" | "startAutomation" | "automationStatus" | "cancelAutomation";
++	cmd: "status" | "quiesce" | "unquiesce" | "startAutomation" | "automationStatus" | "cancelAutomation" | "startWorkspaceRequest" | "workspaceRequestStatus" | "cancelWorkspaceRequest";
+ 	runId?: string;
++	ticketId?: string;
++	sourceWorkspaceId?: string;
++	conversationTitle?: string;
+ 	prompt?: string;
+ 	modelRef?: string;
+ }
+@@ -165,6 +174,32 @@
+ 									resp = await service.cancelAutomation(req.runId ?? "");
+ 								}
+ 								break;
++							case "startWorkspaceRequest":
++								if (!service.startWorkspaceRequest) {
++									resp = { ok: false, error: "workspace_request_unsupported" };
++								} else {
++									resp = await service.startWorkspaceRequest({
++										runId: req.runId ?? "",
++										ticketId: req.ticketId,
++										sourceWorkspaceId: req.sourceWorkspaceId,
++										conversationTitle: req.conversationTitle,
++										modelRef: req.modelRef,
++										prompt: req.prompt ?? "",
++									});
++								}
++								break;
++							case "workspaceRequestStatus":
++								resp = service.workspaceRequestStatus
++									? service.workspaceRequestStatus(req.runId ?? "")
++									: { ok: false, error: "workspace_request_unsupported" };
++								break;
++							case "cancelWorkspaceRequest":
++								if (!service.cancelWorkspaceRequest) {
++									resp = { ok: false, error: "workspace_request_unsupported" };
++								} else {
++									resp = await service.cancelWorkspaceRequest(req.runId ?? "");
++								}
++								break;
+ 							default:
+ 								resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
+ 								break;

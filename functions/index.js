@@ -59,6 +59,7 @@ const {
 const {createAutomationRunsService} = require("./automationRuns.service");
 const {createWorkspaceTicketsService} = require("./workspaceTickets.service");
 const {createWorkspaceRequestGrantsService} = require("./workspaceRequestGrants.service");
+const {createWorkspaceRequestRuntimeService} = require("./workspaceRequestRuntime.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
@@ -310,6 +311,15 @@ const {provisionQueuedSession} = createProvisioningWorker({
   releaseChromeWorkspaceSession,
   releaseWorkspaceSyncWriterLease,
 });
+const workspaceRequestRuntimeService = createWorkspaceRequestRuntimeService({
+  admin,
+  createSession,
+  db,
+  requestRunnerJson,
+  requireWorkspace,
+  restartSession,
+  sessionCollection,
+});
 const automationProvisioningService = createAutomationProvisioningService({
   admin,
   createSession,
@@ -323,6 +333,7 @@ const automationProvisioningService = createAutomationProvisioningService({
   requestRunnerJson,
   sessionCollection,
   storage,
+  workspaceRequestRuntime: workspaceRequestRuntimeService,
 });
 const {
   handleAutomationRunEvent,
@@ -339,6 +350,7 @@ const automationCleanupService = createAutomationCleanupService({
   releaseAutomationSlot: automationAdmissionService.releaseAutomationSlot,
   scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
   sessionCollection,
+  cancelWorkspaceRequest: workspaceRequestRuntimeService.cancel,
   wakeQueue: wakeAutomationQueue,
 });
 const {
@@ -356,6 +368,7 @@ const automationReconciliationService = createAutomationReconciliationService({
   },
   provisionAutomationRun: automationProvisioningService.provisionAutomationRun,
   processDueRetries: (...args) => automationRetryService.processDueRetries(...args),
+  reconcileWorkspaceRequest: workspaceRequestRuntimeService.reconcile,
   requestRunnerJson,
   sessionCollection,
 });
@@ -403,6 +416,7 @@ const automationDefinitionsService = createAutomationDefinitionsService({
 });
 const automationRunsService = createAutomationRunsService({
   admin,
+  cancelWorkspaceRequest: workspaceRequestRuntimeService.cancel,
   db,
   requireWorkspace,
   wakeAutomationQueue,

@@ -196,6 +196,12 @@ test("quiesces through the local control socket and reports activity without a b
                 ? {ok: true, runId: request.runId, conversationId: "c1", status: "running"}
                 : request.cmd === "cancelAutomation"
                   ? {ok: true, runId: request.runId, conversationId: "c1", status: "canceled"}
+            : request.cmd === "startWorkspaceRequest"
+              ? {ok: true, runId: request.runId, conversationId: "c-request", status: "running"}
+            : request.cmd === "workspaceRequestStatus"
+              ? {ok: true, runId: request.runId, conversationId: "c-request", status: "succeeded"}
+            : request.cmd === "cancelWorkspaceRequest"
+              ? {ok: true, runId: request.runId, conversationId: "c-request", status: "canceled"}
             : {ok: true, quiesced: false, connectedClients: 0, activeConversations: 1, activeTools: 1, pendingMessages: 0};
           setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")), 5);
         };
@@ -210,16 +216,29 @@ test("quiesces through the local control socket and reports activity without a b
     const started = await managed.startAutomation({runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"});
     const automation = await managed.automationStatus("run-1");
     const canceled = await managed.cancelAutomation("run-1");
-    assert.deepEqual(commands, ["quiesce", "status", "status", "startAutomation", "automationStatus", "cancelAutomation"]);
+    const requestStarted = await managed.startWorkspaceRequest({
+      runId: "run-2", ticketId: "ticket-2", sourceWorkspaceId: "source", conversationTitle: "Request",
+      prompt: "request it", modelRef: "openai/gpt-5",
+    });
+    const requestStatus = await managed.workspaceRequestStatus("run-2");
+    const requestCanceled = await managed.cancelWorkspaceRequest("run-2");
+    assert.deepEqual(commands, ["quiesce", "status", "status", "startAutomation", "automationStatus", "cancelAutomation", "status", "startWorkspaceRequest", "workspaceRequestStatus", "cancelWorkspaceRequest"]);
     assert.deepEqual(requests.slice(2), [
       {cmd: "status"},
       {cmd: "startAutomation", runId: "run-1", prompt: "run it", modelRef: "openai/gpt-5"},
       {cmd: "automationStatus", runId: "run-1"},
       {cmd: "cancelAutomation", runId: "run-1"},
+      {cmd: "status"},
+      {cmd: "startWorkspaceRequest", runId: "run-2", ticketId: "ticket-2", sourceWorkspaceId: "source", conversationTitle: "Request", prompt: "request it", modelRef: "openai/gpt-5"},
+      {cmd: "workspaceRequestStatus", runId: "run-2"},
+      {cmd: "cancelWorkspaceRequest", runId: "run-2"},
     ]);
     assert.deepEqual(started, {ok: true, runId: "run-1", conversationId: "c1", status: "running"});
     assert.deepEqual(automation, {ok: true, runId: "run-1", conversationId: "c1", status: "running"});
     assert.deepEqual(canceled, {ok: true, runId: "run-1", conversationId: "c1", status: "canceled"});
+    assert.deepEqual(requestStarted, {ok: true, runId: "run-2", conversationId: "c-request", status: "running"});
+    assert.deepEqual(requestStatus, {ok: true, runId: "run-2", conversationId: "c-request", status: "succeeded"});
+    assert.deepEqual(requestCanceled, {ok: true, runId: "run-2", conversationId: "c-request", status: "canceled"});
     assert.deepEqual(activity, {
       ok: true,
       quiesced: false,

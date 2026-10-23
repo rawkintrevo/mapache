@@ -1,0 +1,15 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -2113,7 +2185,11 @@
+ 
+ 	/** (Re)attach event plumbing to the ACTIVE conversation's session. */
+ 	private async bindSession(): Promise<void> {
+-		const conv = this.conv;
++		await this.bindConversation(this.conv);
++	}
++
++	/** Bind a conversation without making it the active browser conversation. */
++	private async bindConversation(conv: Conversation): Promise<void> {
+ 		conv.unsubscribe?.();
+ 		conv.session = conv.runtime.session;
+ 		await conv.session.bindExtensions({

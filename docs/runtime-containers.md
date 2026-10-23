@@ -196,12 +196,13 @@ owns event delivery. Changes to this reducer require the same upstream build
 and a rebuilt `pi-chrome` revision.
 
 The runner waits for the Pi UI's private Unix control socket to answer a status
-request before it submits an automation prompt. The Pi HTTP health route can
+request before it submits an automation or workspace-request prompt. The Pi HTTP health route can
 become ready before that socket is listening; treating HTTP health alone as
 automation readiness could reject the run immediately after starting the UI.
 The status probe is read-only, retries only within the bounded automation start
 window, and submits the prompt once after the socket responds. The runner allows
-five minutes (300 seconds) for the `startAutomation` acknowledgment, accommodating
+five minutes (300 seconds) for the `startAutomation` or `startWorkspaceRequest`
+acknowledgment, accommodating
 observed 120–180-second initialization. `lib/piWebUiDefaults.js` owns the shared
 default used by both `lib/config.js` and `lib/piWebUiProcess.js`; configuration
 must not override it with an older, shorter default. The environment variable
@@ -226,6 +227,13 @@ previous prompt. Initial submission allows 60 seconds for SDK conversation and
 model initialization, independently of the five-second shutdown/quiesce bound;
 the upstream control connection remains bounded at 75 seconds. Active automation is exempt from idle reaping only while its
 admitted run assignment remains valid.
+
+Workspace requests use the same authenticated control socket but remain in the
+normal target runtime. `startWorkspaceRequest` creates a listed persisted chat
+conversation, `workspaceRequestStatus` reads its reducer state, and
+`cancelWorkspaceRequest` interrupts only that conversation. The request client
+is reused when no browser is connected and adopted by the first browser attach;
+completion does not dispose the normal runtime or delete its conversation.
 
 The managed-only presentation patch removes the upstream name/logo, version
 controls, and repository link from the embedded header. It adds Chrome beside
@@ -308,6 +316,13 @@ by ordinary runner shutdown. The Functions cleanup worker deletes only the
 deterministic `mpauto-{runId-hash}` service after that request, confirms the
 service is absent, and only then releases the automation slot. A timeout or
 unclosed writer is retained as interrupted/partial persistence evidence.
+
+For a normal target runtime, workspace-request cancellation uses the same
+shutdown-token authentication but never deletes the session or releases an
+automation slot. The runner cancels only the request conversation, while the
+normal runtime remains available for the browser and other request
+conversations. Functions records the cancellation before the interrupt and
+reconciles an ambiguous response without replaying the prompt.
 
 ### Runner health endpoint
 

@@ -355,14 +355,20 @@ for automation labels, rechecks metadata before deletion, and never targets a
 main session service.
 
 An admitted automation runner resolves its assignment from the owner-bound run
-record only after its session boot has been admitted. The runner claims
-`executionStartedAt` exactly once before invoking the private pi-web-ui
+record only after its session boot has been admitted. Scheduled automation
+claims `executionStartedAt` exactly once before invoking the private pi-web-ui
 `startAutomation` control, publishes `executionHeartbeatAt` while polling, and
 writes only normalized outcomes (`succeeded`, `failed`, `canceled`, or
 `interrupted`). A claimed run that is not submitted before process loss is
-interrupted rather than replayed. The idle reaper uses the same run/session
-identity check and bypasses only active admitted automation runs; browser
-connections and `longRunning` do not keep automation alive.
+interrupted rather than replayed. A workspace request takes the separate
+`shared-runtime-v1` route: the Functions worker selects or creates the target
+`runtimeKind: main` session, claims `dispatchClaim`, and invokes the runner's
+authenticated `/workspace/requests` control. The runner creates one persisted
+listed conversation, returns its reducer status, and retains it after terminal
+completion. A dispatch ambiguity is recorded as interrupted rather than
+replayed. The idle reaper uses the same run/session identity check for scheduled
+automation; normal request activity is part of the target session and does not
+reserve an automation slot.
 
 ## Persistence and connections
 

@@ -16,6 +16,7 @@ const {
 const {automationSessionId} = require("./runtimePaths.helpers");
 const {cloudRunServiceLabels, waitForCloudRunServiceDeleted, waitForOperation} = require("./cloudRun.service");
 const {isTerminalAutomationStatus} = require("./automationState.helpers");
+const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
 
 const PAGE_SIZE = 50;
 const MAX_RUN_PAGES = 5;
@@ -48,6 +49,7 @@ function createAutomationReconciliationService(dependencies = {}) {
     processDueRetries: dependencies.processDueRetries,
     requestRunnerJson: dependencies.requestRunnerJson,
     sessionCollection: dependencies.sessionCollection,
+    reconcileWorkspaceRequest: dependencies.reconcileWorkspaceRequest,
   };
   if (typeof shared.cleanupAutomationRun !== "function") {
     throw new Error("Automation reconciliation requires a cleanupAutomationRun dependency.");
@@ -61,13 +63,14 @@ function createAutomationReconciliationService(dependencies = {}) {
 }
 
 async function reconcile(dependencies = {}) {
-  if (typeof dependencies.featureEnabled === "function" && !(await dependencies.featureEnabled())) {
+  const runs = await listActiveRuns(dependencies);
+  const automationsEnabled = typeof dependencies.featureEnabled !== "function" || await dependencies.featureEnabled();
+  const eligibleRuns = automationsEnabled ? runs : runs.filter(isSharedWorkspaceRequest);
+  if (!automationsEnabled && eligibleRuns.length === 0) {
     return {skipped: "disabled", runs: 0, services: 0};
   }
-
-  const runs = await listActiveRuns(dependencies);
   const result = {
-    checkedRuns: runs.length,
+    checkedRuns: eligibleRuns.length,
     healthy: 0,
     resumedProvisioning: 0,
     resumedCleanup: 0,
@@ -76,6 +79,7 @@ async function reconcile(dependencies = {}) {
     orphanServices: 0,
     orphanDeleted: 0,
     errors: 0,
+    shared: 0,
     retries: {checked: 0, enqueued: 0, deferred: 0, canceled: 0, errors: 0},
   };
   if (typeof dependencies.processDueRetries === "function") {
@@ -83,14 +87,16 @@ async function reconcile(dependencies = {}) {
   }
   const liveAutomationLabels = new Set();
 
-  for (const run of runs) {
-    const label = cloudRunServiceLabels({
-      automationRunId: run.runId,
-      ownerUid: run.ownerUid,
-      runtimeKind: "automation",
-      workspaceId: run.workspaceId,
-    })["mapache-automation-run"];
-    if (label && runNeedsRuntime(run)) liveAutomationLabels.add(label);
+  for (const run of eligibleRuns) {
+    if (!isSharedWorkspaceRequest(run)) {
+      const label = cloudRunServiceLabels({
+        automationRunId: run.runId,
+        ownerUid: run.ownerUid,
+        runtimeKind: "automation",
+        workspaceId: run.workspaceId,
+      })["mapache-automation-run"];
+      if (label && runNeedsRuntime(run)) liveAutomationLabels.add(label);
+    }
 
     try {
       const action = await reconcileRun(run, dependencies);
@@ -98,6 +104,7 @@ async function reconcile(dependencies = {}) {
       else if (action === "provisioning") result.resumedProvisioning += 1;
       else if (action === "cleanup") result.resumedCleanup += 1;
       else if (action === "interrupted") result.interrupted += 1;
+      else if (action === "shared") result.shared += 1;
       else if (action === "retained") result.retained += 1;
     } catch (error) {
       result.errors += 1;
@@ -117,6 +124,16 @@ async function reconcile(dependencies = {}) {
 
 async function reconcileRun(run, dependencies = {}) {
   const status = normalize(run.status);
+  if (isSharedWorkspaceRequest(run) && typeof dependencies.reconcileWorkspaceRequest === "function") {
+    if (isTerminalAutomationStatus(status) && normalize(run.cleanupState) !== "complete") {
+      await dependencies.cleanupAutomationRun(run.runId);
+      return "cleanup";
+    }
+    const result = await dependencies.reconcileWorkspaceRequest(run.runId);
+    if (result?.provisioning) return "provisioning";
+    if (result?.interrupted) return "interrupted";
+    return "shared";
+  }
   if (typeof dependencies.inspectOom === "function" &&
       (status !== "running" || heartbeatIsStale(run, {}, dependencies)) &&
       await dependencies.inspectOom(run.runId)) {

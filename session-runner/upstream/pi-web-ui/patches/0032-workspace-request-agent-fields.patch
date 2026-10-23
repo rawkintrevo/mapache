@@ -1,0 +1,13 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -5827,6 +5907,10 @@
+ 	private socketCount = 0;
+ 	private pending = new Map<string, Promise<ClientSession>>();
+ 	private stateStore: ClientStateStore;
++	private static readonly INTERNAL_REQUEST_CLIENT_ID = "__mapache_workspace_requests__";
++	/** Requests share the normal client runtime and remain in its conversation map. */
++	private workspaceRequests = new Map<string, WorkspaceRequestHandle>();
++	private internalRequestClient: ClientSession | null = null;
+ 	/** One private automation conversation per embedded runner. Keep the handle
+ 	 * after terminal completion so duplicate requests remain deterministic. */
+ 	private automation: AutomationHandle | null = null;

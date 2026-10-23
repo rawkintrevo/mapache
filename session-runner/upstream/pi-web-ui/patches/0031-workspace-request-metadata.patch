@@ -1,0 +1,13 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -5777,6 +5853,10 @@
+ 	disposePromise: Promise<void> | null;
+ }
+ 
++interface WorkspaceRequestHandle extends AutomationHandle {
++	workspaceRequest: true;
++}
++
+ function automationError(error: unknown): string {
+ 	const message = String((error as Error)?.message ?? error ?? "automation_failed")
+ 		.replace(/\s+/g, " ")

@@ -133,14 +133,18 @@ auth, tokens, connector state, locks, sockets, and cache databases.
 
 The marked Pi runtime also exposes local mode-0600 sockets inside that private
 root. The runner uses one for quiesce/activity and browserless conversation
-controls (`startAutomation`, `automationStatus`, and `cancelAutomation`), and
-main and automation runtimes expose a second runner-owned HTTP Unix socket to the
+controls (`startAutomation`, `automationStatus`, `cancelAutomation`,
+`startWorkspaceRequest`, `workspaceRequestStatus`, and
+`cancelWorkspaceRequest`). Workspace-request controls create visible chats in
+the normal main runtime; scheduled automation controls remain private and
+isolated. Main and automation runtimes expose a second runner-owned HTTP Unix socket to the
 image-owned `mapache-automations` MCP server. That MCP server exposes only the
 bounded current-workspace automation API; the runner keeps bearer-token minting
 and refresh outside the child process. Automation creates one fresh persistent
 conversation per run, keeps its reducer state private to the runner, rejects a
-second run, and uses the existing session abort path for cancellation. These
-controls are not Mapache Chat/Goals routes and are not forwarded through the
+second run, and uses the existing session abort path for cancellation. Workspace
+requests keep one persisted conversation per run in the target runtime and are
+safe to repeat by run ID. These controls are not Mapache Chat/Goals routes and are not forwarded through the
 public browser gateway.
 
 Checkpoint publication selects the workspace pointer for main runtimes and the

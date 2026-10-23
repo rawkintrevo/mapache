@@ -120,6 +120,19 @@ test("confirmed OOM goes through cleanup before provisioning can be resumed", as
   assert.deepEqual(calls, [{action: "cleanup", runId: "run-1"}]);
 });
 
+test("shared-runtime terminal requests finish cleanup without private runner reconciliation", async () => {
+  const {calls, service} = harness([makeRun({
+    status: "succeeded",
+    cleanupState: "pending",
+    executionRoute: "shared-runtime-v1",
+  })], {
+    reconcileWorkspaceRequest: async () => assert.fail("terminal shared request should go directly to cleanup"),
+  });
+  const result = await service.reconcile();
+  assert.equal(result.resumedCleanup, 1);
+  assert.deepEqual(calls, [{action: "cleanup", runId: "run-1"}]);
+});
+
 test("unreachable runners are interrupted only after the Cloud Run lookup succeeds", async () => {
   const {calls, db, service} = harness([makeRun()], {
     healthProbe: async () => { throw Object.assign(new Error("gone"), {code: "runner_unavailable"}); },

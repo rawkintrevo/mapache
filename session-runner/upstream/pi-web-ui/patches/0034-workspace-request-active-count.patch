@@ -1,0 +1,13 @@
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -5872,9 +5963,8 @@
+ 				}),
+ 			]);
+ 		}
+-		const clients = [...this.clients.values()];
++		const clients = this.uniqueClients();
+ 		await Promise.all(clients.map((client) => client.quiesce(Math.max(1, deadline - Date.now()))));
+-		if (this.automation) await this.automation.client.quiesce(Math.max(1, deadline - Date.now()));
+ 		const drained = () =>
+ 			this.pending.size === 0 &&
+ 			this.activeConversations() === 0 &&

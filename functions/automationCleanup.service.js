@@ -9,6 +9,7 @@ const {
 const {automationSessionId} = require("./runtimePaths.helpers");
 const {validateAutomationId} = require("./automationValidation.helpers");
 const {recordSinkDeliveryAttempt} = require("./workspaceRunDelivery.helpers");
+const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
 
 const TERMINAL_OUTCOMES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
 
@@ -23,6 +24,7 @@ function createAutomationCleanupService(dependencies = {}) {
     retryOomAfterDeletion: dependencies.retryOomAfterDeletion,
     sessionCollection: dependencies.sessionCollection,
     deliverRunSinks: dependencies.deliverRunSinks || deliverRunSinks,
+    cancelWorkspaceRequest: dependencies.cancelWorkspaceRequest,
     wakeQueue: dependencies.wakeQueue,
   };
   if (typeof shared.deleteSessionService !== "function") {
@@ -145,6 +147,9 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   if (!isTerminalAutomationStatus(run.status) && normalize(run.status) !== "stopping") {
     return {skipped: "run_not_stopping", runId: normalizedRunId};
   }
+  if (isSharedWorkspaceRequest(run)) {
+    return cleanupSharedWorkspaceRequest(run, runRef, normalizedRunId, dependencies);
+  }
   if (typeof dependencies.inspectOom === "function") {
     try {
       await dependencies.inspectOom(normalizedRunId);
@@ -215,6 +220,27 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
     await markCleanupError(runRef, normalizedRunId, {code: "automation_slot_release_failed"}, dependencies);
     return {runId: normalizedRunId, cleaned: false, error: "automation_slot_release_failed"};
   }
+}
+
+async function cleanupSharedWorkspaceRequest(initialRun, runRef, runId, dependencies = {}) {
+  let run = initialRun;
+  if (!isTerminalAutomationStatus(run.status)) {
+    if (typeof dependencies.cancelWorkspaceRequest !== "function") {
+      return markCleanupError(runRef, runId, {code: "shared_runtime_cancel_unavailable"}, dependencies);
+    }
+    await dependencies.cancelWorkspaceRequest(runId);
+    const latest = await runRef.get();
+    if (!latest.exists) return {runId, skipped: "run_missing"};
+    run = {runId, ...latest.data()};
+    if (!isTerminalAutomationStatus(run.status)) {
+      return {runId, cleaned: false, cancelRequested: true};
+    }
+  }
+
+  const finalized = await finalizeRun(runRef, runId, {}, dependencies);
+  if (!finalized) return {runId, skipped: "run_missing"};
+  await dependencies.deliverRunSinks(runRef, runId, dependencies);
+  return {runId, cleaned: true, released: false, sharedRuntime: true};
 }
 
 async function deliverRunSinks(runRef, runId, dependencies = {}) {

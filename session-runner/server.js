@@ -257,7 +257,7 @@ registerWorkspaceRoutes({
   workspaceSync,
 });
 registerQaFaultRoutes({app, faultHarness: qaFaultHarness, hasRunnerAccess});
-registerAgentRoutes({app, hasRunnerAccess, workspace});
+registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 
 wss.on("connection", (socket, request) => {
