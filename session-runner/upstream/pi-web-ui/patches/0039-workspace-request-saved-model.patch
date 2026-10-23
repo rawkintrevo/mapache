@@ -1,0 +1,31 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 761c406d..03832042 100644
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -1249,6 +1249,13 @@ export class ClientSession {
+ 			? a.name.localeCompare(b.name)
+ 			: a.providerId.localeCompare(b.providerId));
+ 	}
++
++	savedModelSelection(): { providerId: string; modelId: string } | null {
++		const saved = this.stateStore.getMostRecentlySelectedProjectSelection(managedWorkspaceRoot() ?? this.cwd)?.modelId;
++		const slash = String(saved ?? "").indexOf("/");
++		if (slash <= 0 || slash === String(saved ?? "").length - 1) return null;
++		return {providerId: String(saved).slice(0, slash), modelId: String(saved).slice(slash + 1)};
++	}
+ 	/** Session of the active conversation. */
+ 	get session(): AgentSession {
+ 		return this.conv.session;
+@@ -6913,10 +6920,10 @@ export class AgentService {
+ 		return handle ? this.workspaceRequestResponse(handle) : { ok: false, error: "workspace_request_not_found" };
+ 	}
+ 
+-	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[] }> {
++	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[]; savedModelSelection?: { providerId: string; modelId: string } | null }> {
+ 		try {
+ 			const client = await this.requestClient();
+-			return { ok: true, models: client.modelCatalog() };
++			return { ok: true, models: client.modelCatalog(), savedModelSelection: client.savedModelSelection() };
+ 		} catch {
+ 			return { ok: false, error: "workspace_request_model_discovery_unavailable" };
+ 		}

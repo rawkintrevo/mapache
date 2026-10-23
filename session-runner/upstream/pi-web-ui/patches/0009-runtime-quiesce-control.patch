@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 6706c39..b4cd939 100644
+index 2f3040be..29314b90 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -684,6 +684,24 @@ const TOOL_WATCHDOG_TIMEOUT_MS = (() => {
+@@ -967,6 +967,24 @@ const TOOL_WATCHDOG_TIMEOUT_MS = (() => {
  	return Number.isFinite(v) && v > 0 ? v : 20 * 60_000;
  })();
  
@@ -27,7 +27,7 @@ index 6706c39..b4cd939 100644
  /** Cap on simultaneously open NON-subagent conversations of ONE project (each keeps a full
   *  runtime alive; conversations of other projects keep their own lists).
   *  子代理不计入：子代理是 inMemory 后台任务，不参与此上限，既不占位也不被此上限拦截。 */
-@@ -957,7 +975,7 @@ export class ClientSession {
+@@ -1240,7 +1258,7 @@ export class ClientSession {
  		lastLines = "",
  	): void {
  		const conv = this.convs.get(conversationId);
@@ -36,7 +36,7 @@ index 6706c39..b4cd939 100644
  		if (!conv.runtime.session.isStreaming) return;
  		const seconds = Math.max(1, Math.round(idleMs / 1000));
  		void conv.runtime.session
-@@ -982,7 +1000,7 @@ export class ClientSession {
+@@ -1265,7 +1283,7 @@ export class ClientSession {
  		info: { terminalId: string; command: string; exitCode: number | null },
  	): void {
  		const conv = [...this.convs.values()].find((c) => c.terminals === terminals);
@@ -45,7 +45,7 @@ index 6706c39..b4cd939 100644
  		let tail = "";
  		try {
  			const end = terminals.endCursor(info.terminalId);
-@@ -1367,6 +1385,7 @@ export class ClientSession {
+@@ -1666,6 +1684,7 @@ export class ClientSession {
  	 */
  	private subagentHost: SubagentToolHost = {
  		spawnSubagent: (prompt, type, cwd, templateName, model, parentId) => {
@@ -53,7 +53,7 @@ index 6706c39..b4cd939 100644
  			// 模板：存在且启用时应用；传了名字但不可用 → 抛错让工具转给 AI。
  			const tpl = templateName ? this.subagentTemplates.get(templateName) : undefined;
  			if (templateName && (!tpl || !tpl.enabled)) {
-@@ -1386,6 +1405,7 @@ export class ClientSession {
+@@ -1685,6 +1704,7 @@ export class ClientSession {
  		getSubagent: (convId) => this.getSubagentSnapshot(convId),
  		listSubagents: () => this.listSubagentSnapshots(),
  		steerSubagent: async (convId, message) => {
@@ -61,7 +61,7 @@ index 6706c39..b4cd939 100644
  			const conv = this.convs.get(convId);
  			if (!conv?.session) return;
  			await conv.session.sendUserMessage(message, conv.session.isStreaming ? { deliverAs: "steer" } : undefined);
-@@ -1554,6 +1574,7 @@ export class ClientSession {
+@@ -1877,6 +1897,7 @@ export class ClientSession {
  			emit: (msg) => this.emit(msg),
  			flushSnapshot: () => this.flushSnapshot(),
  			isDisposed: () => this.disposed,
@@ -69,7 +69,7 @@ index 6706c39..b4cd939 100644
  			quiesceBlocked: () => this.quiesceBlocked(),
  			// issue #91：目标/审查文案按客户端 UI 语言出中英（英文默认）。
  			lang: () => this.getLang(),
-@@ -1562,6 +1583,7 @@ export class ClientSession {
+@@ -1885,6 +1906,7 @@ export class ClientSession {
  			activeConvId: () => this.activeId,
  			activeConv: () => this.conv,
  			getConv: (id) => this.convs.get(id),
@@ -77,7 +77,7 @@ index 6706c39..b4cd939 100644
  			cwd: () => this.cwd,
  			reviewSettings: () => this.settingsSvc.reviewPrefs,
  			gitDiff: (dir) => this.gitDiff(dir),
-@@ -3523,14 +3545,70 @@ export class ClientSession {
+@@ -3985,14 +4007,70 @@ export class ClientSession {
  		return n;
  	}
  
@@ -149,7 +149,7 @@ index 6706c39..b4cd939 100644
  	async prompt(
  		text: string,
  		attachments?: {
-@@ -3559,6 +3637,9 @@ export class ClientSession {
+@@ -4021,6 +4099,9 @@ export class ClientSession {
  		// different conversation.
  		const conv = this.conv;
  		try {
@@ -159,7 +159,7 @@ index 6706c39..b4cd939 100644
  			const s = this.session;
  			// Native slash commands (see NATIVE_COMMANDS) are executed here and
  			// never reach the SDK. Extension / skill / template commands fall
-@@ -3568,10 +3649,6 @@ export class ClientSession {
+@@ -4030,10 +4111,6 @@ export class ClientSession {
  				this.flushSnapshot();
  				return;
  			}
@@ -170,7 +170,7 @@ index 6706c39..b4cd939 100644
  			// 轨迹用：暂存本轮任务文本，下一轮 agent_start 消费（steer/内部续跑
  			// 不经此处，届时 task 缺省，插件回退为「继续执行」）。
  			conv.pendingTask = text.trim() ? truncRun(text.trim(), RUN_TASK_CAP) : undefined;
-@@ -5078,7 +5155,12 @@ export class ClientSession {
+@@ -5577,7 +5654,12 @@ export class ClientSession {
  			// is useless in the picker. Tombstoned entries (explicitly removed by
  			// the user) stay hidden even though session files still mention them.
  			const projects: ProjectSummary[] = [...map.entries()]
@@ -184,7 +184,7 @@ index 6706c39..b4cd939 100644
  				.map(([path, lastUsed]) => ({ path, lastUsed }))
  				.sort((a, b) => b.lastUsed - a.lastUsed)
  				.slice(0, 20);
-@@ -5519,6 +5601,20 @@ export class ClientSession {
+@@ -6020,6 +6102,20 @@ export class ClientSession {
  	}
  }
  
@@ -205,7 +205,7 @@ index 6706c39..b4cd939 100644
  export class AgentService {
  	/** index.ts 注入：SDK 工具执行事件的插件转发钩子，attach 时拷贝到每个新会话。 */
  	onToolEvent: ((ev: PluginToolEvent) => void) | undefined = undefined;
-@@ -5541,6 +5637,7 @@ export class AgentService {
+@@ -6042,6 +6138,7 @@ export class AgentService {
  	 *  `pi-web-ui server quiesce|unquiesce`. */
  	private quiesced = false;
  	private quiescedAt = 0;
@@ -213,7 +213,7 @@ index 6706c39..b4cd939 100644
  	/** Attached browser sockets (reported by index.ts on open/close) — the
  	 *  control socket reports real sockets, not cached client-session objects. */
  	private socketCount = 0;
-@@ -5565,10 +5662,42 @@ export class AgentService {
+@@ -6066,10 +6163,42 @@ export class AgentService {
  		return this.quiesced;
  	}
  
@@ -258,7 +258,7 @@ index 6706c39..b4cd939 100644
  	}
  
  	/** Leave quiesce: admit new work again. */
-@@ -5596,6 +5725,12 @@ export class AgentService {
+@@ -6097,6 +6226,12 @@ export class AgentService {
  		return n;
  	}
  
@@ -271,23 +271,23 @@ index 6706c39..b4cd939 100644
  	/** 插件用：全客户端最近活跃对话的快照（at 最大者即“当前打开的对话”）。 */
  	readConversationForPlugins(): PluginConversationSnapshot | null {
  		let best: PluginConversationSnapshot | null = null;
-@@ -5627,6 +5762,7 @@ export class AgentService {
+@@ -6148,6 +6283,7 @@ export class AgentService {
  		quiescedSince?: number;
  		connectedClients: number;
  		activeConversations: number;
 +		activeTools: number;
  		pendingMessages: number;
- 	} {
- 		return {
-@@ -5636,6 +5772,7 @@ export class AgentService {
+ 		/** 托管本实例的平台服务（null = 前台/dev/Docker）——CLI 的
+ 		 *  `server status` 据此显示启动方式，见 launch-origin.ts。 */
+@@ -6160,6 +6296,7 @@ export class AgentService {
  			...this.quiesceInfo(),
  			connectedClients: this.socketCount,
  			activeConversations: this.activeConversations(),
 +			activeTools: this.activeTools(),
  			pendingMessages: this.pendingMessages(),
+ 			service: toServiceInfo(launchOrigin()),
  		};
- 	}
-@@ -5661,7 +5798,8 @@ export class AgentService {
+@@ -6186,7 +6323,8 @@ export class AgentService {
  				const saved = this.stateStore.get(clientId);
  				if (saved.lastCwd && saved.lastCwd !== this.cwd && managedCwdAllowed(saved.lastCwd)) {
  					try {
@@ -298,15 +298,12 @@ index 6706c39..b4cd939 100644
  						// gone (unmounted drive / deleted) — fall back to the default
  					}
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index 2d548de..f41140e 100644
+index 7a2101e3..0ccf315b 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
-@@ -19,16 +19,28 @@
- import { createServer, createConnection, type Server, type Socket } from "node:net";
- import { chmodSync, existsSync, rmSync } from "node:fs";
- import { join } from "node:path";
--import type { AgentService } from "./agent-service.js";
--
+@@ -23,13 +23,27 @@ import type { AgentService } from "./agent-service.js";
+ import type { UiServiceInfo } from "./protocol.js";
+ 
  /** 控制 socket 只需服务状态与 quiesce 控制（pi/dsh 引擎都满足）。 */
 -type ControlService = Pick<AgentService, "serviceStatus" | "quiesce" | "unquiesce">;
 +type ControlService = {
@@ -335,15 +332,15 @@ index 2d548de..f41140e 100644
  
  /** Socket path (POSIX) or pipe name (Windows). */
  export function controlPath(dataDir: string, port: number): string {
-@@ -50,6 +62,7 @@ export interface ControlStatus {
+@@ -51,6 +65,7 @@ export interface ControlStatus {
  	quiescedSince?: number;
  	connectedClients?: number;
  	activeConversations?: number;
 +	activeTools?: number;
  	pendingMessages?: number;
- }
- 
-@@ -85,6 +98,7 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+ 	/** 托管本实例的平台服务（null = 前台/dev/Docker）——CLI 显示启动方式。 */
+ 	service?: UiServiceInfo | null;
+@@ -88,6 +103,7 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
  
  	function handleConnection(sock: Socket): void {
  		let buf = "";
@@ -351,7 +348,7 @@ index 2d548de..f41140e 100644
  		const timer = setTimeout(() => {
  			sock.destroy();
  		}, CONTROL_IDLE_TIMEOUT_MS);
-@@ -103,24 +117,35 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+@@ -106,24 +122,35 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
  					sock.write(JSON.stringify({ ok: false, error: "bad json" }) + "\n");
  					continue;
  				}
@@ -406,10 +403,10 @@ index 2d548de..f41140e 100644
  		});
  		sock.on("error", () => {
 diff --git a/server/dsh/dsh-agent-service.ts b/server/dsh/dsh-agent-service.ts
-index d61840b..bcedc5d 100644
+index 8bfe9884..5280c53c 100644
 --- a/server/dsh/dsh-agent-service.ts
 +++ b/server/dsh/dsh-agent-service.ts
-@@ -1284,6 +1284,16 @@ export class DshClientSession {
+@@ -1286,6 +1286,16 @@ export class DshClientSession {
  		return n;
  	}
  
@@ -426,7 +423,7 @@ index d61840b..bcedc5d 100644
  	pendingMessages(): number {
  		return 0;
  	}
-@@ -3728,9 +3738,10 @@ export class DshAgentService {
+@@ -3745,9 +3755,10 @@ export class DshAgentService {
  		return this.quiesced;
  	}
  
@@ -438,7 +435,7 @@ index d61840b..bcedc5d 100644
  	}
  
  	unquiesce(): void {
-@@ -3754,6 +3765,12 @@ export class DshAgentService {
+@@ -3771,6 +3782,12 @@ export class DshAgentService {
  		return n;
  	}
  
@@ -451,24 +448,24 @@ index d61840b..bcedc5d 100644
  	noteSocketOpen(): void {
  		this.socketCount += 1;
  	}
-@@ -3770,6 +3787,7 @@ export class DshAgentService {
+@@ -3787,6 +3804,7 @@ export class DshAgentService {
  		quiescedSince?: number;
  		connectedClients: number;
  		activeConversations: number;
 +		activeTools: number;
  		pendingMessages: number;
- 	} {
- 		return {
-@@ -3779,6 +3797,7 @@ export class DshAgentService {
+ 		/** 托管本实例的平台服务（null = 前台/dev/Docker）；语义同 pi 引擎。 */
+ 		service: UiServiceInfo | null;
+@@ -3798,6 +3816,7 @@ export class DshAgentService {
  			...this.quiesceInfo(),
  			connectedClients: this.socketCount,
  			activeConversations: this.activeConversations(),
 +			activeTools: this.activeTools(),
  			pendingMessages: this.pendingMessages(),
+ 			service: toServiceInfo(launchOrigin()),
  		};
- 	}
 diff --git a/server/goal-service.ts b/server/goal-service.ts
-index 355cc1e..85918a5 100644
+index 355cc1ec..85918a50 100644
 --- a/server/goal-service.ts
 +++ b/server/goal-service.ts
 @@ -28,6 +28,19 @@ import { bilingual, pick, type ServerLang } from "./i18n.js";
@@ -661,10 +658,10 @@ index 355cc1e..85918a5 100644
  
  		// The user may have switched chats or replaced/cleared the goal while the
 diff --git a/server/index.ts b/server/index.ts
-index ee3f24b..69d5525 100644
+index 76990ff0..ab375d08 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -243,8 +243,11 @@ function safeBuildDescriptor(): {
+@@ -253,8 +253,11 @@ function safeBuildDescriptor(): {
  	piMcpAdapterVersion: string;
  } | null {
  	try {
@@ -678,7 +675,7 @@ index ee3f24b..69d5525 100644
  		const descriptor = {
  			upstreamCommit: stringValue("upstreamCommit"),
  			packageVersion: stringValue("packageVersion"),
-@@ -258,7 +261,21 @@ function safeBuildDescriptor(): {
+@@ -268,7 +271,21 @@ function safeBuildDescriptor(): {
  }
  
  app.get("/api/health", (_req, res) => {
@@ -701,7 +698,7 @@ index ee3f24b..69d5525 100644
  });
  
  /**
-@@ -767,6 +784,8 @@ export interface DispatchSession {
+@@ -779,6 +796,8 @@ export interface DispatchSession {
  	cloneProvider(provider: string, reqId: number): Promise<void>;
  	getTerminalManager(conversationId?: string): TerminalManagerLike | undefined;
  	getTerminalCwd(conversationId?: string): string;
@@ -710,7 +707,7 @@ index ee3f24b..69d5525 100644
  	listCommands(): Promise<void>;
  	saveCommands(commands: CommandDef[]): Promise<void>;
  	setGoal(goal: string, opts?: { reviewModel?: string; maxRounds?: number; locked?: boolean }): Promise<void>;
-@@ -820,6 +839,7 @@ export interface DispatchSession {
+@@ -835,6 +854,7 @@ export interface DispatchSession {
  	deleteSubagentTemplate(name: string): Promise<void>;
  	emitNotice(level: "info" | "warning" | "error", text: string, textEn?: string): void;
  	activeConversations(): number;
@@ -718,7 +715,7 @@ index ee3f24b..69d5525 100644
  	pendingMessages(): number;
  }
  
-@@ -832,7 +852,7 @@ export interface EngineService {
+@@ -847,7 +867,7 @@ export interface EngineService {
  	noteSocketOpen(): void;
  	noteSocketClose(): void;
  	isQuiesced(): boolean;
@@ -727,19 +724,20 @@ index ee3f24b..69d5525 100644
  	unquiesce(): void;
  	quiesceInfo(): { quiesced: boolean; quiescedSince?: number };
  	serviceStatus(): {
-@@ -843,9 +863,11 @@ export interface EngineService {
+@@ -858,10 +878,12 @@ export interface EngineService {
  		quiescedSince?: number;
  		connectedClients: number;
  		activeConversations: number;
 +		activeTools: number;
  		pendingMessages: number;
+ 		service: UiServiceInfo | null;
  	};
  	activeConversations(): number;
 +	activeTools(): number;
  	pendingMessages(): number;
  	applyPluginAgentTools(): void;
  	applyPluginCommandCatalog(): void;
-@@ -1065,6 +1087,16 @@ wss.on("connection", (ws) => {
+@@ -1095,6 +1117,16 @@ wss.on("connection", (ws) => {
  			send({ type: "notice", level: "error", text: refusal });
  			return;
  		}
@@ -756,7 +754,7 @@ index ee3f24b..69d5525 100644
  		switch (msg.type) {
  			case "prompt":
  				void cs.prompt(msg.text, msg.attachments, msg.queue);
-@@ -1248,6 +1280,7 @@ wss.on("connection", (ws) => {
+@@ -1303,6 +1335,7 @@ wss.on("connection", (ws) => {
  				void cs.removeProviderKey(msg.provider, msg.keyName);
  				break;
  			case "terminal_create": {
@@ -764,7 +762,7 @@ index ee3f24b..69d5525 100644
  				const tm = cs.getTerminalManager(msg.conversationId);
  				if (tm)
  					tm.create(
-@@ -1262,18 +1295,22 @@ wss.on("connection", (ws) => {
+@@ -1317,18 +1350,22 @@ wss.on("connection", (ws) => {
  				break;
  			}
  			case "terminal_input":
@@ -787,7 +785,7 @@ index ee3f24b..69d5525 100644
  				cs.getTerminalManager(msg.conversationId)?.runCommand(
  					msg.terminalId,
  					msg.command,
-@@ -1572,6 +1609,12 @@ async function shutdown(): Promise<void> {
+@@ -1633,6 +1670,12 @@ async function shutdown(): Promise<void> {
  	console.log("\nshutting down…");
  	clearInterval(heartbeatTimer);
  	stopControl();
@@ -802,7 +800,7 @@ index ee3f24b..69d5525 100644
  	await service.disposeAll();
 diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
 new file mode 100644
-index 0000000..429d7f7
+index 00000000..429d7f79
 --- /dev/null
 +++ b/tests/unit/control-socket.test.ts
 @@ -0,0 +1,85 @@
@@ -892,7 +890,7 @@ index 0000000..429d7f7
 +	);
 +});
 diff --git a/tests/unit/goal-persistence.test.ts b/tests/unit/goal-persistence.test.ts
-index 05a9087..635a967 100644
+index 05a90876..635a967e 100644
 --- a/tests/unit/goal-persistence.test.ts
 +++ b/tests/unit/goal-persistence.test.ts
 @@ -53,14 +53,16 @@ function makeHarness(filePath: string, sessionId: string, clientId: string) {
@@ -938,7 +936,7 @@ index 05a9087..635a967 100644
  });
 diff --git a/tests/unit/quiesce.test.ts b/tests/unit/quiesce.test.ts
 new file mode 100644
-index 0000000..5fccccf
+index 00000000..5fccccf0
 --- /dev/null
 +++ b/tests/unit/quiesce.test.ts
 @@ -0,0 +1,94 @@

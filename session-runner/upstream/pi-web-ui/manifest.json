@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "upstream": {
     "repository": "https://github.com/xing-shuyin/pi-web-ui",
-    "commit": "46880b3772591beac91c0c1792bdc79a6fe3671f",
-    "packageVersion": "0.79.0",
-    "archiveUrl": "https://github.com/xing-shuyin/pi-web-ui/archive/46880b3772591beac91c0c1792bdc79a6fe3671f.tar.gz",
-    "archiveSha256": "9efbdaaf3d5567d3e25f7361bd76e10fd6896a2109d2e058a5488444051663ec",
+    "commit": "4470926eb0e7619e9d555f8d86061c562e23e605",
+    "packageVersion": "0.85.0",
+    "archiveUrl": "https://github.com/xing-shuyin/pi-web-ui/archive/4470926eb0e7619e9d555f8d86061c562e23e605.tar.gz",
+    "archiveSha256": "fb8b4c69d684a351c3446d0fff3fc02351cada380d0fa3fcc665c7b1f1f10382",
     "files": {
-      "package.json": "844c22855283708d30bda1b88aa5fb6302d84f73b0c6d9e7589df1cd3fa2dce6",
-      "package-lock.json": "c05ef6f0da2f31c2457c504d36a4925a4bf7db6136e27e2304e358d84cf62d31",
+      "package.json": "1da264661ce356be83b4e1c78295845cd8d6a4dd092d51b64600a7b5f042d5c0",
+      "package-lock.json": "fd2dc0078e2bed6589e37b1c173c491b913631254af312b19a6a2e3591388034",
       "LICENSE": "94eaeecd542b4eac55480f4043c5045ac7b70be4f9e1e0b3f6574b1a745a4e6c"
     }
   },
   "piSdk": {
     "package": "@earendil-works/pi-coding-agent",
-    "version": "0.84.4",
-    "integrity": "sha512-jmOlrqUmvhh/siNWFRXjYLJzhKFIHNsAQaysRwzQPQFnPAaV/vhqHsLH/MBsIISA1Rjj7WTUFR3nJrpXoLx39w=="
+    "version": "0.85.1",
+    "integrity": "sha512-FGRN+OHbWaefBPGaTggAdLjrIHW+s2PzLyglz/5dfLzb9of7uuXMXYC0fJIeZTw+shS32o2cuQ9jF7YSDuL/oQ=="
   },
   "piMcpAdapter": {
     "package": "pi-mcp-adapter",
@@ -73,6 +73,8 @@
     "patches/0026-workspace-request-agent-tools.patch",
     "patches/0027-workspace-request-client-catalog.patch",
     "patches/0024-workspace-request-control-socket.patch",
-    "patches/0025-workspace-request-control-test.patch"
+    "patches/0025-workspace-request-control-test.patch",
+    "patches/0038-workspace-request-model-catalog.patch",
+    "patches/0039-workspace-request-saved-model.patch"
   ]
 }

@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 2aae1ef6..c4f0427e 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -5836,6 +5920,13 @@
+@@ -6421,6 +6421,13 @@ export class AgentService {
  	 *  PluginManager.notifyCwd，让插件宿主的 host.cwd 实时跟随当前项目。 */
  	onClientCwdChanged: ((cwd: string) => void) | undefined = undefined;
  

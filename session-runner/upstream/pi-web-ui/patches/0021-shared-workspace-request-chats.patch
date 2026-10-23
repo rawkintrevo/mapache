@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 61ce4064..cd3eb79f 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -561,6 +561,8 @@
+@@ -844,6 +844,8 @@ export { workspacePath };
   */
  interface Conversation {
  	id: string;

@@ -12,6 +12,11 @@ const MODEL_SELECTION = z.object({
   modelId: z.string().min(1).max(256).optional(),
   providerId: z.string().min(1).max(256).optional(),
 }).strict();
+const WORKSPACE_MODEL = z.union([
+  z.object({providerId: z.string().min(1).max(256), modelId: z.string().min(1).max(512)}).strict(),
+  z.object({name: z.string().min(1).max(256), providerId: z.string().min(1).max(256).optional()}).strict(),
+  z.string().min(1).max(256),
+]);
 const RESOURCES = z.object({
   cpu: z.string().min(1).optional(),
   memory: z.string().min(1).optional(),
@@ -61,6 +66,7 @@ const OCCURRENCE = z.object({
 
 const TOOL_NAMES = Object.freeze([
   "workspace_request_targets",
+  "workspace_request_models",
   "workspace_request_ask",
   "workspace_request_submit",
   "workspace_request_get",
@@ -97,6 +103,13 @@ export function registerAutomationTools(server, client) {
     inputSchema: z.object({}).strict(),
   }, () => invoke(() => client.call("/api/agent/workspace-requests/targets")));
 
+  server.registerTool("workspace_request_models", {
+    description: "List the target workspace model catalog, including friendly names and whether the target currently has provider authentication. Call this after workspace_request_targets and before choosing a request model.",
+    inputSchema: z.object({targetWorkspaceId: AUTOMATION_ID}).strict(),
+  }, ({targetWorkspaceId}) => invoke(() => client.call(
+      `/api/agent/workspace-requests/models?${new URLSearchParams({targetWorkspaceId})}`,
+  )));
+
   server.registerTool("workspace_request_ask", {
     description: "Submit one request to a permitted workspace and wait for its final answer. Prefer this for user-facing information requests so the turn stays active until completion.",
     inputSchema: z.object({
@@ -105,7 +118,7 @@ export function registerAutomationTools(server, client) {
       request: z.string().min(1).max(32768),
       context: z.string().max(32768).optional(),
       desiredOutput: z.string().max(32768).optional(),
-      model: MODEL_SELECTION.nullable().optional(),
+      model: WORKSPACE_MODEL.nullable().optional(),
       resources: RESOURCES.nullable().optional(),
       idempotencyKey: z.string().min(1).max(200),
       timeoutSeconds: z.number().int().min(1).max(600).default(600),
@@ -131,7 +144,7 @@ export function registerAutomationTools(server, client) {
       request: z.string().min(1).max(32768),
       context: z.string().max(32768).optional(),
       desiredOutput: z.string().max(32768).optional(),
-      model: MODEL_SELECTION.nullable().optional(),
+      model: WORKSPACE_MODEL.nullable().optional(),
       resources: RESOURCES.nullable().optional(),
       idempotencyKey: z.string().max(200).optional(),
     }).strict(),
@@ -331,7 +344,7 @@ async function invoke(task) {
   } catch (error) {
     const body = error?.body && typeof error.body === "object" ? error.body : {};
     const details = {error: String(body.error || error?.code || "automation_agent_request_failed")};
-    for (const field of ["pendingRunId", "runId"]) {
+    for (const field of ["pendingRunId", "runId", "message", "action"]) {
       if (typeof body[field] === "string" && body[field]) details[field] = body[field];
     }
     return {

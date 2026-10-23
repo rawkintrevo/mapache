@@ -106,6 +106,9 @@ assertRoute("/api/workspaces/workspace-1/request-grants/workspace-2", {
 assertRoute("/api/agent/workspace-requests/targets", {
   name: "workspaceRequestsAgent", resource: "targets", action: "list",
 });
+assertRoute("/api/agent/workspace-requests/models", {
+  name: "workspaceRequestsAgent", resource: "models", action: "list",
+});
 assertRoute("/api/agent/workspace-requests/ticket-1/reply", {
   name: "workspaceRequestsAgent", resource: "request", action: "reply", ticketId: "ticket-1",
 });

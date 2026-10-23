@@ -30,6 +30,7 @@ test("workspace request routes require runner access and delegate control", asyn
     hasRunnerAccess: (req) => req.authorized === true,
     piWebUi: {
       startWorkspaceRequest: async (body) => { calls.push(["start", body]); return {ok: true}; },
+      workspaceRequestModels: async () => { calls.push(["models"]); return {ok: true, models: []}; },
       workspaceRequestStatus: async (runId) => { calls.push(["status", runId]); return {status: "running"}; },
       cancelWorkspaceRequest: async (runId) => { calls.push(["cancel", runId]); return {ok: true}; },
     },
@@ -38,6 +39,7 @@ test("workspace request routes require runner access and delegate control", asyn
 
   const start = app.routes.find((route) => route.method === "POST" && route.path === "/workspace/requests");
   const status = app.routes.find((route) => route.method === "GET" && route.path === "/workspace/requests/:runId");
+  const models = app.routes.find((route) => route.method === "GET" && route.path === "/workspace/models");
   const cancel = app.routes.find((route) => route.method === "POST" && route.path === "/workspace/requests/:runId/cancel");
 
   const unauthorized = createResponse();
@@ -49,15 +51,19 @@ test("workspace request routes require runner access and delegate control", asyn
   await start.handler({body: {runId: "run-1", prompt: "hello"}, authorized: true}, started);
   const current = createResponse();
   await status.handler({params: {runId: "run-1"}, authorized: true}, current);
+  const discovered = createResponse();
+  await models.handler({authorized: true}, discovered);
   const canceled = createResponse();
   await cancel.handler({params: {runId: "run-1"}, authorized: true}, canceled);
 
   assert.deepEqual(started.body, {ok: true});
   assert.deepEqual(current.body, {status: "running"});
+  assert.deepEqual(discovered.body, {ok: true, models: []});
   assert.deepEqual(canceled.body, {ok: true});
   assert.deepEqual(calls, [
     ["start", {runId: "run-1", prompt: "hello"}],
     ["status", "run-1"],
+    ["models"],
     ["cancel", "run-1"],
   ]);
 });

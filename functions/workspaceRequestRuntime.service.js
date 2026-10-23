@@ -5,6 +5,8 @@ const crypto = require("node:crypto");
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
+const {normalizeModelCatalog, normalizeModelSelection, savedModelSelection} = require("./workspaceRequestModels.service");
+const {classifyWorkspaceRequestFailure, errorDescriptor} = require("./workspaceRequestErrors.helpers");
 
 const SHARED_RUNTIME_EXECUTION_ROUTE = "shared-runtime-v1";
 const TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
@@ -30,9 +32,38 @@ function createWorkspaceRequestRuntimeService(dependencies = {}) {
   }
   return {
     cancel: (runId) => cancelWorkspaceRequest(runId, shared),
+    discoverModels: (ownerUid, workspaceId) => discoverWorkspaceRequestModels(ownerUid, workspaceId, shared),
     isSharedRequest: isSharedWorkspaceRequest,
     provision: (runId) => provisionWorkspaceRequest(runId, shared),
     reconcile: (runId) => reconcileWorkspaceRequest(runId, shared),
+  };
+}
+
+async function discoverWorkspaceRequestModels(ownerUid, workspaceId, dependencies = {}) {
+  const normalizedWorkspaceId = String(workspaceId || "").trim();
+  if (!normalizedWorkspaceId) throw httpError(400, "invalid_target_workspace_id");
+  const runtime = await ensureNormalRuntime({ownerUid, workspaceId: normalizedWorkspaceId}, dependencies);
+  if (!runtime.session || !isRunningSession(runtime.session)) {
+    throw httpError(503, "workspace_request_model_discovery_unavailable");
+  }
+  let response;
+  try {
+    response = await dependencies.requestRunnerJson(runtime.session, "/workspace/models", {
+      failureError: "workspace_request_model_discovery_failed",
+      unavailableError: "workspace_request_model_discovery_unavailable",
+      timeoutMs: 30_000,
+    });
+  } catch (error) {
+    throw httpError(Number(error?.status) >= 400 ? error.status : 503,
+        classifyWorkspaceRequestFailure(error, "workspace_request_model_discovery_unavailable"), error);
+  }
+  if (!response?.ok || !Array.isArray(response.models)) {
+    throw httpError(503, "workspace_request_model_discovery_unavailable");
+  }
+  return {
+    targetWorkspaceId: normalizedWorkspaceId,
+    savedModelSelection: normalizeModelSelection(response.savedModelSelection) || savedModelSelection(runtime.workspace),
+    models: normalizeModelCatalog(response.models),
   };
 }
 
@@ -85,7 +116,7 @@ async function provisionWorkspaceRequest(runId, dependencies = {}) {
     return {failed: true, runId, error: "shared_runtime_dispatch_rejected"};
   }
 
-  await markDispatched(runId, runtime.session, response, dependencies);
+  await markDispatched(runId, runtime.session, response, dependencies, run);
   return {dispatched: true, runId, sessionId: runtime.session.id, conversationId: response.conversationId};
 }
 
@@ -124,6 +155,9 @@ async function reconcileWorkspaceRequest(runId, dependencies = {}) {
       conversationId: request.conversationId || run.conversationId,
       finalResult: request.state?.finalResult || request.finalResult,
       finalAnswer: request.state?.finalAnswer || request.finalAnswer,
+      errorDetail: terminal.errorDetail,
+      errorAction: terminal.errorAction,
+      resolvedModel: request.modelRef || request.state?.modelRef || modelReference(run) || null,
     }, dependencies);
     return {completed: true, runId, status: terminal.status};
   }
@@ -160,7 +194,11 @@ async function cancelWorkspaceRequest(runId, dependencies = {}) {
       unavailableError: "shared_runtime_cancel_ambiguous",
     });
     const terminal = runnerTerminalStatus(response?.request || response);
-    if (terminal) await markOutcome(runId, terminal.status, terminal.errorCode, {}, dependencies);
+    if (terminal) await markOutcome(runId, terminal.status, terminal.errorCode, {
+      errorDetail: terminal.errorDetail,
+      errorAction: terminal.errorAction,
+      resolvedModel: response?.request?.modelRef || response?.modelRef || modelReference(run) || null,
+    }, dependencies);
     return {requested: true, runId};
   } catch {
     await markOutcome(runId, "interrupted", "shared_runtime_cancel_ambiguous", {}, dependencies);
@@ -248,7 +286,7 @@ async function claimDispatch(runId, session, dependencies = {}) {
   return {action};
 }
 
-async function markDispatched(runId, session, response, dependencies = {}) {
+async function markDispatched(runId, session, response, dependencies = {}, run = {}) {
   const now = serverTimestamp(dependencies.admin);
   await dependencies.db.collection("automationRuns").doc(runId).update({
     status: "running",
@@ -260,6 +298,8 @@ async function markDispatched(runId, session, response, dependencies = {}) {
     executionState: "submitted",
     requestRuntimeState: "running",
     sharedRuntimeGeneration: session.agentRuntimeGeneration || null,
+    requestedModel: modelReference(run) || null,
+    resolvedModelSelection: response.modelRef || modelReference(run) || null,
     startedAt: now,
     updatedAt: now,
   });
@@ -295,7 +335,13 @@ async function markOutcome(runId, status, errorCode, details = {}, dependencies 
       ...(details.conversationId ? {conversationId: details.conversationId} : {}),
       ...(details.finalResult ? {finalResult: details.finalResult} : {}),
       ...(details.finalAnswer ? {finalAnswer: String(details.finalAnswer).slice(0, 32768)} : {}),
-      ...(errorCode ? {executionErrorCode: errorCode, lastError: errorCode} : {}),
+      ...(errorCode ? {
+        executionErrorCode: errorCode,
+        executionErrorMessage: details.errorDetail || errorDescriptor(errorCode).message,
+        executionErrorAction: details.errorAction || errorDescriptor(errorCode).action,
+        lastError: errorCode,
+      } : {}),
+      ...(details.resolvedModel ? {resolvedModelSelection: details.resolvedModel} : {}),
     });
   });
 }
@@ -303,7 +349,13 @@ async function markOutcome(runId, status, errorCode, details = {}, dependencies 
 function runnerTerminalStatus(request = {}) {
   const status = normalize(request.status || request.state?.terminal);
   if (status === "succeeded") return {status, errorCode: null};
-  if (status === "failed" || status === "interaction_required") return {status: "failed", errorCode: request.error || "shared_runtime_request_failed"};
+  if (status === "failed" || status === "interaction_required") {
+    const detail = request.error || request.state?.finalError || request.state?.error || request.finalError;
+    const errorCode = status === "interaction_required" ? "workspace_request_interaction_required" :
+      classifyWorkspaceRequestFailure(detail, "shared_runtime_request_failed");
+    const descriptor = errorDescriptor(errorCode, detail);
+    return {status: "failed", errorCode, errorDetail: descriptor.message, errorAction: descriptor.action};
+  }
   if (status === "canceled") return {status, errorCode: "workspace_request_canceled"};
   return null;
 }
@@ -357,7 +409,9 @@ function normalize(value) {
 module.exports = {
   SHARED_RUNTIME_EXECUTION_ROUTE,
   createWorkspaceRequestRuntimeService,
+  discoverWorkspaceRequestModels,
   isSharedWorkspaceRequest,
   provisionWorkspaceRequest,
   reconcileWorkspaceRequest,
+  runnerTerminalStatus,
 };

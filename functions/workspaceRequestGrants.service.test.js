@@ -28,7 +28,7 @@ class Db {
   doc(path) { return new Ref(this, path, path.split("/").pop()); }
 }
 
-function setup() {
+function setup(overrides = {}) {
   const db = new Db();
   db.values.set("workspaces/source", {ownerUid: "owner", name: "Source"});
   db.values.set("workspaces/target", {ownerUid: "owner", name: "Customer Research"});
@@ -38,14 +38,16 @@ function setup() {
       const id = "ticket-1";
       db.values.set(`workspaceTickets/${id}`, {
         id, ownerUid: "owner", workspaceId, status: "queued", runId: "run-1",
-        request: {instructions: body.request}, createdAt: "now", updatedAt: "now",
+        request: {instructions: body.request, model: body.model || null}, createdAt: "now", updatedAt: "now",
       });
-      return {id, workspaceId, status: "queued", runId: "run-1", request: {instructions: body.request}, createdAt: "now", updatedAt: "now"};
+      return {id, workspaceId, status: "queued", runId: "run-1", request: {instructions: body.request, model: body.model || null}, createdAt: "now", updatedAt: "now"};
     },
     async cancelTicket() { return {}; },
   };
   const enqueueWorkspaceRun = async (input) => ({id: input.runId, status: "queued"});
-  return {db, service: createWorkspaceRequestGrantsService({db, admin, enqueueWorkspaceRun, ticketService})};
+  return {db, service: createWorkspaceRequestGrantsService({
+    db, admin, enqueueWorkspaceRun, ticketService, discoverWorkspaceModels: overrides.discoverWorkspaceModels,
+  })};
 }
 
 const claims = {ownerUid: "owner", workspaceId: "source", sessionId: "session-1"};
@@ -63,7 +65,7 @@ test("agent request uses grant and returns a caller-safe projection", async () =
   const result = await service.submitRequest(claims, {targetWorkspaceId: "target", request: "Summarize complaints"}, {idempotencyKey: "one"});
   assert.deepEqual(result, {
     id: "ticket-1", workspaceId: "target", sourceWorkspaceId: "source", status: "queued", runId: "run-1",
-    result: null, reply: null, errorCode: null, createdAt: "now", updatedAt: "now",
+    result: null, reply: null, model: null, errorCode: null, error: null, createdAt: "now", updatedAt: "now",
   });
   assert.equal((await service.getRequest(claims, "ticket-1")).request, undefined);
 });
@@ -98,4 +100,18 @@ test("revoked grant blocks new requests", async () => {
   await service.saveGrant("owner", "source", "target", {permissions: ["submit", "read"]});
   await service.revokeGrant("owner", "source", "target");
   await assert.rejects(service.submitRequest(claims, {targetWorkspaceId: "target", request: "No"}), /request_permission_denied/);
+});
+
+test("resolves a friendly model name in the target scope before ticket creation", async () => {
+  const {service, db} = setup({discoverWorkspaceModels: async () => ({
+    savedModelSelection: {providerId: "openai", modelId: "gpt-5"},
+    models: [{providerId: "openai", modelId: "astra-6", name: "Astra 6", available: true}],
+  })});
+  await service.saveGrant("owner", "source", "target", {permissions: ["discover", "submit", "read"]});
+  const result = await service.submitRequest(claims, {
+    targetWorkspaceId: "target", request: "Use the target model", model: "Astra 6",
+  }, {idempotencyKey: "friendly-model"});
+  assert.deepEqual(result.model, {providerId: "openai", modelId: "astra-6"});
+  assert.deepEqual(db.values.get("workspaceTickets/ticket-1").request.model,
+      {providerId: "openai", modelId: "astra-6"});
 });

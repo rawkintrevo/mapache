@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index b576effc..312a6b9f 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -6144,9 +6234,164 @@
+@@ -6759,9 +6759,164 @@ export class AgentService {
  		return this.automationResponse(handle);
  	}
  

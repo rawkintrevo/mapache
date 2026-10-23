@@ -1,8 +1,8 @@
 {
   "source": {
     "package": "@earendil-works/pi-ai",
-    "version": "0.84.4",
-    "integrity": "sha512-AClAZxf5+c4RRu44NJPS6wyQy+Nmq+Mzyyrdvm4ZVMNuixelO02RZX4G4Aq1F145Yzp43wnM5S+hLlSI7ypfVw==",
+    "version": "0.85.1",
+    "integrity": "sha512-+VgVIJDkDO2efYJKEEqvPTH4zmnIaXdAppGbO+vKFA9qy5PdhFiAenuFAkU+oiCSfOC4dMHDyrjdQeL4ZoC5CQ==",
     "modelOverrides": [
       "openai-codex/gpt-6-astra"
     ]

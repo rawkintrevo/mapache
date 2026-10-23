@@ -9,6 +9,7 @@ const TRIGGER_KINDS = Object.freeze([
   "cron", "manual", "http_ticket", "restart", "retry", "catch_up",
 ]);
 const SECRET_KEY_PATTERN = /(secret|token|password|credential|api[_-]?key|private[_-]?key)/i;
+const {normalizeModelSelection} = require("./workspaceRequestModels.service");
 
 function contractError(code, details = {}) {
   const error = new Error(code);
@@ -29,7 +30,7 @@ function normalizeWorkspaceRunRequest(input = {}) {
   const instructions = boundedString(input.instructions, "instructions", MAX_INSTRUCTIONS_LENGTH, {trim: false});
   const inputData = input.input === undefined ? null : normalizePublicValue(input.input, "input");
   const contextSnapshotRefs = normalizeContextRefs(input.contextSnapshotRefs);
-  const model = input.model === undefined || input.model === null ? null : normalizePublicValue(input.model, "model");
+  const model = input.model === undefined || input.model === null ? null : normalizeModelSelection(input.model);
   const resources = input.resources === undefined || input.resources === null ? null : normalizePublicValue(input.resources, "resources");
   const sinks = normalizeSinks(input.sinks);
   const provenance = normalizeProvenance(input.provenance, source, triggerReference);

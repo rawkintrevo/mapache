@@ -14,6 +14,7 @@ const {
 } = require("./automationValidation.helpers");
 const {contextSnapshotRefsForWorkspace, fromAutomationRun, normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
+const {savedModelSelection} = require("./workspaceRequestModels.service");
 const {
   SHARED_RUNTIME_EXECUTION_ROUTE,
   isSharedWorkspaceRequest,
@@ -243,8 +244,10 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
     const workspace = workspaceSnap.data() || {};
     if (workspace.ownerUid !== actorUid) throw httpError(403, "workspace_forbidden");
     const resources = normalizeSessionResources(request.resources || workspace.resources || {});
+    const resolvedModelSelection = request.model || savedModelSelection(workspace);
     const admittedRequest = normalizeWorkspaceRunRequest({
       ...request,
+      model: resolvedModelSelection,
       resources,
       contextSnapshotRefs: [...(request.contextSnapshotRefs || []), ...contextSnapshotRefsForWorkspace(workspace)],
     });
@@ -259,7 +262,7 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
       automationId: `ticket-${ticketId}`,
       ownerUid: actorUid,
       runId,
-      snapshot: {...snapshot, resources},
+      snapshot: {...snapshot, modelSelection: resolvedModelSelection, resources},
       status: "queued",
       trigger: input.trigger || "http_ticket",
       rootRunId: input.rootRunId || runId,

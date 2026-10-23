@@ -33,6 +33,9 @@ async function handleRequest(request = {}, route = {}, dependencies = {}) {
     case "targets:list":
       requireMethod(request, "GET");
       return {body: {targets: await requests.discoverTargets(claims)}};
+    case "models:list":
+      requireMethod(request, "GET");
+      return {body: {models: await requests.discoverModels(claims, query.targetWorkspaceId)}};
     case "requests:create":
       requireMethod(request, "POST");
       return {status: 201, body: {request: await requests.submitRequest(claims, body, {

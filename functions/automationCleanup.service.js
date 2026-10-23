@@ -10,6 +10,7 @@ const {automationSessionId} = require("./runtimePaths.helpers");
 const {validateAutomationId} = require("./automationValidation.helpers");
 const {recordSinkDeliveryAttempt} = require("./workspaceRunDelivery.helpers");
 const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
+const {errorDescriptor} = require("./workspaceRequestErrors.helpers");
 
 const TERMINAL_OUTCOMES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
 
@@ -269,15 +270,19 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
           // never overwrite the new attempt's status or result.
           if (ticketSnap.data().runId && ticketSnap.data().runId !== runId) return;
           if (ticketSnap.data().status === "canceled" && run.status !== "canceled") return;
+          const failureCode = ticketFailureCode(run);
+          const failure = failureCode ? errorDescriptor(failureCode, run.executionErrorMessage) : null;
           transaction.update(ticketRef, {
             status: run.status,
-            errorCode: ticketFailureCode(run),
+            errorCode: failureCode,
+            error: failure,
             result: {
               runId,
               finalResult: run.finalResult || null,
               answer: run.status === "succeeded" && run.finalResult === "success" ? callerSafeFinalAnswer(run.finalAnswer) : null,
               artifactPointers: run.artifactPointers || {},
               workspaceOutput: run.workspaceOutput || null,
+              error: failure,
             },
             resultPublishedAt: serverTimestamp(dependencies.admin || defaultAdmin),
             updatedAt: serverTimestamp(dependencies.admin || defaultAdmin),

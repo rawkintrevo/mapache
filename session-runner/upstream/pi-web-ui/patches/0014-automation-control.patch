@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 27951e5..4ba595b 100644
+index 2b5a19d0..e1c7a258 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -72,6 +72,12 @@ import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
+@@ -74,6 +74,12 @@ import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
  import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
  import { isManaged, managedMcpAdapterPath } from "./managed.js";
  import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
@@ -15,7 +15,7 @@ index 27951e5..4ba595b 100644
  
  import {
  	applyHeadTail,
-@@ -908,6 +914,9 @@ export class ClientSession {
+@@ -1191,6 +1197,9 @@ export class ClientSession {
  	/** index.ts 注入：把运行轨迹事件转发给插件（PluginManager.emitRunEvent，
  	 *  轨迹视图插件靠它聚合时间线）。未设置时不做任何事。 */
  	onRunEvent: ((ev: PluginRunEvent) => void) | undefined = undefined;
@@ -25,7 +25,7 @@ index 27951e5..4ba595b 100644
  	/** index.ts 注入：当前打开对话变了（切历史会话/切 running 对话/新对话）时
  	 *  通知插件（PluginManager.emitConversationChanged）——轨迹视图靠它重拉。 */
  	onConversationChanged: (() => void) | undefined = undefined;
-@@ -937,6 +946,10 @@ export class ClientSession {
+@@ -1220,6 +1229,10 @@ export class ClientSession {
  		return this.conv.session;
  	}
  
@@ -36,7 +36,7 @@ index 27951e5..4ba595b 100644
  	/** PTYs are owned by individual conversations; this getter targets the active one
  	 * for compatibility with the existing terminal-panel dispatch path. */
  	get terminals(): TerminalManager {
-@@ -1643,6 +1656,48 @@ export class ClientSession {
+@@ -1966,6 +1979,48 @@ export class ClientSession {
  		return cs;
  	}
  
@@ -85,7 +85,7 @@ index 27951e5..4ba595b 100644
  	/**
  	 * Factory for cwd-bound runtimes. All conversations share ONE ModelRuntime
  	 * (the model choice is client-wide), so later conversations reuse the
-@@ -2153,6 +2208,11 @@ export class ClientSession {
+@@ -2485,6 +2540,11 @@ export class ClientSession {
  		// Any SDK event proves the run is alive — feeds the stall watchdog below.
  		conv.lastSdkEventAt = Date.now();
  		conv.stallNoticed = false;
@@ -97,7 +97,7 @@ index 27951e5..4ba595b 100644
  		switch (event.type) {
  			case "bash_execution_update": {
  				if (event.id) {
-@@ -5623,6 +5683,35 @@ export interface QuiesceResult {
+@@ -6124,6 +6184,46 @@ export interface QuiesceResult {
  	pendingMessages: number;
  }
  
@@ -144,7 +144,7 @@ index 27951e5..4ba595b 100644
  export class AgentService {
  	/** index.ts 注入：SDK 工具执行事件的插件转发钩子，attach 时拷贝到每个新会话。 */
  	onToolEvent: ((ev: PluginToolEvent) => void) | undefined = undefined;
-@@ -5651,6 +5740,9 @@ export class AgentService {
+@@ -6152,6 +6252,9 @@ export class AgentService {
  	private socketCount = 0;
  	private pending = new Map<string, Promise<ClientSession>>();
  	private stateStore: ClientStateStore;
@@ -154,7 +154,7 @@ index 27951e5..4ba595b 100644
  	/** Set by index.ts: called when /pi-web-ui:quit is invoked. */
  	onQuit: (() => boolean) | undefined = undefined;
  	/** 任意客户端成功切换工作区后触发（新绝对路径）。index.ts 接到
-@@ -5695,6 +5787,7 @@ export class AgentService {
+@@ -6196,6 +6299,7 @@ export class AgentService {
  		}
  		const clients = [...this.clients.values()];
  		await Promise.all(clients.map((client) => client.quiesce(Math.max(1, deadline - Date.now()))));
@@ -162,7 +162,7 @@ index 27951e5..4ba595b 100644
  		const drained = () =>
  			this.pending.size === 0 &&
  			this.activeConversations() === 0 &&
-@@ -5723,6 +5816,7 @@ export class AgentService {
+@@ -6224,6 +6328,7 @@ export class AgentService {
  	activeConversations(): number {
  		let n = 0;
  		for (const cs of this.clients.values()) n += cs.activeConversations();
@@ -170,7 +170,7 @@ index 27951e5..4ba595b 100644
  		return n;
  	}
  
-@@ -5730,12 +5824,14 @@ export class AgentService {
+@@ -6231,12 +6336,14 @@ export class AgentService {
  	pendingMessages(): number {
  		let n = 0;
  		for (const cs of this.clients.values()) n += cs.pendingMessages();
@@ -185,7 +185,7 @@ index 27951e5..4ba595b 100644
  		return n;
  	}
  
-@@ -5793,6 +5889,173 @@ export class AgentService {
+@@ -6318,6 +6425,174 @@ export class AgentService {
  		};
  	}
  
@@ -360,7 +360,7 @@ index 27951e5..4ba595b 100644
  	/** Get or create the session for a client, racing attach calls safely. */
  	async attach(clientId: string, send: (msg: ServerMessage) => void): Promise<ClientSession> {
  		let cs = this.clients.get(clientId);
-@@ -5925,5 +6188,8 @@ export class AgentService {
+@@ -6450,5 +6725,8 @@ export class AgentService {
  		const all = [...this.clients.values()];
  		this.clients.clear();
  		await Promise.all(all.map((cs) => cs.dispose()));
@@ -370,7 +370,7 @@ index 27951e5..4ba595b 100644
  	}
  }
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index 4cd3d86..c4f13f9 100644
+index 868fab15..5d38169a 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
 @@ -11,6 +11,9 @@
@@ -383,7 +383,7 @@ index 4cd3d86..c4f13f9 100644
   *   → anything else           ← {"ok":false,"error":"..."}
   *
   * Idle connections are closed after a short timeout so a stuck CLI never
-@@ -35,6 +38,9 @@ type ControlService = {
+@@ -38,6 +41,9 @@ type ControlService = {
  	};
  	quiesce: () => Promise<{ ok: boolean; error?: string }>;
  	unquiesce: () => void;
@@ -393,7 +393,7 @@ index 4cd3d86..c4f13f9 100644
  };
  
  /** How long a control connection may sit idle before the server closes it. */
-@@ -49,10 +55,14 @@ export function controlPath(dataDir: string, port: number): string {
+@@ -52,10 +58,14 @@ export function controlPath(dataDir: string, port: number): string {
  }
  
  export interface ControlCommand {
@@ -409,7 +409,7 @@ index 4cd3d86..c4f13f9 100644
  	ok: boolean;
  	error?: string;
  	/** serviceStatus fields, present on "status". */
-@@ -136,6 +146,25 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+@@ -141,6 +151,25 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
  								service.unquiesce();
  								resp = { ok: true, ...service.serviceStatus() };
  								break;
@@ -435,7 +435,7 @@ index 4cd3d86..c4f13f9 100644
  							default:
  								resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
  								break;
-@@ -190,6 +219,7 @@ export function sendControlCommand(
+@@ -195,6 +224,7 @@ export function sendControlCommand(
  	dataDir: string,
  	port: number,
  	cmd: ControlCommand["cmd"],
@@ -443,7 +443,7 @@ index 4cd3d86..c4f13f9 100644
  ): Promise<ControlStatus | null> {
  	const path = controlPath(dataDir, port);
  	return new Promise((resolve) => {
-@@ -205,7 +235,7 @@ export function sendControlCommand(
+@@ -210,7 +240,7 @@ export function sendControlCommand(
  		const timer = setTimeout(() => finish(null), CONTROL_CLIENT_TIMEOUT_MS);
  		let buf = "";
  		sock.on("connect", () => {
@@ -453,7 +453,7 @@ index 4cd3d86..c4f13f9 100644
  		sock.on("data", (chunk) => {
  			buf += chunk.toString("utf8");
 diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
-index 429d7f7..d9b86bd 100644
+index 429d7f79..d9b86bd9 100644
 --- a/tests/unit/control-socket.test.ts
 +++ b/tests/unit/control-socket.test.ts
 @@ -82,4 +82,54 @@ describe("local control socket", () => {

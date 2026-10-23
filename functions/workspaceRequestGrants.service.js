@@ -3,6 +3,8 @@
 const crypto = require("node:crypto");
 const {db: defaultDb, admin: defaultAdmin} = require("./backendContext");
 const {httpError, serialize} = require("./backendUtils.helpers");
+const {normalizeModelCatalog, resolveModelRequest} = require("./workspaceRequestModels.service");
+const {errorDescriptor} = require("./workspaceRequestErrors.helpers");
 
 const PERMISSIONS = Object.freeze(["discover", "submit", "read", "reply", "cancel"]);
 const PERMISSION_SET = new Set(PERMISSIONS);
@@ -14,6 +16,7 @@ function createWorkspaceRequestGrantsService(dependencies = {}) {
     admin: dependencies.admin || defaultAdmin,
     ticketService: dependencies.ticketService,
     enqueueWorkspaceRun: dependencies.enqueueWorkspaceRun,
+    discoverWorkspaceModels: dependencies.discoverWorkspaceModels,
   };
   return {
     listGrants: (uid, sourceWorkspaceId) => listGrants(uid, sourceWorkspaceId, shared),
@@ -21,10 +24,25 @@ function createWorkspaceRequestGrantsService(dependencies = {}) {
     saveGrant: (uid, sourceWorkspaceId, targetWorkspaceId, body) => saveGrant(uid, sourceWorkspaceId, targetWorkspaceId, body, shared),
     revokeGrant: (uid, sourceWorkspaceId, targetWorkspaceId) => revokeGrant(uid, sourceWorkspaceId, targetWorkspaceId, shared),
     discoverTargets: (claims) => discoverTargets(claims, shared),
+    discoverModels: (claims, targetWorkspaceId) => discoverModels(claims, targetWorkspaceId, shared),
     submitRequest: (claims, body, options) => submitRequest(claims, body, options, shared),
     getRequest: (claims, ticketId) => getRequest(claims, ticketId, shared),
     replyRequest: (claims, ticketId, body) => replyRequest(claims, ticketId, body, shared),
     cancelRequest: (claims, ticketId) => cancelRequest(claims, ticketId, shared),
+  };
+}
+
+async function discoverModels(claims, targetWorkspaceId, dependencies) {
+  const targetId = cleanId(targetWorkspaceId, "target_workspace_id");
+  await requirePermission(claims, targetId, "discover", dependencies);
+  if (typeof dependencies.discoverWorkspaceModels !== "function") {
+    throw httpError(503, "workspace_request_model_discovery_unavailable");
+  }
+  const result = await dependencies.discoverWorkspaceModels(claims.ownerUid, targetId);
+  return {
+    targetWorkspaceId: targetId,
+    savedModelSelection: result.savedModelSelection || null,
+    models: normalizeModelCatalog(result.models),
   };
 }
 
@@ -105,9 +123,21 @@ async function submitRequest(claims, body = {}, options = {}, dependencies) {
   if (!dependencies.ticketService?.createTicket) throw httpError(503, "workspace_request_unavailable");
   const source = cleanId(claims.workspaceId, "source_workspace_id");
   const key = String(options.idempotencyKey || body.idempotencyKey || "").trim();
+  let model = body.model;
+  if (typeof dependencies.discoverWorkspaceModels === "function") {
+    const catalog = await discoverModels(claims, targetId, dependencies);
+    let resolution;
+    try {
+      resolution = resolveModelRequest(body.model, catalog.models, {modelSelection: catalog.savedModelSelection});
+    } catch (error) {
+      error.requestError = errorDescriptor(error.publicMessage || error.code);
+      throw error;
+    }
+    model = resolution.selection;
+  }
   const ticket = await dependencies.ticketService.createTicket(
       {uid: claims.ownerUid, type: "agent", sessionId: claims.sessionId}, targetId,
-      {request: body.request || body.instructions, context: body.context, desiredOutput: body.desiredOutput, model: body.model, resources: body.resources},
+      {request: body.request || body.instructions, context: body.context, desiredOutput: body.desiredOutput, model, resources: body.resources},
       {
         idempotencyKey: key ? `${source}:${key}` : undefined,
         source: {type: "workspace_agent", id: source},
@@ -151,6 +181,7 @@ async function replyRequest(claims, ticketId, body, dependencies) {
     reply: {message: message.slice(0, 32768), at: dependencies.admin.firestore.FieldValue.serverTimestamp()},
     status: run.status,
     errorCode: null,
+    error: null,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
   });
   return callerSafeTicket(await readTicket(dependencies.db, ticket.id));
@@ -200,7 +231,9 @@ function callerSafeTicket(ticket) {
     runId: ticket.runId || null,
     result: ticket.result || null,
     reply: ticket.reply || null,
+    model: ticket.request?.model || null,
     errorCode: ticket.errorCode || null,
+    error: ticket.error || (ticket.errorCode ? errorDescriptor(ticket.errorCode, ticket.executionErrorMessage) : null),
     createdAt: ticket.createdAt || null,
     updatedAt: ticket.updatedAt || null,
   };

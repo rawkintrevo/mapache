@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index a428148e..daf206d3 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -5777,6 +5853,10 @@
+@@ -6354,6 +6354,10 @@ interface AutomationHandle {
  	disposePromise: Promise<void> | null;
  }
  

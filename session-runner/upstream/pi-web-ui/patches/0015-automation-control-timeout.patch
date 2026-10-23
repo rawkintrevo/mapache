@@ -1,4 +1,5 @@
 diff --git a/server/control-socket.ts b/server/control-socket.ts
+index 5d38169a..6bdb86fc 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
 @@ -47,7 +47,7 @@ type ControlService = {

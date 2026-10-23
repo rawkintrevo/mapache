@@ -1,21 +1,5 @@
-diff --git a/web/vite.config.ts b/web/vite.config.ts
---- a/web/vite.config.ts
-+++ b/web/vite.config.ts
-@@ -4,6 +4,7 @@ import { join } from "node:path";
- 
- const __dirname = dirname(fileURLToPath(import.meta.url));
-+const webBasePath = process.env.PI_WEB_BASE_PATH?.trim() || "/";
- 
- // Dev: Vite serves the web UI on :5173 and proxies the WebSocket + any API
-@@ -12,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
- export default defineConfig({
- 	root: __dirname,
- 	plugins: [react()],
-+	base: webBasePath,
- 	build: {
- 		outDir: join(__dirname, "dist"),
- 		emptyOutDir: true,
 diff --git a/web/index.html b/web/index.html
+index 773f96e4..df7e81f0 100644
 --- a/web/index.html
 +++ b/web/index.html
 @@ -4,7 +4,7 @@
@@ -28,9 +12,10 @@ diff --git a/web/index.html b/web/index.html
  		<link rel="manifest" href="./manifest.webmanifest" />
  		<meta name="theme-color" content="#0f172a" />
 diff --git a/web/src/main.tsx b/web/src/main.tsx
+index 70dd03b1..f883c2b3 100644
 --- a/web/src/main.tsx
 +++ b/web/src/main.tsx
-@@ -27,17 +27,31 @@ createRoot(document.getElementById("root")!).render(
+@@ -27,16 +27,24 @@ createRoot(document.getElementById("root")!).render(
  	</StrictMode>,
  );
  
@@ -48,7 +33,6 @@ diff --git a/web/src/main.tsx b/web/src/main.tsx
 -		const base = appBase();
 -		navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((err) => {
 -			console.warn("Service worker registration failed:", err);
--		});
 +		const appScope = new URL(appBase(), window.location.href).href;
 +		const appWorker = new URL("sw.js", appScope).href;
 +		navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -61,6 +45,26 @@ diff --git a/web/src/main.tsx b/web/src/main.tsx
 +			return Promise.all(owned.map((registration) => registration.unregister()));
 +		}).catch((err) => {
 +			console.warn("Managed service worker cleanup failed:", err);
-+		});
+ 		});
  	});
  }
+diff --git a/web/vite.config.ts b/web/vite.config.ts
+index e8879333..349b2d75 100644
+--- a/web/vite.config.ts
++++ b/web/vite.config.ts
+@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
+ import { dirname, join } from "node:path";
+ 
+ const __dirname = dirname(fileURLToPath(import.meta.url));
++const webBasePath = process.env.PI_WEB_BASE_PATH?.trim() || "/";
+ 
+ // Dev: Vite serves the web UI on :5173 and proxies the WebSocket + any API
+ // traffic to the backend server (which runs separately via `npm run dev:server`).
+@@ -12,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
+ export default defineConfig({
+ 	root: __dirname,
+ 	plugins: [react()],
++	base: webBasePath,
+ 	build: {
+ 		outDir: join(__dirname, "dist"),
+ 		emptyOutDir: true,

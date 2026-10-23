@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 1bcb0e4..f449032 100644
+index 3897ac90..3582bac4 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -3261,8 +3261,8 @@ export class ClientSession {
+@@ -3723,8 +3723,8 @@ export class ClientSession {
  	reloadModelsConfig(): Promise<void> {
  		return this.modelAdmin.reloadModelsConfig();
  	}
@@ -14,10 +14,10 @@ index 1bcb0e4..f449032 100644
  	refreshProviderModels(providerId: string, reqId: number): Promise<void> {
  		return this.modelAdmin.refreshProviderModels(providerId, reqId, () => this.getLang());
 diff --git a/server/index.ts b/server/index.ts
-index 78029b9..85f9a0c 100644
+index ab375d08..b079a52d 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -780,7 +780,7 @@ export interface DispatchSession {
+@@ -791,7 +791,7 @@ export interface DispatchSession {
  	addProviderKey(provider: string, apiKey: string, name?: string): Promise<void>;
  	activateProviderKey(provider: string, keyName: string): Promise<void>;
  	removeProviderKey(provider: string, keyName: string): Promise<void>;
@@ -26,7 +26,7 @@ index 78029b9..85f9a0c 100644
  	refreshProviderModels(providerId: string, reqId: number): Promise<void>;
  	cloneProvider(provider: string, reqId: number): Promise<void>;
  	getTerminalManager(conversationId?: string): TerminalManagerLike | undefined;
-@@ -1260,7 +1260,7 @@ wss.on("connection", (ws) => {
+@@ -1314,7 +1314,7 @@ wss.on("connection", (ws) => {
  				void cs.listProviders();
  				break;
  			case "fetch_models":
@@ -37,7 +37,7 @@ index 78029b9..85f9a0c 100644
  				void cs.refreshProviderModels(msg.providerId, msg.reqId);
 diff --git a/server/mapache-provider-auth.ts b/server/mapache-provider-auth.ts
 new file mode 100644
-index 0000000..10d9b13
+index 00000000..10d9b13b
 --- /dev/null
 +++ b/server/mapache-provider-auth.ts
 @@ -0,0 +1,30 @@
@@ -72,7 +72,7 @@ index 0000000..10d9b13
 +  return credential.key;
 +}
 diff --git a/server/model-admin.ts b/server/model-admin.ts
-index d443a5e..c11ae25 100644
+index d443a5ea..c11ae252 100644
 --- a/server/model-admin.ts
 +++ b/server/model-admin.ts
 @@ -16,6 +16,7 @@ import { join } from "node:path";
@@ -151,10 +151,10 @@ index d443a5e..c11ae25 100644
  			writeFileSync(this.modelsConfigPath(), JSON.stringify({ providers }, null, 2) + "\n");
  
 diff --git a/server/protocol.ts b/server/protocol.ts
-index 3826a1d..2ea49d6 100644
+index c31ed069..f785aaba 100644
 --- a/server/protocol.ts
 +++ b/server/protocol.ts
-@@ -467,6 +467,7 @@ export type ClientMessage =
+@@ -493,6 +493,7 @@ export type ClientMessage =
  	 *  back in fetch_models_result so the UI can match concurrent requests. */
  	| {
  			type: "fetch_models";
@@ -164,7 +164,7 @@ index 3826a1d..2ea49d6 100644
  			apiKey?: string;
 diff --git a/tests/unit/mapache-custom-provider.test.ts b/tests/unit/mapache-custom-provider.test.ts
 new file mode 100644
-index 0000000..df0856f
+index 00000000..df0856f3
 --- /dev/null
 +++ b/tests/unit/mapache-custom-provider.test.ts
 @@ -0,0 +1,68 @@
@@ -237,7 +237,7 @@ index 0000000..df0856f
 +  }
 +}, 30000);
 diff --git a/web/src/components/ModelConfigModal.tsx b/web/src/components/ModelConfigModal.tsx
-index c25c54a..f9edc0c 100644
+index c25c54af..f9edc0cc 100644
 --- a/web/src/components/ModelConfigModal.tsx
 +++ b/web/src/components/ModelConfigModal.tsx
 @@ -150,6 +150,7 @@ export function ModelConfigModal({

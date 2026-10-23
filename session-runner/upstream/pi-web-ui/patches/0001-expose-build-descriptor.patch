@@ -1,7 +1,8 @@
 diff --git a/server/index.ts b/server/index.ts
+index 873a0776..6f132905 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -222,8 +222,29 @@ const MANAGED = isManaged();
+@@ -233,8 +233,29 @@ const SERVICE_INFO = toServiceInfo(ORIGIN);
  /** PI_WEB_TABS: the tabs this instance offers. null = all of them, as before. */
  const TABS = parseTabs();
  
@@ -30,3 +31,5 @@ diff --git a/server/index.ts b/server/index.ts
 -	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE });
 +	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE, build: safeBuildDescriptor() });
  });
+ 
+ /**

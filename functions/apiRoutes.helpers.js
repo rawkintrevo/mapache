@@ -125,6 +125,9 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "agent" && parts[1] === "workspace-requests" && parts[2] === "targets") {
     return {name: "workspaceRequestsAgent", resource: "targets", action: "list"};
   }
+  if (parts.length === 3 && parts[0] === "agent" && parts[1] === "workspace-requests" && parts[2] === "models") {
+    return {name: "workspaceRequestsAgent", resource: "models", action: "list"};
+  }
   if (parts.length === 2 && parts[0] === "agent" && parts[1] === "workspace-requests") {
     return {name: "workspaceRequestsAgent", resource: "requests", action: "create"};
   }

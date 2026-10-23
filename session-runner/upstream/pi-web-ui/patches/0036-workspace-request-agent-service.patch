@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index 581ad633..b576effc 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -5910,28 +6000,28 @@
+@@ -6501,28 +6501,28 @@ export class AgentService {
  	/** Aggregate across every client session: messages queued in the SDK. */
  	pendingMessages(): number {
  		let n = 0;

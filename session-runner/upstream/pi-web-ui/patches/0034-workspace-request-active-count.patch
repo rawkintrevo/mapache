@@ -1,6 +1,8 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+index c4f0427e..1043c5c2 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -5872,9 +5963,8 @@
+@@ -6464,9 +6464,8 @@ export class AgentService {
  				}),
  			]);
  		}

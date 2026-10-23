@@ -1,31 +1,28 @@
 diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
-index d0e4149..cd5f722 100644
+index f43c58bf..d5c463b8 100644
 --- a/web/src/components/TopBar.tsx
 +++ b/web/src/components/TopBar.tsx
-@@ -25,8 +25,9 @@ import { SoundSettingsPanel } from "./SoundSettings";
- import { NotifyToggle } from "./NotifyToggle";
- import type { SoundKind, SoundSettings } from "../sounds";
+@@ -29,6 +29,7 @@ import type { SoundKind, SoundSettings } from "../sounds";
  import { useI18n, localeShort } from "../i18n";
--import { appSend, useAppGlobals, useIsManaged } from "../app-globals";
-+import { appSend, useIsManaged } from "../app-globals";
+ import { appSend, useAppGlobals, useIsManaged, useServiceInfo } from "../app-globals";
  import { LocaleModal } from "./LocaleModal";
 +import { openEmbeddedSurface } from "../embedded-agent-bridge";
  
  interface TopBarProps {
  	chat: ChatState;
-@@ -86,8 +87,6 @@ export function TopBar({
+@@ -88,8 +89,6 @@ export function TopBar({
  	onThemeChange,
  }: TopBarProps) {
  	const { locale, setLocale, t, packs } = useI18n();
 -	// 受管标记与自身版本号：走全局（web/src/app-globals.ts），整个连接内不变。
 -	const { appVersion } = useAppGlobals();
  	const managed = useIsManaged();
- 	const [soundOpen, setSoundOpen] = useState(false);
- 	const [langOpen, setLangOpen] = useState(false);
-@@ -317,8 +316,8 @@ export function TopBar({
- 				<button type="button" className="panel-toggle" title={t("openHistory")} onClick={() => onOpenPanel("left")}>
- 					<FiMenu />
- 				</button>
+ 	// 由 pi-web-ui 服务启动的实例（launchd/systemd/Windows watchdog）：退出后会被
+ 	// supervisor 拉起，所以更新面板给出「重启服务」按钮；前台/dev 实例没有值。
+@@ -349,8 +348,8 @@ export function TopBar({
+ 						<FiMenu />
+ 					</button>
+ 				)}
 -				<span className="brand-logo">π</span>
 -				<span className="brand-name">pi-web-ui</span>
 +				{!managed && <span className="brand-logo">π</span>}
@@ -33,7 +30,7 @@ index d0e4149..cd5f722 100644
  				<span className={`conn-dot ${connClass}`} title={connLabel} />
  				<span className="conn-label">{connLabel}</span>
  			</div>
-@@ -359,6 +358,12 @@ export function TopBar({
+@@ -391,6 +390,12 @@ export function TopBar({
  							<span>{t("scmTab")}</span>
  						</button>
  					)}
@@ -46,7 +43,7 @@ index d0e4149..cd5f722 100644
  					{(tabOn("plugins") ? plugins : [])
  						.filter((p) => p.view !== false)
  						.map((p) => {
-@@ -488,15 +493,9 @@ export function TopBar({
+@@ -523,15 +528,9 @@ export function TopBar({
  						))}
  					</Dropdown>
  
@@ -65,7 +62,7 @@ index d0e4149..cd5f722 100644
  						<Dropdown
  							trigger={
  								<>
-@@ -531,15 +530,17 @@ export function TopBar({
+@@ -566,15 +565,17 @@ export function TopBar({
  						</Dropdown>
  					)}
  
@@ -92,7 +89,7 @@ index d0e4149..cd5f722 100644
  				</div>
  
  				<button
-@@ -629,17 +630,21 @@ export function TopBar({
+@@ -664,17 +665,21 @@ export function TopBar({
  								{locale === "zh" ? th.name : (th.nameEn ?? th.name)}
  							</DropdownItem>
  						))}
@@ -126,7 +123,7 @@ index d0e4149..cd5f722 100644
  				</div>
  			</div>
 diff --git a/web/src/embedded-agent-bridge.ts b/web/src/embedded-agent-bridge.ts
-index 29bac43..3bc5f23 100644
+index 29bac43a..3bc5f23c 100644
 --- a/web/src/embedded-agent-bridge.ts
 +++ b/web/src/embedded-agent-bridge.ts
 @@ -15,6 +15,11 @@ export type AgentChildMessage =
