@@ -9,10 +9,10 @@ const {spawn: defaultSpawn} = require("node:child_process");
 const {createConnection: defaultControlConnect} = require("node:net");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
+const {DEFAULT_AUTOMATION_START_TIMEOUT_MS} = require("./piWebUiDefaults");
 
 const DEFAULT_HEALTH_INTERVAL_MS = 100;
 const DEFAULT_STARTUP_TIMEOUT_MS = 90_000;
-const DEFAULT_AUTOMATION_START_TIMEOUT_MS = 300_000;
 const DEFAULT_STOP_TIMEOUT_MS = 5_000;
 const DEFAULT_QUIESCE_TIMEOUT_MS = 5_000;
 

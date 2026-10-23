@@ -202,7 +202,12 @@ automation readiness could reject the run immediately after starting the UI.
 The status probe is read-only, retries only within the bounded automation start
 window, and submits the prompt once after the socket responds. The runner allows
 five minutes (300 seconds) for the `startAutomation` acknowledgment, accommodating
-observed 120–180-second initialization. The upstream control socket idle deadline
+observed 120–180-second initialization. `lib/piWebUiDefaults.js` owns the shared
+default used by both `lib/config.js` and `lib/piWebUiProcess.js`; configuration
+must not override it with an older, shorter default. The environment variable
+`MAPACHE_PI_WEB_UI_AUTOMATION_START_TIMEOUT_MS` can explicitly override this
+budget. Slow-acknowledgment tests use the production configuration path.
+The upstream control socket idle deadline
 is 330 seconds so it does not truncate that wait. This is a bounded acknowledgment
 wait, not a task execution deadline or permission to replay timed-out work. Cloud
 Run startup limits still apply to the entire container boot. Changes to this

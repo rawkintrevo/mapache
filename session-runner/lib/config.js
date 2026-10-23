@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("path");
+const {DEFAULT_AUTOMATION_START_TIMEOUT_MS} = require("./piWebUiDefaults");
 const {boundedUnixSocketPath} = require("./unixSocketPath.helpers");
 const {
   envFlag,
@@ -235,7 +236,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piSessionDir,
     piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
     piWebUiDataDir,
-    piWebUiAutomationStartTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_AUTOMATION_START_TIMEOUT_MS, 60000),
+    piWebUiAutomationStartTimeoutMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_AUTOMATION_START_TIMEOUT_MS, DEFAULT_AUTOMATION_START_TIMEOUT_MS),
     piWebUiHealthIntervalMs: positiveNumber(process.env.MAPACHE_PI_WEB_UI_HEALTH_INTERVAL_MS, 100),
     piWebUiHost: "127.0.0.1",
     piWebUiPiDir,
