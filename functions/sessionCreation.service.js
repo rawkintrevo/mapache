@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const {resolveAutomationCredentialSelection} = require("./automationCredentialSelection.service");
 const {automationStorageForWorkspace} = require("./automationStorage.service");
 const {
   DEFAULT_BUCKET,
@@ -126,6 +127,13 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const harnessId = "pi";
   const harness = dependencies.resolveHarness(harnessId);
   const envMetadata = sessionEnvMetadata(workspace, payload);
+  const credentialSelection = runtimeKind === "automation" ?
+    await resolveAutomationCredentialSelection({uid, workspace: {...workspace, id: workspaceId}, sessions: sessionCollectionRef}) : {
+      environmentEntryIds: [...new Set([
+        ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
+        ...(Array.isArray(payload.environmentEntryIds) ? payload.environmentEntryIds : []),
+      ])],
+    };
   const session = {
     ownerUid: uid,
     userPath: userPath(uid),
@@ -181,10 +189,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...sessionHomePolicyMetadata(workspace),
     ...markedAgentSessionMetadata(workspace),
     ...envMetadata,
-    environmentEntryIds: [...new Set([
-      ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
-      ...(Array.isArray(payload.environmentEntryIds) ? payload.environmentEntryIds : []),
-    ])],
+    ...credentialSelection,
     resources,
     activeSocketCount: 0,
     idleTimeoutMinutes,

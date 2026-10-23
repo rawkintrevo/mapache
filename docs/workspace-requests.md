@@ -28,6 +28,24 @@ settings, and uploads stay private to its main runner. See
 [Scheduled Automations](./automations.md#shared-workspace-run-contract) for the
 shared browserless execution lifecycle.
 
+New request and scheduled-run sessions inherit the target's saved main-session
+environment entry IDs and Pi provider credential selection at session creation.
+`functions/automationCredentialSelection.service.js` resolves the workspace's
+canonical session (falling back to its agent-runtime session pointer), including
+when that session is stopped. An explicit empty selection stays empty; legacy
+`genericEnvironmentEntryIds` are supported. If no saved environment selection
+exists, workspace defaults apply. Request payloads cannot replace this selection.
+Only selection IDs are copied. Environment values and provider credentials are
+resolved through the existing owner-private stores at provisioning/startup;
+deleted entries are not resurrected from snapshots. The source must belong to
+the target owner/workspace and must not be another automation. Existing run
+sessions keep their pinned selections on repeated provisioning calls.
+
+This inheritance fix requires deploying `api`, `provisionAutomationRun`,
+`reconcileAutomationSessionProvisioning`, and `reconcileAutomationRuns` to
+`pi-agents-cloud`. No runner rebuild or main-session restart is required. It
+applies to newly created worker sessions; completed requests are not replayed.
+
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
 
 For successful `ticket_result` runs, `result.answer` contains the bounded text
