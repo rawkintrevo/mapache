@@ -178,6 +178,28 @@ test("ticket results include only a bounded answer from successful agent complet
   assert.equal(JSON.stringify(result).includes("private transcript"), false);
 });
 
+test("late delivery from an older attempt cannot overwrite the ticket's newer run pointer", async () => {
+  const {db, service} = harness({runData: run({
+    status: "succeeded",
+    finalResult: "success",
+    finalAnswer: "old answer",
+    ticketId: "ticket-1",
+    workspaceRunRequest: {sinks: [{kind: "ticket_result"}]},
+    sinkDelivery: {"ticket_result:0": {state: "pending", attempts: 0}},
+  })});
+  db.data.set("workspaceTickets/ticket-1", {
+    runId: "run-2",
+    status: "running",
+    result: {runId: "run-2", answer: null},
+  });
+
+  await service.cleanupAutomationRun("run-1");
+
+  assert.equal(db.data.get("workspaceTickets/ticket-1").runId, "run-2");
+  assert.equal(db.data.get("workspaceTickets/ticket-1").status, "running");
+  assert.equal(db.data.get("workspaceTickets/ticket-1").result.answer, null);
+});
+
 console.log("automation cleanup service tests passed");
 
 for (const [status, failure, expected] of [

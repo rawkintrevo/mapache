@@ -16,7 +16,10 @@ const {
 const {automationSessionId} = require("./runtimePaths.helpers");
 const {cloudRunServiceLabels, waitForCloudRunServiceDeleted, waitForOperation} = require("./cloudRun.service");
 const {isTerminalAutomationStatus} = require("./automationState.helpers");
-const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
+const {
+  isRepairableInterruptedRequest,
+  isSharedWorkspaceRequest,
+} = require("./workspaceRequestRuntime.service");
 
 const PAGE_SIZE = 50;
 const MAX_RUN_PAGES = 5;
@@ -125,13 +128,34 @@ async function reconcile(dependencies = {}) {
 async function reconcileRun(run, dependencies = {}) {
   const status = normalize(run.status);
   if (isSharedWorkspaceRequest(run) && typeof dependencies.reconcileWorkspaceRequest === "function") {
-    if (isTerminalAutomationStatus(status) && normalize(run.cleanupState) !== "complete") {
+    const repairCandidate = isRepairableInterruptedRequest(run);
+    if (isTerminalAutomationStatus(status) && !repairCandidate && normalize(run.cleanupState) !== "complete") {
       await dependencies.cleanupAutomationRun(run.runId);
       return "cleanup";
     }
+    if (isTerminalAutomationStatus(status) && !repairCandidate) return "retained";
     const result = await dependencies.reconcileWorkspaceRequest(run.runId);
+    if (result?.repaired) {
+      const latest = await dependencies.db.collection("automationRuns").doc(run.runId).get();
+      const repairedRun = latest.exists ? latest.data() || {} : {};
+      if (isTerminalAutomationStatus(repairedRun.status) && normalize(repairedRun.cleanupState) !== "complete") {
+        await dependencies.cleanupAutomationRun(run.runId);
+        return "cleanup";
+      }
+      return "shared";
+    }
+    if (isTerminalAutomationStatus(status)) {
+      const latest = await dependencies.db.collection("automationRuns").doc(run.runId).get();
+      const current = latest.exists ? latest.data() || {} : {};
+      if (isTerminalAutomationStatus(current.status) && normalize(current.cleanupState) !== "complete") {
+        await dependencies.cleanupAutomationRun(run.runId);
+        return "cleanup";
+      }
+      return "retained";
+    }
     if (result?.provisioning) return "provisioning";
     if (result?.interrupted) return "interrupted";
+    if (result?.pending || result?.retained) return "retained";
     return "shared";
   }
   if (typeof dependencies.inspectOom === "function" &&
@@ -303,7 +327,8 @@ async function listActiveRuns(dependencies = {}) {
 function runNeedsRuntime(run = {}) {
   const status = normalize(run.status);
   return ACTIVE_RUN_STATUSES.includes(status) ||
-    (isTerminalAutomationStatus(status) && normalize(run.cleanupState) !== "complete");
+    (isTerminalAutomationStatus(status) && normalize(run.cleanupState) !== "complete") ||
+    isRepairableInterruptedRequest(run);
 }
 
 async function reconcileOrphanServices(liveAutomationLabels, dependencies = {}) {

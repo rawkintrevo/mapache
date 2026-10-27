@@ -362,13 +362,20 @@ writes only normalized outcomes (`succeeded`, `failed`, `canceled`, or
 `interrupted`). A claimed run that is not submitted before process loss is
 interrupted rather than replayed. A workspace request takes the separate
 `shared-runtime-v1` route: the Functions worker selects or creates the target
-`runtimeKind: main` session, claims `dispatchClaim`, and invokes the runner's
-authenticated `/workspace/requests` control. The runner creates one persisted
-listed conversation, returns its reducer status, and retains it after terminal
-completion. A dispatch ambiguity is recorded as interrupted rather than
-replayed. The idle reaper uses the same run/session identity check for scheduled
-automation; normal request activity is part of the target session and does not
-reserve an automation slot.
+`runtimeKind: main` session, claims a session/generation-fenced
+`dispatchClaim`, and invokes the runner's authenticated `/workspace/requests`
+control. Overlapping workers query the existing run ID through
+`/workspace/requests/{runId}` and never replay a claim; acknowledgment,
+cancellation, and outcome writes reject stale claim or generation updates
+transactionally. Transient status failures retain active work. A stale claim
+without authoritative matching runner evidence is recorded as an ambiguous
+interruption, while a narrowly guarded repair can recover an existing
+interrupted ticket only when the runner, session, generation, conversation, and
+current ticket pointer still match. The runner creates one persisted listed
+conversation, returns its reducer status, and retains it after terminal
+completion. The idle reaper uses the same run/session identity check for
+scheduled automation; normal request activity is part of the target session and
+does not reserve an automation slot.
 
 ## Persistence and connections
 
