@@ -109,12 +109,23 @@ not delete the target session or consume an automation slot.
 The runner exposes the request control contract only behind the authenticated
 shutdown-token route: `GET /workspace/models`, `POST /workspace/requests`, `GET
 /workspace/requests/{runId}`, and `POST /workspace/requests/{runId}/cancel`.
-Dispatch claims are durable. If the control response is ambiguous after a
-claim, the run is interrupted rather than blindly replayed. Cancellation is
-recorded before the runner interrupt and is safe to repeat. Scheduled
-automations retain their separate private-runner lifecycle and are not routed
-through these endpoints. GitHub request context remains read-only, while the
-normal workspace sync and credential boundaries remain authoritative.
+Dispatch claims are durable and fenced to the target session generation.
+Repeated provisioning and reconciliation workers never treat an active claim
+or an acknowledged dispatch as proof of interruption: they query the existing
+run ID through the runner status endpoint and reconcile its active or terminal
+state without resubmitting the prompt. Transient status failures retain the
+claim for a later reconciliation. A stale claim with no matching authoritative
+runner evidence becomes an ambiguous interruption, preserving the no-blind-
+replay boundary. If an ambiguous interruption later has matching runner,
+session, generation, conversation, and current-ticket evidence, the narrowly
+guarded repair path restores the existing run and re-delivers its result; it
+does not reopen canceled runs, replace a newer ticket pointer, or replay the
+prompt. Acknowledgment, cancellation, and outcome writes are transactional, so
+stale workers cannot overwrite a newer outcome. Cancellation is recorded before
+the runner interrupt and is safe to repeat. Scheduled automations retain their
+separate private-runner lifecycle and are not routed through these endpoints.
+GitHub request context remains read-only, while the normal workspace sync and
+credential boundaries remain authoritative.
 
 ## Resource sizing and OOM recovery
 

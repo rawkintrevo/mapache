@@ -95,11 +95,149 @@ test("reconciles the visible chat result and preserves a terminal ticket outcome
   assert.equal(db.values.get("automationRuns/run-1").finalAnswer, "done");
 });
 
-test("does not replay a claimed dispatch after an ambiguous runner failure", async () => {
+test("retains a claimed dispatch after an ambiguous runner failure for later reconciliation", async () => {
   const {calls, db, service} = setup({runner: async () => { throw new Error("runner timeout"); }});
   const first = await service.provision("run-1");
-  assert.equal(first.interrupted, true);
-  assert.equal(calls.length, 1);
+  assert.equal(first.pending, true);
+  assert.equal(calls.length, 2); // submit, then the status check; never a replay
+  assert.equal(db.values.get("automationRuns/run-1").status, "provisioning");
+});
+
+test("overlapping provisioning reconciles the existing claim and submits exactly once", async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let status = "not_found";
+  const {calls, db, service} = setup({runner: async (_session, route, options = {}) => {
+    if (route === "/workspace/requests" && options.method === "POST") {
+      await held;
+      return {ok: true, conversationId: "conversation-1", status: "running"};
+    }
+    if (route === "/workspace/requests/run-1" && status === "not_found") {
+      return {ok: false, error: "workspace_request_not_found"};
+    }
+    return {ok: true, request: {
+      runId: "run-1", status: "succeeded", conversationId: "conversation-1",
+      state: {finalResult: "success", finalAnswer: "The answer arrived once."},
+    }};
+  }});
+
+  const first = service.provision("run-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.filter((call) => call.route === "/workspace/requests").length, 1);
+
+  const second = await service.provision("run-1");
+  assert.equal(second.pending, true);
+  assert.equal(db.values.get("automationRuns/run-1").status, "provisioning");
+
+  status = "succeeded";
+  release();
+  const firstResult = await first;
+  assert.equal(firstResult.dispatched, true);
+  const completed = await service.reconcile("run-1");
+  assert.deepEqual(completed, {completed: true, runId: "run-1", status: "succeeded"});
+  assert.equal(calls.filter((call) => call.route === "/workspace/requests" && call.options.method === "POST").length, 1);
+  assert.equal(db.values.get("automationRuns/run-1").finalAnswer, "The answer arrived once.");
+});
+
+test("duplicate provisioning after acknowledgment reads status without another submission", async () => {
+  const {calls, service} = setup({runner: (_session, route, options = {}) => route === "/workspace/requests" && options.method !== "POST" ?
+    {ok: true, request: {runId: "run-1", status: "running", conversationId: "conversation-1"}} : undefined});
+  await service.provision("run-1");
+  const repeated = await service.provision("run-1");
+  assert.equal(repeated.running, true);
+  assert.equal(calls.filter((call) => call.route === "/workspace/requests" && call.options.method === "POST").length, 1);
+  assert.equal(calls.filter((call) => call.route === "/workspace/requests/run-1").length, 1);
+});
+
+test("transient status lookup failure retains an acknowledged request", async () => {
+  let attempts = 0;
+  const {db, service} = setup({runner: (_session, route, options = {}) => {
+    if (route === "/workspace/requests" && options.method === "POST") return {ok: true, conversationId: "conversation-1", status: "running"};
+    attempts += 1;
+    if (attempts === 1) throw Object.assign(new Error("temporary status timeout"), {status: 503});
+    return {ok: true, request: {runId: "run-1", status: "succeeded", conversationId: "conversation-1", state: {finalResult: "success", finalAnswer: "done"}}};
+  }});
+  await service.provision("run-1");
+  const retained = await service.reconcile("run-1");
+  assert.equal(retained.pending, true);
+  assert.equal(db.values.get("automationRuns/run-1").status, "running");
+  const completed = await service.reconcile("run-1");
+  assert.equal(completed.completed, true);
+  assert.equal(db.values.get("automationRuns/run-1").finalAnswer, "done");
+});
+
+test("stale generation claims become ambiguous without resubmitting the prompt", async () => {
+  const {calls, db, service} = setup({runner: (_session, route) => route === "/workspace/requests/run-1" ?
+    {ok: false, error: "workspace_request_not_found"} : assert.fail(`unexpected runner route ${route}`)});
+  db.values.set("automationRuns/run-1", {
+    ...db.values.get("automationRuns/run-1"),
+    dispatchClaim: {id: "old-claim", sessionId: "old-session", generation: 3, state: "claimed", claimedAt: "2026-09-20T09:00:00.000Z"},
+    sessionId: "old-session",
+    sharedRuntimeGeneration: 3,
+  });
+  const result = await service.provision("run-1");
+  assert.equal(result.interrupted, true);
+  assert.equal(db.values.get("automationRuns/run-1").executionErrorCode, "shared_runtime_dispatch_ambiguous");
+  assert.equal(calls.some((call) => call.route === "/workspace/requests" && call.options.method === "POST"), false);
+});
+
+test("committed cancellation wins over a late successful runner outcome", async () => {
+  const {db, service} = setup({runner: (_session, route, options = {}) => route === "/workspace/requests" && options.method === "POST" ?
+    {ok: true, conversationId: "conversation-1", status: "running"} :
+    {ok: true, request: {runId: "run-1", status: "succeeded", conversationId: "conversation-1", state: {finalResult: "success", finalAnswer: "too late"}}}});
+  await service.provision("run-1");
+  db.values.set("automationRuns/run-1", {...db.values.get("automationRuns/run-1"), status: "stopping", desiredOutcome: "canceled", cancellationRequestedAt: "now"});
+  const result = await service.reconcile("run-1");
+  assert.equal(result.status, "canceled");
+  assert.equal(db.values.get("automationRuns/run-1").status, "canceled");
+  assert.equal(db.values.get("automationRuns/run-1").finalAnswer, undefined);
+});
+
+test("repairs an interrupted ticket only with matching runner and ticket evidence", async () => {
+  const {db, service} = setup({runner: (_session, route) => route === "/workspace/requests/run-1" ?
+    {ok: true, request: {runId: "run-1", status: "succeeded", conversationId: "conversation-1", state: {finalResult: "success", finalAnswer: "recovered"}}} :
+    {ok: true, conversationId: "conversation-1", status: "running"}});
+  db.values.set("automationRuns/run-1", {
+    ...db.values.get("automationRuns/run-1"),
+    status: "interrupted",
+    cleanupState: "complete",
+    sessionId: "main",
+    sharedRuntimeGeneration: 4,
+    conversationId: "conversation-1",
+    dispatchClaim: {id: "claim-1", sessionId: "main", generation: 4, state: "claimed"},
+    executionErrorCode: "shared_runtime_dispatch_ambiguous",
+    lastError: "shared_runtime_dispatch_ambiguous",
+    sinkDelivery: {"ticket_result:0": {state: "delivered", attempts: 1, lastError: null}},
+  });
+  db.values.set("workspaceTickets/ticket-1", {runId: "run-1", status: "interrupted"});
+  const result = await service.reconcile("run-1");
+  assert.deepEqual(result, {repaired: true, runId: "run-1", status: "succeeded"});
+  const repaired = db.values.get("automationRuns/run-1");
+  assert.equal(repaired.status, "succeeded");
+  assert.equal(repaired.cleanupState, "pending");
+  assert.equal(repaired.sinkDelivery["ticket_result:0"].state, "pending");
+  assert.equal(repaired.dispatchRepair.fromErrorCode, "shared_runtime_dispatch_ambiguous");
+});
+
+test("does not repair a canceled ticket or a ticket that points to a newer run", async () => {
+  const {db, service} = setup({runner: (_session, route) => route === "/workspace/requests/run-1" ?
+    {ok: true, request: {runId: "run-1", status: "succeeded", conversationId: "conversation-1", state: {finalResult: "success", finalAnswer: "must not publish"}}} :
+    {ok: true, conversationId: "conversation-1", status: "running"}});
+  db.values.set("automationRuns/run-1", {
+    ...db.values.get("automationRuns/run-1"),
+    status: "interrupted", cleanupState: "complete", sessionId: "main", sharedRuntimeGeneration: 4,
+    conversationId: "conversation-1",
+    dispatchClaim: {id: "claim-1", sessionId: "main", generation: 4, state: "claimed"},
+    executionErrorCode: "shared_runtime_dispatch_ambiguous",
+  });
+  db.values.set("workspaceTickets/ticket-1", {runId: "run-2", status: "running"});
+  const result = await service.reconcile("run-1");
+  assert.equal(result.repaired, undefined);
+  assert.equal(db.values.get("automationRuns/run-1").status, "interrupted");
+
+  db.values.set("workspaceTickets/ticket-1", {runId: "run-1", status: "canceled"});
+  const canceled = await service.reconcile("run-1");
+  assert.equal(canceled.repaired, undefined);
   assert.equal(db.values.get("automationRuns/run-1").status, "interrupted");
 });
 
