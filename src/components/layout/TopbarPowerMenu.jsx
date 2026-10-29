@@ -7,12 +7,18 @@ export function TopbarPowerMenu({
   onRestart,
   onToggle,
   restartDisabled = false,
+  workspacePowerPresentation = null,
   workspaceOn = false,
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const triggerRef = useRef(null);
-  const stateLabel = workspaceOn ? "running" : "stopped";
+  const fallbackState = workspaceOn ? "running" : "stopped";
+  const powerPresentation = workspacePowerPresentation || {
+    state: fallbackState,
+    label: workspaceOn ? "Running" : "Stopped",
+  };
+  const stateLabel = powerPresentation.label.toLowerCase();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -59,9 +65,9 @@ export function TopbarPowerMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Workspace power controls: ${stateLabel}`}
-        className={`topbar-power-trigger topbar-power-trigger--${stateLabel}`}
+        className={`topbar-power-trigger topbar-power-trigger--${powerPresentation.state}`}
         icon
-        title={`Workspace ${stateLabel}. Open power controls`}
+        title={`Workspace ${powerPresentation.label}. Open power controls`}
         variant="secondary"
         onClick={() => setOpen((value) => !value)}
         ref={triggerRef}

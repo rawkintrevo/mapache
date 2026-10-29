@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {DrawerSessionList} from "../drawers/DrawerSessionList.jsx";
 import {SessionList} from "./SessionList.jsx";
-import {formatSessionCheckpointTime, getSessionImageFreshness, getSessionResourceSummary, getSessionRunnerTags, getSessionRuntimeError, getSessionRuntimeStatus, getSessionStatusLabel, getSessionStatusTone, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
+import {formatSessionCheckpointTime, getSessionImageFreshness, getSessionResourceSummary, getSessionRunnerTags, getSessionRuntimeError, getSessionRuntimeStatus, getSessionStatusLabel, getSessionStatusTone, getWorkspacePowerPresentation, isRetryableProvisioningFailure, isRuntimeStopUncertain} from "./sessionPresentation.js";
 
 const baseSession = {
   id: "session-1",
@@ -86,6 +86,20 @@ describe("session presentation helpers", () => {
     expect(isRuntimeStopUncertain({status: "stop_failed", agentRuntimeState: "stopping"})).toBe(false);
     expect(isRuntimeStopUncertain({status: "running", agentRuntimeState: "running"})).toBe(false);
     expect(formatSessionCheckpointTime("not-a-timestamp")).toBe("Not recorded");
+  });
+
+  test("maps workspace power presentation with failure-first precedence", () => {
+    expect(getWorkspacePowerPresentation(null)).toMatchObject({state: "stopped", label: "Stopped", tone: "neutral"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "running"})).toMatchObject({state: "running", label: "Running", tone: "success"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "provisioning"})).toMatchObject({state: "transition", label: "Starting", tone: "warning"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "restarting"})).toMatchObject({state: "transition", label: "Restarting", tone: "warning"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "stopping"})).toMatchObject({state: "transition", label: "Stopping", tone: "warning"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "running", resizeOperationState: "queued"})).toMatchObject({state: "transition", label: "Resizing", tone: "warning"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "resizing"})).toMatchObject({state: "transition", label: "Resizing", tone: "warning"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "running", agentRuntimeState: "failed"})).toMatchObject({state: "error", label: "Error", tone: "danger"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "provision_failed"})).toMatchObject({state: "error", label: "Error", tone: "danger"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "running", resizeOperationState: "failed"})).toMatchObject({state: "error", label: "Error", tone: "danger"});
+    expect(getWorkspacePowerPresentation({id: "session-1", status: "future_status"})).toMatchObject({state: "unavailable", label: "Unavailable", tone: "neutral"});
   });
 });
 

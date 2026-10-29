@@ -46,6 +46,52 @@ export function isRuntimeStopUncertain(session = {}) {
   return RUNTIME_STOP_UNCERTAIN_STATUSES.has(lifecycleStatus) || runtimeState === "stopping";
 }
 
+export function getWorkspacePowerPresentation(session = null) {
+  if (!session) {
+    return {state: "stopped", label: "Stopped", tone: "neutral"};
+  }
+
+  const lifecycleStatus = trimSessionStatus(session.status).toLowerCase();
+  const runtimeState = trimSessionStatus(session.agentRuntimeState).toLowerCase();
+
+  if (
+    RUNTIME_FAILURE_STATUSES.has(lifecycleStatus) ||
+    runtimeState === "failed" ||
+    session.resizeOperationState === "failed" ||
+    trimSessionStatus(session.agentRuntimeCheckpointError) ||
+    trimSessionStatus(session.provisioningState).toLowerCase() === "failed"
+  ) {
+    return {state: "error", label: "Error", tone: "danger"};
+  }
+
+  if (isSessionResizePending(session)) {
+    return {state: "transition", label: "Resizing", tone: "warning"};
+  }
+  if (["stopping", "deleting"].includes(lifecycleStatus) || runtimeState === "stopping") {
+    return {state: "transition", label: "Stopping", tone: "warning"};
+  }
+  if (lifecycleStatus === "restarting" || runtimeState === "restarting") {
+    return {state: "transition", label: "Restarting", tone: "warning"};
+  }
+  if (["updating"].includes(lifecycleStatus)) {
+    return {state: "transition", label: "Updating", tone: "warning"};
+  }
+  if (lifecycleStatus === "resizing") {
+    return {state: "transition", label: "Resizing", tone: "warning"};
+  }
+  if (["provisioning", "queued", "needs_service"].includes(lifecycleStatus) || runtimeState === "starting") {
+    return {state: "transition", label: "Starting", tone: "warning"};
+  }
+  if (["running", "ready"].includes(lifecycleStatus) || runtimeState === "running") {
+    return {state: "running", label: "Running", tone: "success"};
+  }
+  if (["stopped", "inactive", "needs_image"].includes(lifecycleStatus) || runtimeState === "stopped") {
+    return {state: "stopped", label: "Stopped", tone: "neutral"};
+  }
+
+  return {state: "unavailable", label: "Unavailable", tone: "neutral"};
+}
+
 export function getSessionRuntimeStatus(session = {}) {
   if (isSessionResizePending(session)) {
     return {state: "starting", label: "Resizing", tone: "warning", message: "The server is resizing the runtime. Shutdown and startup continue in the background."};

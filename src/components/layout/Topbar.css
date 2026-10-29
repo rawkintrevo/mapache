@@ -136,13 +136,63 @@ h1 {
   flex: 0 0 auto;
 }
 
+.topbar-power-trigger--stopped,
+.topbar-power-trigger--unavailable {
+  background: #eef2f6;
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px rgba(102, 112, 133, 0.3);
+}
+
+.topbar-power-trigger--stopped:hover,
+.topbar-power-trigger--unavailable:hover {
+  background: #e7ebf0;
+}
+
 .topbar-power-trigger--running {
+  background: #dff3eb;
   color: #0b6b4b;
   box-shadow: inset 0 0 0 1px rgba(11, 107, 75, 0.3);
 }
 
 .topbar-power-trigger--running:hover {
-  background: #dff3eb;
+  background: #c9eadc;
+}
+
+.topbar-power-trigger--transition {
+  background: #fff4cc;
+  color: #9a6700;
+  box-shadow: inset 0 0 0 1px rgba(154, 103, 0, 0.34);
+}
+
+.topbar-power-trigger--transition:hover {
+  background: #ffedaa;
+}
+
+.topbar-power-trigger--error {
+  background: #fff0ee;
+  color: var(--color-danger);
+  box-shadow: inset 0 0 0 1px rgba(180, 35, 24, 0.34);
+}
+
+.topbar-power-trigger--error:hover {
+  background: #ffd9d4;
+}
+
+.topbar-power-trigger--stopped:focus-visible,
+.topbar-power-trigger--unavailable:focus-visible {
+  outline-color: rgba(102, 112, 133, 0.46);
+}
+
+.topbar-power-trigger--running:focus-visible {
+  outline-color: rgba(11, 107, 75, 0.46);
+}
+
+.topbar-power-trigger--transition:focus-visible {
+  outline-color: rgba(154, 103, 0, 0.52);
+}
+
+.topbar-power-trigger--error:focus-visible {
+  outline-color: rgba(180, 35, 24, 0.46);
 }
 
 .topbar-more-item,

@@ -5,7 +5,7 @@ import {TopbarUserMenu} from "./TopbarUserMenu.jsx";
 import {TopbarMoreMenu} from "./TopbarMoreMenu.jsx";
 import {TopbarPowerMenu} from "./TopbarPowerMenu.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
-import {isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} from "../sessions/sessionPresentation.js";
+import {getWorkspacePowerPresentation, isMarkedRuntimeSession, isRuntimeStopUncertain, isSessionResizePending} from "../sessions/sessionPresentation.js";
 import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 import {ResourceUtilization} from "../sessions/ResourceUtilization.jsx";
@@ -46,10 +46,12 @@ export function Topbar({
       (session) => session.id === selectedWorkspace?.canonicalSessionId,
   ) || state.sessions.find((session) => session.id === state.selectedSessionId) || state.sessions[0];
   const sessionStatus = String(canonicalSession?.status || "").toLowerCase();
+  const workspacePowerPresentation = getWorkspacePowerPresentation(canonicalSession);
   const workspaceTransitioning = [
-    "provisioning", "queued", "restarting", "resizing", "needs_service", "stopping", "deleting",
-  ].includes(sessionStatus) || isSessionResizePending(canonicalSession);
-  const workspaceOn = ["running", "ready"].includes(sessionStatus);
+    "provisioning", "queued", "restarting", "resizing", "needs_service", "stopping", "deleting", "updating",
+  ].includes(sessionStatus) || isSessionResizePending(canonicalSession) || workspacePowerPresentation.state === "transition";
+  const workspaceOn = ["running", "ready"].includes(sessionStatus) ||
+    String(canonicalSession?.agentRuntimeState || "").toLowerCase() === "running";
   const hasSessionImageMetadata = Boolean(canonicalSession?.imageKey || canonicalSession?.image);
   const workspaceUnsupported = selectedWorkspace?.source?.type === "ssh" ||
     Boolean(canonicalSession && hasSessionImageMetadata && normalizeSessionImageKey(canonicalSession) !== "pi-chrome");
@@ -92,6 +94,7 @@ export function Topbar({
           onRestart={onRestartWorkspace}
           onToggle={onToggleWorkspace}
           restartDisabled={workspaceRestartDisabled}
+          workspacePowerPresentation={workspacePowerPresentation}
           workspaceOn={workspaceOn}
         />
         {showRuntimePolicy ? (
