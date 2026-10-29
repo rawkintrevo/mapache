@@ -55,7 +55,7 @@ policy control, the selected canonical cloud runtime's live CPU and memory
 meters, a marked-runtime Agent shortcut, the complete workspace actions menu,
 and an avatar menu. The power trigger uses gray for stopped or unavailable
 runtimes, green for running/ready, yellow for startup, shutdown, restart,
-  resize, or update transitions, and red for known runtime failures. Its
+resize, or update transitions, and red for known runtime failures. Its
 accessible label names the current state, while lifecycle actions remain
 independently disabled during transitions. The workspace actions menu owns New, Edit, Logs, Upload,
 Automations, Pi auth, generic environment keys, workspace MCP servers, Google
