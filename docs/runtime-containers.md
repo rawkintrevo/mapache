@@ -644,6 +644,14 @@ Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/runn
 
 The runner stores a bounded raw-output replay buffer so a newly loaded iframe can redraw recent terminal output after reconnecting. The default replay limit is `1000000` characters and can be changed with `TERMINAL_REPLAY_LIMIT`. Automatic reconnects from the same iframe skip replay to avoid duplicating visible terminal content. If the shell process itself exits, the runner closes connected sockets and the next fresh iframe connection starts a new PTY.
 
+The pi-chrome container starts Node directly so Cloud Run SIGTERM reaches the
+runner's checkpoint and authority-release handler. An npm/shell PID 1 wrapper
+can bypass this cleanup and leave replacement boots fenced by the old owner.
+This command change requires a rebuilt pi-chrome image and recreation or a new
+revision for existing services. It does not permit heartbeat-only takeover or
+guarantee cleanup after SIGKILL/OOM. Use the normal controlled stop/recreate
+path when an earlier boot's authority remains after forced termination.
+
 This persistence is scoped to the current Cloud Run container instance. Active session services request one minimum instance, so ordinary traffic scale-down does not end the PTY before the backend idle timeout. A Cloud Run revision replacement, service stop, platform restart, or container crash still ends the current PTY process.
 
 Runner bootstrap is lifecycle-aware. `session-runner/lib/runnerLifecycle.js` catches preparation failures before the server listens and asks `session-runner/lib/activity.js` to record `runtimeState: "failed"`, the compact runtime error, and zero active sockets. When the stored lifecycle was `running`, `restarting`, or `resizing`, that transaction also changes it to `update_failed`; initial provisioning remains `provisioning` so the Functions worker can own the normal `provision_failed` transition. This prevents a Cloud Run service whose revision is configured as ready but whose instances cannot start from remaining displayed as a healthy running session.

@@ -328,22 +328,10 @@ runnerLifecycle.start()
       process.exit(1);
     });
 
-let signalShutdown = null;
-async function handleSignal(signal) {
-  if (signalShutdown) return signalShutdown;
-  signalShutdown = runnerLifecycle.shutdownWithBudget({
-    reason: signal,
-    budgetMs: config.sigtermSaveBudgetMs,
-  }).catch((error) => {
-    console.error(`session runner ${signal} shutdown failed`, error);
-  }).finally(() => {
-    process.exit(0);
-  });
-  return signalShutdown;
-}
-
-process.once("SIGTERM", () => { void handleSignal("SIGTERM"); });
-process.once("SIGINT", () => { void handleSignal("SIGINT"); });
+require("./lib/runnerSignals").registerRunnerSignals({
+  runnerLifecycle,
+  budgetMs: config.sigtermSaveBudgetMs,
+});
 
 function hasRunnerAccess(req) {
   return Boolean(config.shutdownToken) && req.get("x-shutdown-token") === config.shutdownToken;

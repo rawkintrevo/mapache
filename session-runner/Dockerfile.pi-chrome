@@ -71,4 +71,5 @@ ENV CHROME_NOVNC_PORT=6080
 ENV RUNNER_CAPABILITIES={"terminal":true,"preview":true,"previewQa":true,"functions":true,"chrome":true}
 
 EXPOSE 8080
-CMD ["npm", "start"]
+# Keep Node as PID 1 so Cloud Run SIGTERM reaches the shutdown handler.
+CMD ["node", "server.js"]
