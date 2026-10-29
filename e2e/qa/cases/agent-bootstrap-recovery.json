@@ -1,0 +1,17 @@
+{
+  "id": "agent-bootstrap-recovery",
+  "title": "Recover transient Agent bootstrap failures and bound persistent failures",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/agent-bootstrap-recovery",
+  "fixture": "/e2e/qa/fixtures/agent-bootstrap.html",
+  "setup": "Start npm run dev. Use Chrome DevTools Fetch interception for *agent-bootstrap-frame.html* only. No authentication or production workspace is used. Expected injected HTTP 429 responses are the only permitted network/console errors.",
+  "steps": [
+    {"assert": "Intercept the first fixture iframe document with HTTP 429 and body Temporarily unavailable; continue subsequent requests. Navigate to the fixture. Within 25 seconds the iframe shows Agent connected and the parent Loading Agent overlay is absent."},
+    {"capture": "screenshot"},
+    {"assert": "Intercept all fixture iframe documents with HTTP 429 and reload the fixture. After 65 seconds there have been exactly three iframe attempts and Agent did not load plus Retry Agent are visible. Wait another 25 seconds and verify there is no fourth attempt."},
+    {"capture": "screenshot"},
+    {"assert": "Disable the injected failures and click Retry Agent. Within 5 seconds Agent connected appears and the parent status overlay disappears. Verify no unexpected console or network errors."},
+    {"capture": "screenshot"},
+    {"capture": "console and redacted network summary"}
+  ]
+}
