@@ -90,7 +90,13 @@ const workspaceAuthority = createWorkspaceAuthority({
   db,
   onLost: () => piWebUi?.stop?.(),
 });
-const activity = createActivityService({admin, db, config, isCurrentRuntime: workspaceAuthority.isCurrentWriter});
+const activity = createActivityService({
+  admin,
+  db,
+  config,
+  getRuntimeIdentity: workspaceAuthority.status,
+  isCurrentRuntime: workspaceAuthority.isCurrentWriter,
+});
 const git = createGitService({config, activity, storage});
 const qaFaultHarness = createQaFaultHarness({
   config,

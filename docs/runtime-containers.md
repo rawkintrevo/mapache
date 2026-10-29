@@ -321,6 +321,17 @@ stopped transition, and records an interrupted-checkpoint warning. This is the
 controlled recovery path for a fenced replacement boot; it does not permit
 heartbeat-only authority takeover or concurrent writers.
 
+Startup failure writes are ownership-fenced as well. The runner reports a
+failure before releasing an authority it successfully acquired. The activity
+service checks the session and, for main runtimes, workspace generation,
+session identity, boot identity, and admitted state in the same transaction as
+the error update. A pre-admission failure is eligible only when the reservation
+has no boot owner; a duplicate or stale boot records a local diagnostic and
+leaves the active owner's status, lease, and socket count unchanged. This
+preserves legitimate clone/restore failures without allowing a rejected Cloud
+Run replacement to poison the current runtime. Changes to this contract require
+a rebuilt `pi-chrome` image and a new revision for existing services.
+
 For an automation runtime, the protected shutdown request first sends a
 run-scoped cancellation through the private pi-web-ui control socket, then
 awaits the same bounded agent quiesce and checkpoint/artifact finalization used

@@ -71,6 +71,17 @@ each other. Automation checkpoint and workspace-file pointers are committed on
 that session document; a stale or duplicate boot is rejected before agent or
 shared-file writes.
 
+Startup failure publication follows the same fence. `runnerLifecycle.js` reports
+the failure before releasing an admitted boot, while `activity.js` verifies the
+persisted generation, session identity, and boot identity in the same Firestore
+transaction as the failure update. A boot that never acquired authority may
+publish an initial provisioning failure only while the reservation has no owner;
+duplicate or stale boots log a skip and cannot change the active owner's session
+state. A failure after authority is lost is also ignored when the persisted
+identity no longer matches. This prevents a rejected Cloud Run replacement from
+turning the owning runner's session into `update_failed` and shutting down the
+healthy owner.
+
 Runners default to the legacy shared storage mode. Automation sessions set
 `MAPACHE_RUNTIME_STORAGE_MODE=private` and a run-scoped identity; the runner
 then derives HOME, Pi auth/settings, transcripts, MCP configuration, UI data,

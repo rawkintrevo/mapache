@@ -332,7 +332,7 @@ test("GitHub token socket starts before workspace commands and closes on startup
     }},
   });
   await assert.rejects(lifecycle.start(), /fixture failure/);
-  assert.deepEqual(events, ["github.start", "workspace.fail", "github.stop", "activity.markRuntimeStartupFailure"]);
+  assert.deepEqual(events, ["github.start", "workspace.fail", "activity.markRuntimeStartupFailure", "github.stop"]);
 });
 
 test("GitHub token socket closes even when final checkpoint fails", async () => {

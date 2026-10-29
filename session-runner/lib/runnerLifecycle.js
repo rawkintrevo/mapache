@@ -37,8 +37,10 @@ function createRunnerLifecycleCoordinator({
     release: async () => false,
   };
   let shutdownInFlight = null;
+  let authorityAcquired = false;
 
   async function start() {
+    authorityAcquired = false;
     try {
       await githubTokenApi?.start?.();
       await googleMcpTokenApi?.start?.();
@@ -50,6 +52,7 @@ function createRunnerLifecycleCoordinator({
       await git.configureGithubCredentialHelper?.();
       await workspace.restoreCheckpoint?.();
       await authority.acquire();
+      authorityAcquired = true;
       await activity.updateSessionActivity({
         runtimeStartedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -72,15 +75,15 @@ function createRunnerLifecycleCoordinator({
         logger.log(`session runner listening on ${config.port}`);
       });
     } catch (error) {
+      await activity.markRuntimeStartupFailure(error, {allowUnadmitted: !authorityAcquired}).catch((writeError) => {
+        logger.error("session runtime failure write failed", writeError);
+      });
       await authority.release("startup_failed").catch((releaseError) => {
         logger.error("workspace runtime authority release failed after startup error", releaseError);
       });
       await automationAgentApi?.stop?.().catch?.(() => {});
       await githubTokenApi?.stop?.().catch?.(() => {});
       await googleMcpTokenApi?.stop?.().catch?.(() => {});
-      await activity.markRuntimeStartupFailure(error).catch((writeError) => {
-        logger.error("session runtime failure write failed", writeError);
-      });
       throw error;
     }
   }
