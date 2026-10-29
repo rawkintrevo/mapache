@@ -154,8 +154,28 @@ test("opens labeled secondary actions from the More menu", async () => {
 test("disables lifecycle actions while an asynchronous resize is queued", async () => {
   const user = userEvent.setup();
   renderTopbar({id: "session-1", status: "running", resizeOperationState: "queued"});
-  await user.click(screen.getByRole("button", {name: "Workspace power controls: running"}));
+  await user.click(screen.getByRole("button", {name: "Workspace power controls: resizing"}));
   expect(screen.getByRole("menuitem", {name: "Stop workspace"})).toBeDisabled();
+  expect(screen.getByRole("menuitem", {name: "Restart workspace"})).toBeDisabled();
+});
+
+test.each([
+  [{id: "session-1", status: "provisioning"}, "starting", "transition"],
+  [{id: "session-1", status: "stopping"}, "stopping", "transition"],
+  [{id: "session-1", status: "restarting"}, "restarting", "transition"],
+  [{id: "session-1", status: "provision_failed"}, "error", "error"],
+  [{id: "session-1", status: "future_status"}, "unavailable", "unavailable"],
+])("shows %s power state on the trigger", (session, stateLabel, stateClass) => {
+  renderTopbar(session);
+  const trigger = screen.getByRole("button", {name: `Workspace power controls: ${stateLabel}`});
+  expect(trigger).toHaveClass(`topbar-power-trigger--${stateClass}`);
+});
+
+test("keeps lifecycle actions disabled while a workspace is transitioning", async () => {
+  const user = userEvent.setup();
+  renderTopbar({id: "session-1", status: "restarting"});
+  await user.click(screen.getByRole("button", {name: "Workspace power controls: restarting"}));
+  expect(screen.getByRole("menuitem", {name: "Start workspace"})).toBeDisabled();
   expect(screen.getByRole("menuitem", {name: "Restart workspace"})).toBeDisabled();
 });
 
