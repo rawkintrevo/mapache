@@ -94,6 +94,15 @@ runtime data. Private auth is materialized from the canonical Mapache stores on
 each boot, while Google and GitHub access continues to use the existing
 short-lived broker paths.
 
+`Dockerfile.pi-chrome` launches `node server.js` directly, making Node PID 1
+through the base image's exec entrypoint. Do not wrap it in `npm start`: npm's
+shell wrapper can terminate without delivering SIGTERM to the runner, leaving
+its boot authority admitted after the process disappears. `lib/runnerSignals.js`
+registers SIGTERM/SIGINT handling, coalesces concurrent signals, logs shutdown
+start/completion/failure, and waits for the lifecycle shutdown before exiting.
+The opt-in `runnerSignals.container.test.js` verifies actual container signal
+delivery using `MAPACHE_SIGNAL_TEST_IMAGE` and the current Dockerfile command.
+
 Quiesce rejects new work and waits for the managed child and writers to stop.
 The runner then captures a final acknowledged checkpoint, closes browser/SSH
 forwards, snapshots Chrome state when applicable, releases authority, and
