@@ -40,4 +40,24 @@ describe("SessionResourceSelector", () => {
 
     expect(screen.getByRole("option", {name: "8 GiB"})).toBeDisabled();
   });
+
+  test("supports selecting the largest catalog allocation through advanced settings", async () => {
+    const user = userEvent.setup();
+    render(<ResourceHarness />);
+    await user.click(screen.getByText("Advanced settings"));
+
+    expect(screen.getByRole("option", {name: "6 vCPU"})).toBeInTheDocument();
+    expect(screen.getByRole("option", {name: "8 vCPU"})).toBeDisabled();
+    expect(screen.getByRole("option", {name: "16 GiB"})).toBeInTheDocument();
+    expect(screen.getByRole("option", {name: "24 GiB"})).toBeInTheDocument();
+    expect(screen.getByRole("option", {name: "32 GiB"})).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole("combobox", {name: "CPU"}), "4");
+    await user.selectOptions(screen.getByRole("combobox", {name: "Memory"}), "16Gi");
+    await user.selectOptions(screen.getByRole("combobox", {name: "CPU"}), "8");
+    await user.selectOptions(screen.getByRole("combobox", {name: "Memory"}), "32Gi");
+
+    expect(screen.getByRole("radio", {name: /Custom/})).toBeChecked();
+    expect(screen.getByText(/Custom selection: \$0\.7488\/hr estimate/)).toBeInTheDocument();
+  });
 });

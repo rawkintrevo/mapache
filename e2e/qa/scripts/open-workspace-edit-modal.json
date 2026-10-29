@@ -1,0 +1,13 @@
+{
+  "id": "script.openWorkspaceEditModal",
+  "title": "Open workspace resource settings",
+  "actions": [
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "nameIncludes": "Edit workspace"},
+    {"type": "waitForSnapshotText", "text": "Edit workspace", "timeoutMs": 5000},
+    {"type": "waitForSnapshotText", "text": "Advanced settings", "timeoutMs": 5000}
+  ],
+  "successSignals": [
+    "Workspace settings expose the shared session sizing controls"
+  ]
+}

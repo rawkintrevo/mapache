@@ -8,15 +8,21 @@
     "asOf": "2026-08-19"
   },
   "advanced": {
-    "cpu": ["1", "2", "4"],
-    "memory": ["1Gi", "2Gi", "4Gi", "8Gi"]
+    "cpu": ["1", "2", "4", "6", "8"],
+    "memory": ["1Gi", "2Gi", "4Gi", "8Gi", "16Gi", "24Gi", "32Gi"]
   },
   "constraints": {
     "minMemoryGiBByCpu": {
-      "4": 2
+      "4": 2,
+      "6": 4,
+      "8": 4
     },
     "maxMemoryGiBByCpu": {
-      "1": 4
+      "1": 4,
+      "2": 8,
+      "4": 16,
+      "6": 24,
+      "8": 32
     }
   },
   "presets": [
