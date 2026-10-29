@@ -160,7 +160,7 @@ test("cancellation during deletion wins over startup OOM recovery", async () => 
 for (const overrides of [
   {run: {desiredOutcome: "canceled"}},
   {run: {oomRetryCount: 2}},
-  {session: {resources: {cpu: "4", memory: "8Gi"}}},
+  {session: {resources: {cpu: "8", memory: "32Gi"}}},
   {ticket: {status: "canceled"}},
   {workspace: {deleted: true}},
   {serviceAbsent: false},
@@ -192,7 +192,9 @@ test("memory grows within the catalog and CPU increases only when required", () 
   assert.deepEqual(nextResources({cpu: "1", memory: "2Gi"}), {cpu: "1", memory: "4Gi"});
   assert.deepEqual(nextResources({cpu: "1", memory: "4Gi"}), {cpu: "2", memory: "8Gi"});
   assert.deepEqual(nextResources({cpu: "4", memory: "4Gi"}), {cpu: "4", memory: "8Gi"});
-  assert.equal(nextResources({cpu: "4", memory: "8Gi"}), null);
+  assert.deepEqual(nextResources({cpu: "4", memory: "16Gi"}), {cpu: "6", memory: "24Gi"});
+  assert.deepEqual(nextResources({cpu: "6", memory: "24Gi"}), {cpu: "8", memory: "32Gi"});
+  assert.equal(nextResources({cpu: "8", memory: "32Gi"}), null);
   assert.equal(nextResources(null), null);
 });
 

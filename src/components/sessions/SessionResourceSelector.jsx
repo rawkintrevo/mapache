@@ -68,7 +68,7 @@ export function SessionResourceSelector({
         <summary>Advanced settings</summary>
         <div className="session-resource-advanced">
           <SessionResourceFields cpu={cpu} cpuName={cpuName} memory={memory} memoryName={memoryName} onChange={onChange} />
-          <p className="subtle">Cloud Run does not support every CPU and memory combination.</p>
+          <p className="subtle">Supported ranges: 1 vCPU up to 4 GiB; 2 vCPU up to 8 GiB; 4 vCPU from 2–16 GiB; 6 vCPU from 4–24 GiB; 8 vCPU from 4–32 GiB.</p>
         </div>
       </details>
     </fieldset>
