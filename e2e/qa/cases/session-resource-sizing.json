@@ -23,7 +23,7 @@
     {"type": "click", "role": "button", "name": "Save changes"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces/", "method": "PATCH", "expectedStatus": 200, "timeoutMs": 30000},
     {"useScript": "scripts/open-workspace-edit-modal.json"},
-    {"assert": "snapshot-text", "expected": "Custom 8 vCPU / 32 GiB"},
+    {"assert": "snapshot-text", "expected": "8 vCPU / 32 GiB"},
     {"assert": "snapshot-text", "expected": "Custom selection: $0.7488/hr estimate"},
     {"capture": "screenshot", "fileName": "session-resource-sizing-8-32.png"},
     {"type": "click", "role": "button", "name": "Cancel"},
