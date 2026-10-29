@@ -2,7 +2,7 @@ name: Runner Registry Cleanup
 
 on:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "23 0 * * *"
   workflow_dispatch:
     inputs:
       mode:
