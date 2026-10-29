@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const {createActivityService} = require("./activity");
 const {createWorkspaceAuthority} = require("./workspaceAuthority");
 
 const admin = {
@@ -147,6 +148,41 @@ test("fences duplicate boots and rejects delayed work after controlled generatio
   assert.equal(instanceA.isCurrentWriter(), false);
   assert.deepEqual(stopped, ["a"]);
   await instanceB.release("test");
+});
+
+test("duplicate startup failure does not poison the admitted owner", async () => {
+  const store = initialStore();
+  const instanceA = createWorkspaceAuthority({
+    admin,
+    config: config("session-a", 1),
+    db: store.db,
+    instanceId: "boot-a",
+  });
+  const duplicate = createWorkspaceAuthority({
+    admin,
+    config: config("session-a", 1),
+    db: store.db,
+    instanceId: "boot-b",
+  });
+  await instanceA.acquire();
+  store.sessions["session-a"].status = "running";
+  await assert.rejects(() => duplicate.acquire(), (error) => error.code === "workspace_runtime_authority_denied");
+
+  const activity = createActivityService({
+    admin,
+    config: config("session-a", 1),
+    db: store.db,
+    getRuntimeIdentity: duplicate.status,
+    logger: {warn: () => {}},
+  });
+  await activity.markRuntimeStartupFailure(new Error("workspace_runtime_authority_denied"), {
+    allowUnadmitted: true,
+  });
+
+  await instanceA.renew();
+  assert.equal(store.sessions["session-a"].status, "running");
+  assert.equal(store.sessions["session-a"].runtimeState, undefined);
+  await instanceA.release("test");
 });
 
 test("coordination loss fails closed and invokes child termination", async () => {
