@@ -69,4 +69,18 @@ describe("instancesController", () => {
     expect(fixtureData.state.instances.instances).toEqual([]);
     expect(fixtureData.state.instances.nextCursor).toBe("");
   });
+
+  test("publishes a response when identity is set after controller creation", async () => {
+    const fixtureData = fixture();
+    fixtureData.state.user = null;
+    const controller = createInstancesController({...fixtureData, setIntervalImpl: vi.fn()});
+
+    fixtureData.state.user = {uid: "user-1"};
+    controller.setIdentity("user-1");
+    await controller.load();
+
+    expect(fixtureData.state.instances.loading).toBe(false);
+    expect(fixtureData.state.instances.error).toBe("");
+    expect(fixtureData.state.instances.instances).toEqual([{id: "session-1", type: "main", status: "running"}]);
+  });
 });

@@ -206,7 +206,10 @@ opaque cursor paging, and polls every five seconds only while the document is
 visible. Main-session Stop delegates the existing session stop/Pause endpoint;
 automation Stop delegates the run cleanup endpoint. The page never performs
 Cloud Run discovery or offers bulk/forced termination, and logout clears the
-inventory and stops its polling lifecycle.
+inventory and stops its polling lifecycle. The app synchronizes the controller's
+authenticated user identity from the auth observer before inventory responses
+can be published, preserving stale-response fencing across sign-in, logout, and
+account changes.
 
 The automation editor is a controlled component owned by the automation workflow.
 `WorkspacePanel` displays global action errors above an existing session as well

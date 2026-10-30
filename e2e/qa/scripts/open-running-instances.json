@@ -1,0 +1,12 @@
+{
+  "id": "script.openRunningInstances",
+  "title": "Open the running instances page from the user menu",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Mapache QA Agent"},
+    {"type": "click", "role": "menuitem", "name": "Running instances"},
+    {"type": "waitForSnapshotText", "text": "Live inventory", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "Running instances page shows the Live inventory section"
+  ]
+}

@@ -73,6 +73,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/auth-timezone.json`: Authenticated profile timezone persistence and shell health.
 - `cases/app-shell-empty.json`: Empty authenticated shell.
 - `cases/navigation-topbar.json`: Workspace, connection, account, and refresh controls in the top navigation.
+- `cases/running-instances.json`: Signed-in user-menu navigation to the Running Instances live inventory and settled loading state.
 - `cases/runtime-schedule-policy.json`: Saves a weekday/timezone runtime schedule while leaving the workspace in Idle timeout mode; does not start a runner.
 - `cases/global-action-indicator.json`: Busy indicator during global refresh.
 - `cases/profile.json`: Profile and runner usage view.
