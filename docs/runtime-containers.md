@@ -145,6 +145,14 @@ run/session workers are idempotent across duplicate Firestore deliveries and
 Cloud Run response loss; provisioning failure leaves cleanup responsible for
 confirming service absence and releasing the run reservation.
 
+## Large workspace artifacts
+
+Local workspace checkpoint restore defers files larger than 100 MiB as pointers.
+Explicit `mapache files pull <path>` downloads verify checksums and check memory
+headroom. Existing checkpoints use the same policy on the next updated runner
+boot. See [Large workspace files](./workspace-large-files.md) for persistence,
+recovery, and rollback constraints.
+
 ## Runner Images
 
 The supported runner image is built from `session-runner/Dockerfile.pi-chrome`

@@ -51,3 +51,11 @@ Read only the skill needed for the task. These image-owned copies remain availab
 - Build-and-serve guidance (compatibility name): `/app/seeded-skills/mapache-preview-build/SKILL.md`
 - Local app/API servers: `/app/seeded-skills/mapache-api-hosting/SKILL.md`
 - Local browser QA (compatibility name): `/app/seeded-skills/mapache-preview-qa/SKILL.md`
+
+## Large workspace files
+
+Local workspace files larger than 100 MiB restart as `mapache-large-file-v1`
+pointers. Run `mapache files pull <path>` before opening a deferred model or
+binary. Fetch verifies checksums and requires RAM for the file plus headroom;
+resize if needed. Renamed or unchanged pointers preserve their stored blobs.
+Shared mounted workspaces retain normal filesystem behavior.

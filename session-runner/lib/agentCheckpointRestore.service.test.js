@@ -339,3 +339,17 @@ test("new workspaces with no published checkpoint remain empty and restore makes
   assert.equal(modelRequests, 0);
   assert.equal(await fs.access(config.workspaceDir).then(() => true).catch(() => false), false);
 });
+
+test("legacy large workspace entries restore as pointers without downloading their blobs", async (t) => {
+  const {config, storage, store} = await makeFixture(t);
+  config.workspaceLargeFileThresholdBytes = 1;
+  const originalBucket = storage.bucket.bind(storage);
+  storage.bucket = (name) => ({file(objectPath) {
+    assert.ok(!objectPath.includes("/objects/nested/.hidden"), "large artifact must not download");
+    return originalBucket(name).file(objectPath);
+  }});
+  await createAgentCheckpointRestoreService({config, db: store.db, storage}).restoreCheckpoint({shouldIgnore: (p) => p === ".git" || p.startsWith(".git/")});
+  const pointer = require("./workspaceLargeFiles").parsePointer(await fs.readFile(path.join(config.workspaceDir, "nested/.hidden")));
+  assert.equal(pointer.byteLength, Buffer.byteLength("restored workspace\n"));
+  assert.equal(await fs.readlink(path.join(config.workspaceDir, "current.txt")), "nested/.hidden");
+});

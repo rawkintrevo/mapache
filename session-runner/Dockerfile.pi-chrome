@@ -32,7 +32,8 @@ COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 RUN node /app/lib/patchPiMcpAdapter.js \
   && node /app/lib/patchPiModelCatalog.js /opt/mapache/pi-web-ui
 
-RUN chmod +x /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js /app/bin/mapache-gh /app/bin/mapache-git-credential.js \
+RUN chmod +x /app/bin/mapache.js /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js /app/bin/mapache-gh /app/bin/mapache-git-credential.js \
+  && ln -sf /app/bin/mapache.js /usr/local/bin/mapache \
   && ln -sf /app/bin/mapache-preview-qa.js /usr/local/bin/mapache-preview-qa \
   && ln -sf /app/bin/mapache-chrome-status.js /usr/local/bin/mapache-chrome-status \
   && ln -sf /app/bin/mapache-gh /usr/local/bin/mapache-gh \
