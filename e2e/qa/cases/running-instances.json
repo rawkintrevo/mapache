@@ -1,0 +1,16 @@
+{
+  "id": "instances.running-inventory",
+  "title": "Running Instances live inventory loads after sign-in",
+  "description": "Open the owner-wide inventory from the signed-in user menu and verify the request settles instead of leaving the page stuck on its loading state.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/instances.running-inventory",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-running-instances.json"},
+    {"assert": "snapshot-text", "expected": "Live inventory"},
+    {"assert": "snapshot-not-text", "expected": "Loading running instances..."},
+    {"capture": "screenshot", "fileName": "running-instances.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

@@ -162,6 +162,7 @@ async function start() {
         api: user ? createApiClient(() => user.getIdToken()) : null,
       });
       automationsController.setIdentity(user?.uid || "");
+      instancesController.setIdentity(user?.uid || "");
       if (!user) {
         sessionSubscriptionController.detach();
         automationsController.clear();
