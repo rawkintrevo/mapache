@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {agentSnapshotStoragePrefix} = require("./agentSnapshot.service");
 const {generationMatchOptions} = require("./workspaceSyncGeneration.helpers");
+const {publishLargeFile, parsePointer, shouldDefer} = require("./workspaceLargeFiles");
 const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 const CHECKPOINT_VERSION = 1;
@@ -281,12 +282,14 @@ async function publishWorkspaceFiles({
   const sourceFiles = files || await collectWorkspaceFiles({fsImpl, root: sourceRoot, shouldIgnore});
   let publicationBase = basePointer;
   let previousPaths = [];
+  let previousManifest = null;
   if (publicationBase === undefined) {
     const previous = await readPublishedWorkspaceState({config, db, identity, storage});
     publicationBase = previous.pointer;
     previousPaths = previous.paths;
+    previousManifest = previous.manifest;
   } else if (tombstones === undefined && publicationBase) {
-    const previousManifest = await readWorkspaceManifest({config, pointer: publicationBase, storage});
+    previousManifest = await readWorkspaceManifest({config, pointer: publicationBase, storage});
     previousPaths = (previousManifest.files || [])
         .map((file) => validateRelativePath(file.path, "published workspace file"));
   }
@@ -335,8 +338,29 @@ async function publishWorkspaceFiles({
     const stat = sourceFile.content !== undefined ?
       {mode: sourceFile.mode || 0o600, isFile: () => true} : await fsImpl.promises.lstat(localPath);
     if (!stat.isFile()) throw checkpointError("checkpoint_workspace_file_invalid", `Workspace path is not a file: ${relativePath}`);
+    // Large files are hashed/uploaded as streams. Pointer text is never published
+    // as artifact content; it must resolve against the trusted previous manifest.
+    if (sourceFile.content === undefined && shouldDefer({byteLength: stat.size}, config)) {
+      const file = await publishLargeFile({config, localPath, mode: stat.mode & 0o777,
+        relativePath, storage, fsImpl});
+      manifest.files.push(file);
+      objectRefs.push({bucketName: config.bucketName, objectPath: file.objectPath,
+        byteLength: file.byteLength, sha256: file.sha256});
+      continue;
+    }
     const content = Buffer.isBuffer(sourceFile.content) ? sourceFile.content :
       sourceFile.content !== undefined ? Buffer.from(String(sourceFile.content), "utf8") : await fsImpl.promises.readFile(localPath);
+    const deferred = parsePointer(content);
+    if (deferred) {
+      if (!previousManifest && publicationBase) previousManifest = await readWorkspaceManifest({config, pointer: publicationBase, storage});
+      const file = await publishLargeFile({config, pointer: deferred, previousManifest,
+        previousPointer: publicationBase, mode: stat.mode & 0o777, relativePath, storage, fsImpl});
+      manifest.files.push(file);
+      objectRefs.push({bucketName: config.bucketName, objectPath: file.objectPath,
+        byteLength: file.byteLength, sha256: file.sha256});
+      continue;
+    }
+
     const file = {
       path: relativePath,
       kind,
@@ -463,6 +487,7 @@ async function readPublishedWorkspaceState({config = {}, db, identity, storage} 
   if (!pointer) return {paths: [], pointer: null};
   const manifest = await readWorkspaceManifest({config, pointer, storage});
   return {
+    manifest,
     paths: (manifest.files || []).map((file) => validateRelativePath(file.path, "published workspace file")),
     pointer,
   };
@@ -479,6 +504,7 @@ async function readWorkspaceManifest({config = {}, pointer, storage} = {}) {
     throw checkpointError("checkpoint_previous_manifest_unavailable", "Published workspace manifest could not be read", error);
   }
   const content = Array.isArray(downloaded) ? downloaded[0] : downloaded;
+  verifyContent(pointer.manifest, Buffer.from(content), "previous workspace manifest");
   let manifest;
   try {
     manifest = JSON.parse(Buffer.from(content).toString("utf8"));
@@ -799,6 +825,7 @@ module.exports = {
   createAgentCheckpointService,
   publishWorkspaceFiles,
   recordCheckpointError,
+  readWorkspaceManifest,
   uploadCapture,
   validateRelativePath,
 };

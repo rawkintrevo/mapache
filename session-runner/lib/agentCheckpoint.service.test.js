@@ -101,10 +101,19 @@ function createStorage({failOnUploadNumber = 0} = {}) {
   const objects = new Map();
   const uploads = [];
   const deletes = [];
+  const metadata = new Map();
   let uploadNumber = 0;
   function file(bucketName, objectPath) {
     const key = `${bucketName}/${objectPath}`;
     return {
+      name: objectPath,
+      async getMetadata() { return [{size: objects.get(key).length, generation: "1", metadata: metadata.get(key) || {}}]; },
+      async copy(target, options) {
+        const destination = `${bucketName}/${target.name}`;
+        if (objects.has(destination)) throw Object.assign(new Error("exists"), {code: 412});
+        objects.set(destination, objects.get(key));
+        metadata.set(destination, options.metadata);
+      },
       async save(content, options) {
         uploadNumber += 1;
         if (uploadNumber === failOnUploadNumber) throw Object.assign(new Error("injected upload failure"), {code: "storage_failed"});
@@ -319,4 +328,32 @@ test("checkpoint status exposes only the safe timestamp and error code", async (
     lastCheckpointAt: "2026-09-11T12:00:00.000Z",
     checkpointError: "checkpoint_upload_failed",
   });
+});
+
+test("pointer publication preserves model bytes through rename, restart and deletion", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-large-checkpoint-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root);
+  const store = admittedStore();
+  const storage = createStorage();
+  let sequence = 0;
+  const publisher = createAgentCheckpointService({admin, config, db: store.db, storage, randomId: () => `capture-${++sequence}`});
+  const first = await publisher.publishWorkspaceFiles({files: [{path: "model.pt", content: "original-model"}]});
+  const {encodePointer} = require("./workspaceLargeFiles");
+  const pointerContent = encodePointer(first.manifest.files[0]);
+  const second = await publisher.publishWorkspaceFiles({files: [{path: "renamed.pt", content: pointerContent}]});
+  assert.equal(second.manifest.files[0].storage, "large-file-v1");
+  assert.deepEqual(second.manifest.tombstones, ["model.pt"]);
+  const blob = second.manifest.files[0].objectPath;
+  assert.equal(storage.objects.get(`${config.bucketName}/${blob}`).toString(), "original-model");
+  const third = await publisher.publishWorkspaceFiles({files: [{path: "renamed.pt", content: pointerContent}]});
+  assert.equal(third.manifest.files[0].objectPath, blob);
+  // A replacement runner restores the CAS-backed entry as a pointer too.
+  await fs.mkdir(config.workspaceDir);
+  const {createAgentCheckpointRestoreService} = require("./agentCheckpointRestore.service");
+  await createAgentCheckpointRestoreService({config, db: store.db, storage}).restoreWorkspaceFiles();
+  assert.deepEqual(await fs.readFile(path.join(config.workspaceDir, "renamed.pt")), pointerContent);
+  const fourth = await publisher.publishWorkspaceFiles({files: []});
+  assert.deepEqual(fourth.manifest.tombstones, ["renamed.pt"]);
+  assert.equal(storage.objects.has(`${config.bucketName}/${blob}`), true, "deletion must retain historical data");
 });

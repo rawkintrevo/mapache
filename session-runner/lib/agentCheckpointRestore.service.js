@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const {agentSnapshotStoragePrefix, parseCompleteJsonl} = require("./agentSnapshot.service");
 const {CHECKPOINT_VERSION, WORKSPACE_FILE_NAMESPACE, validateRelativePath} = require("./agentCheckpoint.service");
+const {shouldDefer, encodePointer} = require("./workspaceLargeFiles");
 const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 function isAutomationRuntime(config = {}) {
@@ -252,6 +253,11 @@ async function buildWorkspacePlan({config, fsImpl, pointer, shouldIgnore, stageD
       continue;
     }
     if (entry.kind !== "workspace-file") throw restoreError("checkpoint_manifest_invalid", `Unsupported workspace file kind: ${relativePath}`);
+    if (shouldDefer(entry, config)) {
+      await writeStagedFile({content: encodePointer(entry), fsImpl, mode: entry.mode, stagedPath});
+      files.push({entry, relativePath, stagedPath, targetPath, symlink: false});
+      continue;
+    }
     const objectPath = expectedObjectPath(pointer, manifest, relativePath, entry.kind);
     const content = await downloadObject({
       bucketName: pointer.manifest.bucketName,
