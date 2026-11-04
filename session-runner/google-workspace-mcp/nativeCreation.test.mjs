@@ -32,11 +32,12 @@ for (const [service, idKey, resource, create, read, update, requests] of [
     assert.deepEqual(calls.map(({url, options}) => [url.origin, url.pathname, options.method || "GET"]), [
       [`https://${service}.googleapis.com`, `/v1/${resource}`, "POST"],
       [`https://${service}.googleapis.com`, `/v1/${resource}/native-1`, "GET"],
+      ...(service === "docs" ? [["https://www.googleapis.com", "/drive/v3/files/native-1/comments", "GET"]] : []),
       [`https://${service}.googleapis.com`, `/v1/${resource}/native-1:batchUpdate`, "POST"],
     ]);
     await assert.rejects(create(client, {title: "   "}), {code: "invalid_title"});
     await assert.rejects(create(client, {title: "x".repeat(257)}), {code: "invalid_title"});
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, service === "docs" ? 4 : 3);
     await assert.rejects(create(recordingClient().client, {title: "Planning"}), {code: `invalid_${idKey}`});
   });
 }

@@ -76,6 +76,38 @@ Drive search and recent-file listing likewise pass `itemsKey: "files"` to the sh
 
 Drive read access includes a unified `drive_read_file` tool. It returns ordinary textual files as bounded UTF-8, exports Google Docs and Slides as plain text, exports Google Sheets as CSV, and preserves a bounded base64 fallback for binary files. Native export uses the existing Drive read-only scope, so users who enabled Drive can inspect native content without separately enabling the Docs, Sheets, or Slides service. The legacy `drive_download_file` tool remains available for callers that explicitly need base64 bytes and continues to reject Google-native files.
 
+`docs_read_document` and Google Docs reads through `drive_read_file` also return
+comments by default using the shared `session-runner/google-workspace-mcp/driveComments.mjs`
+helper. Comments are fetched separately through Drive v3 `comments.list`, with
+an explicit field mask, and include resolved and unresolved threads, authors'
+display names, timestamps, quoted file content when available, and replies with
+resolution actions. Deleted comments/replies are excluded. Quoted text supplies
+context; it is not guaranteed to identify an exact Docs edit range. Comment text
+is untrusted document content, not agent instructions.
+
+Set `includeComments: false` to skip that request. The helper fetches one page
+per read (default `maxComments: 50`, maximum 100). Pass the returned
+`commentsNextPageToken` back as `commentsPageToken` to continue, including when
+an empty page has a continuation token. `commentsTruncated` reports either more
+pages or clipped content; `commentsContentTruncated` specifically reports local
+text/reply clipping. `maxCommentTextLength` bounds total comment/reply text,
+quoted text, and author names to 50,000 characters by default (maximum 500,000).
+Each thread includes at most 100 non-deleted replies and a `repliesTruncated`
+flag. A continuation token advances threads, not clipped text/replies; increase
+the text budget or reduce the page size to recover clipped text. Threads with
+more than 100 replies require a separate Drive API read to obtain all replies.
+Each comment response is additionally limited to 2 MB by the REST client.
+
+`commentsStatus.state` distinguishes `ok` (including an empty list), `disabled`,
+and `unavailable`. Comment permission, network, and response-size failures
+preserve the successful document result, omit the comments list, and provide
+bounded status/code/retryability diagnostics. Existing tool registration gates
+remain unchanged: Mapache's Docs read scope catalog already requires
+`drive.readonly` alongside `documents.readonly`, even with only the Docs service
+enabled. This change requires no new OAuth scope or Functions deployment.
+Publish a rebuilt `pi-chrome` image and restart/recreate existing sessions to
+receive the updated readers; existing Cloud Run revisions retain the old code.
+
 Write-capable runner connections expose the following bounded creation contracts:
 
 - `sheets_create_spreadsheet` requires the Sheets write scope, calls the Sheets API's `spreadsheets.create` method with `{properties: {title}}`, and returns the created `spreadsheetId` plus an editable Google Sheets URL. The returned ID can be passed directly to the existing Sheets value and dimension tools.
