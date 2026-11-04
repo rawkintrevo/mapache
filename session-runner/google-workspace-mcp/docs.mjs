@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import {commentReadSchema, readFileComments} from "./driveComments.mjs";
 import {boundedItemLimit, pathSegment, queryParams, registerJsonTool} from "./tools.mjs";
 
 const DOCS_API = "https://docs.googleapis.com/v1";
@@ -6,8 +7,8 @@ const DOCS_API = "https://docs.googleapis.com/v1";
 export function registerDocsReadTools(server, {client, config}) {
   if (!config?.hasReadScope?.("docs")) return [];
   registerJsonTool(server, "docs_read_document", {
-    description: "Read a compact structured Google Doc while preserving update indices.",
-    inputSchema: z.object({documentId: z.string().min(1).max(512), maxElements: z.number().int().min(1).max(2_000).optional(), maxTextLength: z.number().int().min(1).max(500_000).optional()}),
+    description: "Read a compact structured Google Doc with update indices and comments/replies by default. Set includeComments=false to skip comments. Pass commentsNextPageToken as commentsPageToken to continue; commentsContentTruncated reports text/reply limits.",
+    inputSchema: z.object({documentId: z.string().min(1).max(512), maxElements: z.number().int().min(1).max(2_000).optional(), maxTextLength: z.number().int().min(1).max(500_000).optional(), ...commentReadSchema}),
   }, (input) => readDocument(client, input));
   return ["docs_read_document"];
 }
@@ -15,10 +16,11 @@ export function registerDocsReadTools(server, {client, config}) {
 export async function readDocument(client, input = {}) {
   const documentId = String(input.documentId || "").trim();
   const result = await client.request(`${DOCS_API}/documents/${pathSegment(documentId, "documentId")}?${queryParams({includeTabsContent: true})}`);
-  return compactDocument(result, {
+  const document = compactDocument(result, {
     maxElements: boundedItemLimit(input.maxElements, 500, 2_000),
     maxTextLength: boundedItemLimit(input.maxTextLength, 100_000, 500_000),
   });
+  return {...document, ...await readFileComments(client, documentId, input)};
 }
 
 export function compactDocument(document = {}, limits = {}) {

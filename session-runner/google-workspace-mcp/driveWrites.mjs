@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 import {randomUUID} from "node:crypto";
 import {hasGrantedScope} from "./config.mjs";
 import {compactFile} from "./drive.mjs";
+import {commentReadSchema, readFileComments} from "./driveComments.mjs";
 import {boundedItemLimit, pathSegment, queryParams, registerJsonTool, requiredText} from "./tools.mjs";
 
 const DRIVE_API = "/drive/v3";
@@ -41,8 +42,8 @@ export function registerDriveWriteTools(server, {client, config}) {
   const registered = [];
   if (config?.hasReadScope?.("drive")) {
     registerJsonTool(server, "drive_read_file", {
-      description: "Read bounded Drive file content. Exports Google Docs, Sheets, and Slides to text and returns other text files as UTF-8.",
-      inputSchema: z.object({fileId: z.string().min(1).max(512), maxBytes: z.number().int().min(1).max(5_000_000).optional()}),
+      description: "Read bounded Drive file content. Exports Google Docs, Sheets, and Slides to text and returns other text files as UTF-8. Google Docs include comments/replies by default; set includeComments=false to skip. Pass commentsNextPageToken as commentsPageToken to continue; commentsContentTruncated reports text/reply limits.",
+      inputSchema: z.object({fileId: z.string().min(1).max(512), maxBytes: z.number().int().min(1).max(5_000_000).optional(), ...commentReadSchema}),
     }, (input) => readFile(client, input));
     registerJsonTool(server, "drive_download_file", {
       description: "Download a bounded non-native Drive file as base64.",
@@ -81,6 +82,7 @@ export async function readFile(client, input = {}) {
     file: compactFile(metadata),
     contentMimeType,
     byteLength: bytes.byteLength,
+    ...(sourceMimeType === "application/vnd.google-apps.document" ? await readFileComments(client, fileId, input) : {}),
   };
   if (exportedMimeType || isTextMimeType(contentMimeType)) {
     return {...result, encoding: "utf-8", contentText: new TextDecoder().decode(bytes)};
