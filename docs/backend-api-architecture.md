@@ -446,4 +446,4 @@ matches both owner UID and workspace ID, rejects duplicate/invalid enabled
 routes, and keeps other workspaces direct. Client environment maps cannot set
 the reserved route variables. This prevents accidental cross-user route selection, not malicious code using
 the existing shared runner IAM permissions; see
-[browser office egress](./guides/browser-office-egress.md).
+[browser SSH egress](./guides/browser-ssh-egress.md).

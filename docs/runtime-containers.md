@@ -1240,5 +1240,10 @@ for supported fields, ownership, and credential refresh behavior.
 Owner/workspace-scoped SSH browser egress is operator-configured and off by
 default. The normal persistent Chromium profile uses a
 loopback SOCKS tunnel with no direct fallback. See the
-[browser office egress guide](./guides/browser-office-egress.md) for the access
+[browser SSH egress guide](./guides/browser-ssh-egress.md) for the access
 scope, lifecycle, configuration, and image/revision rollout requirements.
+
+`scripts/ssh-gateway/install.py` provisions a dedicated gateway account with
+public-IPv4 web-only forwarding, blocked private/local destinations, and
+service-managed key revocation. Gateway setup requires local administrator
+access; it does not change the runner image or restart existing browsers.
