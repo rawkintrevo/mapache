@@ -1237,8 +1237,8 @@ for supported fields, ownership, and credential refresh behavior.
 
 ## Optional browser SSH egress
 
-Owner/workspace-scoped SSH browser egress is implemented but disabled pending
-runner isolation hardening. The normal persistent Chromium profile uses a
+Owner/workspace-scoped SSH browser egress is operator-configured and off by
+default. The normal persistent Chromium profile uses a
 loopback SOCKS tunnel with no direct fallback. See the
-[browser office egress guide](./guides/browser-office-egress.md) for the security
-release gate, lifecycle, configuration, and image/revision rollout requirements.
+[browser office egress guide](./guides/browser-office-egress.md) for the access
+scope, lifecycle, configuration, and image/revision rollout requirements.

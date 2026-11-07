@@ -444,6 +444,6 @@ ownership, lifecycle, restart requirements, and verification.
 configuration during runner environment construction, including restarts. It
 matches both owner UID and workspace ID, rejects duplicate/invalid enabled
 routes, and keeps other workspaces direct. Client environment maps cannot set
-the reserved route variables. This feature remains disabled pending a review
-and hardening of runner-to-runner isolation; see
+the reserved route variables. This prevents accidental cross-user route selection, not malicious code using
+the existing shared runner IAM permissions; see
 [browser office egress](./guides/browser-office-egress.md).

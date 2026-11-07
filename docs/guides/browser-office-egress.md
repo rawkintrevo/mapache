@@ -1,23 +1,19 @@
 # Owner-scoped browser SSH egress
 
-## Status and security release gate
+## Access scope
 
-The implementation is disabled unless the operator configures
-`BROWSER_EGRESS_CONFIG_SECRET` on the provisioning Functions. Do not enable it
-on the current shared-runner deployment until runner-to-runner isolation has
-been hardened and reviewed. API ownership checks are necessary but insufficient
-when untrusted runner code has broad control-plane data permissions. Keep the
-secret unset; a route also requires explicit `isolationReviewed: true` before
-credentials can be delivered. This flag records a completed review; it does not
-implement infrastructure isolation.
+This feature prevents accidental use of an owner's office connection by other
+Mapache users. It is operator-configured and off by default; each route matches
+both the exact Firebase owner UID and an explicit workspace allowlist. Normal
+users cannot select someone else's route or override its reserved environment
+variables. Keep credentials in an API-only Secret Manager secret.
 
-Required review: arbitrary code in another user's runner must be unable to read
-or change this workspace's access credentials, provisioning authority, runtime
-identity, or office route secret. Verify the effective IAM policies, including
-inherited roles, and test from a foreign runner identity before enablement.
-Moving the SSH key into Secret Manager alone does not satisfy this requirement.
-The authorized workspace owner/agent remains trusted with its own runner; this
-feature does not isolate a runner's root shell from its own SSH key.
+This is not a hostile multi-tenant sandbox. The current shared runner service
+account has broad control-plane data access, and the authorized workspace's
+root shell can access its own runtime credentials. The owner explicitly accepts
+the trusted-friends threat model; defending against malicious runner code would
+require a separate infrastructure isolation change. Do not describe owner checks
+or Secret Manager storage as fixing that existing limitation.
 
 ## Owners and behavior
 
@@ -49,7 +45,7 @@ feature does not isolate a runner's root shell from its own SSH key.
 - Model API, terminal, Git and workspace storage traffic keep existing routes.
   Automation sessions inherit the route only for an explicitly allowed workspace.
 
-## Operator configuration after isolation hardening
+## Operator configuration
 
 Use a dedicated office SSH account/key restricted to TCP forwarding, without
 shell, PTY, agent, or X11 access. Permit destination ports 80/443 only; restrict
@@ -63,7 +59,6 @@ Store this JSON as a Secret Manager secret version in `pi-agents-cloud`:
   "version": 1,
   "routes": [{
     "enabled": true,
-    "isolationReviewed": false,
     "ownerUid": "EXACT_FIREBASE_UID",
     "workspaceIds": ["EXACT_WORKSPACE_ID"],
     "host": "office.example.com",
@@ -75,7 +70,6 @@ Store this JSON as a Secret Manager secret version in `pi-agents-cloud`:
 }
 ```
 
-The example intentionally refuses activation until the isolation review is done.
 Grant `roles/secretmanager.secretAccessor` on this specific secret only to
 `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Never grant it to the
 shared runner account. Do not store the configuration in Firestore, source
@@ -92,8 +86,8 @@ No host/key/owner values are hardcoded in the runner image.
 
 Build a uniquely tagged image before enabling configuration, deploy Functions,
 and restart/recreate the authorized workspace with the new image. Existing
-services retain their image and environment until replaced. The PR deployment
-leaves the configuration unset and therefore does not enable office access.
+services retain their image and environment until replaced. Deploying Functions with the configuration unset is safe before the runner
+image rollout and does not enable office access.
 
 ```bash
 gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud --substitutions=_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:office-egress-COMMIT
@@ -115,7 +109,8 @@ foreign workspace receive no credential, unconfigured workspaces stay direct,
 normal browser profile state survives restart, office egress is observed inside
 Chromium, localhost previews remain accessible, and stopping SSH makes browser
 internet requests fail instead of using the Google IP. Then verify automatic
-reconnect and perform the cross-runner isolation review described above.
+reconnect. Owner/workspace denial tests cover the trusted-friends access scope;
+they do not establish isolation against malicious runner code.
 
 The initial Wave experiment used two fresh contexts in one live Chromium:
 Google egress remained at the challenge while office egress reached Wave login.

@@ -5,7 +5,7 @@ const {browserEgressEnvironment} = require("./browserEgress.service");
 const {normalizeEnvMap} = require("./env.helpers");
 const {sessionRunnerEnv} = require("./cloudRun.service");
 const resource = "projects/test-project/secrets/browser-egress/versions/1";
-const route = {enabled: true, isolationReviewed: true, ownerUid: "owner", workspaceIds: ["accounting"],
+const route = {enabled: true, ownerUid: "owner", workspaceIds: ["accounting"],
   host: "office.example.com", port: 22, user: "tunnel", hostKey: "ssh-ed25519 AAAA",
   privateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n"};
 const session = {ownerUid: "owner", workspaceId: "accounting"};
@@ -30,8 +30,7 @@ test("only exact owner AND workspace get one credential, including automation se
 test("operator disable revokes assignment on the next provision", async () => {
   assert.deepEqual(await browserEgressEnvironment(session, deps([{...route, enabled: false}])), []);
 });
-test("enabled routes require explicit isolation review; bad config fails closed", async () => {
-  await assert.rejects(browserEgressEnvironment(session, deps([{...route, isolationReviewed: false}])), /isolation_review_required/);
+test("ambiguous or bad route configuration fails closed", async () => {
   await assert.rejects(browserEgressEnvironment(session, deps([route, route])), /ambiguous_route/);
   for (const patch of [{host: "-oProxyCommand=bad"}, {user: "bad\nuser"}, {port: 0}, {port: "22"},
     {hostKey: "ssh-ed25519 AAAA\nother"}, {privateKey: "not a key"}]) {
