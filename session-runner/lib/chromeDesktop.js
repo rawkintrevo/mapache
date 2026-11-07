@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const {browserProxyArgs} = require("./browserEgress");
 const path = require("path");
 const {execFile, spawn} = require("child_process");
 const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
@@ -130,6 +131,7 @@ function createChromeDesktopService(config = {}, deps = {}) {
       "--disable-background-networking",
       "--disable-dev-shm-usage",
       "--no-sandbox",
+      ...browserProxyArgs(config.browserEgressEnabled),
       "about:blank",
     ];
     startProcess("chromium", "chromium", args, {

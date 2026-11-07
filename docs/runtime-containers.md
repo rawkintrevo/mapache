@@ -1234,3 +1234,16 @@ revalidates this metadata and reconstructs custom providers before Pi starts.
 This applies to the managed `pi-chrome` runtime and requires a rebuilt image/new
 revision for existing services. See [Named OpenAI-compatible connections](./runner-harnesses.md#named-openai-compatible-connections)
 for supported fields, ownership, and credential refresh behavior.
+
+## Optional browser SSH egress
+
+Owner/workspace-scoped SSH browser egress is operator-configured and off by
+default. The normal persistent Chromium profile uses a
+loopback SOCKS tunnel with no direct fallback. See the
+[browser SSH egress guide](./guides/browser-ssh-egress.md) for the access
+scope, lifecycle, configuration, and image/revision rollout requirements.
+
+`scripts/ssh-gateway/install.py` provisions a dedicated gateway account with
+public-IPv4 web-only forwarding, blocked private/local destinations, and
+service-managed key revocation. Gateway setup requires local administrator
+access; it does not change the runner image or restart existing browsers.

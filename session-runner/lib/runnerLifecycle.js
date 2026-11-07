@@ -14,6 +14,7 @@ function createRunnerLifecycleCoordinator({
   chromeProfileSeed,
   chromeProfileSnapshots,
   chromeRuntime,
+  browserEgress,
   checkpointScheduler,
   config,
   git,
@@ -60,6 +61,7 @@ function createRunnerLifecycleCoordinator({
       await piModelScope.restore();
       const profileSeedRestore = await chromeProfileSeed?.restore?.();
       if (!profileSeedRestore?.restored) await chromeProfile.restore();
+      await browserEgress?.start();
       await chromeRuntime.start();
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
@@ -75,6 +77,7 @@ function createRunnerLifecycleCoordinator({
         logger.log(`session runner listening on ${config.port}`);
       });
     } catch (error) {
+      await browserEgress?.stop();
       await activity.markRuntimeStartupFailure(error, {allowUnadmitted: !authorityAcquired}).catch((writeError) => {
         logger.error("session runtime failure write failed", writeError);
       });
@@ -142,6 +145,7 @@ function createRunnerLifecycleCoordinator({
       await automationAgentApi?.stop?.();
       await googleMcpTokenApi?.stop?.();
     } finally {
+      await browserEgress?.stop();
       await githubTokenApi?.stop?.();
       await authority.release("shutdown").catch((error) => {
         logger.error("workspace runtime authority release failed during shutdown", error);
