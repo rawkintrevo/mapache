@@ -54,6 +54,22 @@ pair stored on an automation definition, using a generated export of the pinned
 runner catalog. It does not change the interactive Agent's model or require an
 active runtime.
 
+### Environment selection and provider auth
+
+`src/workflows/piAuth.js` and `src/services/api.js` send environment-only saves as
+`{environmentEntryIds: [...]}` to the session auth-selection endpoint.
+`functions/agentAuth.service.js` writes only those IDs, without changing
+`authSelection`, its timestamp, account credentials, or the live native auth file.
+The variables take effect after restart. Omitting `authSelection` on a session
+means inherit account providers; an explicit empty provider map means use none.
+Explicit provider updates still send `selection`, including `{}` to clear it;
+combined provider/environment updates remain supported.
+
+Deploy the API before releasing this frontend. No runner image rebuild is needed.
+This prevents new losses but does not repair existing empty selections: affected
+users must reselect their intended credentials in Manage Pi Auth and restart.
+Do not bulk-reset empty selections because some are intentional.
+
 ## Startup hooks
 
 Runner harness resolution provides a small ordered set of startup hooks:

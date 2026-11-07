@@ -1,0 +1,14 @@
+{
+  "id": "auth.environment-preservation",
+  "title": "Environment edits preserve inherited and explicit Pi authentication",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/auth.environment-preservation",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/environment-preservation.json"},
+    {"assert": "environment-only-auth-preserved", "description": "Create, disable, enable and delete a disposable environment key via the real modal. Auth-selection requests omit selection; absent, explicit selected and explicit empty auth stay unchanged. Reload and restart retain inherited auth and the same configured providers in the runner model catalog. Account credentials remain unchanged."},
+    {"capture": "screenshot", "fileName": "environment-saved.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

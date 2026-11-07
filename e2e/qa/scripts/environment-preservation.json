@@ -1,0 +1,24 @@
+{
+  "id": "script.environmentPreservation",
+  "title": "Exercise environment selection in a disposable QA workspace",
+  "requires": {"chromeDevtools": true, "deployedApi": "environment-only partial updates", "project": "pi-agents-cloud"},
+  "actions": [
+    {"type": "apiRequest", "method": "POST", "path": "/api/workspaces", "body": {"name": "qa-env-preserve-359-{{timestamp}}", "source": {"type": "blank"}}, "saveAs": "workspace"},
+    {"type": "apiRequest", "method": "POST", "path": "/api/workspaces/{{workspace.id}}/sessions", "body": {}, "saveAs": "session"},
+    {"type": "navigate", "url": "{{baseUrl}}/app"},
+    {"type": "waitForSnapshotText", "text": "Agent", "timeoutMs": 180000},
+    {"type": "click", "role": "button", "name": "More workspace actions"},
+    {"type": "click", "role": "menuitem", "name": "Manage generic environment keys"},
+    {"type": "fill", "label": "Variable name", "value": "QA_ENV_PRESERVE_359"},
+    {"type": "fill", "label": "Secret value", "value": "non-secret-qa-fixture"},
+    {"type": "submit", "buttonName": "Save key"},
+    {"type": "waitForSnapshotText", "text": "Environment key saved and selected for this session", "timeoutMs": 15000},
+    {"type": "click", "selector": ".generic-environment-selection input"},
+    {"type": "click", "selector": ".generic-environment-selection input"},
+    {"type": "navigate", "url": "{{baseUrl}}/app"},
+    {"type": "apiRequest", "method": "POST", "path": "/api/workspaces/{{workspace.id}}/sessions/{{session.id}}/restart", "body": {}},
+    {"type": "waitForSnapshotText", "text": "Agent", "timeoutMs": 180000}
+  ],
+  "verification": "Use owner-scoped session reads and read-only runner model catalog/configured-provider metadata before save, after save, after reload and after restart. Repeat checkbox and deletion paths for explicit selected and explicit empty provider states on this disposable session. Do not send model prompts or expose credential values. If the QA account has no credentials, temporarily save a non-secret fixture API key solely to verify configured-provider catalog presence; never invoke it.",
+  "cleanup": "Delete the disposable environment entry, any fixture credential created by this case, and the exact workspace returned by setup; verify deletion. Clear QA login local storage. Never modify another workspace."
+}
