@@ -1234,3 +1234,11 @@ revalidates this metadata and reconstructs custom providers before Pi starts.
 This applies to the managed `pi-chrome` runtime and requires a rebuilt image/new
 revision for existing services. See [Named OpenAI-compatible connections](./runner-harnesses.md#named-openai-compatible-connections)
 for supported fields, ownership, and credential refresh behavior.
+
+## Optional browser SSH egress
+
+Owner/workspace-scoped SSH browser egress is implemented but disabled pending
+runner isolation hardening. The normal persistent Chromium profile uses a
+loopback SOCKS tunnel with no direct fallback. See the
+[browser office egress guide](./guides/browser-office-egress.md) for the security
+release gate, lifecycle, configuration, and image/revision rollout requirements.

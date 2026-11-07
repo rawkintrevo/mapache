@@ -3,6 +3,7 @@
 const {buildUploadsStorageTemplate} = require("./workspaceUploads.service");
 
 const crypto = require("node:crypto");
+const {browserEgressEnvironment} = require("./browserEgress.service");
 const logger = require("firebase-functions/logger");
 const {
   admin,
@@ -859,6 +860,7 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
   }
 
   if (capabilities.chrome) {
+    env.push(...await (dependencies.browserEgressEnvironment || browserEgressEnvironment)(session));
     env.push(
         {name: "CHROME_PROFILE_DIR", value: runtime.chromeProfileDir},
         {name: "CHROME_CDP_HOST", value: "127.0.0.1"},

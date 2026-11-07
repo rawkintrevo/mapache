@@ -2,6 +2,9 @@
 
 const {isolateRunnerGoogleCredentials} = require("./lib/runnerEnvironment");
 const runnerEnvironment = isolateRunnerGoogleCredentials();
+const {takeBrowserEgressConfig, createBrowserEgress} = require("./lib/browserEgress");
+const browserEgressConfig = takeBrowserEgressConfig();
+const browserEgress = createBrowserEgress(browserEgressConfig);
 const path = require("path");
 const http = require("http");
 const express = require("express");
@@ -58,6 +61,7 @@ const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 const {isAutomationRuntime} = require("./lib/runtimePaths");
 
 const config = createConfig(runnerEnvironment);
+config.browserEgressEnabled = Boolean(browserEgressConfig);
 const browserAccess = createBrowserAccessVerifier({
   secret: config.sessionBrowserTokenSecret,
   sessionId: config.sessionId,
@@ -207,6 +211,7 @@ const resourceMetricsSocket = createResourceMetricsWebSocket({
   metricsService: resourceMetrics,
 });
 const runnerLifecycle = createRunnerLifecycleCoordinator({
+  browserEgress,
   activity,
   activeHarness,
   admin,

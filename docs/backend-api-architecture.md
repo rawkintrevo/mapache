@@ -437,3 +437,13 @@ The navbar Upload file action sends local files directly to Cloud Storage using
 resumable transfers. Main and automation sessions mount their workspace inputs
 read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
 ownership, lifecycle, restart requirements, and verification.
+
+## Browser egress provisioning
+
+`browserEgress.service.js` resolves an operator-only, version-pinned Secret Manager
+configuration during runner environment construction, including restarts. It
+matches both owner UID and workspace ID, rejects duplicate/invalid enabled
+routes, and keeps other workspaces direct. Client environment maps cannot set
+the reserved route variables. This feature remains disabled pending a review
+and hardening of runner-to-runner isolation; see
+[browser office egress](./guides/browser-office-egress.md).

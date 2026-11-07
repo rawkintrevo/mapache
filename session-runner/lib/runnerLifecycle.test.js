@@ -32,6 +32,7 @@ function createLifecycleHarness(events, overrides = {}) {
     admin: overrides.admin || {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
     chromeProfile: overrides.chromeProfile || service("restore", "chromeProfile.restore"),
     chromeProfileSeed: overrides.chromeProfileSeed,
+    browserEgress: overrides.browserEgress,
     chromeProfileSnapshots: overrides.chromeProfileSnapshots || {
       enabled: () => true,
       finalize: async () => events.push("chromeProfileSnapshots.finalize"),
@@ -346,4 +347,29 @@ test("GitHub token socket closes even when final checkpoint fails", async () => 
   });
   await assert.rejects(lifecycle.shutdown(), /checkpoint failed/);
   assert.equal(stopped, true);
+});
+
+
+test("egress is ready before Chrome and always stops on shutdown", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {browserEgress: {
+    start: async () => events.push("egress.start"),
+    stop: async () => events.push("egress.stop"),
+  }});
+  await lifecycle.start();
+  assert.ok(events.indexOf("egress.start") < events.indexOf("chromeRuntime.start"));
+  await lifecycle.shutdown();
+  assert.ok(events.indexOf("egress.stop") > events.indexOf("chromeRuntime.stop"));
+});
+
+test("tunnel startup failure prevents Chrome and cleans up the tunnel", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {browserEgress: {
+    start: async () => {throw new Error("browser_egress_start_failed");},
+    stop: async () => events.push("egress.stop"),
+  }});
+  await assert.rejects(lifecycle.start(), /browser_egress_start_failed/);
+  assert.ok(!events.includes("chromeRuntime.start"));
+  assert.ok(!events.includes("server.listen"));
+  assert.ok(events.includes("egress.stop"));
 });

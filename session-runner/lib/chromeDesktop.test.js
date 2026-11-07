@@ -176,3 +176,27 @@ test("requires Xvfb to accept X clients before starting desktop dependents", asy
   assert.deepEqual(calls, ["Xvfb", "x11vnc", "openbox", "tint2", "chromium"]);
   await service.stop();
 });
+
+
+test("office egress flags apply to the normal persistent browser and its restart", async () => {
+  const calls = [], children = [];
+  const service = createChromeDesktopService(config({browserEgressEnabled: true}), {
+    spawn: (command, args) => {
+      calls.push({command, args});
+      const child = new EventEmitter(); child.kill = () => {};
+      children.push({command, child}); return child;
+    },
+    fs: {promises: {mkdir: async () => {}, rm: async () => {}}},
+    displayReady: async () => true,
+  });
+  await service.start();
+  children.find(c => c.command === "chromium").child.emit("exit", 1);
+  await new Promise(resolve => setTimeout(resolve, 300));
+  const browsers = calls.filter(c => c.command === "chromium");
+  assert.equal(browsers.length, 2);
+  for (const browser of browsers) {
+    assert.ok(browser.args.includes("--user-data-dir=/tmp/mapache-chrome-profile"));
+    assert.ok(browser.args.includes("--proxy-server=socks5://127.0.0.1:1080"));
+  }
+  await service.stop();
+});
