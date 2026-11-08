@@ -86,3 +86,17 @@ describe("workspace runtime policy API client", () => {
     expect(fetch.mock.calls[0][1]).toMatchObject({method: "PATCH", body: JSON.stringify(policy)});
   });
 });
+
+describe("auth selection partial updates", () => {
+  test.each([
+    [{environmentEntryIds: ["env"]}, {environmentEntryIds: ["env"]}],
+    [{providers: {}}, {selection: {}}],
+    [{google: "entry"}, {selection: {google: "entry"}}],
+    [{providers: {google: "entry"}, environmentEntryIds: []}, {selection: {google: "entry"}, environmentEntryIds: []}],
+  ])("serializes %j without inventing provider selection", async (input, expected) => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ok: true}));
+    vi.stubGlobal("fetch", fetch);
+    await createApiClient(async () => "token").saveSessionPiAuthSelection("w", "s", input);
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(expected);
+  });
+});

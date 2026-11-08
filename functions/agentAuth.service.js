@@ -180,6 +180,12 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   const environmentEntryIds = hasEnvironmentSelection ?
     normalizeEnvironmentEntryIds(payload.environmentEntryIds) :
     normalizeEnvironmentEntryIds(session.environmentEntryIds || session.genericEnvironmentEntryIds || []);
+  // Environment changes take effect at restart and must not rewrite or
+  // rematerialize provider auth, including an absent (inherited) selection.
+  if (hasEnvironmentSelection && !Object.prototype.hasOwnProperty.call(payload, "selection")) {
+    await sessionSnap.ref.set({environmentEntryIds}, {merge: true});
+    return {ok: true, materialized: {ok: true, appliedToRunner: false, environmentCount: environmentEntryIds.length}};
+  }
   if (harnessId !== "pi" && !hasEnvironmentSelection) {
     throw httpError(400, "auth_selection_unsupported");
   }

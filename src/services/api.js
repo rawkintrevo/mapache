@@ -270,7 +270,9 @@ export function createApiClient(getToken) {
         {method: "POST", body: {}},
     ),
     saveSessionPiAuthSelection: (workspaceId, sessionId, selection) => {
-      const body = {selection: selection.providers || selection};
+      const body = {};
+      if (Object.prototype.hasOwnProperty.call(selection, "providers")) body.selection = selection.providers;
+      else if (!Object.prototype.hasOwnProperty.call(selection, "environmentEntryIds")) body.selection = selection;
       if (Array.isArray(selection.environmentEntryIds)) body.environmentEntryIds = selection.environmentEntryIds;
       return request(
           getToken,

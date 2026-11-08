@@ -203,6 +203,23 @@ function createFakeDependencies() {
     }},
   };
   fake.sessions.set("uid-1/workspace-1/session-1", sessionSnap);
+  const savedAuthBefore = JSON.stringify([...fake.documents]);
+  for (const selection of [undefined, {harness: "pi", providers: {}}, {harness: "pi", providers: {google: "entry-1"}}]) {
+    sessionData = {terminalKind: "pi", serviceUrl: "https://runner", shutdownToken: "token",
+      authSelectionUpdatedAt: "unchanged",
+      ...(selection === undefined ? {} : {authSelection: selection})};
+    for (const ids of [["env-1", "env-1"], []]) {
+      const result = await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {environmentEntryIds: ids});
+      assert.deepStrictEqual(sessionData.authSelection, selection);
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(sessionData, "authSelection"), selection !== undefined);
+      assert.strictEqual(sessionData.authSelectionUpdatedAt, "unchanged");
+      assert.deepStrictEqual(sessionData.environmentEntryIds, [...new Set(ids)]);
+      assert.strictEqual(result.materialized.appliedToRunner, false);
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(result, "selection"), false);
+      assert.strictEqual(calls.length, 0);
+      assert.strictEqual(JSON.stringify([...fake.documents]), savedAuthBefore);
+    }
+  }
   const selectionResult = await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {
     selection: {openai: entryId},
     environmentEntryIds: ["env-1", "env-1"],
@@ -214,6 +231,29 @@ function createFakeDependencies() {
   assert.deepStrictEqual(calls[0].options.body.environmentEntryIds, ["env-1"]);
   await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {selection: {}});
   assert.deepStrictEqual(sessionData.environmentEntryIds, ["env-1"]);
+
+  const activeAuth = await service.savePiAuthProvider("uid-1", "google", {key: "test-google-key"});
+  const activeEntryId = Object.keys(activeAuth.entries)[0];
+  await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {
+    selection: {google: activeEntryId}, environmentEntryIds: ["env-combined"],
+  });
+  assert.deepStrictEqual(sessionData.authSelection.providers, {google: activeEntryId});
+  assert.deepStrictEqual(calls.at(-1).options.body.selection.providers, {google: activeEntryId});
+  await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {selection: {}});
+  assert.deepStrictEqual(sessionData.authSelection.providers, {});
+  assert.deepStrictEqual(sessionData.environmentEntryIds, ["env-combined"]);
+  assert.deepStrictEqual(calls.at(-1).options.body.selection.providers, {});
+
+  // A provider change after the session read cannot be overwritten by an
+  // environment-only save based on that older snapshot.
+  const originalSet = sessionSnap.ref.set;
+  sessionSnap.ref.set = async (patch, options) => {
+    sessionData.authSelection = {harness: "pi", providers: {google: activeEntryId}};
+    await originalSet(patch, options);
+  };
+  await service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {environmentEntryIds: []});
+  assert.deepStrictEqual(sessionData.authSelection.providers, {google: activeEntryId});
+  sessionSnap.ref.set = originalSet;
 
   sessionData = {terminalKind: "shell", serviceUrl: "", shutdownToken: ""};
   await assert.rejects(
