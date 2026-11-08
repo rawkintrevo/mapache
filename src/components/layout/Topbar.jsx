@@ -33,8 +33,10 @@ export function Topbar({
   onShowLogs,
   onShowUpload,
   onShowProfile,
+  onShowSshGateways,
   onSignOut,
   onSetRuntimePolicy,
+  onToggleGateway,
   onToggleWorkspace,
   resourceMetrics,
 }) {
@@ -65,6 +67,10 @@ export function Topbar({
   const showWorkspaceTools = isMarkedRuntimeSession(canonicalSession);
   const showRuntimePolicy = Boolean(selectedWorkspace) && selectedWorkspace.source?.type !== "ssh" &&
     (selectedWorkspace.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(canonicalSession));
+  const gatewayStatus = state.sshGateways?.workspace || {};
+  const gatewayStatusMatchesWorkspace = gatewayStatus.workspaceId === selectedWorkspace?.id;
+  const gatewayEnabled = gatewayStatusMatchesWorkspace && gatewayStatus.enabled === true;
+  const gatewayAvailable = gatewayStatusMatchesWorkspace && (gatewayStatus.enabled === true || gatewayStatus.canEnable === true);
 
   return (
     <header className="topbar">
@@ -143,7 +149,12 @@ export function Topbar({
           onShowAutomations={onShowAutomations}
           onShowLogs={onShowLogs}
           onShowUpload={workspaceUnsupported ? null : onShowUpload}
+          onToggleGateway={onToggleGateway}
           showWorkspaceTools={showWorkspaceTools}
+          gatewayAvailable={gatewayAvailable}
+          gatewayEnabled={gatewayEnabled}
+          gatewayLoading={gatewayStatusMatchesWorkspace && gatewayStatus.loading === true}
+          gatewaySaving={gatewayStatusMatchesWorkspace && gatewayStatus.saving === true}
           managePiAuthLabel={managePiAuthLabel}
           genericEnvironmentDisabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenGenericEnvironment}
           googleWorkspaceDisabled={state.googleWorkspace?.loading || state.googleWorkspace?.saving || !onOpenGoogleWorkspace}
@@ -165,6 +176,7 @@ export function Topbar({
           onShowAdmin={onShowAdmin}
           onShowInstances={onShowInstances}
           onShowProfile={onShowProfile}
+          onShowSshGateways={onShowSshGateways}
           onSignOut={onSignOut}
         />
       </div>

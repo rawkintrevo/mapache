@@ -30,6 +30,7 @@ import {createGoogleWorkspaceController} from "./controllers/googleWorkspaceCont
 import {createAutomationsController} from "./controllers/automationsController.js";
 import {createInstancesController} from "./controllers/instancesController.js";
 import {createRequestGrantsController} from "./controllers/requestGrantsController.js";
+import {createSshGatewaysController} from "./controllers/sshGatewaysController.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -71,6 +72,7 @@ const googleWorkspaceController = createGoogleWorkspaceController({state, render
 const automationsController = createAutomationsController({state, render});
 const instancesController = createInstancesController({state, render});
 const requestGrantsController = createRequestGrantsController({state, render});
+const sshGatewaysController = createSshGatewaysController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -107,6 +109,7 @@ const handlers = {
     signOut,
     showAutomationsHistory,
     showInstances,
+    showSshGateways,
     showWorkspace,
     stopInstance,
   },
@@ -138,6 +141,7 @@ const handlers = {
   automations: automationsController,
   instances: instancesController,
   requestGrants: requestGrantsController,
+  sshGateways: sshGatewaysController,
   workspaces: {
     ...workspaceController,
     selectWorkspace: async (workspaceId) => {
@@ -163,6 +167,7 @@ async function start() {
       });
       automationsController.setIdentity(user?.uid || "");
       instancesController.setIdentity(user?.uid || "");
+      sshGatewaysController.setIdentity(user?.uid || "");
       if (!user) {
         sessionSubscriptionController.detach();
         automationsController.clear();
@@ -227,6 +232,11 @@ async function showInstances() {
   await instancesController.load();
 }
 
+async function showSshGateways() {
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "ssh-gateways"});
+  await sshGatewaysController.load();
+}
+
 function showAutomations() {
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automations"});
 }
@@ -289,6 +299,7 @@ async function refreshAll() {
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {
       await adminController.loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
     }
+    if (state.activePage === "ssh-gateways") await sshGatewaysController.load();
   }, "Working...", OPERATION_KEYS.APP_REFRESH);
 }
 

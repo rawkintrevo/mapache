@@ -1,0 +1,12 @@
+{
+  "id": "script.openConfiguredSshGateways",
+  "title": "Open a configured SSH gateway access page",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Mapache QA Agent"},
+    {"type": "click", "role": "menuitem", "name": "SSH Gateways"},
+    {"type": "waitForSnapshotText", "text": "Workspace access", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "At least one configured gateway and workspace assignment control are visible"
+  ]
+}

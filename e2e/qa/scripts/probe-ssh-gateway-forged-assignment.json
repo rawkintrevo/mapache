@@ -1,0 +1,11 @@
+{
+  "id": "script.probeForgedSshGatewayAssignment",
+  "title": "Reject a forged SSH gateway assignment",
+  "actions": [
+    {"type": "apiRequest", "method": "PUT", "path": "/api/ssh-gateways/forged-gateway-id/assignments", "body": {"workspaceIds": []}},
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/ssh-gateways/forged-gateway-id/assignments", "method": "PUT", "expectedStatus": 404, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "A gateway ID that is not owned by the signed-in user is rejected"
+  ]
+}

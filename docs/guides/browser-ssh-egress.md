@@ -3,9 +3,11 @@
 ## Access scope
 
 This feature prevents accidental use of an owner's gateway connection by other
-Mapache users. It is operator-configured and off by default; each route matches
-both the exact Firebase owner UID and an explicit workspace allowlist. Normal
-users cannot select someone else's route or override its reserved environment
+Mapache users. Gateway connection credentials remain operator-configured and
+off by default, while the route owner can manage the workspace assignment list
+from the **SSH Gateways** entry in the avatar menu. Each route matches the exact
+Firebase owner UID and an owner-validated workspace assignment. Normal users
+cannot select someone else's route or override its reserved environment
 variables. Keep credentials in an API-only Secret Manager secret.
 
 This is not a hostile multi-tenant sandbox. The current shared runner service
@@ -18,11 +20,15 @@ or Secret Manager storage as fixing that existing limitation.
 ## Owners and behavior
 
 - `functions/browserEgress.service.js` resolves an operator-managed secret on
-  every creation/restart environment build. Only an exact owner UID **and**
-  workspace ID match receives one route. Missing configuration means normal
-  direct browsing; an enabled but invalid/unavailable configuration fails closed.
+  every creation/restart environment build. `functions/browserEgressManagement.service.js`
+  stores only owner-scoped gateway/workspace assignment metadata in Firestore;
+  it never stores credentials. Only an exact owner UID **and** workspace ID
+  match receives one route. Missing configuration means normal direct browsing;
+  an enabled but invalid/unavailable configuration fails closed.
 - `functions/env.helpers.js` reserves both configuration names, preventing
-  workspace/session/generic environment injection. There is no client route API.
+  workspace/session/generic environment injection. The client cannot select a
+  route or provide route credentials; it can only save owner-validated workspace
+  assignments through the SSH Gateways management API.
 - `session-runner/lib/browserEgress.js` starts OpenSSH with a loopback SOCKS5
   listener, pinned Ed25519 host key, no password prompts, and dedicated identity.
   Child exit triggers retries with backoff capped at 30 seconds. Startup waits
@@ -183,6 +189,7 @@ Store this JSON as a Secret Manager secret version in `pi-agents-cloud`:
 {
   "version": 1,
   "routes": [{
+    "id": "office-gateway",
     "enabled": true,
     "ownerUid": "EXACT_FIREBASE_UID",
     "workspaceIds": ["EXACT_WORKSPACE_ID"],
@@ -206,6 +213,30 @@ provisioning Functions. The API reads the secret and injects only the matching
 route into its runner's `MAPACHE_BROWSER_SSH_EGRESS` environment. Cloud Run
 administrators can inspect that environment and are within the trust boundary.
 No host/key/owner values are hardcoded in the runner image.
+
+`id` is a stable operator-chosen identifier for the gateway. It is returned as
+an opaque route identifier to the authenticated owner and is never accepted
+without re-reading the matching owned route from this secret. The
+`workspaceIds` value is a migration/default allowlist for routes that have not
+yet been managed in the UI. After the owner saves assignments, the separate
+Firestore document at
+`users/{ownerUid}/private/browserEgressAssignments/gateways/{gatewayId}` stores
+only `ownerUid`, `gatewayId`, `workspaceIds`, and timestamps. An explicitly
+empty saved list revokes the legacy allowlist without changing this secret.
+
+After the secret is configured, open **SSH Gateways** from the top-right user
+menu to choose owned workspaces by name. The page shows the saved assignment
+list and explains that changes apply when a runner is newly created or
+recreated. A running browser keeps its current route until the owner explicitly
+restarts that workspace; removing an assignment does not terminate an already
+established tunnel or close a browser window. The selected workspace's **More**
+menu also shows a green **Gateway: On** or grey **Gateway: Off** control. This
+control adds or removes the workspace from its one available gateway route and
+is useful for a quick per-workspace switch. If the workspace is running, Mapache
+offers to restart it so the browser receives the new route; declining leaves the
+current browser route unchanged until the next explicit restart or recreation.
+When multiple enabled gateway routes are available, choose one from the SSH
+Gateways page before using the More-menu switch.
 
 ## Deployment and rollback
 

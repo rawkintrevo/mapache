@@ -57,6 +57,10 @@ assertRoute("/api/workspaces/workspace-1/runtime-policy", {
   name: "workspaceRuntimePolicy",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/ssh-gateway", {
+  name: "workspaceSshGateway",
+  workspaceId: "workspace-1",
+});
 assertRoute("/api/workspaces/workspace-1/automations", {
   name: "automations",
   workspaceId: "workspace-1",
@@ -73,6 +77,11 @@ assertRoute("/api/workspaces/workspace-1/automations/automation-1/run", {
 });
 assertRoute("/api/automation-runs", {name: "automationRuns"});
 assertRoute("/api/instances", {name: "instances"});
+assertRoute("/api/ssh-gateways", {name: "sshGateways"});
+assertRoute("/api/ssh-gateways/gateway-a/assignments", {
+  name: "sshGatewayAssignments",
+  gatewayId: "gateway-a",
+});
 assertRoute("/api/automation-runs/run-1", {name: "automationRunDetail", runId: "run-1"});
 assertRoute("/api/automation-runs/run-1/events", {name: "automationRunEvents", runId: "run-1"});
 assertRoute("/api/agent/automations", {name: "automationAgent", resource: "definitions", action: "list"});

@@ -19,6 +19,7 @@ Mapache owns the surrounding workspace/session shell and account connections.
 - Lifecycle workflows: `src/workflows/sessionLifecycle.js`
 - Workspace runtime availability policy editor: `src/components/sessions/SessionRuntimePolicy.jsx`
 - Workspace request grant management: `src/controllers/requestGrantsController.js`, `src/components/modals/WorkspaceRequestGrantsModal.jsx`, and `src/services/api.js`
+- SSH gateway assignment management: `src/controllers/sshGatewaysController.js`, `src/components/sshGateways/SshGatewaysPage.jsx`, and `src/services/api.js`
 - Account/connection workflows: `src/workflows/piAuth.js`,
   `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
   `src/workflows/githubConnection.js`
@@ -75,6 +76,18 @@ the strict closing boundary. It is available before a first session so an
 enabled schedule can start a stopped workspace without an open browser. The
 shell no longer reserves either sidebar column. GitHub account/repository
 connection controls remain in the profile and workspace creation flows.
+
+SSH gateway management is a lazy account surface opened from the avatar menu.
+The page lists only gateway metadata returned for the signed-in owner, exposes
+owned workspace names as assignment choices, and saves workspace IDs through
+the authenticated API. The page never receives gateway private keys or host
+keys. Saved assignments affect newly created or explicitly recreated runners;
+the page explains that an already-running session keeps its current route and
+is not silently restarted or closed. The selected workspace's More menu reads
+the same owner-scoped status and exposes a green/grey Gateway On/Off switch. The
+switch updates assignment metadata and offers an explicit workspace restart
+when a running browser needs to apply the change; it never changes the route of
+an existing Chrome process live.
 
 Workspace **Automations** is a lazy management surface opened from the workspace
 actions menu. It combines workspace-scoped definition management with
@@ -210,6 +223,11 @@ inventory and stops its polling lifecycle. The app synchronizes the controller's
 authenticated user identity from the auth observer before inventory responses
 can be published, preserving stale-response fencing across sign-in, logout, and
 account changes.
+
+The avatar menu also opens the lazy `SshGatewaysPage` through
+`sshGatewaysController`. Its API responses are fenced to the authenticated
+identity, expose only safe gateway metadata, and keep saved assignment state
+separate from the operator-managed connection secret.
 
 The automation editor is a controlled component owned by the automation workflow.
 `WorkspacePanel` displays global action errors above an existing session as well

@@ -62,6 +62,22 @@ const ROUTE_DISPATCHERS = Object.freeze({
   instances: Object.freeze([
     ["GET", "instances", jsonResult(({handlers, req, user}) => handlers.listActiveInstances(user.uid, req.query || {}))],
   ]),
+  sshGateways: Object.freeze([
+    ["GET", "sshGateways", jsonResult(({handlers, user}) => handlers.listSshGateways(user.uid))],
+  ]),
+  workspaceSshGateway: Object.freeze([
+    ["GET", "workspaceSshGateway", jsonResult(({handlers, route, user}) => (
+      handlers.getWorkspaceSshGateway(user.uid, route.workspaceId)
+    ))],
+    ["PATCH", "workspaceSshGateway", jsonResult(({handlers, req, route, user}) => (
+      handlers.setWorkspaceSshGateway(user.uid, route.workspaceId, req.body || {})
+    ))],
+  ]),
+  sshGatewayAssignments: Object.freeze([
+    ["PUT", "sshGatewayAssignments", namedJsonResult("gateway", ({handlers, req, route, user}) => (
+      handlers.saveSshGatewayAssignments(user.uid, route.gatewayId, req.body || {})
+    ))],
+  ]),
   workspaceStorage: Object.freeze([
     ["POST", "workspaceUploads", createdJsonResult(({handlers, req, route, user}) =>
       handlers.createWorkspaceUpload(user.uid, route.workspaceId, req.body || {}, req.get?.("origin")))],

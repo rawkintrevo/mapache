@@ -70,6 +70,9 @@ function routeRequest(path) {
   if (parts.length === 2 && parts[0] === "workspaces") {
     return {name: "workspace", workspaceId: parts[1]};
   }
+  if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "ssh-gateway") {
+    return {name: "workspaceSshGateway", workspaceId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "workspaces" && parts[2] === "uploads") {
     return {name: "workspaceUploads", workspaceId: parts[1]};
   }
@@ -89,6 +92,10 @@ function routeRequest(path) {
     return {name: "automationRuns"};
   }
   if (parts.length === 1 && parts[0] === "instances") return {name: "instances"};
+  if (parts.length === 1 && parts[0] === "ssh-gateways") return {name: "sshGateways"};
+  if (parts.length === 3 && parts[0] === "ssh-gateways" && parts[2] === "assignments") {
+    return {name: "sshGatewayAssignments", gatewayId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "restart") {
     return {name: "automationRunRestart", runId: parts[1]};
   }

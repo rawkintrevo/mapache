@@ -42,6 +42,7 @@ function createHandlers() {
     pi: handlerGroup(),
     automations: handlerGroup(),
     instances: handlerGroup(),
+    sshGateways: handlerGroup(),
     sessions: handlerGroup(),
     workspaces: handlerGroup(),
   };
@@ -227,6 +228,28 @@ describe("frontend shell ownership", () => {
     await user.click(within(menu).getByRole("menuitem", {name: "Profile"}));
 
     expect(handlers.modals.showProfile).toHaveBeenCalledOnce();
+  });
+
+  test("exposes SSH gateway management from the user menu", async () => {
+    const user = userEvent.setup();
+    const {handlers} = renderShell();
+
+    await user.click(screen.getByRole("button", {name: "Open user menu for Ada"}));
+    await user.click(screen.getByRole("menuitem", {name: "SSH Gateways"}));
+
+    expect(handlers.app.showSshGateways).toHaveBeenCalledOnce();
+  });
+
+  test("renders the SSH gateway empty state with setup guidance", async () => {
+    const handlers = createHandlers();
+    render(<AppShell handlers={handlers} state={createState({
+      activePage: "ssh-gateways",
+      sshGateways: {attempted: true, gateways: [], workspaces: []},
+    })} />);
+
+    expect(await screen.findByRole("heading", {name: "SSH Gateways"})).toBeInTheDocument();
+    expect(screen.getByText("No SSH gateways are configured")).toBeInTheDocument();
+    expect(screen.getByRole("link", {name: "Open SSH gateway setup documentation"})).toBeInTheDocument();
   });
 
   test("retains workspace modal entry point without a session creation control", async () => {

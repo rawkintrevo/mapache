@@ -16,10 +16,11 @@ const WorkspaceUploadModal = lazy(() => import("../modals/WorkspaceUploadModal.j
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
 const AutomationManagementPage = lazy(() => import("../automations/AutomationManagementPage.jsx").then(({AutomationManagementPage: page}) => ({default: page})));
 const InstancesPage = lazy(() => import("../instances/InstancesPage.jsx").then(({InstancesPage: page}) => ({default: page})));
+const SshGatewaysPage = lazy(() => import("../sshGateways/SshGatewaysPage.jsx").then(({SshGatewaysPage: page}) => ({default: page})));
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, automations, github, instances, modals, sessions, workspaces} = handlers;
+  const {admin, app, automations, github, instances, modals, sessions, sshGateways, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -55,6 +56,21 @@ export function AppShell(props) {
     setLogsOpen(false);
     setUploadOpen(false);
   }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
+
+  useEffect(() => {
+    if (!selectedWorkspace?.id) return;
+    void sshGateways.loadWorkspaceStatus(selectedWorkspace.id);
+  }, [selectedWorkspace?.id, state.activePage, sshGateways]);
+
+  async function toggleGateway(enabled) {
+    if (!selectedWorkspace?.id) return;
+    const result = await sshGateways.setWorkspaceGateway(selectedWorkspace.id, enabled);
+    if (!result || !selectedSession || !["running", "ready"].includes(String(selectedSession.status || "").toLowerCase())) return;
+    const action = enabled ? "enabled" : "disabled";
+    if (window.confirm(`Browser gateway access ${action} for ${selectedWorkspace.name}. Restart the workspace now to apply this setting?`)) {
+      await sessions.restartSession(selectedSession.id);
+    }
+  }
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
     state.genericEnvironmentModalOpen ||
@@ -90,8 +106,10 @@ export function AppShell(props) {
         onShowLogs={() => setLogsOpen(true)}
         onShowUpload={() => setUploadOpen(true)}
         onShowProfile={modals.showProfile}
+        onShowSshGateways={app.showSshGateways}
         onSignOut={app.signOut}
         onSetRuntimePolicy={sessions.setRuntimePolicy}
+        onToggleGateway={toggleGateway}
         onToggleWorkspace={workspaces.toggleWorkspace}
         resourceMetrics={state.activePage === "workspace" && selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />
@@ -130,6 +148,14 @@ export function AppShell(props) {
               onSetFilters={instances.setFilters}
               onShowHistory={app.showAutomationsHistory}
               onStopInstance={app.stopInstance}
+              state={state}
+            />
+          </Suspense>
+        ) : state.activePage === "ssh-gateways" ? (
+          <Suspense fallback={<LazySurfaceFallback label="Loading SSH gateways..." />}>
+            <SshGatewaysPage
+              onLoad={sshGateways.load}
+              onSaveAssignments={sshGateways.saveAssignments}
               state={state}
             />
           </Suspense>

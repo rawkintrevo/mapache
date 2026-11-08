@@ -1,0 +1,12 @@
+{
+  "id": "script.openSshGateways",
+  "title": "Open SSH gateway access from the user menu",
+  "actions": [
+    {"type": "click", "role": "button", "nameIncludes": "Mapache QA Agent"},
+    {"type": "click", "role": "menuitem", "name": "SSH Gateways"},
+    {"type": "waitForSnapshotText", "text": "SSH Gateways", "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "The SSH Gateways page is visible and has requested its gateway inventory"
+  ]
+}

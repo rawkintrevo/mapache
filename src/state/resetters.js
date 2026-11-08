@@ -4,6 +4,7 @@ import {
   createAutomationsState,
   createMcpServersState,
   createPiAuthState,
+  createSshGatewaysState,
 } from "./initialState.js";
 import {createRequestGrantsState} from "./requestGrantsState.js";
 
@@ -31,6 +32,10 @@ export function resetAutomations(state) {
   state.automations = createAutomationsState();
 }
 
+export function resetSshGateways(state) {
+  state.sshGateways = createSshGatewaysState();
+}
+
 export function resetSignedOutState(state) {
   state.sessionEditModalSessionId = null;
   state.googleWorkspaceManageModalOpen = false;
@@ -46,4 +51,5 @@ export function resetSignedOutState(state) {
   resetPiAuth(state);
   resetGoogleWorkspace(state);
   resetAutomations(state);
+  resetSshGateways(state);
 }
