@@ -9,6 +9,7 @@
     {"useScript": "scripts/open-ssh-gateways.json"},
     {"assert": "snapshot-text", "expected": "No SSH gateways are configured"},
     {"assert": "snapshot-text", "expected": "Open SSH gateway setup documentation"},
+    {"assert": "ssh-gateways-page-scroll-container", "instructions": "Evaluate the .ssh-gateways-page element and verify its computed overflow-y is auto, min-height is 0px, and its rendered width fills the available main content width. On a configured account with overflowing workspace assignments, also verify that scrollHeight exceeds clientHeight and the page can be scrolled vertically."},
     {"assert": "network-status", "requestUrlIncludes": "/api/ssh-gateways", "method": "GET", "expectedStatus": 200},
     {"capture": "screenshot", "fileName": "ssh-gateways-empty.png"},
     {"capture": "console"},
