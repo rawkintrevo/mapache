@@ -11,6 +11,15 @@ export function friendlyGlobalError(error) {
   if (message === "app_access_not_allowed") {
     return "This account is not on the Mapache Tools allow list.";
   }
+  if (message === "browser_egress_gateway_unavailable") {
+    return "No enabled SSH gateway is available for this workspace.";
+  }
+  if (message === "browser_egress_gateway_selection_required") {
+    return "Choose one SSH gateway for this workspace from SSH Gateways first.";
+  }
+  if (message === "browser_egress_ambiguous_route") {
+    return "This workspace has multiple SSH gateways assigned. Remove the extra assignment from SSH Gateways first.";
+  }
   return message;
 }
 

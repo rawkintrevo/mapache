@@ -229,7 +229,14 @@ menu to choose owned workspaces by name. The page shows the saved assignment
 list and explains that changes apply when a runner is newly created or
 recreated. A running browser keeps its current route until the owner explicitly
 restarts that workspace; removing an assignment does not terminate an already
-established tunnel or close a browser window.
+established tunnel or close a browser window. The selected workspace's **More**
+menu also shows a green **Gateway: On** or grey **Gateway: Off** control. This
+control adds or removes the workspace from its one available gateway route and
+is useful for a quick per-workspace switch. If the workspace is running, Mapache
+offers to restart it so the browser receives the new route; declining leaves the
+current browser route unchanged until the next explicit restart or recreation.
+When multiple enabled gateway routes are available, choose one from the SSH
+Gateways page before using the More-menu switch.
 
 ## Deployment and rollback
 

@@ -224,6 +224,14 @@ h1 {
   flex: 0 0 auto;
 }
 
+.topbar-gateway-indicator {
+  color: var(--color-text-muted);
+}
+
+.topbar-gateway-indicator--enabled {
+  color: #0b6b4b;
+}
+
 .topbar-more-item--destructive {
   color: var(--danger);
 }

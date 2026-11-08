@@ -90,10 +90,19 @@ export function createApiClient(getToken) {
         `/api/instances?${automationQuery(query)}`,
     ),
     getSshGateways: () => request(getToken, "/api/ssh-gateways"),
+    getWorkspaceSshGateway: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/ssh-gateway`,
+    ),
     saveSshGatewayAssignments: (gatewayId, workspaceIds) => request(
         getToken,
         `/api/ssh-gateways/${encodeURIComponent(gatewayId)}/assignments`,
         {method: "PUT", body: {workspaceIds}},
+    ),
+    setWorkspaceSshGateway: (workspaceId, enabled) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/ssh-gateway`,
+        {method: "PATCH", body: {enabled}},
     ),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();

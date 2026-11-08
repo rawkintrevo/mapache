@@ -128,6 +128,18 @@ function createTestApiHandlers() {
     status: 200,
     payload: {handler: "listSshGateways", args: ["user-1"]},
   });
+  assert.deepStrictEqual(await collectDispatch({route: {name: "workspaceSshGateway", workspaceId: "workspace-1"}}), {
+    status: 200,
+    payload: {handler: "getWorkspaceSshGateway", args: ["user-1", "workspace-1"]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "PATCH",
+    route: {name: "workspaceSshGateway", workspaceId: "workspace-1"},
+    body: {enabled: true},
+  }), {
+    status: 200,
+    payload: {handler: "setWorkspaceSshGateway", args: ["user-1", "workspace-1", {enabled: true}]},
+  });
   assert.deepStrictEqual(await collectDispatch({
     method: "PUT",
     route: {name: "sshGatewayAssignments", gatewayId: "gateway-a"},

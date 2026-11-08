@@ -57,6 +57,10 @@ assertRoute("/api/workspaces/workspace-1/runtime-policy", {
   name: "workspaceRuntimePolicy",
   workspaceId: "workspace-1",
 });
+assertRoute("/api/workspaces/workspace-1/ssh-gateway", {
+  name: "workspaceSshGateway",
+  workspaceId: "workspace-1",
+});
 assertRoute("/api/workspaces/workspace-1/automations", {
   name: "automations",
   workspaceId: "workspace-1",

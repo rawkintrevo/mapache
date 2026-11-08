@@ -56,6 +56,21 @@ export function AppShell(props) {
     setLogsOpen(false);
     setUploadOpen(false);
   }, [selectedSession?.id, selectedSessionIsManaged, selectedWorkspace?.id]);
+
+  useEffect(() => {
+    if (!selectedWorkspace?.id) return;
+    void sshGateways.loadWorkspaceStatus(selectedWorkspace.id);
+  }, [selectedWorkspace?.id, state.activePage, sshGateways]);
+
+  async function toggleGateway(enabled) {
+    if (!selectedWorkspace?.id) return;
+    const result = await sshGateways.setWorkspaceGateway(selectedWorkspace.id, enabled);
+    if (!result || !selectedSession || !["running", "ready"].includes(String(selectedSession.status || "").toLowerCase())) return;
+    const action = enabled ? "enabled" : "disabled";
+    if (window.confirm(`Browser gateway access ${action} for ${selectedWorkspace.name}. Restart the workspace now to apply this setting?`)) {
+      await sessions.restartSession(selectedSession.id);
+    }
+  }
   const busy = hasPendingOperations(state.pendingOperations);
   const hasOpenModal = state.authModalOpen ||
     state.genericEnvironmentModalOpen ||
@@ -94,6 +109,7 @@ export function AppShell(props) {
         onShowSshGateways={app.showSshGateways}
         onSignOut={app.signOut}
         onSetRuntimePolicy={sessions.setRuntimePolicy}
+        onToggleGateway={toggleGateway}
         onToggleWorkspace={workspaces.toggleWorkspace}
         resourceMetrics={state.activePage === "workspace" && selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
       />

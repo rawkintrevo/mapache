@@ -140,6 +140,18 @@ export function createSshGatewaysState(overrides = {}) {
     attempted: false,
     gateways: [],
     workspaces: [],
+    workspace: {
+      workspaceId: "",
+      loading: false,
+      saving: false,
+      attempted: false,
+      error: "",
+      configured: false,
+      enabled: false,
+      canEnable: false,
+      ambiguous: false,
+      gateway: null,
+    },
     ...overrides,
   };
 }

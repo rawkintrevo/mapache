@@ -124,6 +124,48 @@ test("saves owned assignments and provisioning uses them without secret changes"
   assert.deepEqual(removed, []);
 });
 
+test("reports and toggles a workspace gateway assignment", async () => {
+  const {db, service} = setup();
+
+  assert.deepEqual(await service.getWorkspaceGateway("owner", "workspace-1"), {
+    configured: true,
+    enabled: true,
+    canEnable: false,
+    ambiguous: false,
+    gateway: {id: "gateway-a", host: "gateway.example.com", port: 22, user: "mapache_tunnel"},
+  });
+  assert.deepEqual(await service.getWorkspaceGateway("owner", "workspace-2"), {
+    configured: true,
+    enabled: false,
+    canEnable: true,
+    ambiguous: false,
+    gateway: {id: "gateway-a", host: "gateway.example.com", port: 22, user: "mapache_tunnel"},
+  });
+
+  const enabled = await service.setWorkspaceGateway("owner", "workspace-2", {enabled: true});
+  assert.equal(enabled.enabled, true);
+  assert.equal(enabled.changed, true);
+  assert.deepEqual(db.values.get("users/owner/private/browserEgressAssignments/gateways/gateway-a").workspaceIds, [
+    "workspace-1", "workspace-2",
+  ]);
+
+  const disabled = await service.setWorkspaceGateway("owner", "workspace-1", {enabled: false});
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.changed, true);
+  assert.deepEqual(db.values.get("users/owner/private/browserEgressAssignments/gateways/gateway-a").workspaceIds, ["workspace-2"]);
+});
+
+test("requires one gateway when enabling a workspace without an assignment", async () => {
+  const {dependencies, service} = setup();
+  const secondRoute = {...route, id: "gateway-b", host: "second-gateway.example.com", workspaceIds: []};
+  dependencies.readSecret = async () => ({version: 1, routes: [route, secondRoute]});
+
+  await assert.rejects(
+      service.setWorkspaceGateway("owner", "workspace-2", {enabled: true}),
+      (error) => error.status === 409 && error.message === "browser_egress_gateway_selection_required",
+  );
+});
+
 test("rejects forged gateway IDs and foreign workspace IDs", async () => {
   const {service} = setup();
 

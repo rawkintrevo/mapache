@@ -1,9 +1,13 @@
 import {useEffect, useRef, useState} from "react";
-import {Blocks, BookOpen, Bot, Clock3, KeyRound, MoreHorizontal, Pencil, PlugZap, Plus, RefreshCw, ScrollText, Shield, Trash2, Upload, Variable} from "lucide-react";
+import {Blocks, BookOpen, Bot, Circle, Clock3, KeyRound, MoreHorizontal, Pencil, PlugZap, Plus, RefreshCw, ScrollText, Shield, Trash2, Upload, Variable} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 
 export function TopbarMoreMenu({
   disabled = false,
+  gatewayAvailable = false,
+  gatewayEnabled = false,
+  gatewayLoading = false,
+  gatewaySaving = false,
   genericEnvironmentDisabled = false,
   googleWorkspaceDisabled = false,
   managePiAuthLabel = "Manage Auth",
@@ -21,6 +25,7 @@ export function TopbarMoreMenu({
   onShowAutomations,
   onShowLogs,
   onShowUpload,
+  onToggleGateway,
   piAuthDisabled = false,
   selectedWorkspace,
   showWorkspaceTools = false,
@@ -97,6 +102,14 @@ export function TopbarMoreMenu({
           <MenuItem disabled={!selectedWorkspace || mcpServersDisabled} icon={<PlugZap aria-hidden="true" />} label="Manage MCP servers" onClick={onOpenMcpServers} close={close} />
           <MenuItem disabled={!selectedWorkspace || googleWorkspaceDisabled} icon={<Blocks aria-hidden="true" />} label="Manage Google Workspace" onClick={onOpenGoogleWorkspace} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<Shield aria-hidden="true" />} label="Workspace request access" onClick={onOpenRequestGrants} close={close} />
+          <MenuItem
+            ariaChecked={gatewayEnabled}
+            disabled={!selectedWorkspace || !gatewayAvailable || gatewayLoading || gatewaySaving || !onToggleGateway}
+            icon={<Circle aria-hidden="true" className={`topbar-gateway-indicator${gatewayEnabled ? " topbar-gateway-indicator--enabled" : ""}`} fill="currentColor" />}
+            label={`Gateway: ${gatewayEnabled ? "On" : "Off"}`}
+            onClick={() => onToggleGateway?.(!gatewayEnabled)}
+            close={close}
+          />
           <div className="topbar-more-divider" role="separator" />
           <a className="topbar-more-link" href="/community/blog" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Blog</a>
           <a className="topbar-more-link" href="/community/docs/intro/" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Docs</a>
@@ -109,12 +122,13 @@ export function TopbarMoreMenu({
   );
 }
 
-function MenuItem({close, destructive = false, disabled = false, firstItemRef, icon, label, onClick}) {
+function MenuItem({ariaChecked, close, destructive = false, disabled = false, firstItemRef, icon, label, onClick}) {
   return (
     <button
       aria-label={label}
       className={`topbar-more-item${destructive ? " topbar-more-item--destructive" : ""}`}
       disabled={disabled}
+      {...(typeof ariaChecked === "boolean" ? {"aria-checked": ariaChecked} : {})}
       ref={firstItemRef}
       role="menuitem"
       type="button"

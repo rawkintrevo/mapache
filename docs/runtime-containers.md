@@ -1247,6 +1247,10 @@ Once a gateway route is configured, its owner can open **SSH Gateways** from the
 avatar menu and assign owned workspaces without changing the Secret Manager
 version or redeploying Functions. Assignment changes apply to new or recreated
 runners; an existing browser keeps its current tunnel until an explicit restart.
+The selected workspace's More menu exposes a green/grey Gateway On/Off switch
+that updates the same assignment metadata. If a runner is active, the user can
+explicitly confirm a restart to apply the new browser route; the switch does not
+perform live Chrome proxy reconfiguration.
 
 `scripts/ssh-gateway/install.py` provisions a dedicated gateway account with
 public-IPv4 web-only forwarding, blocked private/local destinations, and

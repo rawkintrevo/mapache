@@ -83,7 +83,11 @@ owned workspace names as assignment choices, and saves workspace IDs through
 the authenticated API. The page never receives gateway private keys or host
 keys. Saved assignments affect newly created or explicitly recreated runners;
 the page explains that an already-running session keeps its current route and
-is not silently restarted or closed.
+is not silently restarted or closed. The selected workspace's More menu reads
+the same owner-scoped status and exposes a green/grey Gateway On/Off switch. The
+switch updates assignment metadata and offers an explicit workspace restart
+when a running browser needs to apply the change; it never changes the route of
+an existing Chrome process live.
 
 Workspace **Automations** is a lazy management surface opened from the workspace
 actions menu. It combines workspace-scoped definition management with

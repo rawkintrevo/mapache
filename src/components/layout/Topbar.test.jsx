@@ -4,12 +4,17 @@ import {describe, expect, test, vi} from "vitest";
 import {Topbar} from "./Topbar.jsx";
 import {createInitialState} from "../../state/initialState.js";
 
-function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides = {}) {
+function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides = {}, gatewayOverrides = {}) {
+  const initialState = createInitialState();
   const state = {
-    ...createInitialState(),
+    ...initialState,
     workspaces: [{id: "workspace-1", name: "HubSpot", source: {type: "blank"}, canonicalSessionId: session?.id || null, ...workspaceOverrides}],
     selectedWorkspaceId: "workspace-1",
     sessions: session ? [session] : [],
+    sshGateways: {
+      ...initialState.sshGateways,
+      workspace: {...initialState.sshGateways.workspace, workspaceId: "workspace-1", ...gatewayOverrides},
+    },
   };
   const onToggleWorkspace = vi.fn();
   const onRestartWorkspace = vi.fn();
@@ -20,6 +25,7 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
   const onShowAutomations = vi.fn();
   const onShowUpload = vi.fn();
   const onSetRuntimePolicy = vi.fn();
+  const onToggleGateway = vi.fn();
   render(
     <Topbar
       state={state}
@@ -41,6 +47,7 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
       onShowProfile={vi.fn()}
       onSignOut={vi.fn()}
       onSetRuntimePolicy={onSetRuntimePolicy}
+      onToggleGateway={onToggleGateway}
       onToggleWorkspace={onToggleWorkspace}
       resourceMetrics={resourceMetrics}
     />,
@@ -52,6 +59,7 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
     onOpenPiAuthManage,
     onRestartWorkspace,
     onSetRuntimePolicy,
+    onToggleGateway,
     onShowAutomations,
     onShowUpload,
     onToggleWorkspace,
@@ -85,6 +93,29 @@ describe("Topbar workspace lifecycle", () => {
     expect(handlers.onOpenGenericEnvironment).toHaveBeenCalledOnce();
     expect(handlers.onOpenMcpServers).toHaveBeenCalledOnce();
     expect(handlers.onOpenGoogleWorkspace).toHaveBeenCalledOnce();
+  });
+
+  test("toggles gateway access from the More menu when a gateway is available", async () => {
+    const user = userEvent.setup();
+    const {onToggleGateway} = renderTopbar(null, null, {}, {configured: true, canEnable: true});
+
+    await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+    const gatewayItem = screen.getByRole("menuitem", {name: "Gateway: Off"});
+    expect(gatewayItem).toBeEnabled();
+    expect(gatewayItem.querySelector("svg")).toHaveClass("topbar-gateway-indicator");
+    await user.click(gatewayItem);
+
+    expect(onToggleGateway).toHaveBeenCalledWith(true);
+  });
+
+  test("shows the green gateway indicator when access is enabled", async () => {
+    const user = userEvent.setup();
+    renderTopbar(null, null, {}, {configured: true, enabled: true});
+
+    await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+    const gatewayItem = screen.getByRole("menuitem", {name: "Gateway: On"});
+    expect(gatewayItem).toBeEnabled();
+    expect(gatewayItem.querySelector("svg")).toHaveClass("topbar-gateway-indicator--enabled");
   });
 
   test("stops or restarts a running workspace from the power menu", async () => {
