@@ -9,7 +9,7 @@ const route = {enabled: true, ownerUid: "owner", workspaceIds: ["accounting"],
   host: "office.example.com", port: 22, user: "tunnel", hostKey: "ssh-ed25519 AAAA",
   privateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n"};
 const session = {ownerUid: "owner", workspaceId: "accounting"};
-const deps = (routes = [route]) => ({resource, readSecret: async () => ({version: 1, routes})});
+const deps = (routes = [route]) => ({db: null, resource, readSecret: async () => ({version: 1, routes})});
 
 test("disabled deployment never reads credentials", async () => {
   assert.deepEqual(await browserEgressEnvironment(session, {resource: "", readSecret: () => {throw Error();}}), []);

@@ -89,6 +89,12 @@ export function createApiClient(getToken) {
         getToken,
         `/api/instances?${automationQuery(query)}`,
     ),
+    getSshGateways: () => request(getToken, "/api/ssh-gateways"),
+    saveSshGatewayAssignments: (gatewayId, workspaceIds) => request(
+        getToken,
+        `/api/ssh-gateways/${encodeURIComponent(gatewayId)}/assignments`,
+        {method: "PUT", body: {workspaceIds}},
+    ),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
       params.set("pageSize", String(pageSize));

@@ -441,9 +441,14 @@ ownership, lifecycle, restart requirements, and verification.
 ## Browser egress provisioning
 
 `browserEgress.service.js` resolves an operator-only, version-pinned Secret Manager
-configuration during runner environment construction, including restarts. It
-matches both owner UID and workspace ID, rejects duplicate/invalid enabled
-routes, and keeps other workspaces direct. Client environment maps cannot set
-the reserved route variables. This prevents accidental cross-user route selection, not malicious code using
-the existing shared runner IAM permissions; see
+configuration during runner environment construction, including restarts.
+`browserEgressManagement.service.js` exposes only safe route metadata and stores
+owner-authenticated workspace assignments under the user's private Firestore
+area; the assignment document never contains host keys or private keys. A saved
+assignment overrides the legacy `workspaceIds` allowlist in the secret, while a
+missing assignment preserves that legacy allowlist for migration compatibility.
+Both management and provisioning match the exact owner UID and workspace owner,
+reject duplicate/invalid enabled routes, and keep other workspaces direct. Client
+environment maps cannot set the reserved route variables. This prevents accidental
+cross-user route selection, not malicious code using the existing shared runner IAM permissions; see
 [browser SSH egress](./guides/browser-ssh-egress.md).

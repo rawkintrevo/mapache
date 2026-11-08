@@ -1,0 +1,17 @@
+{
+  "id": "ssh-gateways.empty",
+  "title": "SSH gateway page handles an empty account",
+  "description": "Open SSH gateway access for a QA account with no operator-configured gateway and verify the setup guidance. The account must remain unconfigured for this case.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/ssh-gateways.empty",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-ssh-gateways.json"},
+    {"assert": "snapshot-text", "expected": "No SSH gateways are configured"},
+    {"assert": "snapshot-text", "expected": "Open SSH gateway setup documentation"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/ssh-gateways", "method": "GET", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "ssh-gateways-empty.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

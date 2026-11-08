@@ -77,6 +77,7 @@ export function appReducer(state, action = {}) {
         error: "",
         automations: createInitialState().automations,
         instances: createInitialState().instances,
+        sshGateways: createInitialState().sshGateways,
       };
     default:
       return state;

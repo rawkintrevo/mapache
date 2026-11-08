@@ -1,0 +1,21 @@
+{
+  "id": "ssh-gateways.management",
+  "title": "SSH gateway workspace assignment and restart guidance",
+  "description": "Open SSH gateway access for a QA account with at least one configured, enabled gateway and one owned workspace. Change the first workspace checkbox, save it, reload the page, and verify the persisted assignment plus the explicit restart behavior. This case mutates only the signed-in user's gateway assignment.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/ssh-gateways.management",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-configured-ssh-gateways.json"},
+    {"type": "click", "role": "checkbox"},
+    {"type": "click", "role": "button", "name": "Save workspace access"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/ssh-gateways/", "method": "PUT", "expectedStatus": 200},
+    {"assert": "snapshot-text", "expected": "Workspace access saved."},
+    {"assert": "snapshot-text", "expected": "Running sessions keep their current route until you explicitly restart them"},
+    {"useScript": "scripts/refresh-app-state.json"},
+    {"assert": "snapshot-text", "expected": "SSH Gateways"},
+    {"capture": "screenshot", "fileName": "ssh-gateways-management.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

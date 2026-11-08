@@ -1,4 +1,4 @@
-import {Activity, LogOut, RefreshCw, ShieldCheck, User} from "lucide-react";
+import {Activity, Globe, LogOut, RefreshCw, ShieldCheck, User} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
@@ -28,7 +28,7 @@ function initials(label) {
       .toUpperCase() || "U";
 }
 
-export function TopbarUserMenu({state, onRefresh, onShowAdmin, onShowInstances, onShowProfile, onSignOut}) {
+export function TopbarUserMenu({state, onRefresh, onShowAdmin, onShowInstances, onShowProfile, onShowSshGateways, onSignOut}) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const label = userLabel(state);
@@ -87,6 +87,9 @@ export function TopbarUserMenu({state, onRefresh, onShowAdmin, onShowInstances, 
             ) : null}
             <li>
               <MenuButton icon={<Activity aria-hidden="true" />} label="Running instances" onClick={onShowInstances} close={() => setOpen(false)} />
+            </li>
+            <li>
+              <MenuButton icon={<Globe aria-hidden="true" />} label="SSH Gateways" onClick={onShowSshGateways} close={() => setOpen(false)} />
             </li>
             <li>
               <MenuButton disabled={busy} icon={<RefreshCw aria-hidden="true" />} label={busy ? "Working..." : "Refresh"} onClick={onRefresh} close={() => setOpen(false)} />

@@ -1,6 +1,7 @@
 "use strict";
 
 const {createWorkspaceUploadsService} = require("./workspaceUploads.service");
+const {createBrowserEgressManagementService} = require("./browserEgressManagement.service");
 
 const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
@@ -120,6 +121,7 @@ const {
 
 const automationAdmissionService = createAutomationAdmissionService({admin, db});
 const activeInstancesService = createActiveInstancesService({db});
+const browserEgressManagementService = createBrowserEgressManagementService({admin, db});
 let automationRetryService;
 const {
   assertMainAdmissionAllowed,
@@ -495,6 +497,7 @@ const API_HANDLERS = createApiHandlers({
   automationDefinitionsService,
   automationHistoryService,
   automationRunsService,
+  browserEgressService: browserEgressManagementService,
   workspaceTicketsService,
   workspaceRequestGrantsService,
   environmentKeysService,

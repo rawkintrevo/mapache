@@ -87,6 +87,26 @@ describe("workspace runtime policy API client", () => {
   });
 });
 
+describe("SSH gateway API client", () => {
+  test("loads gateways and saves workspace assignments", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({gateways: [], workspaces: []}))
+      .mockResolvedValueOnce(jsonResponse({gateway: {id: "gateway-a"}}));
+    vi.stubGlobal("fetch", fetch);
+    const client = createApiClient(async () => "firebase-token");
+
+    await client.getSshGateways();
+    await client.saveSshGatewayAssignments("gateway/a", ["workspace/1"]);
+
+    expect(fetch.mock.calls[0][0]).toBe("/api/ssh-gateways");
+    expect(fetch.mock.calls[1][0]).toBe("/api/ssh-gateways/gateway%2Fa/assignments");
+    expect(fetch.mock.calls[1][1]).toMatchObject({
+      method: "PUT",
+      body: JSON.stringify({workspaceIds: ["workspace/1"]}),
+    });
+  });
+});
+
 describe("auth selection partial updates", () => {
   test.each([
     [{environmentEntryIds: ["env"]}, {environmentEntryIds: ["env"]}],

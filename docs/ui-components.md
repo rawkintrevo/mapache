@@ -8,7 +8,7 @@ This index maps significant React components to their current responsibilities.
 | `AppShell` | `src/components/layout/AppShell.jsx` | Signed-in full-width workspace layout and modal stack. |
 | `Topbar` | `src/components/layout/Topbar.jsx` | Composes workspace selection, power/runtime-policy controls, selected-runtime CPU/RAM meters, the marked-runtime Agent shortcut, workspace actions menu, and user menu. |
 | `TopbarPowerMenu` | `src/components/layout/TopbarPowerMenu.jsx` | State-aware power trigger and keyboard-accessible Start, Stop, and Restart menu for the selected workspace runtime. |
-| `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, running instances, refresh, and sign-out actions. |
+| `TopbarUserMenu` | `src/components/layout/TopbarUserMenu.jsx` | Avatar-triggered top-navigation menu for profile, admin, running instances, SSH gateways, refresh, and sign-out actions. |
 | `TopbarMoreMenu` | `src/components/layout/TopbarMoreMenu.jsx` | Keyboard-accessible workspace menu for New/Edit, Logs/Upload/Automations, Pi auth/environment/MCP/Google/request-access management, documentation, refresh, and destructive Delete. |
 | `DrawerSessionList` | `src/components/drawers/DrawerSessionList.jsx` | Retained legacy session-row component; not mounted by the current shell. |
 | `WorkspacePanel` | `src/components/workspaces/WorkspacePanel.jsx` | Workspace header/off state or canonical-runtime detail. |
@@ -43,6 +43,7 @@ This index maps significant React components to their current responsibilities.
 | `RunHistoryPage` | `src/components/automations/RunHistoryPage.jsx` | Global run history section with workspace/workflow/status/date filters, cursor pagination, run selection, and embedded/full-page layout support. |
 | `RunDetailsPanel` | `src/components/automations/RunDetailsPanel.jsx` | Sanitized archived run details, snapshotted configuration, status actions, restart lineage, and paged conversation/tool event display. |
 | `InstancesPage` | `src/components/instances/InstancesPage.jsx` | Owner-wide active main/automation inventory with filters, cursor paging, elapsed/resource/heartbeat summaries, workspace/history links, and targeted Stop actions. |
+| `SshGatewaysPage` | `src/components/sshGateways/SshGatewaysPage.jsx` | Owner-scoped SSH gateway list with safe connection metadata, owned workspace assignment controls, empty/error/loading states, and restart guidance. |
 
 Files, Git, model selection, skills, extensions, subagents, and native Goals
 are upstream-owned surfaces inside the embedded Agent application. The deleted

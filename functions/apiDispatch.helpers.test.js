@@ -66,6 +66,7 @@ function createTestApiHandlers() {
   const service = new Proxy({}, {get: () => stub});
   return createApiHandlers({
     agentAuthService: service,
+    browserEgressService: service,
     environmentKeysService: service,
     openAiCodexAuthService: service,
     qaFaultHarnessService: service,
@@ -122,6 +123,18 @@ function createTestApiHandlers() {
   }), {
     status: 200,
     payload: {handler: "listActiveInstances", args: ["user-1", {limit: "10", type: "automation"}]},
+  });
+  assert.deepStrictEqual(await collectDispatch({route: {name: "sshGateways"}}), {
+    status: 200,
+    payload: {handler: "listSshGateways", args: ["user-1"]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "PUT",
+    route: {name: "sshGatewayAssignments", gatewayId: "gateway-a"},
+    body: {workspaceIds: ["workspace-1"]},
+  }), {
+    status: 200,
+    payload: {gateway: {handler: "saveSshGatewayAssignments", args: ["user-1", "gateway-a", {workspaceIds: ["workspace-1"]}]}},
   });
   assert.deepStrictEqual(await collectDispatch({
     method: "POST",

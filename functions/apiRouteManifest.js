@@ -18,6 +18,8 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["automationRunStop", ["POST"]],
   ["automationRuns", ["GET"]],
   ["instances", ["GET"]],
+  ["sshGateways", ["GET"]],
+  ["sshGatewayAssignments", ["PUT"]],
   ["automationRunDetail", ["GET"]],
   ["automationRunEvents", ["GET"]],
   ["automationStoragePrepare", ["POST"]],

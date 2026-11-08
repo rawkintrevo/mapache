@@ -131,6 +131,19 @@ export function createInstancesState(overrides = {}) {
   };
 }
 
+export function createSshGatewaysState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    error: "",
+    message: "",
+    attempted: false,
+    gateways: [],
+    workspaces: [],
+    ...overrides,
+  };
+}
+
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -164,6 +177,7 @@ export function createInitialState() {
     googleWorkspace: createGoogleWorkspaceState(),
     automations: createAutomationsState(),
     instances: createInstancesState(),
+    sshGateways: createSshGatewaysState(),
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     sessionEditModalSessionId: null,

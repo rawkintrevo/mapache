@@ -16,10 +16,11 @@ const WorkspaceUploadModal = lazy(() => import("../modals/WorkspaceUploadModal.j
 const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").then(({SessionLogsModal: modal}) => ({default: modal})));
 const AutomationManagementPage = lazy(() => import("../automations/AutomationManagementPage.jsx").then(({AutomationManagementPage: page}) => ({default: page})));
 const InstancesPage = lazy(() => import("../instances/InstancesPage.jsx").then(({InstancesPage: page}) => ({default: page})));
+const SshGatewaysPage = lazy(() => import("../sshGateways/SshGatewaysPage.jsx").then(({SshGatewaysPage: page}) => ({default: page})));
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, automations, github, instances, modals, sessions, workspaces} = handlers;
+  const {admin, app, automations, github, instances, modals, sessions, sshGateways, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -90,6 +91,7 @@ export function AppShell(props) {
         onShowLogs={() => setLogsOpen(true)}
         onShowUpload={() => setUploadOpen(true)}
         onShowProfile={modals.showProfile}
+        onShowSshGateways={app.showSshGateways}
         onSignOut={app.signOut}
         onSetRuntimePolicy={sessions.setRuntimePolicy}
         onToggleWorkspace={workspaces.toggleWorkspace}
@@ -130,6 +132,14 @@ export function AppShell(props) {
               onSetFilters={instances.setFilters}
               onShowHistory={app.showAutomationsHistory}
               onStopInstance={app.stopInstance}
+              state={state}
+            />
+          </Suspense>
+        ) : state.activePage === "ssh-gateways" ? (
+          <Suspense fallback={<LazySurfaceFallback label="Loading SSH gateways..." />}>
+            <SshGatewaysPage
+              onLoad={sshGateways.load}
+              onSaveAssignments={sshGateways.saveAssignments}
               state={state}
             />
           </Suspense>

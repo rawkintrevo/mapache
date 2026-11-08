@@ -89,6 +89,10 @@ function routeRequest(path) {
     return {name: "automationRuns"};
   }
   if (parts.length === 1 && parts[0] === "instances") return {name: "instances"};
+  if (parts.length === 1 && parts[0] === "ssh-gateways") return {name: "sshGateways"};
+  if (parts.length === 3 && parts[0] === "ssh-gateways" && parts[2] === "assignments") {
+    return {name: "sshGatewayAssignments", gatewayId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "restart") {
     return {name: "automationRunRestart", runId: parts[1]};
   }

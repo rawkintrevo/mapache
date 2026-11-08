@@ -1,0 +1,13 @@
+{
+  "id": "ssh-gateways.forged-assignment",
+  "title": "SSH gateway assignment rejects forged gateway IDs",
+  "description": "Use an authenticated QA session to call the assignment endpoint with a gateway ID that is not configured for the user. The request must be rejected without exposing gateway credentials or changing assignment state.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/ssh-gateways.forged-assignment",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/probe-ssh-gateway-forged-assignment.json"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}
