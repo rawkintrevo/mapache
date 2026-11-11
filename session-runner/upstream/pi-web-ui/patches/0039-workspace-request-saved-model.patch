@@ -21,7 +21,7 @@ index 761c406d..03832042 100644
  	}
  
 -	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[] }> {
-+	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[]; savedModelSelection?: { providerId: string; modelId: string } | null }> {
++	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[]; savedModelSelection?: { providerId: string; modelId: string } | null; retryable?: boolean; stage?: string }> {
  		try {
  			const client = await this.requestClient();
 -			return { ok: true, models: client.modelCatalog() };
