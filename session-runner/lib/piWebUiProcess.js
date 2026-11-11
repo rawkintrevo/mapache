@@ -9,7 +9,7 @@ const {spawn: defaultSpawn} = require("node:child_process");
 const {createConnection: defaultControlConnect} = require("node:net");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
-const {DEFAULT_AUTOMATION_START_TIMEOUT_MS} = require("./piWebUiDefaults");
+const {DEFAULT_AUTOMATION_START_TIMEOUT_MS, DEFAULT_WORKSPACE_REQUEST_MODELS_TIMEOUT_MS} = require("./piWebUiDefaults");
 
 const DEFAULT_HEALTH_INTERVAL_MS = 100;
 const DEFAULT_STARTUP_TIMEOUT_MS = 90_000;
@@ -47,6 +47,10 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   const automationStartTimeoutMs = positiveNumber(
       config.piWebUiAutomationStartTimeoutMs,
       DEFAULT_AUTOMATION_START_TIMEOUT_MS,
+  );
+  const workspaceRequestModelsTimeoutMs = positiveNumber(
+      config.piWebUiWorkspaceRequestModelsTimeoutMs,
+      DEFAULT_WORKSPACE_REQUEST_MODELS_TIMEOUT_MS,
   );
   const stopTimeoutMs = positiveNumber(config.piWebUiStopTimeoutMs, DEFAULT_STOP_TIMEOUT_MS);
   const quiesceTimeoutMs = positiveNumber(config.piWebUiQuiesceTimeoutMs, DEFAULT_QUIESCE_TIMEOUT_MS);
@@ -301,8 +305,15 @@ function createPiWebUiProcess(config = {}, deps = {}) {
 
   async function workspaceRequestModels() {
     if (!enabled || !child) return {ok: false, error: "pi_web_ui_not_ready"};
-    const response = await controlRequest("workspaceRequestModels", quiesceTimeoutMs);
-    return response || {ok: false, error: "pi_web_ui_workspace_request_unavailable"};
+    const response = await controlRequest("workspaceRequestModels", workspaceRequestModelsTimeoutMs);
+    if (!response) return {ok: false, error: "pi_web_ui_workspace_request_unavailable"};
+    if (response.error === "control_timeout") {
+      logger.warn?.("pi-web-ui workspace model discovery control timeout", {
+        timeoutMs: workspaceRequestModelsTimeoutMs,
+      });
+      return {ok: false, error: "workspace_request_model_discovery_timeout", retryable: true, stage: "control_socket"};
+    }
+    return response;
   }
 
   async function cancelWorkspaceRequest(runId) {

@@ -46,6 +46,7 @@ function setup(overrides = {}) {
   db.values.set("workspaces/target/sessions/main", {
     ownerUid: "owner", workspaceId: "target", runtimeKind: "main", status: "running",
     serviceUrl: "https://runner.example", shutdownToken: "shutdown", agentRuntimeGeneration: 4,
+    ...(overrides.session || {}),
   });
   db.values.set("automationRuns/run-1", {
     runId: "run-1", ownerUid: "owner", workspaceId: "target", status: "provisioning",
@@ -65,6 +66,13 @@ function setup(overrides = {}) {
     requireWorkspace: async () => ({id: "target", name: "Target", canonicalSessionId: "main"}),
     restartSession: async () => { throw new Error("not expected"); },
     sessionCollection: (workspaceId) => db.collection(`workspaces/${workspaceId}/sessions`),
+    now: overrides.now,
+    delay: overrides.delay,
+    logger: overrides.logger || {},
+    modelDiscoveryTimeoutMs: overrides.modelDiscoveryTimeoutMs,
+    modelHttpTimeoutMs: overrides.modelHttpTimeoutMs,
+    runtimeStartupTimeoutMs: overrides.runtimeStartupTimeoutMs,
+    runtimeStartupPollIntervalMs: overrides.runtimeStartupPollIntervalMs,
   });
   return {calls, db, service};
 }
@@ -80,6 +88,58 @@ test("dispatches an incoming request into the existing normal runtime exactly on
   assert.equal(calls[0].options.body.modelRef, "openai/gpt-5");
   assert.equal(db.values.get("automationRuns/run-1").status, "running");
   assert.equal(db.values.get("automationRuns/run-1").sessionId, "main");
+});
+
+test("waits through cold runtime startup and retries a slow first model catalog read", async () => {
+  let clock = 0;
+  let db;
+  let modelCalls = 0;
+  const harness = setup({
+    session: {status: "provisioning", serviceUrl: ""},
+    now: () => clock,
+    delay: async (delayMs) => {
+      clock += delayMs;
+      if (clock >= 2_000) {
+        db.values.set("workspaces/target/sessions/main", {
+          ...db.values.get("workspaces/target/sessions/main"),
+          status: "running",
+          serviceUrl: "https://runner.example",
+        });
+      }
+    },
+    modelDiscoveryTimeoutMs: 30_000,
+    runtimeStartupTimeoutMs: 10_000,
+    runner: (_session, route) => {
+      if (route !== "/workspace/models") return undefined;
+      modelCalls += 1;
+      if (modelCalls === 1) {
+        clock += 6_000;
+        return {ok: false, error: "workspace_request_model_discovery_timeout", retryable: true, stage: "control_socket"};
+      }
+      return {ok: true, savedModelSelection: {providerId: "openai", modelId: "gpt-5"}, models: [
+        {providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true},
+      ]};
+    },
+  });
+  db = harness.db;
+
+  const result = await harness.service.discoverModels("owner", "target");
+  assert.deepEqual(result.models, [{providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true}]);
+  assert.deepEqual(result.savedModelSelection, {providerId: "openai", modelId: "gpt-5"});
+  assert.equal(modelCalls, 2);
+  assert.equal(harness.db.values.get("workspaces/target/sessions/main").status, "running");
+  assert.equal(harness.calls.filter((call) => call.route === "/workspace/models").length, 2);
+});
+
+test("preserves a non-retryable catalog failure from an HTTP-200 runner envelope", async () => {
+  const {calls, service} = setup({runner: (_session, route) => route === "/workspace/models" ?
+    {ok: false, error: "workspace_request_model_catalog_failed", retryable: false, stage: "catalog"} : undefined});
+  await assert.rejects(() => service.discoverModels("owner", "target"), (error) => {
+    assert.equal(error.status, 503);
+    assert.equal(error.publicMessage, "workspace_request_model_catalog_failed");
+    return true;
+  });
+  assert.equal(calls.filter((call) => call.route === "/workspace/models").length, 1);
 });
 
 test("reconciles the visible chat result and preserves a terminal ticket outcome", async () => {

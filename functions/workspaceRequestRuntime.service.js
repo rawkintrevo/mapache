@@ -7,12 +7,23 @@ const {httpError} = require("./backendUtils.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
 const {normalizeModelCatalog, normalizeModelSelection, savedModelSelection} = require("./workspaceRequestModels.service");
 const {classifyWorkspaceRequestFailure, errorDescriptor} = require("./workspaceRequestErrors.helpers");
+const {waitForWorkspaceRuntimeReady} = require("./workspaceRequestReadiness.service");
 
 const SHARED_RUNTIME_EXECUTION_ROUTE = "shared-runtime-v1";
 const TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
 const STOPPED_SESSION_STATUSES = new Set(["stopped", "needs_image", "provision_failed"]);
 const SHARED_RUNTIME_DISPATCH_TIMEOUT_MS = 300_000;
 const SHARED_RUNTIME_DISPATCH_CLAIM_STALE_MS = SHARED_RUNTIME_DISPATCH_TIMEOUT_MS + 30_000;
+const WORKSPACE_REQUEST_MODEL_DISCOVERY_TIMEOUT_MS = 120_000;
+const WORKSPACE_REQUEST_MODEL_HTTP_TIMEOUT_MS = 45_000;
+const WORKSPACE_REQUEST_MODEL_CATALOG_RETRY_DELAY_MS = 250;
+const WORKSPACE_REQUEST_RUNTIME_STARTUP_TIMEOUT_MS = 90_000;
+const WORKSPACE_REQUEST_RUNTIME_STARTUP_POLL_INTERVAL_MS = 1_000;
+const RETRYABLE_MODEL_DISCOVERY_ERRORS = new Set([
+  "workspace_request_model_discovery_unavailable",
+  "workspace_request_model_discovery_timeout",
+  "workspace_request_model_client_initialization_failed",
+]);
 const REPAIRABLE_DISPATCH_ERROR_CODES = new Set([
   "shared_runtime_dispatch_ambiguous",
   "shared_runtime_status_unavailable",
@@ -28,6 +39,12 @@ function createWorkspaceRequestRuntimeService(dependencies = {}) {
     restartSession: dependencies.restartSession,
     sessionCollection: dependencies.sessionCollection,
     now: dependencies.now || (() => Date.now()),
+    delay: dependencies.delay,
+    logger: dependencies.logger || console,
+    modelDiscoveryTimeoutMs: dependencies.modelDiscoveryTimeoutMs || WORKSPACE_REQUEST_MODEL_DISCOVERY_TIMEOUT_MS,
+    modelHttpTimeoutMs: dependencies.modelHttpTimeoutMs || WORKSPACE_REQUEST_MODEL_HTTP_TIMEOUT_MS,
+    runtimeStartupTimeoutMs: dependencies.runtimeStartupTimeoutMs || WORKSPACE_REQUEST_RUNTIME_STARTUP_TIMEOUT_MS,
+    runtimeStartupPollIntervalMs: dependencies.runtimeStartupPollIntervalMs || WORKSPACE_REQUEST_RUNTIME_STARTUP_POLL_INTERVAL_MS,
   };
   if (typeof shared.createSession !== "function" || typeof shared.restartSession !== "function") {
     throw new Error("Workspace request runtime requires normal session lifecycle dependencies.");
@@ -47,29 +64,95 @@ function createWorkspaceRequestRuntimeService(dependencies = {}) {
 async function discoverWorkspaceRequestModels(ownerUid, workspaceId, dependencies = {}) {
   const normalizedWorkspaceId = String(workspaceId || "").trim();
   if (!normalizedWorkspaceId) throw httpError(400, "invalid_target_workspace_id");
+  const startedAt = currentTime(dependencies);
   const runtime = await ensureNormalRuntime({ownerUid, workspaceId: normalizedWorkspaceId}, dependencies);
-  if (!runtime.session || !isRunningSession(runtime.session)) {
-    throw httpError(503, "workspace_request_model_discovery_unavailable");
-  }
-  let response;
-  try {
-    response = await dependencies.requestRunnerJson(runtime.session, "/workspace/models", {
-      failureError: "workspace_request_model_discovery_failed",
-      unavailableError: "workspace_request_model_discovery_unavailable",
-      timeoutMs: 30_000,
-    });
-  } catch (error) {
-    throw httpError(Number(error?.status) >= 400 ? error.status : 503,
-        classifyWorkspaceRequestFailure(error, "workspace_request_model_discovery_unavailable"), error);
-  }
-  if (!response?.ok || !Array.isArray(response.models)) {
-    throw httpError(503, "workspace_request_model_discovery_unavailable");
-  }
+  const ready = await waitForWorkspaceRuntimeReady({
+    workspaceId: normalizedWorkspaceId,
+    session: runtime.session,
+    now: dependencies.now,
+    delay: dependencies.delay,
+    logger: dependencies.logger,
+    timeoutMs: Math.min(Number(dependencies.runtimeStartupTimeoutMs) || WORKSPACE_REQUEST_RUNTIME_STARTUP_TIMEOUT_MS,
+        Math.max(1, (Number(dependencies.modelDiscoveryTimeoutMs) || WORKSPACE_REQUEST_MODEL_DISCOVERY_TIMEOUT_MS) - elapsedSince(startedAt, dependencies))),
+    pollIntervalMs: dependencies.runtimeStartupPollIntervalMs,
+    isReady: isRunningSession,
+    readSession: (targetId, sessionId) => readSession(targetId, sessionId, dependencies),
+  });
+  const response = await fetchModelCatalog(ready.session, startedAt, dependencies);
   return {
     targetWorkspaceId: normalizedWorkspaceId,
     savedModelSelection: normalizeModelSelection(response.savedModelSelection) || savedModelSelection(runtime.workspace),
     models: normalizeModelCatalog(response.models),
   };
+}
+
+async function fetchModelCatalog(session, startedAt, dependencies = {}) {
+  const deadline = startedAt + (Number(dependencies.modelDiscoveryTimeoutMs) || WORKSPACE_REQUEST_MODEL_DISCOVERY_TIMEOUT_MS);
+  let lastFailure = null;
+  let attempt = 0;
+  while (true) {
+    const remaining = deadline - currentTime(dependencies);
+    if (remaining <= 0) {
+      throw httpError(504, lastFailure?.errorCode || "workspace_request_model_discovery_timeout", lastFailure);
+    }
+    attempt += 1;
+    let response;
+    try {
+      response = await dependencies.requestRunnerJson(session, "/workspace/models", {
+        failureError: "workspace_request_model_discovery_failed",
+        unavailableError: "workspace_request_model_discovery_unavailable",
+        timeoutMs: Math.max(1, Math.min(Number(dependencies.modelHttpTimeoutMs) || WORKSPACE_REQUEST_MODEL_HTTP_TIMEOUT_MS, remaining)),
+      });
+    } catch (error) {
+      const errorCode = classifyWorkspaceRequestFailure(error, "workspace_request_model_discovery_unavailable");
+      lastFailure = {errorCode, cause: error};
+      if (!RETRYABLE_MODEL_DISCOVERY_ERRORS.has(errorCode)) {
+        throw httpError(Number(error?.status) >= 400 ? error.status : 503, errorCode, error);
+      }
+      dependencies.logger?.warn?.("workspace request model discovery attempt failed", {
+        stage: "runner_http",
+        errorCode,
+        attempt,
+        elapsedMs: elapsedSince(startedAt, dependencies),
+      });
+    }
+
+    if (response) {
+      const failure = modelCatalogFailure(response);
+      if (!failure) return response;
+      lastFailure = failure;
+      if (!failure.retryable) throw httpError(503, failure.errorCode, response);
+      dependencies.logger?.warn?.("workspace request model discovery attempt failed", {
+        stage: response.stage || "runner_control",
+        errorCode: failure.errorCode,
+        attempt,
+        elapsedMs: elapsedSince(startedAt, dependencies),
+      });
+    }
+
+    const afterAttempt = deadline - currentTime(dependencies);
+    if (afterAttempt <= 0) throw httpError(504, lastFailure?.errorCode || "workspace_request_model_discovery_timeout", lastFailure);
+    await (dependencies.delay || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs))))(
+        Math.min(WORKSPACE_REQUEST_MODEL_CATALOG_RETRY_DELAY_MS, afterAttempt));
+  }
+}
+
+function modelCatalogFailure(response) {
+  if (response?.ok === true && Array.isArray(response.models)) return null;
+  const errorCode = classifyWorkspaceRequestFailure(response, "workspace_request_model_catalog_invalid");
+  return {
+    errorCode,
+    retryable: response?.retryable === true || RETRYABLE_MODEL_DISCOVERY_ERRORS.has(errorCode),
+    stage: response?.stage || null,
+  };
+}
+
+function elapsedSince(startedAt, dependencies = {}) {
+  return Math.max(0, currentTime(dependencies) - startedAt);
+}
+
+function currentTime(dependencies = {}) {
+  return typeof dependencies.now === "function" ? Number(dependencies.now()) : Date.now();
 }
 
 async function provisionWorkspaceRequest(runId, dependencies = {}) {

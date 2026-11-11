@@ -83,6 +83,7 @@ test("marked runners use the managed pi-web-ui state contract while unmarked run
     "MAPACHE_AGENT_STATE_ROOT",
     "MAPACHE_PI_WEB_UI_ROOT",
     "MAPACHE_PI_WEB_UI_STARTUP_TIMEOUT_MS",
+    "MAPACHE_PI_WEB_UI_WORKSPACE_REQUEST_MODELS_TIMEOUT_MS",
     "PI_CODING_AGENT_DIR",
     "PI_SESSION_DIR",
   ];
@@ -107,6 +108,7 @@ test("marked runners use the managed pi-web-ui state contract while unmarked run
     assert.equal(managed.agentUiVersion, "pi-web-ui-v1");
     assert.equal(managed.piWebUiRoot, "/opt/mapache/pi-web-ui-test");
     assert.equal(managed.piWebUiStartupTimeoutMs, 90000);
+    assert.equal(managed.piWebUiWorkspaceRequestModelsTimeoutMs, 30000);
     assert.equal(managed.piWebUiHost, "127.0.0.1");
     assert.equal(managed.piWebUiPort, 8787);
     assert.equal(managed.piAgentDir, path.join("/tmp/mapache-agent-state-test", "pi"));

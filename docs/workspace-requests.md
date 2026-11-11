@@ -30,6 +30,33 @@ proof that the provider account is entitled to every model. Stopped or
 unreachable targets return `workspace_request_model_discovery_unavailable`;
 the broker never invents a model from a stale catalog.
 
+Runtime startup is transient. `functions/workspaceRequestRuntime.service.js`
+selects or creates/restarts the canonical main session once, then
+`functions/workspaceRequestReadiness.service.js` re-reads that same session
+until it has a running status and service URL. Readiness polls once per second
+for up to 90 seconds. A terminal lifecycle failure stops immediately;
+exhaustion returns `workspace_request_runtime_start_timeout` and does not
+create a ticket or dispatch a prompt. The overall model-discovery budget is
+120 seconds, which leaves room for catalog initialization after Cloud Run is
+ready.
+
+The runner catalog request has separate deadlines: the Functions-to-runner HTTP
+call allows 45 seconds, while the pi-web-ui control socket allows 30 seconds
+for first-client initialization and catalog work instead of the 5-second
+quiesce/status deadline. Retryable HTTP-200 failure envelopes are limited to
+catalog unavailability, the inner control deadline, and client initialization;
+model/provider errors and invalid or genuine catalog failures are returned
+without blind retries. Browserless model reads share the in-flight internal
+client initialization promise, so concurrent retries cannot create duplicate
+clients. Logs record only the workspace/session-safe stage, code, attempt, and
+elapsed time; credentials, prompts, and transcripts are excluded.
+
+Submission calls this same readiness-backed discovery before creating the
+durable ticket, so a cold target is allowed to become ready before any prompt
+can be admitted. The caller-visible startup and catalog codes remain separate
+from model selection, provider authentication, and post-dispatch execution
+errors.
+
 `workspace_request_ask` and `workspace_request_submit` accept either an exact
 `{providerId, modelId}` pair, a friendly `name`, or a plain model-name string.
 The broker resolves friendly names against the target catalog, rejects

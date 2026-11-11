@@ -365,6 +365,43 @@ test("allows automation initialization to outlive the shutdown control deadline"
   }
 });
 
+test("uses a dedicated model discovery deadline for slow first catalog access", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild();
+  config.piWebUiQuiesceTimeoutMs = 5;
+  config.piWebUiWorkspaceRequestModelsTimeoutMs = 30;
+  const commands = [];
+  try {
+    const managed = createPiWebUiProcess(config, {
+      fetch: healthyFetch(),
+      processKill: (_pid, signal) => child.kill(signal),
+      spawn: () => child,
+      controlConnect: () => {
+        const socket = new EventEmitter();
+        socket.destroy = () => {};
+        socket.write = (line) => {
+          const request = JSON.parse(String(line));
+          commands.push(request.cmd);
+          const body = request.cmd === "workspaceRequestModels"
+            ? {ok: true, models: [{providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true}]}
+            : {ok: true, quiesced: true};
+          const delayMs = request.cmd === "workspaceRequestModels" ? 15 : 0;
+          setTimeout(() => socket.emit("data", Buffer.from(JSON.stringify(body) + "\n")), delayMs);
+        };
+        setImmediate(() => socket.emit("connect"));
+        return socket;
+      },
+    });
+    await managed.start();
+    const response = await managed.workspaceRequestModels();
+    assert.deepEqual(response, {ok: true, models: [{providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true}]});
+    assert.deepEqual(commands, ["workspaceRequestModels"]);
+    await managed.stop();
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("stops the managed process group so tool descendants cannot outlive the runner", async () => {
   const {root, config} = await fixture();
   const child = fakeChild(4343);

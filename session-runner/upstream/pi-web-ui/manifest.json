@@ -75,6 +75,7 @@
     "patches/0024-workspace-request-control-socket.patch",
     "patches/0025-workspace-request-control-test.patch",
     "patches/0038-workspace-request-model-catalog.patch",
-    "patches/0039-workspace-request-saved-model.patch"
+    "patches/0039-workspace-request-saved-model.patch",
+    "patches/0040-workspace-request-readiness.patch"
   ]
 }

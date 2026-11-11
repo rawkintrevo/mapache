@@ -1,0 +1,118 @@
+diff --git a/server/agent-service.ts b/server/agent-service.ts
+--- a/server/agent-service.ts
++++ b/server/agent-service.ts
+@@ -6440,6 +6440,8 @@ export class AgentService {
+ 	/** Requests share the normal client runtime and remain in its conversation map. */
+ 	private workspaceRequests = new Map<string, WorkspaceRequestHandle>();
+ 	private internalRequestClient: ClientSession | null = null;
++	/** Share the first browserless client initialization across concurrent reads. */
++	private internalRequestClientPromise: Promise<ClientSession> | null = null;
+ 	/** One private automation conversation per embedded runner. Keep the handle
+ 	 * after terminal completion so duplicate requests remain deterministic. */
+ 	private automation: AutomationHandle | null = null;
+@@ -6862,13 +6864,20 @@ export class AgentService {
+ 	private async requestClient(): Promise<ClientSession> {
+ 		const existing = this.uniqueClients()[0];
+ 		if (existing) return existing;
+-		if (this.internalRequestClient) return this.internalRequestClient;
+-		this.internalRequestClient = await ClientSession.create(
++		if (this.internalRequestClientPromise) return this.internalRequestClientPromise;
++		const creating = ClientSession.create(
+ 			AgentService.INTERNAL_REQUEST_CLIENT_ID,
+ 			this.cwd,
+ 			this.stateStore,
+ 		);
+-		return this.internalRequestClient;
++		this.internalRequestClientPromise = creating;
++		try {
++			const client = await creating;
++			this.internalRequestClient = client;
++			return client;
++		} finally {
++			if (this.internalRequestClientPromise === creating) this.internalRequestClientPromise = null;
++		}
+ 	}
+ 
+ 	async startWorkspaceRequest(input: {
+@@ -6924,8 +6933,18 @@ export class AgentService {
+ 		try {
+ 			const client = await this.requestClient();
+ 			return { ok: true, models: client.modelCatalog(), savedModelSelection: client.savedModelSelection() };
+-		} catch {
+-			return { ok: false, error: "workspace_request_model_discovery_unavailable" };
++		} catch (error) {
++			const text = String((error as Error)?.message ?? error ?? "").toLowerCase();
++			const timedOut = /timeout|timed out|deadline/.test(text);
++			const fromClient = /client|initialize|initializ|create/.test(text);
++			return {
++				ok: false,
++				error: timedOut
++					? "workspace_request_model_discovery_timeout"
++					: fromClient ? "workspace_request_model_client_initialization_failed" : "workspace_request_model_catalog_failed",
++				retryable: timedOut || fromClient,
++				stage: fromClient ? "client_initialization" : "catalog",
++			};
+ 		}
+ 	}
+ 
+diff --git a/tests/unit/workspace-request-models.test.ts b/tests/unit/workspace-request-models.test.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/unit/workspace-request-models.test.ts
+@@ -0,0 +1,76 @@
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { AgentService, ClientSession } from "../../server/agent-service.js";
++
++type ServiceHarness = AgentService & Record<string, any>;
++
++function makeService(): ServiceHarness {
++	const service = Object.create(AgentService.prototype) as ServiceHarness;
++	Object.assign(service, {
++		clients: new Map(),
++		internalRequestClient: null,
++		internalRequestClientPromise: null,
++		cwd: "/workspace",
++		stateStore: {},
++	});
++	return service;
++}
++
++function modelClient(): ClientSession {
++	return {
++		modelCatalog: () => [{ providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true }],
++		savedModelSelection: () => null,
++	} as unknown as ClientSession;
++}
++
++afterEach(() => vi.restoreAllMocks());
++
++describe("browserless model discovery", () => {
++	it("shares one in-flight internal client initialization", async () => {
++		let release: (client: ClientSession) => void = () => {};
++		const creating = new Promise<ClientSession>((resolve) => { release = resolve; });
++		const create = vi.spyOn(ClientSession, "create").mockReturnValue(creating);
++		const service = makeService();
++
++		const first = service.workspaceRequestModels();
++		const second = service.workspaceRequestModels();
++		await Promise.resolve();
++		expect(create).toHaveBeenCalledOnce();
++		release(modelClient());
++
++		await expect(first).resolves.toMatchObject({ ok: true, models: [{ modelId: "gpt-5" }] });
++		await expect(second).resolves.toMatchObject({ ok: true, models: [{ modelId: "gpt-5" }] });
++	});
++
++	it("returns only safe client-initialization evidence", async () => {
++		vi.spyOn(ClientSession, "create").mockRejectedValue(new Error("client initialization failed: secret-token"));
++		const response = await makeService().workspaceRequestModels();
++
++		expect(response).toEqual({
++			ok: false,
++			error: "workspace_request_model_client_initialization_failed",
++			retryable: true,
++			stage: "client_initialization",
++		});
++		expect(JSON.stringify(response)).not.toContain("secret-token");
++	});
++});

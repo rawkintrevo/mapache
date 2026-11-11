@@ -14,6 +14,7 @@ index 312a6b9f..7a00e7b0 100644
  		this.automation = null;
  		if (automation) await automation.client.dispose().catch(() => {});
 +		this.internalRequestClient = null;
++		this.internalRequestClientPromise = null;
 +		this.workspaceRequests.clear();
  	}
  }

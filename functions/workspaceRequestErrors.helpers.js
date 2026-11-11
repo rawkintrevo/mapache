@@ -25,6 +25,30 @@ const ERROR_DESCRIPTORS = Object.freeze({
     message: "The target workspace model catalog is temporarily unavailable.",
     action: "Retry discovery when the target workspace runtime is ready.",
   },
+  workspace_request_runtime_start_timeout: {
+    message: "The target workspace is still starting.",
+    action: "Retry model discovery after the target workspace finishes starting.",
+  },
+  workspace_request_runtime_start_failed: {
+    message: "The target workspace could not finish starting.",
+    action: "Check the target workspace runtime and retry after it is healthy.",
+  },
+  workspace_request_model_discovery_timeout: {
+    message: "The target workspace model catalog did not respond in time.",
+    action: "Retry discovery when the target workspace runtime is ready.",
+  },
+  workspace_request_model_client_initialization_failed: {
+    message: "The target workspace model client could not initialize.",
+    action: "Retry discovery after the target workspace runtime is ready.",
+  },
+  workspace_request_model_catalog_failed: {
+    message: "The target workspace model catalog could not be read.",
+    action: "Check the target runtime and retry model discovery.",
+  },
+  workspace_request_model_catalog_invalid: {
+    message: "The target workspace returned an invalid model catalog.",
+    action: "Check the target runtime and retry model discovery.",
+  },
   workspace_request_interaction_required: {
     message: "The target workspace needs an interactive action before this request can finish.",
     action: "Open the target workspace, complete the requested action, and retry.",
@@ -50,6 +74,8 @@ const ERROR_DESCRIPTORS = Object.freeze({
 const PRIVATE_TEXT = /(api[_-]?key|access[_-]?token|bearer\s+[a-z0-9._-]+|password|secret|credential|private[_-]?key|https?:\/\/\S+)/gi;
 
 function classifyWorkspaceRequestFailure(value, fallback = "shared_runtime_request_failed") {
+  const explicitCode = String(value?.publicMessage || value?.error || value?.code || "").trim();
+  if (KNOWN_ERROR_CODES.has(explicitCode)) return explicitCode;
   const text = collectErrorText(value).toLowerCase();
   if (value?.status === "canceled" || /\bcancel(?:ed|led)\b/.test(text)) return "workspace_request_canceled";
   if (/interaction|required action|needs input|approval/.test(text)) return "workspace_request_interaction_required";
@@ -64,6 +90,8 @@ function classifyWorkspaceRequestFailure(value, fallback = "shared_runtime_reque
   if (/dispatch.*reject|rejected/.test(text)) return "shared_runtime_dispatch_rejected";
   return isSafeErrorCode(fallback) ? fallback : "shared_runtime_request_failed";
 }
+
+const KNOWN_ERROR_CODES = new Set(Object.keys(ERROR_DESCRIPTORS));
 
 function errorDescriptor(code, detail) {
   const normalized = isSafeErrorCode(code) ? code : "shared_runtime_request_failed";

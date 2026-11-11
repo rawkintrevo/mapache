@@ -35,6 +35,7 @@ function setup(overrides = {}) {
   const admin = {firestore: {FieldValue: {serverTimestamp: () => "now"}}};
   const ticketService = {
     async createTicket(_actor, workspaceId, body, options) {
+      overrides.events?.push("ticket");
       const id = "ticket-1";
       db.values.set(`workspaceTickets/${id}`, {
         id, ownerUid: "owner", workspaceId, status: "queued", runId: "run-1",
@@ -114,4 +115,25 @@ test("resolves a friendly model name in the target scope before ticket creation"
   assert.deepEqual(result.model, {providerId: "openai", modelId: "astra-6"});
   assert.deepEqual(db.values.get("workspaceTickets/ticket-1").request.model,
       {providerId: "openai", modelId: "astra-6"});
+});
+
+test("uses the same readiness-backed discovery path before creating one submission ticket", async () => {
+  const events = [];
+  const {service} = setup({
+    events,
+    discoverWorkspaceModels: async () => {
+      events.push("discover");
+      return {models: [{providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true}]};
+    },
+  });
+  await service.saveGrant("owner", "source", "target", {permissions: ["discover", "submit", "read"]});
+
+  const discovered = await service.discoverModels(claims, "target");
+  assert.equal(discovered.models[0].modelId, "gpt-5");
+  const submitted = await service.submitRequest(claims, {
+    targetWorkspaceId: "target", request: "Use the ready target", model: {providerId: "openai", modelId: "gpt-5"},
+  }, {idempotencyKey: "ready-target"});
+
+  assert.equal(submitted.id, "ticket-1");
+  assert.deepEqual(events, ["discover", "discover", "ticket"]);
 });
