@@ -34,6 +34,7 @@ const {
   isAutomationRuntime,
   normalizeRuntimeKind,
 } = require("./runtimePaths.helpers");
+const {getRuntimeScheduleManualStartState} = require("./runtimeSchedule.helpers");
 const {
   AGENT_IMAGE_KEY,
   isMarkedAgentWorkspace,
@@ -223,17 +224,21 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   if (dependencies.db && typeof dependencies.db.collection === "function") {
     const workspaceRef = dependencies.db.collection("workspaces").doc(workspaceId);
     const latestWorkspaceSnap = await workspaceRef.get();
+    const workspaceUpdates = {};
     if (latestWorkspaceSnap.exists && !latestWorkspaceSnap.data().canonicalSessionId && !isAutomationRuntime(session)) {
-      await workspaceRef.update({
-        canonicalSessionId: sessionRef.id,
-        updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
-      });
+      workspaceUpdates.canonicalSessionId = sessionRef.id;
+      workspaceUpdates.updatedAt = dependencies.admin.firestore.FieldValue.serverTimestamp();
     }
     if (!payload.runtimeScheduleStart) {
-      await workspaceRef.update({
-        runtimeScheduleManualPauseWindowKey: dependencies.admin.firestore.FieldValue.delete(),
-      });
+      workspaceUpdates.runtimeScheduleManualPauseWindowKey = dependencies.admin.firestore.FieldValue.delete();
+      const scheduleState = getRuntimeScheduleManualStartState(workspace, new Date());
+      if (scheduleState) {
+        workspaceUpdates.runtimeScheduleStatus = scheduleState.status;
+        workspaceUpdates.runtimeScheduleNextEvent = scheduleState.nextEvent;
+        workspaceUpdates.runtimeScheduleError = null;
+      }
     }
+    if (Object.keys(workspaceUpdates).length) await workspaceRef.update(workspaceUpdates);
   }
 
   if (!runnerImage.canProvision) {

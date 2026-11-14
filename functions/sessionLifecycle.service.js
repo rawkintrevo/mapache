@@ -43,7 +43,10 @@ const {
   runtimeSessionStateUpdate,
   runtimeStateUpdate,
 } = require("./runtimeReservation.helpers");
-const {getRuntimeScheduleState} = require("./runtimeSchedule.helpers");
+const {
+  getRuntimeScheduleManualStartState,
+  getRuntimeScheduleState,
+} = require("./runtimeSchedule.helpers");
 
 function createSessionLifecycleService(dependencies = {}) {
   return {
@@ -60,8 +63,8 @@ function createSessionLifecycleService(dependencies = {}) {
     restartSessionForSchedule: (uid, workspaceId, sessionId) =>
       restartSession(uid, workspaceId, sessionId, dependencies, {scheduled: true}),
     stopSession: (uid, workspaceId, sessionId) => stopSession(uid, workspaceId, sessionId, dependencies),
-    stopSessionForSchedule: (uid, workspaceId, sessionId) =>
-      stopSession(uid, workspaceId, sessionId, dependencies, {scheduled: true}),
+    stopSessionForSchedule: (uid, workspaceId, sessionId, options = {}) =>
+      stopSession(uid, workspaceId, sessionId, dependencies, {scheduled: true, ...options}),
   };
 }
 
@@ -144,6 +147,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}, op
     session = await stopSessionBeforeRecreation(sessionRef, session, dependencies);
     return recreateSessionService(workspace, workspaceId, sessionRef, session, dependencies, {
       deferProvisioning: true,
+      scheduled: options.scheduled,
     });
   }
   if (normalizeSessionState(session.status) === "stop_failed") throw httpError(409, "session_stop_failed");
@@ -204,11 +208,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}, op
   }
 
   await sessionRef.update(restartUpdate);
-  if (!options.scheduled && dependencies.db && typeof dependencies.db.collection === "function") {
-    await dependencies.db.collection("workspaces").doc(workspaceId).update({
-      runtimeScheduleManualPauseWindowKey: dependencies.admin.firestore.FieldValue.delete(),
-    });
-  }
+  if (!options.scheduled) await recordManualRuntimeStart(workspaceId, workspace, dependencies);
 
   const serviceId = resolveCloudRunServiceId(sessionId, session.serviceId);
   const serviceName = isValidCloudRunServiceId(session.serviceId) && session.serviceName ?
@@ -307,6 +307,8 @@ async function recreateSessionService(workspace, workspaceId, sessionRef, sessio
   });
 
   await sessionRef.update(restartUpdate);
+
+  if (!options.scheduled) await recordManualRuntimeStart(workspaceId, workspace, dependencies);
 
   const serviceId = resolveCloudRunServiceId(sessionRef.id, session.serviceId);
   const serviceName = isValidCloudRunServiceId(session.serviceId) && session.serviceName ?
@@ -409,6 +411,9 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}, optio
   const session = sessionSnap.data();
   assertMainSession(session);
   assertNoActiveResize(session);
+  if (options.scheduled && options.guardSchedule && !options.force && shouldSkipScheduledStop(workspace, dependencies)) {
+    return {scheduledStopSkipped: true};
+  }
   const reason = options.scheduled ? "scheduled_hours_end" : "manual";
   if (!options.scheduled && workspace.runtimePolicy?.mode === "scheduled" && workspace.runtimePolicy.schedule) {
     const scheduleState = getRuntimeScheduleState(workspace.runtimePolicy.schedule, new Date());
@@ -431,6 +436,33 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}, optio
   const serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {reason});
   if (!serviceDeleted) throw httpError(502, "session_stop_failed");
   return toClientDoc(await sessionRef.get());
+}
+
+async function recordManualRuntimeStart(workspaceId, workspace, dependencies = {}) {
+  if (!dependencies.db || typeof dependencies.db.collection !== "function") return;
+  const update = {
+    runtimeScheduleManualPauseWindowKey: dependencies.admin.firestore.FieldValue.delete(),
+  };
+  const scheduleState = getRuntimeScheduleManualStartState(
+      workspace,
+      dependencies.now ? dependencies.now() : new Date(),
+  );
+  if (scheduleState) {
+    update.runtimeScheduleStatus = scheduleState.status;
+    update.runtimeScheduleNextEvent = scheduleState.nextEvent;
+    update.runtimeScheduleError = null;
+  }
+  await dependencies.db.collection("workspaces").doc(workspaceId).update(update);
+}
+
+function shouldSkipScheduledStop(workspace, dependencies = {}) {
+  if (workspace.runtimePolicy?.mode !== "scheduled" || !workspace.runtimePolicy.schedule) return false;
+  if (workspace.runtimeScheduleStatus !== "open") return true;
+  const state = getRuntimeScheduleState(
+      workspace.runtimePolicy.schedule,
+      dependencies.now ? dependencies.now() : new Date(),
+  );
+  return state.active;
 }
 
 async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {

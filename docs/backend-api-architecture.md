@@ -120,13 +120,16 @@ an actual scheduled tick completes and checks the configured workspaces; saving
 a policy only exercises direct reconciliation and does not validate discovery.
 
 Manual Pause records the local date of the open window and suppresses scheduled
-restart until the next selected-day opening. A manual Start clears that marker;
-outside scheduled hours it follows the existing idle policy. Switching away from
-scheduled mode does not stop an active session. Editing an enabled schedule
-reconciles immediately, including stopping a running session when the edited
-window is closed at the current time. At scheduled close, Functions skips the
-runner's cooperative shutdown and checkpoint path and deletes the Cloud Run
-service directly; after deletion it records that live work was interrupted.
+restart until the next selected-day opening. A manual Start clears that marker
+and records whether the current schedule window is open or closed. Outside
+scheduled hours it follows the existing idle policy; the minute reconciler only
+stops a runtime after an observed open-to-closed schedule transition. Switching
+away from scheduled mode does not stop an active session. Editing an enabled
+schedule reconciles immediately, including stopping a running session when the
+edited window is closed at the current time. At scheduled close, Functions
+skips the runner's cooperative shutdown and checkpoint path and deletes the
+Cloud Run service directly; after deletion it records that live work was
+interrupted.
 
 The workspace authority transaction admits one managed runtime and sync writer.
 Generation and boot-instance fencing prevent a stale Cloud Run container from
