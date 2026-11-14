@@ -110,6 +110,21 @@ function getNextRuntimeScheduleStart(scheduleValue, nowValue = new Date()) {
   throw runtimeScheduleError("runtime_schedule_next_event_unavailable");
 }
 
+function getRuntimeScheduleManualStartState(workspace = {}, nowValue = new Date()) {
+  const policy = workspace.runtimePolicy;
+  if (policy?.mode !== "scheduled" || !policy.schedule) return null;
+  const state = getRuntimeScheduleState(policy.schedule, nowValue);
+  return {
+    status: state.active ? "open" : "closed",
+    nextEvent: {
+      action: state.nextEvent.action,
+      at: state.nextEvent.at,
+      windowKey: state.nextEvent.windowKey,
+      timezone: policy.schedule.timezone,
+    },
+  };
+}
+
 function occurrenceForDate(schedule, dateKey) {
   const date = parseDateKey(dateKey);
   const weekday = isoWeekday(date.year, date.month, date.day);
@@ -240,6 +255,7 @@ function runtimeScheduleError(code) {
 module.exports = {
   getNextRuntimeScheduleStart,
   getRuntimeScheduleState,
+  getRuntimeScheduleManualStartState,
   normalizeRuntimePolicy,
   normalizeRuntimeSchedule,
   runtimeScheduleWindowKey,

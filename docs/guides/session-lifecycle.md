@@ -48,8 +48,11 @@ until that window closes. Capacity limits and main/automation reservations still
 apply. Failures are stored as safe error codes on the workspace and shown in the
 policy editor. A manual Pause during an open window is remembered for that
 local date, so retries do not undo the user's pause; the next selected opening
-can start the session again. A manual Start clears the pause marker and uses the
-ordinary idle timeout outside scheduled hours.
+can start the session again. A manual Start clears the pause marker. Outside
+scheduled hours it records the schedule as closed and uses the ordinary idle
+timeout; the minute reconciler only shuts down a runtime when it observes a
+scheduled window close. A manual Start during an open window remains subject to
+the next scheduled close.
 
 Enabling or editing an enabled schedule reconciles immediately. If the current
 time falls outside the edited window, the normal stop lifecycle runs at once.

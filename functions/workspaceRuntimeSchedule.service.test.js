@@ -117,6 +117,7 @@ function workspace(overrides = {}) {
     canonicalSessionId: "session-1",
     runtimePolicy: {mode: "scheduled", schedule: SCHEDULE},
     runtimePolicyRevision: 1,
+    runtimeScheduleStatus: "open",
     ...overrides,
   };
 }
@@ -184,6 +185,63 @@ function workspace(overrides = {}) {
     assert.equal(result.action, "stopped");
     assert.deepEqual(harness.stopped[0], ["user-1", "workspace-1", "session-1"]);
     assert.equal(harness.workspace.runtimeScheduleStatus, "closed");
+  }
+
+  {
+    const afterHours = new Date("2026-10-19T23:00:00.000Z");
+    const harness = makeHarness({
+      workspace: workspace({runtimeScheduleStatus: "closed"}),
+      sessions: [{id: "session-1", status: "provisioning", ownerUid: "user-1"}],
+      now: afterHours,
+    });
+    const result = await harness.service.reconcileWorkspace("workspace-1", afterHours);
+    assert.equal(result.action, "outside_window");
+    assert.equal(harness.stopped.length, 0, "manual startup outside the window is left to idle timeout");
+    assert.equal(harness.workspace.runtimeScheduleStatus, "closed");
+  }
+
+  {
+    const afterHours = new Date("2026-10-19T23:00:00.000Z");
+    const harness = makeHarness({
+      workspace: workspace({
+        runtimePolicy: {mode: "idle", schedule: null},
+        runtimeScheduleStatus: undefined,
+      }),
+      sessions: [{id: "session-1", status: "running", serviceUrl: "https://runner", ownerUid: "user-1"}],
+      now: afterHours,
+      onStop: ({sessions}) => { sessions.get("session-1").status = "stopped"; },
+    });
+    await harness.service.updatePolicy("user-1", "workspace-1", {
+      mode: "scheduled",
+      schedule: SCHEDULE,
+    });
+    assert.equal(harness.stopped.length, 1, "enabling a schedule reconciles an active session immediately");
+  }
+
+  {
+    const afterHours = new Date("2026-10-19T23:00:00.000Z");
+    let stopAttempts = 0;
+    const harness = makeHarness({
+      workspace: workspace({
+        runtimePolicy: {mode: "idle", schedule: null},
+        runtimeScheduleStatus: undefined,
+      }),
+      sessions: [{id: "session-1", status: "running", serviceUrl: "https://runner", ownerUid: "user-1"}],
+      now: afterHours,
+      onStop: ({sessions}) => {
+        stopAttempts++;
+        if (stopAttempts === 1) throw new Error("session_stop_failed");
+        sessions.get("session-1").status = "stopped";
+      },
+    });
+    await harness.service.updatePolicy("user-1", "workspace-1", {
+      mode: "scheduled",
+      schedule: SCHEDULE,
+    });
+    assert.equal(harness.workspace.runtimeScheduleStatus, "open", "a failed explicit close remains retryable");
+    const retry = await harness.service.reconcileWorkspace("workspace-1", afterHours);
+    assert.equal(retry.action, "stopped");
+    assert.equal(stopAttempts, 2);
   }
 
   {

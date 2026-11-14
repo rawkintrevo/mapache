@@ -35,7 +35,7 @@ function createWorkspaceRuntimeScheduleService(dependencies = {}) {
   };
   return {
     getWorkspaceRuntimePolicy: (uid, workspaceId) => getWorkspaceRuntimePolicy(uid, workspaceId, shared),
-    reconcileWorkspace: (workspaceId, now) => reconcileWorkspaceRuntimeSchedule(workspaceId, now, shared),
+    reconcileWorkspace: (workspaceId, now, options) => reconcileWorkspaceRuntimeSchedule(workspaceId, now, shared, options),
     runTick: (event = {}) => runRuntimeScheduleTick(event, shared),
     setSessionLongRunning: (uid, workspaceId, sessionId, payload) =>
       setSessionLongRunning(uid, workspaceId, sessionId, payload, shared),
@@ -96,7 +96,9 @@ async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependenc
     }
   });
 
-  if (policy.mode === "scheduled") await reconcileWorkspaceRuntimeSchedule(workspaceId, undefined, dependencies);
+  if (policy.mode === "scheduled") {
+    await reconcileWorkspaceRuntimeSchedule(workspaceId, undefined, dependencies, {forceCloseOutsideWindow: true});
+  }
   const snap = await workspaceRef.get();
   return toClientDoc(snap);
 }
@@ -203,7 +205,7 @@ async function listScheduledWorkspaceDocs(now, dependencies = {}) {
   return {docs, pages, capped: pages >= maxPages && Boolean(lastPageDoc && nextCursorPath)};
 }
 
-async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependencies = {}) {
+async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependencies = {}, options = {}) {
   const firestore = dependencies.db || defaultDb;
   const now = nowValue ? asDate(nowValue) : dependencies.now ? asDate(dependencies.now()) : new Date();
   const claim = await claimWorkspace(workspaceId, now, dependencies);
@@ -245,10 +247,17 @@ async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependen
           await dependencies.restartSessionForSchedule(workspace.ownerUid, workspaceId, session.id);
           result = {workspaceId, action: "start_requested", failed: false};
         }
-      } else if (session && isPotentiallyActive(session)) {
+      } else if (session && isPotentiallyActive(session) && (
+        options.forceCloseOutsideWindow === true || workspace.runtimeScheduleStatus === "open"
+      )) {
         attemptedAction = "stop";
-        await dependencies.stopSessionForSchedule(workspace.ownerUid, workspaceId, session.id);
-        result = {workspaceId, action: "stopped", failed: false};
+        const stopResult = await dependencies.stopSessionForSchedule(workspace.ownerUid, workspaceId, session.id, {
+          guardSchedule: true,
+          force: options.forceCloseOutsideWindow === true,
+        });
+        result = stopResult?.scheduledStopSkipped ?
+          {workspaceId, action: "outside_window", failed: false} :
+          {workspaceId, action: "stopped", failed: false};
       } else {
         result = {workspaceId, action: "outside_window", failed: false};
       }
@@ -281,13 +290,14 @@ async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependen
       code: error ? safeErrorCode(error, "runtime_schedule_reconcile_failed") : "runtime_schedule_policy_changed",
       at: now,
     },
+    ...(options.forceCloseOutsideWindow && attemptedAction === "stop" ? {runtimeScheduleStatus: "open"} : {}),
     runtimeScheduleLastAction: result.action,
     runtimeScheduleReconciledAt: now,
   }, dependencies);
   if (result.stale) {
     const latest = await workspaceRef.get();
     if (latest.exists && latest.data()?.runtimePolicy?.mode === "scheduled") {
-      return reconcileWorkspaceRuntimeSchedule(workspaceId, now, dependencies);
+      return reconcileWorkspaceRuntimeSchedule(workspaceId, now, dependencies, options);
     }
   }
   if (error) logger.warn("workspace runtime schedule reconciliation failed", {workspaceId, errorCode: result.errorCode});

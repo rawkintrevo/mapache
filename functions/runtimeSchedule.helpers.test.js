@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  getRuntimeScheduleManualStartState,
   getRuntimeScheduleState,
   normalizeRuntimePolicy,
   normalizeRuntimeSchedule,
@@ -31,6 +32,18 @@ assert.equal(mondayWithinWindow.nextEvent.at.toISOString(), "2026-10-19T23:00:00
 const fridayAfterClose = getRuntimeScheduleState(weekdays, new Date("2026-10-24T00:00:00.000Z"));
 assert.equal(fridayAfterClose.active, false);
 assert.equal(fridayAfterClose.nextEvent.at.toISOString(), "2026-10-26T13:00:00.000Z");
+
+const manualAfterHours = getRuntimeScheduleManualStartState({
+  runtimePolicy: {mode: "scheduled", schedule: weekdays},
+}, new Date("2026-10-24T00:00:00.000Z"));
+assert.equal(manualAfterHours.status, "closed");
+assert.equal(manualAfterHours.nextEvent.action, "start");
+
+const manualWithinWindow = getRuntimeScheduleManualStartState({
+  runtimePolicy: {mode: "scheduled", schedule: weekdays},
+}, new Date("2026-10-19T18:00:00.000Z"));
+assert.equal(manualWithinWindow.status, "open");
+assert.equal(manualWithinWindow.nextEvent.action, "stop");
 
 const springGap = getRuntimeScheduleState({
   days: [7], startTime: "02:30", endTime: "04:00", timezone: "America/New_York",
