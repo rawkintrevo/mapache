@@ -39,6 +39,22 @@ only missing image-owned runtime skills, acquires writer authority, and then
 starts exactly one managed upstream agent child for a marked pi-chrome runtime.
 The upstream child listens on loopback `127.0.0.1:8787`.
 
+Checkpoint restoration stages downloads in batches of at most eight objects and
+64 MiB of declared content; a larger individual object runs alone. Deferred
+large-file pointers retain their existing no-download behavior. The staging
+helper in `lib/checkpointRestoreStaging.js` validates path conflicts before
+writing, creates symlinks after ordinary files, and drains in-flight writes on
+failure before cleanup. Checksums, transcript validation, generation checks,
+and installation rollback still apply before runtime admission. This avoids
+serial Cloud Storage round trips exhausting Cloud Run's 240-second startup
+window for workspaces with many small files. Startup logs identify preparation,
+checkpoint restore, ownership admission, Chrome restore/start, and agent start
+with elapsed times; they do not include file contents or credentials.
+
+This change requires a rebuilt `pi-chrome` image and a new/recreated Cloud Run
+revision for existing sessions. It does not change the startup probe, health
+endpoint, checkpoint format, or published checkpoint pointers.
+
 The startup sequence fails closed if restore validation, credential/MCP
 materialization, authority acquisition, the pinned adapter, or upstream health
 checks fail. No startup path installs or patches `pi-goal-x`, starts Goals RPC,

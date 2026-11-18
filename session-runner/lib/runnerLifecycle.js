@@ -40,6 +40,19 @@ function createRunnerLifecycleCoordinator({
   let shutdownInFlight = null;
   let authorityAcquired = false;
 
+  async function startupStep(stage, operation) {
+    const startedAt = now();
+    logger.log("runner startup stage started", {stage});
+    try {
+      const result = await operation();
+      logger.log("runner startup stage completed", {stage, elapsedMs: now() - startedAt});
+      return result;
+    } catch (error) {
+      logger.error("runner startup stage failed", {stage, elapsedMs: now() - startedAt, code: error.code || "startup_failed"});
+      throw error;
+    }
+  }
+
   async function start() {
     authorityAcquired = false;
     try {
@@ -48,27 +61,27 @@ function createRunnerLifecycleCoordinator({
       await automationAgentApi?.start?.();
       await workspace.ensureWorkspace();
       logger.log(`workspace source mode: ${config.workspaceSourceMode}, sync role: ${config.workspaceSyncRole}, sync policy mode: ${config.workspaceSyncPolicyMode}`);
-      await workspace.prepareWorkspaceSource();
+      await startupStep("workspace_source", () => workspace.prepareWorkspaceSource());
       await git.prepareSharedWorkspaceGit?.();
       await git.configureGithubCredentialHelper?.();
-      await workspace.restoreCheckpoint?.();
-      await authority.acquire();
+      await startupStep("checkpoint_restore", () => workspace.restoreCheckpoint?.());
+      await startupStep("authority_acquire", () => authority.acquire());
       authorityAcquired = true;
       await activity.updateSessionActivity({
         runtimeStartedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       await piModelScope.restore();
-      const profileSeedRestore = await chromeProfileSeed?.restore?.();
-      if (!profileSeedRestore?.restored) await chromeProfile.restore();
+      const profileSeedRestore = await startupStep("chrome_seed_restore", () => chromeProfileSeed?.restore?.());
+      if (!profileSeedRestore?.restored) await startupStep("chrome_profile_restore", () => chromeProfile.restore());
       await browserEgress?.start();
-      await chromeRuntime.start();
+      await startupStep("chrome_start", () => chromeRuntime.start());
       await activeHarness.materializeConfig();
       await activeHarness.materializeAuth();
       if (isAutomationRuntime(config)) await git.prepareGithubAutomationBranch();
       await activeHarness.materializeMcp();
       await activeHarness.materializeSkills();
-      if (config.agentRuntimeEnabled) await piWebUi.start();
+      if (config.agentRuntimeEnabled) await startupStep("agent_start", () => piWebUi.start());
       await automationExecution?.start?.();
       chromeProfileSnapshots.start();
       if (checkpointScheduler) checkpointScheduler.start();

@@ -353,3 +353,98 @@ test("legacy large workspace entries restore as pointers without downloading the
   assert.equal(pointer.byteLength, Buffer.byteLength("restored workspace\n"));
   assert.equal(await fs.readlink(path.join(config.workspaceDir, "current.txt")), "nested/.hidden");
 });
+
+async function addWorkspaceFiles(fixture, count) {
+  const {config, storage, store, workspaceManifest} = fixture;
+  const pointer = store.workspace.agentRuntimeWorkspaceFiles;
+  const basePath = pointer.manifest.objectPath.replace(/\/manifest.json$/, "");
+  for (let i = 0; i < count; i++) {
+    const content = `restored file ${i}\n`;
+    const entry = manifestEntry({basePath, kind: "workspace-file", path: `many/file-${i}.txt`, content});
+    workspaceManifest.files.push(entry);
+    storage.put(config.bucketName, entry.objectPath, content);
+  }
+  pointer.fileCount = workspaceManifest.files.length;
+  pointer.manifest = storage.put(config.bucketName, pointer.manifest.objectPath, JSON.stringify(workspaceManifest));
+}
+
+test("restores many objects with bounded concurrent downloads and preserves every file", async (t) => {
+  const fixture = await makeFixture(t);
+  const {config, storage, store} = fixture;
+  await addWorkspaceFiles(fixture, 25);
+  const bucket = storage.bucket.bind(storage);
+  let active = 0;
+  let peak = 0;
+  storage.bucket = (name) => ({file(objectPath) {
+    const file = bucket(name).file(objectPath);
+    return {async download() {
+      if (objectPath.endsWith("manifest.json")) return file.download();
+      active++;
+      peak = Math.max(peak, active);
+      try {
+        await new Promise((resolve) => setImmediate(resolve));
+        return await file.download();
+      } finally { active--; }
+    }};
+  }});
+  await createAgentCheckpointRestoreService({config, db: store.db, storage}).restoreCheckpoint({shouldIgnore: (p) => p === ".git"});
+  assert.equal(peak, 8);
+  assert.equal(active, 0);
+  for (let i = 0; i < 25; i++) {
+    assert.equal(await fs.readFile(path.join(config.workspaceDir, `many/file-${i}.txt`), "utf8"), `restored file ${i}\n`);
+  }
+  assert.equal(await fs.readFile(path.join(config.piSessionDir, "chat.jsonl"), "utf8"), '{"type":"session"}\n{"type":"message"}\n');
+});
+
+test("a failed parallel download drains its batch before cleanup and never installs partial state", async (t) => {
+  const fixture = await makeFixture(t);
+  const {config, storage, store, root} = fixture;
+  await addWorkspaceFiles(fixture, 20);
+  const bucket = storage.bucket.bind(storage);
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  t.after(() => release());
+  let started = 0;
+  let batchStarted;
+  const ready = new Promise((resolve) => { batchStarted = resolve; });
+  storage.bucket = (name) => ({file(objectPath) {
+    const file = bucket(name).file(objectPath);
+    return {async download() {
+      if (objectPath.endsWith("manifest.json")) return file.download();
+      started++;
+      if (started === 8) batchStarted();
+      if (started === 1) throw new Error("injected read failure");
+      await gate;
+      return file.download();
+    }};
+  }});
+  let settled = false;
+  const result = createAgentCheckpointRestoreService({config, db: store.db, storage}).restoreWorkspaceFiles();
+  const rejection = assert.rejects(result, (error) => error.code === "checkpoint_object_missing");
+  result.then(() => { settled = true; }, () => { settled = true; });
+  await ready;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, "must wait for outstanding writes before removing staging");
+  release();
+  await rejection;
+  assert.equal(started, 8, "must not start another batch after failure");
+  assert.equal(await fs.readFile(path.join(config.workspaceDir, "old.txt"), "utf8"), "old workspace");
+  assert.equal((await fs.readdir(root)).some((name) => name.startsWith(".mapache-checkpoint-")), false);
+});
+
+test("rejects a symlink used as another entry's staging parent before downloading objects", async (t) => {
+  const fixture = await makeFixture(t);
+  const {config, storage, store, workspaceManifest} = fixture;
+  workspaceManifest.files.push(manifestEntry({kind: "symlink", path: "nested", target: "other"}));
+  const pointer = store.workspace.agentRuntimeWorkspaceFiles;
+  pointer.fileCount = workspaceManifest.files.length;
+  pointer.manifest = storage.put(config.bucketName, pointer.manifest.objectPath, JSON.stringify(workspaceManifest));
+  const bucket = storage.bucket.bind(storage);
+  storage.bucket = (name) => ({file(objectPath) {
+    assert.ok(objectPath.endsWith("manifest.json"), "invalid plan must not start object downloads");
+    return bucket(name).file(objectPath);
+  }});
+  await assert.rejects(createAgentCheckpointRestoreService({config, db: store.db, storage}).restoreWorkspaceFiles(),
+      (error) => error.code === "checkpoint_manifest_invalid");
+  assert.equal(await fs.readFile(path.join(config.workspaceDir, "old.txt"), "utf8"), "old workspace");
+});
