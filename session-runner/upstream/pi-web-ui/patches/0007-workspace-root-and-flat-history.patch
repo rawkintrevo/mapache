@@ -1,45 +1,26 @@
-diff --git a/server/agent-service-daemon.ts b/server/agent-service-daemon.ts
-index 7a5ddf6b..887fc6ce 100644
---- a/server/agent-service-daemon.ts
-+++ b/server/agent-service-daemon.ts
-@@ -1,3 +1,4 @@
-+import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
- import { join, resolve } from "node:path";
- import { statSync } from "node:fs";
- import { randomUUID } from "node:crypto";
-@@ -1720,7 +1721,7 @@ export class AgentService {
- 					}
- 					let cwd = this.cwd;
- 					const saved = this.stateStore.get(clientId);
--					if (saved.lastCwd && saved.lastCwd !== this.cwd) {
-+					if (saved.lastCwd && saved.lastCwd !== this.cwd && (!managedWorkspaceRoot() || isCanonicalPathWithinRootSync(managedWorkspaceRoot()!, saved.lastCwd))) {
- 						if (isRemoteWorkspaceUri(saved.lastCwd)) {
- 							cwd = saved.lastCwd;
- 						} else {
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 565b7791..a783a907 100644
+index 7a5dca61..131b2397 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -14,7 +14,7 @@ import {
- } from "./mobile-notification-events.js";
- import * as fsPromises from "node:fs/promises";
- import { DEFAULT_PI_CAPABILITIES } from "./engine-capabilities.js";
--import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync, statSync, watch, writeFileSync } from "node:fs";
-+import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync, statSync, realpathSync, watch, writeFileSync } from "node:fs";
- import { homedir } from "node:os";
- import { basename, delimiter, join, resolve } from "node:path";
+@@ -17,7 +17,7 @@ import "./patch-remote-catalog.js";
+ import { spawn } from "node:child_process";
+ import { randomUUID } from "node:crypto";
+ import { createRequire } from "node:module";
+-import { existsSync, readFileSync, rmSync, statSync, mkdirSync, watch } from "node:fs";
++import { existsSync, readFileSync, rmSync, statSync, mkdirSync, realpathSync, watch } from "node:fs";
+ import { basename, delimiter, dirname, join, resolve, sep } from "node:path";
+ import { fileURLToPath } from "node:url";
  import {
-@@ -142,6 +142,8 @@ import {
- } from "./client-state.js";
- import { isTraditionalLocale, pick, resolveServerLang, type ServerLang } from "./i18n.js";
+@@ -73,6 +73,7 @@ import {
+ import { bilingual, pick, resolveServerLang, type ServerLang } from "./i18n.js";
+ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } from "./subagent-templates.js";
  import { isManaged, managedMcpAdapterPath } from "./managed.js";
 +import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
-+
+ 
  import {
- 	SubagentTemplatesStore,
- 	localizeTemplate,
-@@ -875,6 +877,25 @@ export function clipListText(text: string): string {
- 	return `${text.slice(0, end)}…`;
+ 	applyHeadTail,
+@@ -1085,6 +1086,25 @@ export function piSessionsRoot(): string | undefined {
+ 	return process.env.PI_CODING_AGENT_SESSION_DIR || undefined;
  }
  
 +function sessionStorageRoot(agentDir: string): string {
@@ -62,82 +43,62 @@ index 565b7791..a783a907 100644
 +}
 +
  export class ClientSession {
- 	static mcpProjects: McpProjectRuntimeRegistry | null = null;
- 	clientId: string;
-@@ -1646,7 +1667,7 @@ export class ClientSession {
- 			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, effectiveCwd);
- 			const terminals = this.makeTerminalManager(conversationId, effectiveCwd);
- 			pendingTerminals = terminals;
--			const sessionManager = persist ? SessionManager.create(sessionBaseDir) : SessionManager.inMemory(sessionBaseDir);
-+			const sessionManager = persist ? SessionManager.create(sessionBaseDir, piSessionsRoot()) : SessionManager.inMemory(sessionBaseDir);
- 			if (!persist) {
- 				ephemeralDir = join(this.agentDir, "subagent-sessions", conversationId);
- 				try {
-@@ -4072,8 +4093,8 @@ export class ClientSession {
- 				botExecution
- 					? SessionManager.create(sessionBaseDir, join(agentDir, "bot-sessions", clientId))
- 					: opts?.blank
--						? SessionManager.create(sessionBaseDir)
--						: SessionManager.continueRecent(sessionBaseDir),
-+						? SessionManager.create(sessionBaseDir, piSessionsRoot())
-+						: SessionManager.continueRecent(sessionBaseDir, piSessionsRoot()),
- 			(m) =>
- 				createAgentSessionRuntime(cs.makeRuntimeFactory(terminals, undefined, conversationId), {
- 					cwd: sessionBaseDir,
-@@ -4155,7 +4176,7 @@ export class ClientSession {
- 				const targetPath = resolve(p);
- 				if (!existsSync(targetPath)) continue;
- 				await cs.repairTranscriptFileBeforeOpen(targetPath);
--				const sm = SessionManager.open(targetPath);
-+				const sm = SessionManager.open(targetPath, piSessionsRoot());
- 				const convId = cs.nextConversationId();
- 				const terms = cs.makeTerminalManager(convId, cwd);
- 				const rt = await createAgentSessionRuntime(cs.makeRuntimeFactory(terms, undefined, convId), {
-@@ -11715,9 +11736,9 @@ export class ClientSession {
- 			const opened = await this.openManagerAndRuntime(
- 				() => {
- 					if (ownFile && existsSync(ownFile)) {
--						return SessionManager.open(ownFile);
-+						return SessionManager.open(ownFile, piSessionsRoot());
- 					}
--					return conv.isEphemeral ? SessionManager.inMemory(sessionBaseDir) : SessionManager.create(sessionBaseDir);
-+					return conv.isEphemeral ? SessionManager.inMemory(sessionBaseDir) : SessionManager.create(sessionBaseDir, piSessionsRoot());
- 				},
- 				(m) =>
- 					createAgentSessionRuntime(
-@@ -11867,7 +11888,7 @@ export class ClientSession {
- 			const id = this.nextConversationId();
- 			terminals = this.makeTerminalManager(id, targetCwd);
- 			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, targetCwd);
--			manager = SessionManager.create(sessionBaseDir);
-+			manager = SessionManager.create(sessionBaseDir, piSessionsRoot());
- 			runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, id), {
- 				cwd: sessionBaseDir,
+ 	readonly clientId: string;
+ 	/** Set by AgentService.attach: reflects the SERVICE-wide quiesce flag
+@@ -1896,10 +1916,9 @@ export class ClientSession {
+ 		const runtime = await createAgentSessionRuntime(cs.makeRuntimeFactory(terminals, undefined, conversationId), {
+ 			cwd,
+ 			agentDir,
+-			// Resume the most recent session for this project — the SDK default
+-			// per-project dir (<agentDir>/sessions/--<cwd>--/, shared with the
+-			// pi CLI/TUI) — or start a fresh one on first visit.
+-			sessionManager: SessionManager.continueRecent(cwd),
++			// Resume the most recent session for this project. Managed runners pass
++			// one explicit flat root; ordinary runs keep the SDK default layout.
++			sessionManager: SessionManager.continueRecent(cwd, piSessionsRoot()),
+ 		});
+ 		// First conversation = the resumed session; it also seeds the shared
+ 		// ModelRuntime that every later conversation reuses.
+@@ -4391,7 +4410,7 @@ export class ClientSession {
+ 			const runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(conv.terminals, undefined, conv.id), {
+ 				cwd: conv.cwd,
  				agentDir: this.agentDir,
-@@ -12037,7 +12058,7 @@ export class ClientSession {
- 					(sessionManager as unknown as { sessionDir: string }).sessionDir = ephemeralDir;
- 				} catch {}
- 			} else {
--				sessionManager = SessionManager.create(sessionBaseDir);
-+				sessionManager = SessionManager.create(sessionBaseDir, piSessionsRoot());
- 			}
- 			const runtime = await createAgentSessionRuntime(
- 				this.makeRuntimeFactory(terminals, undefined, conversationId, prevModel ?? undefined, _preset),
-@@ -13184,7 +13205,7 @@ export class ClientSession {
- 		const generation = ClientSession.sessionInfosGeneration;
- 		const run = (async (): Promise<SessionInfo[]> => {
- 			try {
--				const projectDir = SessionManager.create(sessionBaseDir).getSessionDir();
-+				const projectDir = SessionManager.create(sessionBaseDir, piSessionsRoot()).getSessionDir();
- 				const extraRoot = piSessionsRoot() ? resolve(piSessionsRoot()!) : undefined;
- 				// 磁盘索引（纯缓存）：命中就不必再读文件内容，只用 readdir + stat 校对文件没变。
- 				const diskIndex = SessionListDiskIndex.open(this.stateStore?.dataDir, projectDir);
-@@ -13507,16 +13528,14 @@ export class ClientSession {
+-				sessionManager: SessionManager.continueRecent(conv.cwd),
++				sessionManager: SessionManager.continueRecent(conv.cwd, piSessionsRoot()),
+ 			});
+ 			conv.runtime = runtime;
+ 			conv.session = runtime.session;
+@@ -4473,7 +4492,7 @@ export class ClientSession {
+ 			const runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, conversationId), {
+ 				cwd: this.cwd,
+ 				agentDir: this.agentDir,
+-				sessionManager: SessionManager.create(this.cwd),
++				sessionManager: SessionManager.create(this.cwd, piSessionsRoot()),
+ 			});
+ 			const conv = this.makeConversation(runtime, conversationId, terminals);
+ 			this.convs.set(conv.id, conv);
+@@ -4747,9 +4766,8 @@ export class ClientSession {
+ 		if (!this.sessionsRequested) return;
+ 		if (!this.sessionsRequested) return;
+ 		try {
+-			// Sessions live in the SDK default per-project dir
+-			// (<agentDir>/sessions/--<cwd>--/), the same files the pi CLI/TUI
+-			// use — one listing covers every conversation of the current folder.
++			// Sessions use the explicit flat root on managed runners and the SDK
++			// default per-project directory for ordinary runs.
+ 			const infos = await this.loadSessionInfos();
  
+ 			const sessions = new Map<string, SessionSummary>();
+@@ -4788,19 +4806,9 @@ export class ClientSession {
+ 	 */
  	async deleteSession(path: string): Promise<void> {
  		try {
 -			const abs = resolve(path);
--			if (!isInsideSessionsDir(this.agentDir, abs)) {
++			const abs = checkedSessionPath(path, this.agentDir);
+ 			// Guardrail: only transcripts under the shared sessions root
+-			// (<agentDir>/sessions/) may be deleted — never arbitrary files.
+-			const sessionsRoot = resolve(this.agentDir, "sessions");
+-			if (!abs.startsWith(sessionsRoot + sep)) {
 -				this.emit({
 -					type: "notice",
 -					level: "error",
@@ -146,32 +107,17 @@ index 565b7791..a783a907 100644
 -				});
 -				return;
 -			}
-+			const abs = checkedSessionPath(path, this.agentDir);
-+			// Guardrail: only transcripts under the shared sessions root
 +			// (or the explicit flat root) may be deleted — never arbitrary files.
-+			// A live conversation may hold the target transcript. A BACKGROUND
-+			// conversation must still block deletion outright, but when the ACTIVE
-+			// conversation holds it the request can be satisfied by switching away
-+			// first (next-latest history chat, or a fresh blank one) and letting
-+			// the displacement drop the old runtime.
- 			const holdsTarget = (conv: Conversation): boolean => {
- 				const file = conv.session.sessionFile;
- 				return file !== undefined && resolve(file) === abs;
-@@ -13591,7 +13610,7 @@ export class ClientSession {
- 				return;
- 			}
- 			if (existsSync(abs) && readFileSync(abs, "utf8").includes(NATIVE_CLI_ENTRY)) {
--				const manager = SessionManager.open(abs);
-+				const manager = SessionManager.open(abs, piSessionsRoot());
- 				const config = readNativeCliConfig(manager);
- 				if (config?.keepAlive) {
- 					const header = manager.getHeader();
-@@ -13631,17 +13650,8 @@ export class ClientSession {
+ 			// A live conversation may hold the target transcript. A BACKGROUND
+ 			// conversation must still block deletion outright, but when the ACTIVE
+ 			// conversation holds it the request can be satisfied by switching away
+@@ -4880,18 +4888,8 @@ export class ClientSession {
  		try {
  			const trimmed = (name ?? "").trim();
  			if (!trimmed) return;
 -			const abs = resolve(path);
--			if (!isInsideSessionsDir(this.agentDir, abs)) {
+-			const sessionsRoot = resolve(this.agentDir, "sessions");
+-			if (!abs.startsWith(sessionsRoot + sep)) {
 -				this.emit({
 -					type: "notice",
 -					level: "error",
@@ -185,64 +131,76 @@ index 565b7791..a783a907 100644
 +			const mgr = SessionManager.open(abs, piSessionsRoot());
  			mgr.appendSessionInfo(trimmed);
  			this.setConversationTitleForFile(abs, trimmed);
- 			this.invalidateSessionInfos(abs);
-@@ -13818,7 +13828,7 @@ export class ClientSession {
- 		try {
- 			const cwd = conv.cwd || this.cwd;
- 			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, cwd);
--			const sampleSm = SessionManager.create(sessionBaseDir);
-+			const sampleSm = SessionManager.create(sessionBaseDir, piSessionsRoot());
- 			const sessionDir = sampleSm.getSessionDir();
- 			if (!existsSync(sessionDir)) {
- 				mkdirSync(sessionDir, { recursive: true });
-@@ -14323,17 +14333,7 @@ export class ClientSession {
- 				}
- 				path = resolved;
+ 			this.invalidateSessionInfos();
+@@ -4917,7 +4915,7 @@ export class ClientSession {
+ 			conv.title = trimmed;
+ 			try {
+ 				const file = conv.session.sessionFile;
+-				if (file !== undefined) SessionManager.open(resolve(file)).appendSessionInfo(trimmed);
++				if (file !== undefined) SessionManager.open(resolve(file), piSessionsRoot()).appendSessionInfo(trimmed);
+ 			} catch {
+ 				// in-memory title still updated; transcript write is best-effort
  			}
+@@ -5354,7 +5352,7 @@ export class ClientSession {
+ 		let openedRuntime: AgentSessionRuntime | null = null;
+ 		let openedTerminals: TerminalManager | null = null;
+ 		try {
 -			const targetPath = resolve(path);
--			if (!isInsideSessionsDir(this.agentDir, targetPath)) {
--				this.emit({
--					type: "notice",
--					level: "error",
--					text: "只能打开会话目录中的对话记录",
--					textEn: "Only transcripts inside the session directory can be opened",
--				});
--				this.flushSnapshot();
--				return;
--			}
 +			const targetPath = checkedSessionPath(path, this.agentDir);
  
- 			for (const conv of this.convs.values()) {
- 				const sessionFile = conv.session.sessionFile;
-@@ -14408,6 +14408,7 @@ export class ClientSession {
- 			timing.mark("sdk-open");
- 			calibrateSessionLeaf(sessionManager);
- 			timing.mark("branch-calibration");
-+			if (!managedCwdAllowed(targetCwd)) throw new Error("Session workspace path must stay inside /workspace");
- 			const conversationId = this.nextConversationId();
- 			let previewIdSeed: PreviewIdSeed | undefined;
- 			{
-@@ -14644,7 +14645,7 @@ export class ClientSession {
- 				forkedManager = SessionManager.open(forkedSessionPath, sessionDir);
- 				calibrateSessionLeaf(forkedManager);
- 			} else {
--				forkedManager = SessionManager.create(sessionBaseDir);
-+				forkedManager = SessionManager.create(sessionBaseDir, piSessionsRoot());
- 				if (targetLeafId) {
- 					const branch = targetConv.session.sessionManager.getBranch(targetLeafId);
- 					for (const e of branch) {
-@@ -15057,7 +15058,7 @@ export class ClientSession {
- 				void this.ensureProjectsCache(false).catch(() => {});
- 			}
- 			const recent = await this.stateStore.getRecentProjects(this.clientId);
--			this.emit({ type: "projects", projects: this.withCurrentCwd(recent, now) });
-+			this.emit({ type: "projects", projects: this.withCurrentCwd(recent, now).filter(p => managedCwdAllowed(p.path)) });
- 		} catch {
- 			this.emit({ type: "projects", projects: this.withCurrentCwd([], now) });
- 		}
-@@ -15353,6 +15354,10 @@ export class ClientSession {
+ 			// A session may already be open in the running-conversation map. Reuse it
+ 			// instead of creating a second writer for the same JSONL transcript.
+@@ -5366,8 +5364,11 @@ export class ClientSession {
  				}
- 				sessionBaseDir = abs;
+ 			}
+ 
+-			const sessionManager = SessionManager.open(targetPath);
++			const sessionManager = SessionManager.open(targetPath, piSessionsRoot());
+ 			const targetCwd = sessionManager.getCwd();
++			if (!managedCwdAllowed(targetCwd)) {
++				throw new Error("Session workspace path must stay inside /workspace");
++			}
+ 			const conversationId = this.nextConversationId();
+ 			openedTerminals = this.makeTerminalManager(conversationId, targetCwd);
+ 			openedRuntime = await createAgentSessionRuntime(
+@@ -5557,11 +5558,14 @@ export class ClientSession {
+ 		try {
+ 			const saved = this.stateStore.get(this.clientId);
+ 			const removedProjects = new Set(this.stateStore.getRemovedProjects(this.clientId));
++			const workspaceRoot = managedWorkspaceRoot();
+ 			const map = new Map<string, number>();
+-			for (const p of saved.projects) map.set(p.path, p.lastUsed);
++			for (const p of saved.projects) {
++				if (!workspaceRoot || isCanonicalPathWithinRootSync(workspaceRoot, p.path)) map.set(p.path, p.lastUsed);
++			}
+ 			const all = await SessionManager.listAll(piSessionsRoot());
+ 			for (const s of all) {
+-				if (s.cwd) {
++				if (s.cwd && (!workspaceRoot || isCanonicalPathWithinRootSync(workspaceRoot, s.cwd))) {
+ 					const t = s.modified.getTime();
+ 					const prev = map.get(s.cwd);
+ 					if (prev === undefined || t > prev) map.set(s.cwd, t);
+@@ -5571,7 +5575,7 @@ export class ClientSession {
+ 			// is useless in the picker. Tombstoned entries (explicitly removed by
+ 			// the user) stay hidden even though session files still mention them.
+ 			const projects: ProjectSummary[] = [...map.entries()]
+-				.filter(([path]) => !removedProjects.has(path) && existsSync(path))
++				.filter(([path]) => !removedProjects.has(path) && existsSync(path) && (!workspaceRoot || isCanonicalPathWithinRootSync(workspaceRoot, path)))
+ 				.map(([path, lastUsed]) => ({ path, lastUsed }))
+ 				.sort((a, b) => b.lastUsed - a.lastUsed)
+ 				.slice(0, 20);
+@@ -5698,7 +5702,7 @@ export class ClientSession {
+ 			}
+ 			// Windows 裸盘符（"C:"）：resolve 会按该盘当前目录解析，必须显式指到盘根；
+ 			// 仅 win32 生效——posix 下 "C:" 仍是普通相对路径，避免误伤同名目录。
+-			const abs =
++			let abs =
+ 				process.platform === "win32" && /^[A-Za-z]:$/.test(trimmed)
+ 					? `${trimmed.toUpperCase()}${sep}`
+ 					: resolve(trimmed);
+@@ -5706,6 +5710,10 @@ export class ClientSession {
+ 			if (!st.isDirectory()) {
+ 				throw new Error("路径不是目录");
  			}
 +			if (!managedCwdAllowed(abs)) {
 +				throw new Error("工作目录必须位于 /workspace 内");
@@ -251,39 +209,64 @@ index 565b7791..a783a907 100644
  			if (abs === this.cwd) {
  				this.emit({
  					type: "notice",
-@@ -15411,8 +15416,8 @@ export class ClientSession {
- 				const opened = await this.openManagerAndRuntime(
- 					() =>
- 						resumeSkipped || !openRecent
--							? SessionManager.create(sessionBaseDir)
--							: SessionManager.continueRecent(sessionBaseDir),
-+							? SessionManager.create(sessionBaseDir, piSessionsRoot())
-+							: SessionManager.continueRecent(sessionBaseDir, piSessionsRoot()),
- 					(m) =>
- 						createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, conversationId), {
- 							cwd: sessionBaseDir,
+@@ -5744,7 +5752,7 @@ export class ClientSession {
+ 					{
+ 						cwd: abs,
+ 						agentDir: this.agentDir,
+-						sessionManager: SessionManager.continueRecent(abs),
++						sessionManager: SessionManager.continueRecent(abs, piSessionsRoot()),
+ 					},
+ 				);
+ 				const conv = this.makeConversation(newRuntime, conversationId, terminals);
+@@ -6170,14 +6178,15 @@ export class AgentService {
+ 				// otherwise fall back to the server's configured default cwd.
+ 				let cwd = this.cwd;
+ 				const saved = this.stateStore.get(clientId);
+-				if (saved.lastCwd && saved.lastCwd !== this.cwd) {
++				if (saved.lastCwd && saved.lastCwd !== this.cwd && managedCwdAllowed(saved.lastCwd)) {
+ 					try {
+-						if (statSync(saved.lastCwd).isDirectory()) cwd = saved.lastCwd;
++						if (statSync(saved.lastCwd).isDirectory()) cwd = managedWorkspaceRoot() ? realpathSync(saved.lastCwd) : saved.lastCwd;
+ 					} catch {
+ 						// gone (unmounted drive / deleted) — fall back to the default
+ 					}
+ 				}
+-				// Sessions use the SDK default per-project dir — no per-client dir.
++				// Managed sessions use one explicit flat root; client IDs only restore
++				// display state such as the last workspace.
+ 				const creating = ClientSession.create(clientId, cwd, this.stateStore).finally(() => {
+ 					this.pending.delete(clientId);
+ 				});
 diff --git a/server/files-service.ts b/server/files-service.ts
-index 433a905f..067ec8d2 100644
+index a9fe58b0..a88be23c 100644
 --- a/server/files-service.ts
 +++ b/server/files-service.ts
-@@ -3,7 +3,7 @@ import { saveFilePreservingMetadata } from "./file-save.js";
- import { isUploadDataTooLong, uploadLimitBytes } from "./payload-limits.js";
- import { writeUploadExclusiveSync, writeRemoteUploadExclusive } from "./uploads.js";
- import { homedir } from "node:os";
--import { resolve, relative, sep, isAbsolute, posix } from "node:path";
-+import { resolve, relative, sep, dirname, isAbsolute, posix } from "node:path";
+@@ -6,11 +6,12 @@
+  * 经 FilesHost 回调与 ClientSession 解耦。
+  */
+ import { mkdirSync, statSync, writeFileSync, watch } from "node:fs";
+-import { resolve, relative, sep } from "node:path";
++import { resolve, relative, sep, dirname } from "node:path";
  import type { ServerMessage, FileEntry, FileSearchResult } from "./protocol.js";
  import { pick, type ServerLang } from "./i18n.js";
  import { previewKind, looksLikeText, decodeText, hexDump, countLines } from "./text-sniff.js";
-@@ -15,6 +15,7 @@ import {
- 	parseRemoteWorkspaceUri,
- 	resolveRemoteWorkspacePath,
- } from "./remote-ssh-service.js";
+ import { gitDirOf, isNotRepoError, scmStatus, scmHistory, scmFileDiff, scmCommitDetail } from "./scm.js";
 +import { isCanonicalPathWithinRoot, managedWorkspaceRoot, pathWithinRoot } from "./managed-workspace.js";
  
  export const IS_WIN32 = process.platform === "win32";
  
-@@ -1002,6 +1003,10 @@ export class FilesService {
+@@ -896,8 +897,8 @@ export class FilesService {
+ 
+ 	/**
+ 	 * Create a folder. Accepts absolute, ~-prefixed or session-relative paths
+-	 * (same expansion rules as completePath — the cwd picker may browse outside
+-	 * the session root, and set_cwd itself accepts any directory). Answers
++	 * (same expansion rules as completePath — ordinary runs may browse outside
++	 * the session root; managed runners enforce /workspace). Answers
+ 	 * with a notice; the picker refreshes its listing on its own.
+ 	 */
+ 	async makeDir(input: string): Promise<void> {
+@@ -916,6 +917,10 @@ export class FilesService {
  				expanded = resolve(this.host.getCwd(), expanded);
  			}
  			const abs = resolve(expanded);
@@ -294,16 +277,17 @@ index 433a905f..067ec8d2 100644
  			await fs.mkdir(abs, { recursive: true });
  			this.host.emit({
  				type: "notice",
-@@ -1367,17 +1372,26 @@ export class FilesService {
- 			const home = homedir();
+@@ -947,6 +952,7 @@ export class FilesService {
+ 			const cwd = this.host.getCwd();
  			const isWin = IS_WIN32;
  			const rawInput = input.trim();
 +			const managedRoot = managedWorkspaceRoot();
  			if (rawInput === "") {
  				empty();
  				return;
- 			}
+@@ -954,12 +960,20 @@ export class FilesService {
  
+ 			// ---- 机器根（此电脑/盘符列表）----
  			if (rawInput === MACHINE_ROOT || rawInput === MACHINE_ROOT + "/") {
 +				if (managedRoot) {
 +					empty();
@@ -313,6 +297,7 @@ index 433a905f..067ec8d2 100644
  				return;
  			}
  
+ 			// ---- Windows 盘符输入："D"（补全到盘符，Tab 即换盘）/ "D:"（列盘根）----
  			if (isWin && /^[A-Za-z]:?$/.test(rawInput)) {
 +				if (managedRoot) {
 +					empty();
@@ -321,7 +306,7 @@ index 433a905f..067ec8d2 100644
  				const letter = rawInput[0].toUpperCase();
  				const drive = `${letter}:`;
  				let st: { isDirectory(): boolean };
-@@ -1430,6 +1444,10 @@ export class FilesService {
+@@ -1019,6 +1033,10 @@ export class FilesService {
  			const lastSlash = Math.max(expanded.lastIndexOf("/"), expanded.lastIndexOf("\\"));
  			const dirPart = lastSlash >= 0 ? expanded.slice(0, lastSlash + 1) : "";
  			const prefix = lastSlash >= 0 ? expanded.slice(lastSlash + 1) : expanded;
@@ -333,7 +318,7 @@ index 433a905f..067ec8d2 100644
  			const dirents = await fs.readdir(dirPart, { withFileTypes: true }).catch(() => null);
  			if (!dirents) {
 diff --git a/server/index.ts b/server/index.ts
-index 62883882..a7978e2d 100644
+index 4e7a9f8e..a1d51a47 100644
 --- a/server/index.ts
 +++ b/server/index.ts
 @@ -8,13 +8,17 @@
@@ -356,32 +341,35 @@ index 62883882..a7978e2d 100644
 + *   PI_CODING_AGENT_SESSION_DIR  explicit flat transcript root; required by
 + *                   managed runners so all browser clients share one history
   */
- import { botExecutionMessageAllowed } from "./device-center/bot-execution.js";
- import { ALL_AGENT_TOOL_ENTRIES, effectiveDisabledAgentTools, isToolSupportedOnPlatform } from "./tool-manager.js";
-@@ -68,6 +72,7 @@ import {
- 	isClientMessageEnvelope,
- 	isClientMessageWithinByteLimit,
- } from "./ws-pending-queue.js";
+ import { existsSync, readFileSync } from "node:fs";
+ import { stat } from "node:fs/promises";
+@@ -38,6 +42,7 @@ import { ensureWindowsBash, windowsBashDir } from "./ensure-bash.js";
+ import { listThemes, resolveThemeFile } from "./themes.js";
+ import { isManaged, managedCredentialRefusal, managedRefusal } from "./managed.js";
+ import { launchOrigin, toServiceInfo } from "./launch-origin.js";
 +import { managedWorkspaceRoot } from "./managed-workspace.js";
+ import { parseTabs, tabsRefusal } from "./tabs.js";
  import {
  	installPack,
- 	isKnownPack,
-@@ -176,7 +181,10 @@ function cliFlag(name: string): string | undefined {
- 	return undefined;
+@@ -79,7 +84,10 @@ function cliFlag(name: string): string | undefined {
  }
  
+ const PORT = Number(cliFlag("--port") ?? process.env.PI_WEB_PORT ?? 8787);
 -const CWD = resolve(cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
 +// Managed runners expose the Mapache workspace only. Ignore stale client or
 +// command-line cwd values here; per-client project changes are checked again
 +// against the same canonical root in AgentService.
 +const CWD = resolve(managedWorkspaceRoot() ?? cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
  const DATA_DIR = resolve(cliFlag("--data-dir") ?? process.env.PI_WEB_DATA_DIR ?? join(homedir(), ".pi-web"));
- try {
- 	mkdirSync(DATA_DIR, { recursive: true });
-@@ -256,7 +264,13 @@ function buildId(): string {
+ 
+ /** Bind address. Default is loopback ONLY — the service is a local personal
+@@ -128,10 +136,13 @@ function appVersion(): string {
  	}
- 	return buildIdCache;
+ 	return appVersionCache;
  }
+-// Root of the SDK default per-project session dirs — chat transcripts live in
+-// <SESSION_DIR_ROOT>/--<cwd>--/, shared with the pi CLI/TUI (getAgentDir
+-// honors PI_CODING_AGENT_DIR).
 -const SESSION_DIR_ROOT = join(getAgentDir(), "sessions");
 +// Explicitly configured transcript root. Managed runners require this flat
 +// root so every browser client discovers the same history regardless of its
@@ -391,8 +379,8 @@ index 62883882..a7978e2d 100644
 +	throw new Error("managed_session_dir_missing");
 +}
  
- const proxyInfo = initHttpProxy(getAgentDir());
- if (proxyInfo.active) {
+ // Windows 轻量 bash 兜底：把 <home>/.pi-web/bin 前置到 PATH（SDK 的 bash 工具经
+ // findBashOnPath 会找到其中的 bash.exe），并在无 Git Bash 时后台下载 busybox-w32。
 diff --git a/server/managed-workspace.ts b/server/managed-workspace.ts
 new file mode 100644
 index 00000000..95325b76

@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 792995a0..63bfe7f9 100644
+index cd3eb79f..1671bb57 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -4300,13 +4300,83 @@ export class ClientSession {
+@@ -2022,13 +2022,83 @@ export class ClientSession {
  		modelRef: string,
  		cwd: string,
  		projectProviderKeys?: Record<string, string>,

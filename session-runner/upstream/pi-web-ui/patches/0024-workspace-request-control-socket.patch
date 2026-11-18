@@ -1,5 +1,5 @@
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index f0e221fe..64c9d063 100644
+index ef369b19..cae719ef 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
 @@ -14,6 +14,9 @@
@@ -12,7 +12,7 @@ index f0e221fe..64c9d063 100644
   *   → anything else           ← {"ok":false,"error":"..."}
   *
   * Idle connections are closed after a short timeout so a stuck CLI never
-@@ -63,6 +66,9 @@ type ControlService = {
+@@ -44,6 +47,9 @@ type ControlService = {
  	startAutomation?: (input: { runId: string; prompt: string; modelRef?: string }) => Promise<ControlStatus>;
  	automationStatus?: (runId: string) => ControlStatus;
  	cancelAutomation?: (runId: string) => Promise<ControlStatus>;
@@ -22,7 +22,7 @@ index f0e221fe..64c9d063 100644
  };
  
  /** How long a control connection may sit idle before the server closes it. */
-@@ -77,8 +83,11 @@ export function controlPath(dataDir: string, port: number): string {
+@@ -58,8 +64,11 @@ export function controlPath(dataDir: string, port: number): string {
  }
  
  export interface ControlCommand {
@@ -35,7 +35,7 @@ index f0e221fe..64c9d063 100644
  	prompt?: string;
  	modelRef?: string;
  }
-@@ -200,6 +209,32 @@ export function startControlServer(opts: {
+@@ -170,6 +179,32 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
  									resp = await service.cancelAutomation(req.runId ?? "");
  								}
  								break;

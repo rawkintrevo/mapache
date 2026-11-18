@@ -1,5 +1,5 @@
 diff --git a/web/index.html b/web/index.html
-index 2279de4f..5a5af87d 100644
+index 773f96e4..df7e81f0 100644
 --- a/web/index.html
 +++ b/web/index.html
 @@ -4,7 +4,7 @@
@@ -9,21 +9,26 @@ index 2279de4f..5a5af87d 100644
 -		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 +		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
  		<!-- PWA manifest: relative so nginx sub-path deployments (/pi/) resolve correctly -->
- 		<link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
+ 		<link rel="manifest" href="./manifest.webmanifest" />
  		<meta name="theme-color" content="#0f172a" />
 diff --git a/web/src/main.tsx b/web/src/main.tsx
-index 1d80f8e5..5cde4aaa 100644
+index 70dd03b1..f883c2b3 100644
 --- a/web/src/main.tsx
 +++ b/web/src/main.tsx
-@@ -118,11 +118,24 @@ installScrollbarGutterVar();
- if (opaquePortalEnvironment) void restorePortalTheme(window).then(renderApp);
- else renderApp();
+@@ -27,16 +27,24 @@ createRoot(document.getElementById("root")!).render(
+ 	</StrictMode>,
+ );
  
+-// PWA: register the service worker only in production builds so the Vite dev
+-// server (live reload / HMR) is never intercepted or cached. The scope is
+-// derived from the page URL (appBase), so sub-path deployments like /pi/ get
+-// a worker scoped to the app root instead of the site root.
 +// Managed embedding deliberately does not register a service worker. An old
 +// pi-web-ui worker may still be present after an upgrade, so remove only a
 +// registration that belongs to this app's exact subpath. In particular, do
 +// not unregister Mapache's parent-scope worker.
- if (import.meta.env.PROD && !isMobileRuntime() && !opaquePortalEnvironment && "serviceWorker" in navigator) {
+ if (import.meta.env.PROD && "serviceWorker" in navigator) {
+-	// Register after load so it never blocks first paint.
  	window.addEventListener("load", () => {
 -		const base = appBase();
 -		navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((err) => {
@@ -44,23 +49,22 @@ index 1d80f8e5..5cde4aaa 100644
  	});
  }
 diff --git a/web/vite.config.ts b/web/vite.config.ts
-index fc2dabe2..9b3551b0 100644
+index e8879333..349b2d75 100644
 --- a/web/vite.config.ts
 +++ b/web/vite.config.ts
-@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
- import { existsSync, readFileSync, writeFileSync } from "node:fs";
+@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
+ import { dirname, join } from "node:path";
  
  const __dirname = dirname(fileURLToPath(import.meta.url));
 +const webBasePath = process.env.PI_WEB_BASE_PATH?.trim() || "/";
  
- const buildId = process.env.PI_WEB_BUILD_ID ?? new Date().toISOString().replace(/[-:.]/g, "").slice(0, 14);
- 
-@@ -27,7 +28,7 @@ function swBuildIdPlugin(id: string) {
- 
+ // Dev: Vite serves the web UI on :5173 and proxies the WebSocket + any API
+ // traffic to the backend server (which runs separately via `npm run dev:server`).
+@@ -12,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  export default defineConfig({
  	root: __dirname,
--	base: "./",
+ 	plugins: [react()],
 +	base: webBasePath,
- 	plugins: [react(), swBuildIdPlugin(buildId), retainBuildAssets(join(__dirname, "dist"))],
- 	define: {
- 		__BUILD_ID__: JSON.stringify(buildId),
+ 	build: {
+ 		outDir: join(__dirname, "dist"),
+ 		emptyOutDir: true,

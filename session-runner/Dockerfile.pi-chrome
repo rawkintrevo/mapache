@@ -8,8 +8,8 @@ RUN apt-get update \
   && python3 --version \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent@1.5.2 \
-  && test "$(pi --version)" = "1.5.2"
+RUN npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent \
+  && pi --version
 
 RUN pi install npm:pi-mcp-adapter@2.32.1
 RUN npm install -g chrome-devtools-mcp@1.6.0

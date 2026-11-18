@@ -1,8 +1,8 @@
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index 070c87a8..f0e221fe 100644
+index 6bdb86fc..ef369b19 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
-@@ -73,7 +73,7 @@ const CONTROL_CLIENT_TIMEOUT_MS = 10_000;
+@@ -54,7 +54,7 @@ const CONTROL_CLIENT_TIMEOUT_MS = 10_000;
  
  /** Socket path (POSIX) or pipe name (Windows). */
  export function controlPath(dataDir: string, port: number): string {

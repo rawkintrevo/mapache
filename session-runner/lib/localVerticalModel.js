@@ -37,7 +37,7 @@ function createLocalVerticalModelServer({delayMs = 8} = {}) {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
-    if (/strict, independent goal-reviewer|\[goal-review\]/i.test(promptText)) {
+    if (/strict, independent goal-reviewer/i.test(promptText)) {
       await streamText(response, '{"verdict":"pass","feedback":"local fixture review passed"}', delayMs);
     } else if (!hasMcpResult) {
       await streamToolCall(response, "vertical-mcp-call", "mcp", JSON.stringify({

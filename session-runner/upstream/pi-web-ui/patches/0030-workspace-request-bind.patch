@@ -1,13 +1,17 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 63bfe7f9..527a522c 100644
+index 1671bb57..a428148e 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -4352,7 +4352,7 @@ export class ClientSession {
- 			conv.listed = true;
- 			conv.promptedSinceActive = true;
- 			this.convs.set(conv.id, conv);
--			await this.bindConversation(conv);
-+			await this.bindSession(conv);
- 			if (input.modelRef) await this.selectModelForSession(conv.session, input.modelRef, this.cwd);
- 			this.invalidateSessionInfos();
- 			this.emitConversations();
+@@ -2517,7 +2517,11 @@ export class ClientSession {
+ 
+ 	/** (Re)attach event plumbing to the ACTIVE conversation's session. */
+ 	private async bindSession(): Promise<void> {
+-		const conv = this.conv;
++		await this.bindConversation(this.conv);
++	}
++
++	/** Bind a conversation without making it the active browser conversation. */
++	private async bindConversation(conv: Conversation): Promise<void> {
+ 		conv.unsubscribe?.();
+ 		conv.session = conv.runtime.session;
+ 		await conv.session.bindExtensions({

@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index dfcec40b..af30a345 100644
+index 41150eb0..61ce4064 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -144,6 +144,7 @@ import { isTraditionalLocale, pick, resolveServerLang, type ServerLang } from ".
+@@ -75,6 +75,7 @@ import { SubagentTemplatesStore, pickTemplatePrompt, type SubagentTemplate } fro
  import { isManaged, managedMcpAdapterPath } from "./managed.js";
  import { withManagedReference } from "./managed-reference.js";
  import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
@@ -10,10 +10,62 @@ index dfcec40b..af30a345 100644
  import {
  	createAutomationRunState,
  	reduceAutomationRunState,
-@@ -5213,6 +5214,48 @@ export class ClientSession {
+@@ -2307,24 +2308,88 @@ export class ClientSession {
+ 
+ 	/** Summaries of conversations currently streaming — captured at shutdown
+ 	 *  so the next attach can tell the user their run was interrupted. */
+-	streamingSummaries(): { title: string; cwd: string }[] {
+-		const out: { title: string; cwd: string }[] = [];
++	streamingSummaries(): { title: string; cwd: string; sessionFile?: string; workspaceRequest?: boolean }[] {
++		const out: { title: string; cwd: string; sessionFile?: string; workspaceRequest?: boolean }[] = [];
+ 		for (const conv of this.convs.values()) {
+-			if (conv.session.isStreaming) out.push({ title: conv.title, cwd: conv.cwd });
++			if (conv.session.isStreaming) out.push({
++				title: conv.title,
++				cwd: conv.cwd,
++				sessionFile: conv.session.sessionFile,
++				workspaceRequest: shouldResumeInterruptedWorkspaceRequest(conv.session.agent.state.messages),
++			});
+ 		}
  		return out;
  	}
  
+ 	/** Tell the user about runs lost to the last server restart (once). */
+-	notifyInterrupted(list: { title: string; cwd: string; at: number }[] | undefined): void {
++	notifyInterrupted(list: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[] | undefined): void {
+ 		if (!list || list.length === 0) return;
+-		const names = list.map((r) => `「${r.title}」（${r.cwd}）`).join("、");
+-		this.pendingNotices.push({
+-			type: "notice",
+-			level: "warning",
+-			text: `上次服务重启时有 ${list.length} 个进行中的对话被中断：${names}。可在历史对话中恢复继续。`,
+-			textEn: `${list.length} running conversation(s) were interrupted by the last restart: ${names}. Resume them from History.`,
+-		});
++		const automatic = list.filter((entry) => entry.workspaceRequest);
++		const manual = list.filter((entry) => !entry.workspaceRequest);
++		if (automatic.length > 0) {
++			this.pendingNotices.push({
++				type: "notice",
++				level: "info",
++				text: `正在自动恢复 ${automatic.length} 个被中断的工作区请求。`,
++				textEn: `Automatically resuming ${automatic.length} interrupted workspace request(s).`,
++			});
++		}
++		if (manual.length > 0) {
++			const names = manual.map((r) => `「${r.title}」（${r.cwd}）`).join("、");
++			this.pendingNotices.push({
++				type: "notice",
++				level: "warning",
++				text: `上次服务重启时有 ${manual.length} 个进行中的对话被中断：${names}。可在历史对话中恢复继续。`,
++				textEn: `${manual.length} running conversation(s) were interrupted by the last restart: ${names}. Resume them from History.`,
++			});
++		}
++	}
++
++	/** Resume only a request wait that was interrupted by runner replacement.
++	 * The original tool arguments, including its required idempotency key, are
++	 * already persisted in the conversation. The model retries that exact call,
++	 * which resolves to the existing durable ticket instead of new target work. */
 +	async resumeInterruptedWorkspaceRequest(): Promise<boolean> {
 +		const conv = this.conv;
 +		if (conv.session.isStreaming || this.quiesceBlocked()) return false;
@@ -41,6 +93,7 @@ index dfcec40b..af30a345 100644
 +		this.flushSnapshot();
 +		return true;
 +	}
++
 +	async resumeInterruptedWorkspaceRequests(
 +		list: {sessionFile?: string; workspaceRequest?: boolean}[] | undefined,
 +	): Promise<number> {
@@ -54,35 +107,49 @@ index dfcec40b..af30a345 100644
 +			if (await this.resumeInterruptedWorkspaceRequest()) resumed++;
 +		}
 +		return resumed;
-+	}
-+
- 	private restartInterruptedFiles = new Set<string>();
+ 	}
  
- 	private danglingCauseFor(file: string | undefined): DanglingCause {
+ 	/** Add a socket to this client's broadcast set; flushes buffered startup notices. */
+@@ -6654,7 +6719,8 @@ export class AgentService {
+ 		// First attach after a restart: report runs that were interrupted when
+ 		// the previous process shut down (consumed once, then cleared). Queue
+ 		// BEFORE attachSink so the notice rides the initial pending-notice flush.
+-		cs.notifyInterrupted(this.stateStore.takeInterrupted(clientId));
++		const interrupted = this.stateStore.takeInterrupted(clientId);
++		cs.notifyInterrupted(interrupted);
+ 		cs.attachSink(send);
+ 		// Forward hooks (set once by index.ts) to every session.
+ 		cs.onQuit = this.onQuit;
+@@ -6666,6 +6732,11 @@ export class AgentService {
+ 		cs.pluginBgTasksProvider = this.pluginBgTasksProvider;
+ 		cs.pluginStopBgTask = this.pluginStopBgTask;
+ 		cs.isQuiesced = () => this.quiesced;
++		if (interrupted?.some((entry) => entry.workspaceRequest)) {
++			void cs.resumeInterruptedWorkspaceRequests(interrupted).catch((error) => {
++				console.error(`[agent-service] workspace request resume failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
++			});
++		}
+ 		// 插件宿主工作区跟随：初次接入也同步一次（恢复的 lastCwd 可能≠服务启动目录），
+ 		// notifyCwd 幂等去重；此后 set_cwd 成功时由 cs.onCwdChanged 继续驱动。
+ 		cs.onCwdChanged = (abs) => this.onClientCwdChanged?.(abs);
 diff --git a/server/client-state.ts b/server/client-state.ts
-index 899fac53..539659f1 100644
+index c450bd56..a035d092 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
-@@ -930,7 +930,13 @@ export interface ClientState {
- 	 *  extensions) so toggles survive a reload. */
- 	settings?: ClientSettings;
- 	presets?: SettingsPreset[];
--	interrupted?: { title: string; cwd: string; at: number; sessionFile?: string }[];
-+	/** Conversations that were STILL STREAMING when the server last shut down
-+	 *  (SIGTERM / self-update restart). Consumed once on the next attach so
-+	 *  the user learns a run was lost instead of wondering where it went. */
+@@ -253,7 +253,7 @@ export interface ClientState {
+ 	/** Conversations that were STILL STREAMING when the server last shut down
+ 	 *  (SIGTERM / self-update restart). Consumed once on the next attach so
+ 	 *  the user learns a run was lost instead of wondering where it went. */
+-	interrupted?: { title: string; cwd: string; at: number }[];
 +	interrupted?: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[];
-+	/** Workspaces the user explicitly removed from the recent list. Kept as
-+	 *  tombstones so cwds re-discovered from session files stay hidden until
-+	 *  the workspace is opened again. */
- 	removedProjects?: string[];
- 	workspaceRoots?: Record<string, string[]>;
- 	projectProviderKeys?: Record<string, Record<string, string>>;
-@@ -1390,7 +1396,7 @@ export class ClientStateStore {
+ 	/** Workspaces the user explicitly removed from the recent list. Kept as
+ 	 *  tombstones so cwds re-discovered from session files stay hidden until
+ 	 *  the workspace is opened again. */
+@@ -437,7 +437,7 @@ export class ClientStateStore {
  
  	/** Remember conversations that were still streaming at shutdown (best-
  	 *  effort; called during the graceful-shutdown path). */
--	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number; sessionFile?: string }[]): void {
+-	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number }[]): void {
 +	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[]): void {
  		if (list.length === 0) return;
  		const all = this.load();

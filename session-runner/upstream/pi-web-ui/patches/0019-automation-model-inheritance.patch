@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index dd150ed7..dfcec40b 100644
+index 3582bac4..41150eb0 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -4266,6 +4266,7 @@ export class ClientSession {
+@@ -1989,6 +1989,7 @@ export class ClientSession {
  		modelRef?: string,
  	): Promise<ClientSession> {
  		const agentDir = process.env.PI_CODING_AGENT_DIR ?? getAgentDir();
@@ -10,7 +10,7 @@ index dd150ed7..dfcec40b 100644
  		const cs = new ClientSession(clientId, cwd, agentDir, stateStore);
  		const conversationId = cs.nextConversationId();
  		const terminals = cs.makeTerminalManager(conversationId, cwd);
-@@ -4286,16 +4287,21 @@ export class ClientSession {
+@@ -2009,16 +2010,21 @@ export class ClientSession {
  			}
  		}
  		await cs.bindSession();
@@ -35,36 +35,39 @@ index dd150ed7..dfcec40b 100644
  		await this.session.setModel(model);
  	}
  
-@@ -8667,11 +8673,11 @@ export class ClientSession {
- 	 *  Silent + self-healing like the bulk restore above. Falls back to the
- 	 *  GLOBAL default key when the project has no pin for this provider (new
- 	 *  project following the global default model). */
+@@ -3787,11 +3793,15 @@ export class ClientSession {
+ 
+ 	/** When a model is set, ensure its provider's per-project key is restored.
+ 	 *  Silent + self-healing like the bulk restore above. */
 -	private async restoreKeyForModel(modelId: string, cwd: string): Promise<void> {
-+	private async restoreKeyForModel(modelId: string, cwd: string, projectProviderKeys?: Record<string, string>): Promise<void> {
++	private async restoreKeyForModel(
++		modelId: string,
++		cwd: string,
++		projectProviderKeys?: Record<string, string>,
++	): Promise<void> {
  		const slash = modelId.indexOf("/");
  		if (slash <= 0) return;
  		const provider = modelId.slice(0, slash);
--		const projectPin = this.stateStore.getProjectProviderKey(this.clientId, cwd, provider);
-+		const projectPin = projectProviderKeys?.[provider] || this.stateStore.getProjectProviderKey(this.clientId, cwd, provider);
- 		if (projectPin) {
- 			const cur = this.modelAdmin.getActiveKeyName(provider);
- 			if (cur === projectPin) return;
+-		const saved = this.stateStore.getProjectProviderKey(this.clientId, cwd, provider);
++		const saved = projectProviderKeys?.[provider] || this.stateStore.getProjectProviderKey(this.clientId, cwd, provider);
+ 		if (!saved) return;
+ 		const cur = this.modelAdmin.getActiveKeyName(provider);
+ 		if (cur === saved) return;
 diff --git a/server/client-state.ts b/server/client-state.ts
-index a9f69dca..899fac53 100644
+index 26efc04f..c450bd56 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
-@@ -939,6 +939,9 @@ export interface ClientState {
- 	defaultModel?: string;
- 	defaultModels?: Record<string, string>;
- 	defaultProviderKeys?: Record<string, string>;
+@@ -270,6 +270,8 @@ export interface ClientState {
+ 	 *  Together with projectProviderKeys it makes the whole {model, key} pair
+ 	 *  project-bound, so switching back restores both right away. */
+ 	projectModels?: Record<string, string>;
 +	/** Timestamp of the last model selection for each project. */
 +	projectModelUpdatedAt?: Record<string, number>;
-+	/** 内置标记工具开关（全局 + 按 marker 禁用）。 */
+ 	/** 内置标记工具开关（全局 + 按 marker 禁用）。 */
  	markers?: MarkerSettings;
- 	pinnedSessions?: Record<string, string[]>;
- 	sessionTitles?: Record<string, Record<string, string>>;
-@@ -1859,6 +1862,34 @@ export class ClientStateStore {
- 		return undefined;
+ 	/** Browser UI locale code as reported by hello/set_locale (e.g. "zh",
+@@ -657,11 +659,40 @@ export class ClientStateStore {
+ 		return this.load()[clientId]?.projectModels?.[cwd];
  	}
  
 +	/** Get the model and provider-key choices from the client that most recently
@@ -95,17 +98,27 @@ index a9f69dca..899fac53 100644
 +		return selected ? {modelId: selected.modelId, providerKeys: selected.providerKeys} : undefined;
 +	}
 +
- 	saveProjectModel(clientId: string, cwd: string, modelId: string, engine?: string): void {
+ 	/** Remember the model last selected in a project (immediate, not after a turn). */
+ 	saveProjectModel(clientId: string, cwd: string, modelId: string): void {
  		const all = this.load();
- 		const eng = engine?.trim();
-@@ -1875,6 +1906,7 @@ export class ClientStateStore {
- 			const state = (all[clientId] ??= { projects: [] });
- 			this.touchClient(all, clientId);
- 			(state.projectModels ??= {})[cwd] = modelId;
-+			(state.projectModelUpdatedAt ??= {})[cwd] = Date.now();
- 		}
+ 		const state = (all[clientId] ??= { projects: [] });
+ 		(state.projectModels ??= {})[cwd] = modelId;
++		(state.projectModelUpdatedAt ??= {})[cwd] = Date.now();
  		this.save();
  	}
+ 
+@@ -673,6 +704,11 @@ export class ClientStateStore {
+ 		if (!map || !(cwd in map)) return;
+ 		delete map[cwd];
+ 		if (Object.keys(map).length === 0) delete all[clientId]!.projectModels;
++		const timestamps = all[clientId]?.projectModelUpdatedAt;
++		if (timestamps) {
++			delete timestamps[cwd];
++			if (Object.keys(timestamps).length === 0) delete all[clientId]!.projectModelUpdatedAt;
++		}
+ 		this.save();
+ 	}
+ 
 diff --git a/tests/unit/automation-project-model.test.ts b/tests/unit/automation-project-model.test.ts
 new file mode 100644
 index 00000000..d4a8ccd4

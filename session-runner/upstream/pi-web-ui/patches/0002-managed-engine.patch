@@ -1,45 +1,22 @@
 diff --git a/server/index.ts b/server/index.ts
-index c31818a7..8c3c6ea1 100644
+index 6f132905..04ecd062 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -560,7 +560,8 @@ registerQuickAskRoutes(app, {
- 	},
- });
- 
--const EXPLICIT_ENGINE_ARG = cliFlag("--engine") ?? process.env.PI_WEB_ENGINE;
-+const MANAGED = isManaged();
-+const EXPLICIT_ENGINE_ARG = MANAGED ? "pi" : cliFlag("--engine") ?? process.env.PI_WEB_ENGINE;
- let currentDefaultEngine: EngineId =
- 	EXPLICIT_ENGINE_ARG === "codex"
- 		? "codex"
-@@ -576,6 +577,7 @@ let currentDefaultEngine: EngineId =
- const clientEngines = new Map<string, EngineId>();
- 
- function resolveClientEngine(clientId: string): EngineId {
-+	if (MANAGED) return "pi";
- 	const mem = clientEngines.get(clientId);
- 	if (mem) return mem;
- 	if (!EXPLICIT_ENGINE_ARG) {
-@@ -590,13 +592,13 @@ function resolveClientEngine(clientId: string): EngineId {
+@@ -219,7 +219,8 @@ if (AUTH_TOKEN) {
  }
  
- function setClientEngine(clientId: string, engine: EngineId): void {
-+	if (MANAGED) engine = "pi";
- 	clientEngines.set(clientId, engine);
- 	currentDefaultEngine = engine;
- 	sharedStateStore.saveClientEngine(clientId, engine);
- 	sharedStateStore.saveDefaultEngine(engine);
- }
+ /** 引擎选择：PI_WEB_ENGINE=pi|dsh（默认 pi）。重启生效。 */
+-const ENGINE: "pi" | "dsh" = process.env.PI_WEB_ENGINE === "dsh" ? "dsh" : "pi";
++/** Managed deployments always use the embedded Pi runtime, regardless of a
++ * stale or externally supplied PI_WEB_ENGINE value. */
  
--const MANAGED = isManaged();
+ /** PI_WEB_MANAGED=1: this instance is updated by whoever deploys it. */
+ const MANAGED = isManaged();
+@@ -230,6 +231,7 @@ const MANAGED = isManaged();
  const ORIGIN = launchOrigin();
+ /** 下发给浏览器的服务信息（null = 没有 supervisor）。 */
  const SERVICE_INFO = toServiceInfo(ORIGIN);
++const ENGINE: "pi" | "dsh" = MANAGED ? "pi" : process.env.PI_WEB_ENGINE === "dsh" ? "dsh" : "pi";
+ /** PI_WEB_TABS: the tabs this instance offers. null = all of them, as before. */
  const TABS = parseTabs();
-@@ -2742,6 +2744,7 @@ wss.on("connection", (ws) => {
- 	};
  
- 	const handleSwitchEngine = async (msg: Extract<ClientMessage, { type: "switch_engine" }>): Promise<void> => {
-+		if (MANAGED) return;
- 		const targetEngine: EngineId | null =
- 			msg.engine === "codex"
- 				? "codex"

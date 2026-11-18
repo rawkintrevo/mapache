@@ -1,14 +1,13 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index af30a345..792995a0 100644
+index 61ce4064..cd3eb79f 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -654,6 +654,9 @@ export interface Conversation {
- 	nativeCliBinding?: NativeCliBinding;
- 	nativeCliClosed?: boolean;
- 	independent?: boolean;
+@@ -844,6 +844,8 @@ export { workspacePath };
+  */
+ interface Conversation {
+ 	id: string;
 +	/** Durable request metadata used by the runner control plane and history UI. */
 +	workspaceRequest?: { runId: string; ticketId?: string; sourceWorkspaceId?: string };
-+	/** Display title: first user prompt (truncated) or the default. */
+ 	/** Display title: first user prompt (truncated) or the default. */
  	title: string;
- 	isSubagent: boolean;
- 	parentId?: string;
+ 	/** 这是子代理对话（左栏带「子代理」徽标；inMemory session，不进历史/resume）。 */

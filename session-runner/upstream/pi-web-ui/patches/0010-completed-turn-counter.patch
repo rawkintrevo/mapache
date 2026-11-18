@@ -1,74 +1,25 @@
-diff --git a/server/agent-service-daemon.ts b/server/agent-service-daemon.ts
-index 588e35de..05da5a84 100644
---- a/server/agent-service-daemon.ts
-+++ b/server/agent-service-daemon.ts
-@@ -9,7 +9,9 @@ export interface QuiesceResult {
- 	connectedClients: number;
- 	activeConversations: number;
- 		activeTools: number;
-+		completedTurns: number;
- 	activeTools: number;
-+		completedTurns: number;
- 	pendingMessages: number;
- }
- 
-@@ -1159,6 +1161,12 @@ export class AgentService {
- 		}
- 	}
- 
-+	completedTurns(): number {
-+		let n = 0;
-+		for (const cs of this.clients.values()) n += cs.completedTurnCount();
-+		return n;
-+	}
-+
- 	activeTools(): number {
- 		let n = 0;
- 		for (const c of this.convs.values()) n += c.toolStartTimes.size;
-@@ -1426,6 +1434,7 @@ export class AgentService {
- 		connectedClients: number;
- 		activeConversations: number;
- 		activeTools: number;
-+		completedTurns: number;
- 		pendingMessages: number;
- 		service: UiServiceInfo | null;
- 	} {
-@@ -1437,6 +1446,7 @@ export class AgentService {
- 			connectedClients: this.socketCount,
- 			activeConversations: this.activeConversations(),
- 			activeTools: this.activeTools(),
-+			completedTurns: this.completedTurns(),
- 			pendingMessages: this.pendingMessages(),
- 			service: toServiceInfo(launchOrigin()),
- 		};
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 560864b2..0d990ef7 100644
+index 29314b90..2b5a19d0 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -934,6 +934,11 @@ export class ClientSession {
+@@ -1139,6 +1139,8 @@ export class ClientSession {
+ 	private convs = new Map<string, Conversation>();
  	private activeId = "";
  	private convSeq = 0;
- 	private pluginModelKeys = new Map<string, string>();
 +	/** Monotonic completed-turn signal consumed by the runner checkpoint scheduler. */
 +	private completedTurns = 0;
-+	/** One ModelRuntime shared by all conversations — the model chosen in the
-+	 *  top bar applies to every chat, not just the one that set it. Seeded by
-+	 *  the first conversation and reused by later ones. */
- 	private sharedModelRuntime: Awaited<ReturnType<typeof createAgentSessionServices>>["modelRuntime"] | undefined;
- 	private turnEndWaiters = new Map<string, Set<(o: RoleWaitOutcome) => void>>();
- 	private subagentSettleStore?: SubagentSettleRegistry;
-@@ -6016,6 +6021,10 @@ export class ClientSession {
- 				break;
- 			}
+ 	/** One ModelRuntime shared by all conversations — the model chosen in the
+ 	 *  top bar applies to every chat, not just the one that set it. Seeded by
+ 	 *  the first conversation and reused by later ones. */
+@@ -2674,6 +2676,7 @@ export class ClientSession {
+ 			// A run finished or a new entry was persisted — keep the session list fresh
+ 			// (new chat + first message, completed turns, compaction, etc.).
  			case "agent_end": {
 +				if (!event.willRetry) this.completedTurns += 1;
-+				// 可重试错误：SDK 随后发 auto_retry_start 并把末尾 error 消息从
-+				// state 摘掉。这里先立占位，让本次立即 flush 的快照就不含瞬时红错
-+				// ——否则快照先画红、摘掉后又消失，即「红色报错一闪而过」。
- 				if (event.willRetry) {
- 					let errorMessage = "";
- 					for (let i = event.messages.length - 1; i >= 0; i--) {
-@@ -10447,6 +10456,11 @@ export class ClientSession {
+ 				// 可重试错误：SDK 随后发 auto_retry_start 并把末尾 error 消息从
+ 				// state 摘掉。这里先立占位，让本次立即 flush 的快照就不含瞬时红错
+ 				// ——否则快照先画红、摘掉后又消失，即「红色报错一闪而过」。
+@@ -4014,6 +4017,11 @@ export class ClientSession {
  		return n;
  	}
  
@@ -80,11 +31,40 @@ index 560864b2..0d990ef7 100644
  	/** Dispatch-side admission check used by terminal routes. */
  	isQuiesceActive(): boolean {
  		return this.isQuiesced();
+@@ -6232,6 +6240,12 @@ export class AgentService {
+ 		return n;
+ 	}
+ 
++	completedTurns(): number {
++		let n = 0;
++		for (const cs of this.clients.values()) n += cs.completedTurnCount();
++		return n;
++	}
++
+ 	/** 插件用：全客户端最近活跃对话的快照（at 最大者即“当前打开的对话”）。 */
+ 	readConversationForPlugins(): PluginConversationSnapshot | null {
+ 		let best: PluginConversationSnapshot | null = null;
+@@ -6284,6 +6298,7 @@ export class AgentService {
+ 		connectedClients: number;
+ 		activeConversations: number;
+ 		activeTools: number;
++		completedTurns: number;
+ 		pendingMessages: number;
+ 		/** 托管本实例的平台服务（null = 前台/dev/Docker）——CLI 的
+ 		 *  `server status` 据此显示启动方式，见 launch-origin.ts。 */
+@@ -6297,6 +6312,7 @@ export class AgentService {
+ 			connectedClients: this.socketCount,
+ 			activeConversations: this.activeConversations(),
+ 			activeTools: this.activeTools(),
++			completedTurns: this.completedTurns(),
+ 			pendingMessages: this.pendingMessages(),
+ 			service: toServiceInfo(launchOrigin()),
+ 		};
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index 12cc5868..472f92db 100644
+index 0ccf315b..868fab15 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
-@@ -34,6 +34,7 @@ type ControlService = {
+@@ -33,6 +33,7 @@ type ControlService = {
  		connectedClients: number;
  		activeConversations: number;
  		activeTools: number;
@@ -98,5 +78,5 @@ index 12cc5868..472f92db 100644
  	activeTools?: number;
 +	completedTurns?: number;
  	pendingMessages?: number;
- 	authToken?: string;
+ 	/** 托管本实例的平台服务（null = 前台/dev/Docker）——CLI 显示启动方式。 */
  	service?: UiServiceInfo | null;
