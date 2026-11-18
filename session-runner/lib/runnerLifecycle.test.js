@@ -373,3 +373,29 @@ test("tunnel startup failure prevents Chrome and cleans up the tunnel", async ()
   assert.ok(!events.includes("server.listen"));
   assert.ok(events.includes("egress.stop"));
 });
+
+test("startup identifies a failed restore stage and never admits or listens", async () => {
+  const events = [];
+  const logs = [];
+  const error = Object.assign(new Error("private object details"), {code: "checkpoint_checksum_mismatch"});
+  const lifecycle = createLifecycleHarness(events, {
+    workspace: {
+      ensureWorkspace: async () => {},
+      prepareWorkspaceSource: async () => {},
+      restoreCheckpoint: async () => { throw error; },
+    },
+    workspaceAuthority: {
+      acquire: async () => events.push("authority.acquire"),
+      release: async () => {},
+    },
+    logger: {log: (...args) => logs.push(args), error: (...args) => logs.push(args)},
+  });
+  await assert.rejects(lifecycle.start(), (received) => received === error);
+  assert.equal(events.includes("authority.acquire"), false);
+  assert.equal(events.includes("server.listen"), false);
+  const failure = logs.find(([message]) => message === "runner startup stage failed");
+  assert.equal(failure[1].stage, "checkpoint_restore");
+  assert.equal(failure[1].code, "checkpoint_checksum_mismatch");
+  assert.equal(typeof failure[1].elapsedMs, "number");
+  assert.equal(JSON.stringify(logs).includes("private object details"), false);
+});

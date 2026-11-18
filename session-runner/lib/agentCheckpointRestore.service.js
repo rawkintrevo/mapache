@@ -7,6 +7,7 @@ const path = require("node:path");
 const {agentSnapshotStoragePrefix, parseCompleteJsonl} = require("./agentSnapshot.service");
 const {CHECKPOINT_VERSION, WORKSPACE_FILE_NAMESPACE, validateRelativePath} = require("./agentCheckpoint.service");
 const {shouldDefer, encodePointer} = require("./workspaceLargeFiles");
+const {stageCheckpointFiles} = require("./checkpointRestoreStaging");
 const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 function isAutomationRuntime(config = {}) {
@@ -182,12 +183,13 @@ async function buildAgentPlan({config, fsImpl, pointer, sourceWorkspaceCheckpoin
     assertInside(stageDir, stagedPath, "agent restore staging target");
     if (entry.kind === "symlink") {
       validateSymlinkTarget(entry.target, root.stageRoot, stagedPath);
-      await fsImpl.promises.mkdir(path.dirname(stagedPath), {recursive: true});
-      await fsImpl.promises.symlink(entry.target, stagedPath);
       files.push({entry, relativePath, stagedPath, targetPath, symlink: true});
       continue;
     }
     if (!objectPath) throw restoreError("checkpoint_manifest_invalid", `Agent file has no object: ${relativePath}`);
+    files.push({entry, relativePath, stagedPath, targetPath, objectPath, symlink: false});
+  }
+  await stageCheckpointFiles({files, fsImpl, stageFile: async ({entry, relativePath, stagedPath, objectPath}) => {
     const content = await downloadObject({
       bucketName: pointer.manifest.bucketName,
       expected: entry,
@@ -197,8 +199,7 @@ async function buildAgentPlan({config, fsImpl, pointer, sourceWorkspaceCheckpoin
     });
     validateAgentContent(entry, content, relativePath);
     await writeStagedFile({content, fsImpl, mode: entry.mode, stagedPath});
-    files.push({entry, relativePath, stagedPath, targetPath, symlink: false});
-  }
+  }});
   await validateStagedSymlinkTargets({files, fsImpl, stageDir});
   const stageRoots = [...new Map(AGENT_FILE_ROOTS
       .filter(({configKey}) => config[configKey])
@@ -247,19 +248,16 @@ async function buildWorkspacePlan({config, fsImpl, pointer, shouldIgnore, stageD
     assertInside(config.workspaceDir, targetPath, "workspace restore target");
     if (entry.kind === "symlink") {
       validateSymlinkTarget(entry.target, stageDir, stagedPath);
-      await fsImpl.promises.mkdir(path.dirname(stagedPath), {recursive: true});
-      await fsImpl.promises.symlink(entry.target, stagedPath);
       files.push({entry, relativePath, stagedPath, targetPath, symlink: true});
       continue;
     }
     if (entry.kind !== "workspace-file") throw restoreError("checkpoint_manifest_invalid", `Unsupported workspace file kind: ${relativePath}`);
-    if (shouldDefer(entry, config)) {
-      await writeStagedFile({content: encodePointer(entry), fsImpl, mode: entry.mode, stagedPath});
-      files.push({entry, relativePath, stagedPath, targetPath, symlink: false});
-      continue;
-    }
-    const objectPath = expectedObjectPath(pointer, manifest, relativePath, entry.kind);
-    const content = await downloadObject({
+    files.push({entry, relativePath, stagedPath, targetPath,
+      objectPath: expectedObjectPath(pointer, manifest, relativePath, entry.kind),
+      deferred: shouldDefer(entry, config), symlink: false});
+  }
+  await stageCheckpointFiles({files, fsImpl, stageFile: async ({entry, relativePath, stagedPath, objectPath, deferred}) => {
+    const content = deferred ? encodePointer(entry) : await downloadObject({
       bucketName: pointer.manifest.bucketName,
       expected: entry,
       label: relativePath,
@@ -267,8 +265,7 @@ async function buildWorkspacePlan({config, fsImpl, pointer, shouldIgnore, stageD
       storage,
     });
     await writeStagedFile({content, fsImpl, mode: entry.mode, stagedPath});
-    files.push({entry, relativePath, stagedPath, targetPath, symlink: false});
-  }
+  }});
   await validateStagedSymlinkTargets({files, fsImpl, stageDir});
   return {files, stageDir, shouldIgnore, tombstones: [...tombstones]};
 }
