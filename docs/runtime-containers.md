@@ -179,8 +179,10 @@ the validated compatibility point commit
 `4470926eb0e7619e9d555f8d86061c562e23e605` (package `0.85.0`), verifies
 the source archive and package/license hashes, applies the checked-in patch
 series, runs the upstream typecheck/tests/build, and copies only generated
-runtime files plus `build-info.json` into the image. The build pins the
-Pi SDK `0.85.1` for both the image CLI and the pi-web-ui lockfile. The
+runtime files plus `build-info.json` into the image. The image CLI installs
+the latest published Pi release when its Docker install layer runs (use
+`--no-cache` for local rebuilds to refresh it). The pi-web-ui lockfile retains
+Pi SDK `0.85.1` for compatibility with the managed patch series. The
 managed MCP policy remains pinned to `pi-mcp-adapter` `2.32.1` because its
 checked-in mutation patch is version/anchor strict; the image build fails
 closed if those anchors or versions drift. It does not download or install anything
