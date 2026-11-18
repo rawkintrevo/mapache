@@ -1,8 +1,8 @@
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index 5d38169a..6bdb86fc 100644
+index 153abf89..070c87a8 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
-@@ -47,7 +47,7 @@ type ControlService = {
+@@ -66,7 +66,7 @@ type ControlService = {
  };
  
  /** How long a control connection may sit idle before the server closes it. */

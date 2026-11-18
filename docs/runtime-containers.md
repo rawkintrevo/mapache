@@ -176,11 +176,11 @@ their bundled startup behavior until restarted or recreated.
 The `pi-chrome` build also packages the pinned pi-web-ui runtime under
 `/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` fetches
 the validated compatibility point commit
-`4470926eb0e7619e9d555f8d86061c562e23e605` (package `0.85.0`), verifies
+`3ddf35f91820440cd8f612a16a48bad374d8f8af` (package `0.120.0`), verifies
 the source archive and package/license hashes, applies the checked-in patch
-series, runs the upstream typecheck/tests/build, and copies only generated
+series, runs the upstream typecheck/build/tests, and copies only generated
 runtime files plus `build-info.json` into the image. The build pins the
-Pi SDK `0.85.1` for both the image CLI and the pi-web-ui lockfile. The
+Pi SDK `1.5.2` for both the image CLI and the pi-web-ui lockfile. The
 managed MCP policy remains pinned to `pi-mcp-adapter` `2.32.1` because its
 checked-in mutation patch is version/anchor strict; the image build fails
 closed if those anchors or versions drift. It does not download or install anything
@@ -188,6 +188,20 @@ at runner startup. The generated health descriptor is safe for runtime status
 reporting. Existing Cloud Run sessions do not contain this artifact until they
 receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
 for the revision rollout.
+
+Upstream 0.120.0 separates daemon orchestration into `agent-service-daemon.ts`
+and uses delegated goal execution. The compatibility patch carries Mapache
+automation/workspace-request controls into that daemon and preserves paused
+goal restoration, including the selected executor model. The build installs
+mobile development dependencies for upstream typechecking and packages
+`plugin-sdk` plus the bundled Superagent plugin required by the new runtime.
+The lockfile includes optional platform dependencies needed by npm 11.19's clean
+install validation. A separate upstream-regression patch makes empty-subdirectory
+snapshot cleanup run from the Git root and gives browser test fixtures cookie
+authentication for WebSocket handshakes (custom HTTP headers are insufficient).
+CLI integration tests run after compilation because they import `dist/server`;
+the tunnel path-policy fixture uses a synthetic non-root home during image builds.
+
 
 The workspace-request model catalog is served by the same pi-web-ui model
 runtime used by normal chat. It reports catalog metadata and configured-provider

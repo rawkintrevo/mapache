@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 761c406d..03832042 100644
+index a5bff545..52b95336 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -1249,6 +1249,13 @@ export class ClientSession {
+@@ -1183,6 +1183,13 @@ export class ClientSession {
  			? a.name.localeCompare(b.name)
  			: a.providerId.localeCompare(b.providerId));
  	}
@@ -16,16 +16,3 @@ index 761c406d..03832042 100644
  	/** Session of the active conversation. */
  	get session(): AgentSession {
  		return this.conv.session;
-@@ -6913,10 +6920,10 @@ export class AgentService {
- 		return handle ? this.workspaceRequestResponse(handle) : { ok: false, error: "workspace_request_not_found" };
- 	}
- 
--	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[] }> {
-+	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[]; savedModelSelection?: { providerId: string; modelId: string } | null; retryable?: boolean; stage?: string }> {
- 		try {
- 			const client = await this.requestClient();
--			return { ok: true, models: client.modelCatalog() };
-+			return { ok: true, models: client.modelCatalog(), savedModelSelection: client.savedModelSelection() };
- 		} catch {
- 			return { ok: false, error: "workspace_request_model_discovery_unavailable" };
- 		}

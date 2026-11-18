@@ -1,8 +1,8 @@
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 365f7d41..761c406d 100644
+index 527a522c..a5bff545 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
-@@ -1228,6 +1228,27 @@ export class ClientSession {
+@@ -1162,6 +1162,28 @@ export class ClientSession {
  	get runtime(): AgentSessionRuntime {
  		return this.conv.runtime;
  	}
@@ -27,30 +27,15 @@ index 365f7d41..761c406d 100644
 +			? a.name.localeCompare(b.name)
 +			: a.providerId.localeCompare(b.providerId));
 +	}
- 	/** Session of the active conversation. */
++	/** Session of the active conversation. */
  	get session(): AgentSession {
  		return this.conv.session;
-@@ -6892,6 +6913,15 @@ export class AgentService {
- 		return handle ? this.workspaceRequestResponse(handle) : { ok: false, error: "workspace_request_not_found" };
  	}
- 
-+	async workspaceRequestModels(): Promise<AutomationControlResponse & { models?: unknown[] }> {
-+		try {
-+			const client = await this.requestClient();
-+			return { ok: true, models: client.modelCatalog() };
-+		} catch {
-+			return { ok: false, error: "workspace_request_model_discovery_unavailable" };
-+		}
-+	}
-+
- 	async cancelWorkspaceRequest(runId: string): Promise<AutomationControlResponse> {
- 		const handle = this.workspaceRequests.get(String(runId ?? "").trim());
- 		if (!handle) return { ok: false, error: "workspace_request_not_found" };
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index cae719ef..c5503399 100644
+index 64c9d063..e3061914 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
-@@ -48,6 +48,7 @@ type ControlService = {
+@@ -67,6 +67,7 @@ type ControlService = {
  	automationStatus?: (runId: string) => ControlStatus;
  	cancelAutomation?: (runId: string) => Promise<ControlStatus>;
  	startWorkspaceRequest?: (input: { runId: string; ticketId?: string; sourceWorkspaceId?: string; conversationTitle?: string; modelRef?: string; prompt: string }) => Promise<ControlStatus>;
@@ -58,7 +43,7 @@ index cae719ef..c5503399 100644
  	workspaceRequestStatus?: (runId: string) => ControlStatus;
  	cancelWorkspaceRequest?: (runId: string) => Promise<ControlStatus>;
  };
-@@ -64,7 +65,7 @@ export function controlPath(dataDir: string, port: number): string {
+@@ -83,7 +84,7 @@ export function controlPath(dataDir: string, port: number): string {
  }
  
  export interface ControlCommand {
@@ -67,7 +52,7 @@ index cae719ef..c5503399 100644
  	runId?: string;
  	ticketId?: string;
  	sourceWorkspaceId?: string;
-@@ -198,6 +199,11 @@ export function startControlServer(opts: { service: ControlService; dataDir: str
+@@ -228,6 +229,11 @@ export function startControlServer(opts: {
  									? service.workspaceRequestStatus(req.runId ?? "")
  									: { ok: false, error: "workspace_request_unsupported" };
  								break;
@@ -79,16 +64,3 @@ index cae719ef..c5503399 100644
  							case "cancelWorkspaceRequest":
  								if (!service.cancelWorkspaceRequest) {
  									resp = { ok: false, error: "workspace_request_unsupported" };
-diff --git a/server/index.ts b/server/index.ts
-index b079a52d..8cc7ba6a 100644
---- a/server/index.ts
-+++ b/server/index.ts
-@@ -907,6 +907,8 @@ export interface EngineService {
- 	onConversationChanged?: (() => void) | undefined;
- 	/** 当前打开对话的快照（pi 引擎；dsh 引擎无此方法，插件回退空态）。 */
- 	readConversationForPlugins?: (() => PluginConversationSnapshot | null) | undefined;
-+	/** Managed workspace requests: expose a safe model catalog without credentials. */
-+	workspaceRequestModels?: (() => Promise<{ ok: boolean; error?: string; models?: unknown[] }>) | undefined;
- 	/** 插件无头调用 agent（pi 引擎；dsh 引擎暂无，host.chat 明确拒绝）。 */
- 	chatFromPlugin?:
- 		| ((

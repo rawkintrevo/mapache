@@ -134,6 +134,8 @@ function copyRuntime(sourceDir, outputDir) {
 		"themes",
 		"extensions",
 		"plugins/catalog.json",
+		"plugins/superagent",
+		"plugin-sdk",
 		"node_modules",
 	];
 	for (const relativePath of entries) {
@@ -162,7 +164,7 @@ function parseArgs(argv) {
 export async function buildUpstream(options = {}) {
 	const manifest = readManifest(options.manifestPath || MANIFEST_PATH);
 	const workDir = options.workDir ? resolve(options.workDir) : mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-"));
-	const sourceDir = options.sourceDir ? resolve(options.sourceDir) : join(workDir, "source");
+	const sourceDir = options.sourceDir ? resolve(options.sourceDir) : join(workDir, "pi-web-ui");
 	const sourceArchive = join(workDir, "source.tar.gz");
 	let ownsWorkDir = !options.workDir;
 	try {
@@ -183,8 +185,15 @@ export async function buildUpstream(options = {}) {
 			return {commit: manifest.upstream.commit, packageVersion: manifest.upstream.packageVersion, piSdkVersion: manifest.piSdk.version, piMcpAdapterVersion: manifest.piMcpAdapter.version};
 		}
 		await run("npm", ["ci"], {cwd: sourceDir});
+		const sdkPackage = JSON.parse(readFileSync(join(sourceDir, "node_modules", manifest.piSdk.package, "package.json"), "utf8"));
+		const lock = JSON.parse(readFileSync(join(sourceDir, "package-lock.json"), "utf8"));
+		const sdkLock = lock.packages?.[`node_modules/${manifest.piSdk.package}`];
+		if (sdkPackage.version !== manifest.piSdk.version || sdkLock?.integrity !== manifest.piSdk.integrity) {
+			fail("installed Pi SDK does not match the pinned version/integrity");
+		}
+		// The upstream test typecheck imports native mobile bridge declarations.
+		await run("npm", ["ci", "--ignore-scripts"], {cwd: join(sourceDir, "mobile")});
 		await run("npm", ["run", "typecheck"], {cwd: sourceDir});
-		if (!options.skipTests) await run("npm", ["test"], {cwd: sourceDir});
 		const webBasePath = manifest.build?.webBasePath;
 		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
 			fail("manifest build.webBasePath must be a single slash-delimited path");
@@ -193,6 +202,8 @@ export async function buildUpstream(options = {}) {
 			cwd: sourceDir,
 			env: {...process.env, PI_WEB_BASE_PATH: webBasePath},
 		});
+		// CLI integration tests import generated dist/server modules.
+		if (!options.skipTests) await run("npm", ["test"], {cwd: sourceDir, env: {...process.env, PI_TEST_TIMING: "off"}});
 		const outputDir = resolve(options.outputDir);
 		copyRuntime(sourceDir, outputDir);
 		return {commit: manifest.upstream.commit, packageVersion: manifest.upstream.packageVersion, piSdkVersion: manifest.piSdk.version, piMcpAdapterVersion: manifest.piMcpAdapter.version, outputDir};

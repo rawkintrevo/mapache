@@ -1,10 +1,10 @@
 diff --git a/server/index.ts b/server/index.ts
-index 873a0776..6f132905 100644
+index 810ec722..c31818a7 100644
 --- a/server/index.ts
 +++ b/server/index.ts
-@@ -233,8 +233,29 @@ const SERVICE_INFO = toServiceInfo(ORIGIN);
- /** PI_WEB_TABS: the tabs this instance offers. null = all of them, as before. */
- const TABS = parseTabs();
+@@ -613,10 +613,32 @@ registerFileTransferRoutes(
+ 	(clientId) => (sharedStateStore.getSettingsSnapshot(clientId).folderUploadMaxMb ?? 32) * 1024 * 1024,
+ );
  
 +function safeBuildDescriptor(): {
 +	upstreamCommit: string;
@@ -28,8 +28,10 @@ index 873a0776..6f132905 100644
 +}
 +
  app.get("/api/health", (_req, res) => {
--	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE });
-+	res.json({ ok: true, piVersion: VERSION, cwd: CWD, pid: process.pid, engine: ENGINE, build: safeBuildDescriptor() });
- });
- 
- /**
+ 	res.json({
+ 		ok: true,
+ 		piVersion: VERSION,
++		build: safeBuildDescriptor(),
+ 		piSdkCopies: sdkCopies(),
+ 		engine: currentDefaultEngine,
+ 		instanceName: process.env.PI_WEB_INSTANCE_NAME?.trim() || undefined,

@@ -1,40 +1,3 @@
-diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 3897ac90..3582bac4 100644
---- a/server/agent-service.ts
-+++ b/server/agent-service.ts
-@@ -3723,8 +3723,8 @@ export class ClientSession {
- 	reloadModelsConfig(): Promise<void> {
- 		return this.modelAdmin.reloadModelsConfig();
- 	}
--	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string): Promise<void> {
--		return this.modelAdmin.fetchModelsList(reqId, baseUrl, apiKey, authHeader, api, () => this.getLang());
-+	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string, providerId?: string): Promise<void> {
-+		return this.modelAdmin.fetchModelsList(reqId, baseUrl, apiKey, authHeader, api, () => this.getLang(), providerId);
- 	}
- 	refreshProviderModels(providerId: string, reqId: number): Promise<void> {
- 		return this.modelAdmin.refreshProviderModels(providerId, reqId, () => this.getLang());
-diff --git a/server/index.ts b/server/index.ts
-index ab375d08..b079a52d 100644
---- a/server/index.ts
-+++ b/server/index.ts
-@@ -791,7 +791,7 @@ export interface DispatchSession {
- 	addProviderKey(provider: string, apiKey: string, name?: string): Promise<void>;
- 	activateProviderKey(provider: string, keyName: string): Promise<void>;
- 	removeProviderKey(provider: string, keyName: string): Promise<void>;
--	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string): Promise<void>;
-+	fetchModelsList(reqId: number, baseUrl: string, apiKey?: string, authHeader?: boolean, api?: string, providerId?: string): Promise<void>;
- 	refreshProviderModels(providerId: string, reqId: number): Promise<void>;
- 	cloneProvider(provider: string, reqId: number): Promise<void>;
- 	getTerminalManager(conversationId?: string): TerminalManagerLike | undefined;
-@@ -1314,7 +1314,7 @@ wss.on("connection", (ws) => {
- 				void cs.listProviders();
- 				break;
- 			case "fetch_models":
--				void cs.fetchModelsList(msg.reqId, msg.baseUrl, msg.apiKey, msg.authHeader, msg.api);
-+				void cs.fetchModelsList(msg.reqId, msg.baseUrl, msg.apiKey, msg.authHeader, msg.api, msg.providerId);
- 				break;
- 			case "refresh_provider_models":
- 				void cs.refreshProviderModels(msg.providerId, msg.reqId);
 diff --git a/server/mapache-provider-auth.ts b/server/mapache-provider-auth.ts
 new file mode 100644
 index 00000000..10d9b13b
@@ -72,26 +35,18 @@ index 00000000..10d9b13b
 +  return credential.key;
 +}
 diff --git a/server/model-admin.ts b/server/model-admin.ts
-index d443a5ea..c11ae252 100644
+index e780bed1..6f161d67 100644
 --- a/server/model-admin.ts
 +++ b/server/model-admin.ts
-@@ -16,6 +16,7 @@ import { join } from "node:path";
- import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
- import type { ServerMessage, UiModelConfigEntry, UiProviderConfig, ProviderKeyInfo } from "./protocol.js";
+@@ -15,6 +15,7 @@ import { enrichBatch, type EnrichLang } from "./model-enrich.js";
+ import { resolveModelReasoningSpec } from "./reasoning-registry.js";
  import { pick, type ServerLang } from "./i18n.js";
+ import { ProviderOAuthFlowManager } from "./provider-oauth-flow.js";
 +import { isMapacheCustomProvider, mapacheProviderKey } from "./mapache-provider-auth.js";
  import { managedCredentialRefusal } from "./managed.js";
  
- /** ClientSession 提供给本服务的宿主能力（窄接口）。 */
-@@ -1024,6 +1025,7 @@ export class ModelAdminService {
- 		api?: string,
- 		/** 探测抛错文案语言（默认英文）；调用方可传 () => getLang() 实现跟随。 */
- 		lang?: () => ServerLang,
-+		providerId?: string,
- 	): Promise<void> {
- 		const emitError = (error: string) => this.host.emit({ type: "fetch_models_result", reqId, ok: false, error });
- 		if (this.host.managed && hasNonEmptySecret(apiKey)) {
-@@ -1031,6 +1033,10 @@ export class ModelAdminService {
+ export interface ModelAdminHost {
+@@ -1355,6 +1356,10 @@ export class ModelAdminService {
  			return;
  		}
  		try {
@@ -99,10 +54,10 @@ index d443a5ea..c11ae252 100644
 +				apiKey = mapacheProviderKey(this.host.agentDir, providerId, baseUrl, api);
 +				authHeader = true;
 +			}
- 			const models = await ModelAdminService.probeModelsEndpoint(baseUrl, apiKey, authHeader, api, undefined, lang);
+ 			const key = apiKey?.trim() || this.savedProviderApiKey(providerId);
+ 			const models = await ModelAdminService.probeModelsEndpoint(baseUrl, key, authHeader, api, undefined, lang);
  			this.host.emit({ type: "fetch_models_result", reqId, ok: true, models });
- 		} catch (err) {
-@@ -1094,7 +1100,7 @@ export class ModelAdminService {
+@@ -1432,7 +1437,7 @@ export class ModelAdminService {
  			const ac = new AbortController();
  			const timer = setTimeout(() => ac.abort(), 15000);
  			try {
@@ -111,16 +66,20 @@ index d443a5ea..c11ae252 100644
  			} catch (err) {
  				if ((err as Error).name === "AbortError") {
  					throw new Error(pick(l, "请求超时（15 秒）", "Request timed out (15s)", "models.fetch.timeout"));
-@@ -1120,7 +1126,7 @@ export class ModelAdminService {
+@@ -1456,8 +1461,10 @@ export class ModelAdminService {
  		if (!res.ok) {
  			let detail = "";
  			try {
 -				detail = (await res.text()).slice(0, 200);
+-			} catch {}
 +				await res.body?.cancel();
- 			} catch {
- 				// response body already consumed / not text — ignore
- 			}
-@@ -1201,7 +1207,9 @@ export class ModelAdminService {
++			} catch {
++				// response body already consumed / not text — ignore
++			}
+ 			const detailSuffixZh = detail ? `：${detail}` : "";
+ 			const detailSuffixEn = detail ? `: ${detail}` : "";
+ 			throw new Error(
+@@ -1521,7 +1528,9 @@ export class ModelAdminService {
  			}
  			const fetched = await ModelAdminService.probeModelsEndpoint(
  				baseUrl,
@@ -131,7 +90,7 @@ index d443a5ea..c11ae252 100644
  				saved.authHeader === true ? true : undefined,
  				saved.api,
  				saved.headers as Record<string, string> | undefined,
-@@ -1308,7 +1316,18 @@ export class ModelAdminService {
+@@ -1843,7 +1852,18 @@ export class ModelAdminService {
  							: {}),
  					}
  				: config;
@@ -147,15 +106,15 @@ index d443a5ea..c11ae252 100644
 +					for (const key of ["baseUrl", "apiKey", "headers", "api"]) delete model[key];
 +				}
 +			}
- 			mkdirSync(this.host.agentDir, { recursive: true });
- 			writeFileSync(this.modelsConfigPath(), JSON.stringify({ providers }, null, 2) + "\n");
- 
+ 			await this.writeModelsConfigAndReload(providers, pid);
+ 			this.host.emit({
+ 				type: "notice",
 diff --git a/server/protocol.ts b/server/protocol.ts
-index c31ed069..f785aaba 100644
+index c9556d1a..e696a4c6 100644
 --- a/server/protocol.ts
 +++ b/server/protocol.ts
-@@ -493,6 +493,7 @@ export type ClientMessage =
- 	 *  back in fetch_models_result so the UI can match concurrent requests. */
+@@ -1489,6 +1489,7 @@ export type ClientMessage =
+ 	| { type: "list_providers" }
  	| {
  			type: "fetch_models";
 +			providerId?: string;
@@ -237,14 +196,14 @@ index 00000000..df0856f3
 +  }
 +}, 30000);
 diff --git a/web/src/components/ModelConfigModal.tsx b/web/src/components/ModelConfigModal.tsx
-index c25c54af..f9edc0cc 100644
+index 4aa3b179..cdf109aa 100644
 --- a/web/src/components/ModelConfigModal.tsx
 +++ b/web/src/components/ModelConfigModal.tsx
-@@ -150,6 +150,7 @@ export function ModelConfigModal({
- 		setFetchReqId(reqId);
+@@ -911,6 +911,7 @@ export function ModelConfigModal({
+ 		pendingFetchReq.current = reqId;
  		appSend({
  			type: "fetch_models",
 +			providerId: editing.providerId.trim(),
  			reqId,
  			baseUrl: base,
- 			...(managed ? {} : { apiKey: editing.apiKey.trim() || undefined, authHeader: editing.authHeader }),
+ 			apiKey: managed ? undefined : editing.apiKey.trim() || undefined,

@@ -1,32 +1,54 @@
 diff --git a/server/managed.ts b/server/managed.ts
-index becb07f9..88a5f060 100644
+index 11c44ac7..c9546598 100644
 --- a/server/managed.ts
 +++ b/server/managed.ts
-@@ -24,17 +24,8 @@
-  *   software on the machine, not about what the interface can do.
-  */
- 
--/** The client messages that install or replace software on the machine. */
+@@ -1,13 +1,31 @@
 -export const MANAGED_MESSAGES = [
--	/** Update check behind the top-bar badge. */
 -	"check_update",
--	/** "Re-check all" in the UPDATE panel (app + components). */
 -	"check_updates_all",
--	/** Installs the pi agent itself. */
 -	"install_pi_agent",
--	/** Plugin market: fetches and installs a plugin from the network. */
+-	"update_engine",
+-	"uninstall_engine",
 -	"plugin_catalog_add",
+-	"plugin_job",
+-	"plugin_catalog_sync",
 -] as const;
++/**
++ * managed — instances whose updates come from outside.
++ *
++ * pi-web-ui can update itself: the top bar shows an updates badge and a panel
++ * whose buttons run `npm i -g pi-web-ui@latest` in a visible terminal and
++ * restart the server. The plugin market installs plugins from the network the
++ * same way. On a developer's laptop both are conveniences.
++ *
++ * Behind a deploy pipeline they are not. A Docker image, a distribution
++ * package, or a release script that also checks the reverse proxy, the service
++ * unit and the environment variables a new version needs — for all of those,
++ * an in-app self-update leaves the machine in a state nothing describes, until
++ * the next real deploy silently undoes it. `PI_WEB_MANAGED=1` says "this
++ * instance is managed from outside": the update paths refuse, and the client
++ * stops offering them.
++ *
++ * Two rules kept this small:
++ *
++ * - **The server refuses, the client only hides.** Hiding a button while the
++ *   socket still accepts the message is hiding, not disabling: anything that
++ *   can open the WebSocket can still send it.
++ * - **Nothing else changes.** Chatting, plugins already installed, git,
++ *   terminal, settings are untouched — this switch is about who installs
++ *   software on the machine, not about what the interface can do.
++ */
++
 +/** Requests that remain unavailable in a managed deployment. */
 +export const MANAGED_MESSAGES = [] as const;
  
  export type ManagedMessage = (typeof MANAGED_MESSAGES)[number];
  
 diff --git a/tests/unit/managed.test.ts b/tests/unit/managed.test.ts
-index 93c64830..97d52407 100644
+index 966224cd..e0487ce0 100644
 --- a/tests/unit/managed.test.ts
 +++ b/tests/unit/managed.test.ts
-@@ -36,23 +36,12 @@ describe("managed instances", () => {
+@@ -22,29 +22,12 @@ describe("managed instances", () => {
  		}
  	});
  
@@ -42,134 +64,42 @@ index 93c64830..97d52407 100644
  	});
  
 -	it("covers the whole self-update surface, not just the button", () => {
--		// The badge calls check_update, the panel's "Re-check all" calls
--		// check_updates_all, and "install pi" calls install_pi_agent. Leaving one
--		// open would leave a way to reinstall around the deploy.
 -		expect([...MANAGED_MESSAGES].sort()).toEqual(
--			["check_update", "check_updates_all", "install_pi_agent", "plugin_catalog_add"].sort(),
+-			[
+-				"check_update",
+-				"check_updates_all",
+-				"install_pi_agent",
+-				"update_engine",
+-				"uninstall_engine",
+-				"plugin_catalog_add",
+-				"plugin_job",
+-				"plugin_catalog_sync",
+-			].sort(),
 -		);
 -	});
 -
  	it("touches nothing else: chatting, git, terminal and plugins already there", () => {
  		for (const type of ["prompt", "scm_status", "terminal_create", "plugins_reload", "plugin_catalog_remove"]) {
  			expect(managedRefusal(type, true), type).toBeNull();
-diff --git a/web/src/components/PiSetupModal.tsx b/web/src/components/PiSetupModal.tsx
-index 74e32df8..d94fd665 100644
---- a/web/src/components/PiSetupModal.tsx
-+++ b/web/src/components/PiSetupModal.tsx
-@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
- import { FiCpu, FiRefreshCw, FiX } from "react-icons/fi";
- import type { ProviderStatus } from "../types";
- import { useT } from "../i18n";
--import { appSend, useIsManaged } from "../app-globals";
-+import { appSend } from "../app-globals";
- 
- interface PiSetupModalProps {
- 	/** Fetched from the latest snapshot; true once auth.json has credentials. */
-@@ -24,8 +24,6 @@ interface PiSetupModalProps {
-  */
- export function PiSetupModal({ piConfigured, piAgentInstalled, providers, installResult, onClose }: PiSetupModalProps) {
- 	const t = useT();
--	// PI_WEB_MANAGED=1：装软件不是本页的事（全局，见 web/src/app-globals.ts）。
--	const managed = useIsManaged();
- 	const [installing, setInstalling] = useState(false);
- 	const [provider, setProvider] = useState("");
- 	const [apiKey, setApiKey] = useState("");
-@@ -92,14 +90,7 @@ export function PiSetupModal({ piConfigured, piAgentInstalled, providers, instal
- 				</div>
- 				<p className="modal-desc">{t("setupDesc")}</p>
- 
--				{managed ? (
--					<div className="setup-actions">
--						<div className="setup-done">{t("credentialsManaged")}</div>
--						<button type="button" className="btn" onClick={onClose}>
--							{t("skip")}
--						</button>
--					</div>
--				) : installFailed ? (
-+				{installFailed ? (
- 					<div className="setup-failed">
- 						<div className="setup-done">{t("installFailed")}</div>
- 						<pre className="setup-detail">{installResult.detail}</pre>
-diff --git a/web/src/components/SettingsModal.tsx b/web/src/components/SettingsModal.tsx
-index 75a12baa..f9a38c55 100644
---- a/web/src/components/SettingsModal.tsx
-+++ b/web/src/components/SettingsModal.tsx
-@@ -1615,16 +1615,7 @@ export function SettingsModal({ chat, terminal, onSwitchToTerminal, onClose }: S
- 						)}
- 
- 						{/* ---- 插件市场（可一键安装的插件列表） ------------------------ */}
--						{/* A managed instance installs software through its deploy, not
--						    through this page: the market would only offer an action the
--						    server refuses (server/managed.ts). Plugins already installed
--						    keep working and stay listed above. */}
--						{tab === "plugins" && managed && (
--							<div className="set-section">
--								<div className="set-note">{t("updatesManaged")}</div>
--							</div>
--						)}
--						{tab === "plugins" && !managed && (
-+						{tab === "plugins" && (
- 							<div className="set-section">
- 								<div className="set-section-title">
- 									<FiPackage className="set-section-icon" />
 diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
-index d5c463b8..c6c57671 100644
+index 9af6d9f8..5b959a12 100644
 --- a/web/src/components/TopBar.tsx
 +++ b/web/src/components/TopBar.tsx
-@@ -528,10 +528,7 @@ export function TopBar({
- 						))}
- 					</Dropdown>
- 
--					{/* Managed instances omit upstream release controls; the deployment
--					    pipeline decides when the embedded runtime changes. */}
--					{!managed && (
--						<Dropdown
-+					<Dropdown
- 							trigger={
- 								<>
- 									<FiDownload />
-@@ -562,11 +559,9 @@ export function TopBar({
- 							<div className="dd-header">{t("update")}</div>
- 							{renderUpdateBody()}
- 							{renderAllUpdatesBody()}
--						</Dropdown>
--					)}
-+					</Dropdown>
- 
--					{!managed && (
--						<a
-+					<a
- 							className="chip github"
- 							href="https://github.com/xing-shuyin/pi-web-ui"
- 							target="_blank"
-@@ -574,8 +569,7 @@ export function TopBar({
- 							title={t("githubRepo")}
- 						>
- 							<FiGithub />
--						</a>
--					)}
-+					</a>
- 				</div>
- 
- 				<button
-@@ -665,9 +659,7 @@ export function TopBar({
- 								{locale === "zh" ? th.name : (th.nameEn ?? th.name)}
- 							</DropdownItem>
- 						))}
--						{!managed && (
--							<>
--								<div className="dd-header">{t("update")}</div>
-+						<div className="dd-header">{t("update")}</div>
- 								{renderUpdateBody()}
- 								{renderAllUpdatesBody()}
- 								<a
-@@ -678,8 +670,6 @@ export function TopBar({
- 								>
- 									<FiGithub /> {t("githubRepo")}
- 								</a>
--							</>
--						)}
- 					</Dropdown>
- 				</div>
- 			</div>
+@@ -1207,7 +1207,7 @@ export function TopBar({
+ 				})()}
+ 			</Dropdown>
+ 		),
+-		"host:update": managed ? null : (
++		"host:update": (
+ 			<Dropdown
+ 				trigger={
+ 					<>
+@@ -1241,7 +1241,7 @@ export function TopBar({
+ 				{renderAllUpdatesBody()}
+ 			</Dropdown>
+ 		),
+-		"host:github": !managed && (
++		"host:github": (
+ 			<a
+ 				className="chip github"
+ 				href="https://github.com/xing-shuyin/pi-web-ui"

@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const {execFileSync} = require("node:child_process");
 const fsp = require("node:fs/promises");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const express = require("express");
@@ -267,7 +268,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     const health = await request(publicPort, `/runner/health?mapache_access=${encodeURIComponent(accessToken)}`);
     assert.equal(health.status, 200);
     assert.equal(health.body.agentRuntime.ready, true);
-    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "4470926eb0e7619e9d555f8d86061c562e23e605");
+    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "3ddf35f91820440cd8f612a16a48bad374d8f8af");
     assert.equal((await request(publicPort, `/capabilities?mapache_access=${encodeURIComponent(accessToken)}`)).body.browser.state, "ready");
     assert.equal((await request(publicPort, `/preview/status?mapache_access=${encodeURIComponent(accessToken)}`)).body.ok, true);
     const bootstrap = await request(publicPort, `/agent/?mapache_access=${encodeURIComponent(accessToken)}`);
@@ -288,6 +289,20 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     socket.send(JSON.stringify({type: "set_goal", goal: "Make the local vertical fixture pass", locked: false}));
     await next(socket, (message) => message.type === "goal_status" && message.status.goal === "Make the local vertical fixture pass");
     await next(socket, (message) => message.type === "goal_status" && message.status.verdict === "pass", 30_000);
+    // Upstream announces a passing verdict before its final acknowledgement turn.
+    // Wait for that turn to finish before checking reconnect/restart inactivity.
+    const idleDeadline = Date.now() + 30_000;
+    let goalFinished = false;
+    while (Date.now() < idleDeadline) {
+      const activity = (await processSupervisor.health()).activity;
+      const acknowledged = model.requests.some((payload) => JSON.stringify(payload.messages).includes("Goal achieved and passed review"));
+      if (acknowledged && activity?.activeConversations === 0 && activity?.pendingMessages === 0) {
+        goalFinished = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert(goalFinished, "the goal acknowledgement must finish before lifecycle checks");
     snapshot = socket.verticalSnapshotState;
     assert(snapshot.messages.length > 0);
     assert(socket.verticalMessageDeltaCount > 0, "the upstream must stream message deltas");
@@ -298,18 +313,18 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     assert.equal(new Set(mcpResults.map((message) => message.tool_call_id || message.name)).size, 1);
     assert(mcpResults.some((message) => JSON.stringify(message).includes("vertical-tool-ok")),
       `fixture MCP result missing echo payload: ${JSON.stringify(mcpResults).slice(0, 1000)}`);
-    assert(model.requests.length >= 4, "expected streamed main and isolated review model requests");
+    assert(model.requests.length >= 4, "expected streamed executor and reviewer model requests");
 
-    socket.send(JSON.stringify({type: "list_sessions"}));
-    const listed = await next(socket, (message) => message.type === "sessions");
-    assert(listed.sessions.length >= 1);
     const firstSessionFile = snapshot.sessionFile;
-    assert(listed.sessions.some((entry) => entry.path === firstSessionFile || entry.sessionFile === firstSessionFile));
+    socket.send(JSON.stringify({type: "list_sessions"}));
+    const listed = await next(socket, (message) => message.type === "sessions" && message.sessions.some((entry) => entry.path === firstSessionFile || entry.sessionFile === firstSessionFile));
+    assert(listed.sessions.length >= 1);
+    assert(listed.sessions.some((entry) => entry.path === firstSessionFile || entry.sessionFile === firstSessionFile), JSON.stringify({firstSessionFile, sessions: listed.sessions}));
     socket.send(JSON.stringify({type: "new_chat"}));
     const secondSnapshot = await next(socket, (message) => isSnapshot(message) && message.state.conversationId !== firstConversationId);
     assert.notEqual(secondSnapshot.state.conversationId, firstConversationId);
     socket.send(JSON.stringify({type: "list_sessions"}));
-    const listedTwice = await next(socket, (message) => message.type === "sessions");
+    const listedTwice = await next(socket, (message) => message.type === "sessions" && message.sessions.some((entry) => entry.path === firstSessionFile || entry.sessionFile === firstSessionFile));
     assert(listedTwice.sessions.length >= 1);
     socket.send(JSON.stringify({
       type: "terminal_create",
@@ -323,6 +338,16 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     socket.send(JSON.stringify({type: "run_command", terminalId: "vertical-terminal", command: {command: "printf shell-ok", cwd: "/workspace"}, cols: 80, rows: 24}));
     await next(socket, (message) => message.type === "terminal_output" && String(message.data || "").includes("shell-ok"));
 
+    if (process.env.MAPACHE_PI_WEB_QA_TARGET_FILE) {
+      const targetFile = path.resolve(process.env.MAPACHE_PI_WEB_QA_TARGET_FILE);
+      await fsp.writeFile(targetFile, JSON.stringify({url: `${publicOrigin}/agent/?mapache_access=${encodeURIComponent(accessToken)}`}));
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline && !fs.existsSync(`${targetFile}.done`)) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      assert(fs.existsSync(`${targetFile}.done`), "browser QA must complete before the fixture shuts down");
+      await fsp.rm(targetFile, {force: true});
+    }
     const providerCountBeforeRenewal = model.requests.length;
     await closeSocket(socket);
     socket = null;
@@ -338,9 +363,10 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     assert.equal(model.requests.length, providerCountBeforeRenewal, "reconnect must not start a model turn");
 
     reconnect.send(JSON.stringify({type: "switch_session", path: firstSessionFile}));
-    const restored = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile);
+    const restored = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile && message.state.messages.length > 0);
     assert(restored.state.messages.length > 0);
 
+    await processSupervisor.prepareHostSnapshot();
     const capture = await createAgentSnapshotService({config}).capture({
       stagingRoot: stagingDir,
       bootInstanceId: config.agentRuntimeBootInstanceId,
@@ -371,7 +397,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     await next(reconnect, (message) => message.type === "ready");
     await next(reconnect, isSnapshot);
     reconnect.send(JSON.stringify({type: "switch_session", path: firstSessionFile}));
-    const restoredAfterRestart = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile);
+    const restoredAfterRestart = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile && message.state.messages.length > 0);
     assert(restoredAfterRestart.state.messages.length > 0);
     assert.equal(model.requests.length, checkpointCountBeforeRestart, "restart and history restore must not auto-resume execution");
   } finally {
@@ -452,7 +478,13 @@ function createDockerPiWebUiProcess({config, image, modelPort, root}) {
   let state = "stopped";
   let lastHealth = null;
 
-  return {activity, health, quiesce, start, status, stop, upstreamHeaders};
+  return {activity, health, quiesce, start, status, stop, upstreamHeaders, prepareHostSnapshot};
+
+  async function prepareHostSnapshot() {
+    // The fixture container writes mode-0600 state as root; production snapshot
+    // capture runs as that same user, while this harness reads it from the host.
+    execFileSync("docker", ["exec", containerId, "chown", "-R", `${process.getuid()}:${process.getgid()}`, "/ui", "/sessions"], {stdio: "pipe"});
+  }
 
   async function start() {
     if (state === "ready") return status();

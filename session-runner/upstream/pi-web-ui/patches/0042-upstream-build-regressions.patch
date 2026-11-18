@@ -1,0 +1,103 @@
+diff --git a/server/workspace-snapshot.ts b/server/workspace-snapshot.ts
+index 97883aff..d1d01d6e 100644
+--- a/server/workspace-snapshot.ts
++++ b/server/workspace-snapshot.ts
+@@ -311,7 +311,10 @@ async function restoreWorkspaceSnapshotInner(
+ 			await runGit(cwd, ["checkout", snapshotRef, "--", pathspec]);
+ 		}
+ 
+-		await runGit(cwd, ["clean", "-fd", "--", pathspec]);
++		// Run from the repository root: Git refuses to remove its own cwd when
++		// restoring a subdirectory whose snapshot was empty.
++		const repositoryRoot = await runGit(cwd, ["rev-parse", "--show-toplevel"]);
++		await runGit(repositoryRoot.trim(), ["clean", "-fd", "--", pathspec]);
+ 
+ 		lastSnapshotByCwd.delete(resolve(cwd));
+ 		const cachePath = snapshotCachePath(gitDir, cwd);
+diff --git a/tests/unit/device-center-desktop.test.ts b/tests/unit/device-center-desktop.test.ts
+index fece5d8d..daeeb210 100644
+--- a/tests/unit/device-center-desktop.test.ts
++++ b/tests/unit/device-center-desktop.test.ts
+@@ -28,7 +28,7 @@ async function listen(server: Server) {
+ 	return (server.address() as { port: number }).port;
+ }
+ async function fixture(
+-	options: { env?: NodeJS.ProcessEnv; supported?: boolean; dataDir?: string; permissions?: Native["permissions"] } = {},
++	options: { browserCookie?: boolean; env?: NodeJS.ProcessEnv; supported?: boolean; dataDir?: string; permissions?: Native["permissions"] } = {},
+ ) {
+ 	const app = express();
+ 	const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "desktop-route-"));
+@@ -50,7 +50,7 @@ async function fixture(
+ 	const desktop = createDeviceDesktop({
+ 		dataDir,
+ 		app,
+-		authorize: (req) => req.headers.authorization === "Bearer test",
++		authorize: (req) => req.headers.authorization === "Bearer test" || (options.browserCookie === true && req.headers.cookie === "desktop_test=test"),
+ 		env: options.env ?? { PI_DEVICE_DESKTOP: "1" },
+ 		native,
+ 	});
+@@ -588,7 +588,7 @@ describe("device desktop native route", () => {
+ 	it.skipIf(!CHROME_PATH)(
+ 		"decodes native frames onto the canvas through a nested proxy path",
+ 		async () => {
+-			const f = await fixture();
++			const f = await fixture({browserCookie: true});
+ 			const browser = await chromium.launch({
+ 				executablePath: CHROME_PATH,
+ 				headless: true,
+@@ -597,6 +597,7 @@ describe("device desktop native route", () => {
+ 			});
+ 			cleanups.push(() => browser.close());
+ 			const page = await browser.newPage({ extraHTTPHeaders: headers, viewport: { width: 390, height: 740 } });
++			await page.context().addCookies([{name: "desktop_test", value: "test", url: f.url}]);
+ 			const errors: string[] = [];
+ 			const requests: string[] = [];
+ 			page.on("pageerror", (error) => errors.push(error.message));
+diff --git a/tests/unit/device-desktop-relay.test.ts b/tests/unit/device-desktop-relay.test.ts
+index 44e20ca5..4f5f33c2 100644
+--- a/tests/unit/device-desktop-relay.test.ts
++++ b/tests/unit/device-desktop-relay.test.ts
+@@ -43,11 +43,11 @@ async function request(port: number, host: string, path: string, headers: Record
+ 		req.end();
+ 	});
+ }
+-async function fixture() {
++async function fixture(browserCookie = false) {
+ 	const dataDir = mkdtempSync(join(tmpdir(), "desktop-relay-"));
+ 	cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
+ 	const sessions: { options: CaptureOptions; input: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }[] = [];
+-	const authorized = vi.fn((req: http.IncomingMessage) => req.headers.authorization === "Bearer local-secret");
++	const authorized = vi.fn((req: http.IncomingMessage) => req.headers.authorization === "Bearer local-secret" || (browserCookie && req.headers.cookie === "desktop_test=test"));
+ 	const app = express();
+ 	const desktop = createDeviceDesktop({
+ 		app,
+@@ -245,7 +245,7 @@ describe("native desktop through device relay and connector", () => {
+ 	it.skipIf(!CHROME_PATH)(
+ 		"keeps native control connected when browser pointer movement has button=-1",
+ 		async () => {
+-			const f = await fixture();
++			const f = await fixture(true);
+ 			const browser = await chromium.launch({
+ 				executablePath: CHROME_PATH,
+ 				headless: true,
+@@ -254,6 +254,7 @@ describe("native desktop through device relay and connector", () => {
+ 			});
+ 			cleanups.push(() => browser.close());
+ 			const page = await browser.newPage({ extraHTTPHeaders: { authorization: "Bearer local-secret" } });
++			await page.context().addCookies([{name: "desktop_test", value: "test", url: `http://127.0.0.1:${f.localPort}`}]);
+ 			await page.goto(`http://127.0.0.1:${f.localPort}/desktop`);
+ 			expect(await page.locator("#text").getAttribute("maxlength")).toBe("2048");
+ 			expect(await page.locator("#viewonly").isChecked()).toBe(false);
+diff --git a/tests/unit/tunnel-plugin.test.ts b/tests/unit/tunnel-plugin.test.ts
+index ab5a7004..083ca865 100644
+--- a/tests/unit/tunnel-plugin.test.ts
++++ b/tests/unit/tunnel-plugin.test.ts
+@@ -95,7 +95,7 @@ describe("sanitizeMeshTo (Mesh 跨设备注入与路径穿越防御)", () => {
+ });
+ 
+ describe("isRestrictedBrowsePath (目录浏览枚举边界)", () => {
+-	const home = os.homedir();
++	const home = path.join(os.tmpdir(), "pi-web-test-home");
+ 
+ 	it("允许用户主目录及子目录", () => {
+ 		expect(isRestrictedBrowsePath(home, home)).toBe(false);

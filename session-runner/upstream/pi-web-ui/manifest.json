@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "upstream": {
     "repository": "https://github.com/xing-shuyin/pi-web-ui",
-    "commit": "4470926eb0e7619e9d555f8d86061c562e23e605",
-    "packageVersion": "0.85.0",
-    "archiveUrl": "https://github.com/xing-shuyin/pi-web-ui/archive/4470926eb0e7619e9d555f8d86061c562e23e605.tar.gz",
-    "archiveSha256": "fb8b4c69d684a351c3446d0fff3fc02351cada380d0fa3fcc665c7b1f1f10382",
+    "commit": "3ddf35f91820440cd8f612a16a48bad374d8f8af",
+    "packageVersion": "0.120.0",
+    "archiveUrl": "https://github.com/xing-shuyin/pi-web-ui/archive/3ddf35f91820440cd8f612a16a48bad374d8f8af.tar.gz",
+    "archiveSha256": "afae8beeb563a3856c945984a73a569d58fbd2af857828117bb295ddc5522d35",
     "files": {
-      "package.json": "1da264661ce356be83b4e1c78295845cd8d6a4dd092d51b64600a7b5f042d5c0",
-      "package-lock.json": "fd2dc0078e2bed6589e37b1c173c491b913631254af312b19a6a2e3591388034",
-      "LICENSE": "94eaeecd542b4eac55480f4043c5045ac7b70be4f9e1e0b3f6574b1a745a4e6c"
+      "package.json": "ad3151cbb0bb18ebe41ab9a5f669dbc43fa3f5d782d7f5b56942b068d043b275",
+      "package-lock.json": "f1c4f85920f2f3751af8a8d98847d9be14a98ace3f866c35a8df1dae90326567",
+      "LICENSE": "a8068b68c721f3c80c9e17ecf31b325e12e85cb4da9be5b48bd60f36b1ff039c"
     }
   },
   "piSdk": {
     "package": "@earendil-works/pi-coding-agent",
-    "version": "0.85.1",
-    "integrity": "sha512-FGRN+OHbWaefBPGaTggAdLjrIHW+s2PzLyglz/5dfLzb9of7uuXMXYC0fJIeZTw+shS32o2cuQ9jF7YSDuL/oQ=="
+    "version": "1.5.2",
+    "integrity": "sha512-mUWI04rqF1Vd/m1q+Ps1XeWsTXEVvRUnsmRa83I3Dzua0Tx5bYS93imeqtIfrXf7PkkaR6ERz+AuQhIJlom5yA=="
   },
   "piMcpAdapter": {
     "package": "pi-mcp-adapter",
@@ -32,9 +32,10 @@
     "webBasePath": "/agent/",
     "commands": [
       "npm ci",
+      "npm ci --ignore-scripts --prefix mobile",
       "npm run typecheck",
-      "npm test",
-      "npm run build"
+      "npm run build",
+      "npm test"
     ],
     "runtimeRoot": "/opt/mapache/pi-web-ui"
   },
@@ -62,20 +63,12 @@
     "patches/0021-shared-workspace-request-chats.patch",
     "patches/0029-workspace-request-model-and-chat.patch",
     "patches/0030-workspace-request-bind.patch",
-    "patches/0031-workspace-request-metadata.patch",
-    "patches/0032-workspace-request-agent-fields.patch",
-    "patches/0033-workspace-request-quiesce.patch",
-    "patches/0034-workspace-request-active-count.patch",
-    "patches/0035-workspace-request-client-counts.patch",
-    "patches/0036-workspace-request-agent-service.patch",
-    "patches/0037-workspace-request-control-methods.patch",
-    "patches/0022-workspace-request-dispose.patch",
-    "patches/0026-workspace-request-agent-tools.patch",
-    "patches/0027-workspace-request-client-catalog.patch",
     "patches/0024-workspace-request-control-socket.patch",
     "patches/0025-workspace-request-control-test.patch",
     "patches/0038-workspace-request-model-catalog.patch",
     "patches/0039-workspace-request-saved-model.patch",
-    "patches/0040-workspace-request-readiness.patch"
+    "patches/0040-workspace-request-readiness.patch",
+    "patches/0041-upstream-runtime-compatibility.patch",
+    "patches/0042-upstream-build-regressions.patch"
   ]
 }
