@@ -304,7 +304,8 @@ assert.deepStrictEqual(terminalCommandEnv({
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
   });
   assert.strictEqual(service.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
-  assert.strictEqual(service.template.scaling.minInstanceCount, 1);
+  assert.deepStrictEqual(service.scaling, {minInstanceCount: 1, maxInstanceCount: 1});
+  assert.strictEqual(service.template.scaling.minInstanceCount, 0);
   assert.strictEqual(service.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(service.template.containers[0].resources.limits.cpu, "1");
   assert.strictEqual(service.template.containers[0].resources.cpuIdle, undefined);
@@ -325,7 +326,8 @@ assert.deepStrictEqual(terminalCommandEnv({
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
   }, {storage: markedStorage.storage});
-  assert.strictEqual(markedService.template.scaling.minInstanceCount, 1);
+  assert.deepStrictEqual(markedService.scaling, {minInstanceCount: 1, maxInstanceCount: 1});
+  assert.strictEqual(markedService.template.scaling.minInstanceCount, 0);
   assert.strictEqual(markedService.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
@@ -403,7 +405,8 @@ assert.deepStrictEqual(terminalCommandEnv({
     terminalKind: "pi",
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
   }, {restart: true});
-  assert.strictEqual(patch.template.scaling.minInstanceCount, 1);
+  assert.deepStrictEqual(patch.scaling, {minInstanceCount: 1, maxInstanceCount: 1});
+  assert.strictEqual(patch.template.scaling.minInstanceCount, 0);
   assert.strictEqual(patch.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
@@ -438,6 +441,35 @@ assert.deepStrictEqual(terminalCommandEnv({
   }, {}, {storage: storageFixture().storage});
   assert.strictEqual(markedPatch.template.containers[0].resources.cpuIdle, false);
   assert.deepStrictEqual(markedPatch.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}, {name: "workspace-uploads", mountPath: "/uploads"}]);
+
+  // Existing services must actually receive both scaling changes on resize/restart.
+  for (const restart of [false, true]) {
+    let patchRequest;
+    const updates = [];
+    const scalingClient = {request: async (request) => {
+      if (request.method === "PATCH") {
+        patchRequest = request;
+        return {data: {done: true}};
+      }
+      return {data: {uri: "https://runner.example", template: {containers: [{image: "runner:latest"}]}}};
+    }};
+    await createCloudRunService({auth: {getClient: async () => scalingClient}}).patchSessionService({
+      update: async (update) => updates.push(update),
+    }, {
+      serviceName: "projects/p/locations/us-central1/services/scaling-test",
+      image: "runner:latest",
+      resources: {cpu: "1", memory: "1Gi"},
+      terminalKind: "pi",
+      capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
+    }, {restart});
+    assert.ok(patchRequest, "Cloud Run patch was sent");
+    const mask = new URL(patchRequest.url).searchParams.get("updateMask").split(",");
+    assert.ok(mask.includes("scaling"), "service-level keep-warm settings are applied");
+    assert.ok(mask.includes("template.scaling"), "legacy revision minimum is cleared");
+    assert.deepStrictEqual(patchRequest.data.scaling, {minInstanceCount: 1, maxInstanceCount: 1});
+    assert.strictEqual(patchRequest.data.template.scaling.minInstanceCount, 0);
+    assert.strictEqual(updates.at(-1).status, "running");
+  }
 
   let operationPolls = 0;
   const delayedUpdates = [];

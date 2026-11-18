@@ -425,7 +425,7 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
       isMarkedRuntimeSession(session) ?
         "template.containers.resources,template.serviceAccount" :
         "template.containers.resources.limits,template.serviceAccount") + storageMask +
-      (storageMask ? "" : automationOutputMask);
+      (storageMask ? "" : automationOutputMask) + ",scaling,template.scaling";
     const response = await client.request({
       url: `${url}?updateMask=${encodeURIComponent(updateMask)}`,
       method: "PATCH",
@@ -586,11 +586,12 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
     ...(Object.keys(cloudRunServiceLabels(session)).length ? {
       labels: cloudRunServiceLabels(session),
     } : {}),
+    scaling: {minInstanceCount: 1, maxInstanceCount: 1},
     template: {
       ...storageTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
-        minInstanceCount: 1,
+        minInstanceCount: 0,
         maxInstanceCount: 1,
       },
       containers: [container],
@@ -626,11 +627,12 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
     ...(storageTemplate.containers?.[0] || {}),
   };
   return {
+    scaling: {minInstanceCount: 1, maxInstanceCount: 1},
     template: {
       ...storageTemplate,
       serviceAccount: requireRunnerServiceAccount(session),
       scaling: {
-        minInstanceCount: 1,
+        minInstanceCount: 0,
         maxInstanceCount: 1,
       },
       containers: [container],
