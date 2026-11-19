@@ -83,6 +83,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function restoreCheckpoint() {
+    if (config.startupSmoke) return {ok: true, skipped: true, reason: "startup_smoke"};
     if (!config.agentRuntimeEnabled || !checkpointRestore?.restoreCheckpoint) {
       return {ok: true, skipped: true};
     }

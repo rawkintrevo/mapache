@@ -1,18 +1,124 @@
 substitutions:
   _IMAGE: us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
-  _RESOLUTION_KEY: local
+  _CACHE_BUCKET: pi-agents-cloud-build-cache
+  _CACHE_PREFIX: pi-web-ui
 
 steps:
-  - name: gcr.io/cloud-builders/docker
+  - name: node:24-bookworm-slim
+    id: resolve-pi-web-ui-build-inputs
+    entrypoint: bash
     args:
-      - build
-      - -f
-      - Dockerfile.pi-chrome
-      - -t
-      - ${_IMAGE}
-      - --build-arg
-      - MAPACHE_BUILD_RESOLUTION_KEY=${_RESOLUTION_KEY}
-      - .
+      - -ceu
+      - |
+        apt-get update
+        apt-get install -y --no-install-recommends git
+        node upstream/pi-web-ui/buildInputs.mjs \
+          --output pi-web-ui-build-inputs.json \
+          --key-output pi-web-ui-cache-key
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: restore-pi-web-ui-cache
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        key="$$(cat pi-web-ui-cache-key)"
+        cache_uri="gs://${_CACHE_BUCKET}/${_CACHE_PREFIX}/$${key}.tar.gz"
+        printf '%s\n' "$${cache_uri}" > pi-web-ui-cache-uri
+        : > pi-web-ui-cache.tar.gz
+        if gcloud storage cp "$${cache_uri}" pi-web-ui-cache.tar.gz; then
+          echo "pi-web-ui cache lookup: hit key=$${key} uri=$${cache_uri}"
+        else
+          echo "pi-web-ui cache lookup: miss key=$${key} uri=$${cache_uri}"
+        fi
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-pi-chrome
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        key="$$(cat pi-web-ui-cache-key)"
+        docker build \
+          -f Dockerfile.pi-chrome \
+          -t "${_IMAGE}" \
+          --build-arg "MAPACHE_BUILD_RESOLUTION_KEY=$${key}" \
+          .
+
+  - name: gcr.io/cloud-builders/docker
+    id: smoke-test-pi-web-ui
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        container="mapache-pi-web-ui-smoke"
+        docker rm -f "$${container}" >/dev/null 2>&1 || true
+        docker run -d --name "$${container}" \
+          -e MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1 \
+          -e MAPACHE_STARTUP_SMOKE=1 \
+          -e MAPACHE_AGENT_RUNTIME_GENERATION=smoke \
+          -e MAPACHE_PI_MODEL_CATALOG_REFRESH=false \
+          -e RUNNER_CAPABILITIES='{"terminal":false,"preview":false,"previewQa":false,"functions":false,"chrome":false}' \
+          -e SESSION_ID=pi-web-ui-smoke \
+          -e SESSION_BROWSER_TOKEN_SECRET=pi-web-ui-smoke-secret \
+          "${_IMAGE}" >/dev/null
+        trap 'docker rm -f "$${container}" >/dev/null 2>&1 || true' EXIT
+        if ! docker exec "$${container}" node /app/bin/pi-web-ui-smoke.js; then
+          docker logs "$${container}" || true
+          exit 1
+        fi
+
+  - name: gcr.io/cloud-builders/docker
+    id: extract-pi-web-ui-runtime
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        rm -rf pi-web-ui-runtime
+        container="$$(docker create "${_IMAGE}")"
+        trap 'docker rm "$${container}" >/dev/null 2>&1 || true' EXIT
+        docker cp "$${container}:/opt/mapache/pi-web-ui" pi-web-ui-runtime
+
+  - name: node:24-bookworm-slim
+    id: package-pi-web-ui-cache
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        key="$$(cat pi-web-ui-cache-key)"
+        identity="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync("pi-web-ui-runtime/build-info.json", "utf8")).cacheIdentitySha256 || "")')"
+        decision="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync("pi-web-ui-runtime/build-info.json", "utf8")).cacheDecision?.status || "unknown")')"
+        printf '%s\n' "$${decision}" > pi-web-ui-cache-publish-decision
+        echo "pi-web-ui cache decision=$${decision} key=$${key}"
+        if [ "$${decision}" = "miss" ]; then
+          node upstream/pi-web-ui/artifactCache.mjs pack \
+            --runtime-dir pi-web-ui-runtime \
+            --output pi-web-ui-cache.tar.gz \
+            --expected-key "$${key}" \
+            --expected-identity "$${identity}"
+        fi
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: publish-pi-web-ui-cache
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        decision="$$(cat pi-web-ui-cache-publish-decision)"
+        key="$$(cat pi-web-ui-cache-key)"
+        cache_uri="$$(cat pi-web-ui-cache-uri)"
+        if [ "$${decision}" != "miss" ]; then
+          echo "pi-web-ui cache publication skipped: decision=$${decision} key=$${key}"
+          exit 0
+        fi
+        if gcloud storage cp --if-generation-match=0 pi-web-ui-cache.tar.gz "$${cache_uri}"; then
+          echo "pi-web-ui cache published: key=$${key} uri=$${cache_uri}"
+        elif gcloud storage objects describe "$${cache_uri}" >/dev/null 2>&1; then
+          echo "pi-web-ui cache already published by another build: key=$${key} uri=$${cache_uri}"
+        else
+          echo "unable to publish pi-web-ui cache: key=$${key} uri=$${cache_uri}" >&2
+          exit 1
+        fi
 
 images:
   - ${_IMAGE}

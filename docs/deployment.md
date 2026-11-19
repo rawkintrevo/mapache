@@ -147,6 +147,26 @@ port 8080. This behavior is owned by `functions/cloudRun.service.js` and
 `functions/provisioning.worker.js` and requires a Functions deployment; it does
 not require rebuilding `pi-chrome`.
 
+The catalog exposes one supported runner image, `pi-chrome`. The checked-in
+Cloud Build file uses a private content-addressed cache for the validated
+pi-web-ui runtime. Provision the cache bucket once before the first build and
+grant the Cloud Build service account object viewer/creator access without
+delete or overwrite access:
+
+```bash
+gcloud storage buckets create gs://pi-agents-cloud-build-cache \
+  --project pi-agents-cloud --location us-central1 \
+  --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets add-iam-policy-binding gs://pi-agents-cloud-build-cache \
+  --member=serviceAccount:$(gcloud projects describe pi-agents-cloud \
+    --format='value(projectNumber)')@cloudbuild.gserviceaccount.com \
+  --role=roles/storage.objectViewer --project pi-agents-cloud
+gcloud storage buckets add-iam-policy-binding gs://pi-agents-cloud-build-cache \
+  --member=serviceAccount:$(gcloud projects describe pi-agents-cloud \
+    --format='value(projectNumber)')@cloudbuild.gserviceaccount.com \
+  --role=roles/storage.objectCreator --project pi-agents-cloud
+```
+
 The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash

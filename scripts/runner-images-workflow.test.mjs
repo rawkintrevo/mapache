@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 
 const workflow = await readFile(new URL("../.github/workflows/runner-images.yml", import.meta.url), "utf8");
+const cloudbuild = await readFile(new URL("../session-runner/cloudbuild.pi-chrome.yaml", import.meta.url), "utf8");
+const dockerfile = await readFile(new URL("../session-runner/Dockerfile.pi-chrome", import.meta.url), "utf8");
 
 test("runner image builds avoid log streaming and wait for Cloud Build status", () => {
   assert.match(workflow, /gcloud builds submit session-runner \\\n+\s+--async/);
@@ -19,4 +21,22 @@ test("runner image digest lookup happens only after a successful build", () => {
   assert.ok(digestIndex > successIndex);
   assert.match(workflow, /Cloud Build: \$build_url/);
   assert.match(workflow, /digest=\$digest source=\$GITHUB_SHA build=\$build_url/);
+});
+
+test("runner image builds resolve and verify the pi-web-ui cache before packaging", () => {
+  assert.match(cloudbuild, /buildInputs\.mjs[\s\S]+--key-output pi-web-ui-cache-key/);
+  assert.match(cloudbuild, /gcloud storage cp "\$\$\{cache_uri\}" pi-web-ui-cache\.tar\.gz/);
+  assert.match(dockerfile, /--cache-archive \/app\/pi-web-ui-cache\.tar\.gz/);
+  assert.match(cloudbuild, /artifactCache\.mjs pack/);
+  assert.match(cloudbuild, /--if-generation-match=0/);
+});
+
+test("runner image publication is gated by the pi-web-ui page and bundle smoke test", () => {
+  const smokeIndex = cloudbuild.indexOf("id: smoke-test-pi-web-ui");
+  const imageIndex = cloudbuild.indexOf("images:");
+  assert.ok(smokeIndex >= 0);
+  assert.ok(imageIndex > smokeIndex);
+  assert.match(cloudbuild, /pi-web-ui-smoke\.js/);
+  assert.match(cloudbuild, /MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1/);
+  assert.match(cloudbuild, /MAPACHE_STARTUP_SMOKE=1/);
 });

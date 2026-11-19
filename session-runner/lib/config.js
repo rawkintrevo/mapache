@@ -154,6 +154,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     agentAccessAudience: "agent",
     agentRuntimeEnabled,
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
+    startupSmoke: envFlag(process.env.MAPACHE_STARTUP_SMOKE),
     automationAgentApiUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_API_URL),
     automationAgentSocketPath,
     automationAgentTokenUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_TOKEN_URL),

@@ -6,6 +6,7 @@ import {tmpdir} from "node:os";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {spawn} from "node:child_process";
+import {restoreCacheArtifact, updateCacheDecision} from "./artifactCache.mjs";
 import {resolveLatestPackage, resolvePackageAtVersion, resolveStableRelease} from "./releaseResolver.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -216,13 +217,16 @@ function adapterMetadata(manifest) {
 	};
 }
 
-function writeBuildInfo(sourceDir, manifest, release, sourceFiles, sdk, piAi, adapter) {
+function writeBuildInfo(sourceDir, manifest, release, sourceFiles, sdk, piAi, adapter, cache = {}) {
 	const info = {
 		schemaVersion: 2,
 		upstreamCommit: release.commit,
 		packageVersion: release.version,
 		piSdkVersion: sdk.version,
 		piMcpAdapterVersion: adapter.version,
+		cacheKey: cache.key || null,
+		cacheIdentitySha256: cache.identitySha256 || null,
+		cacheDecision: cache.decision || {status: "disabled", reason: "no-build-inputs"},
 		upstream: {
 			repository: release.repository,
 			channel: release.channel,
@@ -256,7 +260,16 @@ function copyRuntime(sourceDir, outputDir, manifest) {
 }
 
 function parseArgs(argv) {
-	const options = {manifestPath: MANIFEST_PATH, outputDir: "", sourceDir: "", workDir: "", verifyOnly: false, skipTests: false};
+	const options = {
+		manifestPath: MANIFEST_PATH,
+		outputDir: "",
+		sourceDir: "",
+		workDir: "",
+		buildInputsPath: "",
+		cacheArchivePath: "",
+		verifyOnly: false,
+		skipTests: false,
+	};
 	for (let index = 0; index < argv.length; index++) {
 		const arg = argv[index];
 		if (arg === "--verify-only") options.verifyOnly = true;
@@ -265,6 +278,8 @@ function parseArgs(argv) {
 		else if (arg === "--output-dir") options.outputDir = argv[++index] || fail("--output-dir requires a path");
 		else if (arg === "--source-dir") options.sourceDir = argv[++index] || fail("--source-dir requires a path");
 		else if (arg === "--work-dir") options.workDir = argv[++index] || fail("--work-dir requires a path");
+		else if (arg === "--build-inputs") options.buildInputsPath = argv[++index] || fail("--build-inputs requires a path");
+		else if (arg === "--cache-archive") options.cacheArchivePath = argv[++index] || fail("--cache-archive requires a path");
 		else fail("unknown option: " + arg);
 	}
 	if (!options.verifyOnly && !options.outputDir) fail("--output-dir is required unless --verify-only is used");
@@ -281,12 +296,13 @@ function resolvedReleaseShape(release) {
 export async function buildUpstream(options = {}) {
 	const manifest = readManifest(options.manifestPath || MANIFEST_PATH);
 	const fetchImpl = options.fetchImpl || globalThis.fetch;
+	const buildInputs = readBuildInputs(options.buildInputsPath);
 	const workDir = options.workDir ? resolve(options.workDir) : mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-"));
 	const sourceDir = options.sourceDir ? resolve(options.sourceDir) : join(workDir, "source");
 	const ownsWorkDir = !options.workDir;
 	try {
 		mkdirSync(workDir, {recursive: true});
-		const release = resolvedReleaseShape(options.resolvedRelease || await resolveStableRelease({manifest, fetchImpl}));
+		const release = resolvedReleaseShape(options.resolvedRelease || buildInputs?.release || await resolveStableRelease({manifest, fetchImpl}));
 		let resolvedSource = release;
 		if (options.sourceDir) {
 			await verifyCommitMarker(sourceDir, release);
@@ -295,6 +311,9 @@ export async function buildUpstream(options = {}) {
 			mkdirSync(sourceDir, {recursive: true});
 			const body = await download(release.archiveUrl, sourceArchive, fetchImpl);
 			resolvedSource = {...release, archiveSha256: sha256Buffer(body)};
+			if (buildInputs?.release?.archiveSha256 && buildInputs.release.archiveSha256 !== resolvedSource.archiveSha256) {
+				fail("resolved source archive changed after cache-key computation");
+			}
 			await run("tar", ["-xzf", sourceArchive, "-C", sourceDir, "--strip-components=1"], {stdio: "pipe"});
 			writeFileSync(join(sourceDir, ".mapache-source-commit"), JSON.stringify({
 				tag: release.tag,
@@ -313,7 +332,7 @@ export async function buildUpstream(options = {}) {
 			};
 		}
 
-		const sdk = await resolveLatestPackage({
+		const sdk = options.resolvedSdk || buildInputs?.piSdk || await resolveLatestPackage({
 			packageName: manifest.piSdk.package,
 			fetchImpl,
 		});
@@ -334,6 +353,76 @@ export async function buildUpstream(options = {}) {
 			fetchImpl,
 		});
 		const adapter = adapterMetadata(manifest);
+		const cacheKey = buildInputs?.cacheKey || null;
+		const cacheIdentitySha256 = buildInputs?.identitySha256 || null;
+		const cacheLookupStartedAt = Date.now();
+		let cacheDecision = {
+			status: "disabled",
+			reason: options.skipTests ? "tests-skipped" : "no-build-inputs",
+			elapsedMs: 0,
+		};
+		const webBasePath = manifest.build?.webBasePath;
+		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
+			fail("manifest build.webBasePath must be a single slash-delimited path");
+		}
+		if (!options.skipTests && cacheKey && options.cacheArchivePath) {
+			const cached = await restoreCacheArtifact({
+				archivePath: options.cacheArchivePath,
+				outputDir: options.outputDir,
+				expectedKey: cacheKey,
+				expectedIdentitySha256: cacheIdentitySha256,
+				requiredRuntimeEntries: manifest.build.runtimeEntries,
+			});
+			cacheDecision = {
+				status: cached.status,
+				reason: cached.reason,
+				elapsedMs: cached.elapsedMs,
+			};
+			console.log(`pi-web-ui cache decision=${cached.status} reason=${cached.reason} key=${cacheKey} elapsedMs=${cached.elapsedMs}`);
+			if (cached.status === "hit") {
+				const expectedBuildInfo = cached.buildInfo || {};
+				if (expectedBuildInfo.upstreamCommit !== resolvedSource.commit ||
+					expectedBuildInfo.packageVersion !== resolvedSource.version ||
+					expectedBuildInfo.piSdkVersion !== sdk.version ||
+					expectedBuildInfo.piAi?.version !== installedPiAi.version ||
+					expectedBuildInfo.piMcpAdapterVersion !== adapter.version) {
+					rmSync(resolve(options.outputDir), {recursive: true, force: true});
+					cacheDecision = {
+						status: "miss",
+						reason: "cached-build-info-metadata-mismatch",
+						elapsedMs: Date.now() - cacheLookupStartedAt,
+					};
+					console.log(`pi-web-ui cache decision=miss reason=${cacheDecision.reason} key=${cacheKey} elapsedMs=${cacheDecision.elapsedMs}`);
+				} else {
+					updateCacheDecision(options.outputDir, cacheDecision);
+					return {
+						commit: resolvedSource.commit,
+						tag: resolvedSource.tag,
+						packageVersion: resolvedSource.version,
+						piSdkVersion: sdk.version,
+						piAiVersion: installedPiAi.version,
+						piMcpAdapterVersion: adapter.version,
+						outputDir: resolve(options.outputDir),
+						cache: cacheDecision,
+						cacheKey,
+					};
+				}
+			}
+		}
+		const buildStartedAt = Date.now();
+		await run("npm", ["run", "typecheck"], {cwd: sourceDir});
+		await run("npm", ["run", "build"], {
+			cwd: sourceDir,
+			env: {...process.env, PI_WEB_BASE_PATH: webBasePath},
+		});
+		if (!options.skipTests) await run("npm", ["test"], {
+			cwd: sourceDir,
+			env: {...process.env, HOME: "/tmp/mapache-build-home", LC_ALL: ""},
+		});
+		cacheDecision = {
+			...cacheDecision,
+			buildElapsedMs: Date.now() - buildStartedAt,
+		};
 		writeBuildInfo(sourceDir, manifest, resolvedSource, sourceFiles, {
 			package: sdk.package,
 			version: installedSdk.version,
@@ -348,19 +437,10 @@ export async function buildUpstream(options = {}) {
 			tarball: piAi.tarball,
 			registryUrl: piAi.registryUrl,
 			resolvedAt: piAi.resolvedAt,
-		}, adapter);
-		const webBasePath = manifest.build?.webBasePath;
-		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
-			fail("manifest build.webBasePath must be a single slash-delimited path");
-		}
-		await run("npm", ["run", "typecheck"], {cwd: sourceDir});
-		await run("npm", ["run", "build"], {
-			cwd: sourceDir,
-			env: {...process.env, PI_WEB_BASE_PATH: webBasePath},
-		});
-		if (!options.skipTests) await run("npm", ["test"], {
-			cwd: sourceDir,
-			env: {...process.env, HOME: "/tmp/mapache-build-home", LC_ALL: ""},
+		}, adapter, {
+			key: cacheKey,
+			identitySha256: cacheIdentitySha256,
+			decision: cacheDecision,
 		});
 		const outputDir = resolve(options.outputDir);
 		copyRuntime(sourceDir, outputDir, manifest);
@@ -372,9 +452,26 @@ export async function buildUpstream(options = {}) {
 			piAiVersion: installedPiAi.version,
 			piMcpAdapterVersion: adapter.version,
 			outputDir,
+			cache: cacheDecision,
+			cacheKey,
 		};
 	} finally {
 		if (ownsWorkDir) rmSync(workDir, {recursive: true, force: true});
+	}
+}
+
+function readBuildInputs(buildInputsPath) {
+	if (!buildInputsPath) return null;
+	try {
+		const inputs = JSON.parse(readFileSync(resolve(buildInputsPath), "utf8"));
+		if (inputs?.schemaVersion !== 1 || !inputs.cacheKey || !inputs.identitySha256 || !inputs.release || !inputs.piSdk) {
+			console.log("pi-web-ui build inputs are unavailable or stale; cache disabled for this build");
+			return null;
+		}
+		return inputs;
+	} catch (error) {
+		console.log(`pi-web-ui build inputs could not be read; cache disabled: ${error.message}`);
+		return null;
 	}
 }
 

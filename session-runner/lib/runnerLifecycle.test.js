@@ -186,6 +186,36 @@ test("managed startup launches pi-web-ui after materialization and stops it firs
   assert.equal(events.at(-1), "workspaceAuthority.release:shutdown");
 });
 
+test("startup smoke launches the managed UI without persistence lifecycle work", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    config: {agentRuntimeEnabled: true, startupSmoke: true},
+    checkpointScheduler: {
+      start: () => events.push("checkpointScheduler.start"),
+      stop: () => events.push("checkpointScheduler.stop"),
+      finalize: async () => events.push("checkpointScheduler.finalize"),
+    },
+    chromeProfileSnapshots: {
+      enabled: () => false,
+      finalize: async () => events.push("chromeProfileSnapshots.finalize"),
+      start: () => events.push("chromeProfileSnapshots.start"),
+      stop: async () => events.push("chromeProfileSnapshots.stop"),
+    },
+    piWebUi: {
+      start: async () => events.push("piWebUi.start"),
+      quiesce: async () => events.push("piWebUi.quiesce"),
+      stop: async () => events.push("piWebUi.stop"),
+    },
+  });
+
+  await lifecycle.start();
+  assert.equal(events.includes("checkpointScheduler.start"), false);
+  assert.equal(events.includes("chromeProfileSnapshots.start"), false);
+  await lifecycle.shutdown();
+  assert.equal(events.includes("checkpointScheduler.finalize"), false);
+  assert.equal(events.includes("workspaceSync.syncUp"), false);
+});
+
 test("automation execution starts only after Pi admission and stops before upstream quiesce", async () => {
   const events = [];
   const lifecycle = createLifecycleHarness(events, {
