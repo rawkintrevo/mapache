@@ -157,13 +157,13 @@ delete or overwrite access:
 gcloud storage buckets create gs://pi-agents-cloud-build-cache \
   --project pi-agents-cloud --location us-central1 \
   --uniform-bucket-level-access --public-access-prevention
+BUILD_SERVICE_ACCOUNT="$(gcloud builds get-default-service-account \
+  --project pi-agents-cloud)"
 gcloud storage buckets add-iam-policy-binding gs://pi-agents-cloud-build-cache \
-  --member=serviceAccount:$(gcloud projects describe pi-agents-cloud \
-    --format='value(projectNumber)')@cloudbuild.gserviceaccount.com \
+  --member="serviceAccount:${BUILD_SERVICE_ACCOUNT}" \
   --role=roles/storage.objectViewer --project pi-agents-cloud
 gcloud storage buckets add-iam-policy-binding gs://pi-agents-cloud-build-cache \
-  --member=serviceAccount:$(gcloud projects describe pi-agents-cloud \
-    --format='value(projectNumber)')@cloudbuild.gserviceaccount.com \
+  --member="serviceAccount:${BUILD_SERVICE_ACCOUNT}" \
   --role=roles/storage.objectCreator --project pi-agents-cloud
 ```
 
