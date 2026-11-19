@@ -23,6 +23,18 @@ that the user separately chose every transport parameter.
 
 ## Engineering defaults — implement without reopening design
 
+### Superseding release policy — issue #578
+
+The original fixed v0.85 compatibility point is historical. New `pi-chrome`
+images resolve the current stable pi-web-ui GitHub release and the latest
+embedded coding-agent SDK at image-build time, record the resolved identities
+in `build-info.json`, and fail closed when the managed integration patch or
+runtime compatibility contract does not apply. The managed MCP adapter remains
+an explicit version/anchor contract because Mapache mutates that package.
+See [the release-resolution audit](../../pi-web-ui-release-resolution.md) for
+the patch-by-patch disposition and rollout evidence. Existing sessions still
+require a new runner revision to receive a successful image build.
+
 - Pin upstream commit `4470926eb0e7619e9d555f8d86061c562e23e605`, package version `0.85.0`. Use a checked-in lock/patch manifest and a reproducible fetched source build under the runner build context. No Git submodule or whole upstream source vendoring; no startup downloads. Use Node 24 and retain license attribution.
 - Keep upstream React in an iframe. Serve it at `/agent/` through the existing runner gateway to `127.0.0.1:8787`. Use upstream subpath helpers where available. Disable its service worker for the embedded managed build.
 - Keep Pi as the only upstream engine. No DSH exposure. Keep managed update/plugin-marketplace restrictions; ordinary agent skills/extensions remain configurable through upstream's supported settings.

@@ -8,7 +8,10 @@ RUN apt-get update \
   && python3 --version \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent \
+ARG MAPACHE_BUILD_RESOLUTION_KEY=local
+
+RUN echo "Mapache build resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+  && npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent \
   && pi --version
 
 RUN pi install npm:pi-mcp-adapter@2.32.1
@@ -19,7 +22,8 @@ COPY package*.json ./
 RUN npm install --omit=dev \
   && npm install -g @playwright/test
 COPY upstream ./upstream
-RUN node /app/upstream/pi-web-ui/build.mjs --output-dir /opt/mapache/pi-web-ui
+RUN echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+  && MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs --output-dir /opt/mapache/pi-web-ui
 COPY server.js ./
 COPY bin ./bin
 COPY lib ./lib

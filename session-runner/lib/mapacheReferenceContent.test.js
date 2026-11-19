@@ -17,7 +17,7 @@ test("operating reference stays bounded and all detailed skill paths ship in the
   assert.match(dockerfile, /^COPY reference \.\/reference$/m);
   assert.match(dockerfile, /^COPY seeded-skills \.\/seeded-skills$/m);
   const manifest = JSON.parse(fs.readFileSync(path.join(runnerRoot, "upstream", "pi-web-ui", "manifest.json"), "utf8"));
-  assert.ok(manifest.patches.includes("patches/0016-managed-operating-reference.patch"));
+  assert.ok(manifest.patches.includes("patches/managed-v0121.patch"));
   const links = [...reference.matchAll(/`\/app\/(seeded-skills\/[^`]+\/SKILL\.md)`/g)];
   assert.equal(new Set(links.map(([, relativePath]) => relativePath)).size, 8);
   for (const [, relativePath] of links) {

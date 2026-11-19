@@ -40,6 +40,16 @@ of an interrupted tool process or an unsaved model turn after a container crash.
 
 ## Upstream baseline and maintenance
 
+### Superseding release policy — issue #578
+
+The reviewed v0.85 baseline below is retained as historical context. The
+active builder now resolves the current stable GitHub release at image-build
+time, resolves the embedded coding-agent SDK from npm `latest`, records the
+actual release/SDK/pi-ai identities, and fails closed when the audited managed
+integration cannot be applied. The managed MCP adapter remains an explicit
+version/anchor contract. See [the current release-resolution audit](../pi-web-ui-release-resolution.md)
+for the v0.121 port, patch dispositions, and verification evidence.
+
 Reviewed [pi-web-ui](https://github.com/xing-shuyin/pi-web-ui) at the validated
 compatibility point commit
 `4470926eb0e7619e9d555f8d86061c562e23e605` (package version `0.85.0`). It uses
