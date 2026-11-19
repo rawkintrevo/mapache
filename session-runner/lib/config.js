@@ -44,6 +44,9 @@ function normalizePreviewBasePath(value) {
 const {AUTOMATION_STORAGE_MODE, isAutomationStorageMode} = require("./automationStorage.helpers");
 
 const PI_MCP_ADAPTER_VERSION = "2.32.1";
+const PI_MODEL_CATALOG_URL = "https://pi.dev/api/models?types=chat%2Cimage%2Cclassifier";
+const PI_MODEL_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const PI_MODEL_CATALOG_TIMEOUT_MS = 4_000;
 
 function parseRunnerCapabilities() {
   const fallback = {terminal: true, preview: true, previewQa: true, functions: true, chrome: true};
@@ -237,6 +240,14 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     piHomeDir,
     piMcpAdapterPath,
     piMcpAdapterVersion: PI_MCP_ADAPTER_VERSION,
+    piModelCatalogCachePath: normalizeEnvString(process.env.MAPACHE_PI_MODEL_CATALOG_CACHE_PATH),
+    piModelCatalogRefreshEnabled: envFlag(process.env.MAPACHE_PI_MODEL_CATALOG_REFRESH, true),
+    piModelCatalogRefreshIntervalMs: positiveNumber(
+        process.env.MAPACHE_PI_MODEL_CATALOG_REFRESH_INTERVAL_MS,
+        PI_MODEL_CATALOG_REFRESH_INTERVAL_MS,
+    ),
+    piModelCatalogTimeoutMs: positiveNumber(process.env.MAPACHE_PI_MODEL_CATALOG_TIMEOUT_MS, PI_MODEL_CATALOG_TIMEOUT_MS),
+    piModelCatalogUrl: normalizeEnvString(process.env.MAPACHE_PI_MODEL_CATALOG_URL) || PI_MODEL_CATALOG_URL,
     piSessionDir,
     piSessionJsonlPath: normalizeEnvString(process.env.PI_SESSION_JSONL_PATH),
     piWebUiDataDir,

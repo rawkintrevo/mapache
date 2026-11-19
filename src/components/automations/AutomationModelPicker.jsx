@@ -1,13 +1,27 @@
-import {useState} from "react";
-import catalog from "../../config/automationModelCatalog.json";
+import {useEffect, useMemo, useState} from "react";
+import {bundledModelCatalog, loadRemoteModelCatalog} from "../../config/remoteModelCatalog.js";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
-
-const providers = Object.keys(catalog.providers).sort((a, b) => piAuthProviderLabel(a).localeCompare(piAuthProviderLabel(b)));
 
 export function AutomationModelPicker({value, onChange, disabled = false}) {
   const providerId = value?.providerId || "";
   const modelId = value?.modelId || "";
   const [custom, setCustom] = useState(false);
+  const [catalog, setCatalog] = useState(bundledModelCatalog);
+  useEffect(() => {
+    let active = true;
+    // Vitest must keep this component deterministic and offline; production
+    // and local browser sessions refresh the public Pi catalog automatically.
+    if (import.meta.env.MODE === "test") return undefined;
+    void loadRemoteModelCatalog().then((next) => {
+      if (active) setCatalog(next);
+    }).catch(() => {
+      // The bundled catalog remains usable when pi.dev is unavailable.
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const providers = useMemo(() => Object.keys(catalog.providers).sort((a, b) => piAuthProviderLabel(a).localeCompare(piAuthProviderLabel(b))), [catalog]);
   const models = catalog.providers[providerId] || {};
   return (
     <fieldset className="automation-editor__model" disabled={disabled}>

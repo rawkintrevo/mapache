@@ -50,8 +50,9 @@ The frontend exposes top-navigation dialogs for saved authentication, generic en
 Google Workspace and GitHub connector workflows. Upstream owns model metadata,
 interactive model selection, skills, extensions, subagents, files, Git, and native Goals.
 The [automation editor](./automations.md) separately selects the provider/model
-pair stored on an automation definition, using a generated export of the pinned
-runner catalog. It does not change the interactive Agent's model or require an
+pair stored on an automation definition, using the generated export of the
+pinned runner catalog as an offline fallback and the public Pi catalog overlay
+when available. It does not change the interactive Agent's model or require an
 active runtime.
 
 ### Environment selection and provider auth

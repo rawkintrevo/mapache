@@ -10,6 +10,7 @@ const {createConnection: defaultControlConnect} = require("node:net");
 const {createWorkspaceProcessEnvironment} = require("./runnerEnvironment");
 const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 const {DEFAULT_AUTOMATION_START_TIMEOUT_MS, DEFAULT_WORKSPACE_REQUEST_MODELS_TIMEOUT_MS} = require("./piWebUiDefaults");
+const {refreshPiModelCatalog} = require("./piModelCatalogRefresh");
 
 const DEFAULT_HEALTH_INTERVAL_MS = 100;
 const DEFAULT_STARTUP_TIMEOUT_MS = 90_000;
@@ -32,6 +33,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   const controlConnectImpl = deps.controlConnect || defaultControlConnect;
   const processKillImpl = deps.processKill || process.kill.bind(process);
   const fetchImpl = deps.fetch || global.fetch;
+  const catalogFetchImpl = deps.catalogFetch || global.fetch;
   const randomBytesImpl = deps.randomBytes || randomBytes;
   const environment = deps.env || process.env;
   const now = deps.now || (() => Date.now());
@@ -137,6 +139,24 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     await fsImpl.promises.mkdir(config.piWebUiPiDir, {recursive: true, mode: 0o700});
     await fsImpl.promises.mkdir(config.piWebUiSessionDir, {recursive: true, mode: 0o700});
     if (stopping) throw publicError("pi_web_ui_start_cancelled");
+
+    if (config.piModelCatalogRefreshEnabled !== false) {
+      const catalogRefresh = await refreshPiModelCatalog({
+        cachePath: config.piModelCatalogCachePath || path.join(config.piWebUiDataDir, "model-catalog.json"),
+        fetchImpl: catalogFetchImpl,
+        fs: fsImpl,
+        logger,
+        piWebUiRoot: root,
+        refreshIntervalMs: config.piModelCatalogRefreshIntervalMs,
+        sourceUrl: config.piModelCatalogUrl,
+        timeoutMs: config.piModelCatalogTimeoutMs,
+      });
+      if (["fallback", "skipped"].includes(catalogRefresh.status) && catalogRefresh.error) {
+        logger.warn?.("Pi model catalog refresh unavailable; using bundled catalog", {
+          error: catalogRefresh.error,
+        });
+      }
+    }
 
     if (process.platform !== "win32") {
       await ensurePrivateRuntimeDirectory(path.dirname(controlSocketPath(config)), {fsImpl});
