@@ -34,8 +34,8 @@
       "npm ci",
       "npm install --no-save --package-lock=false --ignore-scripts <resolved-pi-sdk>",
       "npm run typecheck",
-      "npm test",
-      "npm run build"
+      "npm run build",
+      "npm test"
     ],
     "runtimeRoot": "/opt/mapache/pi-web-ui",
     "runtimeEntries": [

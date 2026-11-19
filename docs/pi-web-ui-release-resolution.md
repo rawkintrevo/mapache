@@ -153,6 +153,13 @@ dependencies, typecheck, production build, runtime copying, and the model
 catalog override all passed. It produced a SHA-256 archive identity and
 build-info.json.
 
+The normal builder runs the production build before npm test because the
+upstream CLI smoke tests import generated server modules. Its test subprocess
+clears inherited LC_ALL so the tests' explicit locale overrides remain
+effective. The test environment also uses a synthetic non-system HOME so the
+upstream browse-path boundary fixture can distinguish a user home from the
+explicitly blocked /root path; production runtime HOME remains unchanged.
+
 The upstream npm test command was also run in the clean patched source:
 1,099 of 1,108 files and 13,007 of 13,061 tests passed. The 14 failures were
 in unrelated desktop/canvas, plugin-output, quota, workspace-snapshot, and

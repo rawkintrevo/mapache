@@ -349,15 +349,18 @@ export async function buildUpstream(options = {}) {
 			registryUrl: piAi.registryUrl,
 			resolvedAt: piAi.resolvedAt,
 		}, adapter);
-		await run("npm", ["run", "typecheck"], {cwd: sourceDir});
-		if (!options.skipTests) await run("npm", ["test"], {cwd: sourceDir});
 		const webBasePath = manifest.build?.webBasePath;
 		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
 			fail("manifest build.webBasePath must be a single slash-delimited path");
 		}
+		await run("npm", ["run", "typecheck"], {cwd: sourceDir});
 		await run("npm", ["run", "build"], {
 			cwd: sourceDir,
 			env: {...process.env, PI_WEB_BASE_PATH: webBasePath},
+		});
+		if (!options.skipTests) await run("npm", ["test"], {
+			cwd: sourceDir,
+			env: {...process.env, HOME: "/tmp/mapache-build-home", LC_ALL: ""},
 		});
 		const outputDir = resolve(options.outputDir);
 		copyRuntime(sourceDir, outputDir, manifest);
