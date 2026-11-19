@@ -173,23 +173,28 @@ processes, loopback VNC, and CDP to be ready before it opens the session HTTP po
 this bootstrap path require a rebuilt `pi-chrome` revision; existing Cloud Run services retain
 their bundled startup behavior until restarted or recreated.
 
-The `pi-chrome` build also packages the pinned pi-web-ui runtime under
-`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` fetches
-the validated compatibility point commit
-`4470926eb0e7619e9d555f8d86061c562e23e605` (package `0.85.0`), verifies
-the source archive and package/license hashes, applies the checked-in patch
-series, runs the upstream typecheck/tests/build, and copies only generated
-runtime files plus `build-info.json` into the image. The image CLI installs
-the latest published Pi release when its Docker install layer runs (use
-`--no-cache` for local rebuilds to refresh it). The pi-web-ui lockfile retains
-Pi SDK `0.85.1` for compatibility with the managed patch series. The
-managed MCP policy remains pinned to `pi-mcp-adapter` `2.32.1` because its
-checked-in mutation patch is version/anchor strict; the image build fails
-closed if those anchors or versions drift. It does not download or install anything
-at runner startup. The generated health descriptor is safe for runtime status
-reporting. Existing Cloud Run sessions do not contain this artifact until they
-receive a new `pi-chrome` revision; see the [pi-web-ui integration checklist](./plans/pi-web-ui-tasks/README.md)
-for the revision rollout.
+The `pi-chrome` build packages the resolved pi-web-ui runtime under
+`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` resolves
+the current stable GitHub release and its tag commit once, downloads that
+archive, records its SHA-256 and source-file hashes, applies the audited
+release-specific managed integration patch, resolves the embedded Pi SDK from
+npm `latest`, and records the actual SDK and `pi-ai` identities in
+`build-info.json`. It runs the upstream typecheck/tests/build and copies only
+the generated runtime files plus the descriptor into the image. A future
+release that cannot accept the managed patch fails the candidate build; it
+does not silently fall back to the previous release. The release-resolution
+cache key is supplied by Cloud Build and includes the GitHub source/run ID in
+the repository workflow; use `--no-cache` for a local forced refresh.
+
+The managed MCP policy remains explicitly compatible with
+`pi-mcp-adapter` `2.32.1` because its checked-in mutation patch and declared
+peer-dependency contract are version/anchor strict; the image build fails
+closed if those anchors, peers, or versions drift. Nothing is downloaded or
+installed at runner startup. The generated health descriptor remains safe for
+runtime status reporting.
+Existing Cloud Run sessions do not contain this artifact until they receive a
+new `pi-chrome` revision; see the [pi-web-ui release-resolution audit](./pi-web-ui-release-resolution.md)
+for the patch dispositions and rollout evidence.
 
 The workspace-request model catalog is served by the same pi-web-ui model
 runtime used by normal chat. It reports catalog metadata and configured-provider
@@ -199,15 +204,15 @@ stale saved selection or pin it explicitly for a request. The catalog is
 available only while the authenticated target runtime is ready; a stopped or
 offline target must be retried after startup.
 
-The pinned Pi SDK catalog can lag the public Pi catalog. The image-build
+The installed Pi SDK catalog can lag the public Pi catalog. The image-build
 `piModelCatalogOverrides.json` entry remains a compatibility fallback, while
 `session-runner/lib/piModelCatalogRefresh.js` fetches
 `https://pi.dev/api/models?types=chat,image,classifier` before the embedded Agent
 starts. The request intentionally omits a Pi-version User-Agent so Pi returns
 the current catalog, allowing new metadata such as newly published Codex models
-to reach the pinned SDK without an image rebuild or SDK upgrade. Only providers
-registered by the installed SDK are merged, with stable API-compatible provider
-renames adapted to the installed ID (for example, hosted `azure` to the pinned
+to reach the installed SDK without an image rebuild. Only providers registered
+by that installed SDK are merged, with stable API-compatible provider renames
+adapted to the installed ID (for example, hosted `azure` to the installed
 `azure-openai-responses`). Unknown model IDs are still published and any
 protocol incompatibility remains a visible provider request error.
 
@@ -220,7 +225,7 @@ already imported child process keeps its current in-memory catalog until its
 next start. `generate:automation-models` continues to provide the checked-in
 offline fallback for the automation editor.
 
-The pinned patch series also contains `server/automation-run-state.ts`, a pure
+The managed release patch also contains `server/automation-run-state.ts`, a pure
 reducer for one unattended automation run. It scopes events to the run and
 conversation, deduplicates event and task IDs, requires a final non-retry agent
 result plus drained tool/subagent/background work, and distinguishes

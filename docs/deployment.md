@@ -21,11 +21,14 @@ Read this before changing Firebase config, deployment workflows, Cloud Functions
 
 Workspace-request model discovery, default inheritance, and caller-safe model
 errors are Functions-owned. Deploy the API/reconciliation Functions before
-publishing the refreshed `pi-chrome` image so grant checks and runner model
-catalogs agree. The runtime image pins pi-web-ui `0.85.0`, Pi SDK `0.85.1`,
-and the managed `pi-mcp-adapter` `2.32.1` patch contract. Existing main
-sessions keep their old runner revision until restarted or recreated; a canary
-must cover normal chat, model discovery, and one incoming request.
+publishing a refreshed `pi-chrome` image so grant checks and runner model
+catalogs agree. The runtime image resolves the current stable pi-web-ui
+release and embedded SDK at image-build time, while retaining the explicit
+managed `pi-mcp-adapter` `2.32.1` patch contract. Existing main sessions keep
+their old runner revision until restarted or recreated; a canary must cover
+normal chat, model discovery, and one incoming request. See the
+[pi-web-ui release-resolution audit](./pi-web-ui-release-resolution.md) for
+the patch disposition and build metadata contract.
 
 ```bash
 firebase deploy --only functions --project pi-agents-cloud

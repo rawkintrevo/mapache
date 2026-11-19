@@ -93,7 +93,7 @@ jobs:
             --config session-runner/cloudbuild.pi-chrome.yaml \
             --format='value(id)' \
             --project pi-agents-cloud \
-            --substitutions="_IMAGE=$image")
+            --substitutions="_IMAGE=$image,_RESOLUTION_KEY=$GITHUB_SHA-$GITHUB_RUN_ID")
           if [ -z "$build_id" ]; then
             echo "::error::Cloud Build submission did not return a build ID"
             exit 1

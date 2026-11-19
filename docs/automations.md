@@ -366,17 +366,18 @@ populate the draft, and the selected pair is saved on the automation definition
 through the existing revisioned API. Refresh preserves an open draft.
 
 The picker starts with `src/config/automationModelCatalog.json`, a labels/IDs-only
-export of the runner's pinned `@earendil-works/pi-ai` catalog, then overlays the
-current public Pi catalog through `src/config/remoteModelCatalog.js`. The overlay
-refreshes every four hours and is persisted in browser storage; the checked-in
-catalog remains available when the network is unavailable. Regenerate the
-fallback with `npm run generate:automation-models` when updating the Pi SDK pin
-in `session-runner/upstream/pi-web-ui/manifest.json`; a frontend test checks
-version alignment. Saved unknown IDs remain selectable, and custom IDs can be
-entered for new models or providers already configured in the runner. The
-catalog does not verify credentials or provider account access; execution uses
-existing saved credentials. Interactive Agent model selection remains
-upstream-owned.
+export of the `@earendil-works/pi-ai` package, then overlays the current public
+Pi catalog through `src/config/remoteModelCatalog.js`. The overlay refreshes
+every four hours and is persisted in browser storage; the checked-in catalog
+remains available when the network is unavailable. Regenerate the fallback with
+`npm run generate:automation-models`; it resolves pi-ai independently from the
+runner's resolved coding-agent SDK. The frontend test checks package identity
+and catalog shape, not numeric version alignment. Saved unknown IDs remain
+selectable, and custom IDs can be entered for new models or providers already
+configured in the runner. The catalog does not verify credentials or provider
+account access; execution uses existing saved credentials. Interactive Agent
+model selection remains upstream-owned and the live runner catalog is the
+capability authority.
 
 ## Cost and recovery accounting
 

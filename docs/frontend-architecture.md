@@ -103,15 +103,17 @@ Panel Refresh reloads the workspace, definitions and concurrency settings while
 preserving an open draft. Pending mutations settle busy state even on failure or
 overlap; preview and history requests do not block Enable.
 `AutomationModelPicker` inside `AutomationEditor` starts with the generated
-catalog from the pinned runner SDK, then overlays the public Pi catalog from
-`src/config/remoteModelCatalog.js` on a four-hour refresh cadence. It preserves
-saved/custom IDs and keeps the generated catalog when the remote source is
-unavailable, so users can choose newly published models without a runner image
-rebuild. The complete pair is saved with the definition. Missing-model list
-guidance opens that editor directly. Model and loading/mutation state gate
-enabling and execution while allowing disabled drafts to be saved. Blocked
-controls explain the prerequisite via `aria-describedby`. Existing enabled
-definitions can be disabled, and an enabled draft is never silently downgraded
+`@earendil-works/pi-ai` fallback, then overlays the public Pi catalog from
+`src/config/remoteModelCatalog.js` on a four-hour refresh cadence. Its fallback
+version is independent of the resolved runner SDK; the live runner remains the
+capability authority. It preserves saved/custom IDs and keeps the generated
+catalog when the remote source is unavailable, so users can choose newly
+published models without a runner image rebuild. The complete pair is saved
+with the definition. Missing-model list guidance opens that editor directly.
+Model and loading/mutation state gate enabling and execution while allowing
+disabled drafts to be saved. Blocked controls explain the prerequisite via
+`aria-describedby`. Existing enabled definitions can be disabled, and an
+enabled draft is never silently downgraded
 on save.
 Only `revision_conflict` produces an edit-conflict banner.
 `AutomationManagementPage` composes the

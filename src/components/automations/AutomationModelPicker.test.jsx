@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {AutomationEditor, createAutomationDraft} from "./AutomationEditor.jsx";
 import catalog from "../../config/automationModelCatalog.json";
-import runner from "../../../session-runner/upstream/pi-web-ui/manifest.json";
 
 function Editor({automation, workspace, onSave = vi.fn()}) {
   const [draft, setDraft] = useState(createAutomationDraft({
@@ -14,8 +13,9 @@ function Editor({automation, workspace, onSave = vi.fn()}) {
 }
 
 describe("automation model selection", () => {
-  test("uses the runner's pinned model catalog", () => {
-    expect(catalog.source.version).toBe(runner.piSdk.version);
+	test("uses the Pi AI package catalog as an offline fallback", () => {
+		expect(catalog.source.package).toBe("@earendil-works/pi-ai");
+		expect(catalog.source.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(catalog.providers.openai["gpt-4.1"]).toBeTruthy();
     expect(catalog.providers["openai-codex"]["gpt-6-astra"]).toBe("GPT-6 Astra");
     expect(catalog.source.modelOverrides).toContain("openai-codex/gpt-6-astra");
