@@ -199,13 +199,26 @@ stale saved selection or pin it explicitly for a request. The catalog is
 available only while the authenticated target runtime is ready; a stopped or
 offline target must be retried after startup.
 
-The pinned Pi SDK catalog predates `openai-codex/gpt-6-astra`, which can be
-stored in a workspace's selected model state. `piModelCatalogOverrides.json`
-adds only that model's non-secret metadata to the embedded SDK at image build
-time, and `generate:automation-models` exposes the same entry in the automation
-model picker. This avoids changing the SDK dependency graph while allowing an
-isolated run to resolve the workspace's saved model; rebuild `pi-chrome` after
-changing the override.
+The pinned Pi SDK catalog can lag the public Pi catalog. The image-build
+`piModelCatalogOverrides.json` entry remains a compatibility fallback, while
+`session-runner/lib/piModelCatalogRefresh.js` fetches
+`https://pi.dev/api/models?types=chat,image,classifier` before the embedded Agent
+starts. The request intentionally omits a Pi-version User-Agent so Pi returns
+the current catalog, allowing new metadata such as newly published Codex models
+to reach the pinned SDK without an image rebuild or SDK upgrade. Only providers
+registered by the installed SDK are merged, with stable API-compatible provider
+renames adapted to the installed ID (for example, hosted `azure` to the pinned
+`azure-openai-responses`). Unknown model IDs are still published and any
+protocol incompatibility remains a visible provider request error.
+
+The runner stores the matched, non-secret catalog metadata at
+`model-catalog.json` below the managed Agent data directory. It refreshes every
+four hours, applies the last successful cache before attempting the network,
+and records the last attempt/error when Pi is unavailable. A fresh runner or
+Agent restart therefore sees catalog changes without changing the image; an
+already imported child process keeps its current in-memory catalog until its
+next start. `generate:automation-models` continues to provide the checked-in
+offline fallback for the automation editor.
 
 The pinned patch series also contains `server/automation-run-state.ts`, a pure
 reducer for one unattended automation run. It scopes events to the run and

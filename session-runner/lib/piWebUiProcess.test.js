@@ -40,6 +40,7 @@ async function fixture() {
       piWebUiDataDir: path.join(root, "state", "ui"),
       piMcpAdapterPath: path.join(adapterRoot, "index.ts"),
       piMcpAdapterVersion: "2.32.1",
+      piModelCatalogRefreshEnabled: false,
       piWebUiHealthIntervalMs: 1,
       piWebUiHost: "127.0.0.1",
       piWebUiPiDir: path.join(root, "state", "pi"),
