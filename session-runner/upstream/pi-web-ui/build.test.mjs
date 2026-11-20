@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import {mkdtempSync, mkdirSync, writeFileSync} from "node:fs";
+import {lstatSync, mkdtempSync, mkdirSync, readlinkSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
-import {applyPatches, buildUpstream, readManifest} from "./build.mjs";
+import {applyPatches, buildUpstream, copyRuntime, readManifest} from "./build.mjs";
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-test-"));
@@ -56,6 +56,20 @@ test("the patch stage rejects a mismatched baseline", async () => {
 		() => applyPatches(sourceDir, {patches: ["patches/fixture.patch"]}, join(patchRoot, "patches")),
 		/patch baseline rejected/,
 	);
+});
+
+test("runtime copy rewrites absolute npm links to portable relative links", () => {
+	const root = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-runtime-copy-test-"));
+	const sourceDir = join(root, "source");
+	const outputDir = join(root, "output");
+	mkdirSync(join(sourceDir, "node_modules", "demo"), {recursive: true});
+	writeFileSync(join(sourceDir, "node_modules", "demo", "cli.js"), "#!/usr/bin/env node\n");
+	mkdirSync(join(sourceDir, "node_modules", ".bin"), {recursive: true});
+	symlinkSync(join(sourceDir, "node_modules", "demo", "cli.js"), join(sourceDir, "node_modules", ".bin", "demo"));
+	copyRuntime(sourceDir, outputDir, {build: {runtimeEntries: ["node_modules"]}});
+	const copiedLink = join(outputDir, "node_modules", ".bin", "demo");
+	assert.equal(lstatSync(copiedLink).isSymbolicLink(), true);
+	assert.equal(readlinkSync(copiedLink), "../demo/cli.js");
 });
 
 test("an incompatible resolved release fails before it can publish output", async () => {

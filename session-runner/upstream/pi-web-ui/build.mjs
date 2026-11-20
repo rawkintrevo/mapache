@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import {createHash} from "node:crypto";
-import {cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, join, resolve} from "node:path";
+import {dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {spawn} from "node:child_process";
 import {restoreCacheArtifact, updateCacheDecision} from "./artifactCache.mjs";
@@ -249,13 +249,49 @@ function writeBuildInfo(sourceDir, manifest, release, sourceFiles, sdk, piAi, ad
 	writeFileSync(join(sourceDir, "build-info.json"), JSON.stringify(info, null, 2) + "\n", "utf8");
 }
 
-function copyRuntime(sourceDir, outputDir, manifest) {
+function copyRuntimeEntry(sourcePath, destinationPath, sourceRoot, destinationRoot) {
+	const entry = lstatSync(sourcePath);
+	if (entry.isSymbolicLink()) {
+		const target = readlinkSync(sourcePath);
+		const targetPath = resolve(dirname(sourcePath), target);
+		const sourceRootPath = resolve(sourceRoot);
+		if (targetPath !== sourceRootPath && !targetPath.startsWith(`${sourceRootPath}/`)) {
+			fail(`runtime link escapes the source tree: ${sourcePath} -> ${target}`);
+		}
+		try {
+			lstatSync(targetPath);
+		} catch {
+			fail(`runtime link target is missing: ${sourcePath} -> ${target}`);
+		}
+		const mappedTarget = join(resolve(destinationRoot), relative(sourceRootPath, targetPath));
+		const portableTarget = relative(dirname(destinationPath), mappedTarget) || ".";
+		mkdirSync(dirname(destinationPath), {recursive: true});
+		symlinkSync(portableTarget, destinationPath);
+		return;
+	}
+	if (entry.isDirectory()) {
+		mkdirSync(destinationPath, {recursive: true});
+		for (const name of readdirSync(sourcePath).sort()) {
+			copyRuntimeEntry(join(sourcePath, name), join(destinationPath, name), sourceRoot, destinationRoot);
+		}
+		return;
+	}
+	if (!entry.isFile()) fail(`runtime output contains an unsupported entry: ${sourcePath}`);
+	mkdirSync(dirname(destinationPath), {recursive: true});
+	cpSync(sourcePath, destinationPath);
+}
+
+export function copyRuntime(sourceDir, outputDir, manifest) {
 	if (existsSync(outputDir) && readdirSync(outputDir).length > 0) fail("output directory is not empty: " + outputDir);
 	mkdirSync(outputDir, {recursive: true});
 	for (const relativePath of manifest.build.runtimeEntries) {
 		const sourcePath = join(sourceDir, relativePath);
-		if (!existsSync(sourcePath)) fail("runtime output is missing: " + relativePath);
-		cpSync(sourcePath, join(outputDir, relativePath), {recursive: true, dereference: true});
+		try {
+			lstatSync(sourcePath);
+		} catch {
+			fail("runtime output is missing: " + relativePath);
+		}
+		copyRuntimeEntry(sourcePath, join(outputDir, relativePath), sourceDir, outputDir);
 	}
 }
 

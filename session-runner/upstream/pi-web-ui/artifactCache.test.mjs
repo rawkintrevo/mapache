@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {mkdtempSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
+import {lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
@@ -53,6 +53,31 @@ test("a packed artifact restores only when its manifest and runtime checksums ve
 	assert.equal(hit.status, "hit");
 	assert.equal(readFileSync(join(restored, "dist/server/index.js"), "utf8"), "console.log('fixture');\n");
 	assert.ok(hit.elapsedMs >= 0);
+});
+
+test("a packed artifact preserves safe relative runtime symlinks", async () => {
+	const runtime = runtimeFixture();
+	mkdirSync(join(runtime, "bin"), {recursive: true});
+	writeFileSync(join(runtime, "bin", "cli.js"), "#!/usr/bin/env node\n");
+	mkdirSync(join(runtime, "node_modules", ".bin"), {recursive: true});
+	symlinkSync("../../bin/cli.js", join(runtime, "node_modules", ".bin", "cli"));
+	const archive = join(runtime, "symlink-cache.tar.gz");
+	const restored = join(runtime, "symlink-restored");
+	await packCacheArtifact({
+		runtimeDir: runtime,
+		outputPath: archive,
+		expectedKey: "fixture-key",
+		expectedIdentitySha256: "fixture-identity",
+	});
+	const hit = await restoreCacheArtifact({
+		archivePath: archive,
+		outputDir: restored,
+		expectedKey: "fixture-key",
+		expectedIdentitySha256: "fixture-identity",
+	});
+	assert.equal(hit.status, "hit");
+	assert.equal(lstatSync(join(restored, "node_modules", ".bin", "cli")).isSymbolicLink(), true);
+	assert.equal(readlinkSync(join(restored, "node_modules", ".bin", "cli")), "../../bin/cli.js");
 });
 
 test("a missing or tampered artifact is a miss", async () => {

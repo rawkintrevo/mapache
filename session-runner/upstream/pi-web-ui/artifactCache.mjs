@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import {createHash} from "node:crypto";
-import {cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync} from "node:fs";
+import {cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join, resolve} from "node:path";
 import {spawn} from "node:child_process";
@@ -36,6 +36,25 @@ export function cacheKey(identity) {
 	return cacheIdentitySha256(identity);
 }
 
+function safeRuntimeLinkTarget(root, relativePath, target, {requireTarget = true} = {}) {
+	if (!target || target.includes("\0") || target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) {
+		fail(`runtime link is not portable: ${relativePath} -> ${target}`);
+	}
+	const rootPath = resolve(root);
+	const targetPath = resolve(rootPath, dirname(relativePath), target);
+	if (targetPath !== rootPath && !targetPath.startsWith(`${rootPath}/`)) {
+		fail(`runtime link escapes its root: ${relativePath} -> ${target}`);
+	}
+	if (requireTarget) {
+		try {
+			lstatSync(targetPath);
+		} catch {
+			fail(`runtime link target is missing: ${relativePath} -> ${target}`);
+		}
+	}
+	return targetPath;
+}
+
 export function directoryDigest(rootPath) {
 	const root = resolve(rootPath);
 	if (!existsSync(root) || !statSync(root).isDirectory()) fail(`runtime directory is missing: ${root}`);
@@ -46,7 +65,12 @@ export function directoryDigest(rootPath) {
 			const absolutePath = join(current, name);
 			const relativePath = relativeRoot ? `${relativeRoot}/${name}` : name;
 			const entry = lstatSync(absolutePath);
-			if (entry.isSymbolicLink()) fail(`runtime contains a symbolic link: ${relativePath}`);
+			if (entry.isSymbolicLink()) {
+				const target = readlinkSync(absolutePath);
+				safeRuntimeLinkTarget(root, relativePath, target);
+				entries.push({kind: "symlink", mode: entry.mode & 0o7777, path: relativePath, target});
+				continue;
+			}
 			if (entry.isDirectory()) {
 				entries.push({kind: "directory", mode: entry.mode & 0o7777, path: relativePath});
 				visit(absolutePath, relativePath);
@@ -65,6 +89,32 @@ export function directoryDigest(rootPath) {
 
 	visit(root, "");
 	return sha256Buffer(JSON.stringify(entries));
+}
+
+function copyTree(sourcePath, destinationPath, rootPath, relativeRoot = "") {
+	const entry = lstatSync(sourcePath);
+	if (entry.isSymbolicLink()) {
+		const target = readlinkSync(sourcePath);
+		safeRuntimeLinkTarget(rootPath, relativeRoot, target);
+		mkdirSync(dirname(destinationPath), {recursive: true});
+		symlinkSync(target, destinationPath);
+		return;
+	}
+	if (entry.isDirectory()) {
+		mkdirSync(destinationPath, {recursive: true});
+		for (const name of readdirSync(sourcePath).sort()) {
+			copyTree(
+				join(sourcePath, name),
+				join(destinationPath, name),
+				rootPath,
+				relativeRoot ? `${relativeRoot}/${name}` : name,
+			);
+		}
+		return;
+	}
+	if (!entry.isFile()) fail(`runtime contains an unsupported entry: ${relativeRoot}`);
+	mkdirSync(dirname(destinationPath), {recursive: true});
+	cpSync(sourcePath, destinationPath);
 }
 
 function run(command, args, options = {}) {
@@ -105,8 +155,21 @@ async function extractArchive(archivePath, destination) {
 		fail("cache archive contains an unsafe or unexpected path");
 	}
 	const verbose = await run("tar", ["-tvzf", archivePath], {capture: true});
-	if (verbose.stdout.split(/\r?\n/).some((line) => line && !["-", "d"].includes(line[0]))) {
-		fail("cache archive contains a link or unsupported entry");
+	const verboseEntries = verbose.stdout.split(/\r?\n/).filter(Boolean);
+	if (verboseEntries.length !== entries.length) fail("cache archive metadata is unverifiable");
+	for (let index = 0; index < verboseEntries.length; index++) {
+		const line = verboseEntries[index];
+		const kind = line[0];
+		if (kind === "l") {
+			const arrow = line.lastIndexOf(" -> ");
+			if (arrow < 0) fail("cache archive contains a symlink without a target");
+			const entry = entries[index].replace(/\/+$/, "");
+			if (!entry.startsWith("runtime/") || entry === "runtime") fail("cache archive contains a link outside runtime");
+			const relativePath = entry.slice("runtime/".length);
+			safeRuntimeLinkTarget(join(destination, "runtime"), relativePath, line.slice(arrow + 4), {requireTarget: false});
+			continue;
+		}
+		if (!["-", "d"].includes(kind)) fail("cache archive contains an unsupported entry");
 	}
 	await run("tar", ["-xzf", archivePath, "-C", destination, "--no-same-owner", "--same-permissions"], {stdio: "pipe"});
 }
@@ -144,7 +207,8 @@ export async function packCacheArtifact({runtimeDir, outputPath, expectedKey, ex
 	const stage = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-cache-pack-"));
 	try {
 		const stagedRuntime = join(stage, "runtime");
-		cpSync(runtime, stagedRuntime, {recursive: true, dereference: true});
+		directoryDigest(runtime);
+		copyTree(runtime, stagedRuntime, runtime);
 		const manifest = {
 			schemaVersion: CACHE_SCHEMA_VERSION,
 			cacheKey: expectedKey,
@@ -216,7 +280,7 @@ export async function restoreCacheArtifact({
 		}
 		if (existsSync(output) && readdirSync(output).length > 0) return miss("output-not-empty");
 		mkdirSync(output, {recursive: true});
-		cpSync(runtime, output, {recursive: true, dereference: true});
+		copyTree(runtime, output, runtime);
 		return {status: "hit", reason: "verified", manifest, buildInfo, elapsedMs: Date.now() - startedAt};
 	} catch (error) {
 		return miss(`unverifiable:${error.message}`);
