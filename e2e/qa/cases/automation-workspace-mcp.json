@@ -4,7 +4,7 @@
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/automation.workspace-mcp",
   "requires": {
-    "runnerImage": "pi-chrome revision containing issue 448",
+    "runnerImage": "gcp-runner revision containing issue 448",
     "provider": "Existing QA OpenAI authentication entry; never capture credential responses",
     "cleanup": "Delete only the recorded disposable workspace, automation definitions, and runs"
   },

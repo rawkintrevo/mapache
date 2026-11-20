@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the pi-chrome compatibility tag as well as its immutable revision tag
+        description: Publish the gcp-runner compatibility tag as well as its immutable revision tag
         required: true
         default: false
         type: boolean
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   detect:
-    name: Detect pi-chrome changes
+    name: Detect gcp-runner changes
     runs-on: ubuntu-latest
     outputs:
       variants: ${{ steps.variants.outputs.variants }}
@@ -59,7 +59,7 @@ jobs:
           echo "variants=$json" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build pi-chrome
+    name: Build gcp-runner
     needs: detect
     if: needs.detect.outputs.variants != '[]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -83,14 +83,14 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            source_tag=$(node scripts/runner-image-release.mjs --variant=pi-chrome --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
+            source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
           else
-            source_tag=$(node scripts/runner-image-release.mjs --variant=pi-chrome --sha="$GITHUB_SHA")
+            source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --sha="$GITHUB_SHA")
           fi
           image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${source_tag}"
           build_id=$(gcloud builds submit session-runner \
             --async \
-            --config session-runner/cloudbuild.pi-chrome.yaml \
+            --config session-runner/cloudbuild.gcp-runner.yaml \
             --format='value(id)' \
             --project pi-agents-cloud \
             --substitutions="_IMAGE=$image")
@@ -132,14 +132,14 @@ jobs:
           fi
           echo "image=$image digest=$digest source=$GITHUB_SHA build=$build_url"
           {
-            echo "### Runner image: pi-chrome"
+            echo "### Runner image: gcp-runner"
             echo "- Cloud Build: $build_url"
             echo "- Image: \`$image\`"
             echo "- Digest: \`$digest\`"
             echo "- Source: \`$GITHUB_SHA\`"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$PUBLISH" = "true" ]; then
-            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:$(node scripts/runner-image-release.mjs --variant=pi-chrome --compatibility=true)"
+            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:$(node scripts/runner-image-release.mjs --variant=gcp-runner --compatibility=true)"
             gcloud artifacts docker tags add "$image" "$compatibility" --project pi-agents-cloud
             echo "published compatibility tag=$compatibility"
           fi

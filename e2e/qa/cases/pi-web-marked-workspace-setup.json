@@ -1,6 +1,6 @@
 {
   "id": "pi-web.marked-workspace-setup",
-  "title": "Use one explicitly marked disposable pi-chrome workspace",
+  "title": "Use one explicitly marked disposable gcp-runner workspace",
   "description": "Preflight for all managed pi-web QA cases. The workspace is created and marked outside the browser case with exact recorded IDs; this case only selects and verifies it.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/pi-web.marked-workspace-setup",
@@ -15,7 +15,7 @@
   },
   "steps": [
     {"useCase": "cases/login.json"},
-    {"useScript": "scripts/select-marked-pi-chrome-workspace.json", "parameters": {"workspaceName": "{{qaWorkspaceName}}"}},
+    {"useScript": "scripts/select-marked-gcp-runner-workspace.json", "parameters": {"workspaceName": "{{qaWorkspaceName}}"}},
     {"assert": "workspace-marker", "expected": "The selected record in the authenticated GET /api/workspaces response has agentUiVersion exactly pi-web-ui-v1; if not, stop as blocked."},
     {"capture": "console"},
     {"capture": "network"},

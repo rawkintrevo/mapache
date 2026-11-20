@@ -239,7 +239,7 @@ export async function resolveBuildInputs({
 			fileDescriptor("lib/patchPiMcpAdapter.js", join(HERE, "../../lib/patchPiMcpAdapter.js")),
 			fileDescriptor("lib/patchPiModelCatalog.js", join(HERE, "../../lib/patchPiModelCatalog.js")),
 			fileDescriptor("lib/piModelCatalogOverrides.json", join(HERE, "../../lib/piModelCatalogOverrides.json")),
-			fileDescriptor("Dockerfile.pi-chrome", join(HERE, "../../Dockerfile.pi-chrome")),
+			fileDescriptor("Dockerfile.gcp-runner", join(HERE, "../../Dockerfile.gcp-runner")),
 		];
 		const identity = createBuildIdentity({
 			manifest,

@@ -3,7 +3,7 @@
   "title": "Delete selected session",
   "actions": [
     {"type": "confirmDialog", "action": "accept"},
-    {"type": "click", "role": "button", "nameIncludes": "Delete session"},
+    {"type": "click", "role": "button", "nameIncludes": "Delete"},
     {"type": "waitForNetwork", "requestUrlIncludes": "/sessions/", "method": "DELETE", "expectedStatus": 200, "timeoutMs": 60000}
   ],
   "successSignals": [

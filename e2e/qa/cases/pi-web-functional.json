@@ -1,18 +1,18 @@
 {
   "id": "pi-web.functional",
   "title": "Managed pi-web functional surface",
-  "description": "Exercise one marked pi-chrome workspace through bounded Agent turns, read-only connector probes, native history, shell coexistence, Chrome/Preview health, and navbar connection ownership.",
+  "description": "Exercise one marked gcp-runner workspace through bounded Agent turns, read-only connector probes, native history, shell coexistence, Chrome/Preview health, and navbar connection ownership.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/pi-web.functional",
   "requires": {
-    "cloudRun": "Creates one billable marked pi-chrome service",
+    "cloudRun": "Creates one billable marked gcp-runner service",
     "piProvider": "Use an already configured QA provider; missing model access is blocked",
     "readOnlyMcp": "An existing read-only connector may be present; no server is created or mutated",
     "turnBudget": "At most two live turns, each bounded to 120 seconds; no CRM writes or Goal execution"
   },
   "steps": [
     {"useCase": "cases/pi-web-marked-workspace-setup.json"},
-    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-functional-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-functional"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-functional-{{timestamp}}", "imageKey": "gcp-runner", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-functional"}},
     {"useScript": "scripts/wait-session-running.json"},
     {"assert": "agent-ui-ready", "expected": "The marked session access response is ready and the embedded Agent UI reports readiness without a second browser or runner process."},
     {"assert": "native-goal-surface", "expected": "The upstream native Goal control is visible when the pinned runtime exposes it; absence is a failure, and no Mapache legacy Goal bridge is used."},

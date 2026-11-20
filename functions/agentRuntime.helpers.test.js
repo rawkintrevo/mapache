@@ -25,6 +25,7 @@ const session = {
 assert.equal(isMarkedAgentWorkspace(workspace), true);
 assert.deepEqual(markedAgentSessionMetadata(workspace), {agentUiVersion: AGENT_UI_VERSION});
 assert.equal(isCompatibleAgentSession(workspace, session), true);
+assert.equal(isCompatibleAgentSession(workspace, {...session, imageKey: "pi-chrome"}), true);
 assert.equal(isCompatibleAgentSession(workspace, {...session, agentRuntimeGeneration: "0"}), false);
 assert.equal(isCompatibleAgentSession(workspace, {...session, imageKey: "pi-web"}), false);
 assert.equal(isCompatibleAgentSession({}, session), false);

@@ -121,7 +121,7 @@ function createChromeProfileSeedService({
         capturedAt: new Date(now()).toISOString(),
         browser: {
           family: "chromium",
-          runtime: "pi-chrome",
+          runtime: "gcp-runner",
         },
       };
       validateDescriptor(descriptor, {workspaceId: config.workspaceId, prefix, bucketName});

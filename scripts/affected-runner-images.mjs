@@ -1,4 +1,4 @@
-const SUPPORTED_VARIANT = "pi-chrome";
+const SUPPORTED_VARIANT = "gcp-runner";
 const STANDARD_VARIANTS = Object.freeze([SUPPORTED_VARIANT]);
 const ALL_VARIANTS = STANDARD_VARIANTS;
 
@@ -7,7 +7,7 @@ function normalizeFiles(files) {
 }
 
 function imageVariantForFile(file) {
-  const match = file.match(/(?:Dockerfile|cloudbuild)\.(pi-chrome)(?:\.yaml)?$/);
+  const match = file.match(/(?:Dockerfile|cloudbuild)\.(gcp-runner)(?:\.yaml)?$/);
   if (match) return match[1];
   return null;
 }

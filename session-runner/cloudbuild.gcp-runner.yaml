@@ -1,5 +1,5 @@
 substitutions:
-  _IMAGE: us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
+  _IMAGE: us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner
   _CACHE_BUCKET: pi-agents-cloud-build-cache
   _CACHE_PREFIX: pi-web-ui
 
@@ -33,14 +33,14 @@ steps:
         fi
 
   - name: gcr.io/cloud-builders/docker
-    id: build-pi-chrome
+    id: build-gcp-runner
     entrypoint: bash
     args:
       - -ceu
       - |
         key="$$(cat pi-web-ui-cache-key)"
         docker build \
-          -f Dockerfile.pi-chrome \
+          -f Dockerfile.gcp-runner \
           -t "${_IMAGE}" \
           --build-arg "MAPACHE_BUILD_RESOLUTION_KEY=$${key}" \
           .

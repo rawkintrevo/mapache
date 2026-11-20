@@ -1,7 +1,7 @@
 {
   "id": "full.blank-workspace-smoke",
   "title": "Full blank workspace smoke",
-  "description": "Broad blank-workspace smoke covering login, workspace creation, the sole pi-chrome session path, embedded Agent readiness, navbar connection controls, and cleanup.",
+  "description": "Broad blank-workspace smoke covering login, workspace creation, the sole gcp-runner session path, embedded Agent readiness, navbar connection controls, and cleanup.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/full.blank-workspace-smoke",
   "requires": {
@@ -12,7 +12,7 @@
     {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-full-ws-{{timestamp}}"}},
     {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-full-session-{{timestamp}}"}},
     {"useScript": "scripts/wait-session-running.json"},
-    {"assert": "agent-ui-ready", "expected": "The new session uses the marked pi-chrome path and the embedded Agent reports readiness."},
+    {"assert": "agent-ui-ready", "expected": "The new session uses the marked gcp-runner path and the embedded Agent reports readiness."},
     {"useScript": "scripts/open-session-logs.json"},
     {"assert": "runtime-canvas-preserved", "expected": "Opening the lazy Logs dialog does not replace or reconnect the existing Agent iframe."},
     {"capture": "screenshot", "fileName": "runtime-logs.png"},

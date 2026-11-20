@@ -841,8 +841,8 @@ async function listSessions(uid, workspaceId) {
 
 function currentRunnerImageReference(session = {}) {
   try {
-    if (session.imageKey) {
-      const resolved = resolveRunnerImage({imageKey: session.imageKey});
+    if (session.imageKey || session.image) {
+      const resolved = resolveRunnerImage(session.imageKey ? {imageKey: session.imageKey} : {image: session.image});
       if (resolved.image) return resolved.image;
     }
   } catch (error) {

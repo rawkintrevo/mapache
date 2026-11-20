@@ -14,12 +14,24 @@ const fixtures = () => [
 ];
 
 test("only recognized PR/revision tag formats enter deletion rules", () => {
+  assert.equal(classifyTag("gcp-runner-pr-1-abcdef012345"), "pr");
+  assert.equal(classifyTag(`gcp-runner-${"a".repeat(40)}`), "revision");
   assert.equal(classifyTag("pi-chrome-pr-1-abcdef012345"), "pr");
   assert.equal(classifyTag("codex-basic-codex-basic-pr-278-abcdef012345"), "pr");
   assert.equal(classifyTag(`pi-web-pi-web-${"a".repeat(40)}`), "revision");
   for (const tag of ["pi-chrome", "latest", "pi-chrome-qa-fault-harness-1234567", "pi-chrome-deadbee-extra"]) {
     assert.equal(classifyTag(tag), "other");
   }
+});
+
+test("canonical gcp-runner releases follow the same retention boundaries", () => {
+  const images = [
+    image(8, ["gcp-runner-pr-8-abcdef012345"], 3),
+    image(9, [`gcp-runner-${"c".repeat(40)}`], 8),
+    image(10, ["gcp-runner"], 90),
+  ];
+  const plan = buildPlan({images, now});
+  assert.deepEqual(plan.candidates.map((candidate) => candidate.digest), [digest(8), digest(9)]);
 });
 
 test("two-day PR and seven-day release boundaries; untagged and fixtures survive", () => {

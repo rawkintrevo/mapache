@@ -135,7 +135,7 @@ partial tree recovery leaves the active workspace unchanged. An operator must
 explicitly validate the recorded hashes/content and perform any later cutover.
 The pre-migration checkpoint remains separate from this recovery pointer.
 
-Admitted automation runs use the same trusted mount and pinned `pi-chrome` image
+Admitted automation runs use the same trusted mount and pinned `gcp-runner` image
 as other supported sessions, but receive a separate `auto-{runId}` session and
 `mpauto-{runId-hash}` Cloud Run service. The service carries hashed owner,
 workspace, and run labels; an existing service is adopted only when all labels
@@ -155,25 +155,33 @@ recovery, and rollback constraints.
 
 ## Runner Images
 
-The supported runner image is built from `session-runner/Dockerfile.pi-chrome`
+The supported runner image is built from `session-runner/Dockerfile.gcp-runner`
 and published as:
 
 ```text
-us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
+us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner
 ```
 
-Release automation also publishes immutable `pi-chrome-<source-commit>` tags.
-Retired image tags and existing Cloud Run services are historical data; this
-cutover does not purge them or make them selectable for new sessions.
+Release automation also publishes immutable `gcp-runner-<source-commit>` tags.
+The former `pi-chrome` key and
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome`
+tag remain a temporary compatibility alias for persisted sessions and rollback.
+`functions/runnerCatalog.helpers.js` maps that key/tag to the canonical
+`gcp-runner` image before provisioning, restart, resize, or automation launch;
+new session documents always persist the canonical key/tag. A running service
+keeps its existing digest until it is explicitly restarted or recreated.
+Registry cleanup recognizes both release prefixes and keeps deployed digests;
+remove the legacy alias only after old services and revisions are drained and
+the rollback window has ended.
 
 Chrome desktop bootstrap waits for Xvfb to accept a real X client connection before launching
 x11vnc or Chromium. x11vnc starts first after that readiness gate, so the loopback VNC listener
 is not delayed by Chromium profile startup. The runner still requires the supervised desktop
 processes, loopback VNC, and CDP to be ready before it opens the session HTTP port. Changes to
-this bootstrap path require a rebuilt `pi-chrome` revision; existing Cloud Run services retain
+this bootstrap path require a rebuilt `gcp-runner` revision; existing Cloud Run services retain
 their bundled startup behavior until restarted or recreated.
 
-The `pi-chrome` build packages the resolved pi-web-ui runtime under
+The `gcp-runner` build packages the resolved pi-web-ui runtime under
 `/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/buildInputs.mjs`
 resolves the current stable GitHub release and its tag commit before every
 Cloud Build cache lookup. It records the source archive and required-file
@@ -212,7 +220,7 @@ closed if those anchors, peers, or versions drift. Nothing is downloaded or
 installed at runner startup. The generated health descriptor remains safe for
 runtime status reporting.
 Existing Cloud Run sessions do not contain this artifact until they receive a
-new `pi-chrome` revision; see the [pi-web-ui release-resolution audit](./pi-web-ui-release-resolution.md)
+new `gcp-runner` revision; see the [pi-web-ui release-resolution audit](./pi-web-ui-release-resolution.md)
 for the patch dispositions and rollout evidence.
 
 The workspace-request model catalog is served by the same pi-web-ui model
@@ -252,7 +260,7 @@ result plus drained tool/subagent/background work, and distinguishes
 completion from log silence or aggregate turn counters and does not create
 sockets, sessions, or API clients; the later automation subscription layer
 owns event delivery. Changes to this reducer require the same upstream build
-and a rebuilt `pi-chrome` revision.
+and a rebuilt `gcp-runner` revision.
 
 The runner waits for the Pi UI's private Unix control socket to answer a status
 request before it submits an automation or workspace-request prompt. The Pi HTTP health route can
@@ -271,10 +279,10 @@ The upstream control socket idle deadline
 is 330 seconds so it does not truncate that wait. This is a bounded acknowledgment
 wait, not a task execution deadline or permission to replay timed-out work. Cloud
 Run startup limits still apply to the entire container boot. Changes to this
-startup path require a rebuilt `pi-chrome` revision; existing Cloud Run services
+startup path require a rebuilt `gcp-runner` revision; existing Cloud Run services
 need recreation to receive it.
 
-Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces and `automation-readonly-gcs-v1` inputs. Read-only automation snapshots intentionally omit repository metadata; `gitAuth.service.js` must skip repository-local credential configuration in this mode, while ordinary Git-backed startup still fails on invalid repositories. The Git credential helper ships with a Node shebang. Managed Agent Git renewal uses the runner-owned `MAPACHE_GITHUB_TOKEN_SOCKET`; the Agent never receives `SESSION_SHUTDOWN_TOKEN` or the direct GitHub refresh inputs. See [GitHub workspaces](./github-workspaces.md) for the renewal boundary and rollout requirements. `/usr/local/bin/mapache-gh` is only a compatibility shell script that executes native `gh` unchanged; new agent guidance uses `gh` directly. Rebuild/publish `pi-chrome` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
+Connected GitHub workspace startup reapplies a repository-local `credential.helper` entry for the executable `/usr/local/bin/mapache-git-credential` and `credential.useHttpPath=true` after fresh clone or private Git metadata restore. The setup is idempotent, preserves unrelated local helpers, and is skipped for public or non-GitHub workspaces and `automation-readonly-gcs-v1` inputs. Read-only automation snapshots intentionally omit repository metadata; `gitAuth.service.js` must skip repository-local credential configuration in this mode, while ordinary Git-backed startup still fails on invalid repositories. The Git credential helper ships with a Node shebang. Managed Agent Git renewal uses the runner-owned `MAPACHE_GITHUB_TOKEN_SOCKET`; the Agent never receives `SESSION_SHUTDOWN_TOKEN` or the direct GitHub refresh inputs. See [GitHub workspaces](./github-workspaces.md) for the renewal boundary and rollout requirements. `/usr/local/bin/mapache-gh` is only a compatibility shell script that executes native `gh` unchanged; new agent guidance uses `gh` directly. Rebuild/publish `gcp-runner` and recreate or revise existing Cloud Run sessions before expecting this startup behavior.
 
 The runner's automation execution service starts only after private workspace
 materialization and runtime admission. It validates the owner/workspace/session
@@ -323,7 +331,7 @@ unregisters only the exact app-scope `/agent/` registration or a worker whose
 script URL is `/agent/sw.js`, leaving any Mapache parent-scope worker alone.
 
 The server-owned workspace marker `agentUiVersion: "pi-web-ui-v1"` is passed to
-the runner as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`. A marked `pi-chrome`
+the runner as `MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1`. A marked `gcp-runner`
 runner restores the published checkpoint after source/archive preparation and
 before writer admission, credential materialization, and harness startup. It
 then starts exactly one supervised child from
@@ -377,7 +385,7 @@ has no boot owner; a duplicate or stale boot records a local diagnostic and
 leaves the active owner's status, lease, and socket count unchanged. This
 preserves legitimate clone/restore failures without allowing a rejected Cloud
 Run replacement to poison the current runtime. Changes to this contract require
-a rebuilt `pi-chrome` image and a new revision for existing services.
+a rebuilt `gcp-runner` image and a new revision for existing services.
 
 For an automation runtime, the protected shutdown request first sends a
 run-scoped cancellation through the private pi-web-ui control socket, then
@@ -409,7 +417,7 @@ the existing browser HMAC or runner shutdown-token authentication. The caller
 lives in `functions/automationReconciliation.service.js`.
 `functions/runnerHealthContract.test.js` prevents reserved-path references in
 production runner/Functions JavaScript; route and reconciler tests enforce the
-canonical endpoint. Rebuild/publish `pi-chrome` before deploying the caller.
+canonical endpoint. Rebuild/publish `gcp-runner` before deploying the caller.
 Existing runner services require recreation; do not restore an old-path
 fallback for compatibility.
 
@@ -493,7 +501,7 @@ the upstream `npm i -g pi-web-ui@latest` action does not replace the supervised
 binary. Durable, recoverable application/Pi self-update plus the requested Pi
 package and custom web-theme controls remain open work in issue #356.
 Workspace-local plugin/catalog and UI state are captured by the managed agent
-snapshot. A rebuilt `pi-chrome` image and a new/recreated Cloud Run revision are
+snapshot. A rebuilt `gcp-runner` image and a new/recreated Cloud Run revision are
 required for this patch-series change to reach existing sessions.
 
 Managed auth is materialized from the canonical Mapache provider document into
@@ -518,13 +526,13 @@ credential, and forwards only workspace-scoped automation requests. The child
 receives the socket path, not `SESSION_SHUTDOWN_TOKEN` or the broker signing
 secret; the socket is removed during runner shutdown.
 
-The frontend image catalog is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It exposes only the supported `pi-chrome` image and Pi harness. Historical shell, SSH, Codex, web, and N64 records may remain in Firestore for readable old sessions and cleanup, but they are not catalog launch targets. New session creation is server-owned and resolves the marked `pi-chrome`/Pi image; legacy Chat and Goals capability flags are no longer advertised.
+The frontend image catalog is configured from `functions/runnerCatalog.json` through `src/config/sessionImages.js`. It exposes only the supported `gcp-runner` image and Pi harness. Historical shell, SSH, Codex, web, and N64 records may remain in Firestore for readable old sessions and cleanup, but they are not catalog launch targets. New session creation is server-owned and resolves the marked `gcp-runner`/Pi image; legacy Chat and Goals capability flags are no longer advertised.
 
-The supported runner key is `pi-chrome`. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so the supported image renders `pi` and `chrome` tags without adding a view-specific mapping.
+The supported runner key is `gcp-runner`. Session list UI derives runner tags directly from the normalized key by splitting on hyphens, so the supported image renders `pi` and `chrome` tags without adding a view-specific mapping.
 
-The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` resolve the exact `pi-chrome` entry and Pi harness. Client `imageKey` and `image` fields cannot select another image; provisioning and queued-worker paths repeat the canonical identity check and reject unsupported or arbitrary runner records before any Cloud Run request. Historical records remain readable for status and cleanup without becoming launchable.
+The backend is authoritative for image selection. `functions/runnerCatalog.helpers.js` and `functions/runnerImages.helpers.js` resolve the exact `gcp-runner` entry and Pi harness. Client `imageKey` and `image` fields cannot select another image; provisioning and queued-worker paths repeat the canonical identity check and reject unsupported or arbitrary runner records before any Cloud Run request. Historical records remain readable for status and cleanup without becoming launchable.
 
-Workspace MCP server config is managed from the top-navigation MCP dialog and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. Legacy/shared runners write `/workspace/.mcp.json` for shared MCP discovery. Private automation runners instead write the generated Pi config below their private runtime root and launch the managed child with `--mcp-config`; they never replace the shared project file with generated credential-bearing content. The `pi-chrome` image bakes the exact `pi-mcp-adapter@2.32.1` package and exposes its image-owned `index.ts` entry through `PI_WEB_MCP_ADAPTER_PATH`; managed pi-web sessions pass that one path to the Pi SDK `additionalExtensionPaths` loader. The managed server does not start its legacy `<dataDir>/mcp.json` `McpBridge`, so the adapter is the only MCP transport and each configured server is started once. Its setup/editor, auth actions, project enable/disable, and bearer-token write paths are read-only/refused in managed mode; Mapache remains the owner of workspace config and Google token refresh/materialization.
+Workspace MCP server config is managed from the top-navigation MCP dialog and stored on the workspace document. Session creation and restart snapshot that config into `MCP_CONFIG` for the runner. Legacy/shared runners write `/workspace/.mcp.json` for shared MCP discovery. Private automation runners instead write the generated Pi config below their private runtime root and launch the managed child with `--mcp-config`; they never replace the shared project file with generated credential-bearing content. The `gcp-runner` image bakes the exact `pi-mcp-adapter@2.32.1` package and exposes its image-owned `index.ts` entry through `PI_WEB_MCP_ADAPTER_PATH`; managed pi-web sessions pass that one path to the Pi SDK `additionalExtensionPaths` loader. The managed server does not start its legacy `<dataDir>/mcp.json` `McpBridge`, so the adapter is the only MCP transport and each configured server is started once. Its setup/editor, auth actions, project enable/disable, and bearer-token write paths are read-only/refused in managed mode; Mapache remains the owner of workspace config and Google token refresh/materialization.
 
 Workspace-bound Google MCP services are injected during Functions provisioning after a server-side refresh. The runner receives an ephemeral `GOOGLE_MCP_ACCESS_TOKEN`; local mode starts `/app/google-workspace-mcp/server.mjs` over stdio and passes enabled services/scopes through non-secret environment values. No Google token is written to `MCP_CONFIG`, `/workspace/.mcp.json`, or persisted pi-web UI config: the adapter uses the runner's `bearer_env` reference. The runner owns a mode-0600 `google-mcp-token-*.sock` renewal adapter; the child receives only `GOOGLE_MCP_TOKEN_SOCKET`, while the runner keeps the broker URL, connection identity, and `SESSION_SHUTDOWN_TOKEN`. Pi's legacy `/root/.pi/agent/mcp-oauth` directory has a dedicated hidden archive target, while private automation OAuth state is local-only and namespaced with the run. `GET /google/mcp/status` performs local initialize/tools-list readiness plus bounded Drive/Gmail/Calendar probes through the same REST client and exposes only per-service evidence, adapter, and safe account metadata behind the shutdown-token gate. See [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
 
@@ -539,7 +547,7 @@ identity on every request. In addition to automation tools, the entry exposes
 `workspace_request_cancel`; request operations require their directional grant
 permission and return caller-safe projections. The managed entry is added without replacing
 user MCP entries; a collision uses a deterministic alternate server name. The
-server and `mapache-automations` guidance skill are baked into the `pi-chrome`
+server and `mapache-automations` guidance skill are baked into the `gcp-runner`
 image, so startup performs no npm download. Rebuild and restart or recreate
 existing sessions before expecting the new request tools.
 
@@ -572,9 +580,9 @@ Installed OS packages currently include:
 
 `make` and `g++` are present because `node-pty` and terminal-adjacent dependencies may require native build support during image construction.
 
-The `pi-chrome` Dockerfile runs both `python --version` and `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` verifies the supported image's build contract. Both commands invoke the installed Python 3 runtime; `python3.13` is not provided as a separate command name.
+The `gcp-runner` Dockerfile runs both `python --version` and `python3 --version` during image construction, and `session-runner/lib/runnerImageBaseline.test.js` verifies the supported image's build contract. Both commands invoke the installed Python 3 runtime; `python3.13` is not provided as a separate command name.
 
-The supported `pi-chrome` image installs Pi Agents with:
+The supported `gcp-runner` image installs Pi Agents with:
 
 ```bash
 curl -fsSL https://pi.dev/install.sh | sh
@@ -595,7 +603,7 @@ construct Git and other activity consumers. Reading `activity` before its
 initialization crashes Node before the HTTP listener opens and surfaces as a
 Cloud Run port-8080 startup failure. `lib/serverBootstrap.test.js` executes the
 entrypoint with external services stubbed to catch this wiring regression.
-Fixes require rebuilding `pi-chrome`; existing services need a new revision
+Fixes require rebuilding `gcp-runner`; existing services need a new revision
 through restart or recreation.
 
 The container entry point is still `session-runner/server.js`, but it is now a bootstrap/router layer rather than the full runtime implementation. Feature code lives under `session-runner/lib/`:
@@ -618,7 +626,7 @@ For explicitly enabled automation runtimes backed by GitHub, automatic branch pr
 
 GitHub restart restoration preserves the workspace cache before any automation cleanup. The `.git` archive is stored with workspace-relative `./.git/**` entries and must be extracted at the workspace root, not inside `/workspace/.git`, or it creates an invalid nested `.git/.git` repository. Interactive runners retain the restored user branch, including modified, staged, and untracked files. An explicitly enabled automation runtime resumes the same session automation branch without resetting or cleaning; when it must create a new automation branch, it stashes restored tracked and untracked changes before resetting to the selected remote base and reapplies them after creating the branch. A stash conflict fails startup with the stash retained instead of silently replacing cached files.
 
-The `pi-chrome` Dockerfile packages `session-runner/lib/` and `session-runner/routes/` with `server.js`. Route modules are required startup dependencies; omitting either directory causes the container to exit before the Cloud Run startup probe can succeed. Changes under either shared directory, including this lifecycle gate, require rebuilding `pi-chrome`; existing session revisions retain their previously bundled behavior until restarted or recreated with the new image revision.
+The `gcp-runner` Dockerfile packages `session-runner/lib/` and `session-runner/routes/` with `server.js`. Route modules are required startup dependencies; omitting either directory causes the container to exit before the Cloud Run startup probe can succeed. Changes under either shared directory, including this lifecycle gate, require rebuilding `gcp-runner`; existing session revisions retain their previously bundled behavior until restarted or recreated with the new image revision.
 
 The runner exposes a backend-only `POST /workspace/sync-down` route protected by `SESSION_SHUTDOWN_TOKEN`. Functions calls this route after file-browser uploads or editor saves so newly written Cloud Storage objects materialize into the active `/workspace` filesystem that the terminal process sees. The existing periodic sync loop still uploads local terminal changes back to storage and preserves newer remote objects when it encounters them.
 
@@ -628,7 +636,7 @@ duplicate file browser. The embedded upstream Agent owns live file browsing and
 Git for marked sessions. Historical unsupported runner records remain available
 for cleanup only; no new SSH file-backed runner can be created.
 
-The `pi-chrome` image copies `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require a new `pi-chrome` revision; existing Cloud Run session revisions retain the catalog bundled in their current image.
+The `gcp-runner` image copies `session-runner/seeded-skills/` into `/app/seeded-skills/` so the harness-neutral catalog is available at runtime. The seeding path treats these files as optional startup aids: if an expected seed file is absent, the runner logs a warning, skips that seed, and continues starting the session. Changes to the catalog require a new `gcp-runner` revision; existing Cloud Run session revisions retain the catalog bundled in their current image.
 
 ### Agent operating reference
 
@@ -660,7 +668,7 @@ removed by this guidance change.
 Workspace skill seeding remains missing-only. Existing user-edited/older copies
 are not overwritten; the always-present reference points to current
 `/app/seeded-skills/` copies and explicitly supersedes obsolete gateway guidance.
-Rebuild/publish `pi-chrome` and recreate/revise existing runner services to get
+Rebuild/publish `gcp-runner` and recreate/revise existing runner services to get
 this reference and updated image-owned skills. Updating Markdown in a workspace
 or rebuilding an image tag alone does not update an already running revision.
 The managed-runtime catalog also seeds `mapache-installation`, which requires an
@@ -691,10 +699,10 @@ Browser access to the terminal page, `/terminal` WebSocket, `/preview/*`, `/runn
 
 The runner stores a bounded raw-output replay buffer so a newly loaded iframe can redraw recent terminal output after reconnecting. The default replay limit is `1000000` characters and can be changed with `TERMINAL_REPLAY_LIMIT`. Automatic reconnects from the same iframe skip replay to avoid duplicating visible terminal content. If the shell process itself exits, the runner closes connected sockets and the next fresh iframe connection starts a new PTY.
 
-The pi-chrome container starts Node directly so Cloud Run SIGTERM reaches the
+The gcp-runner container starts Node directly so Cloud Run SIGTERM reaches the
 runner's checkpoint and authority-release handler. An npm/shell PID 1 wrapper
 can bypass this cleanup and leave replacement boots fenced by the old owner.
-This command change requires a rebuilt pi-chrome image and recreation or a new
+This command change requires a rebuilt gcp-runner image and recreation or a new
 revision for existing services. It does not permit heartbeat-only takeover or
 guarantee cleanup after SIGKILL/OOM. Use the normal controlled stop/recreate
 path when an earlier boot's authority remains after forced termination.
@@ -703,7 +711,7 @@ This persistence is scoped to the current Cloud Run container instance. Active s
 
 Runner bootstrap is lifecycle-aware. `session-runner/lib/runnerLifecycle.js` catches preparation failures before the server listens and asks `session-runner/lib/activity.js` to record `runtimeState: "failed"`, the compact runtime error, and zero active sockets. When the stored lifecycle was `running`, `restarting`, or `resizing`, that transaction also changes it to `update_failed`; initial provisioning remains `provisioning` so the Functions worker can own the normal `provision_failed` transition. This prevents a Cloud Run service whose revision is configured as ready but whose instances cannot start from remaining displayed as a healthy running session.
 
-The runner reports terminal and embedded Agent activity back to the session document in Firestore. WebSocket connects and disconnects update only `activeSocketCount`, `lastConnectedAt`, and `lastDisconnectedAt`; transport reconnects do not count as user activity because Cloud Run can recycle long-lived WebSockets. Terminal input and PTY output, successful Agent mutations, meaningful Agent WebSocket frames, and background completed-turn progress update `lastActivityAt` with a short debounce. Keepalives, health/status polling, reconnects, and checkpoint metadata are deliberately excluded. The runner records `runtimeStartedAt` after acquiring its generation/boot authority; the scheduled idle reaper uses that baseline and actual activity for marked sessions, with session update/creation timestamps as compatibility fallbacks for older runners. Changes to this path require a new `pi-chrome` revision and existing Cloud Run services must be restarted or recreated to receive it.
+The runner reports terminal and embedded Agent activity back to the session document in Firestore. WebSocket connects and disconnects update only `activeSocketCount`, `lastConnectedAt`, and `lastDisconnectedAt`; transport reconnects do not count as user activity because Cloud Run can recycle long-lived WebSockets. Terminal input and PTY output, successful Agent mutations, meaningful Agent WebSocket frames, and background completed-turn progress update `lastActivityAt` with a short debounce. Keepalives, health/status polling, reconnects, and checkpoint metadata are deliberately excluded. The runner records `runtimeStartedAt` after acquiring its generation/boot authority; the scheduled idle reaper uses that baseline and actual activity for marked sessions, with session update/creation timestamps as compatibility fallbacks for older runners. Changes to this path require a new `gcp-runner` revision and existing Cloud Run services must be restarted or recreated to receive it.
 
 Cloud runner sessions also expose an authenticated read-only `/metrics` WebSocket. `resourceMetrics.service.js` samples Linux cgroup CPU and memory counters every two seconds while a client is subscribed, and `resourceMetricsWebSocket.js` broadcasts the safe `{type: "metrics", ...}` payload without attaching to the PTY or updating session activity. CPU is normalized against the cgroup CPU limit and memory against the cgroup memory limit. If the container does not expose bounded cgroup memory data, the socket reports `resource_metrics_unavailable`; it never falls back to host-wide memory values.
 
@@ -725,7 +733,7 @@ The Chrome DevTools MCP package is baked into both Chrome images at `chrome-devt
 
 The authenticated `/agent` gateway returns `Referrer-Policy: strict-origin-when-cross-origin` so the embedded pi-web-ui can validate the parent origin for its postMessage access bridge. It still strips `referer`, `origin`, cookies, and access query parameters before forwarding requests to the private upstream UI. Checkpoint restore validates Pi settings as JSON objects while accepting array-shaped UI catalogs such as `ui/subagent-templates.seeded.json`.
 
-The `pi-chrome` Dockerfile runs `bin/check-chrome-runtime.js` and `bin/chrome-smoke.js` during image construction. The smoke check is bounded and credential-free: it verifies CDP, loopback VNC, multiple page targets, browser cookie/local-storage interaction, profile file creation, and clean desktop shutdown. Profile archive restore and restart behavior remain covered by runner persistence tests and the canary checklist.
+The `gcp-runner` Dockerfile runs `bin/check-chrome-runtime.js` and `bin/chrome-smoke.js` during image construction. The smoke check is bounded and credential-free: it verifies CDP, loopback VNC, multiple page targets, browser cookie/local-storage interaction, profile file creation, and clean desktop shutdown. Profile archive restore and restart behavior remain covered by runner persistence tests and the canary checklist.
 
 The supported Pi runner starts its terminal process in Pi resume mode:
 
@@ -739,7 +747,7 @@ For Pi runners, that process is Pi resume mode:
 pi -c
 ```
 
-Cloud Functions sets `TERMINAL_COMMAND` and JSON-array `TERMINAL_ARGS` when provisioning each session. The supported `pi-chrome` runner receives:
+Cloud Functions sets `TERMINAL_COMMAND` and JSON-array `TERMINAL_ARGS` when provisioning each session. The supported `gcp-runner` runner receives:
 
 ```text
 TERMINAL_COMMAND=pi
@@ -773,9 +781,9 @@ JSONL history is captured and restored as storage state, but the runner does not
 tail it into a second Chat UI or inject prompts through a Mapache Chat socket.
 The only managed child is the upstream pi-web-ui process on the marked path.
 
-## Managed pi-chrome runtime
+## Managed gcp-runner runtime
 
-`session-runner/Dockerfile.pi-chrome` is the supported managed runner. It combines Pi, Chromium, preview, browser QA, and the embedded pi-web-ui runtime. The image sets the runner capability contract to:
+`session-runner/Dockerfile.gcp-runner` is the supported managed runner. It combines Pi, Chromium, preview, browser QA, and the embedded pi-web-ui runtime. The image sets the runner capability contract to:
 
 ```json
 {"terminal":true,"preview":true,"previewQa":true,"functions":true}
@@ -851,7 +859,7 @@ Build and push the image with:
 ```bash
 gcloud builds submit session-runner \
   --project pi-agents-cloud \
-  --config session-runner/cloudbuild.pi-chrome.yaml
+  --config session-runner/cloudbuild.gcp-runner.yaml
 ```
 
 ## Workspace Sync
@@ -991,7 +999,7 @@ A selected GitHub CLI credential is required when no other native CLI login is
 configured; GitHub App workspace access alone does not authenticate manual `gh`.
 Internal Git automation and `mapache-git-credential` retain App token renewal.
 
-This behavior ships in the `pi-chrome` runner image. Rebuild and publish that image, then create a new Cloud Run revision or restart/recreate sessions to receive the wrapper change. No Functions deploy is needed. Seeded skill copies are written only when missing, so existing workspace copies require an explicit refresh before they receive the updated guidance; an image update alone does not replace them.
+This behavior ships in the `gcp-runner` runner image. Rebuild and publish that image, then create a new Cloud Run revision or restart/recreate sessions to receive the wrapper change. No Functions deploy is needed. Seeded skill copies are written only when missing, so existing workspace copies require an explicit refresh before they receive the updated guidance; an image update alone does not replace them.
 
 For GitHub workspaces, treating `/workspace/.git` as archive-backed state is also a consistency boundary. The app should not expose Git internals through normal file listing or per-file object sync. Restoring `.git` from a single archive is safer than trying to mirror Git internals as ordinary Cloud Storage objects. Normal sync now skips `.git` paths for GitHub workspaces, and archive upload stores `.git` under the hidden internal archive prefix while skipping obvious transient `*.lock` files where practical. Private automation runners reserve a run-scoped `/var/lib/mapache/runtimes/{identity}/git/repository` root and do not publish a workspace `.git` archive; private Git migration/capture remains the dedicated follow-up boundary.
 
@@ -1026,7 +1034,7 @@ When a session is created, or a marked managed runtime is restarted,
 runner, writes the session record with `provisioningState: "queued"`, and
 returns without waiting for Cloud Run readiness. The
 `provisionQueuedSession` Firestore trigger provisions the server-selected
-`pi-chrome` image. Cloud Run request construction,
+`gcp-runner` image. Cloud Run request construction,
 service-account resolution, resource mapping, and runner environment assembly
 live in `functions/cloudRun.service.js`; credentials, Google/MCP materialization,
 and GitHub source/automation behavior remain in their focused services. The
@@ -1055,7 +1063,7 @@ terminal state.
 GitHub workspaces still enforce one active managed agent session at a time so
 two agents cannot race on cached Git state. Historical shell/SSH records may be
 readable alongside it, but new session creation resolves the managed
-pi-chrome/Pi runtime.
+gcp-runner/Pi runtime.
 
 Each session service is named with the session id:
 
@@ -1187,7 +1195,7 @@ new managed `/agent/` gateway, checkpoint contract, image `ENV` values, or
 runtime route set; they need a new revision or recreation before those changes
 take effect.
 
-Existing sessions do not gain the managed Chrome/Agent runtime when the catalog or image is updated. A session must be newly created or explicitly restarted onto `pi-chrome`; historical sessions retain their current runtime and archive behavior until they are cleaned up.
+Existing sessions do not gain the managed Chrome/Agent runtime when the catalog or image is updated. A session must be newly created or explicitly restarted onto `gcp-runner`; historical sessions retain their current runtime and archive behavior until they are cleaned up.
 
 When `functions/` changes are part of a runtime/API change, deploy Cloud
 Functions before handoff:
@@ -1200,7 +1208,7 @@ The relevant runtime locations remain the workspace-owned home/checkpoint
 prefix, the versioned agent snapshot prefix, the workspace-file manifest
 prefix, the legacy Chrome profile archive prefix, and the immutable Chrome
 profile seed prefix. Publishing or restoring seeds requires the rebuilt
-`pi-chrome` image and recreated/restarted runner services; Functions provisioning
+`gcp-runner` image and recreated/restarted runner services; Functions provisioning
 must be deployed before enabling the automation canary. No package catalog or
 duplicate agent-control API is part of the current deployment.
 
@@ -1209,9 +1217,9 @@ duplicate agent-control API is part of the current deployment.
 - Browser terminals should use a real terminal emulator. The app uses xterm.js so terminal programs and shell formatting render correctly.
 - The runner keeps the PTY alive across WebSocket disconnects so frontend re-renders, iframe reloads, and brief network drops do not discard in-progress terminal work.
 - Idle shutdown is controlled by Cloud Functions instead of browser timers so abandoned sessions are cleaned up even after the browser is closed.
-- Runtime image selection is no longer user-facing for ordinary sessions. Cloud Functions selects and verifies `pi-chrome`; historical catalog entries remain only for readable metadata and cleanup. Bring-your-own-image support, if added later, must be a separate permission-gated untrusted-workload path rather than an extension of normal session creation.
+- Runtime image selection is no longer user-facing for ordinary sessions. Cloud Functions selects and verifies `gcp-runner`; historical catalog entries remain only for readable metadata and cleanup. Bring-your-own-image support, if added later, must be a separate permission-gated untrusted-workload path rather than an extension of normal session creation.
 - Containers include common developer tools by default when they are broadly expected in terminal workflows.
-- Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing the curated `pi-chrome` runtime to select its managed Pi/Chrome startup contract.
+- Image-specific startup should be controlled by environment variables in the image where possible. This keeps the runner server shared while allowing the curated `gcp-runner` runtime to select its managed Pi/Chrome startup contract.
 - Large generated runtime directories should use archive-backed sync instead of object-per-file Cloud Storage sync. This avoids slow file listings and excessive object counts for directories such as `node_modules`.
 - Pi auth/settings may be user-scoped, but Pi conversation JSONLs must be session-scoped. New app sessions start with a fresh Pi conversation; the same app session can resume that conversation from its own archive.
 - Native upstream model settings are restored as upstream-owned state; Mapache does not expose a duplicate model editor.
@@ -1270,7 +1278,7 @@ The runner projects custom OpenAI-compatible entries from `models.json` into
 `pi/mapache-models.json` during checkpoint capture. Raw model configuration remains
 on the secret exclusion list. After restore, canonical auth materialization
 revalidates this metadata and reconstructs custom providers before Pi starts.
-This applies to the managed `pi-chrome` runtime and requires a rebuilt image/new
+This applies to the managed `gcp-runner` runtime and requires a rebuilt image/new
 revision for existing services. See [Named OpenAI-compatible connections](./runner-harnesses.md#named-openai-compatible-connections)
 for supported fields, ownership, and credential refresh behavior.
 

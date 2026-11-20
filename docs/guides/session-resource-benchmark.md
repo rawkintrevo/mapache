@@ -4,9 +4,9 @@ This checklist records how to validate the resource catalog before changing the 
 
 ## Pass rule
 
-An image/allocation/workload combination passes only when it has no OOM termination or restart and the observed peak memory leaves at least 25% headroom. Run startup/restore, idle terminal, managed Agent startup, and a representative workspace task for the supported `pi-chrome` image. Include Preview QA, browser startup, one QA navigation, and terminal use while Chrome remains open. Run each combination at least three times, or record why a different sample is sufficient.
+An image/allocation/workload combination passes only when it has no OOM termination or restart and the observed peak memory leaves at least 25% headroom. Run startup/restore, idle terminal, managed Agent startup, and a representative workspace task for the supported `gcp-runner` image. Include Preview QA, browser startup, one QA navigation, and terminal use while Chrome remains open. Run each combination at least three times, or record why a different sample is sufficient.
 
-The routine matrix is the supported `pi-chrome` image. Historical runner variants are not launch targets for this benchmark. Capture the image, allocation, workload, run number, peak memory, restart/OOM evidence, revision/log links, and result. Remove every temporary workspace, session, and Cloud Run service after the run.
+The routine matrix is the supported `gcp-runner` image. Historical runner variants are not launch targets for this benchmark. Capture the image, allocation, workload, run number, peak memory, restart/OOM evidence, revision/log links, and result. Remove every temporary workspace, session, and Cloud Run service after the run.
 
 ## Current catalog baseline
 
@@ -14,7 +14,7 @@ The implementation baseline uses the conservative candidate `Small = 1 vCPU / 2 
 
 | Image | 1 vCPU / 1 GiB context | 1 vCPU / 2 GiB candidate | Image-specific override |
 | --- | --- | --- | --- |
-| `pi-chrome` | Existing compatibility allocation; peak evidence required | Catalog Small candidate; include Chrome and terminal coexistence | None configured |
+| `gcp-runner` | Existing compatibility allocation; peak evidence required | Catalog Small candidate; include Chrome and terminal coexistence | None configured |
 
 The catalog mapping must not be changed based only on a startup success. If measured peak memory fails the pass rule, update the catalog and its tests together, and record the image-specific reason here and in the parent sizing issue. The posted us-central1 rate formula used for the current candidate is `(vCPU × 0.000018 + GiB × 0.000002) × 3600`; it produces `$0.0792/hr` for Small before free tier, discounts, network, storage, build, and other charges.
 

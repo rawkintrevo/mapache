@@ -20,6 +20,7 @@ const RUNNER_IMAGES = Object.freeze(
 const RUNNER_IMAGES_BY_IMAGE = Object.freeze(
     Object.values(RUNNER_IMAGES).reduce((acc, image) => {
       acc[image.image] = image;
+      for (const legacyImage of image.legacyImages || []) acc[legacyImage] = image;
       return acc;
     }, {}),
 );
@@ -32,6 +33,8 @@ function freezeResolvedImage(image) {
     label: image.label,
     variant: image.variant,
     image: image.image,
+    legacyImageKeys: Object.freeze([...(image.legacyImageKeys || [])]),
+    legacyImages: Object.freeze([...(image.legacyImages || [])]),
     terminalKind: resolveHarness(image.harnessId).terminalKind,
     capabilities: cloneCapabilities(image.capabilities),
   });
@@ -78,7 +81,7 @@ function resolveSessionHarness(session = {}) {
   const imageMatch = RUNNER_IMAGES_BY_IMAGE[cleanRunnerImageValue(session.image)];
   if (imageMatch) return resolveHarness(imageMatch.harnessId);
 
-  const keyMatch = RUNNER_IMAGES[cleanRunnerImageValue(session.imageKey)];
+  const keyMatch = runnerImageForKey(session.imageKey);
   if (keyMatch) return resolveHarness(keyMatch.harnessId);
 
   return resolveHarness("pi");
@@ -86,7 +89,7 @@ function resolveSessionHarness(session = {}) {
 
 function runnerImageCapabilities(image) {
   const normalizedImage = cleanRunnerImageValue(image);
-  const runnerImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || RUNNER_IMAGES[normalizedImage];
+  const runnerImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || runnerImageForKey(normalizedImage);
   return runnerImage ? cloneCapabilities(runnerImage.capabilities) : cloneCapabilities({});
 }
 
@@ -94,7 +97,7 @@ function resolveSessionCapabilities(session = {}) {
   const persistedCapabilities = session.capabilities && typeof session.capabilities === "object" ? session.capabilities : {};
   const imageValue = session.imageKey || session.image;
   const normalizedImage = cleanRunnerImageValue(imageValue);
-  const knownImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || RUNNER_IMAGES[normalizedImage];
+  const knownImage = RUNNER_IMAGES_BY_IMAGE[normalizedImage] || runnerImageForKey(normalizedImage);
 
   if (!knownImage) {
     return Object.keys(persistedCapabilities).length ? {...persistedCapabilities} : runnerImageCapabilities(imageValue);
@@ -107,36 +110,55 @@ function resolveSessionCapabilities(session = {}) {
 function resolveRunnerImage(payload = {}, defaultImage = "") {
   const requestedKey = cleanRunnerImageValue(payload.imageKey);
   if (requestedKey) {
-    const runnerImage = RUNNER_IMAGES[requestedKey];
+    const runnerImage = runnerImageForKey(requestedKey);
     if (!runnerImage) throw invalidRunnerImageError();
     return resolvedRunnerImage(runnerImage);
   }
 
   const legacyImage = cleanRunnerImageValue(payload.image);
   if (legacyImage) {
-    const runnerImage = RUNNER_IMAGES_BY_IMAGE[legacyImage] || RUNNER_IMAGES[legacyImage];
+    const runnerImage = RUNNER_IMAGES_BY_IMAGE[legacyImage];
     if (!runnerImage) throw invalidRunnerImageError();
     return resolvedRunnerImage(runnerImage);
   }
 
   const configuredDefaultImage = cleanRunnerImageValue(defaultImage);
-  const runnerImage = RUNNER_IMAGES_BY_IMAGE[configuredDefaultImage];
+  const runnerImage = RUNNER_IMAGES_BY_IMAGE[configuredDefaultImage] || runnerImageForKey(configuredDefaultImage);
   if (runnerImage) return resolvedRunnerImage(runnerImage);
   throw invalidRunnerImageError();
 }
 
 /**
- * Task 32 keeps historical catalog entries readable while making pi-chrome
- * the only runner that backend provisioning may launch.
+ * Historical session documents may retain the pi-chrome key and tag. Resolve
+ * those values to the canonical gcp-runner image before provisioning.
  */
 function isSupportedProvisioningSession(session = {}) {
-  const runnerImage = RUNNER_IMAGES[AGENT_IMAGE_KEY];
-  if (!runnerImage) return false;
-  if (cleanRunnerImageValue(session.imageKey) !== AGENT_IMAGE_KEY) return false;
-  if (cleanRunnerImageValue(session.image) !== runnerImage.image) return false;
+  const runnerImage = resolveSessionRunnerImage(session);
+  if (!runnerImage || runnerImage.key !== AGENT_IMAGE_KEY) return false;
+  if (!cleanRunnerImageValue(session.imageKey) || !cleanRunnerImageValue(session.image)) return false;
   if (cleanRunnerImageValue(session.harnessId) && cleanRunnerImageValue(session.harnessId) !== "pi") return false;
   if (cleanRunnerImageValue(session.terminalKind) && cleanRunnerImageValue(session.terminalKind) !== "pi") return false;
   return true;
+}
+
+function resolveSessionRunnerImage(session = {}) {
+  const imageKey = cleanRunnerImageValue(session.imageKey);
+  const imageReference = cleanRunnerImageValue(session.image);
+  const keyImage = imageKey ? runnerImageForKey(imageKey) : null;
+  const referenceImage = imageReference ? RUNNER_IMAGES_BY_IMAGE[imageReference] : null;
+  if (imageKey && !keyImage || imageReference && !referenceImage) return null;
+  if (keyImage && referenceImage && keyImage.key !== referenceImage.key) return null;
+  return keyImage || referenceImage;
+}
+
+function canonicalRunnerImageReference(session = {}) {
+  return resolveSessionRunnerImage(session)?.image || "";
+}
+
+function runnerImageForKey(value) {
+  const normalized = cleanRunnerImageValue(value);
+  if (RUNNER_IMAGES[normalized]) return RUNNER_IMAGES[normalized];
+  return Object.values(RUNNER_IMAGES).find((image) => image.legacyImageKeys?.includes(normalized)) || null;
 }
 
 function resolvedRunnerImage(runnerImage) {
@@ -165,10 +187,12 @@ module.exports = {
   HARNESSES,
   RUNNER_IMAGES,
   cloneCapabilities,
+  canonicalRunnerImageReference,
   isSupportedProvisioningSession,
   listRunnerImages,
   resolveHarness,
   resolveRunnerImage,
+  resolveSessionRunnerImage,
   resolveSessionCapabilities,
   resolveSessionHarness,
   runnerImageCapabilities,

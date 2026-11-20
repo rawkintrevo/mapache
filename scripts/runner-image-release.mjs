@@ -1,4 +1,4 @@
-const SUPPORTED_VARIANT = "pi-chrome";
+const SUPPORTED_VARIANT = "gcp-runner";
 
 function normalizeVariant(variant) {
   const cleanVariant = String(variant || "").trim();

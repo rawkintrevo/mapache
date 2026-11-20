@@ -162,7 +162,7 @@ test("seeded GitHub guidance uses native gh and the image installs the compatibi
   assert.doesNotMatch(skill, /mapache-gh|mapache_gh|gh auth token/);
   assert.match(skill, /gh issue create/);
   assert.match(skill, /gh pr create/);
-  const dockerfile = fs.readFileSync(path.join(runnerRoot, "Dockerfile.pi-chrome"), "utf8");
+  const dockerfile = fs.readFileSync(path.join(runnerRoot, "Dockerfile.gcp-runner"), "utf8");
   assert.match(dockerfile, /ln -sf \/app\/bin\/mapache-gh \/usr\/local\/bin\/mapache-gh/);
 });
 

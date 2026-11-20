@@ -327,7 +327,7 @@ the helper, and the backend verifies the session/source binding. Native `gh`
 authentication remains independent: successful `gh auth status` does not test
 managed Git renewal. A `github_token_refresh_failed:404:not_found` from the
 direct broker can mean a missing/mismatched session shutdown credential, not
-only a missing connection. Rebuild/publish `pi-chrome` and restart or recreate
+only a missing connection. Rebuild/publish `gcp-runner` and restart or recreate
 existing sessions to receive this socket-based renewal path. No Functions
 deployment is needed for this runner-only change. Manual PR creation is verified immediately. An explicitly
 chosen separate worktree does not disable exit automation in the original

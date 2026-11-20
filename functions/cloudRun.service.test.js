@@ -309,6 +309,8 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(service.template.containers[0].resources.limits.cpu, "1");
   assert.strictEqual(service.template.containers[0].resources.cpuIdle, undefined);
   assert.strictEqual(envMap(service.template.containers[0].env).WORKSPACE_ID, "workspace-1");
+  assert.strictEqual(service.template.containers[0].image,
+      "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner");
 
   const markedStorage = storageFixture();
   const markedService = await buildCloudRunService({
@@ -408,6 +410,8 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(patch.template.containers[0].resources.limits.memory, "2Gi");
   assert.ok(envMap(patch.template.containers[0].env).RESTART_NONCE);
   assert.strictEqual(patch.template.containers[0].resources.cpuIdle, undefined);
+  assert.strictEqual(patch.template.containers[0].image,
+      "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner");
 
   const sharedPatch = await buildCloudRunPatch({
     image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",

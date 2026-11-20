@@ -22,7 +22,7 @@ Submission reuses `workspaceTickets.service.js` and `automationRuns.service.js`;
 
 `GET /api/agent/workspace-requests/models?targetWorkspaceId=...` is the
 grant-gated discovery boundary. It starts or reuses the target's normal
-`pi-chrome` runtime when possible and returns only safe catalog metadata:
+`gcp-runner` runtime when possible and returns only safe catalog metadata:
 `providerId`, `modelId`, display `name`, supported input hints, and an
 `available` flag based on whether the target runtime has provider
 authentication configured. The flag is evidence of configured credentials, not
@@ -101,7 +101,7 @@ sessions keep their pinned selections on repeated provisioning calls.
 
 The shared-runtime route is feature-gated independently from scheduled
 automation admission. Deploy the Functions change before accepting new
-requests; existing target sessions need the rebuilt `pi-chrome` revision before
+requests; existing target sessions need the rebuilt `gcp-runner` revision before
 they can accept the runner control route.
 
 Agent reads use a caller-safe projection containing request ID, target workspace, source workspace, status, run ID, result, reply, error, and timestamps. It excludes target prompts/context, transcript, credentials, private history, and unrelated tickets. The existing owner-authenticated ticket endpoint remains the owner view and is not used as the agent broker boundary. A permitted reply creates a new queued `ticket-{ticketId}-reply-{uuid}` run linked to the prior run through `rootRunId`, updates the same ticket pointer, and uses the normal sink/admission path; it does not replay the original run.
@@ -161,7 +161,7 @@ CPU and memory automatically. `automationRuns.service.js` pins this resolved pai
 in the queued run snapshot and request contract; explicit `resources` overrides
 win. A workspace without saved resources uses the normal Small default (1 CPU,
 2 GiB). No sizing question is required. Normal request sessions still use
-`pi-chrome`, including the complete saved browser profile when one is available.
+`gcp-runner`, including the complete saved browser profile when one is available.
 Concurrent requests create separate persisted conversations in the same target
 runtime; they do not create sibling Cloud Run services.
 
@@ -233,7 +233,7 @@ visible chat lifecycle.
 
 The current image-bundled skill path remains authoritative when workspace-local
 copies are older. Seeding creates missing skills without replacing user edits.
-Rebuild/publish `pi-chrome` and recreate/revise existing sessions to receive the
+Rebuild/publish `gcp-runner` and recreate/revise existing sessions to receive the
 operating reference, model discovery tool, and new skill; a repository docs edit
 or image tag update alone does not refresh a running revision. Deploy Functions
 before the image because the broker owns grant checks and model resolution.
@@ -255,7 +255,7 @@ claim.
 - `workspace_request_reply`
 - `workspace_request_cancel`
 
-The child process receives only the runner-owned Unix socket. The runner adapter refreshes the short-lived token and forwards bounded requests; it does not expose shutdown credentials to the Agent. A rebuilt `pi-chrome` image and restarted/recreated sessions are required before existing runners see these tools.
+The child process receives only the runner-owned Unix socket. The runner adapter refreshes the short-lived token and forwards bounded requests; it does not expose shutdown credentials to the Agent. A rebuilt `gcp-runner` image and restarted/recreated sessions are required before existing runners see these tools.
 
 ## Verification
 

@@ -39,7 +39,7 @@ export function SessionDetail({
   const imageFreshness = getSessionImageFreshness(session);
   const isHistoricalRuntime = !hasRunnerUrl && (
     session.sourceType === "ssh" ||
-    (Boolean(session.imageKey || session.image) && normalizeSessionImageKey(session) !== "pi-chrome")
+    (Boolean(session.imageKey || session.image) && normalizeSessionImageKey(session) !== "gcp-runner")
   );
   const unavailableMessage = isHistoricalRuntime ? "This historical runtime is unavailable" :
     (!hasRunnerUrl && ["stopped", "inactive", "needs_image"].includes(String(session.status).toLowerCase()) ? "Workspace is stopped" : "");

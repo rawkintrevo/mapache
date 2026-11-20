@@ -12,10 +12,11 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const {createAgentCheckpointService} = require("../../../session-runner/lib/agentCheckpoint.service.js");
 const {createAgentSnapshotService} = require("../../../session-runner/lib/agentSnapshot.service.js");
+const {isAgentImageKey} = require("../../../functions/agentRuntime.helpers.js");
 
 export const CUTOVER_CONFIRMATION = "pi-web-ui-hubspot-cutover-v1";
 export const AGENT_UI_VERSION = "pi-web-ui-v1";
-export const AGENT_IMAGE_KEY = "pi-chrome";
+export const AGENT_IMAGE_KEY = "gcp-runner";
 
 const WORKSPACE_PREFIX = "workspace/";
 const HISTORY_PREFIX = "sessions/";
@@ -229,8 +230,8 @@ async function assertRemotePreconditions({before, bucketName, project, sourcePre
     throw cutoverError("source_not_stopped", "source session is not confirmed stopped");
   }
   await assertCloudRunAbsent({project, region: before.session.region || "us-central1", serviceId: before.session.serviceId});
-  if (before.session.imageKey !== AGENT_IMAGE_KEY || before.session.harnessId !== "pi") {
-    throw cutoverError("source_session_not_pi_chrome", "restricted source session is not the selected pi-chrome session");
+  if (!isAgentImageKey(before.session.imageKey) || before.session.harnessId !== "pi") {
+    throw cutoverError("source_session_not_gcp_runner", "restricted source session is not the selected gcp-runner session");
   }
 }
 
@@ -433,7 +434,7 @@ function checkpointSummary(result) {
 function requireDigestImage(value) {
   const image = String(value || "").trim();
   if (!/^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/.test(image)) {
-    throw cutoverError("immutable_image_required", "cut-over requires the exact pi-chrome Artifact Registry digest");
+    throw cutoverError("immutable_image_required", "cut-over requires the exact gcp-runner Artifact Registry digest");
   }
   return image;
 }

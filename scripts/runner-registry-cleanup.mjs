@@ -10,7 +10,7 @@ const LOCATION = "us-central1";
 const REPOSITORY = "pi-agents";
 const REGISTRY = `${LOCATION}-docker.pkg.dev/${PROJECT}/${REPOSITORY}`;
 const RUNNER = `${REGISTRY}/session-runner`;
-const VARIANTS = ["default", "pi-basic", "pi-web", "pi-chrome", "codex-basic", "codex-web", "codex-chrome", "pi-n64"];
+const VARIANTS = ["default", "pi-basic", "pi-web", "gcp-runner", "pi-chrome", "codex-basic", "codex-web", "codex-chrome", "pi-n64"];
 const POLICY_NAMES = ["runner-pr-2-days", "runner-revision-7-days", "keep-deployed-and-other-tags"];
 
 export function classifyTag(tag) {

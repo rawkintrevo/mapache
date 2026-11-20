@@ -212,7 +212,7 @@ async function ensureAutomationSession(run, workspace, dependencies = {}, chrome
   const existingSnap = await sessionRef.get();
   if (!existingSnap.exists) {
     await dependencies.createSession(run.ownerUid, run.workspaceId, {
-      imageKey: "pi-chrome",
+      imageKey: "gcp-runner",
       name: run.snapshot?.name || "Automation run",
       operationId: run.provisioningOperationId,
       resources: run.snapshot?.resources || workspace.resources || undefined,

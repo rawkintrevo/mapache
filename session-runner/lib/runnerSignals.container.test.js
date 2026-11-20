@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-// Opt in with a locally available pi-chrome image. Uses its inherited Node
+// Opt in with a locally available gcp-runner image. Uses its inherited Node
 // entrypoint and the current Dockerfile CMD, without production credentials.
 test("container SIGTERM reaches runner cleanup before PID 1 exits", {
   skip: !process.env.MAPACHE_SIGNAL_TEST_IMAGE,
@@ -32,7 +32,7 @@ test("container SIGTERM reaches runner cleanup before PID 1 exits", {
       console.log('READY');
       setInterval(() => {}, 1000);
     `);
-    const dockerfile = fs.readFileSync(path.join(__dirname, "../Dockerfile.pi-chrome"), "utf8");
+    const dockerfile = fs.readFileSync(path.join(__dirname, "../Dockerfile.gcp-runner"), "utf8");
     const command = JSON.parse(dockerfile.match(/^CMD (.+)$/m)[1]);
     container = docker("create", "--network=none", "--volume", `${directory}:/signal-test:ro`, "--workdir=/signal-test", process.env.MAPACHE_SIGNAL_TEST_IMAGE, ...command);
     docker("start", container);

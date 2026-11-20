@@ -12,7 +12,7 @@ const skill = (name) => fs.readFileSync(path.join(runnerRoot, "seeded-skills", n
 
 test("operating reference stays bounded and all detailed skill paths ship in the image", () => {
   assert.ok(Buffer.byteLength(reference) < 8000, "keep the always-present reference small");
-  const dockerfile = fs.readFileSync(path.join(runnerRoot, "Dockerfile.pi-chrome"), "utf8");
+  const dockerfile = fs.readFileSync(path.join(runnerRoot, "Dockerfile.gcp-runner"), "utf8");
   assert.match(dockerfile, /^WORKDIR \/app$/m);
   assert.match(dockerfile, /^COPY reference \.\/reference$/m);
   assert.match(dockerfile, /^COPY seeded-skills \.\/seeded-skills$/m);

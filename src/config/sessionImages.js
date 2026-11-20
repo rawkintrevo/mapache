@@ -17,6 +17,8 @@ export const sessionImages = catalog.images.map((image) => ({
   label: image.label,
   variant: image.variant,
   value: image.image,
+  legacyImageKeys: [...(image.legacyImageKeys || [])],
+  legacyImages: [...(image.legacyImages || [])],
   terminalKind: catalog.harnesses?.[image.harnessId]?.terminalKind || "shell",
   capabilities: normalizeCapabilities(image.capabilities),
 }));
@@ -27,7 +29,8 @@ function cleanSessionImageValue(value) {
 
 function findSessionImage(imageValue) {
   const normalizedValue = cleanSessionImageValue(imageValue);
-  return sessionImages.find((item) => item.value === normalizedValue || item.key === normalizedValue) || null;
+  return sessionImages.find((item) => item.value === normalizedValue || item.key === normalizedValue ||
+    item.legacyImageKeys.includes(normalizedValue) || item.legacyImages.includes(normalizedValue)) || null;
 }
 
 export function sessionImageCapabilities(imageValue) {
@@ -37,7 +40,7 @@ export function sessionImageCapabilities(imageValue) {
 
 export function normalizeSessionImageKey(session = {}) {
   const imageKey = cleanSessionImageValue(session.imageKey);
-  if (imageKey) return imageKey;
+  if (imageKey) return findSessionImage(imageKey)?.key || imageKey;
 
   const legacyImage = findSessionImage(session.image);
   return legacyImage ? legacyImage.key : "";

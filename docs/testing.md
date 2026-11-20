@@ -56,10 +56,10 @@ Candidate flows:
 - `pi-web` preview status, static preview, proxy preview, and browser log capture.
 - Chrome-image desktop readiness, authenticated browser access, persistent profile archive behavior, and Pi provider handoff.
 - Native upstream Goal persistence and explicit paused/resume behavior inside the embedded Agent surface.
-- Managed pi-web runtime behavior through one explicitly marked disposable `pi-chrome` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, Long-running persistence and idle-policy behavior, and deterministic failure-recovery assertions.
+- Managed pi-web runtime behavior through one explicitly marked disposable `gcp-runner` workspace, including upstream agent/tools, multiple histories, terminal/shell, native Goals, read-only credentials/MCP probes, Chrome/Preview, access renewal, stop/restart, resource changes, Long-running persistence and idle-policy behavior, and deterministic failure-recovery assertions.
 - Runtime availability schedule boundaries and daylight-saving resolution, disabled/selected weekdays, manual-pause suppression, idle bypass during open windows, direct Cloud Run deletion without runner grace at close, lifecycle retries, and deletion/capacity fencing are covered by `functions/runtimeSchedule.helpers.test.js`, `functions/workspaceRuntimeSchedule.service.test.js`, `functions/sessionLifecycle.service.test.js`, and `functions/cloudRun.service.test.js`.
 
-Routine browser QA and standard session-creation validation focus on the supported `pi-chrome` runner. Historical runner records may be inspected for cleanup, but retired runner families are not launch targets.
+Routine browser QA and standard session-creation validation focus on the supported `gcp-runner` runner. Historical runner records may be inspected for cleanup, but retired runner families are not launch targets.
 
 E2E tests should not run in normal PR workflows until they are reliable, bounded, and credential-light. Run them manually before risky deploys and in scheduled workflows once automation exists.
 
@@ -104,7 +104,7 @@ Run slower checks when a change touches the related subsystem:
 - Frontend workspace/session UI: frontend smoke tests once added, plus Playwright E2E for critical flows.
 - Session sizing: `functions/sessionResources.helpers.test.js`, `src/utils/sessionResources.test.js`, `SessionResourceSelector.test.jsx`, `SessionModal.test.jsx`, `SessionEditModal.test.jsx`, and the opt-in `e2e/qa/cases/session-resource-sizing.json` case cover catalog parity, preset/custom inference, estimate formatting, invalid pairs, create/edit payloads, resize payloads, and compact summaries.
 - Deployment, service accounts, Cloud Run provisioning, or Firebase rules: staging deploy or scheduled workflow with explicit `--project pi-agents-cloud` flags.
-- Managed pi-web-ui runtime changes: build the local `pi-chrome` image, then run the opt-in
+- Managed pi-web-ui runtime changes: build the local `gcp-runner` image, then run the opt-in
   `session-runner/lib/piWebUi.localVertical.test.js` suite with
   `MAPACHE_RUN_PI_WEB_UI_VERTICAL=1`. The suite uses a deterministic local model and MCP
   fixture through the real pi-web-ui server, gateway, WebSocket, terminal, Goal, checkpoint,

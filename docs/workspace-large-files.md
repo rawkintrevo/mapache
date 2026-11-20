@@ -53,7 +53,7 @@ not a general filesystem quota.
 
 ## Rollout and recovery
 
-Rebuild `Dockerfile.pi-chrome` and restart/recreate existing sessions with the new
+Rebuild `Dockerfile.gcp-runner` and restart/recreate existing sessions with the new
 revision. The image installs `mapache` from `bin/mapache.js`; the fetch service is
 `lib/workspaceLargeFilePull.js`. Trashpanda's existing checkpoint is compatible and
 its two large model artifacts restore as pointers without downloading their bytes.
