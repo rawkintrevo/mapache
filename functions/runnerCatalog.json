@@ -54,11 +54,17 @@
   },
   "images": [
     {
-      "imageKey": "pi-chrome",
+      "imageKey": "gcp-runner",
       "harnessId": "pi",
       "variant": "chrome",
-      "label": "pi-chrome",
-      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+      "label": "gcp-runner",
+      "image": "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner",
+      "legacyImageKeys": [
+        "pi-chrome"
+      ],
+      "legacyImages": [
+        "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome"
+      ],
       "capabilities": {
         "terminal": true,
         "preview": true,

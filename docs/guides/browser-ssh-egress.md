@@ -246,7 +246,7 @@ services retain their image and environment until replaced. Deploying Functions 
 image rollout and does not enable gateway access.
 
 ```bash
-gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud --substitutions=_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gateway-egress-COMMIT
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud --substitutions=_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gateway-egress-COMMIT
 firebase deploy --only functions --project pi-agents-cloud
 ```
 

@@ -17,7 +17,7 @@ const session = {
   status: "running",
   serviceUrl: "https://runner.example",
   terminalKind: "pi",
-  imageKey: "pi-chrome",
+  imageKey: "gcp-runner",
   resources: {cpu: "1", memory: "1Gi"},
   capabilities: {terminal: true, preview: true, previewQa: true, chrome: true},
 };

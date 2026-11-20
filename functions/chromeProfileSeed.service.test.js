@@ -64,11 +64,13 @@ function sessions(sources = []) {
 
 test("validates workspace ownership and immutable seed object paths", () => {
   const descriptor = seedDescriptor();
-  assert.deepEqual(validateChromeProfileSeedDescriptor(descriptor, {
+  const normalized = validateChromeProfileSeedDescriptor(descriptor, {
     workspaceId,
     bucketName,
     workspaceStoragePrefix: prefix,
-  }).seedVersion, descriptor.seedVersion);
+  });
+  assert.equal(normalized.seedVersion, descriptor.seedVersion);
+  assert.equal(normalized.browser.runtime, "gcp-runner");
   assert.throws(() => validateChromeProfileSeedDescriptor({...descriptor, sourceWorkspaceId: "other"}, {
     workspaceId,
     bucketName,

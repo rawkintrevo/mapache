@@ -1,21 +1,19 @@
 {
   "id": "session.create-all-runners",
-  "title": "Create the supported pi-chrome session",
-  "description": "Log in, create a blank workspace, then create and clean up one pi-chrome session.",
+  "title": "Create the supported gcp-runner session",
+  "description": "Log in, create a blank workspace, start its server-selected gcp-runner session, then delete the workspace and its session resources.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/session.create-all-runners",
   "requires": {
-    "cloudRun": "Creates one billable pi-chrome Cloud Run service"
+    "cloudRun": "Creates one billable gcp-runner Cloud Run service"
   },
   "steps": [
     {"useCase": "cases/login.json"},
     {"useScript": "scripts/create-blank-workspace.json", "parameters": {"workspaceName": "qa-all-runners-ws-{{timestamp}}"}},
-    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-chrome-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi"}},
+    {"type": "click", "role": "button", "name": "Workspace power controls: stopped"},
+    {"type": "click", "role": "menuitem", "name": "Start workspace"},
     {"assert": "network-status", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201},
-    {"assert": "snapshot-any-text", "expectedAny": ["Terminal access is not ready.", "Terminal qa-pi-chrome"]},
-    {"capture": "screenshot", "fileName": "pi-chrome-session.png"},
-    {"useScript": "scripts/delete-selected-session.json"},
-
+    {"capture": "screenshot", "fileName": "gcp-runner-session.png"},
     {"useScript": "scripts/delete-selected-workspace.json"}
   ]
 }

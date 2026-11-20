@@ -59,7 +59,7 @@ supporting examples with source references. This is an information request.”
 ## Explain the actual limitation
 
 - **Tools missing:** This session does not expose the request tools. It may need
-  the current `pi-chrome` image and a restarted/recreated runner, or runtime/MCP
+  the current `gcp-runner` image and a restarted/recreated runner, or runtime/MCP
   setup repair. A documentation change alone does not install tools.
 - **Target absent or no targets:** Discovery lists only explicitly permitted
   workspaces. Ask the owner to check **More → Workspace request access** in the

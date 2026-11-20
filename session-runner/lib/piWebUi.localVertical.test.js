@@ -21,7 +21,7 @@ const {registerBrowserRoutes, registerPreviewRoutes} = require("../routes/browse
 const {createLocalVerticalModelServer} = require("./localVerticalModel");
 
 const ENABLED = process.env.MAPACHE_RUN_PI_WEB_UI_VERTICAL === "1";
-const IMAGE = process.env.MAPACHE_PI_CHROME_IMAGE || "mapache-task22-pi-chrome:latest";
+const IMAGE = process.env.MAPACHE_GCP_RUNNER_IMAGE || process.env.MAPACHE_PI_CHROME_IMAGE || "mapache-task22-gcp-runner:latest";
 
 test("composes concurrent admission with stale checkpoint publication fencing", async (t) => {
   const root = await fsp.mkdtemp(path.join("/tmp", "mapache-pi-web-authority-"));
@@ -90,7 +90,7 @@ test("composes concurrent admission with stale checkpoint publication fencing", 
 });
 
 test("runs the local pi-web vertical slice through the real image runtime and gateway", {
-  skip: !ENABLED && "set MAPACHE_RUN_PI_WEB_UI_VERTICAL=1 after building the local pi-chrome image",
+  skip: !ENABLED && "set MAPACHE_RUN_PI_WEB_UI_VERTICAL=1 after building the local gcp-runner image",
   timeout: 180_000,
 }, async (t) => {
   // Bind mounts must be visible to the Docker daemon, so keep this bounded

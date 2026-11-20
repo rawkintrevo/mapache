@@ -4,7 +4,7 @@ This is the entrypoint for developer-facing and agent-facing knowledge about Map
 
 ## Purpose
 
-Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud agent sessions. The active app lets authenticated users create blank or GitHub-backed workspaces, start an isolated managed `pi-chrome` runner, work in the embedded upstream agent UI, use sibling terminal/Chrome/Preview surfaces, manage credentials and external connections, and persist workspace/agent state through Cloud Storage and GitHub.
+Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud agent sessions. The active app lets authenticated users create blank or GitHub-backed workspaces, start an isolated managed `gcp-runner` runner, work in the embedded upstream agent UI, use sibling terminal/Chrome/Preview surfaces, manage credentials and external connections, and persist workspace/agent state through Cloud Storage and GitHub.
 
 ## How to Read This Wiki
 

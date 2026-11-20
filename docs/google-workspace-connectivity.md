@@ -72,7 +72,7 @@ The catalog exposes Gmail, Drive, Docs, Sheets, Slides, and Calendar. Chat and P
 
 The local Gmail search and draft-list tools map the Gmail API's `threads` and `drafts` response collections explicitly into the shared paginator. Keep those service-specific collection keys when changing pagination; the shared client defaults to an `items` collection, and using that default for Gmail silently produces empty connector results even when Google returned matches.
 
-Drive search and recent-file listing likewise pass `itemsKey: "files"` to the shared paginator because Drive v3 returns its collection under `files`; single-file metadata and permission calls use endpoint-specific field masks. Sheets metadata, values reads, values writes, batch updates, and dimension insertion use the dedicated `https://sheets.googleapis.com/v4` service endpoint rather than the shared `www.googleapis.com` host; the real REST-client regression tests assert the resolved host and paths for each operation. The local health tool performs bounded read-only probes for Gmail, Drive, and Calendar through the same REST client and reports Docs, Sheets, and Slides as unverified when no resource identifier is available. Deploying a Sheets REST-client or tool change requires rebuilding and publishing `pi-chrome`; existing workspaces need a restart through the normal lifecycle to receive the corrected runner revision. Reauthorizing the Google account alone does not update runner code.
+Drive search and recent-file listing likewise pass `itemsKey: "files"` to the shared paginator because Drive v3 returns its collection under `files`; single-file metadata and permission calls use endpoint-specific field masks. Sheets metadata, values reads, values writes, batch updates, and dimension insertion use the dedicated `https://sheets.googleapis.com/v4` service endpoint rather than the shared `www.googleapis.com` host; the real REST-client regression tests assert the resolved host and paths for each operation. The local health tool performs bounded read-only probes for Gmail, Drive, and Calendar through the same REST client and reports Docs, Sheets, and Slides as unverified when no resource identifier is available. Deploying a Sheets REST-client or tool change requires rebuilding and publishing `gcp-runner`; existing workspaces need a restart through the normal lifecycle to receive the corrected runner revision. Reauthorizing the Google account alone does not update runner code.
 
 Drive read access includes a unified `drive_read_file` tool. It returns ordinary textual files as bounded UTF-8, exports Google Docs and Slides as plain text, exports Google Sheets as CSV, and preserves a bounded base64 fallback for binary files. Native export uses the existing Drive read-only scope, so users who enabled Drive can inspect native content without separately enabling the Docs, Sheets, or Slides service. The legacy `drive_download_file` tool remains available for callers that explicitly need base64 bytes and continues to reject Google-native files.
 
@@ -105,7 +105,7 @@ bounded status/code/retryability diagnostics. Existing tool registration gates
 remain unchanged: Mapache's Docs read scope catalog already requires
 `drive.readonly` alongside `documents.readonly`, even with only the Docs service
 enabled. This change requires no new OAuth scope or Functions deployment.
-Publish a rebuilt `pi-chrome` image and restart/recreate existing sessions to
+Publish a rebuilt `gcp-runner` image and restart/recreate existing sessions to
 receive the updated readers; existing Cloud Run revisions retain the old code.
 
 Write-capable runner connections expose the following bounded creation contracts:
@@ -121,7 +121,7 @@ Docs reads, creation, and batch updates use `https://docs.googleapis.com/v1`; Sl
 
 The shared REST client preserves HTTP error classification and retryability even when Google returns HTML or plain text. MCP error results include `status`, `retryable`, and a bounded diagnostic excerpt with markup, script/style bodies, and credentials removed. A non-JSON success response still reports `google_invalid_json` with diagnostic text; successful byte downloads remain unchanged. The existing single 401 renewal/retry happens before interpreting the final response. Upstream diagnostic text is untrusted provider content, not agent instructions.
 
-Deploy these runner-only changes by rebuilding and publishing `pi-chrome`; existing sessions require restart/recreation to receive a new revision. No Functions deployment or new OAuth scopes are required. Read-only connections still need write authorization before creation is available.
+Deploy these runner-only changes by rebuilding and publishing `gcp-runner`; existing sessions require restart/recreation to receive a new revision. No Functions deployment or new OAuth scopes are required. Read-only connections still need write authorization before creation is available.
 
 The required Functions configuration is:
 
@@ -184,7 +184,7 @@ firebase deploy --only functions --project pi-agents-cloud
 The runner status, Pi archive, and local Google REST client changes require rebuilt runner images. Build the affected standard images with the checked-in Cloud Build configuration and explicit project flag, then restart or recreate existing sessions before expecting them to use the new runtime. Token renewal specifically requires both the Function and runner revisions: an older session does not have the broker URL and connection metadata in its environment.
 
 ```bash
-gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome
+gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner
 ```
 
 Before production use, verify the three OAuth secrets, redirect URI, Google Cloud APIs, consent screen, and any Workspace administrator policy. The OAuth consent screen's Data Access configuration must include `https://www.googleapis.com/auth/calendar.events` before users connect Calendar with read/write access and `https://mail.google.com/` before users opt into permanent Gmail deletion. Existing read/write connections continue without reauthorization; users who enable permanent deletion must reconnect the saved account to obtain the additional grant, then restart or recreate affected sessions to receive the new runner environment. Disabling the setting does not rely on revoking the broad scope: the persisted opt-in remains the independent gate. If a rollout must be reversed, deploy the previous Functions commit/revision and its matching runner image tags, restart affected sessions, and revoke or delete the saved Google connections through the UI/API. Existing sessions retain their already-provisioned environment until they are stopped or restarted.

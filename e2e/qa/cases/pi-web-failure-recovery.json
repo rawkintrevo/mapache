@@ -5,7 +5,7 @@
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/pi-web.failure-recovery",
   "requires": {
-    "cloudRun": "Creates one billable marked pi-chrome service",
+    "cloudRun": "Creates one billable marked gcp-runner service",
     "provider": "An existing QA-configured Pi provider for one bounded inert turn; no tools or writes are allowed",
     "faultHarness": "A QA-only deterministic harness must be able to inject storage publication failure, writer revocation, uncertain replacement, and no-auto-resume state; absence is blocked",
     "accessRenewal": "A QA-only short-lived access fixture is available to prove renewal before expiry; absence is blocked",

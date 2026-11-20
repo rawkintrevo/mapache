@@ -85,10 +85,10 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/workspace-request-await.json`: Managed Agent submits one granted cross-workspace request, stays active, and returns its answer without a reminder.
 - `cases/workspace-github-url.json`: GitHub workspace creation from URL.
 - `cases/session-create-basic.json`: Basic Pi session creation.
-- `cases/session-create-all-runners.json`: Blank workspace plus the supported `pi-chrome` session creation.
+- `cases/session-create-all-runners.json`: Blank workspace plus the supported `gcp-runner` session creation.
 - `cases/session-lifecycle.json`: Session resize, restart, stop, delete.
 - `cases/session-resource-sizing.json`: Priced Small/Medium/Large selection, Advanced settings, Custom inference, invalid-pair prevention, resize, and compact summaries.
-- `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable pi-chrome workspace.
+- `cases/pi-web-marked-workspace-setup.json`: Preflight for one explicitly marked disposable gcp-runner workspace.
 - `cases/pi-web-functional.json`: Managed Agent turns, read-only MCP/auth probes, native history, shell coexistence, Chrome/Preview, and native Goal assertions.
 - `cases/pi-web-long-running-policy.json`: Managed runtime Long-running switch, persisted policy across reload, automatic-pause messaging, and cleanup.
 - `cases/pi-web-failure-recovery.json`: Bounded disconnect, duplicate-start, writer-fencing, checkpoint, replacement, access-renewal, and no-auto-resume assertions; requires the named deterministic fault harness.
@@ -99,7 +99,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/automation-management.json`: Workspace automation CRUD, disabled-save, schedule/timezone, concurrency, global-history navigation, and cleanup.
 - `cases/automation-model-selection.json`: Select a provider/model through the editor, enable/create, change and reload the selection, preserve drafts, and repair missing-model definitions without starting a runner or seeding models through admin tools.
 - `cases/pi-auth-selection.json`: Manage Pi Auth for a selected Pi session.
-- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole pi-chrome path, lazy runtime Logs, and navbar connection controls.
+- `cases/full-blank-workspace-smoke.json`: Broad blank-workspace smoke for the sole gcp-runner path, lazy runtime Logs, and navbar connection controls.
 
 Parent-level Files, Git, Skills, Subagents, Extensions, Models, Chat, and Mapache Goals cases are intentionally absent. Upstream Agent owns the live workspace, Git, model, history, skill, and native Goal surfaces; Mapache retains only lifecycle, authentication, MCP, Google Workspace, and migration/persistence boundaries.
 

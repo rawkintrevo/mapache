@@ -1,6 +1,6 @@
 {
   "id": "script.selectMarkedPiChromeWorkspace",
-  "title": "Select and verify the explicitly marked disposable pi-chrome workspace",
+  "title": "Select and verify the explicitly marked disposable gcp-runner workspace",
   "parameters": {
     "workspaceName": ""
   },

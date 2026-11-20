@@ -21,7 +21,7 @@ Read this before changing Firebase config, deployment workflows, Cloud Functions
 
 Workspace-request model discovery, default inheritance, and caller-safe model
 errors are Functions-owned. Deploy the API/reconciliation Functions before
-publishing a refreshed `pi-chrome` image so grant checks and runner model
+publishing a refreshed `gcp-runner` image so grant checks and runner model
 catalogs agree. The runtime image resolves the current stable pi-web-ui
 release and embedded SDK at image-build time, while retaining the explicit
 managed `pi-mcp-adapter` `2.32.1` patch contract. Existing main sessions keep
@@ -32,7 +32,7 @@ the patch disposition and build metadata contract.
 
 ```bash
 firebase deploy --only functions --project pi-agents-cloud
-gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
 ```
 
 Workspace-request OOM recovery is a Functions-only change. Deploy `api`,
@@ -58,9 +58,9 @@ with event retries; its ten-minute claim prevents overlapping invocations.
 
 Firebase Hosting serves the Vite app from `dist/`, rewrites `/api/**` to the `api` Cloud Function, rewrites `/app` and `/app/**` to the app shell, and serves the Docusaurus community build under `/community/**`.
 
-The `/api/**` rewrite also serves public shared website previews at `/api/public-previews/{token}/...`. Those requests are intentionally unauthenticated and are authorized by unguessable preview tokens plus `publicPreviews/{token}` metadata. Deploying Share Preview or browser QA contract changes requires the Cloud Functions API revision and a rebuilt `pi-chrome` runner revision; existing running sessions need restart/recreation before they receive the new behavior.
+The `/api/**` rewrite also serves public shared website previews at `/api/public-previews/{token}/...`. Those requests are intentionally unauthenticated and are authorized by unguessable preview tokens plus `publicPreviews/{token}` metadata. Deploying Share Preview or browser QA contract changes requires the Cloud Functions API revision and a rebuilt `gcp-runner` runner revision; existing running sessions need restart/recreation before they receive the new behavior.
 
-The disposable failure-recovery injector is part of the shared runner and Functions revisions. Deploy the Functions revision before calling the session-scoped fault API, and rebuild/recreate the disposable `pi-chrome` session before hosted QA so it contains the runner routes. The injector is marker- and environment-gated; it is unavailable on ordinary sessions and does not move the production `pi-chrome` tag by itself.
+The disposable failure-recovery injector is part of the shared runner and Functions revisions. Deploy the Functions revision before calling the session-scoped fault API, and rebuild/recreate the disposable `gcp-runner` session before hosted QA so it contains the runner routes. The injector is marker- and environment-gated; it is unavailable on ordinary sessions and does not move the production `gcp-runner` tag by itself.
 
 The repo targets the `pi-agents-cloud` Firebase/GCP project. Use explicit project flags for remote build and deploy commands:
 
@@ -115,11 +115,11 @@ The automation agent credential broker requires the Functions secret
 before deploying the Functions revision. The broker/API feature remains behind
 the existing `appConfig/automations.enabled` rollout flag. Because the runner
 adds the private Unix adapter and removes the shutdown credential from the
-managed child environment, rebuild and publish `pi-chrome`, then restart or
+managed child environment, rebuild and publish `gcp-runner`, then restart or
 recreate automation runners after deploying Functions:
 
 ```bash
-gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
 firebase deploy --only functions --project pi-agents-cloud
 ```
 
@@ -145,9 +145,9 @@ a terminal failure or absence. This prevents an ambiguous control-plane read
 from making the starting runner fail its own authority check before binding
 port 8080. This behavior is owned by `functions/cloudRun.service.js` and
 `functions/provisioning.worker.js` and requires a Functions deployment; it does
-not require rebuilding `pi-chrome`.
+not require rebuilding `gcp-runner`.
 
-The catalog exposes one supported runner image, `pi-chrome`. The checked-in
+The catalog exposes one supported runner image, `gcp-runner`. The checked-in
 Cloud Build file uses a private content-addressed cache for the validated
 pi-web-ui runtime. Provision the cache bucket once before the first build and
 grant the Cloud Build service account object viewer/creator access without
@@ -167,15 +167,22 @@ gcloud storage buckets add-iam-policy-binding gs://pi-agents-cloud-build-cache \
   --role=roles/storage.objectCreator --project pi-agents-cloud
 ```
 
-The catalog exposes one supported runner image, `pi-chrome`. Build and push it from the repository root with the checked-in Cloud Build file:
+The catalog exposes one canonical runner image, `gcp-runner`. Build and push it from the repository root with the checked-in Cloud Build file:
 
 ```bash
-gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
 firebase deploy --only functions --project pi-agents-cloud
 firebase deploy --only hosting --project pi-agents-cloud
 ```
 
-Record the resulting Artifact Registry digest and verify the `pi-chrome` tag before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
+Record the resulting Artifact Registry digest and verify the `gcp-runner` tag before deploying Hosting. Functions must deploy before Hosting so the API recognizes the catalog, capability metadata, reservation, and signed browser access fields. A canary must then exercise Chrome launch, authenticated noVNC, MCP/QA attachment, popup windows, persistence, shell coexistence, stop, and replacement launch; delete the canary sessions and workspace afterward.
+
+The previous `pi-chrome` compatibility tag and persisted image key are retained
+for rollback and existing session documents. The catalog resolves them to
+`gcp-runner` for new provisioning, restart, resize, and automation services;
+the release workflow publishes only the new canonical tag. Do not delete the
+legacy tag or its digests until no Cloud Run service/revision depends on them
+and the rollback window is closed.
 
 Production Cloud Functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Per-session Cloud Run services run as `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. Do not use `mapache-session-runner@...`; that service account does not exist in the project. The API service account must have `roles/iam.serviceAccountUser` on the runner service account, `roles/eventarc.eventReceiver` on the project so Firestore-triggered 2nd-gen functions can receive events, and `roles/logging.viewer` so the authenticated session Logs modal can read the selected runner's Cloud Run entries. Restore the project-level bindings with:
 
@@ -207,9 +214,9 @@ gcloud projects add-iam-policy-binding pi-agents-cloud \
   --condition=None
 ```
 
-`.github/workflows/runner-images.yml` detects changes affecting the sole `pi-chrome` image. Pull requests build revision-tagged canaries without moving the compatibility tag. Main pushes and explicitly authorized manual runs may publish the compatibility tag after the immutable revision tag succeeds. Immutable tags include the complete source commit, so a different commit cannot overwrite a prior revision tag.
+`.github/workflows/runner-images.yml` detects changes affecting the sole `gcp-runner` image. Pull requests build revision-tagged canaries without moving the compatibility tag. Main pushes and explicitly authorized manual runs may publish the compatibility tag after the immutable revision tag succeeds. Immutable tags include the complete source commit, so a different commit cannot overwrite a prior revision tag.
 
-The workflow publishes the immutable `pi-chrome-<source-commit>` tag and, when publishing is enabled, the `pi-chrome` compatibility tag. Keep this mapping in `scripts/runner-image-release.mjs` so a successful build cannot leave the compatibility tag pointing at an older runner revision.
+The workflow publishes the immutable `gcp-runner-<source-commit>` tag and, when publishing is enabled, the `gcp-runner` compatibility tag. Keep this mapping in `scripts/runner-image-release.mjs` so a successful build cannot leave the compatibility tag pointing at an older runner revision.
 
 Runner-image jobs submit Cloud Builds asynchronously and poll the Cloud Build API for an authoritative terminal status. They do not stream the default Cloud Build log bucket, so the GitHub Actions service identity needs build submission/status permissions but does not need log-object read access. A successful status gates digest lookup and compatibility-tag publication; failure, internal error, timeout, cancellation, expiration, or an unknown status fails the matrix job. Each successful job summary records the Cloud Build URL, immutable image tag, digest, and source revision.
 
@@ -217,18 +224,18 @@ GitHub Actions preview and production workflows install root, `community/`, `fun
 
 Browser QA login uses a Functions secret plus configured QA account params. Configure `QA_LOGIN_SECRET` as a Firebase Functions secret, and set `QA_LOGIN_UID`, `QA_LOGIN_EMAIL`, and optionally `QA_LOGIN_DISPLAY_NAME` for the deployed function. The QA account must also be present in `appConfig/access` when the app allowlist is enabled. The API service account needs `roles/firebaseauth.admin` so it can create or update the controlled QA Firebase Auth user before minting the custom token.
 
-MCP management changes require both the Functions API revision and the `pi-chrome` runner revision. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. The runner image must be rebuilt when the baked `pi-mcp-adapter`, image-owned automation MCP server, or seeded guidance skill changes; existing Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents. The automation MCP broker route is feature-gated with the rest of the automation rollout and does not enable the product flag.
+MCP management changes require both the Functions API revision and the `gcp-runner` runner revision. Functions owns the workspace MCP config API and passes `MCP_CONFIG` into Cloud Run. The runner image must be rebuilt when the baked `pi-mcp-adapter`, image-owned automation MCP server, or seeded guidance skill changes; existing Cloud Run sessions need restart or recreation before they receive updated MCP config or image contents. The automation MCP broker route is feature-gated with the rest of the automation rollout and does not enable the product flag.
 
 Google Workspace MCP connectivity additionally requires the configured OAuth client ID/redirect URI and the `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_STATE_SECRET`, and `GOOGLE_OAUTH_ENCRYPTION_KEY` Functions secrets. Gmail permanent deletion is an explicit, default-off connection setting that adds the restricted `https://mail.google.com/` scope only during reconnect; ordinary read/write connections do not need reauthorization. Deploy the Functions API before testing OAuth or provisioning, then rebuild the affected runner image for the Gmail archive/delete tool changes. Existing sessions keep their previous environment until restart or recreation, and existing accounts must be reconnected plus their sessions restarted after enabling the additional Gmail scope. Use the explicit production commands:
 
 ```bash
 firebase deploy --only functions --project pi-agents-cloud
-gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
 ```
 
 The storage model, scope catalog, and rollback/revoke procedure are documented in [Google Workspace MCP connectivity](./google-workspace-connectivity.md).
 
-Running-session Google token renewal also deploys the dedicated `googleMcpToken` Function. That Function must retain the OAuth client-secret and encryption-key bindings, while the runner receives only its URL, a safe connection ID, and the existing per-session shutdown credential. Rebuild `pi-chrome` after changing `session-runner/google-workspace-mcp/`. Restart or recreate existing sessions after the Functions and image rollout because old Cloud Run revisions do not contain the refresh URL or refreshed MCP wrapper.
+Running-session Google token renewal also deploys the dedicated `googleMcpToken` Function. That Function must retain the OAuth client-secret and encryption-key bindings, while the runner receives only its URL, a safe connection ID, and the existing per-session shutdown credential. Rebuild `gcp-runner` after changing `session-runner/google-workspace-mcp/`. Restart or recreate existing sessions after the Functions and image rollout because old Cloud Run revisions do not contain the refresh URL or refreshed MCP wrapper.
 
 Cloud Run create, update, and delete operations use a 480-second polling deadline by default, configurable with `CLOUD_RUN_OPERATION_TIMEOUT_MS`. The API and queued-provisioning Functions use 540-second request timeouts, leaving one minute for readiness reconciliation and Firestore updates. This window intentionally exceeds Cloud Run control-plane backoff intervals that can defer an operation retry for five minutes; a shorter poll can delete a viable service before Cloud Run performs that retry. When create polling genuinely times out, Functions reconciles an already-ready service before reporting failure; otherwise it requests service deletion so a healthy but inaccessible runner is not left orphaned. Provisioning failures always record a user-safe `lastError`.
 
@@ -236,11 +243,11 @@ Per-session Cloud Run service IDs are derived from the Firestore session ID as a
 
 Active session service templates set `minInstanceCount: 1` and `maxInstanceCount: 1`. Managed pi-web-ui services also set the Cloud Run v2 `template.containers[].resources.cpuIdle` field to `false`, keeping CPU available for browser-independent work. Their persisted `longRunning` policy is off by default: the idle reaper automatically pauses an eligible managed runtime unless the user explicitly enables Long-running, which bypasses automatic pause for background work. Workspace Pause remains available in either state. Historical unmarked sessions retain the existing idle reaper and template behavior but cannot be restarted or reprovisioned after the one-runner backend cutover. Managed restart and resize first request the runner's bounded quiesce/final-save acknowledgement, delete the old service, confirm deletion, and only then reserve a new runtime generation and create its replacement. A failed acknowledgement, uncertain deletion, or startup failure leaves safe recoverable metadata and does not start a successor. Deploy Functions before validating this behavior, and restart, resize, or recreate an older managed session because an existing Cloud Run template retains its previous scaling values. Runner bootstrap-failure reporting additionally requires rebuilt affected standard runner images; older revisions can still leave Firestore at `running` after a later instance-start failure.
 
-The embedded pi-web-ui rollout is now the default for newly created supported workspaces: Functions writes the fixed `agentUiVersion` marker and forces every new session to the curated `pi-chrome` image, ignoring client image fields. The deployment-only `scripts/mark-agent-workspace.mjs --project=pi-agents-cloud --confirm-qa=pi-web-ui-v1 --uid=<owner-uid> --workspace-id=<qa-workspace-id>` helper remains only as a controlled, owner-verified migration/rollback procedure; it accepts no image or version input from the browser. Access responses omit `agentUrl` until all compatibility and generation checks pass. Keep historical HubSpot source metadata and legacy records recoverable; do not mass-convert them.
+The embedded pi-web-ui rollout is now the default for newly created supported workspaces: Functions writes the fixed `agentUiVersion` marker and forces every new session to the curated `gcp-runner` image, ignoring client image fields. The deployment-only `scripts/mark-agent-workspace.mjs --project=pi-agents-cloud --confirm-qa=pi-web-ui-v1 --uid=<owner-uid> --workspace-id=<qa-workspace-id>` helper remains only as a controlled, owner-verified migration/rollback procedure; it accepts no image or version input from the browser. Access responses omit `agentUrl` until all compatibility and generation checks pass. Keep historical HubSpot source metadata and legacy records recoverable; do not mass-convert them.
 
 Provisioning is idempotent by operation ID. Session creation persists the operation and attempt metadata before queueing, and the Functions transaction claims each worker attempt before sending a Cloud Run create request. Retries with the same `operationId` converge on the same session and Cloud Run service; completed operations return the existing session. If Cloud Run reports that the fixed per-session service already exists, provisioning polls and adopts it only after it becomes ready instead of recording a false failure. Other failures retain a safe error plus a retryable flag for controlled retry paths. The deployed `provisionQueuedSession` Firestore trigger handles queued records outside the client request, so create-session callers should treat the returned session as in progress and follow its Firestore status changes. That trigger must bind the GitHub App ID/private-key secrets and Google OAuth client/state/encryption secrets because connected GitHub and Google Workspace provisioning resolves credentials outside the API function.
 
-Workspace sync-writer ownership is also controlled by Functions transactions. The post-cutover session reservation admits one `pi-chrome` runner per workspace and persists its writer lease together with managed runtime generation state; stop, delete, worker/Cloud Run provisioning failure, and the `reconcileWorkspaceSyncWriters` scheduled function release or repair the lease. Deploy the scheduled function with the Functions revision so existing workspaces can recover from stale owners.
+Workspace sync-writer ownership is also controlled by Functions transactions. The post-cutover session reservation admits one `gcp-runner` runner per workspace and persists its writer lease together with managed runtime generation state; stop, delete, worker/Cloud Run provisioning failure, and the `reconcileWorkspaceSyncWriters` scheduled function release or repair the lease. Deploy the scheduled function with the Functions revision so existing workspaces can recover from stale owners.
 
 The runner's compatibility default for a missing `WORKSPACE_SYNC_ROLE` is `writer`, preserving upload behavior for existing services. New reader services receive the role from Functions and skip worktree/archive uploads and deletion reconciliation; they can still restore workspace state at startup and use explicit sync-down.
 
@@ -281,7 +288,7 @@ cutover or rollback evidence, and pass `--execute` only for an isolated target.
 `us-central1` Artifact Registry repository `pi-agents`. Recognized PR images
 expire two days after image creation; revision-tagged releases expire after
 seven days. Untagged images, custom QA tags, compatibility tags (including
-`pi-chrome` and `latest`), and unrelated packages are retained. Historical
+`gcp-runner`, legacy `pi-chrome`, and `latest`), and unrelated packages are retained. Historical
 duplicate-variant tags are recognized. A keep rule overrides deletion for
 digests referenced by Cloud Run service templates, existing revisions, and jobs.
 An unresolved deployed image or incomplete inventory aborts the refresh.
@@ -322,13 +329,13 @@ is needed. See [Google's cleanup policy documentation](https://docs.cloud.google
 - Keep Functions and runner service accounts separate.
 - Functions changes require a Functions deploy before handoff unless the user explicitly asks not to deploy.
 - Keep `CLOUD_RUN_OPERATION_TIMEOUT_MS` below the API Function timeout so timeout reconciliation and Firestore updates have time to complete.
-- Share Preview, browser QA, and managed Agent runtime changes that touch `session-runner/` require rebuilding and pushing `pi-chrome`; existing sessions keep their current runner revision until restarted or recreated.
+- Share Preview, browser QA, and managed Agent runtime changes that touch `session-runner/` require rebuilding and pushing `gcp-runner`; existing sessions keep their current runner revision until restarted or recreated.
 - Keep `QA_LOGIN_SECRET` out of source files, browser builds, logs, and checked-in QA artifacts.
 - Runner image changes require a Cloud Build push; existing Cloud Run services keep their current image/revision until restarted, recreated, or updated.
-- The `pi-chrome` image build validates `python3 --version`, and the runner unit suite keeps that Python 3 contract aligned with the Dockerfile.
-- The supported runner image tag is `pi-chrome`; immutable release tags use `pi-chrome-<source-commit>`. Historical Artifact Registry tags and Cloud Run services are not purged by this cutover.
+- The `gcp-runner` image build validates `python3 --version`, and the runner unit suite keeps that Python 3 contract aligned with the Dockerfile.
+- The supported runner image tag is `gcp-runner`; immutable release tags use `gcp-runner-<source-commit>`. The legacy `pi-chrome` tag/prefix remains protected for the compatibility and rollback window; historical Cloud Run services are not purged by this cutover.
 - Chrome image builds run the bounded `check-chrome-runtime.js` and `chrome-smoke.js` checks before publishing, but production canary verification is still required after Functions and Hosting deploy.
-- Chrome desktop supervision changes require rebuilding and publishing `pi-chrome`; existing Cloud Run services retain their current runner revision until restarted or recreated. The runner gates dependent process launch on Xvfb readiness and requires CDP plus loopback VNC readiness before reporting a browser runtime as ready. No Functions or Hosting deployment is needed when the browser status/API contract is unchanged.
+- Chrome desktop supervision changes require rebuilding and publishing `gcp-runner`; existing Cloud Run services retain their current runner revision until restarted or recreated. The runner gates dependent process launch on Xvfb readiness and requires CDP plus loopback VNC readiness before reporting a browser runtime as ready. No Functions or Hosting deployment is needed when the browser status/API contract is unchanged.
 - Do not put developer maintenance notes under `community/`.
 
 ## Verification

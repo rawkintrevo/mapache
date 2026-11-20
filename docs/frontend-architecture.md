@@ -127,7 +127,7 @@ Embedded history shares that page flow; bounded event panes and horizontal table
 overflow retain their own local behavior. Agent and terminal sizing is unchanged.
 
 New workspaces are marked `agentUiVersion: "pi-web-ui-v1"`. New sessions are
-server-selected `pi-chrome` sessions. A marked running session renders
+server-selected `gcp-runner` sessions. A marked running session renders
 `ManagedAgentSurface` as the borderless, full-height center surface. Agent and
 Logs are icon actions in the top navigation; Logs opens an owner-scoped modal with the
 runtime's Cloud Run entries and current recorded error. The managed upstream

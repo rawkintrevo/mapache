@@ -35,10 +35,11 @@ const dependencies = {
   },
   resolveHarness: () => ({terminalKind: "pi"}),
   resolveRunnerImage: (payload) => {
-    if (payload.imageKey !== "pi-chrome") throw Object.assign(new Error("invalid_runner_image"), {code: "invalid_runner_image"});
+    if (payload.imageKey && !["gcp-runner", "pi-chrome"].includes(payload.imageKey)) throw Object.assign(new Error("invalid_runner_image"), {code: "invalid_runner_image"});
+    if (payload.image && payload.image !== "gcr.io/example/chrome") throw Object.assign(new Error("invalid_runner_image"), {code: "invalid_runner_image"});
     return {
-      key: payload.imageKey,
-      imageKey: payload.imageKey,
+      key: "gcp-runner",
+      imageKey: "gcp-runner",
       image: "gcr.io/example/chrome",
       harnessId: "pi",
       terminalKind: "pi",
@@ -135,7 +136,7 @@ async function createWithWorkspace(workspace, payload) {
     mcpConfig: {},
   }, {operationId: "marked-1", imageKey: "pi-chrome", agentUiVersion: "browser-chosen-version"});
   assert.strictEqual(marked.agentUiVersion, AGENT_UI_VERSION);
-  assert.strictEqual(marked.imageKey, "pi-chrome");
+  assert.strictEqual(marked.imageKey, "gcp-runner");
   assert.strictEqual(marked.harnessId, "pi");
   assert.strictEqual(marked.capabilities.chrome, true);
   assert.strictEqual(marked.longRunning, false);

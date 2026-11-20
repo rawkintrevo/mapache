@@ -3,7 +3,9 @@
 const assert = require("assert");
 const {
   isSupportedProvisioningSession,
+  canonicalRunnerImageReference,
   resolveRunnerImage,
+  resolveSessionRunnerImage,
   resolveSessionCapabilities,
   runnerImageCapabilities,
 } = require("./runnerImages.helpers");
@@ -17,9 +19,9 @@ function code(fn) {
   return "";
 }
 
-const image = resolveRunnerImage({imageKey: "pi-chrome"});
-assert.strictEqual(image.key, "pi-chrome");
-assert.strictEqual(image.image, "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome");
+const image = resolveRunnerImage({imageKey: "gcp-runner"});
+assert.strictEqual(image.key, "gcp-runner");
+assert.strictEqual(image.image, "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner");
 assert.strictEqual(image.harnessId, "pi");
 assert.strictEqual(image.terminalKind, "pi");
 assert.deepStrictEqual(image.capabilities, {
@@ -31,11 +33,27 @@ assert.deepStrictEqual(image.capabilities, {
 });
 assert.strictEqual(image.canProvision, true);
 
+const legacyImage = resolveRunnerImage({imageKey: "pi-chrome"});
+assert.deepStrictEqual(legacyImage, image);
+assert.deepStrictEqual(resolveRunnerImage({
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+}), image);
+
 const refreshedImage = resolveSessionCapabilities({
   imageKey: "pi-chrome",
   capabilities: {terminal: true, preview: false, previewQa: false, functions: false, chrome: false},
 });
 assert.deepStrictEqual(refreshedImage, image.capabilities);
+assert.deepStrictEqual(resolveSessionRunnerImage({
+  imageKey: "pi-chrome",
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+}), {
+  ...require("./runnerCatalog.helpers").RUNNER_IMAGES["gcp-runner"],
+});
+assert.strictEqual(canonicalRunnerImageReference({
+  imageKey: "pi-chrome",
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+}), image.image);
 
 assert.strictEqual(code(() => resolveRunnerImage({imageKey: "default"})), "invalid_runner_image");
 assert.strictEqual(code(() => resolveRunnerImage({imageKey: "codex-web"})), "invalid_runner_image");
@@ -51,6 +69,12 @@ assert.deepStrictEqual(runnerImageCapabilities("unknown"), {
   chrome: false,
 });
 
+assert.strictEqual(isSupportedProvisioningSession({
+  imageKey: "gcp-runner",
+  image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner",
+  sessionType: "cloud",
+  terminalKind: "pi",
+}), true);
 assert.strictEqual(isSupportedProvisioningSession({
   imageKey: "pi-chrome",
   image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",

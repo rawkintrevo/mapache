@@ -34,7 +34,11 @@ const {
 } = require("./backendUtils.helpers");
 const {envMapToCloudRunEnv} = require("./env.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
-const {isSupportedProvisioningSession, resolveSessionCapabilities} = require("./runnerCatalog.helpers");
+const {
+  canonicalRunnerImageReference,
+  isSupportedProvisioningSession,
+  resolveSessionCapabilities,
+} = require("./runnerCatalog.helpers");
 const {getSessionImageFreshness} = require("./runnerImageFreshness.service");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {isRetryableProvisioningError} = require("./provisioning.helpers");
@@ -568,7 +572,7 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
     automationOutputDir: automationStorage.output.path,
   } : trustedWorkspaceRuntimeFields(workspace && workspace.sharedStorage);
   const container = {
-    image: session.image,
+    image: canonicalRunnerImageReference(session) || session.image,
     ports: [{containerPort: 8080}],
     resources: runtimeResourceRequirements(session),
     env: [
@@ -619,7 +623,7 @@ async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
   } : trustedWorkspaceRuntimeFields(options.trustedStorageDescriptor);
   const patchSession = {...session, ...trustedWorkspaceFields};
   const container = {
-    image: session.image,
+    image: canonicalRunnerImageReference(session) || session.image,
     resources: runtimeResourceRequirements(session),
     env: options.restart || Object.keys(trustedWorkspaceFields).length > 0 ? await sessionRunnerEnv(patchSession,
       options.restart ? {restartNonce: Date.now().toString()} : {}, dependencies) : undefined,

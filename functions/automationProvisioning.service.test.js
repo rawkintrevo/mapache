@@ -152,6 +152,7 @@ test("claims and provisions an admitted run without changing the canonical main 
   assert.equal(db.data.get("workspaces/workspace-1").canonicalSessionId, "main-session");
   assert.equal(calls.filter((call) => call.kind === "createSession").length, 1);
   assert.equal(calls.find((call) => call.kind === "createSession").payload.runtimeKind, "automation");
+  assert.equal(calls.find((call) => call.kind === "createSession").payload.imageKey, "gcp-runner");
   assert.equal(calls.find((call) => call.kind === "createSession").payload.resources.memory, "4Gi");
   assert.equal(calls.find((call) => call.kind === "createSession").payload.automationRunAt,
       "2026-09-22T20:40:50.000Z");

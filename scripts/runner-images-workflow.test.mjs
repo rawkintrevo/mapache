@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 
 const workflow = await readFile(new URL("../.github/workflows/runner-images.yml", import.meta.url), "utf8");
-const cloudbuild = await readFile(new URL("../session-runner/cloudbuild.pi-chrome.yaml", import.meta.url), "utf8");
-const dockerfile = await readFile(new URL("../session-runner/Dockerfile.pi-chrome", import.meta.url), "utf8");
+const cloudbuild = await readFile(new URL("../session-runner/cloudbuild.gcp-runner.yaml", import.meta.url), "utf8");
+const dockerfile = await readFile(new URL("../session-runner/Dockerfile.gcp-runner", import.meta.url), "utf8");
 
 test("runner image builds avoid log streaming and wait for Cloud Build status", () => {
   assert.match(workflow, /gcloud builds submit session-runner \\\n+\s+--async/);

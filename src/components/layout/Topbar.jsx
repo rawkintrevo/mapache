@@ -56,7 +56,7 @@ export function Topbar({
     String(canonicalSession?.agentRuntimeState || "").toLowerCase() === "running";
   const hasSessionImageMetadata = Boolean(canonicalSession?.imageKey || canonicalSession?.image);
   const workspaceUnsupported = selectedWorkspace?.source?.type === "ssh" ||
-    Boolean(canonicalSession && hasSessionImageMetadata && normalizeSessionImageKey(canonicalSession) !== "pi-chrome");
+    Boolean(canonicalSession && hasSessionImageMetadata && normalizeSessionImageKey(canonicalSession) !== "gcp-runner");
   const workspaceStartBlocked = workspaceUnsupported && !workspaceOn;
   const workspaceStopUncertain = isRuntimeStopUncertain(canonicalSession || {});
   const workspaceActionDisabled = busy || !selectedWorkspace || workspaceTransitioning || workspaceStartBlocked || workspaceStopUncertain;

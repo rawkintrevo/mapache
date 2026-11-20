@@ -1,16 +1,22 @@
 # Frontend, Functions, and runner compatibility matrix
 
 This matrix is the release checklist for changes that cross the browser app, the
-Cloud Functions API, and the session-runner image. `pi-chrome` is the only current
+Cloud Functions API, and the session-runner image. `gcp-runner` is the only current
 launch target. A revision is **current** when it contains the code being released
 and **previous** when it is an already-running revision that has not been restarted
 or replaced.
+
+The prior `pi-chrome` image key/tag is a temporary legacy alias for the same Pi
+Chrome-capable runtime. Functions accepts it only when resolving persisted
+session records, then requests the canonical `gcp-runner` image for a new
+revision. New records and release tags use `gcp-runner`; old tags/digests stay
+available for rollback until the migration window closes.
 
 ## Contract matrix
 
 | Area | Frontend contract | Functions contract | Runner contract | Mixed-revision expectation |
 | --- | --- | --- | --- | --- |
-| Session identity | Reads `harnessId`, `imageKey`, `serviceUrl`, lifecycle status, and runtime-generation fields from the session document. | Resolves only the curated `pi-chrome`/Pi catalog entry and persists the resolved image metadata; never trusts an arbitrary image URI. | Reads `HARNESS_ID`, `SESSION_ID`, storage settings, and terminal settings from its environment. | Historical records remain readable, but new provisioning never selects a retired runner family. |
+| Session identity | Reads `harnessId`, `imageKey`, `serviceUrl`, lifecycle status, and runtime-generation fields from the session document. | Resolves only the curated `gcp-runner`/Pi catalog entry and persists the resolved image metadata; never trusts an arbitrary image URI. | Reads `HARNESS_ID`, `SESSION_ID`, storage settings, and terminal settings from its environment. | Historical records remain readable, but new provisioning never selects a retired runner family. |
 | Browser terminal and preview | Uses signed session access URLs returned by the API. | Mints browser/status URLs and forwards the protected runner token only through backend requests. | Accepts browser HMAC tokens for `/terminal`, `/preview/*`, `/runner/health`, and `/capabilities`; keeps management routes behind the shutdown token. | A Functions revision can talk to a previous runner only when the requested route and token gate already exist. |
 | Workspace skills | Calls the neutral `/skills` route exposed by the selected Pi runtime. | Proxies the neutral route and validates the selected harness. | Serves the neutral route and writes Pi-native files. | Historical sessions may retain their stored capability metadata, but no new retired image is launched. |
 | Workspace subagents | Calls neutral `/subagents` routes. | Proxies neutral routes and validates the selected harness. | Serves neutral `/subagents` routes and preserves Pi-native files. | The Functions API does not advertise V1 chain routes; internal runner chain routes are not a public compatibility promise. |
@@ -22,7 +28,7 @@ or replaced.
 ## Deployment order
 
 1. Run `npm run check` and focused contract tests.
-2. Build and publish the affected `pi-chrome` runner with an immutable source-revision tag.
+2. Build and publish the affected `gcp-runner` runner with an immutable source-revision tag.
 3. Deploy Functions with `firebase deploy --only functions --project pi-agents-cloud`.
 4. Deploy Hosting with `firebase deploy --only hosting --project pi-agents-cloud` when the frontend changed.
 5. Restart or recreate existing sessions when a change affects runner image contents, environment variables, native files, or runner routes.

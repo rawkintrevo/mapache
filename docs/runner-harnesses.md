@@ -17,10 +17,13 @@ does not import the Functions package directly.
 ## Current behavior
 
 Each session records a stable `harnessId`; `imageKey` selects the only supported
-curated image, `pi-chrome`, and `terminalKind` remains a compatibility runtime
+curated image, `gcp-runner`, and `terminalKind` remains a compatibility runtime
 hint for restored records. Historical session documents can still be displayed
 and cleaned up, but they are not launchable. New session creation is
-server-owned and resolves the marked `pi-chrome`/Pi combination.
+server-owned and resolves the marked `gcp-runner`/Pi combination. The former
+`pi-chrome` image key and compatibility tag are accepted only as legacy
+references to this same catalog entry, so old session records can be restarted
+or resized without selecting an unrelated runner.
 
 Image capabilities describe terminal, Preview, Preview QA, Functions, and
 Chrome access. Legacy Chat, Goals, SSH, and N64 capability flags are not part of
@@ -95,8 +98,9 @@ the server-owned credential boundary.
 ## Invariants and verification
 
 - Browser payloads cannot choose a runner image or harness.
-- `pi-chrome` is the only catalog image and the only image accepted by
-  provisioning and release automation.
+- `gcp-runner` is the only canonical catalog image and release key. The
+  `pi-chrome` key/tag remains an explicit legacy alias for old session records;
+  it is not emitted for new sessions or new release tags.
 - Catalog changes regenerate `session-runner/lib/harnesses/generatedCatalog.json`.
 - Existing Cloud Run services keep their old image until a revision/recreation;
   rebuilding a tag alone does not change a running service.
@@ -160,5 +164,5 @@ models to the generated automation catalog or a separate automation setup UI.
 Verify with the custom-provider Functions tests, runner `customPiModels.test.js`,
 upstream `mapache-custom-provider.test.ts` (authenticated discovery and streamed
 tool call through the pinned SDK), and `e2e/qa/cases/auth-custom-provider.json`.
-Deploy the API and rebuild `pi-chrome`; existing sessions need a new revision
+Deploy the API and rebuild `gcp-runner`; existing sessions need a new revision
 before the custom connection runtime behavior is available.

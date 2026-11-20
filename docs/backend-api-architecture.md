@@ -93,7 +93,10 @@ fields. New sessions persist `longRunning: false`; the authenticated session
 long-running policy route may change that field only for marked managed
 runtimes. New blank and GitHub workspaces receive the server-owned
 `agentUiVersion: "pi-web-ui-v1"` marker. New sessions use the workspace resource setting and resolve the curated
-`pi-chrome` image and Pi harness regardless of browser payloads.
+`gcp-runner` image and Pi harness regardless of browser payloads. Persisted
+`pi-chrome` image keys/tags are accepted only through the catalog's explicit
+legacy alias and are canonicalized to `gcp-runner` before a new Cloud Run
+revision is requested.
 
 Runtime availability scheduling is separate from scheduled Agent automations.
 `functions/runtimeSchedule.helpers.js` validates one same-day weekday window and
@@ -134,9 +137,10 @@ interrupted.
 The workspace authority transaction admits one managed runtime and sync writer.
 Generation and boot-instance fencing prevent a stale Cloud Run container from
 publishing checkpoints or being mistaken for its replacement. The provisioning
-worker repeats the pi-chrome identity check before creating a per-session Cloud
-Run service. Historical unsupported records remain readable but cannot be
-converted into newly launched unsupported runners.
+worker repeats the gcp-runner identity check before creating a per-session Cloud
+Run service. Historical `pi-chrome` records remain readable and restartable
+through that alias; unrelated or unsupported records remain readable but cannot
+be converted into newly launched unsupported runners.
 
 Automation sessions are a separate runtime identity: each run uses the
 deterministic `auto-{runId}` session ID and stores its generation, boot, writer
@@ -327,7 +331,7 @@ the owning workspace; provisioning never requests a live profile capture.
 Snapshot refresh remains a separate protected runner operation.
 The ordinary queued-session worker skips automation sessions; run/session
 Firestore workers reconcile duplicate deliveries and response loss against the
-same session operation. Cloud Run creation reuses the trusted `pi-chrome`,
+same session operation. Cloud Run creation reuses the trusted `gcp-runner`,
 runner service account, fresh credential/MCP resolution, and ready shared GCS
 FUSE descriptor, while automation labels fence owner/workspace/run identity.
 Provisioning operations have a 15-minute infrastructure deadline rather than

@@ -5,7 +5,7 @@ const test = require("node:test");
 
 const runnerRoot = path.resolve(__dirname, "..");
 const dockerfiles = [
-  "Dockerfile.pi-chrome",
+  "Dockerfile.gcp-runner",
 ];
 
 for (const dockerfile of dockerfiles) {
@@ -18,8 +18,8 @@ for (const dockerfile of dockerfiles) {
   });
 }
 
-test("the supported pi-chrome image has one upstream agent entrypoint", () => {
-  const source = fs.readFileSync(path.join(runnerRoot, "Dockerfile.pi-chrome"), "utf8");
+test("the supported gcp-runner image has one upstream agent entrypoint", () => {
+  const source = fs.readFileSync(path.join(runnerRoot, "Dockerfile.gcp-runner"), "utf8");
   assert.match(source, /pi-mcp-adapter@2\.32\.1/);
   assert.match(source, /RUN node \/app\/lib\/patchPiMcpAdapter\.js/);
   assert.match(source, /ENV PI_WEB_MCP_ADAPTER_PATH=\/root\/\.pi\/agent\/npm\/node_modules\/pi-mcp-adapter\/index\.ts/);

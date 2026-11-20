@@ -5,13 +5,13 @@
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/pi-web.long-running-policy",
   "requires": {
-    "cloudRun": "Creates one disposable marked pi-chrome service",
+    "cloudRun": "Creates one disposable marked gcp-runner service",
     "managedWorkspace": "Use the explicitly marked disposable workspace setup",
     "idlePolicy": "The session must expose the backend idle timeout and Long-running control"
   },
   "steps": [
     {"useCase": "cases/pi-web-marked-workspace-setup.json"},
-    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-long-running-{{timestamp}}", "imageKey": "pi-chrome", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-long-running-policy"}},
+    {"useScript": "scripts/create-session.json", "parameters": {"sessionName": "qa-pi-web-long-running-{{timestamp}}", "imageKey": "gcp-runner", "cpu": "1", "memory": "2Gi", "sessionEnv": "QA_CASE=pi-web-long-running-policy"}},
     {"useScript": "scripts/wait-session-running.json"},
     {"assert": "checkbox-present", "name": "Long-running"},
     {"assert": "snapshot-text", "expected": "Automatically pauses after 60 minutes without activity."},

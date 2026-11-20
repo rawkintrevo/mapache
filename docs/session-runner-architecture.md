@@ -36,7 +36,7 @@ protected HTTP routes, and runs the ordered startup/shutdown lifecycle.
 The runner restores the published generation/boot-scoped checkpoint and
 workspace state, materializes selected credentials and MCP configuration, seeds
 only missing image-owned runtime skills, acquires writer authority, and then
-starts exactly one managed upstream agent child for a marked pi-chrome runtime.
+starts exactly one managed upstream agent child for a marked gcp-runner runtime.
 The upstream child listens on loopback `127.0.0.1:8787`.
 
 Checkpoint restoration stages downloads in batches of at most eight objects and
@@ -51,7 +51,7 @@ window for workspaces with many small files. Startup logs identify preparation,
 checkpoint restore, ownership admission, Chrome restore/start, and agent start
 with elapsed times; they do not include file contents or credentials.
 
-This change requires a rebuilt `pi-chrome` image and a new/recreated Cloud Run
+This change requires a rebuilt `gcp-runner` image and a new/recreated Cloud Run
 revision for existing sessions. It does not change the startup probe, health
 endpoint, checkpoint format, or published checkpoint pointers.
 
@@ -110,7 +110,7 @@ runtime data. Private auth is materialized from the canonical Mapache stores on
 each boot, while Google and GitHub access continues to use the existing
 short-lived broker paths.
 
-`Dockerfile.pi-chrome` launches `node server.js` directly, making Node PID 1
+`Dockerfile.gcp-runner` launches `node server.js` directly, making Node PID 1
 through the base image's exec entrypoint. Do not wrap it in `npm start`: npm's
 shell wrapper can terminate without delivering SIGTERM to the runner, leaving
 its boot authority admitted after the process disappears. `lib/runnerSignals.js`

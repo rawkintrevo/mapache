@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const {isCustomPiProvider, customPiCredential} = require("./customPiProviders.helpers");
 const {normalizeEnvironmentEntryIds} = require("./environmentKeys.service");
 const {cleanName, httpError} = require("./backendUtils.helpers");
+const {isAgentImageKey} = require("./agentRuntime.helpers");
 
 const PI_AUTH_API_KEY_PROVIDERS = new Set([
   "anthropic",
@@ -473,7 +474,7 @@ function sessionHarnessId(session = {}) {
   const imageKey = String(session.imageKey || "").trim().toLowerCase();
   if (imageKey.startsWith("pi-")) return "pi";
   const image = String(session.image || "").trim().toLowerCase();
-  if (imageKey === "pi-chrome" || /session-runner:pi-chrome(?:@|$)/.test(image)) return "pi";
+  if (isAgentImageKey(imageKey) || /session-runner:(?:pi-chrome|gcp-runner)(?:@|$)/.test(image)) return "pi";
   return "";
 }
 

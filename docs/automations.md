@@ -147,7 +147,7 @@ run records.
   relabeling it as user cancellation.
 - Transcript sanitization permits nonnegative integer token counts only in
   known usage fields (including `message.usage.totalTokens`); credential-like
-  fields elsewhere remain rejected. This fix requires a rebuilt `pi-chrome`
+  fields elsewhere remain rejected. This fix requires a rebuilt `gcp-runner`
   image and new runner services; existing services require recreation.
 - Artifacts are immutable, sanitized, and written under
   `automation-runs/{runId}/v1/`; the manifest pointer is published only after
@@ -229,7 +229,7 @@ otherwise Node can omit the revision body and deletion fails with
 `automation_revision_required`.
 
 Deploy the `api` and `automationAgentToken` Functions, then rebuild and publish
-`pi-chrome`. Existing workspaces need a runner restart/recreation onto the new
+`gcp-runner`. Existing workspaces need a runner restart/recreation onto the new
 image revision to discover the tools and skill; new sessions receive them
 automatically. No repository files or per-workspace MCP setup are required.
 
@@ -331,7 +331,7 @@ Paths longer than 100 bytes resolve under a private `/tmp/mapache-ipc-{sha256}`
 directory using a hash of the full original path, keeping runtime and broker
 identities distinct. The directory remains 0700 and each socket 0600. This is
 required for scheduled run IDs, whose ordinary runtime paths exceed Unix socket
-limits. Rebuild and publish `pi-chrome` for this fix; existing services require
+limits. Rebuild and publish `gcp-runner` for this fix; existing services require
 restart/recreation to receive the new socket configuration.
 
 Automations can run alongside main and each other. They see saved input selected
@@ -350,7 +350,7 @@ Before submitting a prompt, the runner also waits for the embedded Pi UI's priva
 control socket to answer a status request. HTTP health can succeed before the
 socket is listening, so this bounded probe prevents a startup race from ending an
 otherwise admitted run before execution begins. The prompt is sent once after the
-control channel responds. This runner change requires a new `pi-chrome` image and
+control channel responds. This runner change requires a new `gcp-runner` image and
 new automation services; existing main sessions keep their current revision.
 
 The legacy shared-storage preparation/recovery endpoints remain maintenance
@@ -404,7 +404,7 @@ retained bytes and their `recoverableUntil` time must be recorded.
 ## Release and rollback
 
 Stage Firestore rules/indexes and worker consumers before producer/API routes,
-build and publish the immutable `pi-chrome` image before the new automation path or
+build and publish the immutable `gcp-runner` image before the new automation path or
 the Automations UI, then deploy Functions before Hosting with explicit project
 flags. Keep the feature flag off through deployment and enable it only for the
 canary. Record the image digest, exact commands, mount configuration,
@@ -412,7 +412,7 @@ compatibility evidence, and storage/API cost measurements.
 
 ```bash
 npm run check
-gcloud builds submit session-runner --config session-runner/cloudbuild.pi-chrome.yaml --project pi-agents-cloud
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
 firebase deploy --only firestore,functions,hosting --project pi-agents-cloud
 ```
 

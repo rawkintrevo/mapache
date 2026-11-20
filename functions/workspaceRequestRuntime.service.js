@@ -303,7 +303,7 @@ async function ensureNormalRuntime(run, dependencies = {}) {
   let session = await findCanonicalSession(workspace, run.workspaceId, dependencies);
   if (!session) {
     const created = await dependencies.createSession(run.ownerUid, run.workspaceId, {
-      imageKey: "pi-chrome",
+      imageKey: "gcp-runner",
       name: `${workspace.name || "Workspace"} requests`,
       operationId: workspaceRequestOperationId(run.workspaceId),
       sessionType: "cloud",

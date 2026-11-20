@@ -44,7 +44,7 @@ A request can be `queued`, `provisioning`, `running`, `stopping`, `succeeded`, `
 ## Boundaries and troubleshooting
 
 - The source receives status, the final result, and explicitly shared artifacts—not the target transcript, credentials, private history, or unrelated tickets.
-- Missing tools usually mean the workspace needs a new/restarted `pi-chrome` runner image.
+- Missing tools usually mean the workspace needs a new/restarted `gcp-runner` runner image.
 - `request_permission_denied` means the directional grant is missing, disabled, or lacks the requested operation.
 - `request_target_not_found` means the target is no longer visible to the source owner.
 - Missing model or connection errors are target configuration problems; configure Y and submit a new request.

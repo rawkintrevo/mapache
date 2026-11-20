@@ -119,10 +119,10 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   }
   const requestedImageKey = cleanName(payload.imageKey);
   const requestedImage = cleanName(payload.image);
-  if (requestedImageKey && requestedImageKey !== AGENT_IMAGE_KEY) {
+  if (requestedImageKey && !requestedRunnerImageMatches(dependencies, {imageKey: requestedImageKey}, runnerImage)) {
     throw httpError(400, "invalid_runner_image");
   }
-  if (requestedImage && requestedImage !== runnerImage.image) {
+  if (requestedImage && !requestedRunnerImageMatches(dependencies, {image: requestedImage}, runnerImage)) {
     throw httpError(400, "invalid_runner_image");
   }
   const harnessId = "pi";
@@ -277,6 +277,16 @@ function sessionHomePolicyMetadata(workspace) {
       "",
     homeArchiveName: cleanName(policy.archiveName || "home.tar.gz") || "home.tar.gz",
   };
+}
+
+function requestedRunnerImageMatches(dependencies, payload, expectedImage) {
+  try {
+    const resolved = dependencies.resolveRunnerImage(payload);
+    return resolved?.key === expectedImage.key;
+  } catch (error) {
+    if (error && error.code === "invalid_runner_image") return false;
+    throw error;
+  }
 }
 
 function sessionEnvMetadata(workspace, payload) {

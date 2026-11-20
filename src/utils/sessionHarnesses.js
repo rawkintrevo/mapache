@@ -31,12 +31,14 @@ export function listSessionImages() {
 
 export function findSessionImage(imageValue) {
   const normalizedValue = cleanValue(imageValue);
-  return listSessionImages().find((item) => item.image === normalizedValue || item.imageKey === normalizedValue) || null;
+  return listSessionImages().find((item) => item.image === normalizedValue || item.imageKey === normalizedValue ||
+    (item.legacyImageKeys || []).some((legacyKey) => cleanValue(legacyKey) === normalizedValue) ||
+    (item.legacyImages || []).some((legacyImage) => cleanValue(legacyImage) === normalizedValue)) || null;
 }
 
 export function normalizeSessionImageKey(session = {}) {
   const imageKey = cleanValue(session.imageKey);
-  if (imageKey) return imageKey;
+  if (imageKey) return findSessionImage(imageKey)?.imageKey || imageKey;
 
   const legacyImage = findSessionImage(session.image);
   return legacyImage ? legacyImage.imageKey : "";

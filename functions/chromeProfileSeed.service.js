@@ -208,7 +208,8 @@ function safeBrowserMetadata(value) {
   return Object.fromEntries(Object.entries(value)
       .filter(([key, item]) => ["family", "version", "image", "runtime"].includes(key) &&
         (typeof item === "string" || typeof item === "number"))
-      .map(([key, item]) => [key, String(item).slice(0, 128)]));
+      .map(([key, item]) => [key, key === "runtime" && String(item).trim().toLowerCase() === "pi-chrome" ?
+        "gcp-runner" : String(item).slice(0, 128)]));
 }
 
 function normalizeStoragePath(value) {
