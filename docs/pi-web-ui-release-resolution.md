@@ -53,12 +53,14 @@ package version and source anchors, and the post-build patch step remains the
 final runtime guard. This is an intentional compatibility gate, separate from
 the floating pi-web release and SDK resolution.
 
-Cloud Build receives MAPACHE_BUILD_RESOLUTION_KEY; the GitHub runner workflow
-sets it to the source SHA and workflow run ID. Local builds use local by
-default and can use --no-cache when a fresh registry/release lookup is
-required. A successful image is still the only artifact eligible for the
-immutable and compatibility tags, so the last working image remains in place
-when a newer candidate fails.
+Cloud Build runs `buildInputs.mjs` before the cache lookup. Its content-addressed
+key includes the resolved release archive, patched dependency lock tree,
+managed patch hashes, builder scripts, and the Node/npm/git toolchain. The
+GitHub workflow does not add a run ID, so a fresh worker can reuse the same
+validated runtime. Cache objects are private and create-only; an absent or
+unverifiable object is a miss. A successful image is still the only artifact
+eligible for the immutable and compatibility tags, so the last working image
+remains in place when a newer candidate fails.
 
 ## Managed patch disposition
 
@@ -145,7 +147,15 @@ to advance independently without silently rewriting a saved model selection.
 Focused builder tests:
 
     node --test session-runner/upstream/pi-web-ui/build.test.mjs \
-      session-runner/upstream/pi-web-ui/releaseResolver.test.mjs
+      session-runner/upstream/pi-web-ui/releaseResolver.test.mjs \
+      session-runner/upstream/pi-web-ui/artifactCache.test.mjs
+
+The Cloud Build cache rehearsal is the release evidence for this policy: the
+first clean worker records a miss and full-build elapsed time, a second clean
+worker with identical inputs records a verified hit, and changing a managed
+patch or resolved dependency records a different key and a miss. The final
+image smoke test also fetches `/agent/` and each referenced JavaScript bundle
+before the image can be published.
 
 The clean archive-mode build was run against the resolved v0.121.0 release with
 --skip-tests; source verification, the managed patch, npm installs, mobile

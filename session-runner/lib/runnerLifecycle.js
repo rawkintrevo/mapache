@@ -83,9 +83,11 @@ function createRunnerLifecycleCoordinator({
       await activeHarness.materializeSkills();
       if (config.agentRuntimeEnabled) await startupStep("agent_start", () => piWebUi.start());
       await automationExecution?.start?.();
-      chromeProfileSnapshots.start();
-      if (checkpointScheduler) checkpointScheduler.start();
-      else startSyncLoop();
+      if (!config.startupSmoke) {
+        chromeProfileSnapshots.start();
+        if (checkpointScheduler) checkpointScheduler.start();
+        else startSyncLoop();
+      }
       listen(() => {
         logger.log(`session runner listening on ${config.port}`);
       });
@@ -119,7 +121,7 @@ function createRunnerLifecycleCoordinator({
   async function shutdownInternal({reason, budgetMs}) {
     const deadline = now() + Math.max(1, Number(budgetMs) || 120_000);
     await automationExecution?.stop?.({cancel: true});
-    checkpointScheduler?.stop?.();
+    if (!config.startupSmoke) checkpointScheduler?.stop?.();
     try {
       if (config.agentRuntimeEnabled) {
         try {
@@ -134,22 +136,24 @@ function createRunnerLifecycleCoordinator({
       }
       resourceMetrics?.close?.();
       await chromeRuntime.stop();
-      if (!checkpointScheduler) {
-        await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
-      }
-      if (chromeProfileSnapshots.enabled()) {
-        await chromeProfileSnapshots.stop();
-        if (authority.isCurrentWriter()) await bounded(chromeProfileSnapshots.finalize(), deadline, "checkpoint_timeout");
-        else logger.warn?.("final Chrome profile snapshot skipped after writer authority loss");
-      } else if (checkpointScheduler) {
-        await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
-      } else if (authority.isCurrentWriter()) {
-        await bounded(workspaceSync.syncUp({includeArchives: true}), deadline, "checkpoint_timeout");
-      } else {
-        logger.warn?.("final workspace sync skipped after writer authority loss");
-      }
-      if (checkpointScheduler && chromeProfileSnapshots.enabled()) {
-        await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
+      if (!config.startupSmoke) {
+        if (!checkpointScheduler) {
+          await piModelScope.persist().catch((error) => logger.error("Pi model scope sync failed during shutdown", error));
+        }
+        if (chromeProfileSnapshots.enabled()) {
+          await chromeProfileSnapshots.stop();
+          if (authority.isCurrentWriter()) await bounded(chromeProfileSnapshots.finalize(), deadline, "checkpoint_timeout");
+          else logger.warn?.("final Chrome profile snapshot skipped after writer authority loss");
+        } else if (checkpointScheduler) {
+          await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
+        } else if (authority.isCurrentWriter()) {
+          await bounded(workspaceSync.syncUp({includeArchives: true}), deadline, "checkpoint_timeout");
+        } else {
+          logger.warn?.("final workspace sync skipped after writer authority loss");
+        }
+        if (checkpointScheduler && chromeProfileSnapshots.enabled()) {
+          await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
+        }
       }
       await activity.updateSessionActivity({
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),

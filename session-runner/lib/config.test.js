@@ -77,6 +77,19 @@ test("runner capability parsing preserves the supported capability contract", ()
   }
 });
 
+test("startup smoke mode is explicit and disabled by default", () => {
+  const previous = process.env.MAPACHE_STARTUP_SMOKE;
+  try {
+    delete process.env.MAPACHE_STARTUP_SMOKE;
+    assert.equal(createConfig().startupSmoke, false);
+    process.env.MAPACHE_STARTUP_SMOKE = "1";
+    assert.equal(createConfig().startupSmoke, true);
+  } finally {
+    if (previous === undefined) delete process.env.MAPACHE_STARTUP_SMOKE;
+    else process.env.MAPACHE_STARTUP_SMOKE = previous;
+  }
+});
+
 test("marked runners use the managed pi-web-ui state contract while unmarked runners retain Pi paths", () => {
   const names = [
     "MAPACHE_AGENT_UI_VERSION",

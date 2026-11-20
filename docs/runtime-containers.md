@@ -174,17 +174,36 @@ this bootstrap path require a rebuilt `pi-chrome` revision; existing Cloud Run s
 their bundled startup behavior until restarted or recreated.
 
 The `pi-chrome` build packages the resolved pi-web-ui runtime under
-`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/build.mjs` resolves
-the current stable GitHub release and its tag commit once, downloads that
-archive, records its SHA-256 and source-file hashes, applies the audited
-release-specific managed integration patch, resolves the embedded Pi SDK from
-npm `latest`, and records the actual SDK and `pi-ai` identities in
-`build-info.json`. It runs the upstream typecheck/tests/build and copies only
-the generated runtime files plus the descriptor into the image. A future
-release that cannot accept the managed patch fails the candidate build; it
-does not silently fall back to the previous release. The release-resolution
-cache key is supplied by Cloud Build and includes the GitHub source/run ID in
-the repository workflow; use `--no-cache` for a local forced refresh.
+`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/buildInputs.mjs`
+resolves the current stable GitHub release and its tag commit before every
+Cloud Build cache lookup. It records the source archive and required-file
+hashes, resolves the embedded Pi SDK from npm `latest`, resolves the resulting
+lockfile dependency tree, and hashes the managed patches, builder scripts,
+Docker toolchain, platform, and build options into a content-addressed cache
+key. The key never contains a GitHub Actions run ID, so a fresh worker can
+reuse a validated artifact for identical inputs.
+
+`artifactCache.mjs` stores a runtime archive in the dedicated, private
+`pi-agents-cloud-build-cache` bucket. Cache objects are written under their
+full SHA-256 key with a create-only generation precondition. A missing,
+tampered, stale, or otherwise unverifiable object is a miss. On a miss,
+`build.mjs` runs the existing typecheck, full upstream suite, and web build,
+then the finished image is started and `bin/pi-web-ui-smoke.js` verifies that
+`/agent/` serves HTML plus every referenced JavaScript application bundle.
+The build-only smoke container sets `MAPACHE_STARTUP_SMOKE=1`, which skips
+workspace checkpoint coordination and authority persistence because the image
+has no session document; it does not change normal Cloud Run startup behavior.
+Only after those checks pass is the runtime packaged and the cache object
+published. On a verified hit, the runtime is restored and the three upstream
+checks are skipped. Both paths log the cache key, decision, reason, and
+elapsed time; changing a managed patch, resolved dependency tree, release, or
+builder environment produces a miss.
+
+A future release that cannot accept the managed patch fails the candidate
+build; it does not silently fall back to the previous release. Use the
+Cloud Build cache rehearsal in [Testing](./testing.md) to capture cold,
+repeat-worker, and changed-input evidence. Local builds use the checked-in
+empty cache placeholders and therefore perform the normal uncached build.
 
 The managed MCP policy remains explicitly compatible with
 `pi-mcp-adapter` `2.32.1` because its checked-in mutation patch and declared

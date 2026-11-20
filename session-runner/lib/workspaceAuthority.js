@@ -27,7 +27,7 @@ function createWorkspaceAuthority({
   randomUUIDImpl = randomUUID,
   setIntervalFn = setInterval,
 } = {}) {
-  const enabled = config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1";
+  const enabled = !config.startupSmoke && (config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1");
   const automationRuntime = String(config.runtimeKind || "").trim().toLowerCase() === "automation";
   const bootInstanceId = String(instanceId || randomUUIDImpl()).trim();
   const renewalIntervalMs = positiveNumber(
