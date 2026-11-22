@@ -29,8 +29,14 @@ export function readManifest(manifestPath = MANIFEST_PATH) {
 	if (!upstream.packageName || !Array.isArray(upstream.requiredFiles) || upstream.requiredFiles.length === 0) {
 		fail("manifest is missing upstream package identity or required files");
 	}
+	if (upstream.version !== undefined && !/^\d+\.\d+\.\d+$/.test(String(upstream.version))) {
+		fail("manifest has an invalid upstream version");
+	}
 	if (!manifest.piSdk?.package || manifest.piSdk.releaseChannel !== "latest") {
 		fail("manifest must resolve the embedded Pi SDK from the latest npm channel");
+	}
+	if (manifest.piSdk.version !== undefined && !/^\d+\.\d+\.\d+$/.test(String(manifest.piSdk.version))) {
+		fail("manifest has an invalid Pi SDK version");
 	}
 	if (!manifest.piMcpAdapter?.package || !manifest.piMcpAdapter.version || !manifest.piMcpAdapter.integrity) {
 		fail("manifest is missing the managed MCP adapter compatibility contract");
@@ -322,9 +328,12 @@ function parseArgs(argv) {
 	return options;
 }
 
-function resolvedReleaseShape(release) {
+function resolvedReleaseShape(release, manifest) {
 	if (!release?.commit || !release?.tag || !release?.version || !release?.archiveUrl) {
 		fail("release resolver returned incomplete metadata");
+	}
+	if (manifest.upstream.version && release.version !== manifest.upstream.version) {
+		fail(`resolved upstream version mismatch (expected ${manifest.upstream.version}, got ${release.version})`);
 	}
 	return release;
 }
@@ -332,13 +341,13 @@ function resolvedReleaseShape(release) {
 export async function buildUpstream(options = {}) {
 	const manifest = readManifest(options.manifestPath || MANIFEST_PATH);
 	const fetchImpl = options.fetchImpl || globalThis.fetch;
-	const buildInputs = readBuildInputs(options.buildInputsPath);
+	const buildInputs = readBuildInputs(options.buildInputsPath, manifest);
 	const workDir = options.workDir ? resolve(options.workDir) : mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-"));
 	const sourceDir = options.sourceDir ? resolve(options.sourceDir) : join(workDir, "source");
 	const ownsWorkDir = !options.workDir;
 	try {
 		mkdirSync(workDir, {recursive: true});
-		const release = resolvedReleaseShape(options.resolvedRelease || buildInputs?.release || await resolveStableRelease({manifest, fetchImpl}));
+		const release = resolvedReleaseShape(options.resolvedRelease || buildInputs?.release || await resolveStableRelease({manifest, fetchImpl}), manifest);
 		let resolvedSource = release;
 		if (options.sourceDir) {
 			await verifyCommitMarker(sourceDir, release);
@@ -370,8 +379,12 @@ export async function buildUpstream(options = {}) {
 
 		const sdk = options.resolvedSdk || buildInputs?.piSdk || await resolveLatestPackage({
 			packageName: manifest.piSdk.package,
+			expectedVersion: manifest.piSdk.version,
 			fetchImpl,
 		});
+		if (manifest.piSdk.version && sdk.version !== manifest.piSdk.version) {
+			fail(`resolved Pi SDK version mismatch (expected ${manifest.piSdk.version}, got ${sdk.version})`);
+		}
 		await run("npm", ["ci"], {cwd: sourceDir});
 		await run("npm", ["install", "--no-save", "--package-lock=false", "--ignore-scripts", sdk.package + "@" + sdk.version], {cwd: sourceDir});
 		if (existsSync(join(sourceDir, "mobile", "package.json"))) {
@@ -496,11 +509,13 @@ export async function buildUpstream(options = {}) {
 	}
 }
 
-function readBuildInputs(buildInputsPath) {
+function readBuildInputs(buildInputsPath, manifest) {
 	if (!buildInputsPath) return null;
 	try {
 		const inputs = JSON.parse(readFileSync(resolve(buildInputsPath), "utf8"));
-		if (inputs?.schemaVersion !== 1 || !inputs.cacheKey || !inputs.identitySha256 || !inputs.release || !inputs.piSdk) {
+		if (inputs?.schemaVersion !== 1 || !inputs.cacheKey || !inputs.identitySha256 || !inputs.release || !inputs.piSdk ||
+			(manifest.upstream.version && inputs.release.version !== manifest.upstream.version) ||
+			(manifest.piSdk.version && inputs.piSdk.version !== manifest.piSdk.version)) {
 			console.log("pi-web-ui build inputs are unavailable or stale; cache disabled for this build");
 			return null;
 		}
