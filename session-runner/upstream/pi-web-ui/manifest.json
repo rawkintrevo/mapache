@@ -58,6 +58,7 @@
     ]
   },
   "patches": [
-    "patches/managed-v0121.patch"
+    "patches/managed-v0121.patch",
+    "patches/0019-release-test-compat.patch"
   ]
 }

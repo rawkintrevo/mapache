@@ -181,6 +181,16 @@ its normal test command is enabled; the passing `--skip-tests` build proves the
 runtime typecheck and production artifact path, not a claim that those host
 fixtures are fixed.
 
+Cloud Build runs the same test command from a release tarball rather than a
+Git checkout. The builder removes its source-resolution marker before testing
+and creates a temporary Git index so upstream repository-hygiene tests inspect
+the extracted source without treating build metadata as a repository file.
+The v0.121.3 compatibility patch also registers the two managed internal
+variables (`PI_WEB_CONTROL_PATH` and `PI_WEB_MCP_ADAPTER_PATH`) and removes the
+unused `goalBarSet` translation key from the synchronized dictionaries. This
+keeps the release audit strict while making the archive-mode test environment
+equivalent to the upstream checkout assumptions.
+
 Before publishing, run the default image build in a clean Node 24 container,
 then run the runner checks and the local vertical harness. Validate the
 authenticated `/runner/health` contract and keep `/healthz` and `/healthz/`

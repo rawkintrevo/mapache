@@ -1,0 +1,181 @@
+diff --git a/locales/de.json b/locales/de.json
+index c8ed537bdd629a2891328be6c4cc01377d16b5c5..3de5b2e37ca831f63fa90ff5f29885d5eb2f7db7 100644
+--- a/locales/de.json
++++ b/locales/de.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Geben Sie mindestens eine Modell-ID ein",
+ 		"goalBarTitle": "Ziel",
+ 		"goalBarPlaceholder": "Legen Sie ein Ziel fest, der Agent wird nach Abschluss automatisch überprüft…",
+-		"goalBarSet": "Starten",
+ 		"goalBarResume": "Fortsetzen",
+ 		"goalBarClear": "Abbrechen",
+ 		"goalBarLocked": "Gesperrt: gilt für alle folgenden Runden",
+diff --git a/locales/es.json b/locales/es.json
+index 20e7f5ee2c2ada681b0fde52a89c8aa92989a015..8a7a594acaf54086c9555ba743523f95a84c2487 100644
+--- a/locales/es.json
++++ b/locales/es.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Ingrese al menos un ID de modelo",
+ 		"goalBarTitle": "Objetivo",
+ 		"goalBarPlaceholder": "Defina un objetivo; el agente lo revisará automáticamente al completarlo…",
+-		"goalBarSet": "Iniciar",
+ 		"goalBarResume": "Reanudar",
+ 		"goalBarClear": "Cancelar",
+ 		"goalBarLocked": "Bloqueado: se aplica a todos los turnos siguientes",
+diff --git a/locales/fr.json b/locales/fr.json
+index 974fa0ceb23ac25aea2ef6052d4490b5623dc929..4463e0d04648b0f7b62007eba77aebc2c25d5194 100644
+--- a/locales/fr.json
++++ b/locales/fr.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Saisissez au moins un ID de modèle",
+ 		"goalBarTitle": "Objectif",
+ 		"goalBarPlaceholder": "Fixez un objectif, l'agent le fera relire automatiquement une fois accompli…",
+-		"goalBarSet": "Démarrer",
+ 		"goalBarResume": "Reprendre",
+ 		"goalBarClear": "Annuler",
+ 		"goalBarLocked": "Verrouillé : appliqué à tous les tours suivants",
+diff --git a/locales/it.json b/locales/it.json
+index 72788c5b3f73d3b5d4b7c2929ee17395984479f5..9cb592788ea9d4bd6fb7cf106d033e7ed85205a6 100644
+--- a/locales/it.json
++++ b/locales/it.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Inserisci almeno un ID modello",
+ 		"goalBarTitle": "Obiettivo",
+ 		"goalBarPlaceholder": "Fissa un obiettivo; l'output dell'agente viene revisionato automaticamente…",
+-		"goalBarSet": "Avvia",
+ 		"goalBarResume": "Riprendi",
+ 		"goalBarClear": "Annulla",
+ 		"goalBarLocked": "Bloccato: vale per ogni turno successivo",
+diff --git a/locales/ja.json b/locales/ja.json
+index 0df300eeb77c35db83a125466411f483debd64ae..183b524c3f49f4d3cfdbd5ab62594c6b8b3b7456 100644
+--- a/locales/ja.json
++++ b/locales/ja.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "モデル ID を 1 つ以上入力してください",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "目標を設定すると、agent が完了後に自動レビューします…",
+-		"goalBarSet": "開始",
+ 		"goalBarResume": "再開",
+ 		"goalBarClear": "キャンセル",
+ 		"goalBarLocked": "固定：以降すべてのラウンドに適用します",
+diff --git a/locales/ko.json b/locales/ko.json
+index 62e22f0467c6c084b4c0f302225428af8d7ec37a..98cf36f05de6fee69bd572cb6bb3dae4226674b2 100644
+--- a/locales/ko.json
++++ b/locales/ko.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "모델 ID를 1개 이상 입력하세요",
+ 		"goalBarTitle": "목표",
+ 		"goalBarPlaceholder": "목표를 설정하세요. agent가 완료하면 자동으로 검토해요…",
+-		"goalBarSet": "시작",
+ 		"goalBarResume": "재개",
+ 		"goalBarClear": "취소",
+ 		"goalBarLocked": "고정: 이후 모든 라운드에 적용돼요",
+diff --git a/locales/pt.json b/locales/pt.json
+index 5b8306cf6ff88385ed60978647fbe3aae4271ef6..ee98fb59197916817dfa8dcce0087bd17efa830b 100644
+--- a/locales/pt.json
++++ b/locales/pt.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Informe ao menos um ID de modelo",
+ 		"goalBarTitle": "Objetivo",
+ 		"goalBarPlaceholder": "Digite o objetivo a alcançar…",
+-		"goalBarSet": "Iniciar",
+ 		"goalBarResume": "Retomar",
+ 		"goalBarClear": "Cancelar",
+ 		"goalBarLocked": "Travado: aplica a todas as rodadas seguintes",
+diff --git a/locales/ru.json b/locales/ru.json
+index cebb0a414007835237d40b6b31f4f38cca72eafd..ccb174202460047e8cd9beb0f991575553b91196 100644
+--- a/locales/ru.json
++++ b/locales/ru.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Укажите хотя бы один ID модели",
+ 		"goalBarTitle": "Цель",
+ 		"goalBarPlaceholder": "Задайте цель, агент автоматически проверит результат после выполнения…",
+-		"goalBarSet": "Начать",
+ 		"goalBarResume": "Возобновить",
+ 		"goalBarClear": "Отменить",
+ 		"goalBarLocked": "Закреплено: применяется ко всем последующим ходам",
+diff --git a/locales/tr.json b/locales/tr.json
+index 70959beeff8edd6adf2d9c66a004135071aa0b59..6ddee45aa70cfd3ec6373b8957934f5a3133d7e3 100644
+--- a/locales/tr.json
++++ b/locales/tr.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "Önce en az bir model kimliği girin",
+ 		"goalBarTitle": "Hedef",
+ 		"goalBarPlaceholder": "Ulaşılacak hedefi girin…",
+-		"goalBarSet": "Gönder",
+ 		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "İptal",
+ 		"goalBarLocked": "Kilitli: sonraki tüm turlara uygulanır",
+diff --git a/locales/zh-HK.json b/locales/zh-HK.json
+index 4431651b6869380d1b930bdb59bc8b4cdc233e44..fe9b4a97dd8664b6b15dc62bf9bda2d80c70d855 100644
+--- a/locales/zh-HK.json
++++ b/locales/zh-HK.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
+-		"goalBarSet": "發送",
+ 		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用到後續所有回合",
+diff --git a/locales/zh-Hant.json b/locales/zh-Hant.json
+index e1ab984d9148ac6be15b8c12e9e86042eadc0bfc..93eff7f4f9ad9f1ac2329da716691344a5978a8f 100644
+--- a/locales/zh-Hant.json
++++ b/locales/zh-Hant.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
+-		"goalBarSet": "發送",
+ 		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用到後續所有回合",
+diff --git a/locales/zh-TW.json b/locales/zh-TW.json
+index cfb6d22faafe0504a7d0202785694f49ddf7b79d..06590844a81089882d65898e1134699985cfd013 100644
+--- a/locales/zh-TW.json
++++ b/locales/zh-TW.json
+@@ -1417,7 +1417,6 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
+-		"goalBarSet": "傳送",
+ 		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用程式到後續所有回合",
+diff --git a/server/env-registry.ts b/server/env-registry.ts
+index 15521f796f7dd31a157a6413325dadaf6da878e0..042a61db382db68e2f160e1be29e019dd82e8ff7 100644
+--- a/server/env-registry.ts
++++ b/server/env-registry.ts
+@@ -105,6 +105,8 @@ export const ENV_SPECS: readonly EnvSpec[] = [
+ 	{ name: "PI_DEVICE_HUB_PACKAGE_ROOT", scope: "internal" },
+ 	{ name: "PI_DEVICE_HUB_SERVICE_CONFIG", scope: "internal" },
+ 	{ name: "PI_WEB_ASSET_AUTO_MIRROR", scope: "internal" },
++	{ name: "PI_WEB_CONTROL_PATH", scope: "internal" },
++	{ name: "PI_WEB_MCP_ADAPTER_PATH", scope: "internal" },
+ 	{ name: "PI_WEB_ASSET_MIRROR", scope: "internal" },
+ 	{ name: "PI_WEB_ASYNC_SESSION_OPEN", scope: "internal" },
+ 	{ name: "PI_WEB_CLAUDE_PERMISSION_MODE", scope: "internal" },
+diff --git a/web/src/i18n/messages/core/en.json b/web/src/i18n/messages/core/en.json
+index 894739c538109dff1ed6aa791644fafd1cd273d4..cea7514173ec7676d634414f8b08e307f656d16d 100644
+--- a/web/src/i18n/messages/core/en.json
++++ b/web/src/i18n/messages/core/en.json
+@@ -1413,7 +1413,6 @@
+ 	"enrichModelsNeedIds": "Enter at least one model id",
+ 	"goalBarTitle": "Goal",
+ 	"goalBarPlaceholder": "Enter the goal to achieve…",
+-	"goalBarSet": "Send",
+ 	"goalBarResume": "Resume goal",
+ 	"goalBarClear": "Cancel",
+ 	"goalBarLocked": "Locked: applies to every later turn",
+diff --git a/web/src/i18n/messages/core/zh.json b/web/src/i18n/messages/core/zh.json
+index 0ff51c2b95dccf47338bf2af04092721b3de4d3b..34904453b6be89ff39d1b0db2093786ee8b90cd7 100644
+--- a/web/src/i18n/messages/core/zh.json
++++ b/web/src/i18n/messages/core/zh.json
+@@ -1413,7 +1413,6 @@
+ 	"enrichModelsNeedIds": "先填写至少一个模型 ID",
+ 	"goalBarTitle": "目标",
+ 	"goalBarPlaceholder": "输入要达成的目标…",
+-	"goalBarSet": "发送",
+ 	"goalBarResume": "Resume goal",
+ 	"goalBarClear": "取消",
+ 	"goalBarLocked": "锁定：应用到后续所有回合",
