@@ -1936,13 +1936,13 @@ index 0000000..977b366
 +	return state.terminal !== null;
 +}
 diff --git a/server/client-state.ts b/server/client-state.ts
-index acd28fe..c5de58f 100644
+index acd28fe..373a797 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
-@@ -902,6 +902,48 @@ export function isExtensionDisabled(
- 	if (isInternalExtension(e)) return false;
- 	if (disabled.length === 0) return false;
- 	const keys = extensionKeyCandidates(e);
+@@ -947,6 +947,49 @@ export interface MarkerSettings {
+ /** 出厂默认关闭的内联标记（单源：客户端状态默认值、MarkerService 均取此处）。 */
+ export const DEFAULT_DISABLED_MARKERS: readonly string[] = ["notify", "action", "suggest"];
+ 
 +/**
 + * Persisted display-only state for one native Goal. The key is the upstream
 + * session identity, not a browser client id: session ids survive reconnects,
@@ -1985,10 +1985,11 @@ index acd28fe..c5de58f 100644
 +		savedAt: typeof raw.savedAt === "number" && Number.isFinite(raw.savedAt) ? raw.savedAt : Date.now(),
 +	};
 +}
- 	return disabled.some((d) => keys.includes(d));
- }
- 
-@@ -956,9 +998,21 @@ export interface ClientState {
++
+ export interface ClientState {
+ 	lastCwd?: string;
+ 	projects: { path: string; lastUsed: number }[];
+@@ -956,9 +999,21 @@ export interface ClientState {
  		locked: boolean;
  		execModel?: string | null;
  	};
@@ -2011,7 +2012,7 @@ index acd28fe..c5de58f 100644
  	removedProjects?: string[];
  	workspaceRoots?: Record<string, string[]>;
  	projectProviderKeys?: Record<string, Record<string, string>>;
-@@ -967,6 +1021,9 @@ export interface ClientState {
+@@ -967,6 +1022,9 @@ export interface ClientState {
  	defaultModel?: string;
  	defaultModels?: Record<string, string>;
  	defaultProviderKeys?: Record<string, string>;
@@ -2021,7 +2022,7 @@ index acd28fe..c5de58f 100644
  	markers?: MarkerSettings;
  	pinnedSessions?: Record<string, string[]>;
  	sessionTitles?: Record<string, Record<string, string>>;
-@@ -1382,7 +1439,41 @@ export class ClientStateStore {
+@@ -1382,7 +1440,41 @@ export class ClientStateStore {
  		this.save();
  	}
  
@@ -2064,7 +2065,7 @@ index acd28fe..c5de58f 100644
  		if (list.length === 0) return;
  		const all = this.load();
  		const state = (all[clientId] ??= { projects: [] });
-@@ -1858,6 +1949,34 @@ export class ClientStateStore {
+@@ -1858,6 +1950,34 @@ export class ClientStateStore {
  		return undefined;
  	}
  
@@ -2099,7 +2100,7 @@ index acd28fe..c5de58f 100644
  	saveProjectModel(clientId: string, cwd: string, modelId: string, engine?: string): void {
  		const all = this.load();
  		const eng = engine?.trim();
-@@ -1874,6 +1993,7 @@ export class ClientStateStore {
+@@ -1874,6 +1994,7 @@ export class ClientStateStore {
  			const state = (all[clientId] ??= { projects: [] });
  			this.touchClient(all, clientId);
  			(state.projectModels ??= {})[cwd] = modelId;
@@ -3518,6 +3519,19 @@ index b2edd70..261d60a 100644
  	round: number;
  	status: string;
  	statusEn?: string;
+diff --git a/server/virtual-tui.ts b/server/virtual-tui.ts
+index 93a3cce..a86c761 100644
+--- a/server/virtual-tui.ts
++++ b/server/virtual-tui.ts
+@@ -25,7 +25,7 @@ export function extractCursorPosition(lines: string[]): { row: number; col: numb
+ 	return null;
+ }
+ 
+-export function formatAnsiScreen(rawLines: string[], _cols: number, _rows?: number): string {
++export function formatAnsiScreen(rawLines: readonly string[], _cols: number, _rows?: number): string {
+ 	const lines = [...rawLines];
+ 	const cursor = extractCursorPosition(lines);
+ 
 diff --git a/server/workspace-request-resume.ts b/server/workspace-request-resume.ts
 new file mode 100644
 index 0000000..17748d3
