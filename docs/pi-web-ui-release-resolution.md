@@ -15,12 +15,14 @@ installs the resolved SDK version, records the actual installed pi-ai
 metadata, and fails before producing a runtime directory when a compatibility
 check fails. There is no fallback to an older release.
 
-The current audit target was GitHub release
-v0.121.0 (https://github.com/xing-shuyin/pi-web-ui/releases/tag/v0.121.0),
-commit 6142308d81a1c85bd7c1ec180955ba5331cc650e. That is evidence from the
-resolution performed during this change, not a new source pin. A future stable
-release must either accept the managed patch or fail the candidate image build
-until its integration is ported.
+The current audit target is GitHub release
+v0.121.3 (https://github.com/xing-shuyin/pi-web-ui/releases/tag/v0.121.3),
+commit a990160ea722abf587f7fc05308b209b743e6279. That is evidence from the
+latest resolution, not a new source pin. The managed-v0121 patch was refreshed
+for this release after the prior v0.121.0 context no longer applied with strict
+git checks; the retained Mapache integration changes and their scope are
+unchanged. A future stable release must either accept the managed patch or fail
+the candidate image build until its integration is ported.
 
 ## Resolution contract
 
