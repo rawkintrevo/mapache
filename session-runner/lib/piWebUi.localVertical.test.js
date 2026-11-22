@@ -267,7 +267,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     const health = await request(publicPort, `/runner/health?mapache_access=${encodeURIComponent(accessToken)}`);
     assert.equal(health.status, 200);
     assert.equal(health.body.agentRuntime.ready, true);
-    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "a990160ea722abf587f7fc05308b209b743e6279");
+    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "6a3a5e705f8084d2c9afee408b5c3dce9cf1e1c6");
     assert.equal((await request(publicPort, `/capabilities?mapache_access=${encodeURIComponent(accessToken)}`)).body.browser.state, "ready");
     assert.equal((await request(publicPort, `/preview/status?mapache_access=${encodeURIComponent(accessToken)}`)).body.ok, true);
     const bootstrap = await request(publicPort, `/agent/?mapache_access=${encodeURIComponent(accessToken)}`);
@@ -300,6 +300,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
       `fixture MCP result missing echo payload: ${JSON.stringify(mcpResults).slice(0, 1000)}`);
     assert(model.requests.length >= 4, "expected streamed main and isolated review model requests");
 
+    socket.verticalMessages = socket.verticalMessages.filter((message) => message.type !== "sessions");
     socket.send(JSON.stringify({type: "list_sessions"}));
     const listed = await next(socket, (message) => message.type === "sessions");
     assert(listed.sessions.length >= 1);
@@ -308,6 +309,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     socket.send(JSON.stringify({type: "new_chat"}));
     const secondSnapshot = await next(socket, (message) => isSnapshot(message) && message.state.conversationId !== firstConversationId);
     assert.notEqual(secondSnapshot.state.conversationId, firstConversationId);
+    socket.verticalMessages = socket.verticalMessages.filter((message) => message.type !== "sessions");
     socket.send(JSON.stringify({type: "list_sessions"}));
     const listedTwice = await next(socket, (message) => message.type === "sessions");
     assert(listedTwice.sessions.length >= 1);
@@ -338,9 +340,13 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     assert.equal(model.requests.length, providerCountBeforeRenewal, "reconnect must not start a model turn");
 
     reconnect.send(JSON.stringify({type: "switch_session", path: firstSessionFile}));
-    const restored = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile);
+    const restored = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile && message.state.messages?.length > 0);
     assert(restored.state.messages.length > 0);
 
+    // Production snapshotting and Pi run as the same user. Match ownership for
+    // this host-side snapshotter after the root image writes private 0600 state.
+    execFileSync("docker", ["run", "--rm", "-v", `${root}:/state`, "--entrypoint", "chown", IMAGE,
+      "-R", `${process.getuid()}:${process.getgid()}`, "/state"], {stdio: "ignore"});
     const capture = await createAgentSnapshotService({config}).capture({
       stagingRoot: stagingDir,
       bootInstanceId: config.agentRuntimeBootInstanceId,
@@ -371,7 +377,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     await next(reconnect, (message) => message.type === "ready");
     await next(reconnect, isSnapshot);
     reconnect.send(JSON.stringify({type: "switch_session", path: firstSessionFile}));
-    const restoredAfterRestart = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile);
+    const restoredAfterRestart = await next(reconnect, (message) => isSnapshot(message) && message.state.sessionFile === firstSessionFile && message.state.messages?.length > 0);
     assert(restoredAfterRestart.state.messages.length > 0);
     assert.equal(model.requests.length, checkpointCountBeforeRestart, "restart and history restore must not auto-resume execution");
   } finally {
