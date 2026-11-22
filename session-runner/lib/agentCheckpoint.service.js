@@ -8,6 +8,8 @@ const {generationMatchOptions} = require("./workspaceSyncGeneration.helpers");
 const {publishLargeFile, parsePointer, shouldDefer} = require("./workspaceLargeFiles");
 const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
+const {uploadCheckpointBatches} = require("./checkpointUploadBatch");
+
 const CHECKPOINT_VERSION = 1;
 const WORKSPACE_FILE_NAMESPACE = "workspace-files";
 
@@ -319,72 +321,81 @@ async function publishWorkspaceFiles({
   ].join("/");
   const objectRefs = [];
 
-  for (const sourceFile of sourceFiles) {
-    const relativePath = validateRelativePath(sourceFile.path, "workspace file");
-    const kind = sourceFile.kind || "workspace-file";
-    if (kind === "symlink") {
-      manifest.files.push({
+  await uploadCheckpointBatches({
+    files: sourceFiles,
+    sizeOf: async (file) => {
+      if (file.kind === "symlink") return 0;
+      if (file.content !== undefined) return Buffer.byteLength(Buffer.isBuffer(file.content) ? file.content : String(file.content));
+      const localPath = file.localPath || resolveStagingPath(sourceRoot, file.path);
+      return (await fsImpl.promises.lstat(localPath)).size;
+    },
+    upload: async (sourceFile) => {
+      const relativePath = validateRelativePath(sourceFile.path, "workspace file");
+      const kind = sourceFile.kind || "workspace-file";
+      if (kind === "symlink") {
+        manifest.files.push({
+          path: relativePath,
+          kind,
+          byteLength: Buffer.byteLength(String(sourceFile.target || ""), "utf8"),
+          sha256: sha256(Buffer.from(String(sourceFile.target || ""), "utf8")),
+          mode: sourceFile.mode || 0o777,
+          target: String(sourceFile.target || ""),
+          objectPath: null,
+        });
+        return;
+      }
+      const localPath = sourceFile.localPath || resolveStagingPath(sourceRoot, relativePath);
+      const stat = sourceFile.content !== undefined ?
+        {mode: sourceFile.mode || 0o600, isFile: () => true} : await fsImpl.promises.lstat(localPath);
+      if (!stat.isFile()) throw checkpointError("checkpoint_workspace_file_invalid", `Workspace path is not a file: ${relativePath}`);
+      // Large files are hashed/uploaded as streams. Pointer text is never published
+      // as artifact content; it must resolve against the trusted previous manifest.
+      if (sourceFile.content === undefined && shouldDefer({byteLength: stat.size}, config)) {
+        const file = await publishLargeFile({config, localPath, mode: stat.mode & 0o777,
+          relativePath, storage, fsImpl});
+        manifest.files.push(file);
+        objectRefs.push({bucketName: config.bucketName, objectPath: file.objectPath,
+          byteLength: file.byteLength, sha256: file.sha256});
+        return;
+      }
+      const content = Buffer.isBuffer(sourceFile.content) ? sourceFile.content :
+        sourceFile.content !== undefined ? Buffer.from(String(sourceFile.content), "utf8") : await fsImpl.promises.readFile(localPath);
+      const deferred = parsePointer(content);
+      if (deferred) {
+        if (!previousManifest && publicationBase) previousManifest = await readWorkspaceManifest({config, pointer: publicationBase, storage});
+        const file = await publishLargeFile({config, pointer: deferred, previousManifest,
+          previousPointer: publicationBase, mode: stat.mode & 0o777, relativePath, storage, fsImpl});
+        manifest.files.push(file);
+        objectRefs.push({bucketName: config.bucketName, objectPath: file.objectPath,
+          byteLength: file.byteLength, sha256: file.sha256});
+        return;
+      }
+
+      const file = {
         path: relativePath,
         kind,
-        byteLength: Buffer.byteLength(String(sourceFile.target || ""), "utf8"),
-        sha256: sha256(Buffer.from(String(sourceFile.target || ""), "utf8")),
-        mode: sourceFile.mode || 0o777,
-        target: String(sourceFile.target || ""),
-        objectPath: null,
+        byteLength: content.length,
+        sha256: sha256(content),
+        mode: stat.mode & 0o777,
+      };
+      const objectPath = `${basePath}/objects/${relativePath}`;
+      await writeImmutableObject({
+        admin,
+        bucketName: config.bucketName,
+        contentType: "application/octet-stream",
+        fsImpl,
+        localPath,
+        content: sourceFile.content !== undefined ? content : undefined,
+        metadata: {mapacheWorkspacePath: relativePath},
+        objectPath,
+        storage,
+        uploadObject,
       });
-      continue;
-    }
-    const localPath = sourceFile.localPath || resolveStagingPath(sourceRoot, relativePath);
-    const stat = sourceFile.content !== undefined ?
-      {mode: sourceFile.mode || 0o600, isFile: () => true} : await fsImpl.promises.lstat(localPath);
-    if (!stat.isFile()) throw checkpointError("checkpoint_workspace_file_invalid", `Workspace path is not a file: ${relativePath}`);
-    // Large files are hashed/uploaded as streams. Pointer text is never published
-    // as artifact content; it must resolve against the trusted previous manifest.
-    if (sourceFile.content === undefined && shouldDefer({byteLength: stat.size}, config)) {
-      const file = await publishLargeFile({config, localPath, mode: stat.mode & 0o777,
-        relativePath, storage, fsImpl});
+      file.objectPath = objectPath;
+      objectRefs.push(objectReference({bucketName: config.bucketName, content, objectPath}));
       manifest.files.push(file);
-      objectRefs.push({bucketName: config.bucketName, objectPath: file.objectPath,
-        byteLength: file.byteLength, sha256: file.sha256});
-      continue;
-    }
-    const content = Buffer.isBuffer(sourceFile.content) ? sourceFile.content :
-      sourceFile.content !== undefined ? Buffer.from(String(sourceFile.content), "utf8") : await fsImpl.promises.readFile(localPath);
-    const deferred = parsePointer(content);
-    if (deferred) {
-      if (!previousManifest && publicationBase) previousManifest = await readWorkspaceManifest({config, pointer: publicationBase, storage});
-      const file = await publishLargeFile({config, pointer: deferred, previousManifest,
-        previousPointer: publicationBase, mode: stat.mode & 0o777, relativePath, storage, fsImpl});
-      manifest.files.push(file);
-      objectRefs.push({bucketName: config.bucketName, objectPath: file.objectPath,
-        byteLength: file.byteLength, sha256: file.sha256});
-      continue;
-    }
-
-    const file = {
-      path: relativePath,
-      kind,
-      byteLength: content.length,
-      sha256: sha256(content),
-      mode: stat.mode & 0o777,
-    };
-    const objectPath = `${basePath}/objects/${relativePath}`;
-    await writeImmutableObject({
-      admin,
-      bucketName: config.bucketName,
-      contentType: "application/octet-stream",
-      fsImpl,
-      localPath,
-      content: sourceFile.content !== undefined ? content : undefined,
-      metadata: {mapacheWorkspacePath: relativePath},
-      objectPath,
-      storage,
-      uploadObject,
-    });
-    file.objectPath = objectPath;
-    objectRefs.push(objectReference({bucketName: config.bucketName, content, objectPath}));
-    manifest.files.push(file);
-  }
+    },
+  });
   manifest.files.sort((a, b) => a.path.localeCompare(b.path));
   const manifestContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   const manifestObjectPath = `${basePath}/manifest.json`;

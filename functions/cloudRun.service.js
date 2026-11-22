@@ -478,7 +478,7 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       shutdownResult = {ok: false, skipped: true};
     } else {
       shutdownResult = await requestRunnerShutdown(session, {
-        requireAcknowledgement: false,
+        requireAcknowledgement: options.requireAcknowledgement === true,
         timeoutMs: dependencies.shutdownTimeoutMs,
       });
     }
@@ -505,6 +505,17 @@ async function deleteSessionService(sessionRef, session, options = {}, dependenc
       persistenceWarning: options.recoveryWarning || shutdownResult.ok === false,
     });
   } catch (error) {
+    if (options.requireAcknowledgement && error.code === "runner_shutdown_failed") {
+      shutdownResult = {ok: false};
+      // Recovery can proceed when Cloud Run independently confirms there is
+      // no old container to save. An unreachable existing service is retained.
+      try {
+        const client = await (dependencies.auth || auth).getClient();
+        await getCloudRunService(client, serviceName);
+      } catch (lookupError) {
+        if (isGoogleNotFound(lookupError)) error = lookupError;
+      }
+    }
     if (isGoogleNotFound(error)) {
       await markSessionStoppedIfNeeded(dependencies, sessionRef, session, options);
       if (options.recoveryWarning || shutdownResult.ok === false) {
@@ -1034,7 +1045,12 @@ function stringifyMcpConfig(value) {
 }
 
 async function requestRunnerShutdown(session, options = {}) {
-  if (!session.serviceUrl || !session.shutdownToken) return {ok: true, skipped: true};
+  if (!session.serviceUrl || !session.shutdownToken) {
+    if (options.requireAcknowledgement) {
+      throw Object.assign(new Error("runner_shutdown_unavailable"), {code: "runner_shutdown_failed"});
+    }
+    return {ok: true, skipped: true};
+  }
 
   const controller = new AbortController();
   const timeoutMs = positiveOperationNumber(options.timeoutMs, DEFAULT_RUNNER_SHUTDOWN_TIMEOUT_MS);

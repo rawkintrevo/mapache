@@ -915,6 +915,7 @@ assert.deepStrictEqual(terminalCommandEnv({
         return {data: {done: true}};
       }
       if (method === "GET" && url.includes("/services/runner")) {
+        if (!deleteCalled) return {data: {name: "runner"}};
         const error = new Error("missing");
         error.response = {status: 404, data: {error: {code: 404}}};
         throw error;
@@ -939,6 +940,38 @@ assert.deepStrictEqual(terminalCommandEnv({
   assert.strictEqual(deleteCalled, true);
   assert.strictEqual(shutdownUpdates[0].agentRuntimeRecoveryWarning, "interrupted");
   assert.strictEqual(shutdownUpdates[0].lastError, "runtime_interrupted_checkpoint_recovery_required");
+
+  // An ordinary restart must retain the service when its final save fails.
+  for (const credentials of [
+    {serviceUrl: "https://runner.example", shutdownToken: "shutdown-token"},
+    {},
+  ]) {
+    deleteCalled = false;
+    const result = await shutdownFailureService.deleteSessionService(shutdownFailureRef, {
+      serviceName: "projects/p/locations/us-central1/services/runner",
+      status: "stopping",
+      ...credentials,
+    }, {reason: "manual", requireAcknowledgement: true});
+    assert.strictEqual(result, false);
+    assert.strictEqual(deleteCalled, false);
+    assert.strictEqual(shutdownUpdates.at(-1).status, "stop_failed");
+  }
+
+  let absentDeletes = 0;
+  const absentRestartService = createCloudRunService({
+    auth: {getClient: async () => ({request: async ({method}) => {
+      if (method === "DELETE") absentDeletes++;
+      const error = new Error("missing");
+      error.response = {status: 404, data: {error: {code: 404}}};
+      throw error;
+    }})},
+    markSessionStopped: async () => {},
+  });
+  assert.strictEqual(await absentRestartService.deleteSessionService(shutdownFailureRef, {
+    serviceName: "projects/p/locations/us-central1/services/runner",
+    status: "stopping",
+  }, {reason: "manual", requireAcknowledgement: true}), true);
+  assert.strictEqual(absentDeletes, 0);
 
   let scheduledShutdownRequests = 0;
   let scheduledDeleteRequests = 0;

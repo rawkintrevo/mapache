@@ -122,6 +122,7 @@ function createRunnerLifecycleCoordinator({
     const deadline = now() + Math.max(1, Number(budgetMs) || 120_000);
     await automationExecution?.stop?.({cancel: true});
     if (!config.startupSmoke) checkpointScheduler?.stop?.();
+    let saved = false;
     try {
       if (config.agentRuntimeEnabled) {
         try {
@@ -155,6 +156,7 @@ function createRunnerLifecycleCoordinator({
           await bounded(checkpointScheduler.finalize({timeoutMs: Math.max(1, deadline - now())}), deadline, "checkpoint_timeout");
         }
       }
+      saved = true;
       await activity.updateSessionActivity({
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
         shutdownRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -164,9 +166,13 @@ function createRunnerLifecycleCoordinator({
     } finally {
       await browserEgress?.stop();
       await githubTokenApi?.stop?.();
-      await authority.release("shutdown").catch((error) => {
-        logger.error("workspace runtime authority release failed during shutdown", error);
-      });
+      // A failed manual save must remain retryable while the container exists.
+      // Signal shutdown still releases authority because the process will exit.
+      if (saved || reason !== "manual") {
+        await authority.release("shutdown").catch((error) => {
+          logger.error("workspace runtime authority release failed during shutdown", error);
+        });
+      }
     }
   }
 

@@ -361,7 +361,7 @@ async function stopSessionBeforeRecreation(sessionRef, session, dependencies) {
   try {
     serviceDeleted = await dependencies.deleteSessionService(sessionRef, session, {
       reason: "manual",
-      recoveryWarning: "interrupted",
+      requireAcknowledgement: true,
     });
   } catch (error) {
     await recordRuntimeStopFailure(sessionRef, session, dependencies, error);

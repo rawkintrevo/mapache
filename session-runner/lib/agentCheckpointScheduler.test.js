@@ -191,3 +191,16 @@ test("records capture failures while preserving the previous checkpoint", async 
   await assert.rejects(() => scheduler.finalize({timeoutMs: 500}), (error) => error.code === "snapshot_capture_failed");
   assert.deepEqual(errors, ["snapshot_capture_failed"]);
 });
+
+test("a failed final save can be retried after storage recovers", async () => {
+  let attempts = 0;
+  const {scheduler} = harness({workspaceSync: {
+    flush: async () => {},
+    syncUp: async () => {
+      if (++attempts === 1) throw new Error("storage unavailable");
+    },
+  }});
+  await assert.rejects(scheduler.finalize(), /storage unavailable/);
+  assert.deepEqual(await scheduler.finalize(), {ok: true, final: true});
+  assert.equal(attempts, 2);
+});
