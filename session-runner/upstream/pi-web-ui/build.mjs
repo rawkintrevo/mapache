@@ -287,6 +287,16 @@ function copyRuntimeEntry(sourcePath, destinationPath, sourceRoot, destinationRo
 	cpSync(sourcePath, destinationPath);
 }
 
+async function prepareSourceForTests(sourceDir) {
+	// Release archives are intentionally extracted without .git metadata. Keep the
+	// upstream repository-hygiene tests meaningful by giving them a temporary index,
+	// while keeping the resolver marker out of the source tree's root allowlist.
+	rmSync(join(sourceDir, ".mapache-source-commit"), {force: true});
+	if (existsSync(join(sourceDir, ".git"))) return;
+	await run("git", ["init", "--quiet"], {cwd: sourceDir, stdio: "pipe"});
+	await run("git", ["add", "--all"], {cwd: sourceDir, stdio: "pipe"});
+}
+
 export function copyRuntime(sourceDir, outputDir, manifest) {
 	if (existsSync(outputDir) && readdirSync(outputDir).length > 0) fail("output directory is not empty: " + outputDir);
 	mkdirSync(outputDir, {recursive: true});
@@ -464,10 +474,13 @@ export async function buildUpstream(options = {}) {
 			cwd: sourceDir,
 			env: {...process.env, PI_WEB_BASE_PATH: webBasePath},
 		});
-		if (!options.skipTests) await run("npm", ["test"], {
-			cwd: sourceDir,
-			env: {...process.env, HOME: "/tmp/mapache-build-home", LC_ALL: ""},
-		});
+		if (!options.skipTests) {
+			await prepareSourceForTests(sourceDir);
+			await run("npm", ["test"], {
+				cwd: sourceDir,
+				env: {...process.env, HOME: "/tmp/mapache-build-home", LC_ALL: ""},
+			});
+		}
 		cacheDecision = {
 			...cacheDecision,
 			buildElapsedMs: Date.now() - buildStartedAt,
