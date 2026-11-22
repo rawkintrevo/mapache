@@ -357,3 +357,46 @@ test("pointer publication preserves model bytes through rename, restart and dele
   assert.deepEqual(fourth.manifest.tombstones, ["renamed.pt"]);
   assert.equal(storage.objects.has(`${config.bucketName}/${blob}`), true, "deletion must retain historical data");
 });
+
+test("workspace install tree publishes concurrently and restores executable links and libraries", async (t) => {
+  const {createAgentCheckpointRestoreService} = require("./agentCheckpointRestore.service");
+  const {createWorkspacePathHelpers} = require("./workspacePath.helpers");
+  const {execFileSync} = require("node:child_process");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "tool-checkpoint-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root, {workspaceSyncPolicyExclude: []});
+  const bin = path.join(config.workspaceDir, ".local/bin");
+  const lib = path.join(config.workspaceDir, ".local/lib");
+  await fs.mkdir(bin, {recursive: true});
+  await fs.mkdir(lib, {recursive: true});
+  await fs.writeFile(path.join(lib, "tool"), '#!/bin/sh\ncat "$(dirname "$0")/../lib/data-0"\n', {mode: 0o755});
+  await fs.symlink("../lib/tool", path.join(bin, "tool"));
+  for (let i = 0; i < 25; i++) await fs.writeFile(path.join(lib, `data-${i}`), "installed\n");
+  const store = admittedStore();
+  const storage = createStorage();
+  const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
+  const {shouldIgnoreWorkspacePath} = createWorkspacePathHelpers({config});
+  const saved = await publisher.publishWorkspaceFiles({shouldIgnore: shouldIgnoreWorkspacePath});
+  assert.equal(saved.manifest.files.length, 27);
+  await fs.rm(config.workspaceDir, {recursive: true});
+  await fs.mkdir(config.workspaceDir);
+  const restore = createAgentCheckpointRestoreService({config, db: store.db, storage});
+  await restore.restoreCheckpoint({shouldIgnore: shouldIgnoreWorkspacePath});
+  assert.equal(await fs.readlink(path.join(bin, "tool")), "../lib/tool");
+  assert.equal(execFileSync(path.join(bin, "tool"), {encoding: "utf8"}), "installed\n");
+});
+
+test("a failed parallel installation upload never publishes a partial manifest", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "tool-checkpoint-failure-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root);
+  const store = admittedStore();
+  const storage = createStorage({failOnUploadNumber: 3});
+  const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
+  await assert.rejects(publisher.publishWorkspaceFiles({
+    files: Array.from({length: 20}, (_, i) => ({path: `.local/lib/tool-${i}`, content: "tool"})),
+  }), /injected upload failure/);
+  assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
+  assert.equal([...storage.objects.keys()].some((key) => key.endsWith("/manifest.json")), false);
+  assert.equal(storage.uploads.length, 7);
+});

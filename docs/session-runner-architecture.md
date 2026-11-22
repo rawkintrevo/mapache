@@ -122,7 +122,20 @@ delivery using `MAPACHE_SIGNAL_TEST_IMAGE` and the current Dockerfile command.
 Quiesce rejects new work and waits for the managed child and writers to stop.
 The runner then captures a final acknowledged checkpoint, closes browser/SSH
 forwards, snapshots Chrome state when applicable, releases authority, and
-exits. A forced loss leaves the last completed published checkpoint available;
+exits. A failed manual checkpoint retains writer authority and permits a retry;
+`agentCheckpointScheduler.js` clears failed final-save promises so a transient
+storage error does not permanently prevent saving. The Agent and Chrome may
+already be stopped, so this is a save/restart retry, not a resumed interactive
+session. Signal shutdown still releases authority because the process exits.
+The Functions recreation path requires a shutdown acknowledgment before deleting
+the service; an HTTP failure, timeout, or missing shutdown credentials leaves it
+in `stop_failed` without creating a replacement, unless Cloud Run independently
+confirms the service is already absent. Explicit stop/delete and hard
+scheduled shutdown retain their existing interruption semantics.
+
+These changes require deploying Functions plus rebuilding `gcp-runner`; existing
+services need a new revision for parallel checkpoint uploads and retry behavior.
+A forced loss leaves the last completed published checkpoint available;
 restore never resumes an in-flight model/tool turn automatically.
 
 ## HTTP and WebSocket routes

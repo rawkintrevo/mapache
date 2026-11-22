@@ -213,6 +213,7 @@ function createAgentCheckpointScheduler({
       if (failures.length) throw failures[0];
       return {ok: true, final: true};
     }, "final checkpoint save"), deadline, "checkpoint_timeout").catch((error) => {
+      finalPromise = null;
       lastError = {code: error?.code || "checkpoint_timeout", label: "final checkpoint save", at: now()};
       throw error;
     }).finally(() => {

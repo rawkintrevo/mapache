@@ -429,3 +429,30 @@ test("startup identifies a failed restore stage and never admits or listens", as
   assert.equal(typeof failure[1].elapsedMs, "number");
   assert.equal(JSON.stringify(logs).includes("private object details"), false);
 });
+
+test("failed manual checkpoint retains writer authority until a successful retry", async () => {
+  const events = [];
+  let attempts = 0;
+  const lifecycle = createLifecycleHarness(events, {
+    workspaceAuthority: {isCurrentWriter: () => true, release: async () => events.push("release")},
+    chromeProfileSnapshots: {enabled: () => false},
+    checkpointScheduler: {finalize: async () => {
+      if (++attempts === 1) throw new Error("checkpoint_timeout");
+    }},
+  });
+  await assert.rejects(lifecycle.shutdown(), /checkpoint_timeout/);
+  assert.equal(events.includes("release"), false);
+  await lifecycle.shutdown();
+  assert.equal(events.filter((event) => event === "release").length, 1);
+});
+
+test("signal shutdown releases authority even when the final checkpoint fails", async () => {
+  const events = [];
+  const lifecycle = createLifecycleHarness(events, {
+    workspaceAuthority: {isCurrentWriter: () => true, release: async () => events.push("release")},
+    chromeProfileSnapshots: {enabled: () => false},
+    checkpointScheduler: {finalize: async () => { throw new Error("checkpoint_timeout"); }},
+  });
+  await assert.rejects(lifecycle.shutdownWithBudget({reason: "SIGTERM", budgetMs: 100}), /checkpoint_timeout/);
+  assert.equal(events.includes("release"), true);
+});

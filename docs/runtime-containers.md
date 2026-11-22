@@ -87,7 +87,14 @@ directories to installation guidance. The normal workspace home archive
 excludes `.local` so user-wide files are not copied into a workspace-specific
 home archive.
 
-This contract uses GCS FUSE for both persistent install scopes. Installers that
+Blank/local workspaces persist workspace installs through immutable checkpoints,
+not a GCS FUSE workspace mount. A restart only restores a published manifest;
+objects from an interrupted upload are not a complete backup. Workspace
+checkpoint publication in `lib/agentCheckpoint.service.js` uploads batches of
+at most eight files and 64 MiB of declared content (larger files run alone).
+Failures drain the current batch and never publish a partial manifest.
+
+This contract uses GCS FUSE for user-wide installs and shared workspaces. Installers that
 require unsupported locking, rename, symlink, permission, or local-cache
 semantics must use a compatible artifact or a session-local directory. The
 user-wide mount is added by Functions provisioning; existing Cloud Run services
@@ -216,7 +223,7 @@ processes, loopback VNC, and CDP to be ready before it opens the session HTTP po
 this bootstrap path require a rebuilt `gcp-runner` revision; existing Cloud Run services retain
 their bundled startup behavior until restarted or recreated.
 
-The `gcp-runner` build packages the managed pi-web-ui `0.121.3` runtime under
+The `gcp-runner` build packages the managed pi-web-ui `0.122.0` runtime under
 `/opt/mapache/pi-web-ui` with `@earendil-works/pi-coding-agent` `1.6.0`.
 `session-runner/upstream/pi-web-ui/buildInputs.mjs` resolves the GitHub stable
 release and npm registry metadata before every Cloud Build cache lookup, then

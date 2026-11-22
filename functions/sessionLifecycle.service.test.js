@@ -271,6 +271,7 @@ assert.strictEqual(isIdleSession({
   assert.strictEqual(calls.some((call) => call.kind === "patchService"), false);
   assert.strictEqual(currentSession.status, "provisioning");
   assert.strictEqual(currentSession.provisioningState, "queued");
+  assert.strictEqual(calls.find((call) => call.kind === "deleteService").args[2].requireAcknowledgement, true);
 
   calls.length = 0;
   currentSession = {
