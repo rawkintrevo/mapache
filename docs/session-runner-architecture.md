@@ -39,7 +39,7 @@ only missing image-owned runtime skills, acquires writer authority, and then
 starts exactly one managed upstream agent child for a marked gcp-runner runtime.
 The upstream child listens on loopback `127.0.0.1:8787`.
 
-Checkpoint restoration stages downloads in batches of at most eight objects and
+Checkpoint restoration stages downloads in batches of at most 64 objects and
 64 MiB of declared content; a larger individual object runs alone. Deferred
 large-file pointers retain their existing no-download behavior. The staging
 helper in `lib/checkpointRestoreStaging.js` validates path conflicts before
