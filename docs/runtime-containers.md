@@ -223,7 +223,7 @@ processes, loopback VNC, and CDP to be ready before it opens the session HTTP po
 this bootstrap path require a rebuilt `gcp-runner` revision; existing Cloud Run services retain
 their bundled startup behavior until restarted or recreated.
 
-The `gcp-runner` build packages the managed pi-web-ui `0.121.3` runtime under
+The `gcp-runner` build packages the managed pi-web-ui `0.122.0` runtime under
 `/opt/mapache/pi-web-ui` with `@earendil-works/pi-coding-agent` `1.6.0`.
 `session-runner/upstream/pi-web-ui/buildInputs.mjs` resolves the GitHub stable
 release and npm registry metadata before every Cloud Build cache lookup, then

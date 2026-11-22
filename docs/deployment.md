@@ -22,7 +22,7 @@ Read this before changing Firebase config, deployment workflows, Cloud Functions
 Workspace-request model discovery, default inheritance, and caller-safe model
 errors are Functions-owned. Deploy the API/reconciliation Functions before
 publishing a refreshed `gcp-runner` image so grant checks and runner model
-catalogs agree. The runtime image builds the managed pi-web-ui `0.121.3`
+catalogs agree. The runtime image builds the managed pi-web-ui `0.122.0`
 release with `@earendil-works/pi-coding-agent` `1.6.0`, while retaining the
 explicit managed `pi-mcp-adapter` `2.32.1` patch contract. The build fails
 closed if the source release, SDK, lockfile, or managed patch drifts from that
