@@ -216,11 +216,12 @@ processes, loopback VNC, and CDP to be ready before it opens the session HTTP po
 this bootstrap path require a rebuilt `gcp-runner` revision; existing Cloud Run services retain
 their bundled startup behavior until restarted or recreated.
 
-The `gcp-runner` build packages the resolved pi-web-ui runtime under
-`/opt/mapache/pi-web-ui`. `session-runner/upstream/pi-web-ui/buildInputs.mjs`
-resolves the current stable GitHub release and its tag commit before every
-Cloud Build cache lookup. It records the source archive and required-file
-hashes, resolves the embedded Pi SDK from npm `latest`, resolves the resulting
+The `gcp-runner` build packages the managed pi-web-ui `0.121.3` runtime under
+`/opt/mapache/pi-web-ui` with `@earendil-works/pi-coding-agent` `1.6.0`.
+`session-runner/upstream/pi-web-ui/buildInputs.mjs` resolves the GitHub stable
+release and npm registry metadata before every Cloud Build cache lookup, then
+rejects source or SDK drift from the versions recorded in `manifest.json`. It
+records the source archive and required-file hashes, resolves the resulting
 lockfile dependency tree, and hashes the managed patches, builder scripts,
 Docker toolchain, platform, and build options into a content-addressed cache
 key. The key never contains a GitHub Actions run ID, so a fresh worker can

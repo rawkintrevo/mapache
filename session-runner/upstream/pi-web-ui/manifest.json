@@ -6,6 +6,7 @@
     "releaseApiUrl": "https://api.github.com/repos/xing-shuyin/pi-web-ui/releases/latest",
     "commitApiUrl": "https://api.github.com/repos/xing-shuyin/pi-web-ui/commits/{tag}",
     "packageName": "pi-web-ui",
+    "version": "0.121.3",
     "requiredFiles": [
       "package.json",
       "package-lock.json",
@@ -14,7 +15,8 @@
   },
   "piSdk": {
     "package": "@earendil-works/pi-coding-agent",
-    "releaseChannel": "latest"
+    "releaseChannel": "latest",
+    "version": "1.6.0"
   },
   "piMcpAdapter": {
     "package": "pi-mcp-adapter",
@@ -56,6 +58,7 @@
     ]
   },
   "patches": [
-    "patches/managed-v0121.patch"
+    "patches/managed-v0121.patch",
+    "patches/0019-release-test-compat.patch"
   ]
 }

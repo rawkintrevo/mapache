@@ -13,10 +13,10 @@ function fixture() {
 
 function release(overrides = {}) {
 	return {
-		tag: "v0.121.0",
-		version: "0.121.0",
-		commit: "6142308d81a1c85bd7c1ec180955ba5331cc650e",
-		archiveUrl: "https://github.com/xing-shuyin/pi-web-ui/archive/refs/tags/v0.121.0.tar.gz",
+		tag: "v0.121.3",
+		version: "0.121.3",
+		commit: "a990160ea722abf587f7fc05308b209b743e6279",
+		archiveUrl: "https://github.com/xing-shuyin/pi-web-ui/archive/refs/tags/v0.121.3.tar.gz",
 		...overrides,
 	};
 }
@@ -26,7 +26,8 @@ test("the manifest is a release policy rather than a manually pinned source", ()
 	assert.equal(manifest.schemaVersion, 2);
 	assert.equal(manifest.upstream.commit, undefined);
 	assert.equal(manifest.upstream.archiveSha256, undefined);
-	assert.equal(manifest.piSdk.version, undefined);
+	assert.equal(manifest.upstream.version, "0.121.3");
+	assert.equal(manifest.piSdk.version, "1.6.0");
 	assert.equal(manifest.piSdk.releaseChannel, "latest");
 });
 
@@ -85,6 +86,6 @@ test("an incompatible resolved release fails before it can publish output", asyn
 	writeFileSync(join(sourceDir, "LICENSE"), "fixture\n");
 	await assert.rejects(
 		() => buildUpstream({sourceDir, verifyOnly: true, resolvedRelease: incompatible}),
-		/patch baseline rejected/,
+		/resolved upstream version mismatch/,
 	);
 });

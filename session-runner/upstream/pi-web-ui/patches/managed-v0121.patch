@@ -1,16 +1,17 @@
 diff --git a/locales/de.json b/locales/de.json
-index 2f721c3..74760d5 100644
+index 2f721c303a346a3e6114a30647b253f1e93ae9fa..c8ed537bdd629a2891328be6c4cc01377d16b5c5 100644
 --- a/locales/de.json
 +++ b/locales/de.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Geben Sie mindestens eine Modell-ID ein",
+ 		"goalBarTitle": "Ziel",
+ 		"goalBarPlaceholder": "Legen Sie ein Ziel fest, der Agent wird nach Abschluss automatisch überprüft…",
++		"goalBarSet": "Starten",
 +		"goalBarResume": "Fortsetzen",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "Abbrechen",
+ 		"goalBarLocked": "Gesperrt: gilt für alle folgenden Runden",
+ 		"goalBarUnlocked": "Nur diese Runde (wird danach automatisch gelöscht)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Offizielles Plugin-Repository und Community-Marktplatz besuchen (GitHub)",
  		"pluginOfficialLink": "Offizieller Link",
  		"pluginOfficialLinkHint": "Plugin-Homepage oder Quellcode-Repository besuchen",
@@ -19,18 +20,19 @@ index 2f721c3..74760d5 100644
  		"pluginCatalogAdd": "Plug-in hinzufügen",
  		"pluginCatalogAddHint": "Ein Drittanbieter-Plug-in in die installierbare Liste aufnehmen (owner/repo oder vollständige GitHub-Adresse)",
 diff --git a/locales/es.json b/locales/es.json
-index 521781a..b4c1c15 100644
+index 521781ab91445386f95e99a4fe120d015d565c26..20e7f5ee2c2ada681b0fde52a89c8aa92989a015 100644
 --- a/locales/es.json
 +++ b/locales/es.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Ingrese al menos un ID de modelo",
+ 		"goalBarTitle": "Objetivo",
+ 		"goalBarPlaceholder": "Defina un objetivo; el agente lo revisará automáticamente al completarlo…",
++		"goalBarSet": "Iniciar",
 +		"goalBarResume": "Reanudar",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "Cancelar",
+ 		"goalBarLocked": "Bloqueado: se aplica a todos los turnos siguientes",
+ 		"goalBarUnlocked": "Solo este turno (se borra automáticamente al terminar)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Visitar el repositorio oficial de complementos y el mercado de la comunidad (GitHub)",
  		"pluginOfficialLink": "Enlace oficial",
  		"pluginOfficialLinkHint": "Visitar la página web del complemento o el repositorio de código",
@@ -39,18 +41,19 @@ index 521781a..b4c1c15 100644
  		"pluginCatalogAdd": "Añadir extensión",
  		"pluginCatalogAddHint": "Añada extensiones de terceros a la lista instalable (owner/repo o dirección completa de GitHub)",
 diff --git a/locales/fr.json b/locales/fr.json
-index d75498b..0df1df6 100644
+index d75498bd2c2f6df7d36c44b427b228817bf415dc..974fa0ceb23ac25aea2ef6052d4490b5623dc929 100644
 --- a/locales/fr.json
 +++ b/locales/fr.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Saisissez au moins un ID de modèle",
+ 		"goalBarTitle": "Objectif",
+ 		"goalBarPlaceholder": "Fixez un objectif, l'agent le fera relire automatiquement une fois accompli…",
++		"goalBarSet": "Démarrer",
 +		"goalBarResume": "Reprendre",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "Annuler",
+ 		"goalBarLocked": "Verrouillé : appliqué à tous les tours suivants",
+ 		"goalBarUnlocked": "Tour actuel seul (effacé auto après modification)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Visiter le dépôt officiel des extensions et le marketplace communautaire (GitHub)",
  		"pluginOfficialLink": "Lien officiel",
  		"pluginOfficialLinkHint": "Visiter la page d'accueil ou le dépôt de l'extension",
@@ -59,18 +62,19 @@ index d75498b..0df1df6 100644
  		"pluginCatalogAdd": "Ajouter un plugin",
  		"pluginCatalogAddHint": "Ajoutez un plugin tiers à la liste installable (owner/repo ou adresse GitHub complète)",
 diff --git a/locales/it.json b/locales/it.json
-index 286fef3..885b3a5 100644
+index 286fef32b89d4946c7a8f77940ae9caf23da0097..72788c5b3f73d3b5d4b7c2929ee17395984479f5 100644
 --- a/locales/it.json
 +++ b/locales/it.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Inserisci almeno un ID modello",
+ 		"goalBarTitle": "Obiettivo",
+ 		"goalBarPlaceholder": "Fissa un obiettivo; l'output dell'agente viene revisionato automaticamente…",
++		"goalBarSet": "Avvia",
 +		"goalBarResume": "Riprendi",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "Annulla",
+ 		"goalBarLocked": "Bloccato: vale per ogni turno successivo",
+ 		"goalBarUnlocked": "Solo questo turno (cancellato dopo)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Visita il repository ufficiale dei plugin e il marketplace della community (GitHub)",
  		"pluginOfficialLink": "Link ufficiale",
  		"pluginOfficialLinkHint": "Visita la home page del plugin o il repository sorgente",
@@ -79,18 +83,19 @@ index 286fef3..885b3a5 100644
  		"pluginCatalogAdd": "Aggiungi plugin",
  		"pluginCatalogAddHint": "Aggiungi un plugin di terze parti all'elenco installabile (owner/repo o URL GitHub completo)",
 diff --git a/locales/ja.json b/locales/ja.json
-index 997edde..2fed5e1 100644
+index 997edde1d4b23b06083d6c1b46de8f2a7fa4e51f..0df300eeb77c35db83a125466411f483debd64ae 100644
 --- a/locales/ja.json
 +++ b/locales/ja.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "モデル ID を 1 つ以上入力してください",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "目標を設定すると、agent が完了後に自動レビューします…",
++		"goalBarSet": "開始",
 +		"goalBarResume": "再開",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "キャンセル",
+ 		"goalBarLocked": "固定：以降すべてのラウンドに適用します",
+ 		"goalBarUnlocked": "このラウンドのみ（変更後に自動クリア）",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "公式プラグインリポジトリとコミュニティマーケットプレイス（GitHub）を開く",
  		"pluginOfficialLink": "公式リンク",
  		"pluginOfficialLinkHint": "プラグインのホームページまたはソースリポジトリを開く",
@@ -99,18 +104,19 @@ index 997edde..2fed5e1 100644
  		"pluginCatalogAdd": "プラグインを追加します",
  		"pluginCatalogAddHint": "サードパーティのプラグインをインストール可能なリストに追加します（owner/repo または完全なGitHubアドレス）",
 diff --git a/locales/ko.json b/locales/ko.json
-index 7f0f3fc..5858990 100644
+index 7f0f3fcbe8d9f357e106e25f7b69c58adb49e041..62e22f0467c6c084b4c0f302225428af8d7ec37a 100644
 --- a/locales/ko.json
 +++ b/locales/ko.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "모델 ID를 1개 이상 입력하세요",
+ 		"goalBarTitle": "목표",
+ 		"goalBarPlaceholder": "목표를 설정하세요. agent가 완료하면 자동으로 검토해요…",
++		"goalBarSet": "시작",
 +		"goalBarResume": "재개",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "취소",
+ 		"goalBarLocked": "고정: 이후 모든 라운드에 적용돼요",
+ 		"goalBarUnlocked": "이번 라운드에만 적용돼요 (수정 후 자동 해제돼요)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "공식 플러그인 리포지토리 및 커뮤니티 마켓플레이스 방문 (GitHub)",
  		"pluginOfficialLink": "공식 링크",
  		"pluginOfficialLinkHint": "플러그인 홈페이지 또는 소스 리포지토리 방문",
@@ -119,18 +125,19 @@ index 7f0f3fc..5858990 100644
  		"pluginCatalogAdd": "plugin 추가하기",
  		"pluginCatalogAddHint": "서드파티 plugin을 설치 가능한 목록에 넣어요(owner/repo 또는 전체 GitHub 주소)",
 diff --git a/locales/pt.json b/locales/pt.json
-index 0da7507..ce2cb6f 100644
+index 0da750769827d07d6c92c5ff71736caaff3fbac4..5b8306cf6ff88385ed60978647fbe3aae4271ef6 100644
 --- a/locales/pt.json
 +++ b/locales/pt.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Informe ao menos um ID de modelo",
+ 		"goalBarTitle": "Objetivo",
+ 		"goalBarPlaceholder": "Digite o objetivo a alcançar…",
++		"goalBarSet": "Iniciar",
 +		"goalBarResume": "Retomar",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "Cancelar",
+ 		"goalBarLocked": "Travado: aplica a todas as rodadas seguintes",
+ 		"goalBarUnlocked": "Só esta rodada (limpa automaticamente ao terminar)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Visitar o repositório oficial de plugins e o mercado comunitário (GitHub)",
  		"pluginOfficialLink": "Link oficial",
  		"pluginOfficialLinkHint": "Visitar o site ou o repositório de código do plugin",
@@ -139,18 +146,19 @@ index 0da7507..ce2cb6f 100644
  		"pluginCatalogAdd": "Adicionar plugin",
  		"pluginCatalogAddHint": "Inclua um plugin de terceiros na lista de instalação (owner/repo ou URL completa do GitHub)",
 diff --git a/locales/ru.json b/locales/ru.json
-index 5537d6f..01d1365 100644
+index 5537d6f4da18baeda55e1f0f00d38a1fec5d8fab..cebb0a414007835237d40b6b31f4f38cca72eafd 100644
 --- a/locales/ru.json
 +++ b/locales/ru.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Укажите хотя бы один ID модели",
+ 		"goalBarTitle": "Цель",
+ 		"goalBarPlaceholder": "Задайте цель, агент автоматически проверит результат после выполнения…",
++		"goalBarSet": "Начать",
 +		"goalBarResume": "Возобновить",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "Отменить",
+ 		"goalBarLocked": "Закреплено: применяется ко всем последующим ходам",
+ 		"goalBarUnlocked": "Только текущий ход (очищается автоматически)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Перейти в официальный репозиторий плагинов и каталог сообщества (GitHub)",
  		"pluginOfficialLink": "Официальная ссылка",
  		"pluginOfficialLinkHint": "Перейти на домашнюю страницу или в репозиторий плагина",
@@ -159,18 +167,19 @@ index 5537d6f..01d1365 100644
  		"pluginCatalogAdd": "Добавить плагин",
  		"pluginCatalogAddHint": "Добавьте сторонний плагин в список доступных для установки (owner/repo или полный адрес GitHub)",
 diff --git a/locales/tr.json b/locales/tr.json
-index 3374db3..0a576fe 100644
+index 3374db30ecd4eafd5df295e71b8d22f0d2811cd0..70959beeff8edd6adf2d9c66a004135071aa0b59 100644
 --- a/locales/tr.json
 +++ b/locales/tr.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 		"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 		"scmBlame": "Blame",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "Önce en az bir model kimliği girin",
+ 		"goalBarTitle": "Hedef",
+ 		"goalBarPlaceholder": "Ulaşılacak hedefi girin…",
++		"goalBarSet": "Gönder",
 +		"goalBarResume": "Resume goal",
- 		"scmBackToList": "Back to list",
- 		"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 		"scmBlameLoading": "Loading blame…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "İptal",
+ 		"goalBarLocked": "Kilitli: sonraki tüm turlara uygulanır",
+ 		"goalBarUnlocked": "Yalnızca bu tur (sonrasında temizlenir)",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "Resmî eklenti deposunu ve topluluk marketini ziyaret edin (GitHub)",
  		"pluginOfficialLink": "Resmî bağlantı",
  		"pluginOfficialLinkHint": "Eklentinin ana sayfasını veya kaynak deposunu ziyaret edin",
@@ -179,18 +188,19 @@ index 3374db3..0a576fe 100644
  		"pluginCatalogAdd": "Eklenti ekle",
  		"pluginCatalogAddHint": "Üçüncü taraf bir eklentiyi kurulabilir listeye ekleyin (owner/repo veya tam GitHub adresi)",
 diff --git a/locales/zh-HK.json b/locales/zh-HK.json
-index 97b9b45..9463c6f 100644
+index 97b9b45019e77f41ee91d47906b03fc08c0a1af9..4431651b6869380d1b930bdb59bc8b4cdc233e44 100644
 --- a/locales/zh-HK.json
 +++ b/locales/zh-HK.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "確定把分支「{old}」重命名为「{new}」吗？（git branch -m {new}）",
- 		"scmBranchDeleteCurrent": "不能刪除当前分支，请先切换到其他分支。",
- 		"scmBlame": "追溯",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
++		"goalBarSet": "發送",
 +		"goalBarResume": "Resume goal",
- 		"scmBackToList": "返回列表",
- 		"scmBlameTip": "显示所选檔案的行级追溯（git blame --line-porcelain）",
- 		"scmBlameLoading": "加載追溯中…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用到後續所有回合",
+ 		"goalBarUnlocked": "僅本回合（改完自動清除）",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "訪問官方插件倉庫與社區市場 (GitHub)",
  		"pluginOfficialLink": "官方鏈接",
  		"pluginOfficialLinkHint": "訪問插件主頁或源碼倉庫",
@@ -199,18 +209,19 @@ index 97b9b45..9463c6f 100644
  		"pluginCatalogAdd": "添加插件",
  		"pluginCatalogAddHint": "把第三方插件填進可安裝列表（owner/repo 或完整 GitHub 地址）",
 diff --git a/locales/zh-Hant.json b/locales/zh-Hant.json
-index 2dd83e8..bda50c7 100644
+index 2dd83e8c257ed760eb14574567f5863839f43f0c..e1ab984d9148ac6be15b8c12e9e86042eadc0bfc 100644
 --- a/locales/zh-Hant.json
 +++ b/locales/zh-Hant.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "確定把分支「{old}」重命名为「{new}」吗？（git branch -m {new}）",
- 		"scmBranchDeleteCurrent": "不能刪除当前分支，请先切换到其他分支。",
- 		"scmBlame": "追溯",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
++		"goalBarSet": "發送",
 +		"goalBarResume": "Resume goal",
- 		"scmBackToList": "返回列表",
- 		"scmBlameTip": "显示所选檔案的行级追溯（git blame --line-porcelain）",
- 		"scmBlameLoading": "加載追溯中…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用到後續所有回合",
+ 		"goalBarUnlocked": "僅本回合（改完自動清除）",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "訪問官方插件倉庫與社區市場 (GitHub)",
  		"pluginOfficialLink": "官方鏈接",
  		"pluginOfficialLinkHint": "訪問插件主頁或源碼倉庫",
@@ -219,18 +230,19 @@ index 2dd83e8..bda50c7 100644
  		"pluginCatalogAdd": "添加插件",
  		"pluginCatalogAddHint": "把第三方插件填進可安裝列表（owner/repo 或完整 GitHub 地址）",
 diff --git a/locales/zh-TW.json b/locales/zh-TW.json
-index 3a14b95..49f28b4 100644
+index 3a14b95dcc44fef57d58470baefecc0c7e1e244e..cfb6d22faafe0504a7d0202785694f49ddf7b79d 100644
 --- a/locales/zh-TW.json
 +++ b/locales/zh-TW.json
-@@ -1349,6 +1349,7 @@
- 		"scmBranchRenameConfirm": "確定把分支「{old}」重命名为「{new}」吗？（git branch -m {new}）",
- 		"scmBranchDeleteCurrent": "不能刪除当前分支，请先切换到其他分支。",
- 		"scmBlame": "追溯",
+@@ -1417,6 +1417,8 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
++		"goalBarSet": "傳送",
 +		"goalBarResume": "Resume goal",
- 		"scmBackToList": "返回列表",
- 		"scmBlameTip": "显示所选檔案的行级追溯（git blame --line-porcelain）",
- 		"scmBlameLoading": "載入追溯中…",
-@@ -2194,6 +2195,7 @@
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用程式到後續所有回合",
+ 		"goalBarUnlocked": "僅本回合（改完自動清除）",
+@@ -2194,6 +2196,7 @@
  		"pluginOfficialMarketHint": "前往官方外掛儲存庫與社群市集 (GitHub)",
  		"pluginOfficialLink": "官方連結",
  		"pluginOfficialLinkHint": "存取外掛主頁或原始碼儲存庫",
@@ -239,7 +251,7 @@ index 3a14b95..49f28b4 100644
  		"pluginCatalogAdd": "新增外掛",
  		"pluginCatalogAddHint": "把第三方外掛填進可安裝列表（owner/repo 或完整 GitHub 位址）",
 diff --git a/server/agent-service-daemon.ts b/server/agent-service-daemon.ts
-index c265274..7ed6a9a 100644
+index c2652745a426586bcd9187aaefffbacaccc1a330..7ed6a9aabfb4ffca358dea4f7a305ef3beaa1d5a 100644
 --- a/server/agent-service-daemon.ts
 +++ b/server/agent-service-daemon.ts
 @@ -1,3 +1,72 @@
@@ -816,7 +828,7 @@ index c265274..7ed6a9a 100644
  	}
  }
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 04907ae..f6433dc 100644
+index 04907ae4867b2e7457ecffd012da2b6f47a7597e..5ce05a84ed4ca52413794dd3b1adcbaf3a7368d5 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
 @@ -1,3 +1,11 @@
@@ -1063,7 +1075,7 @@ index 04907ae..f6433dc 100644
  				const convId = cs.nextConversationId();
  				const terms = cs.makeTerminalManager(convId, cwd);
  				const rt = await createAgentSessionRuntime(cs.makeRuntimeFactory(terms, undefined, convId), {
-@@ -4759,6 +4870,133 @@ export class ClientSession {
+@@ -4759,6 +4870,134 @@ export class ClientSession {
  		return created.capability;
  	}
  
@@ -1165,7 +1177,7 @@ index 04907ae..f6433dc 100644
 +			// Defer the prompt until the control response has been returned so the
 +			// AgentService can install the run-state reducer before SDK events arrive.
 +			setImmediate(() => {
-+				void this.submitText(conv, prompt, this.deliveryModeOf(conv)).catch((error) => {
++				void this.submitText(conv, prompt).catch((error) => {
 +					console.error(`[agent-service] workspace request ${runId} failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
 +				});
 +			});
@@ -1194,10 +1206,11 @@ index 04907ae..f6433dc 100644
 +	 * 应用（prompt replace/append + 白名单），其余（终端接管、Windows persona
 +	 * 等）仍跟随主会话设置。undefined = 按主会话设置（普通对话/不选模板的子代理）。
 +	 */
++
  	private makeRuntimeFactory(
  		terminals: TerminalManager,
  		apply?: SubagentTemplate,
-@@ -4884,10 +5122,13 @@ export class ClientSession {
+@@ -4884,10 +5123,13 @@ export class ClientSession {
  						return out;
  					},
  				});
@@ -1211,16 +1224,16 @@ index 04907ae..f6433dc 100644
  						...sandboxExtensionOptions(Boolean(sandboxIdentity) || Boolean(botExecution)),
  						systemPromptOverride: promptBase.systemPromptOverride,
  						appendSystemPromptOverride: promptBase.appendSystemPromptOverride,
-@@ -4989,7 +5230,7 @@ export class ClientSession {
+@@ -4989,7 +5231,7 @@ export class ClientSession {
  								name: "pi-webui-persona",
  								hidden: true,
  								factory: (pi) => {
 -									pi.on("before_agent_start", (event) => {
-+									pi.on("before_agent_start", withManagedReference((event) => {
++																		pi.on("before_agent_start", withManagedReference((event) => {
  										const { core, rewrap } = prepareBotExecutionSystemPrompt(event, botExecution);
  										if (apply) {
  											const tplPrompt = this.templatePrompt(apply).trim();
-@@ -5069,7 +5310,7 @@ export class ClientSession {
+@@ -5069,7 +5311,7 @@ export class ClientSession {
  											}
  										}
  										return undefined;
@@ -1229,7 +1242,7 @@ index 04907ae..f6433dc 100644
  								},
  							},
  						],
-@@ -5653,6 +5894,7 @@ export class ClientSession {
+@@ -5653,6 +5895,7 @@ export class ClientSession {
  		// issue #946：登记持有会话，让父链/执行身份解析走 O(1) 快路径（移除时 forget）。
  		registerConversationHome(conv, this);
  		this.restorePlan(conv);
@@ -1237,7 +1250,7 @@ index 04907ae..f6433dc 100644
  		return conv;
  	}
  
-@@ -5729,6 +5971,48 @@ export class ClientSession {
+@@ -5729,6 +5972,48 @@ export class ClientSession {
  		return out;
  	}
  
@@ -1286,7 +1299,7 @@ index 04907ae..f6433dc 100644
  	private restartInterruptedFiles = new Set<string>();
  
  	private danglingCauseFor(file: string | undefined): DanglingCause {
-@@ -6468,6 +6752,11 @@ export class ClientSession {
+@@ -6468,6 +6753,11 @@ export class ClientSession {
  	private onEvent(conv: Conversation, event: AgentSessionEvent): void {
  		conv.lastSdkEventAt = Date.now();
  		conv.stallNoticed = false;
@@ -1298,7 +1311,7 @@ index 04907ae..f6433dc 100644
  		switch (event.type) {
  			case "bash_execution_update": {
  				if (event.id) {
-@@ -6668,6 +6957,10 @@ export class ClientSession {
+@@ -6668,6 +6958,10 @@ export class ClientSession {
  				break;
  			}
  			case "agent_end": {
@@ -1309,7 +1322,7 @@ index 04907ae..f6433dc 100644
  				if (event.willRetry) {
  					let errorMessage = "";
  					for (let i = event.messages.length - 1; i >= 0; i--) {
-@@ -9201,11 +9494,11 @@ export class ClientSession {
+@@ -9201,11 +9495,11 @@ export class ClientSession {
  	 *  Silent + self-healing like the bulk restore above. Falls back to the
  	 *  GLOBAL default key when the project has no pin for this provider (new
  	 *  project following the global default model). */
@@ -1323,7 +1336,7 @@ index 04907ae..f6433dc 100644
  		if (projectPin) {
  			const cur = this.modelAdmin.getActiveKeyName(provider);
  			if (cur === projectPin) return;
-@@ -11129,9 +11422,37 @@ export class ClientSession {
+@@ -11129,9 +11423,37 @@ export class ClientSession {
  		return n;
  	}
  
@@ -1362,7 +1375,7 @@ index 04907ae..f6433dc 100644
  		return n;
  	}
  
-@@ -11321,12 +11642,48 @@ export class ClientSession {
+@@ -11321,12 +11643,54 @@ export class ClientSession {
  		this.emit(msg);
  	}
  
@@ -1407,24 +1420,17 @@ index 04907ae..f6433dc 100644
  		queue = false,
  		targetConversation?: Conversation,
  	): Promise<void> {
-+		if (this.quiesceBlocked()) return;
- 		// 私聊会话的能力挂在会话上（`conv.bot`）；无头设备任务才有客户端级能力。
- 		(this.botOf(targetConversation?.id) ?? this.botExecution)?.assertActive();
- 		const conv = targetConversation ?? this.conv;
-@@ -11448,6 +11805,12 @@ export class ClientSession {
- 		this.markerSvc.clearActions(conv.id);
- 		if (conv.planMode === true) {
- 			this.applyToolGating(conv.session);
++		if (this.quiesceBlocked?.()) return;
 +			// This gate intentionally precedes slash expansion: extension commands
 +			// can execute arbitrary code and are therefore new work too.
-+			if (this.quiesceBlocked()) return;
++			if (this.quiesceBlocked?.()) return;
 +			// Native slash commands (see NATIVE_COMMANDS) are executed here and
 +			// never reach the SDK. Extension / skill / template commands fall
 +			// through — AgentSession.prompt() handles those itself.
- 		}
- 		if (conv.delegateMode === true && (await this.dispatchToDelegate(conv, text))) {
- 			conv.presetLocked = true;
-@@ -12517,9 +12880,9 @@ export class ClientSession {
+ 		// 私聊会话的能力挂在会话上（`conv.bot`）；无头设备任务才有客户端级能力。
+ 		(this.botOf(targetConversation?.id) ?? this.botExecution)?.assertActive();
+ 		const conv = targetConversation ?? this.conv;
+@@ -12517,9 +12881,9 @@ export class ClientSession {
  			const opened = await this.openManagerAndRuntime(
  				() => {
  					if (ownFile && existsSync(ownFile)) {
@@ -1436,7 +1442,7 @@ index 04907ae..f6433dc 100644
  				},
  				(m) =>
  					createAgentSessionRuntime(
-@@ -12669,7 +13032,7 @@ export class ClientSession {
+@@ -12669,7 +13033,7 @@ export class ClientSession {
  			const id = this.nextConversationId();
  			terminals = this.makeTerminalManager(id, targetCwd);
  			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, targetCwd);
@@ -1445,7 +1451,7 @@ index 04907ae..f6433dc 100644
  			runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, id), {
  				cwd: sessionBaseDir,
  				agentDir: this.agentDir,
-@@ -13055,7 +13418,7 @@ export class ClientSession {
+@@ -13055,7 +13419,7 @@ export class ClientSession {
  				// Bot 私聊的转录落在 bot 自己的目录里：与普通会话历史分开，下次点这个 Bot 就回到这一份。
  				sessionManager = SessionManager.create(sessionBaseDir, botChatSessionDir(this.agentDir, botChat.bot.id));
  			} else {
@@ -1454,7 +1460,7 @@ index 04907ae..f6433dc 100644
  			}
  			if (botChat) this.pendingBotChat.set(conversationId, botChat.capability);
  			const runtime = await createAgentSessionRuntime(
-@@ -14614,16 +14977,14 @@ export class ClientSession {
+@@ -14614,16 +14978,14 @@ export class ClientSession {
  
  	async deleteSession(path: string): Promise<void> {
  		try {
@@ -1479,7 +1485,7 @@ index 04907ae..f6433dc 100644
  			const holdsTarget = (conv: Conversation): boolean => {
  				const file = conv.session.sessionFile;
  				return file !== undefined && resolve(file) === abs;
-@@ -14699,7 +15060,7 @@ export class ClientSession {
+@@ -14699,7 +15061,7 @@ export class ClientSession {
  				return;
  			}
  			if (existsSync(abs) && readFileSync(abs, "utf8").includes(NATIVE_CLI_ENTRY)) {
@@ -1488,7 +1494,7 @@ index 04907ae..f6433dc 100644
  				const config = readNativeCliConfig(manager);
  				if (config?.keepAlive) {
  					const header = manager.getHeader();
-@@ -14739,17 +15100,8 @@ export class ClientSession {
+@@ -14739,17 +15101,8 @@ export class ClientSession {
  		try {
  			const trimmed = (name ?? "").trim();
  			if (!trimmed) return;
@@ -1508,7 +1514,7 @@ index 04907ae..f6433dc 100644
  			mgr.appendSessionInfo(trimmed);
  			this.setConversationTitleForFile(abs, trimmed);
  			this.invalidateSessionInfos(abs);
-@@ -14926,7 +15278,7 @@ export class ClientSession {
+@@ -14926,7 +15279,7 @@ export class ClientSession {
  		try {
  			const cwd = conv.cwd || this.cwd;
  			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, cwd);
@@ -1517,7 +1523,7 @@ index 04907ae..f6433dc 100644
  			const sessionDir = sampleSm.getSessionDir();
  			if (!existsSync(sessionDir)) {
  				mkdirSync(sessionDir, { recursive: true });
-@@ -15436,17 +15788,7 @@ export class ClientSession {
+@@ -15436,17 +15789,7 @@ export class ClientSession {
  				}
  				path = resolved;
  			}
@@ -1536,7 +1542,7 @@ index 04907ae..f6433dc 100644
  
  			for (const conv of this.convs.values()) {
  				const sessionFile = conv.session.sessionFile;
-@@ -15799,7 +16141,7 @@ export class ClientSession {
+@@ -15799,7 +16142,7 @@ export class ClientSession {
  				forkedManager = SessionManager.open(forkedSessionPath, sessionDir);
  				calibrateSessionLeaf(forkedManager);
  			} else {
@@ -1545,7 +1551,7 @@ index 04907ae..f6433dc 100644
  				if (targetLeafId) {
  					const branch = targetConv.session.sessionManager.getBranch(targetLeafId);
  					for (const e of branch) {
-@@ -16209,7 +16551,7 @@ export class ClientSession {
+@@ -16209,7 +16552,7 @@ export class ClientSession {
  				void this.ensureProjectsCache(true).catch(() => {});
  			}
  			const recent = await this.stateStore.getRecentProjects(this.clientId);
@@ -1554,7 +1560,7 @@ index 04907ae..f6433dc 100644
  		} catch {
  			this.emit({ type: "projects", projects: this.withCurrentCwd([], now) });
  		}
-@@ -16508,6 +16850,10 @@ export class ClientSession {
+@@ -16508,6 +16851,10 @@ export class ClientSession {
  				}
  				sessionBaseDir = abs;
  			}
@@ -1565,7 +1571,7 @@ index 04907ae..f6433dc 100644
  			if (abs === this.cwd) {
  				this.emit({
  					type: "notice",
-@@ -16568,8 +16914,8 @@ export class ClientSession {
+@@ -16568,8 +16915,8 @@ export class ClientSession {
  				const opened = await this.openManagerAndRuntime(
  					() =>
  						resumeSkipped || !openRecent
@@ -1576,7 +1582,7 @@ index 04907ae..f6433dc 100644
  					(m) =>
  						createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, conversationId), {
  							cwd: sessionBaseDir,
-@@ -17054,6 +17400,10 @@ export class ClientSession {
+@@ -17054,6 +17401,10 @@ export class ClientSession {
  		return this.goalSvc.setGoalPrefs(opts, conv);
  	}
  
@@ -1589,7 +1595,7 @@ index 04907ae..f6433dc 100644
  	}
 diff --git a/server/automation-run-state.test.ts b/server/automation-run-state.test.ts
 new file mode 100644
-index 0000000..9ba6332
+index 0000000000000000000000000000000000000000..9ba63320bbdbe103a11507d9c5df9ffe39202d07
 --- /dev/null
 +++ b/server/automation-run-state.test.ts
 @@ -0,0 +1,120 @@
@@ -1715,7 +1721,7 @@ index 0000000..9ba6332
 +});
 diff --git a/server/automation-run-state.ts b/server/automation-run-state.ts
 new file mode 100644
-index 0000000..977b366
+index 0000000000000000000000000000000000000000..977b36690a3014574678869a8657c20aa3746f25
 --- /dev/null
 +++ b/server/automation-run-state.ts
 @@ -0,0 +1,216 @@
@@ -1936,13 +1942,13 @@ index 0000000..977b366
 +	return state.terminal !== null;
 +}
 diff --git a/server/client-state.ts b/server/client-state.ts
-index acd28fe..373a797 100644
+index acd28feabd67a5da8fda52c9bff8ef4bba095caf..e299755aef8baf29784ef5f5cf61daa41497b125 100644
 --- a/server/client-state.ts
 +++ b/server/client-state.ts
-@@ -947,6 +947,49 @@ export interface MarkerSettings {
+@@ -946,6 +946,48 @@ export interface MarkerSettings {
+ 
  /** 出厂默认关闭的内联标记（单源：客户端状态默认值、MarkerService 均取此处）。 */
  export const DEFAULT_DISABLED_MARKERS: readonly string[] = ["notify", "action", "suggest"];
- 
 +/**
 + * Persisted display-only state for one native Goal. The key is the upstream
 + * session identity, not a browser client id: session ids survive reconnects,
@@ -1985,11 +1991,10 @@ index acd28fe..373a797 100644
 +		savedAt: typeof raw.savedAt === "number" && Number.isFinite(raw.savedAt) ? raw.savedAt : Date.now(),
 +	};
 +}
-+
+ 
  export interface ClientState {
  	lastCwd?: string;
- 	projects: { path: string; lastUsed: number }[];
-@@ -956,9 +999,21 @@ export interface ClientState {
+@@ -956,9 +998,21 @@ export interface ClientState {
  		locked: boolean;
  		execModel?: string | null;
  	};
@@ -2012,7 +2017,7 @@ index acd28fe..373a797 100644
  	removedProjects?: string[];
  	workspaceRoots?: Record<string, string[]>;
  	projectProviderKeys?: Record<string, Record<string, string>>;
-@@ -967,6 +1022,9 @@ export interface ClientState {
+@@ -967,6 +1021,9 @@ export interface ClientState {
  	defaultModel?: string;
  	defaultModels?: Record<string, string>;
  	defaultProviderKeys?: Record<string, string>;
@@ -2022,7 +2027,7 @@ index acd28fe..373a797 100644
  	markers?: MarkerSettings;
  	pinnedSessions?: Record<string, string[]>;
  	sessionTitles?: Record<string, Record<string, string>>;
-@@ -1382,7 +1440,41 @@ export class ClientStateStore {
+@@ -1382,7 +1439,41 @@ export class ClientStateStore {
  		this.save();
  	}
  
@@ -2065,7 +2070,7 @@ index acd28fe..373a797 100644
  		if (list.length === 0) return;
  		const all = this.load();
  		const state = (all[clientId] ??= { projects: [] });
-@@ -1858,6 +1950,34 @@ export class ClientStateStore {
+@@ -1858,6 +1949,34 @@ export class ClientStateStore {
  		return undefined;
  	}
  
@@ -2100,7 +2105,7 @@ index acd28fe..373a797 100644
  	saveProjectModel(clientId: string, cwd: string, modelId: string, engine?: string): void {
  		const all = this.load();
  		const eng = engine?.trim();
-@@ -1874,6 +1994,7 @@ export class ClientStateStore {
+@@ -1874,6 +1993,7 @@ export class ClientStateStore {
  			const state = (all[clientId] ??= { projects: [] });
  			this.touchClient(all, clientId);
  			(state.projectModels ??= {})[cwd] = modelId;
@@ -2109,7 +2114,7 @@ index acd28fe..373a797 100644
  		this.save();
  	}
 diff --git a/server/control-socket.ts b/server/control-socket.ts
-index 5e47b6a..e306191 100644
+index 5e47b6afbe93f93be8fde714610c96bb5ef4a997..e3061914d27ca9a2f87287bf7c68a665f6b97bd2 100644
 --- a/server/control-socket.ts
 +++ b/server/control-socket.ts
 @@ -1,3 +1,27 @@
@@ -2371,7 +2376,7 @@ index 5e47b6a..e306191 100644
 +	});
 +}
 diff --git a/server/dispatch-domain-handlers.ts b/server/dispatch-domain-handlers.ts
-index 72a6c44..c26711d 100644
+index 72a6c448e57cce802387aad74aa109365c2572f4..c26711d61406c807ac115508c83437ad6c8ffad7 100644
 --- a/server/dispatch-domain-handlers.ts
 +++ b/server/dispatch-domain-handlers.ts
 @@ -389,6 +389,10 @@ export function handleTerminalMessage(
@@ -2396,7 +2401,7 @@ index 72a6c44..c26711d 100644
  			void cs.clearGoal();
  			return true;
 diff --git a/server/dsh/dsh-agent-service.ts b/server/dsh/dsh-agent-service.ts
-index c10c3e7..2daa2dc 100644
+index c10c3e7006b624816174bef2944f1ca85e7fee4f..2daa2dcf0a0dda008ddb82869ce83313db061561 100644
 --- a/server/dsh/dsh-agent-service.ts
 +++ b/server/dsh/dsh-agent-service.ts
 @@ -1658,6 +1658,16 @@ export class DshClientSession {
@@ -2469,21 +2474,8 @@ index c10c3e7..2daa2dc 100644
  			pendingMessages: this.pendingMessages(),
  			service: toServiceInfo(launchOrigin()),
  		};
-diff --git a/server/env-registry.ts b/server/env-registry.ts
-index 15521f7..ca35214 100644
---- a/server/env-registry.ts
-+++ b/server/env-registry.ts
-@@ -121,6 +121,8 @@ export const ENV_SPECS: readonly EnvSpec[] = [
- 	{ name: "PI_WEB_RESTART_CHILD", scope: "internal" },
- 	{ name: "PI_WEB_SDK_DIR", scope: "internal" },
- 	{ name: "PI_WEB_SHOW_CONSOLE", scope: "internal" },
-+	{ name: "PI_WEB_CONTROL_PATH", scope: "internal" },
-+	{ name: "PI_WEB_MCP_ADAPTER_PATH", scope: "internal" },
- 
- 	// ── 对外配置（用户/部署方真的要设）──────────────────────────────────────
- 	{ name: "PI_CODING_AGENT_DIR", scope: "public" },
 diff --git a/server/files-service.ts b/server/files-service.ts
-index 6b08dfa..d2d883a 100644
+index 6b08dfabe1160f98086455d7767164a1f35513ba..d2d883aa36a21a059957b59c9722b2251808a47f 100644
 --- a/server/files-service.ts
 +++ b/server/files-service.ts
 @@ -3,7 +3,7 @@ import { saveFilePreservingMetadata } from "./file-save.js";
@@ -2553,7 +2545,7 @@ index 6b08dfa..d2d883a 100644
  			const dirents = await fs.readdir(dirPart, { withFileTypes: true }).catch(() => null);
  			if (!dirents) {
 diff --git a/server/goal-service.ts b/server/goal-service.ts
-index 46d3b39..f74e663 100644
+index 46d3b391857bb8ed5d63b476930879697b67fd2b..e7f9c65feb94316b1384f6e3067796d12c1bcd9b 100644
 --- a/server/goal-service.ts
 +++ b/server/goal-service.ts
 @@ -10,11 +10,25 @@ import {
@@ -2640,7 +2632,7 @@ index 46d3b39..f74e663 100644
 +		for (const conv of (this.host.conversations?.() ?? [this.host.activeConv()])) {
 +			const goal = conv.goal;
 +			conv.goalGeneration += 1;
-+			
++
 +			conv.wizardRunning = false;
 +			goal.wizard.active = false;
 +			goal.wizard.status = "";
@@ -2808,7 +2800,7 @@ index 46d3b39..f74e663 100644
  		goal.feedback = undefined;
  		goal.status = "";
 diff --git a/server/index.ts b/server/index.ts
-index 5f7aef9..a0efb1e 100644
+index 5f7aef96dca3ddb4ca5aa89ef1ef89fd8f19dec3..a0efb1e6bf19269a287fa36170bd87419fa513ec 100644
 --- a/server/index.ts
 +++ b/server/index.ts
 @@ -8,13 +8,17 @@
@@ -3080,7 +3072,7 @@ index 5f7aef9..a0efb1e 100644
  	authToken: () => AUTH_TOKEN,
 diff --git a/server/managed-reference.ts b/server/managed-reference.ts
 new file mode 100644
-index 0000000..596696a
+index 0000000000000000000000000000000000000000..596696ade4f61d0f469c5525267ef3592a1bbb16
 --- /dev/null
 +++ b/server/managed-reference.ts
 @@ -0,0 +1,37 @@
@@ -3123,7 +3115,7 @@ index 0000000..596696a
 +}
 diff --git a/server/managed-workspace.ts b/server/managed-workspace.ts
 new file mode 100644
-index 0000000..95325b7
+index 0000000000000000000000000000000000000000..95325b76a4a69deaf36331620d83464195072a9b
 --- /dev/null
 +++ b/server/managed-workspace.ts
 @@ -0,0 +1,34 @@
@@ -3162,7 +3154,7 @@ index 0000000..95325b7
 +	}
 +}
 diff --git a/server/managed.ts b/server/managed.ts
-index 7cfcd19..c954659 100644
+index 7cfcd19489d4f5d321535ff1709039cb603d1b91..c95465984c8577f941ae6415b9c1fcb2cb1f067e 100644
 --- a/server/managed.ts
 +++ b/server/managed.ts
 @@ -1,21 +1,110 @@
@@ -3287,7 +3279,7 @@ index 7cfcd19..c954659 100644
 +}
 diff --git a/server/mapache-provider-auth.ts b/server/mapache-provider-auth.ts
 new file mode 100644
-index 0000000..10d9b13
+index 0000000000000000000000000000000000000000..10d9b13bc93c23f85c9fca5362b28c1b47efe1da
 --- /dev/null
 +++ b/server/mapache-provider-auth.ts
 @@ -0,0 +1,30 @@
@@ -3322,7 +3314,7 @@ index 0000000..10d9b13
 +  return credential.key;
 +}
 diff --git a/server/model-admin.ts b/server/model-admin.ts
-index b217148..6f161d6 100644
+index b217148a9f98e5ef9029a5e002a56863d3e923b4..6f161d672f7cdf16066db94495352955f5f4fa0c 100644
 --- a/server/model-admin.ts
 +++ b/server/model-admin.ts
 @@ -15,9 +15,13 @@ import { enrichBatch, type EnrichLang } from "./model-enrich.js";
@@ -3502,7 +3494,7 @@ index b217148..6f161d6 100644
 +	return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0);
 +}
 diff --git a/server/protocol.ts b/server/protocol.ts
-index b2edd70..261d60a 100644
+index b2edd70434d978b8b2a5911ff007fbcd8fb1a9ba..261d60abe8fcb157ba9495d91436f7f1b32e9db9 100644
 --- a/server/protocol.ts
 +++ b/server/protocol.ts
 @@ -1553,6 +1553,15 @@ export type ClientMessage =
@@ -3533,7 +3525,7 @@ index b2edd70..261d60a 100644
  	status: string;
  	statusEn?: string;
 diff --git a/server/virtual-tui.ts b/server/virtual-tui.ts
-index 93a3cce..a86c761 100644
+index 93a3cce6537cceabdcd63aaab381c4e0a9def981..a86c761c7e5610ceaa1a413d4345acb0cdd882cb 100644
 --- a/server/virtual-tui.ts
 +++ b/server/virtual-tui.ts
 @@ -25,7 +25,7 @@ export function extractCursorPosition(lines: string[]): { row: number; col: numb
@@ -3547,7 +3539,7 @@ index 93a3cce..a86c761 100644
  
 diff --git a/server/workspace-request-resume.ts b/server/workspace-request-resume.ts
 new file mode 100644
-index 0000000..17748d3
+index 0000000000000000000000000000000000000000..17748d3cfe2cabc3ed20175721dad2fde972847d
 --- /dev/null
 +++ b/server/workspace-request-resume.ts
 @@ -0,0 +1,19 @@
@@ -3571,7 +3563,7 @@ index 0000000..17748d3
 +	return false;
 +}
 diff --git a/tests/helpers/fake-session.ts b/tests/helpers/fake-session.ts
-index 058604f..a7bd198 100644
+index 058604fd3660abaff23d08a490b2381cc3cc6b2d..a7bd198ed2b3df6b93c8878acb0b95f483b4b86a 100644
 --- a/tests/helpers/fake-session.ts
 +++ b/tests/helpers/fake-session.ts
 @@ -243,7 +243,7 @@ export function fakeWebUi(overrides: Loose = {}): Loose {
@@ -3585,7 +3577,7 @@ index 058604f..a7bd198 100644
  export function fakeAgentService(overrides: Loose = {}): FakeAgentService {
 diff --git a/tests/unit/automation-project-model.test.ts b/tests/unit/automation-project-model.test.ts
 new file mode 100644
-index 0000000..cb02a8c
+index 0000000000000000000000000000000000000000..cb02a8c8ecec618d66d98a17048c6f2b2e708513
 --- /dev/null
 +++ b/tests/unit/automation-project-model.test.ts
 @@ -0,0 +1,48 @@
@@ -3639,7 +3631,7 @@ index 0000000..cb02a8c
 +});
 diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
 new file mode 100644
-index 0000000..d82b9bd
+index 0000000000000000000000000000000000000000..d82b9bddbf3d6f79275c6c3df423cddadfb77cf7
 --- /dev/null
 +++ b/tests/unit/control-socket.test.ts
 @@ -0,0 +1,193 @@
@@ -3836,22 +3828,9 @@ index 0000000..d82b9bd
 +		}
 +	});
 +});
-diff --git a/tests/unit/delivery-gate-929.test.ts b/tests/unit/delivery-gate-929.test.ts
-index da2960f..295ae8c 100644
---- a/tests/unit/delivery-gate-929.test.ts
-+++ b/tests/unit/delivery-gate-929.test.ts
-@@ -56,6 +56,8 @@ function fakeSession(opts: { convs: Record<string, any>; lang?: "zh" | "en" }) {
- 		conv: undefined,
- 		pendingBotChat: new Map(),
- 		botOf: proto.botOf,
-+		isQuiesced: () => false,
-+		quiesceBlocked: proto.quiesceBlocked,
- 		prompt: proto.prompt,
- 		parkGatedPrompt: proto.parkGatedPrompt,
- 		resolveExecution: (id: string) => {
 diff --git a/tests/unit/embedded-agent-bridge.test.ts b/tests/unit/embedded-agent-bridge.test.ts
 new file mode 100644
-index 0000000..0ce60ba
+index 0000000000000000000000000000000000000000..0ce60ba7436939ec53839e62099da6dc17354da2
 --- /dev/null
 +++ b/tests/unit/embedded-agent-bridge.test.ts
 @@ -0,0 +1,36 @@
@@ -3892,7 +3871,7 @@ index 0000000..0ce60ba
 +	});
 +});
 diff --git a/tests/unit/empty-prompt-guard.test.ts b/tests/unit/empty-prompt-guard.test.ts
-index 08d43b9..f7006db 100644
+index 08d43b96e05b9d87737120c598f20c84b216a380..f7006db9026f8e0b997806eef897c86068cd12ca 100644
 --- a/tests/unit/empty-prompt-guard.test.ts
 +++ b/tests/unit/empty-prompt-guard.test.ts
 @@ -10,6 +10,7 @@ describe("empty prompt backend guard", () => {
@@ -3905,7 +3884,7 @@ index 08d43b9..f7006db 100644
  			assertSubagentWorktreeAdmission: vi.fn(),
 diff --git a/tests/unit/goal-persistence.test.ts b/tests/unit/goal-persistence.test.ts
 new file mode 100644
-index 0000000..e19b1b4
+index 0000000000000000000000000000000000000000..e19b1b46f89b6e74ab22ea08784490374d03dd96
 --- /dev/null
 +++ b/tests/unit/goal-persistence.test.ts
 @@ -0,0 +1,161 @@
@@ -4072,7 +4051,7 @@ index 0000000..e19b1b4
 +});
 diff --git a/tests/unit/managed-reference.test.ts b/tests/unit/managed-reference.test.ts
 new file mode 100644
-index 0000000..e667e2d
+index 0000000000000000000000000000000000000000..e667e2dcf1dd0de956d437ade4463214d146b41e
 --- /dev/null
 +++ b/tests/unit/managed-reference.test.ts
 @@ -0,0 +1,130 @@
@@ -4208,7 +4187,7 @@ index 0000000..e667e2d
 +});
 diff --git a/tests/unit/managed-workspace.test.ts b/tests/unit/managed-workspace.test.ts
 new file mode 100644
-index 0000000..00ef723
+index 0000000000000000000000000000000000000000..00ef72351d5421b857a4f300f4239a08aaad3c5f
 --- /dev/null
 +++ b/tests/unit/managed-workspace.test.ts
 @@ -0,0 +1,103 @@
@@ -4316,7 +4295,7 @@ index 0000000..00ef723
 +  });
 +});
 diff --git a/tests/unit/managed.test.ts b/tests/unit/managed.test.ts
-index 011020c..e0487ce 100644
+index 011020cd9f2dcce13278f5d1d0bdda32f2d95111..e0487ce0456d000d0a75247a0cecbef8605101f9 100644
 --- a/tests/unit/managed.test.ts
 +++ b/tests/unit/managed.test.ts
 @@ -1,5 +1,12 @@
@@ -4407,7 +4386,7 @@ index 011020c..e0487ce 100644
  });
 diff --git a/tests/unit/mapache-custom-provider.test.ts b/tests/unit/mapache-custom-provider.test.ts
 new file mode 100644
-index 0000000..df0856f
+index 0000000000000000000000000000000000000000..df0856f39653943e52fe4ba1008bc99dd17ae10c
 --- /dev/null
 +++ b/tests/unit/mapache-custom-provider.test.ts
 @@ -0,0 +1,68 @@
@@ -4480,7 +4459,7 @@ index 0000000..df0856f
 +  }
 +}, 30000);
 diff --git a/tests/unit/model-admin-merge.test.ts b/tests/unit/model-admin-merge.test.ts
-index e46784f..df26729 100644
+index e46784f9843bd7d56e306fc8c6427c1556d690b0..df267298cb9e3a6c637b0e7a44932770918ef72a 100644
 --- a/tests/unit/model-admin-merge.test.ts
 +++ b/tests/unit/model-admin-merge.test.ts
 @@ -188,4 +188,63 @@ describe("ModelAdminService.saveModelConfig", () => {
@@ -4548,7 +4527,7 @@ index e46784f..df26729 100644
 +	});
  });
 diff --git a/tests/unit/native-cli-conversation.test.ts b/tests/unit/native-cli-conversation.test.ts
-index 10b56ec..8cdf859 100644
+index 10b56ec3f3ae6ed6448a085e51787ffe7ac65f26..8cdf859c03b9355ac63c2e5b344cdc257e246d6f 100644
 --- a/tests/unit/native-cli-conversation.test.ts
 +++ b/tests/unit/native-cli-conversation.test.ts
 @@ -88,7 +88,7 @@ function client(overrides: Record<string, unknown> = {}): any {
@@ -4562,7 +4541,7 @@ index 10b56ec..8cdf859 100644
  		localParentId: () => undefined,
 diff --git a/tests/unit/quiesce.test.ts b/tests/unit/quiesce.test.ts
 new file mode 100644
-index 0000000..a4b377a
+index 0000000000000000000000000000000000000000..a4b377af5387dd515416ce951c5e98c7902b3e37
 --- /dev/null
 +++ b/tests/unit/quiesce.test.ts
 @@ -0,0 +1,95 @@
@@ -4661,28 +4640,8 @@ index 0000000..a4b377a
 +		expect(conv.promptedSinceActive).toBe(false);
 +	});
 +});
-diff --git a/tests/unit/repo-hygiene.test.ts b/tests/unit/repo-hygiene.test.ts
-index 6b0f408..e675c47 100644
---- a/tests/unit/repo-hygiene.test.ts
-+++ b/tests/unit/repo-hygiene.test.ts
-@@ -65,6 +65,7 @@ const ROOT_ALLOWLIST = new Set([
- 	".scratch",
- 	".theme-audit",
- 	".artifacts",
-+	".mapache-source-commit",
- 	"artifacts",
- 	"dist",
- 	"release",
-@@ -122,6 +123,7 @@ const MUST_BE_IGNORED = [
- ];
- 
- function git(args: string[]): string {
-+	if (!existsSync(join(ROOT, ".git"))) return "";
- 	return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 32 << 20 });
- }
- 
 diff --git a/tests/unit/restart-resume.test.ts b/tests/unit/restart-resume.test.ts
-index 59cfb02..83319b5 100644
+index 59cfb02b3ea379fb14d9e11e169826e1f5966c54..83319b539e7927627c868e1ec7e4534418179361 100644
 --- a/tests/unit/restart-resume.test.ts
 +++ b/tests/unit/restart-resume.test.ts
 @@ -60,7 +60,7 @@ describe("restart continuation", () => {
@@ -4695,7 +4654,7 @@ index 59cfb02..83319b5 100644
  			const conv = { id: "restored", session, promptInFlight: false, viewOnly: true, promptedSinceActive: false };
  			const client = clientFor([conv]);
 diff --git a/tests/unit/shared-conversation.test.ts b/tests/unit/shared-conversation.test.ts
-index 5c93639..54059fc 100644
+index 5c9363944a6574d73f487c545808f2da2b416a87..54059fcee7775d8bdf571b9d904087fe14dc5c40 100644
 --- a/tests/unit/shared-conversation.test.ts
 +++ b/tests/unit/shared-conversation.test.ts
 @@ -1,3 +1,5 @@
@@ -4734,7 +4693,7 @@ index 5c93639..54059fc 100644
  	it("persists the flag before publishing and restores legacy ordinary and pseudo defaults", () => {
  		const session = fakeClientSession() as any;
 diff --git a/tests/unit/use-chat-socket-close.test.ts b/tests/unit/use-chat-socket-close.test.ts
-index 22115a8..fc2c279 100644
+index 22115a8dd98a964a5a77247500d6ffa9639fe39e..fc2c2790f61874c177f5fea1637c828e054874ea 100644
 --- a/tests/unit/use-chat-socket-close.test.ts
 +++ b/tests/unit/use-chat-socket-close.test.ts
 @@ -3,12 +3,12 @@ import { runInNewContext } from "node:vm";
@@ -4791,7 +4750,7 @@ index 22115a8..fc2c279 100644
  	});
 diff --git a/tests/unit/workspace-request-models.test.ts b/tests/unit/workspace-request-models.test.ts
 new file mode 100644
-index 0000000..41239be
+index 0000000000000000000000000000000000000000..41239bee539c477bb711f6f80d1b061c4954e6ec
 --- /dev/null
 +++ b/tests/unit/workspace-request-models.test.ts
 @@ -0,0 +1,57 @@
@@ -4854,7 +4813,7 @@ index 0000000..41239be
 +});
 diff --git a/tests/unit/workspace-request-resume.test.ts b/tests/unit/workspace-request-resume.test.ts
 new file mode 100644
-index 0000000..b596a42
+index 0000000000000000000000000000000000000000..b596a42a55e51b8d537bdd9b32e9a392bc4793b5
 --- /dev/null
 +++ b/tests/unit/workspace-request-resume.test.ts
 @@ -0,0 +1,37 @@
@@ -4896,7 +4855,7 @@ index 0000000..b596a42
 +	]), false);
 +});
 diff --git a/web/index.html b/web/index.html
-index 2279de4..5a5af87 100644
+index 2279de4fe5d46f1bfe7ec7fbbb48c81d5c78c98e..5a5af87d0367fe13f009bfd66e72ca8907051039 100644
 --- a/web/index.html
 +++ b/web/index.html
 @@ -4,7 +4,7 @@
@@ -4909,7 +4868,7 @@ index 2279de4..5a5af87 100644
  		<link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
  		<meta name="theme-color" content="#0f172a" />
 diff --git a/web/src/App.tsx b/web/src/App.tsx
-index 4009032..c550530 100644
+index 4009032104252f39058ee0b0980208c99857b265..c550530c62d2435cf1efd93bacd3c549ac8ce4c4 100644
 --- a/web/src/App.tsx
 +++ b/web/src/App.tsx
 @@ -198,6 +198,7 @@ import { markConversationsUnread, clearConversationUnread, useUnreadConversation
@@ -4929,7 +4888,7 @@ index 4009032..c550530 100644
  	// 插件通用 toast：plugin-host 会在无 notifyAction 依赖时 dispatch "pi-web-ui:toast"，接到全局 NoticeToast
  	useEffect(() => {
 diff --git a/web/src/components/GoalBar.tsx b/web/src/components/GoalBar.tsx
-index 3292a91..6ddcbcb 100644
+index 3292a91cc6597dc81bf8a465ccc76f9d8c17559a..6ddcbcbd67b7680cf9c4e09e6e1107b2ad46c984 100644
 --- a/web/src/components/GoalBar.tsx
 +++ b/web/src/components/GoalBar.tsx
 @@ -336,6 +336,7 @@ export const GoalBar = memo(function GoalBar({
@@ -4941,7 +4900,7 @@ index 3292a91..6ddcbcb 100644
  						<span className="goalbar-detail" title={execRole?.convId}>
  							· {execActivity}
 diff --git a/web/src/components/ModelConfigModal.tsx b/web/src/components/ModelConfigModal.tsx
-index 75fa847..3cce1f2 100644
+index 75fa8475094701c28952ea8a0b9e8404772b2aaa..3cce1f2d12e65e8af88ddedc99618d14b709786c 100644
 --- a/web/src/components/ModelConfigModal.tsx
 +++ b/web/src/components/ModelConfigModal.tsx
 @@ -25,7 +25,7 @@ import type {
@@ -5047,7 +5006,7 @@ index 75fa847..3cce1f2 100644
  												<span style={{ fontSize: 12.5, fontWeight: 600 }}>{t("apiKeyManagement")}</span>
  												<div className="provider-keys">
 diff --git a/web/src/components/PiSetupModal.tsx b/web/src/components/PiSetupModal.tsx
-index ed4839f..64a2e66 100644
+index ed4839fea7784ad65638742c8140840a4e2ad775..64a2e66d5d2c677a3a88aa49e5c4fa4a73a48a4a 100644
 --- a/web/src/components/PiSetupModal.tsx
 +++ b/web/src/components/PiSetupModal.tsx
 @@ -89,7 +89,7 @@ export function PiSetupModal({
@@ -5060,7 +5019,7 @@ index ed4839f..64a2e66 100644
  						<div className="setup-done">{t("installFailed")}</div>
  						<pre className="setup-detail">{installResult.detail}</pre>
 diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
-index adbef41..454810f 100644
+index adbef415dbb63b932beda82ca5c82960e52d2a9d..77ff732ca40777c545dbb2e7e40c2771213af576 100644
 --- a/web/src/components/TopBar.tsx
 +++ b/web/src/components/TopBar.tsx
 @@ -1,3 +1,4 @@
@@ -5109,17 +5068,17 @@ index adbef41..454810f 100644
  		"host:ctx": (
  			<span className="chip" data-tip={t("contextUsage")}>
  				<span className="chip-sub">
-@@ -1475,6 +1471,7 @@ export function TopBar({
- 		Array.from(flow.children).filter((el) => !el.classList.contains("tb-spacer")) as HTMLElement[];
- 	const topbarDragNode = (node: EventTarget | null): { el: HTMLElement; entry: UiSlotEntry } | null => {
- 		const flow = flowRef.current;
+@@ -1661,6 +1657,7 @@ export function TopBar({
+ 	const hideTopbarText = chat.settings?.uiLayout?.topbarText === false;
+ 	return (
+ 		<header className={`topbar${hideTopbarText ? " no-labels" : ""}`} data-pi-anchor="topbar">
 +			{managed && <button type="button" className="chip" onClick={() => openEmbeddedSurface("chrome")}>Chrome</button>}
- 		if (!flow || !(node instanceof Element)) return null;
- 		let el: Element | null = node;
- 		while (el && el.parentElement !== flow) el = el.parentElement;
+ 			<div
+ 				className={`topbar-flow${draggingId ? " tb-reordering" : ""}`}
+ 				ref={flowRef}
 diff --git a/web/src/embedded-agent-bridge.ts b/web/src/embedded-agent-bridge.ts
 new file mode 100644
-index 0000000..3bc5f23
+index 0000000000000000000000000000000000000000..3bc5f23c4beb58fc8183d988c5b1cdbdc539aa23
 --- /dev/null
 +++ b/web/src/embedded-agent-bridge.ts
 @@ -0,0 +1,136 @@
@@ -5260,18 +5219,19 @@ index 0000000..3bc5f23
 +	return () => window.removeEventListener("message", onMessage);
 +}
 diff --git a/web/src/i18n/messages/core/en.json b/web/src/i18n/messages/core/en.json
-index 75876a6..083423f 100644
+index 75876a626fe030ba5e1daaad5fd93cfb1e285f45..894739c538109dff1ed6aa791644fafd1cd273d4 100644
 --- a/web/src/i18n/messages/core/en.json
 +++ b/web/src/i18n/messages/core/en.json
-@@ -1345,6 +1345,7 @@
- 	"scmBranchRenameConfirm": "Rename branch \"{old}\" to \"{new}\"? (git branch -m {new})",
- 	"scmBranchDeleteCurrent": "Cannot delete the current branch. Switch to another branch first.",
- 	"scmBlame": "Blame",
+@@ -1413,6 +1413,8 @@
+ 	"enrichModelsNeedIds": "Enter at least one model id",
+ 	"goalBarTitle": "Goal",
+ 	"goalBarPlaceholder": "Enter the goal to achieve…",
++	"goalBarSet": "Send",
 +	"goalBarResume": "Resume goal",
- 	"scmBackToList": "Back to list",
- 	"scmBlameTip": "Show line-level blame for the selected file (git blame --line-porcelain)",
- 	"scmBlameLoading": "Loading blame…",
-@@ -2190,6 +2191,7 @@
+ 	"goalBarClear": "Cancel",
+ 	"goalBarLocked": "Locked: applies to every later turn",
+ 	"goalBarUnlocked": "This turn only (cleared afterwards)",
+@@ -2190,6 +2192,7 @@
  	"pluginOfficialMarketHint": "Visit official plugin repository & community marketplace (GitHub)",
  	"pluginOfficialLink": "Official Link",
  	"pluginOfficialLinkHint": "Visit plugin homepage or source repository",
@@ -5280,18 +5240,19 @@ index 75876a6..083423f 100644
  	"pluginCatalogAdd": "Add plugin",
  	"pluginCatalogAddHint": "Drop a third-party plugin into the installable list (owner/repo or full GitHub URL)",
 diff --git a/web/src/i18n/messages/core/zh.json b/web/src/i18n/messages/core/zh.json
-index ed9497a..f9ce7e1 100644
+index ed9497a3982ebdd7b268648e193f5e35f72dff68..0ff51c2b95dccf47338bf2af04092721b3de4d3b 100644
 --- a/web/src/i18n/messages/core/zh.json
 +++ b/web/src/i18n/messages/core/zh.json
-@@ -1345,6 +1345,7 @@
- 	"scmBranchRenameConfirm": "确定把分支“{old}”重命名为“{new}”吗？（git branch -m {new}）",
- 	"scmBranchDeleteCurrent": "不能删除当前分支，请先切换到其他分支。",
- 	"scmBlame": "追溯",
+@@ -1413,6 +1413,8 @@
+ 	"enrichModelsNeedIds": "先填写至少一个模型 ID",
+ 	"goalBarTitle": "目标",
+ 	"goalBarPlaceholder": "输入要达成的目标…",
++	"goalBarSet": "发送",
 +	"goalBarResume": "Resume goal",
- 	"scmBackToList": "返回列表",
- 	"scmBlameTip": "显示所选文件的行级追溯（git blame --line-porcelain）",
- 	"scmBlameLoading": "加载追溯中…",
-@@ -2190,6 +2191,7 @@
+ 	"goalBarClear": "取消",
+ 	"goalBarLocked": "锁定：应用到后续所有回合",
+ 	"goalBarUnlocked": "仅本回合（改完自动清除）",
+@@ -2190,6 +2192,7 @@
  	"pluginOfficialMarketHint": "访问官方插件仓库与社区市场 (GitHub)",
  	"pluginOfficialLink": "官方链接",
  	"pluginOfficialLinkHint": "访问插件主页或源码仓库",
@@ -5300,7 +5261,7 @@ index ed9497a..f9ce7e1 100644
  	"pluginCatalogAdd": "添加插件",
  	"pluginCatalogAddHint": "把第三方插件填进可安装列表（owner/repo 或完整 GitHub 地址）",
 diff --git a/web/src/main.tsx b/web/src/main.tsx
-index 1d80f8e..5cde4aa 100644
+index 1d80f8e5ab92e9e041af41820ec26060a5bd2cbc..5cde4aaa30d3a0f210fdaf0fcdc84f4273256a5a 100644
 --- a/web/src/main.tsx
 +++ b/web/src/main.tsx
 @@ -118,11 +118,24 @@ installScrollbarGutterVar();
@@ -5332,7 +5293,7 @@ index 1d80f8e..5cde4aa 100644
  	});
  }
 diff --git a/web/src/use-chat.ts b/web/src/use-chat.ts
-index 9b8aacb..5c10df0 100644
+index 9b8aacb9a04f0339c8572e6fa7ae158fb23cfeea..5c10df02b318f6af5f7dda26dbe393506ee61ca8 100644
 --- a/web/src/use-chat.ts
 +++ b/web/src/use-chat.ts
 @@ -17,6 +17,7 @@ import { useT } from "./i18n";
@@ -5415,7 +5376,7 @@ index 9b8aacb..5c10df0 100644
  		const onLocale = (ev: Event) => {
  			const locale = (ev as CustomEvent<string>).detail ?? readUiLocale();
 diff --git a/web/vite.config.ts b/web/vite.config.ts
-index fc2dabe..9b3551b 100644
+index fc2dabe202012f64c651425c700e68fda918a2e8..9b3551b0176f69f0fd69446424538afe827ccc05 100644
 --- a/web/vite.config.ts
 +++ b/web/vite.config.ts
 @@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
