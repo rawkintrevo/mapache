@@ -2,7 +2,9 @@
 
 const path = require("node:path");
 
-const MAX_DOWNLOADS = 8;
+// Tool installations contain tens of thousands of small objects. Allow more
+// requests while the independent byte budget still bounds buffered content.
+const MAX_DOWNLOADS = 64;
 const MAX_BATCH_BYTES = 64 * 1024 * 1024;
 
 // Validate the complete path plan before creating anything. A symlink (or file)

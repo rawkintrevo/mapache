@@ -1346,3 +1346,33 @@ perform live Chrome proxy reconfiguration.
 public-IPv4 web-only forwarding, blocked private/local destinations, and
 service-managed key revocation. Gateway setup requires local administrator
 access; it does not change the runner image or restart existing browsers.
+
+### Large installation restore (#598)
+
+Checkpoint restore permits up to 64 concurrent objects within the existing
+64 MiB declared-content budget; oversized objects still run alone. This avoids
+serial network latency across large SDK trees exhausting Cloud Run’s 240-second
+startup limit. Checksum validation, full path-plan validation, failure draining,
+and symlink ordering remain mandatory. The owner is
+`session-runner/lib/checkpointRestoreStaging.js`. Existing services need a rebuilt
+image/new revision to use this limit; raising the startup probe beyond Cloud
+Run’s limit is not a recovery strategy.
+
+Recovery validation on 2026-11-22 used the approved `install-test` checkpoint
+(37,612 entries, about 442 MB; all regular objects present with matching sizes).
+The eight-request implementation exceeded the 240-second probe; the 64-request
+implementation restored it in 112.6–116.5 seconds. Generation 4 then acquired
+single-writer authority, started the agent, and returned authenticated
+`/runner/health` 200 with `agentRuntime.ready=true`. The restored gcloud wrapper
+reported Google Cloud SDK 594.0.1.
+
+The scoped recovery image `session-runner:issue598-recovery` was built by Cloud
+Build `926c9928-aa8a-4891-a905-011f7fd91e0d`, layering only the tested restore
+helper over deployed digest `957c2a7f635602eccb38d450d6a4cde1987a0d13235cec654ca20b6205f5e0d7`.
+Its digest is `0a6880586c5ab7223f8940601b9baa80c0b9b480809d1f9f538c254d903e4cdb`.
+Only the recovered service uses this image; the standard release must include
+this change before ordinary recreation reliably retains the faster restore.
+Recovery also cleared the failed provisioning operation and restored its
+released reservation after confirming no admitted boot, then reconciled running
+state only after authenticated agent readiness. Do not clear a live boot's
+reservation as a generic startup workaround.

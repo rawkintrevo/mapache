@@ -371,7 +371,7 @@ async function addWorkspaceFiles(fixture, count) {
 test("restores many objects with bounded concurrent downloads and preserves every file", async (t) => {
   const fixture = await makeFixture(t);
   const {config, storage, store} = fixture;
-  await addWorkspaceFiles(fixture, 25);
+  await addWorkspaceFiles(fixture, 130);
   const bucket = storage.bucket.bind(storage);
   let active = 0;
   let peak = 0;
@@ -388,9 +388,9 @@ test("restores many objects with bounded concurrent downloads and preserves ever
     }};
   }});
   await createAgentCheckpointRestoreService({config, db: store.db, storage}).restoreCheckpoint({shouldIgnore: (p) => p === ".git"});
-  assert.equal(peak, 8);
+  assert.equal(peak, 64);
   assert.equal(active, 0);
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 130; i++) {
     assert.equal(await fs.readFile(path.join(config.workspaceDir, `many/file-${i}.txt`), "utf8"), `restored file ${i}\n`);
   }
   assert.equal(await fs.readFile(path.join(config.piSessionDir, "chat.jsonl"), "utf8"), '{"type":"session"}\n{"type":"message"}\n');
@@ -399,7 +399,7 @@ test("restores many objects with bounded concurrent downloads and preserves ever
 test("a failed parallel download drains its batch before cleanup and never installs partial state", async (t) => {
   const fixture = await makeFixture(t);
   const {config, storage, store, root} = fixture;
-  await addWorkspaceFiles(fixture, 20);
+  await addWorkspaceFiles(fixture, 130);
   const bucket = storage.bucket.bind(storage);
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
@@ -412,7 +412,7 @@ test("a failed parallel download drains its batch before cleanup and never insta
     return {async download() {
       if (objectPath.endsWith("manifest.json")) return file.download();
       started++;
-      if (started === 8) batchStarted();
+      if (started === 64) batchStarted();
       if (started === 1) throw new Error("injected read failure");
       await gate;
       return file.download();
@@ -427,7 +427,7 @@ test("a failed parallel download drains its batch before cleanup and never insta
   assert.equal(settled, false, "must wait for outstanding writes before removing staging");
   release();
   await rejection;
-  assert.equal(started, 8, "must not start another batch after failure");
+  assert.equal(started, 64, "must not start another batch after failure");
   assert.equal(await fs.readFile(path.join(config.workspaceDir, "old.txt"), "utf8"), "old workspace");
   assert.equal((await fs.readdir(root)).some((name) => name.startsWith(".mapache-checkpoint-")), false);
 });
