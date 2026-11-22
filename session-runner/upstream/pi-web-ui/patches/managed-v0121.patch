@@ -816,7 +816,7 @@ index c265274..7ed6a9a 100644
  	}
  }
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 04907ae..c06527f 100644
+index 04907ae..f6433dc 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
 @@ -1,3 +1,11 @@
@@ -1165,7 +1165,7 @@ index 04907ae..c06527f 100644
 +			// Defer the prompt until the control response has been returned so the
 +			// AgentService can install the run-state reducer before SDK events arrive.
 +			setImmediate(() => {
-+				void conv.session.sendUserMessage(prompt).catch((error) => {
++				void this.submitText(conv, prompt, this.deliveryModeOf(conv)).catch((error) => {
 +					console.error(`[agent-service] workspace request ${runId} failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
 +				});
 +			});
@@ -2469,6 +2469,19 @@ index c10c3e7..2daa2dc 100644
  			pendingMessages: this.pendingMessages(),
  			service: toServiceInfo(launchOrigin()),
  		};
+diff --git a/server/env-registry.ts b/server/env-registry.ts
+index 15521f7..ca35214 100644
+--- a/server/env-registry.ts
++++ b/server/env-registry.ts
+@@ -121,6 +121,8 @@ export const ENV_SPECS: readonly EnvSpec[] = [
+ 	{ name: "PI_WEB_RESTART_CHILD", scope: "internal" },
+ 	{ name: "PI_WEB_SDK_DIR", scope: "internal" },
+ 	{ name: "PI_WEB_SHOW_CONSOLE", scope: "internal" },
++	{ name: "PI_WEB_CONTROL_PATH", scope: "internal" },
++	{ name: "PI_WEB_MCP_ADAPTER_PATH", scope: "internal" },
+ 
+ 	// ── 对外配置（用户/部署方真的要设）──────────────────────────────────────
+ 	{ name: "PI_CODING_AGENT_DIR", scope: "public" },
 diff --git a/server/files-service.ts b/server/files-service.ts
 index 6b08dfa..d2d883a 100644
 --- a/server/files-service.ts
@@ -3823,6 +3836,19 @@ index 0000000..d82b9bd
 +		}
 +	});
 +});
+diff --git a/tests/unit/delivery-gate-929.test.ts b/tests/unit/delivery-gate-929.test.ts
+index da2960f..295ae8c 100644
+--- a/tests/unit/delivery-gate-929.test.ts
++++ b/tests/unit/delivery-gate-929.test.ts
+@@ -56,6 +56,8 @@ function fakeSession(opts: { convs: Record<string, any>; lang?: "zh" | "en" }) {
+ 		conv: undefined,
+ 		pendingBotChat: new Map(),
+ 		botOf: proto.botOf,
++		isQuiesced: () => false,
++		quiesceBlocked: proto.quiesceBlocked,
+ 		prompt: proto.prompt,
+ 		parkGatedPrompt: proto.parkGatedPrompt,
+ 		resolveExecution: (id: string) => {
 diff --git a/tests/unit/embedded-agent-bridge.test.ts b/tests/unit/embedded-agent-bridge.test.ts
 new file mode 100644
 index 0000000..0ce60ba
@@ -4635,6 +4661,26 @@ index 0000000..a4b377a
 +		expect(conv.promptedSinceActive).toBe(false);
 +	});
 +});
+diff --git a/tests/unit/repo-hygiene.test.ts b/tests/unit/repo-hygiene.test.ts
+index 6b0f408..e675c47 100644
+--- a/tests/unit/repo-hygiene.test.ts
++++ b/tests/unit/repo-hygiene.test.ts
+@@ -65,6 +65,7 @@ const ROOT_ALLOWLIST = new Set([
+ 	".scratch",
+ 	".theme-audit",
+ 	".artifacts",
++	".mapache-source-commit",
+ 	"artifacts",
+ 	"dist",
+ 	"release",
+@@ -122,6 +123,7 @@ const MUST_BE_IGNORED = [
+ ];
+ 
+ function git(args: string[]): string {
++	if (!existsSync(join(ROOT, ".git"))) return "";
+ 	return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 32 << 20 });
+ }
+ 
 diff --git a/tests/unit/restart-resume.test.ts b/tests/unit/restart-resume.test.ts
 index 59cfb02..83319b5 100644
 --- a/tests/unit/restart-resume.test.ts
