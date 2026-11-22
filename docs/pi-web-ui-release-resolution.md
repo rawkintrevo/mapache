@@ -2,24 +2,24 @@
 
 ## Scope
 
-Issue #578 upgrades the embedded pi-web-ui without making the Mapache
-integration depend on a manually edited upstream commit or on matching numeric
-versions across unrelated Pi packages.
+Issue #591 upgrades the embedded pi-web-ui and Pi coding-agent SDK while keeping
+the Mapache integration fail-closed on a known-compatible managed target.
 
 The build policy in
-session-runner/upstream/pi-web-ui/manifest.json now selects the GitHub
-stable release channel and the npm latest channel for the embedded coding
-agent. build.mjs resolves each channel once, verifies the source package
-identity, applies the release-specific managed integration patch strictly,
-installs the resolved SDK version, records the actual installed pi-ai
-metadata, and fails before producing a runtime directory when a compatibility
-check fails. There is no fallback to an older release.
+session-runner/upstream/pi-web-ui/manifest.json records the managed targets
+pi-web-ui `0.121.3` and `@earendil-works/pi-coding-agent` `1.6.0`. The
+resolver still uses the GitHub stable-release and npm registry metadata
+endpoints, but it rejects a release or package that differs from those targets.
+build.mjs verifies the source package identity, applies the release-specific
+managed integration patch strictly, installs the exact SDK version, records the
+actual installed pi-ai metadata, and fails before producing a runtime directory
+when a compatibility check fails. There is no fallback to an older release.
 
-The current audit target was GitHub release
-v0.121.0 (https://github.com/xing-shuyin/pi-web-ui/releases/tag/v0.121.0),
-commit 6142308d81a1c85bd7c1ec180955ba5331cc650e. That is evidence from the
-resolution performed during this change, not a new source pin. A future stable
-release must either accept the managed patch or fail the candidate image build
+The current audit target is GitHub release
+v0.121.3 (https://github.com/xing-shuyin/pi-web-ui/releases/tag/v0.121.3),
+commit a990160ea722abf587f7fc05308b209b743e6279, with Pi SDK `1.6.0` and
+pi-ai `1.6.0`. A future stable release must either be intentionally selected in
+the manifest and accept the managed patch or fail the candidate image build
 until its integration is ported.
 
 ## Resolution contract
@@ -36,11 +36,12 @@ descriptor. The latter includes:
   image build inspected the installed package;
 - the applied integration patch path.
 
-The pi SDK is installed with an exact version selected from the npm latest
-dist-tag after resolution. The upstream lockfile remains a source input, not
-the authority for the installed SDK. pi-ai metadata is resolved from the
-installed package's own version, so a coding-agent release and its AI package
-are not assumed to share a number.
+The pi SDK is installed with the exact version selected in the manifest. The
+registry packument is still read for integrity/tarball metadata, but a changed
+`latest` dist-tag cannot silently install a different SDK. The upstream lockfile
+remains a source input, not the authority for the installed SDK. pi-ai metadata
+is resolved from the installed package's own version, so a coding-agent release
+and its AI package are not assumed to share a number.
 
 The managed MCP adapter remains explicitly versioned at 2.32.1. The builder
 also compares its installed peer-dependency contract with the checked-in
@@ -157,11 +158,12 @@ patch or resolved dependency records a different key and a miss. The final
 image smoke test also fetches `/agent/` and each referenced JavaScript bundle
 before the image can be published.
 
-The clean archive-mode build was run against the resolved v0.121.0 release with
---skip-tests; source verification, the managed patch, npm installs, mobile
-dependencies, typecheck, production build, runtime copying, and the model
-catalog override all passed. It produced a SHA-256 archive identity and
-build-info.json.
+The clean archive-mode build was run against v0.121.3 with `--skip-tests`;
+source verification, the managed patch, npm installs, mobile dependencies,
+typecheck, production build, runtime copying, and the model catalog override
+all passed. The resulting runtime reported pi-web-ui `0.121.3`, coding-agent
+`1.6.0`, pi-ai `1.6.0`, and pi-mcp `1.6.0`, and produced a SHA-256 archive
+identity and build-info.json.
 
 The normal builder runs the production build before npm test because the
 upstream CLI smoke tests import generated server modules. Its test subprocess
@@ -170,18 +172,31 @@ effective. The test environment also uses a synthetic non-system HOME so the
 upstream browse-path boundary fixture can distinguish a user home from the
 explicitly blocked /root path; production runtime HOME remains unchanged.
 
-The upstream npm test command was also run in the clean patched source:
-1,099 of 1,108 files and 13,007 of 13,061 tests passed. The 14 failures were
-in unrelated desktop/canvas, plugin-output, quota, workspace-snapshot, and
-SDK-compatibility fixtures in this host environment. The builder remains
-fail-closed when its normal test command is enabled; the --skip-tests result
-does not claim those failures are fixed.
+The normal builder test command was also run in the clean patched source:
+1,204 of 1,217 files and 14,027 of 14,088 tests passed. The 12 failing files
+and 16 failing tests were environment-sensitive desktop, SDK-hook, environment
+registry, i18n, plugin-link, notes, quota, repository-hygiene, process, and
+workspace-snapshot fixtures on this host. The builder remains fail-closed when
+its normal test command is enabled; the passing `--skip-tests` build proves the
+runtime typecheck and production artifact path, not a claim that those host
+fixtures are fixed.
+
+Cloud Build runs the same test command from a release tarball rather than a
+Git checkout. The builder removes its source-resolution marker before testing
+and creates a temporary Git index so upstream repository-hygiene tests inspect
+the extracted source without treating build metadata as a repository file.
+The v0.121.3 compatibility patch also registers the two managed internal
+variables (`PI_WEB_CONTROL_PATH` and `PI_WEB_MCP_ADAPTER_PATH`) and removes the
+unused `goalBarSet` translation key from the synchronized dictionaries. This
+keeps the release audit strict while making the archive-mode test environment
+equivalent to the upstream checkout assumptions.
 
 Before publishing, run the default image build in a clean Node 24 container,
 then run the runner checks and the local vertical harness. Validate the
-authenticated /runner/health contract and explicitly assert that /healthz
-and /healthz/ are not served or probed. A new image revision is required for
-new sessions; existing Cloud Run services retain their current image until
-restarted or recreated. No Cloud Functions deployment is required for this
-source-only runner change, but the image digest and release/build descriptor
-must be recorded in the rollout note.
+authenticated `/runner/health` contract and keep `/healthz` and `/healthz/`
+out of all routes and callers. This source-only change did not modify an
+existing Cloud Run service or revision; a new `gcp-runner` image revision is
+required for new sessions, while existing services retain their current image
+until restarted or recreated. No Cloud Functions deployment is required, but
+the published image digest and release/build descriptor must be recorded in
+the rollout note.

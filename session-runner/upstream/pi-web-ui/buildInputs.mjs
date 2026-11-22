@@ -208,7 +208,7 @@ export async function resolveBuildInputs({
 		})}\n`, "utf8");
 		await applyPatches(sourceDir, manifest, patchRoot);
 		const resolvedRelease = {...release, archiveSha256, sourceFiles: sourceFileHashes, resolvedAt: now};
-		const sdk = await resolveLatestPackage({packageName: manifest.piSdk.package, fetchImpl, now});
+		const sdk = await resolveLatestPackage({packageName: manifest.piSdk.package, expectedVersion: manifest.piSdk.version, fetchImpl, now});
 		await run("npm", [
 			"install",
 			"--package-lock-only",

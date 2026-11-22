@@ -56,6 +56,11 @@ export async function resolveStableRelease({manifest, fetchImpl = globalThis.fet
 	const tag = String(release.tag_name || "").trim();
 	const version = stableVersion(tag);
 	if (!version) fail(`stable release has an invalid tag: ${tag || "(empty)"}`);
+	const expectedVersion = upstream.version === undefined ? null : stableVersion(upstream.version);
+	if (upstream.version !== undefined && !expectedVersion) fail(`manifest has an invalid upstream version: ${upstream.version}`);
+	if (expectedVersion && version !== expectedVersion) {
+		fail(`stable release version mismatch (expected ${expectedVersion}, got ${version})`);
+	}
 	const commitUrl = String(upstream.commitApiUrl || "").replace("{tag}", encodeURIComponent(tag));
 	if (!commitUrl || commitUrl === upstream.commitApiUrl) fail("manifest is missing commitApiUrl/{tag}");
 	const commit = await readJson(fetchImpl, commitUrl, `commit for ${tag}`);
@@ -77,7 +82,7 @@ export async function resolveStableRelease({manifest, fetchImpl = globalThis.fet
 	};
 }
 
-export async function resolveLatestPackage({packageName, fetchImpl = globalThis.fetch, now = new Date().toISOString()} = {}) {
+export async function resolveLatestPackage({packageName, expectedVersion, fetchImpl = globalThis.fetch, now = new Date().toISOString()} = {}) {
 	if (!packageName) fail("package name is required");
 	if (typeof fetchImpl !== "function") fail("fetch is unavailable");
 	const registryUrl = `https://registry.npmjs.org/${encodeURIComponent(packageName)}`;
@@ -85,7 +90,9 @@ export async function resolveLatestPackage({packageName, fetchImpl = globalThis.
 		accept: "application/vnd.npm.install-v1+json",
 		"user-agent": DEFAULT_USER_AGENT,
 	});
-	const version = stableVersion(packument?.["dist-tags"]?.latest);
+	const requestedVersion = expectedVersion === undefined ? null : stableVersion(expectedVersion);
+	if (expectedVersion !== undefined && !requestedVersion) fail(`package ${packageName} has an invalid requested version: ${expectedVersion}`);
+	const version = requestedVersion || stableVersion(packument?.["dist-tags"]?.latest);
 	if (!version) fail(`npm package ${packageName} has no stable latest version`);
 	return packageMetadata({packageName, version, packument, now, registryUrl});
 }

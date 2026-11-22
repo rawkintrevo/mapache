@@ -11,7 +11,7 @@ RUN apt-get update \
 ARG MAPACHE_BUILD_RESOLUTION_KEY=local
 
 RUN echo "Mapache build resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
-  && npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent \
+  && npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent@1.6.0 \
   && pi --version
 
 RUN pi install npm:pi-mcp-adapter@2.32.1
