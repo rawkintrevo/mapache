@@ -1587,6 +1587,354 @@ index 04907ae..c06527f 100644
  	async clearGoal(conv?: Conversation): Promise<void> {
  		return this.goalSvc.clearGoal(conv);
  	}
+diff --git a/server/automation-run-state.test.ts b/server/automation-run-state.test.ts
+new file mode 100644
+index 0000000..9ba6332
+--- /dev/null
++++ b/server/automation-run-state.test.ts
+@@ -0,0 +1,120 @@
++import assert from "node:assert/strict";
++import {test} from "vitest";
++import {
++	createAutomationRunState,
++	isAutomationRunTerminal,
++	reduceAutomationRunState,
++	type AutomationRunEvent,
++} from "./automation-run-state.js";
++
++function apply(state: ReturnType<typeof createAutomationRunState>, ...events: AutomationRunEvent[]) {
++	return events.reduce(reduceAutomationRunState, state);
++}
++
++function event(type: AutomationRunEvent["type"], fields: Record<string, unknown> = {}): AutomationRunEvent {
++	return {type, runId: "run-1", conversationId: "conversation-1", ...fields} as AutomationRunEvent;
++}
++
++test("requires final non-retry agent end and drains tools, subagents, and background tasks", () => {
++	let state = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("tool_start", {taskId: "tool-1"}),
++		event("subagent_start", {taskId: "subagent-1"}),
++		event("background_task_start", {taskId: "background-1"}),
++		event("agent_end", {result: "success"}),
++	);
++	assert.equal(state.agentEnded, true);
++	assert.equal(state.terminal, null);
++	state = apply(
++		state,
++		event("tool_end", {taskId: "tool-1", isError: true}),
++		event("subagent_end", {taskId: "subagent-1"}),
++		event("background_task_end", {taskId: "background-1"}),
++	);
++	assert.equal(state.terminal, "succeeded");
++	assert.equal(isAutomationRunTerminal(state), true);
++});
++
++test("duplicate task and event IDs are idempotent", () => {
++	let state = apply(
++		createAutomationRunState("run-1"),
++		event("started", {eventId: "start-1"}),
++		event("started", {eventId: "start-1"}),
++		event("tool_start", {taskId: "tool-1", eventId: "tool-start-1"}),
++		event("tool_start", {taskId: "tool-1", eventId: "tool-start-2"}),
++	);
++	assert.deepEqual(state.toolIds, ["tool-1"]);
++	state = apply(state, event("tool_end", {taskId: "tool-1", eventId: "tool-end-1"}), event("tool_end", {taskId: "tool-1", eventId: "tool-end-1"}));
++	assert.deepEqual(state.toolIds, []);
++});
++
++test("wrong run or conversation cannot affect state", () => {
++	let state = apply(createAutomationRunState("run-1"), event("started"));
++	const wrongRun = {...event("agent_end", {result: "success"}), runId: "run-2"} as AutomationRunEvent;
++	const wrongConversation = {...event("agent_end", {result: "success"}), conversationId: "conversation-2"} as AutomationRunEvent;
++	state = reduceAutomationRunState(state, wrongRun);
++	state = reduceAutomationRunState(state, wrongConversation);
++	assert.equal(state.agentEnded, false);
++	assert.equal(state.terminal, null);
++});
++
++test("retrying agent end is not final, while a model error is terminal only when final", () => {
++	let state = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "error", error: "temporary", willRetry: true}),
++	);
++	assert.equal(state.agentEnded, false);
++	assert.equal(state.terminal, null);
++	state = apply(state, event("model_end", {error: "provider down", retryable: false}), event("agent_end", {result: "error", error: "provider down"}));
++	assert.equal(state.terminal, "failed");
++});
++
++test("tool failures do not fail a final successful agent result", () => {
++	const state = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("tool_start", {taskId: "tool-1"}),
++		event("tool_end", {taskId: "tool-1", isError: true, error: "recoverable"}),
++		event("agent_end", {result: "success"}),
++	);
++	assert.equal(state.finalError, null);
++	assert.equal(state.terminal, "succeeded");
++});
++
++test("input request becomes interaction_required, but cancellation wins before terminal commit", () => {
++	let state = apply(createAutomationRunState("run-1"), event("started"), event("input_requested", {requestId: "question-1"}));
++	assert.equal(state.interactionRequired, true);
++	assert.equal(state.terminal, null);
++	state = reduceAutomationRunState(state, event("canceled", {error: "runner stopped"}));
++	assert.equal(state.terminal, "canceled");
++
++	state = apply(createAutomationRunState("run-1"), event("started"), event("input_requested", {requestId: "question-1"}), event("agent_end", {result: "success"}));
++	assert.equal(state.terminal, "interaction_required");
++});
++
++test("stores a bounded final assistant answer without exposing a failed answer", () => {
++	const answer = "Workspace purpose: social media planning.";
++	const success = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "success", answer}),
++	);
++	assert.equal(success.finalAnswer, answer);
++	assert.equal(success.terminal, "succeeded");
++
++	const failed = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "error", error: "provider failed", answer}),
++	);
++	assert.equal(failed.finalAnswer, null);
++
++	const bounded = apply(
++		createAutomationRunState("run-1"),
++		event("started"),
++		event("agent_end", {result: "success", answer: "x".repeat(40000)}),
++	);
++	assert.equal(bounded.finalAnswer?.length, 32768);
++});
+diff --git a/server/automation-run-state.ts b/server/automation-run-state.ts
+new file mode 100644
+index 0000000..977b366
+--- /dev/null
++++ b/server/automation-run-state.ts
+@@ -0,0 +1,216 @@
++/**
++ * Pure completion-state reducer for one unattended automation conversation.
++ *
++ * This module deliberately knows nothing about sockets, sessions, timers, or
++ * process lifetime. The caller owns event delivery and invokes the reducer
++ * with the run's persisted state. Only a final, non-retry agent result can
++ * produce success; log silence and aggregate turn counters are not signals.
++ */
++
++export type AutomationTerminal = "succeeded" | "failed" | "canceled" | "interaction_required";
++
++export interface AutomationRunState {
++	runId: string;
++	conversationId: string | null;
++	submitted: boolean;
++	agentEnded: boolean;
++	modelEnded: boolean;
++	toolIds: string[];
++	subagentIds: string[];
++	backgroundTaskIds: string[];
++	inputRequestIds: string[];
++	interactionRequired: boolean;
++	finalResult: "success" | "error" | null;
++	finalError: string | null;
++	finalAnswer: string | null;
++	terminal: AutomationTerminal | null;
++	seenEventIds: string[];
++}
++
++type BaseEvent = {
++	runId: string;
++	conversationId: string;
++	eventId?: string;
++};
++
++export type AutomationRunEvent =
++	| (BaseEvent & { type: "started" })
++	| (BaseEvent & { type: "model_end"; error?: string; retryable?: boolean })
++	| (BaseEvent & { type: "agent_end"; result?: "success" | "error"; error?: string; answer?: string; willRetry?: boolean })
++	| (BaseEvent & { type: "tool_start"; taskId: string })
++	| (BaseEvent & { type: "tool_end"; taskId: string; isError?: boolean; error?: string })
++	| (BaseEvent & { type: "subagent_start"; taskId: string })
++	| (BaseEvent & { type: "subagent_end"; taskId: string; isError?: boolean; error?: string })
++	| (BaseEvent & { type: "background_task_start"; taskId: string })
++	| (BaseEvent & { type: "background_task_end"; taskId: string; isError?: boolean; error?: string })
++	| (BaseEvent & { type: "error"; source?: "model" | "tool" | "subagent" | "background"; error: string; retryable?: boolean })
++	| (BaseEvent & { type: "input_requested"; requestId: string })
++	| (BaseEvent & { type: "input_canceled"; requestId: string })
++	| (BaseEvent & { type: "canceled"; error?: string });
++
++function unique(values: string[]): string[] {
++	return [...new Set(values)];
++}
++
++function cleanId(value: unknown): string {
++	return String(value ?? "").trim();
++}
++
++function cleanError(value: unknown): string | null {
++	const error = String(value ?? "").trim();
++	return error || null;
++}
++
++function cleanAnswer(value: unknown): string | null {
++	if (typeof value !== "string") return null;
++	const answer = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
++	return answer ? answer.slice(0, 32768) : null;
++}
++
++function pendingWork(state: AutomationRunState): boolean {
++	return state.toolIds.length > 0 ||
++		state.subagentIds.length > 0 ||
++		state.backgroundTaskIds.length > 0;
++}
++
++function settle(state: AutomationRunState): AutomationRunState {
++	if (state.terminal || pendingWork(state) || !state.agentEnded) return state;
++	if (state.interactionRequired) {
++		return { ...state, terminal: "interaction_required" };
++	}
++	if (state.finalResult === "error") {
++		return { ...state, terminal: "failed" };
++	}
++	if (state.finalResult === "success") {
++		return { ...state, terminal: "succeeded" };
++	}
++	return state;
++}
++
++export function createAutomationRunState(runId: string): AutomationRunState {
++	const normalizedRunId = cleanId(runId);
++	if (!normalizedRunId) throw new Error("automation_run_id_required");
++	return {
++		runId: normalizedRunId,
++		conversationId: null,
++		submitted: false,
++		agentEnded: false,
++		modelEnded: false,
++		toolIds: [],
++		subagentIds: [],
++		backgroundTaskIds: [],
++		inputRequestIds: [],
++		interactionRequired: false,
++		finalResult: null,
++		finalError: null,
++		finalAnswer: null,
++		terminal: null,
++		seenEventIds: [],
++	};
++}
++
++function owned(state: AutomationRunState, event: AutomationRunEvent): boolean {
++	if (event.runId !== state.runId) return false;
++	if (!state.conversationId) return event.type === "started";
++	return event.conversationId === state.conversationId;
++}
++
++function markSeen(state: AutomationRunState, eventId: string | undefined): AutomationRunState {
++	const id = cleanId(eventId);
++	return id && !state.seenEventIds.includes(id) ? {
++		...state,
++		seenEventIds: [...state.seenEventIds, id],
++	} : state;
++}
++
++function remove(values: string[], value: string): string[] {
++	return values.filter((candidate) => candidate !== value);
++}
++
++export function reduceAutomationRunState(
++	previous: AutomationRunState,
++	event: AutomationRunEvent,
++): AutomationRunState {
++	if (!owned(previous, event)) return previous;
++	const eventId = cleanId(event.eventId);
++	if (eventId && previous.seenEventIds.includes(eventId)) return previous;
++	let state = markSeen(previous, event.eventId);
++
++	if (event.type === "started") {
++		if (state.conversationId && state.conversationId !== event.conversationId) return previous;
++		return {
++			...state,
++			conversationId: event.conversationId,
++			submitted: true,
++		};
++	}
++	if (state.terminal) return state;
++
++	switch (event.type) {
++		case "tool_start":
++			if (event.taskId) state = {...state, toolIds: unique([...state.toolIds, event.taskId])};
++			break;
++		case "tool_end":
++			state = {...state, toolIds: remove(state.toolIds, event.taskId)};
++			break;
++		case "subagent_start":
++			if (event.taskId) state = {...state, subagentIds: unique([...state.subagentIds, event.taskId])};
++			break;
++		case "subagent_end":
++			state = {...state, subagentIds: remove(state.subagentIds, event.taskId)};
++			break;
++		case "background_task_start":
++			if (event.taskId) state = {...state, backgroundTaskIds: unique([...state.backgroundTaskIds, event.taskId])};
++			break;
++		case "background_task_end":
++			state = {...state, backgroundTaskIds: remove(state.backgroundTaskIds, event.taskId)};
++			break;
++		case "input_requested":
++			if (event.requestId) {
++				state = {
++					...state,
++					inputRequestIds: unique([...state.inputRequestIds, event.requestId]),
++					interactionRequired: true,
++				};
++			}
++			break;
++		case "input_canceled":
++			state = {...state, inputRequestIds: remove(state.inputRequestIds, event.requestId)};
++			break;
++		case "canceled":
++			return {
++				...state,
++				finalResult: "error",
++				finalError: cleanError(event.error) || "canceled",
++				terminal: "canceled",
++			};
++		case "model_end":
++			state = {
++				...state,
++				modelEnded: true,
++				...(event.retryable ? {} : event.error ? {finalError: cleanError(event.error)} : {}),
++			};
++			break;
++		case "error":
++			if (event.source === "model" && !event.retryable) {
++				state = {...state, finalResult: "error", finalError: cleanError(event.error)};
++			}
++			break;
++		case "agent_end":
++			if (!event.willRetry) {
++				state = {
++					...state,
++					agentEnded: true,
++					finalResult: event.result || (event.error ? "error" : "success"),
++					finalError: cleanError(event.error) || state.finalError,
++					finalAnswer: event.result === "error" || event.error ? null : cleanAnswer(event.answer),
++				};
++			}
++			break;
++	}
++	return settle(state);
++}
++
++export function isAutomationRunTerminal(state: AutomationRunState): boolean {
++	return state.terminal !== null;
++}
 diff --git a/server/client-state.ts b/server/client-state.ts
 index acd28fe..c5de58f 100644
 --- a/server/client-state.ts
@@ -2716,6 +3064,89 @@ index 5f7aef9..a0efb1e 100644
  	dataDir: DATA_DIR,
  	port: PORT,
  	authToken: () => AUTH_TOKEN,
+diff --git a/server/managed-reference.ts b/server/managed-reference.ts
+new file mode 100644
+index 0000000..596696a
+--- /dev/null
++++ b/server/managed-reference.ts
+@@ -0,0 +1,37 @@
++import { readFileSync } from "node:fs";
++import type { BeforeAgentStartEvent, BeforeAgentStartEventResult } from "@earendil-works/pi-coding-agent";
++import { isManaged } from "./managed.js";
++
++export const MAPACHE_REFERENCE_PATH = "/app/reference/mapache.md";
++
++type PromptHandler = (event: BeforeAgentStartEvent) => BeforeAgentStartEventResult | undefined;
++
++/** Wrap the persona hook, not APPEND_SYSTEM: custom composers may omit {{append}}.
++ * Each runtime (including resumed sessions and template subagents) loads its own
++ * image-owned reference. Never materialize instructions into the workspace.
++ */
++export function withManagedReference(
++	compose: PromptHandler,
++	env: NodeJS.ProcessEnv = process.env,
++	referencePath = MAPACHE_REFERENCE_PATH,
++): PromptHandler {
++	if (!isManaged(env)) return compose;
++	let reference: string;
++	try {
++		reference = readFileSync(referencePath, "utf8").trim();
++	} catch {
++		console.warn("[Mapache] Operating reference unavailable; keeping existing system prompt.");
++		return compose;
++	}
++	if (!reference) {
++		console.warn("[Mapache] Operating reference empty; keeping existing system prompt.");
++		return compose;
++	}
++	return (event) => {
++		const result = compose(event);
++		const prompt = result?.systemPrompt ?? event.systemPrompt;
++		// Repeated turns/reloads must not accumulate another copy.
++		if (prompt.includes(reference)) return result;
++		return { ...result, systemPrompt: `${prompt}\n\n${reference}` };
++	};
++}
+diff --git a/server/managed-workspace.ts b/server/managed-workspace.ts
+new file mode 100644
+index 0000000..95325b7
+--- /dev/null
++++ b/server/managed-workspace.ts
+@@ -0,0 +1,34 @@
++import { realpathSync } from "node:fs";
++import { realpath } from "node:fs/promises";
++import { isAbsolute, relative, resolve, sep } from "node:path";
++import { isManaged } from "./managed.js";
++
++/** The single workspace root exposed by a managed runner. */
++export const MANAGED_WORKSPACE_ROOT = "/workspace";
++
++export function managedWorkspaceRoot(env: NodeJS.ProcessEnv = process.env): string | null {
++	return isManaged(env) ? MANAGED_WORKSPACE_ROOT : null;
++}
++
++/** Lexical containment check used together with the canonical checks below. */
++export function pathWithinRoot(root: string, target: string): boolean {
++	const rel = relative(resolve(root), resolve(target));
++	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
++}
++
++/** Follow existing symlinks before accepting a managed workspace path. */
++export function isCanonicalPathWithinRootSync(root: string, target: string): boolean {
++	try {
++		return pathWithinRoot(realpathSync(root), realpathSync(target));
++	} catch {
++		return false;
++	}
++}
++
++export async function isCanonicalPathWithinRoot(root: string, target: string): Promise<boolean> {
++	try {
++		return pathWithinRoot(await realpath(root), await realpath(target));
++	} catch {
++		return false;
++	}
++}
 diff --git a/server/managed.ts b/server/managed.ts
 index 7cfcd19..c954659 100644
 --- a/server/managed.ts
@@ -2839,6 +3270,42 @@ index 7cfcd19..c954659 100644
 +
 +function credentialRefusalText(): string {
 +	return "This instance is managed: provider credentials, OAuth, and secret headers are handled by Mapache. Model selection and non-secret model metadata remain available.";
++}
+diff --git a/server/mapache-provider-auth.ts b/server/mapache-provider-auth.ts
+new file mode 100644
+index 0000000..10d9b13
+--- /dev/null
++++ b/server/mapache-provider-auth.ts
+@@ -0,0 +1,30 @@
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++
++export const isMapacheCustomProvider = (id: string): boolean => /^custom-[a-z0-9][a-z0-9-]{0,62}$/.test(id);
++
++function endpoint(value: unknown): string {
++  const url = new URL(String(value || ""));
++  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
++    throw new Error("Invalid custom provider endpoint");
++  }
++  return url.href.replace(/\/+$/, "");
++}
++
++/** Credentials are resolved only by provider ID and the endpoint saved in Mapache. */
++export function mapacheProviderKey(agentDir: string, id: string, baseUrl: string, api?: string): string {
++  if (!isMapacheCustomProvider(id) || api !== "openai-completions") {
++    throw new Error("Select an OpenAI-compatible connection saved in Mapache");
++  }
++  let credential: {key?: string; mapacheBaseUrl?: string} | undefined;
++  try {
++    credential = JSON.parse(readFileSync(join(agentDir, "auth.json"), "utf8"))[id];
++  } catch { /* Missing auth is reported without exposing file contents. */ }
++  if (!credential?.key || !credential.mapacheBaseUrl) {
++    throw new Error("Select this connection in Mapache Authentication and restart the workspace");
++  }
++  if (endpoint(baseUrl) !== endpoint(credential.mapacheBaseUrl)) {
++    throw new Error("Endpoint differs from this connection in Mapache Authentication. Update the connection there first");
++  }
++  return credential.key;
 +}
 diff --git a/server/model-admin.ts b/server/model-admin.ts
 index b217148..6f161d6 100644
@@ -3051,6 +3518,31 @@ index b2edd70..261d60a 100644
  	round: number;
  	status: string;
  	statusEn?: string;
+diff --git a/server/workspace-request-resume.ts b/server/workspace-request-resume.ts
+new file mode 100644
+index 0000000..17748d3
+--- /dev/null
++++ b/server/workspace-request-resume.ts
+@@ -0,0 +1,19 @@
++export function shouldResumeInterruptedWorkspaceRequest(messages: unknown[]): boolean {
++	for (let index = messages.length - 1; index >= 0; index--) {
++		const message = messages[index] as {role?: unknown; content?: unknown};
++		if (message.role === "assistant" && Array.isArray(message.content)) {
++			for (const part of message.content) {
++				if (!part || typeof part !== "object" || (part as {type?: unknown}).type !== "toolCall") continue;
++				let encoded = "";
++				try {
++					encoded = JSON.stringify(part);
++				} catch {
++					continue;
++				}
++				if (encoded.includes("workspace_request_ask") && encoded.includes("idempotencyKey")) return true;
++			}
++		}
++		if (message.role === "user") return false;
++	}
++	return false;
++}
 diff --git a/tests/helpers/fake-session.ts b/tests/helpers/fake-session.ts
 index 058604f..a7bd198 100644
 --- a/tests/helpers/fake-session.ts
@@ -3064,6 +3556,301 @@ index 058604f..a7bd198 100644
  }
  
  export function fakeAgentService(overrides: Loose = {}): FakeAgentService {
+diff --git a/tests/unit/automation-project-model.test.ts b/tests/unit/automation-project-model.test.ts
+new file mode 100644
+index 0000000..cb02a8c
+--- /dev/null
++++ b/tests/unit/automation-project-model.test.ts
+@@ -0,0 +1,48 @@
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { describe, expect, it } from "vitest";
++import { ClientStateStore } from "../../server/client-state.js";
++
++describe("automation workspace model selection", () => {
++  it("inherits the model and provider key from the client that most recently selected a model", () => {
++    const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-automation-model-"));
++    try {
++      const filePath = join(dir, "client-state.json");
++      writeFileSync(filePath, JSON.stringify({
++        "older-client": {
++          lastActive: Date.now(),
++          projects: [{ path: "/workspace", lastUsed: 100 }],
++          projectModels: { "/workspace": "openai/gpt-4.1" },
++          projectProviderKeys: { "/workspace": { openai: "older-key" } },
++          projectModelUpdatedAt: { "/workspace": 300 },
++        },
++        "newer-client": {
++          lastActive: Date.now(),
++          projects: [{ path: "/workspace", lastUsed: 200 }],
++          projectModels: { "/workspace": "openai/gpt-5" },
++          projectProviderKeys: { "/workspace": { openai: "current-key" } },
++          projectModelUpdatedAt: { "/workspace": 250 },
++        },
++      }));
++
++      expect(new ClientStateStore(filePath).getMostRecentlySelectedProjectSelection("/workspace")).toEqual({
++        modelId: "openai/gpt-4.1",
++        providerKeys: { openai: "older-key" },
++      });
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++
++  it("returns no inherited selection when the workspace has no saved model", () => {
++    const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-automation-model-"));
++    try {
++      const filePath = join(dir, "client-state.json");
++      writeFileSync(filePath, JSON.stringify({ "other-client": { projects: [] } }));
++      expect(new ClientStateStore(filePath).getMostRecentlySelectedProjectSelection("/workspace")).toBeUndefined();
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++});
+diff --git a/tests/unit/control-socket.test.ts b/tests/unit/control-socket.test.ts
+new file mode 100644
+index 0000000..d82b9bd
+--- /dev/null
++++ b/tests/unit/control-socket.test.ts
+@@ -0,0 +1,193 @@
++import { existsSync, mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { sendControlCommand, startControlServer } from "../../server/control-socket.js";
++
++const tempDirs: string[] = [];
++
++afterEach(() => {
++	vi.unstubAllEnvs();
++	for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
++});
++
++async function waitForSocket(path: string): Promise<void> {
++	for (let i = 0; i < 100 && !existsSync(path); i++) await new Promise((resolve) => setTimeout(resolve, 5));
++}
++
++describe("local control socket", () => {
++	it.skipIf(process.platform === "win32")("uses the runner control path for long ticket runtime directories", async () => {
++		const socketDir = mkdtempSync(join(tmpdir(), "pi-control-short-"));
++		tempDirs.push(socketDir);
++		const dataDir = "/var/lib/mapache/runtimes/auto-ticket-" + "a".repeat(64) + "/agent-state/ui";
++		vi.stubEnv("PI_WEB_CONTROL_PATH", join(socketDir, "agent.sock"));
++		const service = {
++			serviceStatus: () => ({pid: process.pid, version: "test", cwd: "/workspace", quiesced: false,
++				connectedClients: 0, activeConversations: 0, activeTools: 0, pendingMessages: 0}),
++			quiesce: async () => ({ok: true}), unquiesce: () => {},
++			startAutomation: async () => ({ok: true, runId: "ticket-run", status: "running"}),
++		};
++		const stop = startControlServer({service, dataDir, port: 9880});
++		try {
++			await waitForSocket(join(socketDir, "agent.sock"));
++			expect(await sendControlCommand(dataDir, 9880, "startAutomation", {runId: "ticket-run", prompt: "fixture"}))
++				.toMatchObject({ok: true, runId: "ticket-run", status: "running"});
++		} finally { stop(); }
++	});
++
++	it.skipIf(process.platform === "win32")("does not acknowledge quiesce until the drain completes", async () => {
++		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-control-"));
++		tempDirs.push(dataDir);
++		let activeConversations = 1;
++		const service = {
++			serviceStatus: () => ({
++				pid: process.pid,
++				version: "test",
++				cwd: "/workspace",
++				quiesced: true,
++				connectedClients: 0,
++				activeConversations,
++				activeTools: activeConversations,
++				pendingMessages: 0,
++			}),
++			quiesce: async () => {
++				await new Promise((resolve) => setTimeout(resolve, 35));
++				activeConversations = 0;
++				return { ok: true };
++			},
++			unquiesce: () => {},
++		};
++		const stop = startControlServer({ service, dataDir, port: 9876 });
++		try {
++			const socketPath = join(dataDir, "pi-web-ui.sock");
++			await waitForSocket(socketPath);
++			const startedAt = Date.now();
++			const response = await sendControlCommand(dataDir, 9876, "quiesce");
++			expect(Date.now() - startedAt).toBeGreaterThanOrEqual(25);
++			expect(response).toMatchObject({ ok: true, activeConversations: 0, activeTools: 0 });
++		} finally {
++			stop();
++		}
++	});
++
++	it.skipIf(process.platform === "win32")(
++		"returns a bounded visible failure when a drain does not finish",
++		async () => {
++			const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-control-timeout-"));
++			tempDirs.push(dataDir);
++			const service = {
++				serviceStatus: () => ({
++					pid: process.pid,
++					version: "test",
++					cwd: "/workspace",
++					quiesced: true,
++					connectedClients: 0,
++					activeConversations: 1,
++					activeTools: 1,
++					pendingMessages: 0,
++				}),
++				quiesce: async () => ({ ok: false, error: "quiesce_timeout" }),
++				unquiesce: () => {},
++			};
++			const stop = startControlServer({ service, dataDir, port: 9877 });
++			try {
++				await waitForSocket(join(dataDir, "pi-web-ui.sock"));
++				expect(await sendControlCommand(dataDir, 9877, "quiesce")).toMatchObject({
++					ok: false,
++					error: "quiesce_timeout",
++					activeConversations: 1,
++				});
++			} finally {
++				stop();
++			}
++		},
++	);
++
++	it.skipIf(process.platform === "win32")("routes private automation commands without an HTTP endpoint", async () => {
++		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-automation-control-"));
++		tempDirs.push(dataDir);
++		const calls: Array<{ command: string; value?: unknown }> = [];
++		const service = {
++			serviceStatus: () => ({
++				pid: process.pid,
++				version: "test",
++				cwd: "/workspace",
++				quiesced: false,
++				connectedClients: 0,
++				activeConversations: 0,
++				activeTools: 0,
++				pendingMessages: 0,
++			}),
++			quiesce: async () => ({ ok: true }),
++			unquiesce: () => {},
++			startAutomation: async (input: { runId: string; prompt: string; modelRef?: string }) => {
++				calls.push({ command: "start", value: input });
++				return { ok: true, runId: input.runId, conversationId: "c1", status: "running" };
++			},
++			automationStatus: (runId: string) => {
++				calls.push({ command: "status", value: runId });
++				return { ok: true, runId, conversationId: "c1", status: "running" };
++			},
++			cancelAutomation: async (runId: string) => {
++				calls.push({ command: "cancel", value: runId });
++				return { ok: true, runId, conversationId: "c1", status: "canceled" };
++			},
++		};
++		const stop = startControlServer({ service, dataDir, port: 9878 });
++		try {
++			await waitForSocket(join(dataDir, "pi-web-ui.sock"));
++			expect(await sendControlCommand(dataDir, 9878, "startAutomation", { runId: "run-1", prompt: "hello", modelRef: "openai/gpt-5" })).toMatchObject({
++				ok: true,
++				runId: "run-1",
++				status: "running",
++			});
++			expect(await sendControlCommand(dataDir, 9878, "automationStatus", { runId: "run-1" })).toMatchObject({ ok: true, status: "running" });
++			expect(await sendControlCommand(dataDir, 9878, "cancelAutomation", { runId: "run-1" })).toMatchObject({ ok: true, status: "canceled" });
++			expect(calls).toEqual([
++				{ command: "start", value: { runId: "run-1", prompt: "hello", modelRef: "openai/gpt-5" } },
++				{ command: "status", value: "run-1" },
++				{ command: "cancel", value: "run-1" },
++			]);
++		} finally {
++			stop();
++		}
++	});
++
++	it.skipIf(process.platform === "win32")("routes visible workspace request commands", async () => {
++		const dataDir = mkdtempSync(join(tmpdir(), "pi-web-ui-workspace-request-control-"));
++		tempDirs.push(dataDir);
++		const calls: Array<{ command: string; value?: unknown }> = [];
++		const service = {
++			serviceStatus: () => ({ pid: process.pid, version: "test", cwd: "/workspace", quiesced: false, connectedClients: 0, activeConversations: 0, activeTools: 0, pendingMessages: 0 }),
++			quiesce: async () => ({ ok: true }),
++			unquiesce: () => {},
++			startWorkspaceRequest: async (input: { runId: string; ticketId?: string; sourceWorkspaceId?: string; conversationTitle?: string; modelRef?: string; prompt: string }) => {
++				calls.push({ command: "start", value: input });
++				return { ok: true, runId: input.runId, conversationId: "c-request", status: "running" };
++			},
++			workspaceRequestStatus: (runId: string) => {
++				calls.push({ command: "status", value: runId });
++				return { ok: true, runId, conversationId: "c-request", status: "succeeded" };
++			},
++			cancelWorkspaceRequest: async (runId: string) => {
++				calls.push({ command: "cancel", value: runId });
++				return { ok: true, runId, conversationId: "c-request", status: "canceled" };
++			},
++		};
++		const stop = startControlServer({ service, dataDir, port: 9879 });
++		try {
++			await waitForSocket(join(dataDir, "pi-web-ui.sock"));
++			expect(await sendControlCommand(dataDir, 9879, "startWorkspaceRequest", {
++				runId: "run-2", ticketId: "ticket-2", sourceWorkspaceId: "source", conversationTitle: "Request", modelRef: "openai/gpt-5", prompt: "hello",
++			})).toMatchObject({ ok: true, runId: "run-2", status: "running" });
++			expect(await sendControlCommand(dataDir, 9879, "workspaceRequestStatus", { runId: "run-2" })).toMatchObject({ ok: true, status: "succeeded" });
++			expect(await sendControlCommand(dataDir, 9879, "cancelWorkspaceRequest", { runId: "run-2" })).toMatchObject({ ok: true, status: "canceled" });
++			expect(calls).toHaveLength(3);
++			expect(calls[0]).toEqual({ command: "start", value: {
++				runId: "run-2", ticketId: "ticket-2", sourceWorkspaceId: "source", conversationTitle: "Request", modelRef: "openai/gpt-5", prompt: "hello",
++			} });
++		} finally {
++			stop();
++		}
++	});
++});
+diff --git a/tests/unit/embedded-agent-bridge.test.ts b/tests/unit/embedded-agent-bridge.test.ts
+new file mode 100644
+index 0000000..0ce60ba
+--- /dev/null
++++ b/tests/unit/embedded-agent-bridge.test.ts
+@@ -0,0 +1,36 @@
++import { describe, expect, it } from "vitest";
++import {
++	EMBEDDED_AGENT_BRIDGE_VERSION,
++	isValidAgentAccessUrl,
++	parentOrigin,
++	parseAgentParentMessage,
++} from "../../web/src/embedded-agent-bridge";
++
++describe("embedded agent bridge", () => {
++	it("accepts only the typed access message", () => {
++		expect(parseAgentParentMessage({
++			type: "mapache.agent.access",
++			version: EMBEDDED_AGENT_BRIDGE_VERSION,
++			agentUrl: "https://runner.example/agent/?mapache_access=signed",
++		})).toEqual({
++			type: "mapache.agent.access",
++			version: 1,
++			agentUrl: "https://runner.example/agent/?mapache_access=signed",
++		});
++		expect(parseAgentParentMessage({type: "mapache.agent.access", version: 2, agentUrl: "https://runner.example/agent/"})).toBeNull();
++		expect(parseAgentParentMessage({type: "mapache.agent.access", version: 1, agentUrl: "https://evil.example/agent/?mapache_access=x"})).not.toBeNull();
++	});
++
++	it("validates renewal URL origin, path, and exactly one access query", () => {
++		const current = "https://runner.example/agent/";
++		expect(isValidAgentAccessUrl("https://runner.example/agent/?mapache_access=one", current, "/agent/")).toBe(true);
++		expect(isValidAgentAccessUrl("https://evil.example/agent/?mapache_access=one", current, "/agent/")).toBe(false);
++		expect(isValidAgentAccessUrl("https://runner.example/api/?mapache_access=one", current, "/agent/")).toBe(false);
++		expect(isValidAgentAccessUrl("https://runner.example/agent/?mapache_access=one&mapache_access=two", current, "/agent/")).toBe(false);
++	});
++
++	it("derives an exact parent origin from the referrer", () => {
++		expect(parentOrigin("https://mapache.tools/app?session=one")).toBe("https://mapache.tools");
++		expect(parentOrigin("not a URL")).toBe("");
++	});
++});
 diff --git a/tests/unit/empty-prompt-guard.test.ts b/tests/unit/empty-prompt-guard.test.ts
 index 08d43b9..f7006db 100644
 --- a/tests/unit/empty-prompt-guard.test.ts
@@ -3076,6 +3863,418 @@ index 08d43b9..f7006db 100644
  			emit: (msg: unknown) => emitted.push(msg),
  			flushSnapshot,
  			assertSubagentWorktreeAdmission: vi.fn(),
+diff --git a/tests/unit/goal-persistence.test.ts b/tests/unit/goal-persistence.test.ts
+new file mode 100644
+index 0000000..e19b1b4
+--- /dev/null
++++ b/tests/unit/goal-persistence.test.ts
+@@ -0,0 +1,161 @@
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import type { AgentSession } from "@earendil-works/pi-coding-agent";
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { ClientStateStore, type ConversationGoalState } from "../../server/client-state.js";
++import { GoalService, type GoalConversation, type GoalHost } from "../../server/goal-service.js";
++import type { ServerMessage } from "../../server/protocol.js";
++
++const tempDirs: string[] = [];
++
++afterEach(() => {
++	for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
++});
++
++function makeSavedGoal(): ConversationGoalState {
++	return {
++		goal: "Keep the native goal attached to this conversation",
++		reviewModel: "openai/gpt-5",
++		maxRounds: 3,
++		locked: false,
++		round: 2,
++		verdict: "fail",
++		status: "Needs one more pass",
++		statusEn: "Needs one more pass",
++		feedback: "Preserve the conversation identity.",
++		savedAt: 123,
++	};
++}
++
++function makeHarness(filePath: string, sessionId: string, clientId: string) {
++	const sent: string[] = [];
++	const session = {
++		sessionId,
++		sessionFile: `/var/lib/pi/sessions/${sessionId}.jsonl`,
++		isStreaming: false,
++		sendUserMessage: vi.fn(async (message: string) => {
++			sent.push(message);
++		}),
++	} as unknown as AgentSession;
++	const conv = {
++		id: "c1",
++		cwd: "/workspace",
++		session,
++		wizardRunning: false,
++		goalGeneration: 0,
++		goalReviewGeneration: 0,
++		goal: undefined,
++	} as unknown as GoalConversation;
++	const emitted: ServerMessage[] = [];
++	const flushSnapshot = vi.fn();
++	const host = {
++		clientId,
++		agentDir: "/tmp/agent",
++		stateStore: new ClientStateStore(filePath),
++		webUi: { cancelPendingDialogs: vi.fn() },
++		emit: (msg: ServerMessage) => emitted.push(msg),
++		flushSnapshot,
++		isDisposed: () => false,
++		quiesced: () => false,
++		quiesceBlocked: () => false,
++		activeConvId: () => conv.id,
++		activeConv: () => conv,
++		getConv: (id: string) => (id === conv.id ? conv : undefined),
++		conversations: () => [conv],
++		cwd: () => conv.cwd,
++		reviewSettings: () => ({ reviewPrompt: "", reviewDisabledSkills: [] }),
++		gitDiff: async () => "",
++		goalModeEnabled: () => true,
++		spawnRoleAgent: vi.fn(),
++		waitRoleAgent: vi.fn(),
++		sendRoleAgent: vi.fn(),
++		readRoleAgent: vi.fn(),
++		hasConv: () => true,
++	} as unknown as GoalHost;
++	const service = new GoalService(host);
++	conv.goal = service.makeGoalStatus();
++	return { conv, emitted, flushSnapshot, host, sent, service };
++}
++
++describe("native Goal persistence", () => {
++	it("stores display state in the global client-state entry and restores it for a new browser client", () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-persistence-"));
++		tempDirs.push(dir);
++		const filePath = join(dir, "client-state.json");
++		const saved = makeSavedGoal();
++		new ClientStateStore(filePath).saveConversationGoal("session:stable-1", saved);
++
++		const reloaded = new ClientStateStore(filePath);
++		expect(reloaded.getConversationGoal("session:stable-1")).toEqual(saved);
++		expect(reloaded.getConversationGoal("session:other")).toBeUndefined();
++		const disk = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
++		expect(disk.__settings__).toMatchObject({ conversationGoals: { "session:stable-1": saved } });
++	});
++
++	it("restores a goal paused without starting review work, then resumes only on explicit action", async () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-restore-"));
++		tempDirs.push(dir);
++		const filePath = join(dir, "client-state.json");
++		new ClientStateStore(filePath).saveConversationGoal("session:stable-1", makeSavedGoal());
++
++		const { conv, flushSnapshot, sent, service } = makeHarness(filePath, "stable-1", "fresh-browser-client");
++		service.restoreGoalStatus(conv);
++
++		expect(conv.goal).toMatchObject({
++			conversationId: "c1",
++			goal: "Keep the native goal attached to this conversation",
++			reviewModel: "openai/gpt-5",
++			maxRounds: 3,
++			locked: false,
++			round: 2,
++			verdict: "fail",
++			paused: true,
++			reviewing: false,
++			wizard: { active: false, draft: "", step: 0 },
++		});
++
++		// Reconnect/history open must not kick the model or start the reviewer.
++		expect(service.onAgentEnd(conv, false)).toBeNull();
++		expect(sent).toHaveLength(0);
++
++		const start = vi.spyOn(service, "setGoal").mockResolvedValue(undefined);
++		await service.resumeGoal();
++		expect(conv.goal.paused).toBe(false);
++		expect(start).toHaveBeenCalledWith("Keep the native goal attached to this conversation", expect.objectContaining({targetConvId: "c1", reviewModel: "openai/gpt-5", maxRounds: 3}));
++		expect(sent).toHaveLength(0);
++	});
++
++	it("keeps restored state scoped to the stable upstream session identity", () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-scope-"));
++		tempDirs.push(dir);
++		const filePath = join(dir, "client-state.json");
++		new ClientStateStore(filePath).saveConversationGoal("session:stable-1", makeSavedGoal());
++
++		const first = makeHarness(filePath, "stable-1", "client-a");
++		const second = makeHarness(filePath, "stable-2", "client-b");
++		first.service.restoreGoalStatus(first.conv);
++		second.service.restoreGoalStatus(second.conv);
++
++		expect(first.conv.goal.goal).toBe("Keep the native goal attached to this conversation");
++		expect(second.conv.goal.goal).toBeNull();
++		expect(second.conv.goal.paused).toBe(false);
++	});
++
++	it("pauses a native goal and invalidates review work during quiesce", async () => {
++		const dir = mkdtempSync(join(tmpdir(), "pi-web-ui-goal-quiesce-"));
++		tempDirs.push(dir);
++		const harness = makeHarness(join(dir, "client-state.json"), "stable-1", "client-a");
++		await harness.service.setGoal("Finish the drain-safe goal", { autoStart: false });
++
++		await harness.service.quiesce();
++
++		expect(harness.conv.goal).toMatchObject({
++			goal: "Finish the drain-safe goal",
++			paused: true,
++			reviewing: false,
++			statusEn: "Goal paused while the server is stopping…",
++		});
++		expect(harness.conv.goalGeneration).toBe(2);
++	});
++});
+diff --git a/tests/unit/managed-reference.test.ts b/tests/unit/managed-reference.test.ts
+new file mode 100644
+index 0000000..e667e2d
+--- /dev/null
++++ b/tests/unit/managed-reference.test.ts
+@@ -0,0 +1,130 @@
++import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import {
++	DefaultResourceLoader,
++	ExtensionRunner,
++	SessionManager,
++	type BeforeAgentStartEvent,
++	type ModelRegistry,
++} from "@earendil-works/pi-coding-agent";
++import { MAPACHE_REFERENCE_PATH, withManagedReference } from "../../server/managed-reference.js";
++
++const reference = "# Mapache operating reference\nUse localhost:port in managed Chrome.";
++const original = "SYSTEM.md instructions\n\nAvailable tools: read\nProject AGENTS.md\nUser APPEND_SYSTEM.md";
++const event = (systemPrompt = original): BeforeAgentStartEvent => ({
++	type: "before_agent_start",
++	messageType: "user",
++	prompt: "user request",
++	systemPrompt,
++	systemPromptOptions: { cwd: root, selectedTools: [], hiddenTools: [], toolSnippets: {}, toolGuidelines: {}, promptGuidelines: [], appendSystemPrompt: "", sections: {}, contextFiles: [], skills: [] },
++});
++let root: string;
++let path: string;
++beforeEach(() => {
++	root = mkdtempSync(join(tmpdir(), "managed-reference-"));
++	path = join(root, "mapache.md");
++	writeFileSync(path, `\n${reference}\n`);
++});
++afterEach(() => {
++	vi.restoreAllMocks();
++	rmSync(root, { recursive: true, force: true });
++});
++
++function wrap(compose: Parameters<typeof withManagedReference>[0] = () => undefined) {
++	return withManagedReference(compose, { PI_WEB_MANAGED: "1" }, path);
++}
++
++describe("managed operating reference", () => {
++	it("appends exactly once while preserving all existing instructions and repeated turns", () => {
++		const handler = wrap();
++		const expected = `${original}\n\n${reference}`;
++		expect(handler(event())?.systemPrompt).toBe(expected);
++		expect(handler(event())?.systemPrompt).toBe(expected);
++		// No override needed when a chained prompt already includes the reference.
++		expect(handler(event(expected))).toBeUndefined();
++	});
++
++	it("appends after custom composition even when it omits the append token", () => {
++		const composed = "Custom composer instructions\nProject rules";
++		const message = { customType: "example", content: "retain", display: false };
++		const handler = wrap(() => ({ systemPrompt: composed, message }));
++		expect(handler(event())).toEqual({ systemPrompt: `${composed}\n\n${reference}`, message });
++	});
++
++	it.each(["append", "replace", "replace with SYSTEM.md", "empty template"])(
++		"preserves the existing %s template result",
++		(mode) => {
++			const composed = mode === "empty template" ? original : `${mode} role\nProject rules\nUser append`;
++			const handler = wrap(() => (mode === "empty template" ? undefined : { systemPrompt: composed }));
++			expect(handler(event())?.systemPrompt).toBe(`${composed}\n\n${reference}`);
++		},
++	);
++
++	it.each([{}, { PI_WEB_MANAGED: "0" }, { PI_WEB_MANAGED: "false" }])(
++		"does not read files or alter the composer when unmanaged/disabled: %j",
++		(env) => {
++			const compose = () => ({ systemPrompt: "unchanged" });
++			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
++			expect(withManagedReference(compose, env, join(root, "missing"))).toBe(compose);
++			expect(warn).not.toHaveBeenCalled();
++		},
++	);
++
++	it.each(["missing", "empty"])("keeps existing prompt for %s reference with a safe warning", (kind) => {
++		if (kind === "missing") rmSync(path);
++		else writeFileSync(path, " \n\t");
++		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
++		const compose = () => ({ systemPrompt: original });
++		expect(wrap(compose)).toBe(compose);
++		expect(warn).toHaveBeenCalledOnce();
++		expect(warn.mock.calls[0][0]).not.toContain(path);
++	});
++
++	it("loads fresh image content when a runtime is recreated/resumed", () => {
++		const first = wrap();
++		writeFileSync(path, "Updated image reference");
++		const resumed = wrap();
++		expect(first(event())?.systemPrompt).toContain(reference);
++		expect(resumed(event())?.systemPrompt).toBe(`${original}\n\nUpdated image reference`);
++	});
++
++	it("uses the supported SDK hook and preserves earlier extension instructions without a model call", async () => {
++		const loader = new DefaultResourceLoader({
++			cwd: root,
++			agentDir: root,
++			noExtensions: true,
++			noSkills: true,
++			noPromptTemplates: true,
++			extensionFactories: [
++				(pi) => {
++					pi.on("before_agent_start", (e) => ({ systemPrompt: `${e.systemPrompt}\nEarlier extension` }));
++					pi.on("before_agent_start", wrap());
++				},
++			],
++		});
++		await loader.reload();
++		const loaded = loader.getExtensions();
++		expect(loaded.errors).toEqual([]);
++		const runner = new ExtensionRunner(
++			loaded.extensions,
++			loaded.runtime,
++			root,
++			SessionManager.inMemory(root),
++			{} as ModelRegistry,
++		);
++		for (let turn = 0; turn < 2; turn++) {
++			const result = await runner.emitBeforeAgentStart({messageType: "user", prompt: "request"}, {cwd: root, forceSystemPrompt: original});
++			expect(result?.systemPromptOptions.forceSystemPrompt).toBe(`${original}\nEarlier extension\n\n${reference}`);
++		}
++	});
++
++	it("wraps the common runtime factory persona hook, covering ordinary, resumed and subagent creation", () => {
++		const source = readFileSync(new URL("../../server/agent-service.ts", import.meta.url), "utf8");
++		const factory = source.slice(source.indexOf("private makeRuntimeFactory("));
++		expect(factory).toContain('pi.on("before_agent_start", withManagedReference((event) => {');
++		expect(factory).toContain('name: "pi-webui-persona"');
++		expect(MAPACHE_REFERENCE_PATH).toBe("/app/reference/mapache.md");
++	});
++});
+diff --git a/tests/unit/managed-workspace.test.ts b/tests/unit/managed-workspace.test.ts
+new file mode 100644
+index 0000000..00ef723
+--- /dev/null
++++ b/tests/unit/managed-workspace.test.ts
+@@ -0,0 +1,103 @@
++import assert from "node:assert/strict";
++import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import { dirname, join } from "node:path";
++import { SessionManager } from "@earendil-works/pi-coding-agent";
++import { describe, it } from "vitest";
++import {
++  isCanonicalPathWithinRoot,
++  isCanonicalPathWithinRootSync,
++  pathWithinRoot,
++} from "../../server/managed-workspace.js";
++
++describe("managed workspace", () => {
++  it("checks canonical paths and rejects symlink escapes", async () => {
++    const root = await mkdtemp(join(tmpdir(), "pi-web-ui-managed-workspace-"));
++    const workspace = join(root, "workspace");
++    const outside = join(root, "outside");
++    const link = join(workspace, "link");
++    await mkdir(workspace);
++    await mkdir(outside);
++    await symlink(outside, link);
++
++    assert.equal(pathWithinRoot(workspace, join(workspace, "project")), true);
++    assert.equal(pathWithinRoot(workspace, outside), false);
++    assert.equal(isCanonicalPathWithinRootSync(workspace, workspace), true);
++    assert.equal(isCanonicalPathWithinRootSync(workspace, link), false);
++    assert.equal(await isCanonicalPathWithinRoot(workspace, link), false);
++
++    await rm(root, { recursive: true, force: true });
++  });
++
++  it("shares flat SDK history IDs and branches across independent clients", async () => {
++    const root = await mkdtemp(join(tmpdir(), "pi-web-ui-flat-history-"));
++    const workspace = join(root, "workspace");
++    const history = join(root, "history");
++    await mkdir(workspace);
++    await mkdir(history);
++
++    const manager = SessionManager.create(workspace, history, {
++      id: "task11-shared-session",
++    });
++    const userId = manager.appendMessage({
++      role: "user",
++      content: [{ type: "text", text: "shared" }],
++      timestamp: Date.now(),
++    } as never);
++    manager.appendMessage({
++      role: "assistant",
++      content: [{ type: "text", text: "reply" }],
++      api: "openai-completions",
++      provider: "openai",
++      model: "gpt-4o-mini",
++      usage: {
++        input: 1,
++        output: 1,
++        cacheRead: 0,
++        cacheWrite: 0,
++        totalTokens: 2,
++        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
++      },
++      stopReason: "stop",
++      timestamp: Date.now(),
++    } as never);
++    manager.branch(userId);
++    manager.appendMessage({
++      role: "assistant",
++      content: [{ type: "text", text: "branched" }],
++      api: "openai-completions",
++      provider: "openai",
++      model: "gpt-4o-mini",
++      usage: {
++        input: 1,
++        output: 1,
++        cacheRead: 0,
++        cacheWrite: 0,
++        totalTokens: 2,
++        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
++      },
++      stopReason: "stop",
++      timestamp: Date.now(),
++    } as never);
++
++    const sessionFile = manager.getSessionFile();
++    assert.ok(sessionFile);
++    assert.equal(dirname(sessionFile), history);
++    const firstClient = await SessionManager.list(workspace, history);
++    const secondClient = await SessionManager.list(workspace, history);
++    assert.deepEqual(
++      secondClient.map((entry) => entry.id),
++      firstClient.map((entry) => entry.id),
++    );
++    assert.equal(firstClient[0]?.id, "task11-shared-session");
++
++    const opened = SessionManager.open(sessionFile, history);
++    assert.equal(opened.getSessionId(), "task11-shared-session");
++    assert.equal(opened.getCwd(), workspace);
++    assert.equal(opened.getSessionDir(), history);
++    assert.equal(opened.getLeafId(), manager.getLeafId());
++    assert.equal(opened.getBranch().length, 2);
++
++    await rm(root, { recursive: true, force: true });
++  });
++});
 diff --git a/tests/unit/managed.test.ts b/tests/unit/managed.test.ts
 index 011020c..e0487ce 100644
 --- a/tests/unit/managed.test.ts
@@ -3166,6 +4365,80 @@ index 011020c..e0487ce 100644
 +		).toBeNull();
 +	});
  });
+diff --git a/tests/unit/mapache-custom-provider.test.ts b/tests/unit/mapache-custom-provider.test.ts
+new file mode 100644
+index 0000000..df0856f
+--- /dev/null
++++ b/tests/unit/mapache-custom-provider.test.ts
+@@ -0,0 +1,68 @@
++import {mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
++import {tmpdir} from "node:os";
++import {join} from "node:path";
++import {createServer} from "node:http";
++import type {AddressInfo} from "node:net";
++import {ModelRuntime} from "@earendil-works/pi-coding-agent";
++import {afterEach, expect, it} from "vitest";
++import {ModelAdminService, type ModelAdminHost} from "../../server/model-admin.js";
++import {mapacheProviderKey} from "../../server/mapache-provider-auth.js";
++import type {ServerMessage} from "../../server/protocol.js";
++
++const roots: string[] = [];
++afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
++
++it("uses canonical credentials for discovery and Pi streaming/tool calls without serializing secrets", async () => {
++  const dir = mkdtempSync(join(tmpdir(), "mapache-custom-")); roots.push(dir);
++  const requests: {url: string; key: string | undefined}[] = [];
++  const server = createServer((req, res) => {
++    requests.push({url: req.url || "", key: req.headers.authorization});
++    if (req.headers.authorization !== "Bearer test-only-key") { res.writeHead(401).end(); return; }
++    if (req.method === "GET") {
++      res.setHeader("content-type", "application/json");
++      res.end(JSON.stringify({data: [{id: "qwen", context_window: 32768}]})); return;
++    }
++    req.resume();
++    req.on("end", () => {
++      res.writeHead(200, {"content-type": "text/event-stream"});
++      res.write(`data: ${JSON.stringify({id: "chat-fixture", object: "chat.completion.chunk", created: 1, model: "qwen", choices: [{index: 0, delta: {role: "assistant", tool_calls: [{index: 0, id: "call-fixture", type: "function", function: {name: "echo", arguments: '{"text":"hello"}'}}]}, finish_reason: null}]})}\n\n`);
++      res.write(`data: ${JSON.stringify({id: "chat-fixture", object: "chat.completion.chunk", created: 1, model: "qwen", choices: [{index: 0, delta: {}, finish_reason: "tool_calls"}]})}\n\n`);
++      res.end("data: [DONE]\n\n");
++    });
++  });
++  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
++  try {
++    const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
++    const auth = {"custom-lab": {type: "api_key", key: "test-only-key", mapacheBaseUrl: baseUrl}, openai: {type: "api_key", key: "unrelated-key"}};
++    writeFileSync(join(dir, "auth.json"), JSON.stringify(auth));
++    writeFileSync(join(dir, "models.json"), JSON.stringify({providers: {"custom-lab": {baseUrl, api: "openai-completions", models: []}}}));
++    const runtime = await ModelRuntime.create({authPath: join(dir, "auth.json"), modelsPath: join(dir, "models.json"), modelsStorePath: join(dir, "cache.json"), allowModelNetwork: false});
++    const messages: ServerMessage[] = [];
++    const host: ModelAdminHost = {agentDir: dir, managed: true, modelRuntime: () => runtime, emit: (m) => messages.push(m), flushSnapshot() {}, isDisposed: () => false, invalidatePiConfig() {}, pushModels: async () => {}};
++    const admin = new ModelAdminService(host);
++    await admin.fetchModelsList(1, baseUrl, undefined, undefined, "openai-completions", undefined, "custom-lab");
++    expect(messages).toContainEqual(expect.objectContaining({type: "fetch_models_result", ok: true}));
++    await admin.refreshProviderModels("custom-lab", 2);
++    expect(messages).toContainEqual(expect.objectContaining({type: "refresh_provider_result", ok: true}));
++    await admin.saveModelConfig("custom-lab", {providerId: "custom-lab", baseUrl, api: "openai-completions", models: [{id: "qwen", contextWindow: 32768, maxTokens: 1024}]});
++    const model = runtime.getModel("custom-lab", "qwen");
++    expect(model).toBeDefined();
++    const result = await runtime.complete(model!, {messages: [{role: "user", content: "Call echo", timestamp: Date.now()}]});
++    expect(result.content).toContainEqual(expect.objectContaining({type: "toolCall", name: "echo", arguments: {text: "hello"}}));
++    expect(requests.some((r) => r.url === "/v1/chat/completions")).toBe(true);
++    expect(requests.every((r) => r.key === "Bearer test-only-key")).toBe(true);
++    expect(readFileSync(join(dir, "models.json"), "utf8")).not.toContain("test-only-key");
++    expect(JSON.stringify(messages)).not.toContain("test-only-key");
++    const before = requests.length;
++    await admin.fetchModelsList(3, "https://other.example/v1", undefined, undefined, "openai-completions", undefined, "custom-lab");
++    expect(requests).toHaveLength(before);
++    expect(messages).toContainEqual(expect.objectContaining({type: "fetch_models_result", reqId: 3, ok: false}));
++    expect(() => mapacheProviderKey(dir, "openai", baseUrl, "openai-completions")).toThrow();
++    expect(() => mapacheProviderKey(dir, "custom-missing", baseUrl, "openai-completions")).toThrow();
++    await admin.saveModelConfig("custom-lab", {providerId: "custom-lab", baseUrl: "https://other.example/v1", api: "openai-completions", models: [{id: "qwen"}]});
++    expect(JSON.parse(readFileSync(join(dir, "models.json"), "utf8")).providers["custom-lab"].baseUrl).toBe(baseUrl);
++  } finally {
++    server.closeAllConnections();
++    await new Promise<void>((resolve) => server.close(() => resolve()));
++  }
++}, 30000);
 diff --git a/tests/unit/model-admin-merge.test.ts b/tests/unit/model-admin-merge.test.ts
 index e46784f..df26729 100644
 --- a/tests/unit/model-admin-merge.test.ts
@@ -3247,6 +4520,107 @@ index 10b56ec..8cdf859 100644
  		getLang: () => "en",
  		parentExecution: () => undefined,
  		localParentId: () => undefined,
+diff --git a/tests/unit/quiesce.test.ts b/tests/unit/quiesce.test.ts
+new file mode 100644
+index 0000000..a4b377a
+--- /dev/null
++++ b/tests/unit/quiesce.test.ts
+@@ -0,0 +1,95 @@
++import { fakeClientSession } from "../helpers/fake-session.js";
++import { performance } from "node:perf_hooks";
++import { describe, expect, it, vi } from "vitest";
++import { ClientSession } from "../../server/agent-service.js";
++
++function delay(ms: number): Promise<void> {
++	return new Promise((resolve) => setTimeout(resolve, ms));
++}
++
++function makeClient(session: Record<string, unknown>, timeoutGoal?: () => Promise<void>) {
++	let idle = false;
++	const conv = {
++		id: "c1",
++		session,
++		runtime: { session },
++		toolStartTimes: new Map(),
++		queueSteering: ["queued steer"],
++		queueFollowUp: ["queued follow-up"],
++		terminals: { killAll: vi.fn() },
++		promptedSinceActive: false,
++		lastActiveAt: 0,
++		lastSdkEventAt: 0,
++		stallNoticed: false,
++		title: "New chat",
++	};
++	Object.defineProperty(session, "isStreaming", { get: () => !idle, configurable: true });
++	Object.defineProperty(session, "isIdle", { get: () => idle, configurable: true });
++	(session as any).abort = async () => {
++		await delay(30);
++		idle = true;
++	};
++	const client = fakeClientSession() as ClientSession & Record<string, any>;
++	Object.assign(client, {
++		activeId: "c1",
++		convs: new Map([["c1", conv]]),
++		goalSvc: { quiesce: timeoutGoal || (async () => {}) },
++		bashKills: new Set(),
++		bg: { killAll: async () => [] },
++		disposed: false,
++		sinks: new Set(),
++		pendingNotices: [],
++		flushSnapshot: vi.fn(),
++		cancelPendingQuestions: vi.fn(),
++		isQuiesced: () => false,
++	});
++	return { client, conv, session };
++}
++
++describe("agent quiesce", () => {
++	it("waits for a delayed abort before reporting that writers stopped", async () => {
++		const { client, conv, session } = makeClient({
++			clearQueue: vi.fn(),
++			pendingMessageCount: 0,
++			abort: vi.fn(),
++		});
++		const startedAt = performance.now();
++		const drained = await client.quiesce(100);
++
++		expect(drained).toBe(true);
++		expect(performance.now() - startedAt).toBeGreaterThanOrEqual(25);
++		expect(session.clearQueue).toHaveBeenCalledOnce();
++		expect(conv.terminals.killAll).toHaveBeenCalledOnce();
++		expect(client.flushSnapshot).toHaveBeenCalledWith(true);
++	});
++
++	it("returns a bounded failure when an agent refuses to stop", async () => {
++		const { client, session } = makeClient({
++			clearQueue: vi.fn(),
++			pendingMessageCount: 0,
++			abort: vi.fn(() => new Promise<void>(() => {})),
++		});
++		Object.defineProperty(session, "isStreaming", { get: () => true, configurable: true });
++		Object.defineProperty(session, "isIdle", { get: () => false, configurable: true });
++
++		const startedAt = performance.now();
++		const drained = await client.quiesce(30);
++
++		expect(drained).toBe(false);
++		expect(performance.now() - startedAt).toBeLessThan(300);
++	});
++
++	it("rejects a direct prompt before slash or model work can execute", async () => {
++		const prompt = vi.fn(async () => {});
++		const { client, conv } = makeClient({
++			clearQueue: vi.fn(),
++			pendingMessageCount: 0,
++			prompt,
++		});
++		client.isQuiesced = () => true;
++		await client.prompt("/arbitrary-extension-command");
++
++		expect(prompt).not.toHaveBeenCalled();
++		expect(conv.promptedSinceActive).toBe(false);
++	});
++});
 diff --git a/tests/unit/restart-resume.test.ts b/tests/unit/restart-resume.test.ts
 index 59cfb02..83319b5 100644
 --- a/tests/unit/restart-resume.test.ts
@@ -3355,6 +4729,112 @@ index 22115a8..fc2c279 100644
  		expect(c.bridgeRef.current.clear).not.toHaveBeenCalled();
  		expect(c.setTimeout).not.toHaveBeenCalled();
  	});
+diff --git a/tests/unit/workspace-request-models.test.ts b/tests/unit/workspace-request-models.test.ts
+new file mode 100644
+index 0000000..41239be
+--- /dev/null
++++ b/tests/unit/workspace-request-models.test.ts
+@@ -0,0 +1,57 @@
++import { fakeAgentService } from "../helpers/fake-session.js";
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { AgentService, ClientSession } from "../../server/agent-service.js";
++
++type ServiceHarness = AgentService & Record<string, any>;
++
++function makeService(): ServiceHarness {
++	const service = fakeAgentService() as ServiceHarness;
++	Object.assign(service, {
++		clients: new Map(),
++		internalRequestClient: null,
++		internalRequestClientPromise: null,
++		cwd: "/workspace",
++		stateStore: {},
++	});
++	return service;
++}
++
++function modelClient(): ClientSession {
++	return {
++		modelCatalog: () => [{ providerId: "openai", modelId: "gpt-5", name: "GPT-5", available: true }],
++		savedModelSelection: () => null,
++	} as unknown as ClientSession;
++}
++
++afterEach(() => vi.restoreAllMocks());
++
++describe("browserless model discovery", () => {
++	it("shares one in-flight internal client initialization", async () => {
++		let release: (client: ClientSession) => void = () => {};
++		const creating = new Promise<ClientSession>((resolve) => { release = resolve; });
++		const create = vi.spyOn(ClientSession, "create").mockReturnValue(creating);
++		const service = makeService();
++
++		const first = service.workspaceRequestModels();
++		const second = service.workspaceRequestModels();
++		await Promise.resolve();
++		expect(create).toHaveBeenCalledOnce();
++		release(modelClient());
++
++		await expect(first).resolves.toMatchObject({ ok: true, models: [{ modelId: "gpt-5" }] });
++		await expect(second).resolves.toMatchObject({ ok: true, models: [{ modelId: "gpt-5" }] });
++	});
++
++	it("returns only safe client-initialization evidence", async () => {
++		vi.spyOn(ClientSession, "create").mockRejectedValue(new Error("client initialization failed: secret-token"));
++		const response = await makeService().workspaceRequestModels();
++
++		expect(response).toEqual({
++			ok: false,
++			error: "workspace_request_model_client_initialization_failed",
++			retryable: true,
++			stage: "client_initialization",
++		});
++		expect(JSON.stringify(response)).not.toContain("secret-token");
++	});
++});
+diff --git a/tests/unit/workspace-request-resume.test.ts b/tests/unit/workspace-request-resume.test.ts
+new file mode 100644
+index 0000000..b596a42
+--- /dev/null
++++ b/tests/unit/workspace-request-resume.test.ts
+@@ -0,0 +1,37 @@
++import assert from "node:assert/strict";
++import {test} from "vitest";
++import {shouldResumeInterruptedWorkspaceRequest} from "../../server/workspace-request-resume.js";
++
++test("resumes a persisted ask with its stable idempotency key", () => {
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "Ask Research"},
++		{role: "assistant", content: [{type: "toolCall", name: "mcp", arguments: {
++			tool: "workspace_request_ask",
++			args: {targetWorkspaceId: "research", idempotencyKey: "research-1"},
++		}}]},
++		{role: "toolResult", content: "runner stopped"},
++	]), true);
++});
++
++test("does not resume unrelated or incomplete request calls", () => {
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "List targets"},
++		{role: "assistant", content: [{type: "toolCall", name: "workspace_request_targets"}]},
++	]), false);
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "Ask Research"},
++		{role: "assistant", content: [{type: "toolCall", name: "workspace_request_ask"}]},
++	]), false);
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "user", content: "Explain the implementation"},
++		{role: "assistant", content: "workspace_request_ask requires idempotencyKey"},
++	]), false);
++});
++
++test("does not cross into an earlier user turn", () => {
++	assert.equal(shouldResumeInterruptedWorkspaceRequest([
++		{role: "assistant", content: "workspace_request_ask idempotencyKey"},
++		{role: "user", content: "Do something else"},
++		{role: "assistant", content: "interrupted"},
++	]), false);
++});
 diff --git a/web/index.html b/web/index.html
 index 2279de4..5a5af87 100644
 --- a/web/index.html
@@ -3577,6 +5057,148 @@ index adbef41..454810f 100644
  		if (!flow || !(node instanceof Element)) return null;
  		let el: Element | null = node;
  		while (el && el.parentElement !== flow) el = el.parentElement;
+diff --git a/web/src/embedded-agent-bridge.ts b/web/src/embedded-agent-bridge.ts
+new file mode 100644
+index 0000000..3bc5f23
+--- /dev/null
++++ b/web/src/embedded-agent-bridge.ts
+@@ -0,0 +1,136 @@
++import { appBase } from "./base-url";
++
++export const EMBEDDED_AGENT_BRIDGE_VERSION = 1 as const;
++export const AGENT_ACCESS_RENEWED_EVENT = "mapache-agent-access-renewed";
++export type AgentRenewalReason = "expired" | "bootstrap" | "connection-error";
++
++export type AgentParentMessage = {
++	type: "mapache.agent.access";
++	version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++	agentUrl: string;
++};
++
++export type AgentChildMessage =
++	| {
++			type: "mapache.agent.ready";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++		}
++	| {
++			type: "mapache.agent.navigate";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++			surface: "chrome";
++		}
++	| {
++			type: "mapache.agent.renewal-request";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++			reason: AgentRenewalReason;
++		}
++	| {
++			type: "mapache.agent.status";
++			version: typeof EMBEDDED_AGENT_BRIDGE_VERSION;
++			status: "access-renewed" | "access-error";
++			error?: "access_refresh_failed";
++		};
++
++type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
++
++export function parseAgentParentMessage(value: unknown): AgentParentMessage | null {
++	if (!value || typeof value !== "object") return null;
++	const candidate = value as Partial<AgentParentMessage>;
++	if (candidate.version !== EMBEDDED_AGENT_BRIDGE_VERSION || candidate.type !== "mapache.agent.access") return null;
++	if (typeof candidate.agentUrl !== "string" || candidate.agentUrl.length === 0 || candidate.agentUrl.length > 4096) return null;
++	return { type: candidate.type, version: candidate.version, agentUrl: candidate.agentUrl };
++}
++
++export function parentOrigin(referrer: string): string {
++	if (!referrer) return "";
++	try {
++		return new URL(referrer).origin;
++	} catch {
++		return "";
++	}
++}
++
++export function isValidAgentAccessUrl(value: string, currentUrl: string, expectedPath: string): boolean {
++	try {
++		const target = new URL(value, currentUrl);
++		const current = new URL(currentUrl);
++		return target.origin === current.origin && target.pathname === expectedPath &&
++			target.searchParams.getAll("mapache_access").length === 1 &&
++			target.searchParams.get("mapache_access") !== "";
++	} catch {
++		return false;
++	}
++}
++
++export async function refreshEmbeddedAgentAccess(
++	agentUrl: string,
++	{fetchImpl = globalThis.fetch, currentUrl = globalThis.location?.href || ""}: {fetchImpl?: FetchLike; currentUrl?: string} = {},
++): Promise<boolean> {
++	const expected = new URL(appBase(), currentUrl || "http://localhost/agent/");
++	if (!isValidAgentAccessUrl(agentUrl, currentUrl || expected.href, expected.pathname)) return false;
++	try {
++		const response = await fetchImpl(agentUrl, {
++			cache: "no-store",
++			credentials: "include",
++			redirect: "follow",
++		});
++		if (!response.ok) return false;
++		globalThis.window?.dispatchEvent(new Event(AGENT_ACCESS_RENEWED_EVENT));
++		return true;
++	} catch {
++		return false;
++	}
++}
++
++export function postAgentBridgeMessage(message: AgentChildMessage): boolean {
++	if (typeof window === "undefined" || window.parent === window) return false;
++	const origin = parentOrigin(document.referrer);
++	if (!origin) return false;
++	window.parent.postMessage(message, origin);
++	return true;
++}
++
++export function requestEmbeddedAgentAccess(reason: AgentRenewalReason): boolean {
++	if (reason !== "expired" && reason !== "bootstrap" && reason !== "connection-error") return false;
++	return postAgentBridgeMessage({
++		type: "mapache.agent.renewal-request",
++		version: EMBEDDED_AGENT_BRIDGE_VERSION,
++		reason,
++	});
++}
++
++export function openEmbeddedSurface(surface: "chrome"): boolean {
++	return postAgentBridgeMessage({
++		type: "mapache.agent.navigate",
++		version: EMBEDDED_AGENT_BRIDGE_VERSION,
++		surface,
++	});
++}
++
++export function installEmbeddedAgentBridge(): () => void {
++	if (typeof window === "undefined" || window.parent === window) return () => {};
++	const expectedOrigin = parentOrigin(document.referrer);
++	if (!expectedOrigin) return () => {};
++	const parent = window.parent;
++	const onMessage = (event: MessageEvent<unknown>) => {
++		if (event.source !== parent || event.origin !== expectedOrigin) return;
++		const message = parseAgentParentMessage(event.data);
++		if (!message) return;
++		void refreshEmbeddedAgentAccess(message.agentUrl).then((ok) => {
++			postAgentBridgeMessage(ok ? {
++				type: "mapache.agent.status",
++				version: EMBEDDED_AGENT_BRIDGE_VERSION,
++				status: "access-renewed",
++			} : {
++				type: "mapache.agent.status",
++				version: EMBEDDED_AGENT_BRIDGE_VERSION,
++				status: "access-error",
++				error: "access_refresh_failed",
++			});
++		});
++	};
++	window.addEventListener("message", onMessage);
++	postAgentBridgeMessage({type: "mapache.agent.ready", version: EMBEDDED_AGENT_BRIDGE_VERSION});
++	return () => window.removeEventListener("message", onMessage);
++}
 diff --git a/web/src/i18n/messages/core/en.json b/web/src/i18n/messages/core/en.json
 index 75876a6..083423f 100644
 --- a/web/src/i18n/messages/core/en.json
