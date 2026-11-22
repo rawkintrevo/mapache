@@ -92,6 +92,10 @@ test("software installation guidance is discoverable and covers runtime persiste
     "actual runner stop/start",
     "GOOGLE_APPLICATION_CREDENTIALS",
     "Do not equate",
+    "/workspace/.local/bin",
+    "/root/.local/bin",
+    "MAPACHE_USER_BIN_DIR",
+    "owner-scoped persistent Cloud Storage",
   ]) assert.ok(guidance.toLowerCase().includes(phrase.toLowerCase()), phrase);
   assert.match(guidance, /all-workspace|all workspaces/i);
   assert.match(guidance, /OS-level|OS package/i);

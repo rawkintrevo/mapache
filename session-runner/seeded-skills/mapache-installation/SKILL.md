@@ -46,6 +46,9 @@ printf 'HOME_STORAGE_BUCKET=%s\n' "${HOME_STORAGE_BUCKET:-unset}"
 printf 'HOME_STORAGE_PREFIX=%s\n' "${HOME_STORAGE_PREFIX:-unset}"
 printf 'MAPACHE_RUNTIME_ROOT=%s\n' "${MAPACHE_RUNTIME_ROOT:-unset}"
 printf 'WORKSPACE_DIR=%s\n' "${WORKSPACE_DIR:-/workspace}"
+printf 'MAPACHE_WORKSPACE_BIN_DIR=%s\n' "${MAPACHE_WORKSPACE_BIN_DIR:-unset}"
+printf 'MAPACHE_USER_BIN_DIR=%s\n' "${MAPACHE_USER_BIN_DIR:-unset}"
+printf 'PATH_PREFIX=%s\n' "${PATH%%:*}"
 tool_name="<tool>"
 tool_path="$(command -v "$tool_name" || true)"
 printf 'tool_path=%s\n' "$tool_path"
@@ -61,15 +64,13 @@ configuration contents.
 Use the result, not an assumed default:
 
 - A legacy runner with `HOME_SYNC_MODE=persistent` uses the actual `$HOME`
-  (normally `/root`) as an archived workspace runtime tree. A user-local
-  install under `$HOME/.local` or another supported home prefix can survive a
-  workspace restart, but only if the fresh-session verification below proves
-  that the archive restored it.
+  (normally `/root`) as an archived workspace runtime tree. Workspace-scoped
+  installs belong in `/workspace/.local`; do not put them in `$HOME`.
 - A shared workspace runner reports `WORKSPACE_STORAGE_MODE=shared-gcsfuse-v1`.
-  Its `/workspace` is the durable project tree, while its private `$HOME` is
-  ephemeral. The private runtime paths under `/var/lib/mapache/runtimes/` are
-  also session-scoped. Never call a package installed there durable merely
-  because it is outside `/workspace`.
+  Its `/workspace` is the durable project tree, while its private `$HOME` and
+  the private runtime paths under `/var/lib/mapache/runtimes/` are ephemeral.
+  The explicit `/root/.local` mount is the owner-wide durable install location;
+  it remains valid even when `$HOME` is a private runtime directory.
 - A missing or unexpected value is not proof of persistence. Re-check the
   resolved paths and report uncertainty instead of guessing.
 
@@ -90,40 +91,69 @@ not become available to other workspaces.
 
 ### Across restarts in this workspace
 
-For a verified legacy persistent-home runner, prefer the tool's supported
-user-local or project-local prefix. After installation, make the smallest
-appropriate `PATH` change in the login-shell file that the runner actually
-reads, then start a fresh login shell to verify it. Do not claim that a setup
-script is automatic unless a fresh shell has actually sourced it.
+Use `/workspace/.local` for an installation that belongs only to the current
+workspace. Put executables in `/workspace/.local/bin`; for example,
+`npm install --prefix /workspace/.local <package>` or a tool's equivalent
+explicit prefix. Mapache creates this directory, persists the whole tree with
+the workspace, and places it first on PATH automatically. Do not edit shell
+startup files to repair this PATH.
 
 For `shared-gcsfuse-v1`, `/workspace` is durable but is a GCS FUSE mount, not a
 normal local filesystem. Before installing there, test the exact operations the
 tool needs: create, rename, execute, permissions, locking, and any symlinks or
 temporary files. If those semantics are not supported, do not install a
-package manager tree directly on the mount. The current runner has no generic
-startup hook that restores an arbitrary workspace installation into the
-private ephemeral home or repairs `PATH` for every new process. In that case:
+package manager tree directly on the mount. Use the owner-wide location only
+when the tool supports the mounted filesystem, or keep it session-local and
+report that limitation.
 
-- A simple portable executable may be kept in a project-owned workspace
-  directory only after the filesystem test passes; invoke it through an
-  explicit path or a verified project command and report that limitation.
+### Across all workspaces for this user
+
+Use the owner-wide mount at `/root/.local`, with executables in
+`/root/.local/bin`; for example, `npm install --prefix /root/.local <package>`
+or the tool's supported equivalent. The complete `/root/.local` tree is stored
+in owner-scoped persistent Cloud Storage and mounted into every workspace
+runner for that user, including new workspaces. `MAPACHE_USER_BIN_DIR` is the
+canonical runtime-discovered bin path. Workspace-local PATH entries come first,
+so a project can intentionally override a user-wide executable.
+
+The owner-wide directory is a shared writable install surface for that user:
+concurrent installs can race, and files placed there are available to every
+workspace and automation owned by that user. The mount is backend-derived and
+uses a different storage namespace for other users; do not copy credentials or
+private project files into it.
+
+For `shared-gcsfuse-v1`, both install locations use GCS FUSE. Before installing
+a tool, test the exact operations it needs: create, rename, execute,
+permissions, locking, and symlinks. Package managers or compiled tools that
+require unsupported local filesystem behavior should remain session-local or
+use a project-specific artifact strategy.
+
+The same PATH is applied to interactive shells, the managed Agent process,
+terminal commands, and automation subprocesses. It is ordered as
+`/workspace/.local/bin:/root/.local/bin:<existing system PATH>` and is
+initialized idempotently for every process; preserving a custom existing PATH
+does not require shell startup files.
+
+For tools that cannot use a persistent mount:
+
+- A simple portable executable may be kept in a session-local directory such as
+  `/tmp/mapache-install` only after testing it; invoke it through an explicit
+  path or a verified project command and report that limitation.
 - A tool needing local filesystem semantics, compiled caches, locks, or a
-  private package tree needs a supported persistent-artifact-plus-restoration
-  helper or a new runner image/bootstrap capability. Identify that follow-up
-  instead of claiming the install is durable.
+  private package tree should use a session-local root unless its documented
+  installation strategy supports one of the persistent mounts.
 
 Project dependencies should use the project's normal manifest and lockfile
 when possible. Do not turn a project installation into a platform-wide
 installation, and do not treat the workspace mount as a safe place for
 credentials.
 
-### All workspaces or OS-level availability
+### OS-level availability
 
-There is no skill-only mechanism that installs software into every workspace
-or changes the Cloud Run image for all users. If no existing account-level or
-runner-image support covers the request, explain that it needs an explicit
-image/bootstrap, account, or product follow-up. Do not silently broaden a
-workspace request into a deployment or OS package change.
+These paths do not change the runner image or install OS packages. If a tool
+requires root-owned system locations, an image rebuild is a separate explicit
+deployment decision; do not silently broaden a user-local installation into an
+OS package or account-level setting.
 
 ## gcloud example
 

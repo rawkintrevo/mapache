@@ -5,6 +5,7 @@ You are running inside a Mapache-managed workspace. This reference describes the
 ## Workspace and session lifecycle
 
 - The interactive project lives in `/workspace`. Use the current working directory and repository instructions before editing. Automation runs may instead start in a separate writable output directory with `/workspace` mounted read-only; obey the run's supplied input/output paths.
+- PATH has `/workspace/.local/bin` then `/root/.local/bin`; read the installation skill for scope and filesystem compatibility.
 - Mapache saves workspace and agent state through its persistence lifecycle. A stopped or replaced runner does not preserve live processes, shell jobs, or in-flight tool calls. Do not promise that an unsaved change or interrupted turn will survive.
 - Workspace persistence is not a Git commit, a push, a deployment, or a backup guarantee. Report those actions separately and only after verifying them.
 - Keep durable project deliverables in the workspace (or the automation's assigned output directory), not `/tmp` or image-owned directories. Do not modify Mapache's private runtime state to configure a project.

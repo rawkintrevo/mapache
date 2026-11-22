@@ -136,6 +136,23 @@ session to create a Cloud Run revision with the mount:
 firebase deploy --only functions --project pi-agents-cloud
 ```
 
+Persistent tool installs use the same Functions-owned Cloud Run template path:
+`/workspace/.local` is workspace storage and `/root/.local` is an owner-scoped
+GCS FUSE mount. The mount is prepared from the configured
+`USER_TOOLS_STORAGE_BUCKET` or the Firebase default bucket, so deploys must
+retain runner object access to that bucket. New sessions receive the mount at
+creation; existing services need a restart/revision or recreation. The PATH
+bootstrap and seeded installation guidance are in the `gcp-runner` image, so
+build/publish the runner and deploy Functions in this order:
+
+```bash
+gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+No Hosting deploy is needed for this runtime-only change. N64-specific services
+remain outside the rollout.
+
 Queued session provisioning retains the workspace runtime reservation when a
 Cloud Run operation poll is interrupted while the service still reports a
 pending terminal condition. The Firestore-triggered provisioning worker

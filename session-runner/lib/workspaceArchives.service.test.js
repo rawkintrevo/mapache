@@ -73,6 +73,10 @@ test("selects default archive targets for blank workspaces", () => {
   assert.deepEqual(targets.find((target) => target.name === "home").exclude, [
     ".config/gh/hosts.yml",
     "./.config/gh/hosts.yml",
+    ".local",
+    ".local/*",
+    "./.local",
+    "./.local/*",
     ".npm",
     ".npm/*",
     "./.npm",
@@ -158,6 +162,10 @@ test("does not add Pi npm excludes when Pi agent dir is outside home", () => {
   assert.deepEqual(homeTarget.exclude, [
     ".config/gh/hosts.yml",
     "./.config/gh/hosts.yml",
+    ".local",
+    ".local/*",
+    "./.local",
+    "./.local/*",
     ".npm",
     ".npm/*",
     "./.npm",

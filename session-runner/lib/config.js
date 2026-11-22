@@ -76,6 +76,10 @@ function parseJsonObject(value, fallback = null) {
 
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
+  const workspaceLocalBinDir = path.resolve(
+      process.env.MAPACHE_WORKSPACE_BIN_DIR || path.join(workspaceDir, ".local", "bin"),
+  );
+  const userLocalBinDir = path.resolve(process.env.MAPACHE_USER_BIN_DIR || "/root/.local/bin");
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
   const requestedWorkspaceMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase();
   const workspaceStorageMode = [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(requestedWorkspaceMode) ? requestedWorkspaceMode : "legacy";
@@ -295,6 +299,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     terminalReplayLimit: positiveNumber(process.env.TERMINAL_REPLAY_LIMIT, 1000000),
     terminalKind: "pi",
     workspaceDir,
+    workspaceLocalBinDir,
+    userLocalBinDir,
     workspaceGoogleApplicationCredentials: normalizeEnvString(workspaceGoogleApplicationCredentials),
     workspaceId: process.env.WORKSPACE_ID || "",
     workspaceSourceMode,

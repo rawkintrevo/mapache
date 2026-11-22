@@ -14,6 +14,8 @@ const {normalizeEnvMap, RESERVED_ENV_NAMES} = require("./env.helpers");
   "MAPACHE_BROWSER_CDP_URL",
   "MAPACHE_BROWSER_STATUS_URL",
   "MAPACHE_BROWSER_ACTIVITY_URL",
+  "MAPACHE_USER_BIN_DIR",
+  "MAPACHE_WORKSPACE_BIN_DIR",
 ].forEach((name) => {
   assert.strictEqual(RESERVED_ENV_NAMES.has(name), true);
   assert.throws(() => normalizeEnvMap({[name]: "user-controlled"}), /reserved/);
