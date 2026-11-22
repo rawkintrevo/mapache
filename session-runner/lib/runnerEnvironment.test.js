@@ -1,10 +1,16 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
+const {spawnSync} = require("node:child_process");
 const test = require("node:test");
 const {
+  applyMapacheToolPath,
   createWorkspaceProcessEnvironment,
   isolateRunnerGoogleCredentials,
+  prependPathEntries,
 } = require("./runnerEnvironment");
 
 test("runner control plane ignores workspace Google credentials", () => {
@@ -61,4 +67,56 @@ test("shared worktree child environment exposes private Git metadata consistentl
 
   assert.equal(childEnv.GIT_DIR, "/var/lib/mapache/git/repository");
   assert.equal(childEnv.GIT_WORK_TREE, "/workspace");
+});
+
+test("tool PATH is deterministic, idempotent, and preserves existing system entries", () => {
+  assert.equal(
+      prependPathEntries("/usr/bin:/workspace/.local/bin:/usr/local/bin", ["/workspace/.local/bin", "/root/.local/bin"]),
+      "/workspace/.local/bin:/root/.local/bin:/usr/bin:/usr/local/bin",
+  );
+
+  const env = {PATH: "/usr/bin:/bin"};
+  applyMapacheToolPath({
+    workspaceDir: "/workspace",
+    workspaceLocalBinDir: "/workspace/.local/bin",
+    userLocalBinDir: "/root/.local/bin",
+  }, env);
+  assert.equal(env.PATH, "/workspace/.local/bin:/root/.local/bin:/usr/bin:/bin");
+  assert.equal(env.MAPACHE_WORKSPACE_BIN_DIR, "/workspace/.local/bin");
+  assert.equal(env.MAPACHE_USER_BIN_DIR, "/root/.local/bin");
+});
+
+test("every workspace child receives both install locations", () => {
+  const childEnv = createWorkspaceProcessEnvironment({
+    workspaceDir: "/workspace",
+    workspaceLocalBinDir: "/workspace/.local/bin",
+    userLocalBinDir: "/root/.local/bin",
+    workspaceGoogleApplicationCredentials: "",
+  }, {PATH: "/usr/bin"});
+
+  assert.equal(childEnv.PATH, "/workspace/.local/bin:/root/.local/bin:/usr/bin");
+});
+
+test("a fresh child resolves an executable from the workspace install directory", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-tool-path-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const workspaceBinDir = path.join(root, "workspace", ".local", "bin");
+  await fs.mkdir(workspaceBinDir, {recursive: true});
+  const executable = path.join(workspaceBinDir, "mapache-test-tool");
+  await fs.writeFile(executable, "#!/bin/sh\nprintf 'tool-ok\\n'\n");
+  await fs.chmod(executable, 0o755);
+
+  const childEnv = createWorkspaceProcessEnvironment({
+    workspaceDir: path.join(root, "workspace"),
+    workspaceLocalBinDir: workspaceBinDir,
+    userLocalBinDir: path.join(root, "user", ".local", "bin"),
+    workspaceGoogleApplicationCredentials: "",
+  }, {PATH: "/usr/bin:/bin"});
+  const result = spawnSync("sh", ["-c", "command -v mapache-test-tool && mapache-test-tool"], {
+    encoding: "utf8",
+    env: childEnv,
+  });
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, `${executable}\ntool-ok\n`);
 });

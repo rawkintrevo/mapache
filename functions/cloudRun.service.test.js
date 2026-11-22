@@ -302,7 +302,7 @@ assert.deepStrictEqual(terminalCommandEnv({
     shutdownToken: "shutdown",
     browserAccessTokenSecret: "browser-secret",
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
-  });
+  }, {storage: storageFixture().storage, userToolsStorageBucket: "tools-bucket"});
   assert.strictEqual(service.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(service.template.scaling.minInstanceCount, 1);
   assert.strictEqual(service.template.scaling.maxInstanceCount, 1);
@@ -326,13 +326,17 @@ assert.deepStrictEqual(terminalCommandEnv({
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: true, chrome: true},
-  }, {storage: markedStorage.storage});
+  }, {storage: markedStorage.storage, userToolsStorageBucket: "tools-bucket"});
   assert.strictEqual(markedService.template.scaling.minInstanceCount, 1);
   assert.strictEqual(markedService.template.scaling.maxInstanceCount, 1);
   assert.strictEqual(markedService.template.serviceAccount, "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com");
   assert.strictEqual(markedService.template.containers[0].resources.cpuIdle, false);
   assert.equal(markedService.template.volumes[0].gcs.readOnly, true);
-  assert.deepStrictEqual(markedService.template.containers[0].volumeMounts, [{name: "automation-outputs", mountPath: "/automations"}, {name: "workspace-uploads", mountPath: "/uploads"}]);
+  assert.deepStrictEqual(markedService.template.containers[0].volumeMounts, [
+    {name: "automation-outputs", mountPath: "/automations"},
+    {name: "workspace-uploads", mountPath: "/uploads"},
+    {name: "user-tools", mountPath: "/root/.local"},
+  ]);
 
   const sharedService = await buildCloudRunService({
     id: "workspace-1",
@@ -351,7 +355,7 @@ assert.deepStrictEqual(terminalCommandEnv({
     resources: {cpu: "1", memory: "1Gi"},
     terminalKind: "pi",
     capabilities: {terminal: true, preview: false, previewQa: false, functions: false},
-  }, {storage: storageFixture().storage});
+  }, {storage: storageFixture().storage, userToolsStorageBucket: "tools-bucket"});
   assert.equal(sharedService.template.executionEnvironment, "EXECUTION_ENVIRONMENT_GEN2");
   assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.bucketName, "mpw-1234567890-workspace1");
   assert.equal(sharedService.template.volumes[0].csi.volumeAttributes.mountOptions.includes("trees/42"), true);
@@ -360,7 +364,11 @@ assert.deepStrictEqual(terminalCommandEnv({
     {name: "workspace", mountPath: "/workspace"},
     {name: "automation-outputs", mountPath: "/automations"},
     {name: "workspace-uploads", mountPath: "/uploads"},
+    {name: "user-tools", mountPath: "/root/.local"},
   ]);
+  assert.equal(sharedService.template.volumes[3].name, "user-tools");
+  assert.equal(sharedService.template.volumes[3].gcs.readOnly, false);
+  assert.match(sharedService.template.volumes[3].gcs.mountOptions[0], /^only-dir=mapache-user-tools\//);
   const sharedServiceEnv = envMap(sharedService.template.containers[0].env);
   assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_MODE, "shared-gcsfuse-v1");
   assert.equal(sharedServiceEnv.WORKSPACE_STORAGE_GENERATION, "42");
@@ -384,11 +392,16 @@ assert.deepStrictEqual(terminalCommandEnv({
     terminalKind: "pi",
     capabilities: {terminal: true, preview: true, previewQa: true, functions: false, chrome: true},
   };
-  const automationDeps = {storage: {bucket: () => ({file: () => ({save: async () => {}})})}};
+  const automationDeps = {
+    storage: {bucket: () => ({file: () => ({save: async () => {}})})},
+    userToolsStorageBucket: "tools-bucket",
+  };
   const automationService = await buildCloudRunService(automationWorkspace, automationSession, automationDeps);
   assert.equal(automationService.template.volumes[0].gcs.readOnly, true);
   assert.equal(automationService.template.volumes[1].gcs.readOnly, false);
   assert.equal(automationService.template.volumes[1].gcs.bucket, "existing-bucket");
+  assert.equal(automationService.template.volumes[3].name, "user-tools");
+  assert.equal(automationService.template.volumes[3].gcs.readOnly, false);
   assert.equal(envMap(automationService.template.containers[0].env).WORKSPACE_STORAGE_MODE, "automation-readonly-gcs-v1");
   const automationPatch = await buildCloudRunPatch(automationSession, {restart: true}, automationDeps);
   assert.deepStrictEqual(automationPatch.template.volumes, automationService.template.volumes);

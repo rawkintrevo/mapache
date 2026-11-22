@@ -150,6 +150,10 @@ function homeArchiveExcludePatterns(config) {
   const excludes = [
     ".config/gh/hosts.yml",
     "./.config/gh/hosts.yml",
+    ".local",
+    ".local/*",
+    "./.local",
+    "./.local/*",
     ".npm",
     ".npm/*",
     "./.npm",

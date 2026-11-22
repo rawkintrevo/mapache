@@ -71,7 +71,8 @@ test("marked runtimes do not fall back to the legacy flat workspace prefix", asy
   assert.equal(legacyFlatReads, 0);
   await service.restoreCheckpoint();
   assert.equal(restores, 1);
-  assert.deepEqual(await fs.readdir(config.workspaceDir), []);
+  assert.deepEqual(await fs.readdir(config.workspaceDir), [".local"]);
+  assert.deepEqual(await fs.readdir(path.join(config.workspaceDir, ".local")), ["bin"]);
 });
 
 test("shared GCS workspaces are authoritative and skip legacy source synchronization", async (t) => {
@@ -125,6 +126,7 @@ test("shared GCS workspaces are authoritative and skip legacy source synchroniza
     },
   });
   await service.ensureWorkspace();
+  assert.equal((await fs.stat(path.join(workspaceDir, ".local", "bin"))).isDirectory(), true);
   assert.deepEqual(await service.prepareWorkspaceSource(), {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"});
   assert.deepEqual(await service.syncDown(), {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"});
   assert.equal(legacySyncCalled, false);

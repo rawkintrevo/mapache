@@ -10,7 +10,7 @@ const {generationMatchOptions, isStorageGenerationConflict} = require("./workspa
 const {normalizeRelativeWorkspacePath} = require("./utils");
 const {assertSharedWorkspaceMount, isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
-const {assertAutomationStorageMounts} = require("./automationStorage.helpers");
+const {assertAutomationStorageMounts, isAutomationStorageMode} = require("./automationStorage.helpers");
 
 function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
@@ -29,6 +29,9 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
       await assertAutomationStorageMounts(config);
     } else {
       await fs.promises.mkdir(config.workspaceDir, {recursive: true});
+    }
+    if (!isAutomationStorageMode(config.workspaceStorageMode)) {
+      await fs.promises.mkdir(config.workspaceLocalBinDir || path.join(config.workspaceDir, ".local", "bin"), {recursive: true});
     }
     await fs.promises.mkdir(config.piSessionDir, {recursive: true});
     if (!isMountedWorkspaceMode(config.workspaceStorageMode)) {

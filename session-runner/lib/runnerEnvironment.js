@@ -2,6 +2,8 @@
 
 const path = require("node:path");
 
+const DEFAULT_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
 function isolateRunnerGoogleCredentials(env = process.env) {
   const workspaceGoogleApplicationCredentials = String(
       env.GOOGLE_APPLICATION_CREDENTIALS || "",
@@ -12,6 +14,7 @@ function isolateRunnerGoogleCredentials(env = process.env) {
 
 function createWorkspaceProcessEnvironment(config, baseEnv = process.env) {
   const env = {...baseEnv};
+  applyMapacheToolPath(config, env);
   const credentialsPath = String(config.workspaceGoogleApplicationCredentials || "").trim();
   if (credentialsPath) env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
   else delete env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -31,7 +34,29 @@ function createWorkspaceProcessEnvironment(config, baseEnv = process.env) {
   return env;
 }
 
+function applyMapacheToolPath(config = {}, env = process.env) {
+  const workspaceBinDir = config.workspaceLocalBinDir ||
+    path.join(config.workspaceDir || "/workspace", ".local", "bin");
+  const userBinDir = config.userLocalBinDir || "/root/.local/bin";
+  env.PATH = prependPathEntries(env.PATH, [workspaceBinDir, userBinDir]);
+  env.MAPACHE_WORKSPACE_BIN_DIR = workspaceBinDir;
+  env.MAPACHE_USER_BIN_DIR = userBinDir;
+  return env;
+}
+
+function prependPathEntries(existingPath, entries) {
+  const result = [];
+  for (const value of [...entries, ...(String(existingPath || DEFAULT_SYSTEM_PATH).split(":"))]) {
+    const entry = String(value || "").trim();
+    if (!entry || result.includes(entry)) continue;
+    result.push(entry);
+  }
+  return result.join(":");
+}
+
 module.exports = {
+  applyMapacheToolPath,
   createWorkspaceProcessEnvironment,
   isolateRunnerGoogleCredentials,
+  prependPathEntries,
 };

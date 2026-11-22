@@ -60,6 +60,41 @@ startup does not clone or restore a worktree, and periodic/final sync does not
 upload, delete, or restore legacy worktree and Git archives. Private transcript,
 Chrome, auth, and runtime cache/checkpoint roots remain outside the mount. The
 legacy runner path is unchanged when no trusted descriptor is present.
+
+### Persistent tool installation paths
+
+Runner provisioning adds a backend-derived writable GCS FUSE mount at
+`/root/.local` for user-wide tool installations. The mount uses the configured
+`USER_TOOLS_STORAGE_BUCKET` or the Firebase default storage bucket and the
+owner-hashed prefix
+`mapache-user-tools/<sha256(ownerUid)>/.mapache-internal/tools`; a workspace or
+browser payload cannot select either value. Provisioning creates the mount and
+its `bin/` directory with create-only markers, so the complete installation
+tree—not only PATH entries or symlinks—survives runner replacement and is
+visible in every workspace and automation runner owned by that user. A
+different owner resolves to a different prefix. This is an owner-scoped mount
+boundary, not permission to copy credentials or private project files into a
+shared install tree; concurrent installs by the same owner are not serialized.
+
+The runner creates `/workspace/.local/bin` for workspace-scoped tools. Legacy
+workspace sync and the shared `gcp-runner` workspace mount persist the complete
+`.local` tree; the automation input mount remains read-only. Every shell,
+terminal, managed Agent child, and automation subprocess receives the same
+idempotent PATH precedence:
+`/workspace/.local/bin:/root/.local/bin:<existing system PATH>`.
+`MAPACHE_WORKSPACE_BIN_DIR` and `MAPACHE_USER_BIN_DIR` expose the resolved
+directories to installation guidance. The normal workspace home archive
+excludes `.local` so user-wide files are not copied into a workspace-specific
+home archive.
+
+This contract uses GCS FUSE for both persistent install scopes. Installers that
+require unsupported locking, rename, symlink, permission, or local-cache
+semantics must use a compatible artifact or a session-local directory. The
+user-wide mount is added by Functions provisioning; existing Cloud Run services
+need a restart/revision or recreation before they receive it. The runner image
+must also be rebuilt to receive the PATH initialization and updated operating
+guidance. N64-specific images and workflows are outside this change.
+
 The maintenance importer in `session-runner/maintenance/shared-workspace-import.js`
 validates a local published workspace staging root before touching Cloud Storage. It
 uploads files, supported relative symlinks, empty-directory markers, and original

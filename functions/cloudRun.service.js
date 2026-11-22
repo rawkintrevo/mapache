@@ -51,6 +51,11 @@ const {
 } = require("./runtimeReservation.helpers");
 const {consumeQaFault} = require("./qaFaultHarness.helpers");
 const {buildSharedWorkspaceTemplate} = require("./sharedWorkspaceTemplate.helpers");
+const {
+  buildUserToolsStorageTemplate,
+  prepareUserToolsStorage,
+  userToolsStorageForOwner,
+} = require("./userToolsStorage.service");
 
 const {
   AUTOMATION_STORAGE_MODE,
@@ -419,8 +424,7 @@ async function patchSessionService(sessionRef, session, options = {}, dependenci
     const client = await (dependencies.auth || auth).getClient();
     const url = `https://run.googleapis.com/v2/${session.serviceName}`;
     const body = await buildCloudRunPatch(session, options, dependencies);
-    const sharedTemplate = sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
-    const storageMask = Object.keys(sharedTemplate).length > 0 ?
+    const storageMask = body.template.volumes?.length || body.template.containers?.[0]?.volumeMounts?.length ?
       ",template.volumes,template.executionEnvironment,template.containers.env" : "";
     const automationOutputMask = options.restart && (isMarkedRuntimeSession(session) || isAutomationRuntime(session)) && session.workspaceStoragePrefix ?
       ",template.volumes,template.executionEnvironment" : "";
@@ -551,20 +555,24 @@ async function markSessionStopped(dependencies, sessionRef, session, reason) {
 }
 
 async function buildCloudRunService(workspace, session, dependencies = {}) {
+  const storageClient = dependencies.storage || storage;
   const automationStorage = isAutomationRuntime(session) ?
-    await prepareAutomationStorage(session.automationStorage, dependencies.storage || storage) : null;
+    await prepareAutomationStorage(session.automationStorage, storageClient) : null;
+  const userToolsStorage = userToolsStorageForRuntime(workspace, session, dependencies);
+  if (userToolsStorage) await prepareUserToolsStorage(userToolsStorage, storageClient);
   const sharedTemplate = automationStorage ? buildAutomationStorageTemplate(automationStorage) :
     sharedWorkspaceTemplateFor(workspace && workspace.sharedStorage);
   const automationOutputAccess = automationStorage ? null : await prepareMainAutomationOutputAccess(
       workspace,
       session,
-      dependencies.storage || storage,
+      storageClient,
   );
   const storageTemplate = mergeStorageTemplates(
       sharedTemplate,
       automationOutputAccess ? buildAutomationOutputAccessTemplate(automationOutputAccess) : {},
       (isMarkedRuntimeSession(session) || isAutomationRuntime(session)) && workspace?.storagePrefix ?
-        await buildUploadsStorageTemplate(workspace, dependencies.storage || storage) : {},
+        await buildUploadsStorageTemplate(workspace, storageClient) : {},
+      userToolsStorage ? buildUserToolsStorageTemplate(userToolsStorage) : {},
   );
   const trustedWorkspaceFields = automationStorage ? {
     runtimeStorageMode: "private",
@@ -603,19 +611,23 @@ async function buildCloudRunService(workspace, session, dependencies = {}) {
 }
 
 async function buildCloudRunPatch(session, options = {}, dependencies = {}) {
+  const storageClient = dependencies.storage || storage;
   const automationStorage = isAutomationRuntime(session) ?
-    await prepareAutomationStorage(session.automationStorage, dependencies.storage || storage) : null;
+    await prepareAutomationStorage(session.automationStorage, storageClient) : null;
+  const userToolsStorage = userToolsStorageForRuntime(null, session, dependencies);
+  if (userToolsStorage) await prepareUserToolsStorage(userToolsStorage, storageClient);
   const sharedTemplate = automationStorage ? buildAutomationStorageTemplate(automationStorage) :
     sharedWorkspaceTemplateFor(options.trustedStorageDescriptor);
   const automationOutputAccess = automationStorage ? null : await prepareMainAutomationOutputAccess({
     bucket: session.workspaceStorageBucket,
     storagePrefix: session.workspaceStoragePrefix,
-  }, session, dependencies.storage || storage);
+  }, session, storageClient);
   const storageTemplate = mergeStorageTemplates(
       sharedTemplate,
       automationOutputAccess ? buildAutomationOutputAccessTemplate(automationOutputAccess) : {},
       (isMarkedRuntimeSession(session) || isAutomationRuntime(session)) && session.workspaceStoragePrefix ?
-        await buildUploadsStorageTemplate(session, dependencies.storage || storage) : {},
+        await buildUploadsStorageTemplate(session, storageClient) : {},
+      userToolsStorage ? buildUserToolsStorageTemplate(userToolsStorage) : {},
   );
   const trustedWorkspaceFields = automationStorage ? {
     runtimeStorageMode: "private", workspaceStorageMode: AUTOMATION_STORAGE_MODE,
@@ -658,6 +670,16 @@ function mergeStorageTemplates(...templates) {
     ...(volumes.length ? {volumes} : {}),
     ...(volumeMounts.length ? {containers: [{volumeMounts}]} : {}),
   };
+}
+
+function userToolsStorageForRuntime(workspace, session, dependencies = {}) {
+  const ownerUid = String(workspace?.ownerUid || session?.ownerUid || "").trim();
+  if (!ownerUid) return null;
+  const bucketName = dependencies.userToolsStorageBucket || process.env.USER_TOOLS_STORAGE_BUCKET || DEFAULT_BUCKET;
+  if (!bucketName) return null;
+  return userToolsStorageForOwner(ownerUid, {
+    bucketName,
+  });
 }
 
 function sharedWorkspaceTemplateFor(descriptor) {
@@ -781,6 +803,8 @@ async function sessionRunnerEnv(session, options = {}, dependencies = {}) {
     {name: "MAPACHE_RUNTIME_ROOT", value: runtime.root},
     {name: "HOME", value: homeDir},
     {name: "MAPACHE_HOME_DIR", value: homeDir},
+    {name: "MAPACHE_WORKSPACE_BIN_DIR", value: "/workspace/.local/bin"},
+    {name: "MAPACHE_USER_BIN_DIR", value: "/root/.local/bin"},
     {name: "OWNER_UID", value: session.ownerUid || ""},
     {name: "WORKSPACE_ID", value: session.workspaceId || ""},
     {name: "SESSION_ID", value: session.runnerSessionId || ""},
