@@ -593,6 +593,21 @@ async function collectWorkspaceFiles({fsImpl, root, shouldIgnore}) {
   if (!rootStat.isDirectory()) throw checkpointError("checkpoint_workspace_invalid", "Workspace root is not a directory");
   const files = [];
   await walkWorkspace({fsImpl, root: resolvedRoot, currentDir: resolvedRoot, files, shouldIgnore});
+  const capturedPaths = new Set(files.map((file) => file.path));
+  const capturedDirectories = new Set();
+  for (const file of files) {
+    let parent = path.posix.dirname(file.path);
+    while (parent !== ".") {
+      capturedDirectories.add(parent);
+      parent = path.posix.dirname(parent);
+    }
+  }
+  for (const file of files.filter((entry) => entry.kind === "symlink")) {
+    const target = path.posix.normalize(path.posix.join(path.posix.dirname(file.path), file.target));
+    if (!capturedPaths.has(target) && !capturedDirectories.has(target)) {
+      throw checkpointError("checkpoint_unsafe_symlink", `Workspace symlink target is excluded or empty: ${file.path}`);
+    }
+  }
   return files;
 }
 

@@ -87,6 +87,17 @@ directories to installation guidance. The normal workspace home archive
 excludes `.local` so user-wide files are not copied into a workspace-specific
 home archive.
 
+Workspace tool trees under `/workspace/.local` include nested `node_modules` in
+immutable checkpoints. `lib/workspacePath.helpers.js` retains the ordinary
+project dependency exclusion elsewhere and still honors explicit workspace
+exclusion policies. Before uploading a capture, `lib/agentCheckpoint.service.js`
+checks that every collected symlink target is represented by a captured file or
+nonempty directory. An excluded target rejects publication instead of creating a
+checkpoint that the strict restore validator cannot load. Existing incomplete
+checkpoints require recovery; changing the filter does not recreate omitted
+package payloads. This change requires a rebuilt `gcp-runner` image and new
+service revisions.
+
 Blank/local workspaces persist workspace installs through immutable checkpoints,
 not a GCS FUSE workspace mount. A restart only restores a published manifest;
 objects from an interrupted upload are not a complete backup. Workspace
