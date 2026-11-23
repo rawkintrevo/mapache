@@ -394,9 +394,9 @@ test("a failed parallel installation upload never publishes a partial manifest",
   const storage = createStorage({failOnUploadNumber: 3});
   const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
   await assert.rejects(publisher.publishWorkspaceFiles({
-    files: Array.from({length: 20}, (_, i) => ({path: `.local/lib/tool-${i}`, content: "tool"})),
+    files: Array.from({length: 129}, (_, i) => ({path: `.local/lib/tool-${i}`, content: "tool"})),
   }), /injected upload failure/);
   assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
   assert.equal([...storage.objects.keys()].some((key) => key.endsWith("/manifest.json")), false);
-  assert.equal(storage.uploads.length, 7);
+  assert.equal(storage.uploads.length, 63);
 });
