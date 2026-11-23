@@ -81,6 +81,7 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(blank.status, "provisioning");
   assert.strictEqual(blank.provisioningState, "queued");
   assert.strictEqual(blank.longRunning, false);
+  assert.strictEqual(blank.runtimeDataDiskSizeGb, undefined);
   assert.ok(blank.serviceId.length < 50);
   assert.strictEqual(reservations[0].kind, "reserveChrome");
   await assert.rejects(
@@ -126,6 +127,17 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(chrome.capabilities.chrome, true);
   assert.strictEqual(reservations[0].kind, "reserveChrome");
   assert.strictEqual(reservations[0].args[3].syncWriterEligible, true);
+
+  const configuredDisk = await createWithWorkspace({
+    ownerUid: "user-1",
+    bucket: "bucket",
+    storagePrefix: "workspaces/user-1/configured-disk",
+    source: {type: "blank"},
+    mcpConfig: {},
+    machineConfig: {desired: {diskSizeGb: 128}, desiredVersion: 3},
+  }, {operationId: "configured-disk-1"});
+  assert.strictEqual(configuredDisk.runtimeDataDiskSizeGb, 128);
+  assert.strictEqual(configuredDisk.machineConfigDesiredVersion, 3);
 
   const marked = await createWithWorkspace({
     ownerUid: "user-1",
