@@ -647,6 +647,33 @@ All matched their recorded sizes and hashes. Evidence:
 This is published-checkpoint recovery evidence, not a complete-machine export,
 archive verification, or migration. No cloud writes or deployments were needed.
 
+`--workspace <id> --list-objects <limit>` adds bounded, paginated current-object
+metadata inventory (maximum 100,000 entries). Provide `--default-bucket` and
+`--tools-bucket` from verified deployment configuration when needed; the tool
+does not silently guess owner-tool storage. `scripts/lib/vm-storage-metadata.mjs`
+derives workspace, custom HOME, historical session, shared-tree, browser seed,
+uploads and owner-hashed tool candidates, including `.mapahce-internal` legacy
+spellings. It deduplicates identical prefixes, appends a slash to each listing
+scope, and reports access failures, malformed metadata, cursor loops and budget
+exhaustion explicitly. Source listings can overlap: their object/byte totals are
+not additive. Reports retain category counts, metadata evidence digests and
+unresolved descriptors, not filenames. No archives or tools are downloaded by
+this option. Current browser pointers are read within a 64 KiB bound and checked
+with the runner's descriptor validator against the workspace, bucket and pinned
+archive metadata; this is not archive hash or extraction validation.
+
+The 2026-11-23 `vm-test` scan completed 584 listing entries across overlapping
+sources within a 10,000-entry limit. Its workspace prefix contained 568 objects;
+the owner-tools source contained three non-marker files totaling 65,988 bytes.
+Neither current nor legacy HOME prefix contained an archive, which does not
+prove no live-only HOME state existed. The current browser seed selected an
+existing 48,086,059-byte archive captured at `2026-11-23T19:59:11.882Z` and its
+descriptor/generation/size checks passed. Archive content, tool payloads and
+source authority still require verification. Evidence:
+`artifacts/qa/vm-migration-inventory/vm-test-storage-verified.json` (0600).
+Run metadata tests with `node --test scripts/lib/vm-storage-metadata.test.mjs`.
+No production resources or data were changed.
+
 The 2026-11-23 read-only scan accounted for 85 legacy workspace records and one
 isolated VM fixture: 27 inactive, 57 with no session records and one excluded SSH
 workspace. Of the published sources inspected, 41 manifests passed integrity and

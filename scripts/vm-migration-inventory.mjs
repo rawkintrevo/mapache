@@ -4,23 +4,28 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {inspectMigrationSource} from './lib/vm-migration-inventory.mjs';
 import {verifyCheckpointPayloads} from './lib/vm-checkpoint-payloads.mjs';
+import {storageCandidates, inventoryStorageMetadata, inspectBrowserSeedMetadata} from './lib/vm-storage-metadata.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const workspaceFields = ['ownerUid', 'source', 'imageKey', 'runtimeProvider.backend', 'status', 'lifecycle', 'deleted',
+  'bucket', 'storagePrefix', 'workspaceStorageBucket', 'workspaceStoragePrefix', 'homePolicy',
   'sharedStorage', 'agentRuntimeGeneration', 'agentRuntimeCheckpoint', 'agentRuntimeWorkspaceFiles'];
-const sessionFields = ['ownerUid', 'status', 'terminalKind', 'imageKey', 'runtimeProvider.backend'];
+const sessionFields = ['ownerUid', 'status', 'terminalKind', 'imageKey', 'runtimeProvider.backend',
+  'bucket', 'workspaceStorageBucket', 'workspaceStoragePrefix', 'homeStorageBucket', 'homeStoragePrefix'];
 
 async function main() {
   const args = process.argv.slice(2);
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!['--project', '--output', '--workspace', '--verify-bytes'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
+    if (!['--project', '--output', '--workspace', '--verify-bytes', '--list-objects', '--default-bucket', '--tools-bucket'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
     options[args[i]] = args[i + 1];
   }
   if (options['--project'] !== 'pi-agents-cloud') throw Error('explicit_project_required');
   if (options['--workspace'] && !/^[A-Za-z0-9_-]{1,128}$/.test(options['--workspace'])) throw Error('invalid_workspace');
   const budget = {remaining: Number(options['--verify-bytes'] || 0)};
   if (options['--verify-bytes'] && (!options['--workspace'] || !Number.isSafeInteger(budget.remaining) || budget.remaining < 1)) throw Error('payload_verification_requires_workspace_and_byte_budget');
+  const maxObjects = Number(options['--list-objects'] || 0);
+  if (options['--list-objects'] && (!options['--workspace'] || !Number.isSafeInteger(maxObjects) || maxObjects < 1 || maxObjects > 100000)) throw Error('storage_inventory_requires_workspace_and_object_budget');
   admin.initializeApp({projectId: 'pi-agents-cloud'});
   const db = admin.firestore(); const storage = admin.storage();
   async function* pages(collection, fields) {
@@ -67,8 +72,32 @@ async function main() {
     if (!doc.exists) throw Error('workspace_not_found');
     const sessions = [];
     for await (const session of pages(doc.ref.collection('sessions'), sessionFields)) sessions.push({id: session.id, ...session.data()});
-    records.push(await inspectMigrationSource({workspaceId: doc.id, workspace: doc.data(), sessions, readManifest,
-      verifyPayloads: options['--verify-bytes'] ? (manifest, manifestRef) => verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) : undefined}));
+    const record = await inspectMigrationSource({workspaceId: doc.id, workspace: doc.data(), sessions, readManifest,
+      verifyPayloads: options['--verify-bytes'] ? (manifest, manifestRef) => verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) : undefined});
+    if (maxObjects) record.storageMetadata = await inventoryStorageMetadata({
+      ...storageCandidates({workspace: doc.data(), sessions, defaultBucket: options['--default-bucket'], toolsBucket: options['--tools-bucket']}), maxObjects,
+      listPage: async ({bucketName, prefix, pageToken, limit}) => {
+        const [files, next] = await storage.bucket(bucketName).getFiles({prefix, pageToken, maxResults: limit, autoPaginate: false});
+        return {objects: files.map(file => file.metadata), nextPageToken: next?.pageToken || null};
+      },
+      inspectBrowserSeed: ({bucketName, prefix}) => inspectBrowserSeedMetadata({workspaceId: doc.id,
+        workspacePrefix: doc.data().storagePrefix || doc.data().workspaceStoragePrefix, bucketName,
+        readPointer: async () => {
+          const objectPath = `${prefix}/current.json`;
+          const [metadata] = await storage.bucket(bucketName).file(objectPath).getMetadata();
+          if (!Number.isSafeInteger(Number(metadata.size)) || Number(metadata.size) < 0 || Number(metadata.size) > 65536) throw Error('browser_seed_pointer_too_large');
+          const chunks = []; let length = 0;
+          for await (const chunk of storage.bucket(bucketName).file(objectPath, {generation: metadata.generation}).createReadStream()) {
+            length += chunk.length;
+            if (length > 65536) throw Error('browser_seed_pointer_too_large');
+            chunks.push(chunk);
+          }
+          return {content: Buffer.concat(chunks), generation: metadata.generation};
+        },
+        readObjectMetadata: async ref => (await storage.bucket(ref.bucketName).file(ref.objectPath, {generation: ref.generation}).getMetadata())[0],
+      }),
+    });
+    records.push(record);
   }
   const vmRecords = [];
   for await (const doc of pages(db.collection('vmRuntimes_v2'), ['ownerUid', 'generation', 'state'])) {
