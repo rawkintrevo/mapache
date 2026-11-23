@@ -11,7 +11,7 @@ async function directory(name) {
   catch (error) { if (error.code !== 'EEXIST') throw error; }
   await plainDirectory(name);
 }
-async function verifyEntry(target, entry) {
+export async function verifyEntry(target, entry) {
   const stat = await fs.lstat(target);
   if (entry.kind === 'symlink') {
     if (!stat.isSymbolicLink() || await fs.readlink(target) !== entry.target) fail('import_tree_destination_changed');

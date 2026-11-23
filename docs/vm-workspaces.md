@@ -816,6 +816,35 @@ metadata and aggregate counts. No cloud writes or deployments were needed.
 Tests: `node --test scripts/lib/vm-archive-import.test.mjs
 scripts/lib/vm-archive-verifier.test.mjs`.
 
+`scripts/lib/vm-archive-tree.mjs` extracts that verified archive into its private
+`tree/`. It first revalidates the staged archive and compares its complete member
+plan, then streams file bodies through size/hash checks into synced temporary
+files and publishes them without replacing existing paths. It recreates hard
+links only after regular files, verifies matching device/inode identity, and
+preserves original symlink text. Explicit empty directories survive; directory
+permissions are applied from descendants upward after file/link installation.
+Implicit parents use mode 0700. Restrictive modes require sufficient maintenance
+process privileges; the importer never silently loosens final permissions.
+
+Resume validates existing contents and rejects unknown entries. Before a final
+receipt exists, directories can have their temporary 0700 mode or the planned
+mode; afterward their exact final mode is required. The completed tree is fully
+compared before a private `archive-tree.json` receipt is published. Like the
+checkpoint receipt, it is not a VM disk-ready marker or cutover permission.
+The caller must retain exclusive maintenance access and revalidate mutable
+destinations before use. Abandoned temporary files from process death remain
+outside the assembled tree for later coordinator cleanup.
+
+Fixture extraction passed a real SIGKILL after file publication and resumed
+successfully. Tests verify empty directory modes, hardlink inodes, symlink text,
+and refusal of changed directory modes or hardlinks replaced by equal-content
+copies. Local `vm-test` extraction restored and verified 324 files and 120
+directories (119 archived plus one implied parent), without network reads or
+agent/browser launch. Evidence:
+`artifacts/qa/vm-browser-archive-import/tree-result.json`. Browser/SQLite runtime
+validation, HOME recovery, source merging and full-machine cutover are still
+outstanding. No Function, Hosting or runner deployment is needed for this tool.
+
 Cutover is:
 
 ```text
