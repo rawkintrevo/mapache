@@ -88,7 +88,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const workspaceLocalBinDir = path.resolve(
       process.env.MAPACHE_WORKSPACE_BIN_DIR || path.join(workspaceDir, ".local", "bin"),
   );
-  const userLocalBinDir = path.resolve(process.env.MAPACHE_USER_BIN_DIR || "/root/.local/bin");
+  const userLocalBinDir = path.resolve(process.env.MAPACHE_USER_BIN_DIR ||
+    (retainedPaths ? path.join(retainedPaths.home, ".local", "bin") : "/root/.local/bin"));
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
   const requestedWorkspaceMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase();
   const workspaceStorageMode = retainedDiskMode ? RETAINED_DISK_STORAGE_MODE :

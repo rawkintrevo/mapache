@@ -236,6 +236,67 @@ Pricing references: [Compute Engine pricing](https://cloud.google.com/products/c
 
 ### Isolated rollout Functions
 
+The isolated proof uses synthetic identity `vm-proof-605` / `vm-proof-owner`;
+`scripts/vm-crossover-fixture.mjs` accepts no user workspace ID. Its operations
+are `inspect`, `start`, `pause`, and `replace`, followed by a generation and
+(for start/replace) a project-owned immutable runner image digest. Replace
+deletes only the ownership-verified fixture instance and auto-delete boot disk;
+the data disk remains. `scripts/vm-persistence-proof.cjs seed|verify` runs inside
+that fixture container and checks dirty Git state, symlinks, modes, SQLite,
+file locking, atomic rename, and a compiled native executable. This harness
+does not yet establish browser-profile, package-manager, backup, or migration
+release gates.
+
+The deployed proof infrastructure in `pi-agents-cloud` is:
+
+| Resource | Configuration |
+| --- | --- |
+| VPC `mapache-vm-v2` | Custom subnet mode; separate from existing services |
+| Subnet `mapache-vm-v2-us-central1` | `us-central1`, `10.90.0.0/24`, Private Google Access |
+| Router `mapache-vm-v2-router` | `us-central1`, on the proof VPC |
+| NAT `mapache-vm-v2-egress` | Auto-allocated external addresses; only the proof subnet |
+| Firewall `mapache-vm-v2-iap-ssh` | TCP 22 from IAP `35.235.240.0/20`, tag `mapache-vm-v2` |
+| Custom role `mapacheVmProvisionerV2` | Instance create/delete/get/start/metadata/service-account/tags/labels; disk create/get/use/labels; subnet use; zone-operation get; image use-read-only |
+
+Only `mapache-api` receives the custom provisioning role. Existing
+`iam.serviceAccountUser` on `mapache-runner` supplies actAs; the runner retains
+its existing Artifact Registry reader grant. VMs have no external access config.
+The startup script blocks container access to the metadata HTTP endpoint while
+allowing host image authentication. NAT and retained disks incur charges even
+between proof runs; pause removes compute, not those infrastructure resources.
+COS host Docker configuration lives under `/var/lib/mapache/host-home` on the
+disposable boot filesystem because `/root` is read-only. The runner identity
+also has `roles/logging.logWriter` for guest startup diagnostics.
+
+VM terminal/tool child processes must receive retained HOME, XDG config/state,
+caches, and the retained user-local executable directory. Owners are
+`session-runner/lib/runnerEnvironment.js` and `session-runner/lib/config.js`.
+Temporary sockets/locks remain under container `/tmp`. Changes to these files
+require a new canary runner image; existing Cloud Run images are unaffected.
+
+The first live boot reached the container but exposed direct Firestore calls
+that still depend on ambient Google credentials. Full agent startup therefore
+remains unverified with metadata credentials fenced. A scoped VM control-plane
+path is required before migration; the standalone filesystem proof does not
+waive that requirement.
+
+On 2026-11-23 the clean replacement filesystem proof passed from fixture
+generation 2 (`mapache-vm-35530052c17c57f4310967d3`) to generation 3
+(`mapache-vm-b732e83747943dda08a0cc3e`), using retained disk
+`mapache-ws-efaf283eb879545a0e7ba4d3`. Both seed and verify reported Git HEAD
+`9850d196d8e77c5e0ce1a72364cbb5a4f5b67217` and passed native executable,
+SQLite, mode, symlink, and locking checks. Verification ran as an offline
+container command from the pinned existing runner image, not as an authenticated
+user session. Hard-loss/open-write recovery, full agent startup, browser state,
+package installation, and backup restore remain separate unpassed gates.
+The API-identity preflight now reports no missing checked Compute permissions.
+
+Canary build `e3dfe040-ecab-4bcd-8dc5-5396ce730736` succeeded and published
+`vm-crossover-c431211` (digest
+`sha256:82c6f6db5286091d53b6a262337e35f7b8a69124c4064ae83a74f2114a6c53c3`).
+It predates the retained-HOME child-environment correction; that correction
+requires the next image. The production `gcp-runner` tag was not moved.
+
 `vmRuntimePreflight_v2` is an IAM-private, read-only HTTP Function owned by
 `functions/vmRuntimePreflight.service.js`. It checks the deployed API identity
 for Compute permissions and gateway configuration without changing workspace

@@ -282,6 +282,7 @@ test("compute-engine config maps all durable roots to the retained disk", () => 
     assert.equal(config.workspaceStorageMode, "retained-disk");
     assert.equal(config.workspaceDir, "/mnt/mapache-data/workspace");
     assert.equal(config.homeDir, "/mnt/mapache-data/home");
+    assert.equal(config.userLocalBinDir, "/mnt/mapache-data/home/.local/bin");
     assert.equal(config.retainedDiskPaths.browser, "/mnt/mapache-data/browser/profile");
     assert.equal(config.chromeDesktopMinimal, true);
     assert.equal(config.chromeSandboxEnabled, true);

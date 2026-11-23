@@ -291,8 +291,9 @@ function createComputeEngineService(dependencies = {}) {
         {boot: false, autoDelete: false, deviceName: descriptor.dataDiskName, type: "PERSISTENT", mode: "READ_WRITE", source: disk.selfLink || `${zoneUrl(descriptor)}/disks/${descriptor.dataDiskName}`},
       ],
       networkInterfaces: [{subnetwork: options.subnetwork || `regions/${descriptor.region}/subnetworks/default`}],
+      tags: {items: ["mapache-vm-v2"]},
       serviceAccounts: [{email: runnerServiceAccount, scopes: ["https://www.googleapis.com/auth/logging.write", "https://www.googleapis.com/auth/monitoring.write", "https://www.googleapis.com/auth/devstorage.read_only"]}],
-      metadata: {items: [{key: "startup-script", value: startupScript(descriptor, options)}]},
+      metadata: {items: [{key: "disable-legacy-endpoints", value: "TRUE"}, {key: "startup-script", value: startupScript(descriptor, options)}]},
     };
   }
 
@@ -321,8 +322,17 @@ function createComputeEngineService(dependencies = {}) {
       "fi",
       "# Docker is invoked by the startup script; deprecated container declarations are not used.",
       "mkdir -p /var/lib/mapache/workspace/credentials",
+      "# Container-Optimized OS has a read-only /root; keep host auth on boot storage.",
+      "export HOME=/var/lib/mapache/host-home",
+      "export DOCKER_CONFIG=/var/lib/mapache/host-home/.docker",
+      "mkdir -p \"$DOCKER_CONFIG\"",
+      "chmod 700 \"$HOME\" \"$DOCKER_CONFIG\"",
+      `docker-credential-gcr configure-docker --registries=${shellQuote(image.split("/")[0])}`,
       `docker pull ${shellQuote(image)}`,
-      `docker run --rm --name mapache-runner --privileged=false --shm-size=${shellQuote(options.shmSize || "2g")} ${runtimeMountArgs()} ${runtimeEnvArgs(descriptor, options)} ${shellQuote(image)}`,
+      "# The host pulls images; workspace code must not obtain the host identity.",
+      "iptables -C DOCKER-USER -d 169.254.169.254/32 -p tcp --dport 80 -j REJECT 2>/dev/null || iptables -I DOCKER-USER 1 -d 169.254.169.254/32 -p tcp --dport 80 -j REJECT",
+      "docker rm -f mapache-runner >/dev/null 2>&1 || true",
+      `docker run -d --restart=unless-stopped --name mapache-runner --privileged=false -p 8080:8080 --shm-size=${shellQuote(options.shmSize || "2g")} ${runtimeMountArgs()} ${runtimeEnvArgs(descriptor, options)} ${shellQuote(image)}`,
     ].join("\n");
   }
 

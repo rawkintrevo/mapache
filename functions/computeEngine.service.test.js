@@ -52,7 +52,7 @@ test("VM startup creates a labeled retained disk and a private instance without 
   for (const value of Object.values(instanceRequest.data.labels)) {
     assert.match(value, /^[a-z0-9_-]{1,63}$/);
   }
-  const script = instanceRequest.data.metadata.items[0].value;
+  const script = instanceRequest.data.metadata.items.find((item) => item.key === "startup-script").value;
   assert.ok(script.indexOf("OWNER_UID=") < script.indexOf("grep -q"));
   assert.ok(script.indexOf("WORKSPACE_ID=") < script.indexOf("grep -q"));
   const diskRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/disks"));
@@ -60,10 +60,12 @@ test("VM startup creates a labeled retained disk and a private instance without 
   assert.match(diskRequest.params.requestId, uuidPattern);
   assert.match(instanceRequest.params.requestId, uuidPattern);
   assert.notEqual(diskRequest.params.requestId, instanceRequest.params.requestId);
-  assert.match(instanceRequest.data.metadata.items[0].value, /mkfs.ext4 -L mapache-data/);
-  assert.match(instanceRequest.data.metadata.items[0].value, /docker run/);
-  assert.doesNotMatch(instanceRequest.data.metadata.items[0].value, /gce-container-declaration|konlet/);
-  assert.match(instanceRequest.data.metadata.items[0].value, /runner\/health|MAPACHE_RUNTIME_PROVIDER|mapache-runner/);
+  assert.match(script, /mkfs.ext4 -L mapache-data/);
+  assert.match(script, /docker run/);
+  assert.doesNotMatch(script, /gce-container-declaration|konlet/);
+  assert.match(script, /runner\/health|MAPACHE_RUNTIME_PROVIDER|mapache-runner/);
+  assert.match(script, /DOCKER-USER.*169\.254\.169\.254/);
+  assert.equal(instanceRequest.data.networkInterfaces[0].accessConfigs, undefined);
 });
 
 test("ownership labels prevent cleanup of another workspace", async () => {
