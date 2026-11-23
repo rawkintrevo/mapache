@@ -149,3 +149,15 @@ test("healthy response cannot complete a generation whose writer lease was lost"
   assert.equal(f.ws().activeOperationId, operationId);
   assert.equal(f.ws().lifecycleReadyGeneration, undefined);
 });
+
+test("reservation carries the configuration saved during quiesce rather than an enqueue snapshot", async () => {
+  const f = fixture(); const {operationId} = await f.request();
+  while (f.op(operationId).phase !== "reserve") await f.service.step(operationId);
+  const old = f.docs.get("vmRuntimes_v2/workspace/sessions/old");
+  old.piScopedModels = ["saved/at-shutdown"];
+  old.authSelection = {harness: "pi", providers: {openai: "selected-entry"}};
+  await finish(f, operationId);
+  const current = f.docs.get(`vmRuntimes_v2/workspace/sessions/${f.ws().currentSessionId}`);
+  assert.deepEqual(current.piScopedModels, old.piScopedModels);
+  assert.deepEqual(current.authSelection, old.authSelection);
+});

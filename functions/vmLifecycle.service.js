@@ -39,7 +39,6 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       if (descriptor.backend !== "compute-engine" || descriptor.generation !== ws.generation) throw httpError(409, "vm_descriptor_mismatch");
       const operation = {workspaceId, ownerUid, action, oldGeneration: ws.generation,
         oldSessionId: ws.currentSessionId, descriptor, runnerImage: ws.runnerImage, gatewayHost: ws.gatewayHost,
-        authSelection: ss.authSelection || {harness: "pi", providers: {}}, piScopedModels: ss.piScopedModels || [],
         phase: action === "start" ? "delete" : "quiesce", status: "pending", claim: null,
         createdAtMs: now(), updatedAtMs: now()};
       tx.set(ref, operation);
@@ -98,14 +97,16 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           const sessionId = `vm-${operationId.slice(0, 24)}-g${generation}`;
           const sr = wr.collection("sessions").doc(sessionId);
           const cr = db.collection("vmRuntimeCredentials_v2").doc(sessionId);
-          const [s, c] = await Promise.all([tx.get(sr), tx.get(cr)]);
+          const [s, c, old] = await Promise.all([tx.get(sr), tx.get(cr), tx.get(wr.collection("sessions").doc(operation.oldSessionId))]);
           if (s.exists || c.exists) throw httpError(409, "vm_reservation_conflict");
+          const saved = old.data();
+          if (saved?.ownerUid !== operation.ownerUid || saved.generation !== operation.oldGeneration) throw httpError(409, "vm_previous_session_mismatch");
           const descriptor = normalizeRuntimeDescriptor({...operation.descriptor, generation, instanceName: null});
           const secrets = {ownerUid: operation.ownerUid, generation, controlToken: randomBytes(32).toString("hex"),
             browserToken: randomBytes(32).toString("hex"), shutdownToken: randomBytes(32).toString("hex")};
           tx.set(cr, secrets);
           tx.set(sr, {ownerUid: operation.ownerUid, generation, state: "reserved", runtimeProvider: descriptor,
-            authSelection: operation.authSelection, piScopedModels: operation.piScopedModels,
+            authSelection: saved.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
             controlTokenHash: tokenHash(secrets.controlToken)});
           tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
           tx.update(ref, {phase: "provision", descriptor, sessionId, claim: null, updatedAtMs: now()});

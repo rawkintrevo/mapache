@@ -214,7 +214,8 @@ The phases are quiesce -> delete -> reserve -> provision -> route -> health.
 Pause completes after confirmed deletion/detachment. Start skips quiesce but
 still confirms old compute absence. Reservation atomically creates one fresh
 session/generation and credentials, retaining selected authentication and model
-scope. Provision retries use the same Compute operation ID and cannot create a
+scope read from the old session after quiesce/deletion, including final shutdown
+saves rather than an earlier enqueue snapshot. Provision retries use the same Compute operation ID and cannot create a
 missing retained disk. Gateway routing changes only to the current owned VM;
 completion requires actual agent health plus a still-current live writer lease.
 Compute RUNNING is insufficient. Browser requests are denied while stopping;
