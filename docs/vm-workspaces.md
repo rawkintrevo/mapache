@@ -188,10 +188,81 @@ explicit `allowCreateDisk` authority for a new workspace. The fixture records
 that authority only on its initial reservation and stops using it once a boot
 has been admitted. Interrupted first-disk initialization still requires durable
 controller reconciliation before production use. These helper changes are used
-by the local fixture; the production async lifecycle worker remains outstanding.
+by the local fixture and the isolated lifecycle controller below; production
+API/migration integration remains outstanding.
 No legacy Functions using this helper were redeployed. The isolated preflight
 is selectively redeployed with the current Functions source package; it does
 not enable VM admission or perform lifecycle mutations.
+
+### Resumable lifecycle canary
+
+`functions/vmLifecycle.service.js` owns operation reservation and phases;
+`vmLifecycle.adapter.js` owns Compute, gateway publication and authenticated
+shutdown/health calls. The separately named `vmLifecycle_v2` operator endpoint,
+`vmLifecycleWorker_v2` Firestore worker and `vmLifecycleReconcile_v2` minute
+scheduler use only `vmLifecycleOperations_v2` and the existing isolated VM
+registry. They run as `mapache-api`. The HTTP endpoint is IAM-private; this is
+not yet the Firebase-owner API or a production migration admission path.
+
+Only an existing VM record explicitly marked `lifecycleEnabled=true` can queue
+start, pause or replacement. The request checks owner, expected generation,
+state, trusted pinned image and gateway configuration. Its request ID gives a
+stable operation ID. Duplicate requests return that operation; competing
+operations cannot take the workspace while it holds `activeOperationId`.
+
+The phases are quiesce -> delete -> reserve -> provision -> route -> health.
+Pause completes after confirmed deletion/detachment. Start skips quiesce but
+still confirms old compute absence. Reservation atomically creates one fresh
+session/generation and credentials, retaining selected authentication and model
+scope. Provision retries use the same Compute operation ID and cannot create a
+missing retained disk. Gateway routing changes only to the current owned VM;
+completion requires actual agent health plus a still-current live writer lease.
+Compute RUNNING is insufficient. Browser requests are denied while stopping;
+the controller's distinct health/shutdown credential remains allowed until the
+lease is released. Failed/unreachable quiesce is recorded explicitly before
+deletion; it is not reported as successful graceful shutdown.
+
+Each worker invocation has a 540-second hard platform timeout and a 15-minute
+exclusive claim. An uncertain cloud effect or exception retains the claim and
+workspace admission. Reconciliation waits until that invocation cannot still
+be running, then retries the same phase and operation ID. Stale completion
+callbacks cannot overwrite a newer claim. The worker never logs raw Google API
+error objects, which can contain bootstrap credentials. Health-not-ready retries
+wait at least 15 seconds and are picked up by the minute scheduler.
+
+The first controller is deliberately limited to admitted canaries: reconciliation
+scans up to 100 pending operations and runs up to four at a time. Paginated cohort
+reconciliation, initial-disk initialization recovery, operator repair/UI flows,
+resource resizing, richer machine properties/capabilities and end-to-end worker
+termination tests remain required before broad rollout. Unit tests inject loss
+after each external phase and verify stable operation/instance IDs, admission,
+duplicate suppression and readiness fencing; these are not real process-kill
+acceptance tests. Missing storage stays pending with an actionable error and no
+automatic empty-disk or Cloud Run fallback.
+
+Deploy only the new functions and resolver:
+`firebase deploy --only functions:vmLifecycle_v2,functions:vmLifecycleWorker_v2,functions:vmLifecycleReconcile_v2,functions:vmGatewayResolve_v2 --project pi-agents-cloud --force`.
+The explicit Firebase retry-policy acknowledgement applies to the new worker;
+the selected deploy does not replace legacy triggers. No runner rebuild is
+needed. `scripts/vm-lifecycle-fixture.mjs` admits only `vm-proof-605` and calls
+the IAM-private API using an operator identity token without printing it.
+Its pause/start/replace requests are submitted twice to check idempotency;
+`status`/`wait` observe the persisted operation rather than restarting work.
+
+On 2026-11-23 the deployed controller paused generation 6 with successful
+quiesce, confirmed the VM absent and the retained disk's `users` empty, then
+started generation 7 on `mapache-vm-e867ca428e8588b757d06955`. Both requests were
+submitted twice and returned their original operation IDs. Pause operation
+`83dd5385515a11e8499f270c823637fb25b9307f346349fc51fdf5cee0479530` and start
+operation `a0f18ebe17eb48e54aa540d3182b606f8e2c057c70e97d8aabea6736e8a6203b`
+both reached `succeeded`; start remained pending until actual agent health and
+current writer authority were confirmed. Live gateway health, 17 bundles, and
+shell/retained-path checks passed against the controller-created session.
+The normal in-container runtime proof and full retained-filesystem verifier
+also passed on generation 7, including the original generation-2 Git HEAD.
+Sanitized operation evidence lives under `artifacts/qa/vm-lifecycle/`.
+Only the synthetic registry record is lifecycle-admitted. Existing workspaces,
+including `vm-test`, are not moved or admitted by these tests.
 
 The Compute Engine runtime identity is
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. It receives only the

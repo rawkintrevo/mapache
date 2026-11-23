@@ -14,6 +14,7 @@ function createVmGatewayResolveService({db, now = Date.now}) {
         path.includes("\\") || /[\x00-\x20\x7f]/.test(path)) throw httpError(400, "invalid_gateway_request");
     // Cookie-bearing cross-origin writes/WebSockets must never reach the runner.
     if (origin && origin !== `https://${host}`) throw httpError(404, "not_found");
+    const controlPath = path === "/runner/health" || path === "/shutdown";
     return db.runTransaction(async (tx) => {
       const route = (await tx.get(db.collection("vmGatewayRoutes_v2").doc(host))).data();
       if (!route?.workspaceId || route.enabled !== true) throw httpError(404, "not_found");
@@ -31,10 +32,11 @@ function createVmGatewayResolveService({db, now = Date.now}) {
           session.ownerUid !== ws.ownerUid || credentials.ownerUid !== ws.ownerUid ||
           session.generation !== ws.generation || credentials.generation !== ws.generation ||
           route.generation !== ws.generation || route.sessionId !== ws.currentSessionId ||
-          ws.state !== "active" || session.state !== "active" || !ws.bootId || ws.bootId !== session.bootId ||
+          !(controlPath ? ["active", "stopping"].includes(ws.state) : ws.state === "active") ||
+          !(controlPath ? ["active", "stopping"].includes(session.state) : session.state === "active") || !ws.bootId || ws.bootId !== session.bootId ||
           !(ws.leaseExpiresAt > time) || !(session.leaseExpiresAt > time)) throw httpError(404, "not_found");
       let expiresAt;
-      if (path === "/runner/health") {
+      if (controlPath) {
         if (!safeEqual(shutdownToken, credentials.shutdownToken)) throw httpError(404, "not_found");
         expiresAt = time + 30000;
       } else {

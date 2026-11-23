@@ -16,7 +16,7 @@ async function main() {
   assert.ok(['route', 'probe', 'browser'].includes(action) && Number.isSafeInteger(generation) && generation > 0);
   const workspaceId = 'vm-proof-605';
   const ownerUid = 'vm-proof-owner';
-  const sessionId = `${workspaceId}-g${generation}`;
+  let sessionId = `${workspaceId}-g${generation}`;
   const project = 'pi-agents-cloud';
   const run = JSON.parse(execFileSync('gcloud', ['run', 'services', 'describe', 'mapache-vm-gateway-v2',
     '--region', 'us-central1', '--project', project, '--format=json'], {encoding: 'utf8'}));
@@ -26,6 +26,8 @@ async function main() {
   admin.initializeApp({projectId: project});
   const db = admin.firestore();
   const wsRef = db.collection('vmRuntimes_v2').doc(workspaceId);
+  const current = (await wsRef.get()).data();
+  if (current?.generation === generation && current.ownerUid === ownerUid) sessionId = current.currentSessionId;
   if (action === 'route') {
     const descriptor = createRuntimeDescriptor({backend: 'compute-engine', workspaceId, ownerUid,
       region: 'us-central1', zone: 'us-central1-a', generation});

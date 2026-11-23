@@ -571,6 +571,11 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
 });
 
 // IAM-private gateway resolver: deploy independently of all legacy handlers.
+const vmLifecycleFunctions = require("./vmLifecycle.functions");
+exports.vmLifecycle_v2 = vmLifecycleFunctions.vmLifecycle_v2;
+exports.vmLifecycleWorker_v2 = vmLifecycleFunctions.vmLifecycleWorker_v2;
+exports.vmLifecycleReconcile_v2 = vmLifecycleFunctions.vmLifecycleReconcile_v2;
+
 exports.vmGatewayResolve_v2 = onRequest({
   invoker: "mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com",
   timeoutSeconds: 30,

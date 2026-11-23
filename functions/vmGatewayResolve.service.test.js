@@ -74,3 +74,10 @@ test("health requires distinct control credential; upstream cannot escape privat
     f.route.address = address; await assert.rejects(f.call(), /gateway_target_unavailable/);
   }
 });
+
+test("stopping denies browser traffic but permits authenticated controller shutdown", async () => {
+  const f = fixture(); f.ws.state = "stopping"; f.session.state = "stopping";
+  await assert.rejects(f.call(), /not_found/);
+  await assert.rejects(f.call({path: "/shutdown"}), /not_found/);
+  await f.call({path: "/shutdown", shutdownToken: "health-secret", token: ""});
+});

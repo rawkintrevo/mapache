@@ -153,7 +153,9 @@ function createComputeEngineService(dependencies = {}) {
     return {
       descriptor,
       disk: disk ? {name: disk.name, sizeGb: Number(disk.sizeGb), status: disk.status, labels: disk.labels || {}, users: disk.users || []} : null,
-      instance: instance ? {name: instance.name, status: instance.status, labels: instance.labels || {}, selfLink: instance.selfLink} : null,
+      instance: instance ? {name: instance.name, status: instance.status, labels: instance.labels || {}, selfLink: instance.selfLink,
+        privateAddress: instance.networkInterfaces?.length === 1 && !instance.networkInterfaces[0].accessConfigs?.length &&
+          instance.networkInterfaces[0].subnetwork?.endsWith("/subnetworks/mapache-vm-v2-us-central1") ? instance.networkInterfaces[0].networkIP : null} : null,
       state: instance?.status === "RUNNING" ? "running" : "stopped",
       observedAt: new Date().toISOString(),
     };

@@ -38,7 +38,8 @@ if (['start', 'replace'].includes(action)) {
   const secretRef = db.collection('vmRuntimeCredentials_v2').doc(sessionId);
   secrets = await db.runTransaction(async (tx) => {
     const [ws, ss, cs] = await Promise.all([tx.get(workspaceRef), tx.get(sessionRef), tx.get(secretRef)]);
-    if (ws.exists && (ws.data().ownerUid !== descriptor.ownerUid || ws.data().generation > descriptor.generation)) {
+    if (ws.exists && (ws.data().ownerUid !== descriptor.ownerUid || ws.data().generation > descriptor.generation ||
+        (ws.data().generation === descriptor.generation && ws.data().currentSessionId !== sessionId))) {
       throw new Error('fixture_registry_conflict');
     }
     if (ss.exists) {
