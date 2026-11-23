@@ -12,8 +12,6 @@ function createVmGatewayResolveService({db, now = Date.now}) {
         typeof host !== "string" || !/^[a-z0-9][a-z0-9.-]{0,252}$/.test(host) ||
         typeof path !== "string" || !path.startsWith("/") || path.startsWith("//") ||
         path.includes("\\") || /[\x00-\x20\x7f]/.test(path)) throw httpError(400, "invalid_gateway_request");
-    // Cookie-bearing cross-origin writes/WebSockets must never reach the runner.
-    if (origin && origin !== `https://${host}`) throw httpError(404, "not_found");
     const controlPath = path === "/runner/health" || path === "/shutdown";
     return db.runTransaction(async (tx) => {
       const route = (await tx.get(db.collection("vmGatewayRoutes_v2").doc(host))).data();
@@ -21,6 +19,12 @@ function createVmGatewayResolveService({db, now = Date.now}) {
       const workspaceRef = db.collection("vmRuntimes_v2").doc(route.workspaceId);
       const ws = (await tx.get(workspaceRef)).data();
       if (!ws?.currentSessionId || ws.backend !== "compute-engine") throw httpError(404, "not_found");
+      // The parent app's read-only meters connect from a different origin.
+      // Only backend-admitted exact origins may use that one route. Terminal,
+      // agent and mutation routes retain the same-origin requirement.
+      const crossOriginMetrics = origin && origin !== `https://${host}` && path === "/metrics" &&
+        Array.isArray(ws.metricsOrigins) && ws.metricsOrigins.includes(origin);
+      if (origin && origin !== `https://${host}` && !crossOriginMetrics) throw httpError(404, "not_found");
       const [ss, cs] = await Promise.all([
         tx.get(workspaceRef.collection("sessions").doc(ws.currentSessionId)),
         tx.get(db.collection("vmRuntimeCredentials_v2").doc(ws.currentSessionId)),
@@ -44,6 +48,7 @@ function createVmGatewayResolveService({db, now = Date.now}) {
         if (!payload || payload.sid !== ws.currentSessionId ||
             (payload.gen !== undefined && String(payload.gen) !== String(ws.generation)) ||
             (payload.aud !== undefined && payload.aud !== "agent")) throw httpError(404, "not_found");
+        if (crossOriginMetrics && (payload.aud !== "agent" || String(payload.gen) !== String(ws.generation))) throw httpError(404, "not_found");
         // URL normalization prevents encoded traversal from weakening agent checks.
         let pathname;
         try { pathname = new URL(decodeURIComponent(path), "https://gateway.invalid").pathname; } catch {

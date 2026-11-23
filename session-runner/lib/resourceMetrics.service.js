@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("node:os");
 const {promisify} = require("util");
 const {
   calculateCpuPercent,
@@ -46,6 +47,8 @@ function createResourceMetricsService({
   clearIntervalFn = clearInterval,
   logger = console,
   cgroupDirectory = null,
+  allowHostMemoryFallback = false,
+  totalMemory = os.totalmem,
 } = {}) {
   const listeners = new Set();
   let timer = null;
@@ -151,7 +154,11 @@ function createResourceMetricsService({
     const cpuUsageUsec = parseCpuUsageUsec(cpuStat);
     const limitCores = parseCpuLimitCores(cpuMax);
     const memoryUsedBytes = parseMemoryBytes(memoryCurrent);
-    const memoryLimitBytes = parseMemoryBytes(memoryMax);
+    // A dedicated VM container may have no cgroup memory quota. Use its
+    // machine's physical capacity only when explicitly enabled by the VM
+    // runtime; missing, malformed and unreadable cgroup data still fail closed.
+    const memoryLimitBytes = allowHostMemoryFallback && String(memoryMax).trim() === "max" ?
+      parseMemoryBytes(totalMemory()) : parseMemoryBytes(memoryMax);
     return validateSnapshot({
       cpuUsageUsec,
       limitCores,

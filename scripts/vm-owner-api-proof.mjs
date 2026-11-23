@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {readFile, mkdir, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {proveOwnerCreation} from './vm-owner-create-proof.mjs';
+import {liveShellProof} from './vm-live-shell-proof.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const {isFirebaseTokenAllowed, parseAppAllowList} = require('../functions/appAllowList.helpers');
@@ -16,7 +17,7 @@ const base = 'https://us-central1-pi-agents-cloud.cloudfunctions.net';
 const uids = ['vm-proof-owner', 'vm-proof-outsider'];
 
 async function main() {
-  assert.ok(['probe', 'cycle', 'create'].includes(mode));
+  assert.ok(['probe', 'cycle', 'create', 'shell'].includes(mode));
   admin.initializeApp({projectId: project});
   const db = admin.firestore(); const auth = admin.auth();
   const preexistingUsers = new Set();
@@ -44,17 +45,20 @@ async function main() {
     const allowed = [...parseAppAllowList(access.allowedUids).map(entry => entry.value), ...added];
     if (added.length) tx.update(accessRef, {allowedUids: allowed});
     tx.update(wr, {apiEnabled: true, apiQaRunId: nonce});
-    return {apiEnabled: ws.apiEnabled === true, generation: ws.generation, added, allowed, previousAllowed: access.allowedUids};
+    if (mode === 'shell') tx.update(wr, {metricsOrigins: [...new Set([...(ws.metricsOrigins || []), 'http://127.0.0.1:5174'])]});
+    return {apiEnabled: ws.apiEnabled === true, generation: ws.generation, added, allowed, previousAllowed: access.allowedUids, metricsOrigins: ws.metricsOrigins};
   });
   const result = {ok: false, mode, fromGeneration: setup.generation};
   try {
     const tokens = {};
+    let ownerCustomToken;
     for (const [index, identity] of ['owner', 'outsider'].entries()) {
       const signed = await fetch(`${base}/vmFixtureAuth_v2`, {method: 'POST',
         headers: {authorization: `Bearer ${operatorToken}`, 'content-type': 'application/json'},
         body: JSON.stringify({identity}), signal: AbortSignal.timeout(30000)});
       assert.equal(signed.status, 200, 'private fixture signer failed');
       const custom = await signed.json(); assert.equal(custom.uid, uids[index]);
+      if (identity === 'owner') ownerCustomToken = custom.token;
       const login = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`, {
         method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({token: custom.token, returnSecureToken: true}),
         signal: AbortSignal.timeout(30000),
@@ -94,6 +98,7 @@ async function main() {
     assert.equal((await call('vm-proof-605/replace', 'POST', {expectedGeneration: setup.generation, requestId: nonce, ownerUid: uids[1]})).status, 400);
     assert.equal((await call('vm-proof-605/access', 'POST', {expectedGeneration: setup.generation - 1})).status, 409);
     let generation = setup.generation;
+    if (mode === 'shell') result.shell = await liveShellProof({customToken: ownerCustomToken});
     if (mode === 'create') result.creation = await proveOwnerCreation({db, call, outsiderToken: tokens.outsider, nonce});
     if (mode === 'cycle') {
       async function lifecycle(action) {
@@ -151,6 +156,7 @@ async function main() {
     await db.runTransaction(async tx => {
       const [w, a] = await Promise.all([tx.get(wr), tx.get(accessRef)]);
       if (w.data()?.ownerUid === uids[0] && w.data()?.apiQaRunId === nonce) tx.update(wr, {apiEnabled: setup.apiEnabled, apiQaRunId: admin.firestore.FieldValue.delete()});
+      if (mode === 'shell' && w.data()?.apiQaRunId === nonce) tx.update(wr, {metricsOrigins: setup.metricsOrigins ?? admin.firestore.FieldValue.delete()});
       if (setup.added.length) {
         const current = a.data()?.allowedUids;
         const restored = JSON.stringify(current) === JSON.stringify(setup.allowed) ?

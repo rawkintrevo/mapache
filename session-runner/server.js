@@ -214,7 +214,8 @@ const agentWebSocket = createAgentWebSocketGateway({
   upstreamPort: config.piWebUiPort,
   isCurrentWriter: workspaceAuthority.isCurrentWriter,
 });
-const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
+const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs,
+  allowHostMemoryFallback: config.runtimeProvider === "compute-engine"});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
   hasBrowserAccess,
   metricsService: resourceMetrics,

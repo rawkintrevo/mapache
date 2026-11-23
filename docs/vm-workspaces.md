@@ -119,6 +119,26 @@ does not mount one ordinary ext4 filesystem into two workspaces.
 
 ## Access, identity, and routing
 
+The parent app's `/metrics` WebSocket is the sole cross-origin gateway
+exception. `vmRuntimes_v2/{id}.metricsOrigins` is a backend-only list of exact
+approved app origins; it is not accepted from a browser request. An approved
+origin still needs a valid current-generation agent token and the normal
+workspace/session/boot/lease authority. Other paths, including Agent sockets,
+shell and shutdown, keep the same-origin restriction. Removing an origin
+invalidates its long connection on the next gateway reauthorization. Operators
+must configure the deployed frontend origin when admitting a VM to the UI.
+The live shell harness temporarily adds only `http://127.0.0.1:5174` to the
+synthetic fixture, then restores its prior origin configuration.
+
+VM resource collection uses container cgroup usage counters. If cgroup v2
+explicitly reports unlimited memory (`max`), only the Compute Engine runtime
+uses physical VM memory as the capacity denominator. This reports container
+usage relative to machine capacity, not total host/OS usage. Explicit cgroup
+limits retain precedence; missing/malformed metrics remain unavailable. Cloud
+Run collection does not enable this fallback. Owners are
+`session-runner/lib/resourceMetrics.service.js` and `session-runner/server.js`;
+the change needs a new VM runner image, not a Cloud Run revision.
+
 Runner, Chrome, terminal, preview, upload, and WebSocket traffic enters through
 the authenticated gateway origin recorded in the trusted descriptor. The VM has
 no public runner, Chrome, terminal, or debug port. The gateway authorizes the
@@ -644,6 +664,31 @@ predated the baked-path precedence correction, so it is startup evidence only.
 health, functional agent readiness, blocked metadata-token access, retained
 workspace, and retained child HOME. The health path skips legacy Firestore
 checkpoint reads for VM storage; backups are a separate concern.
+
+The parent-metrics canary build `d1aa0a46-2f29-45a2-8dce-d276c0f21c7e`
+published the VM-only tag `vm-crossover-metrics-f72a55b` at immutable digest
+`sha256:885a04f85bc34d8987523624f2c7bd9fe704b0121d483971adfe227299c7b3b8`.
+It adds the dedicated-VM unlimited-memory capacity fallback above. Production
+runner tags were not moved. `scripts/vm-lifecycle-fixture.mjs admit GENERATION
+[PINNED_IMAGE]` now preserves the fixture's stored image unless an explicit
+validated digest is supplied; admission no longer rolls it back to an older
+hard-coded image.
+Replacement operation
+`d7c04e20305031d5f7d76501a70233dea7a8e189d15d20e6a8c08ab0538268ef`
+passed generation 8 -> 9 with graceful quiesce. Generation 9 is
+`mapache-vm-f82ddd54fbcf523ee9cd3e54`, still attached to retained disk
+`mapache-ws-efaf283eb879545a0e7ba4d3`. Normal agent health, metadata fencing,
+retained child HOME/workspace and the original Git/SQLite/native/mode/symlink/
+locking proofs passed. The live opt-in app shell then passed Firebase owner
+login, discovery, current-session reads, signed Agent access, connected embedded
+Agent and real CPU/RAM samples. The shell used neither legacy workspace-scoped
+API calls nor a legacy Firestore session listener. Temporary Auth, allowlist,
+API admission and parent metrics-origin changes were restored. Evidence is
+`artifacts/qa/vm-owner-api/shell.json`, `artifacts/qa/vm-live-shell/`, and the
+operation record under `artifacts/qa/vm-lifecycle/`. The synthetic unpaired
+Device Center's verified `NOT_PAIRED` 409 is expected; model-chat and migration
+acceptance remain outstanding. Only `vmGatewayResolve_v2` was redeployed for
+the gateway fix; no production runner tag or Hosting release changed.
 
 Generation 5 (`mapache-vm-d0af925469e49c4467ec0bd6`) passed that stronger
 runtime proof on 2026-11-23 with immutable image

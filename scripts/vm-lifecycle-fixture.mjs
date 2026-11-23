@@ -29,8 +29,11 @@ async function main() {
       assert.equal(r.data()?.workspaceId, workspaceId);
       assert.equal(r.data()?.ownerUid, ownerUid);
       assert.equal(r.data()?.generation, generation);
+      const runnerImage = requestId || w.data()?.runnerImage;
+      assert.match(runnerImage || '', /^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/,
+        'admit requires a stored image or an explicit pinned image argument');
       tx.update(ref, {lifecycleEnabled: true, gatewayHost: host,
-        runnerImage: 'us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:a65b97e030790abfe1dc8e7d3de5cc8c30bf753cfddada062f1dd358c161fecc'});
+        runnerImage});
     });
     console.log(JSON.stringify({ok: true, action, workspaceId, generation})); return;
   }

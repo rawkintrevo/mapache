@@ -63,8 +63,9 @@ workspace selection skips the legacy workspace MCP/Google config reads for VM
 records. Global account credential management remains available; unsupported
 VM-scoped actions return an explicit unavailable error. This is temporary
 crossover coverage, not removal of the central configuration requirements.
-Creation UI, configuration/automation/request/upload routing and live full-shell
-acceptance remain unfinished. Builds without the flag keep the old behavior.
+Creation UI, configuration/automation/request/upload routing and full-shell
+creation/lifecycle acceptance remain unfinished. Builds without the flag keep
+the old behavior.
 
 `e2e/qa/cases/vm-client-routing.json` exercises the production power control
 and VM adapter with synthetic responses via the local Vite fixture. CDP QA
@@ -72,6 +73,21 @@ passed Stop -> Start -> fresh-generation access, with no legacy calls or
 unexpected console/network errors. Evidence is in
 `artifacts/qa/vm-client-routing/`; this fixture is not live Firebase full-shell
 acceptance. The browser harness is `scripts/vm-client-browser-proof.mjs`.
+
+`scripts/vm-owner-api-proof.mjs shell` adds live full-shell QA on an owned Vite
+server at `127.0.0.1:5174` with the VM flag and explicit public Firebase
+configuration enabled. It signs the fixed synthetic owner into the actual app,
+checks admitted listing/current-session/access requests, waits for the embedded
+Agent connection, and requires live CPU/RAM samples. It rejects legacy scoped
+workspace calls and Firestore listeners. The harness temporarily admits the
+fixture and parent metrics origin, restores them and Auth/allowlist state, and
+does not mutate the machine lifecycle. The case is
+`e2e/qa/cases/vm-live-shell.json`; artifacts are under
+`artifacts/qa/vm-live-shell/`. No model-authenticated turn is implied by this QA.
+This live read/access/metrics case passed on synthetic generation 9 on
+2026-11-23. The screenshot shows the actual signed-in shell and connected Agent
+with live CPU/RAM samples. Creation and lifecycle actions through the full
+browser shell, central configuration, and migration still need acceptance.
 
 On the first authenticated refresh, `src/utils/userTimezone.js` initializes a
 missing profile timezone from the browser's IANA timezone (falling back to

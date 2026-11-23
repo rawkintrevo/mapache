@@ -1,0 +1,17 @@
+{
+  "id": "vm-live-shell",
+  "title": "Opt-in app shell opens the admitted live VM through Firebase owner authentication",
+  "baseUrl": "http://127.0.0.1:5174/app",
+  "artifactsDir": "artifacts/qa/vm-live-shell",
+  "requires": "Vite on 5174 with VITE_VM_WORKSPACES_ENABLED=true and explicit public Firebase API key/project configuration from src/services/auth.js; isolated CDP Chrome on 9223; vm-owner-api-proof.mjs shell supplies the fixed synthetic owner's custom token in memory",
+  "steps": [
+    {"assert": "Sign in using the fixed fixture custom token; actual shell lists and selects vm-proof-605"},
+    {"assert": "Owner discovery, canonical-session reads and signed access requests succeed"},
+    {"assert": "Shell shows running workspace power, a connected Agent iframe on the admitted VM gateway, and live CPU/RAM meter samples"},
+    {"assert": "No legacy workspace-scoped API calls or legacy session Firestore listener; no unexpected console/network failures"},
+    {"capture": "screenshot"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ],
+  "limits": "No model credentials/chat, machine mutation, migration or configuration acceptance. The synthetic upstream Device Center may return the verified NOT_PAIRED 409."
+}

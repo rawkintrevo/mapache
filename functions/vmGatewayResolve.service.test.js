@@ -34,6 +34,19 @@ test("authorized routing returns only bounded target and authority, never creden
   assert.equal((await f.call({path: "/shell", token: f.token({aud: undefined, gen: undefined})})).address, "10.90.0.12");
 });
 
+test("parent-app metrics require an admitted exact origin and current agent credentials", async () => {
+  const f = fixture(); const origin = "https://app.example.com";
+  await assert.rejects(f.call({origin, path: "/metrics"}), /not_found/);
+  f.ws.metricsOrigins = [origin];
+  assert.equal((await f.call({origin, path: "/metrics"})).sessionId, "session");
+  for (const path of ["/shell", "/agent/ws", "/shutdown", "/%6detrics"]) await assert.rejects(f.call({origin, path}), /not_found/);
+  for (const denied of ["https://evil.example.com", "https://app.example.com.evil.test", `${origin}/`]) await assert.rejects(f.call({origin: denied, path: "/metrics"}), /not_found/);
+  await assert.rejects(f.call({origin, path: "/metrics", token: f.token({gen: undefined})}), /not_found/);
+  await assert.rejects(f.call({origin, path: "/metrics", token: f.token({aud: undefined})}), /not_found/);
+  f.ws.metricsOrigins = [];
+  await assert.rejects(f.call({origin, path: "/metrics"}), /not_found/);
+});
+
 test("guessed hosts, foreign owners, expired and forged credentials fail closed", async () => {
   for (const body of [{host: "other.example.com"}, {token: ""}, {token: fixture().token({}, "foreign")},
     {token: fixture().token({sid: "other"})}, {token: fixture().token({exp: 99})},
