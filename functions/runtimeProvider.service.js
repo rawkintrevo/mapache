@@ -32,6 +32,9 @@ function createRuntimeProviderService({cloudRunService, computeEngineService, en
         throw error;
       }
     }
+    if (operation === "provisionSessionService") {
+      return cloudRunService.provisionSessionService(workspace, sessionRef, session);
+    }
     return cloudRunService[operation](sessionRef, session, options);
   }
 }

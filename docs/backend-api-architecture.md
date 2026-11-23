@@ -69,6 +69,11 @@ CRUD API in the current manifest.
 Session creation and resize share `normalizeRequestedSessionResources` from
 `functions/index.js`; it must be supplied to both service dependency objects.
 Resize validates resources before stopping or recreating a managed runtime.
+Runtime-provider dispatch preserves each provider's boundary contract: Cloud
+Run provisioning receives `(workspace, sessionRef, session)`, while patch and
+delete operations receive `(sessionRef, session, options)`. Compute Engine
+uses the same public lifecycle operation names with its backend-specific
+implementation.
 
 Resize requests return HTTP 202 after `sessionResize.service.js` transactionally
 records a `resizeOperationId`, requested resources, and `queued` state on the
