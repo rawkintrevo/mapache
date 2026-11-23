@@ -69,8 +69,8 @@ The bootstrap accepts only a successful signature probe or the explicit
 no-signature result, mounts ext4, and permits creation of a missing identity
 marker only for the admitted initial operation on an empty filesystem.
 Probe errors, unmarked retained disks and populated unmarked roots fail closed.
-The lifecycle API still needs initial workspace reservation/admission; this
-low-level recovery contract does not enable new user VM creation by itself.
+Initial workspace reservation/admission is handled by the owner creation path
+below; this low-level recovery contract alone does not admit new workspaces.
 
 `functions/computeEngine.creation.test.js` injects loss of the disk-create
 response, reconstructs the service and runs the generated storage bootstrap in
@@ -267,7 +267,7 @@ wait at least 15 seconds and are picked up by the minute scheduler.
 
 The first controller is deliberately limited to admitted canaries: reconciliation
 scans up to 100 pending operations and runs up to four at a time. Paginated cohort
-reconciliation, initial-disk initialization recovery, operator repair/UI flows,
+reconciliation, operator repair/UI flows,
 resource resizing, richer machine properties/capabilities and end-to-end worker
 termination tests remain required before broad rollout. Unit tests inject loss
 after each external phase and verify stable operation/instance IDs, admission,
@@ -300,6 +300,60 @@ Only the synthetic registry record is lifecycle-admitted. Existing workspaces,
 including `vm-test`, are not moved or admitted by these tests.
 
 ### Firebase owner API
+
+`POST /workspaces/{id}/create` accepts only `{requestId, name}` after ordinary
+Firebase authentication/app admission. `functions/vmCreation.service.js`
+requires an enabled backend-only `vmCreationAdmissions_v2/{id}` document with
+the exact `ownerUid`, pinned `runnerImage`, and allocated `gatewayHost`. There
+is no general public admission or client-selected infrastructure. The transaction
+rejects existing VM and legacy workspace records, consumed admissions, occupied
+gateway origins (even disabled routes), and credential/session collisions. It
+atomically creates generation 1, independent credentials, a disabled route,
+and a pending creation operation while recording the consumed admission.
+Identical owner/request/name retries return the original operation; changed
+requests cannot allocate another machine. Revoked admission rejects retries.
+
+Creation follows disk -> provision -> route -> health. The disk phase may
+create storage only for the initial operation/generation and rejects a disk
+with another creation provenance. After that phase is committed, provisioning
+sets `allowCreateDisk=false`: loss of the confirmed disk remains an error.
+Separate `allowInitializeDisk` authority permits first formatting/marker setup
+on that existing, correctly labelled disk and ends once a boot is admitted.
+Route publication and completion use the same ownership, health and live-lease
+checks as replacement. Provisioning does not delete old compute or copy a
+Cloud Run checkpoint. Legacy workspace IDs are explicitly rejected; migration
+must use its own freeze/import/cutover protocol.
+
+Creation currently requires an operator-allocated isolated gateway origin and
+explicit per-workspace admission. Frontend creation, central configuration
+materialization, generalized origin allocation, and migration remain release
+gates. No real user workspace is admitted by deploying these handlers.
+Deploy with `firebase deploy --only functions:vmApi_v2,functions:vmLifecycleWorker_v2,functions:vmLifecycleReconcile_v2 --project pi-agents-cloud`.
+`scripts/vm-owner-api-proof.mjs create` uses the fixed `vm-owner-create-605`
+fixture and a `create-proof` gateway revision tag. It exercises real owner
+authentication, duplicate/foreign-owner/forged-input rejection, readiness and
+agent access, then pauses and deletes only its dedicated disk and registry
+records. Completed operation records remain as evidence. A failed or pending
+operation is retained for reconciliation, never automatically restarted as a
+new workspace. Remove the temporary gateway tag after the proof completes.
+Before running it, use `gcloud run services update-traffic mapache-vm-gateway-v2
+--region us-central1 --project pi-agents-cloud --update-tags create-proof=REVISION`
+with the inspected ready gateway revision. This adds a fixture hostname without
+changing the main traffic split. Cleanup uses the same command with
+`--remove-tags create-proof` instead of `--update-tags`.
+The creation tests cover atomic duplicate reservation, legacy/origin conflicts,
+auth-derived ownership, loss of a disk-create response, and a lost provisioning
+response after boot admission. Initialization authority is not renewed after
+that boot, and missing storage after the disk phase cannot be recreated.
+On 2026-11-23 the deployed owner creation proof passed. Operation
+`6d2a68c4745c31eeccdf0cc192a157cb34e1c2690fa78c80077f1a778bc96759`
+created a healthy generation-1 machine and its isolated signed agent URL
+returned the agent page. Duplicate creation reused that operation; unauthorised
+owners and caller-supplied infrastructure were rejected. Pause operation
+`f244d09e97a6af8da5785a9dc23eb9b331268ca403480ddab12846e9ccf63ba0`
+completed before disk/registry cleanup. The original generation-8 fixture's
+owner API/access checks also passed afterward, and temporary Auth/allowlist
+state was restored. Evidence: `artifacts/qa/vm-owner-api/create.json`.
 
 `functions/vmApi.service.js` backs the separately deployed `vmApi_v2` Function.
 It uses the existing `requireUser` Firebase ID-token verification and app

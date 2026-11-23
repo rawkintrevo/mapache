@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {readFile, mkdir, writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {proveOwnerCreation} from './vm-owner-create-proof.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const {isFirebaseTokenAllowed, parseAppAllowList} = require('../functions/appAllowList.helpers');
@@ -15,7 +16,7 @@ const base = 'https://us-central1-pi-agents-cloud.cloudfunctions.net';
 const uids = ['vm-proof-owner', 'vm-proof-outsider'];
 
 async function main() {
-  assert.ok(['probe', 'cycle'].includes(mode));
+  assert.ok(['probe', 'cycle', 'create'].includes(mode));
   admin.initializeApp({projectId: project});
   const db = admin.firestore(); const auth = admin.auth();
   const preexistingUsers = new Set();
@@ -76,6 +77,7 @@ async function main() {
     assert.equal((await call('vm-proof-605/replace', 'POST', {expectedGeneration: setup.generation, requestId: nonce, ownerUid: uids[1]})).status, 400);
     assert.equal((await call('vm-proof-605/access', 'POST', {expectedGeneration: setup.generation - 1})).status, 409);
     let generation = setup.generation;
+    if (mode === 'create') result.creation = await proveOwnerCreation({db, call, outsiderToken: tokens.outsider, nonce});
     if (mode === 'cycle') {
       async function lifecycle(action) {
         const request = {expectedGeneration: generation, requestId: `${action}-${nonce}`};

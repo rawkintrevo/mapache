@@ -169,6 +169,10 @@ function createComputeEngineService(dependencies = {}) {
     });
     if (existing) {
       assertOwnership(existing, descriptor);
+      if (options.requireCreationMatch === true && (existing.labels?.["mapache-created-generation"] !== String(descriptor.generation) ||
+          existing.labels?.["mapache-operation-id"] !== identityLabel(String(options.operationId || descriptor.generation)))) {
+        throw computeError("runtime_data_disk_creation_conflict", "Existing disk belongs to another creation operation");
+      }
       if (existing.status !== "READY") throw computeError("runtime_data_disk_unusable", `Data disk is ${existing.status}`);
       if (options.expectedSizeGb && Number(existing.sizeGb) < Number(options.expectedSizeGb)) {
         throw computeError("runtime_data_disk_resize_required", "Data disk is smaller than the requested capacity");
@@ -224,7 +228,7 @@ function createComputeEngineService(dependencies = {}) {
       params: {requestId: operationId(`instance:${descriptor.instanceName}:${options.operationId || descriptor.generation}`)},
       // Creation authority survives a worker restart, but cannot be borrowed
       // by a later generation, another operation, or an ordinary resume.
-      data: instanceBody(descriptor, disk, {...options, allowNewDisk: options.allowCreateDisk === true &&
+      data: instanceBody(descriptor, disk, {...options, allowNewDisk: (options.allowCreateDisk === true || options.allowInitializeDisk === true) &&
         disk.labels?.["mapache-created-generation"] === String(descriptor.generation) &&
         disk.labels?.["mapache-operation-id"] === identityLabel(String(options.operationId || descriptor.generation))}),
     });

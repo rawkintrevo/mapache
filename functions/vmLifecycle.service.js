@@ -79,7 +79,13 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       if (workspaceFields.state === "stopped") tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "stopped", leaseExpiresAt: 0});
     });
     try {
-      if (operation.phase === "quiesce") {
+      if (operation.phase === "disk") {
+        if (operation.action !== "create" || operation.descriptor.generation !== 1) throw httpError(409, "vm_initial_disk_authority_missing");
+        const ws = (await wr.get()).data();
+        if (ws?.initialOperationId !== operationId || ws.bootId) throw httpError(409, "vm_initial_disk_authority_missing");
+        await compute.ensureDataDisk(operation.descriptor, {operationId: `${operationId}-create`, allowCreateDisk: true, requireCreationMatch: true, timeoutMs: 240000});
+        await commit("provision");
+      } else if (operation.phase === "quiesce") {
         const result = await quiesce(operation);
         await commit("delete", {quiesceResult: result});
       } else if (operation.phase === "delete") {
@@ -113,10 +119,14 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           tx.update(ref, {phase: "provision", descriptor, sessionId, claim: null, updatedAtMs: now()});
         });
       } else if (operation.phase === "provision") {
+        const currentWorkspace = (await wr.get()).data();
+        assertOperation(currentWorkspace, operation, operationId);
         const credentials = (await db.collection("vmRuntimeCredentials_v2").doc(operation.sessionId).get()).data();
         if (credentials?.ownerUid !== operation.ownerUid || credentials.generation !== operation.descriptor.generation) throw httpError(409, "vm_credentials_mismatch");
         await compute.start(operation.descriptor, {operationId: `${operationId}-create`, timeoutMs: 240000,
-          allowCreateDisk: false, runnerImage: operation.runnerImage,
+          allowCreateDisk: false, allowInitializeDisk: operation.action === "create" && operation.descriptor.generation === 1 &&
+            currentWorkspace.initialOperationId === operationId && !currentWorkspace.bootId,
+          runnerImage: operation.runnerImage,
           subnetwork: "projects/pi-agents-cloud/regions/us-central1/subnetworks/mapache-vm-v2-us-central1",
           env: {GCLOUD_PROJECT: "pi-agents-cloud", MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
             MAPACHE_VM_CONTROL_URL: "https://us-central1-pi-agents-cloud.cloudfunctions.net/vmRuntimeControl_v2",

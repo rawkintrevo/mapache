@@ -3,6 +3,7 @@ const {createHmac} = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
 const {OPERATIONS} = require("./vmLifecycle.service");
 const {isVmAddress} = require("./vmGatewayResolve.service");
+const {createVmCreationService} = require("./vmCreation.service");
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
@@ -10,10 +11,16 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
     const user = await requireUser(req);
     const uid = user.uid || user.id;
     if (!uid) throw httpError(401, "invalid_auth_token");
-    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
+    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(create|access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
     if (!match) throw httpError(404, "not_found");
     const [, workspaceId, action, operationId] = match;
     const wr = db.collection("vmRuntimes_v2").doc(workspaceId);
+    if (action === "create" && !operationId && req.method === "POST") {
+      const body = req.body;
+      if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !["requestId", "name"].includes(key))) throw httpError(400, "invalid_vm_request");
+      const result = await createVmCreationService({db, now})({workspaceId, ownerUid: uid, requestId: body.requestId, name: body.name});
+      return {status: 202, body: result};
+    }
     if (!action && req.method === "GET") {
       const ws = await ownedWorkspace(wr, uid);
       return {status: 200, body: {workspace: publicWorkspace(workspaceId, ws, now())}};

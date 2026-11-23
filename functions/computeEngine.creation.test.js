@@ -92,3 +92,14 @@ test("ordinary resume, another operation and a later generation cannot format or
     assert.notEqual(boot(f.state.script, {signature: 0, marker: {...marker, ownerUid: "another"}}).status, 0);
   }
 });
+
+test("initial controller provisioning can initialize its confirmed disk without permission to recreate it", async () => {
+  const f = fixture();
+  await f.service().ensureDataDisk(f.descriptor, f.options);
+  await assert.rejects(f.service().ensureDataDisk(f.descriptor, {...f.options, operationId: "other", requireCreationMatch: true}), /another creation/);
+  await f.service().start(f.descriptor, {...f.options, allowCreateDisk: false, allowInitializeDisk: true});
+  assert.equal(boot(f.state.script).status, 0);
+  f.state.disk = null; f.state.instance = null;
+  await assert.rejects(f.service().start(f.descriptor, {...f.options, allowCreateDisk: false, allowInitializeDisk: true}), error => error.code === "runtime_data_disk_missing");
+  assert.equal(f.state.diskCreates, 1);
+});
