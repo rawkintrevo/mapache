@@ -576,6 +576,30 @@ exports.vmLifecycle_v2 = vmLifecycleFunctions.vmLifecycle_v2;
 exports.vmLifecycleWorker_v2 = vmLifecycleFunctions.vmLifecycleWorker_v2;
 exports.vmLifecycleReconcile_v2 = vmLifecycleFunctions.vmLifecycleReconcile_v2;
 
+exports.vmApi_v2 = onRequest({invoker: "public", cors: true, timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmApiService} = require("./vmApi.service");
+    const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
+    const result = await createVmApiService({db, requireUser, lifecycle: createVmLifecycleAdapter({db})})(req);
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_api_unavailable"});
+  }
+});
+
+exports.vmFixtureAuth_v2 = onRequest({invoker: "private", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmFixtureAuthService} = require("./vmFixtureAuth.service");
+    res.json(await createVmFixtureAuthService({db, auth: admin.auth()})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "fixture_auth_unavailable"});
+  }
+});
+
 exports.vmGatewayResolve_v2 = onRequest({
   invoker: "mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com",
   timeoutSeconds: 30,

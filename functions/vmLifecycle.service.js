@@ -11,7 +11,7 @@ const CLAIM_MS = 15 * 60 * 1000;
 function createVmLifecycleService({db, compute, quiesce, publishRoute, health, now = Date.now}) {
   const workspaceRef = id => db.collection("vmRuntimes_v2").doc(identifier(id));
   const opRef = id => db.collection(OPERATIONS).doc(identifier(id));
-  async function request({workspaceId, ownerUid, requestId, action, expectedGeneration}) {
+  async function request({workspaceId, ownerUid, requestId, action, expectedGeneration, requireApiAdmission = false}) {
     identifier(ownerUid); identifier(requestId);
     if (!["start", "pause", "replace"].includes(action)) throw httpError(400, "invalid_vm_action");
     const wr = workspaceRef(workspaceId);
@@ -21,6 +21,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       const [w, existing] = await Promise.all([tx.get(wr), tx.get(ref)]);
       const ws = w.data();
       if (!ws || ws.ownerUid !== ownerUid || ws.backend !== "compute-engine") throw httpError(404, "not_found");
+      if (requireApiAdmission && ws.apiEnabled !== true) throw httpError(404, "not_found");
       if (existing.exists) {
         const operation = existing.data();
         if (operation.ownerUid !== ownerUid || operation.action !== action || operation.oldGeneration !== expectedGeneration) throw httpError(409, "vm_request_id_conflict");

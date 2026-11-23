@@ -83,6 +83,8 @@ test("unadmitted and stale machine requests do not create operations", async () 
   await assert.rejects(f.request({expectedGeneration: 5}), /vm_generation_mismatch/);
   assert.equal(f.docs.size, 2);
   assert.equal(f.effects.length, 0);
+  await assert.rejects(f.request({requireApiAdmission: true}), /not_found/);
+  assert.equal(f.docs.size, 2);
 });
 
 test("each interrupted effect reconciles the same phase without dropping writer admission", async () => {

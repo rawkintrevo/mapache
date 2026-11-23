@@ -265,6 +265,68 @@ Sanitized operation evidence lives under `artifacts/qa/vm-lifecycle/`.
 Only the synthetic registry record is lifecycle-admitted. Existing workspaces,
 including `vm-test`, are not moved or admitted by these tests.
 
+### Firebase owner API
+
+`functions/vmApi.service.js` backs the separately deployed `vmApi_v2` Function.
+It uses the existing `requireUser` Firebase ID-token verification and app
+allowlist, then checks workspace ownership and the explicit `apiEnabled` gate
+in `vmRuntimes_v2`. It does not accept an owner UID, image, disk, or upstream
+address from the caller. All responses use `Cache-Control: no-store`.
+
+| Method/path relative to `vmApi_v2` | Contract |
+| --- | --- |
+| `GET /workspaces/{id}` | Safe state/generation/session/operation fields; readiness also requires a live lease |
+| `POST /workspaces/{id}/access` | `{expectedGeneration}`; owner-scoped signed runner URLs only after lifecycle readiness and matching live session/route authority |
+| `POST /workspaces/{id}/start`, `/pause`, `/replace` | `{expectedGeneration, requestId}`; queues the isolated lifecycle operation, with API admission rechecked in its reservation transaction |
+| `GET /workspaces/{id}/operations/{operationId}` | Safe progress/error fields only for the same owner and workspace |
+
+Access credentials expire after 15 minutes. The same agent-audience/generation
+credential is used for Agent, Shell and Preview URLs so a sibling surface cannot
+replace the cookie with an agent-invalid token. The runner's existing 303
+bootstrap installs the cookie and removes the token from the URL. Stored browser
+signing secrets, shutdown/control credentials and private VM addresses never
+appear in owner API responses. The gateway continues checking current
+generation/boot/lease on requests and long connections. A signed runner token
+is not a Firebase API credential. Chrome URLs are returned only when the
+session records that capability. This endpoint does not yet replace the
+frontend's legacy API wiring or admit/migrate an existing workspace.
+
+`vmFixtureAuth_v2` is an IAM-private test helper, restricted to the fixed
+`vm-proof-owner` and `vm-proof-outsider` identities while the synthetic workspace
+is API/lifecycle-admitted. It refuses unrelated or disabled pre-existing Auth
+users and cannot mint a caller-selected UID. It uses the API service account's
+existing self-signing permission; no operator signing or new IAM grant is
+needed. It does not bypass `vmApi_v2`'s app allowlist.
+
+`scripts/vm-owner-api-proof.mjs probe|cycle` exchanges fixture custom tokens
+using the [Firebase REST authentication contract](https://firebase.google.com/docs/reference/rest/auth/),
+verifies their Firebase identities, and exercises the real owner API. Probe
+covers missing/invalid auth, another authenticated owner, forged owner fields,
+stale generation, runner-cookie bootstrap, and rejection of runner tokens as API
+credentials. Cycle additionally pauses/starts through the owner API, submits each
+request twice, checks owner-only operation polling and stopped-access rejection,
+then opens the new runner. Tokens stay in memory; evidence under
+`artifacts/qa/vm-owner-api/` is sanitized. Cleanup restores temporary API admission
+and allowlist entries without removing concurrent unrelated changes, and removes
+only synthetic Auth users/profiles created by the probe. A process kill during
+the harness itself still requires operator cleanup of its `apiQaRunId` marker.
+
+Deploy only `functions:vmApi_v2,functions:vmFixtureAuth_v2` with explicit
+`--project pi-agents-cloud`. These functions run as `mapache-api`; no legacy API,
+Hosting rewrite or runner image needs replacement. The fixture signer is private
+at IAM; the owner API is network-public but every operation authenticates and
+checks ownership/admission. The fixture access probe passed on generation 7.
+The owner-driven pause/start cycle then passed from generation 7 to 8, including
+duplicate request IDs, cross-owner denial, stale-generation denial, and fresh
+agent/shell access. Temporary API admission, allowlist entries, and synthetic
+Auth state were restored. Sanitized evidence is in
+`artifacts/qa/vm-owner-api/{probe,cycle}.json`. This does not wire the frontend
+or migrate existing user workspaces.
+Generation 8 also passed the in-container runtime and retained-filesystem
+proofs: normal agent readiness, blocked metadata credentials, retained child
+HOME/workspace, original dirty Git state, native executable, SQLite, modes,
+symlink and locking.
+
 The Compute Engine runtime identity is
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. It receives only the
 runtime scopes needed for logging, monitoring, and the runner's approved
