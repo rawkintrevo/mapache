@@ -290,6 +290,18 @@ health, functional agent readiness, blocked metadata-token access, retained
 workspace, and retained child HOME. The health path skips legacy Firestore
 checkpoint reads for VM storage; backups are a separate concern.
 
+Generation 5 (`mapache-vm-d0af925469e49c4467ec0bd6`) passed that stronger
+runtime proof on 2026-11-23 with immutable image
+`sha256:a65b97e030790abfe1dc8e7d3de5cc8c30bf753cfddada062f1dd358c161fecc`.
+Unauthenticated health returned 404, authenticated health returned 200 with
+the agent ready, metadata-token access was blocked, and a real child used the
+retained HOME and workspace. The authenticated agent page and all referenced
+JavaScript bundles also passed the HTTP smoke check. The persistence verifier
+passed inside this running normal runner against the original generation-2
+Git HEAD and retained SQLite/native executable/mode/symlink/lock fixtures.
+These checks do not establish browser interaction, model-provider authentication,
+WebSocket routing, or user migration. The private gateway remains a release gate.
+
 The isolated proof uses synthetic identity `vm-proof-605` / `vm-proof-owner`;
 `scripts/vm-crossover-fixture.mjs` accepts no user workspace ID. Its operations
 are `inspect`, `start`, `pause`, and `replace`, followed by a generation and
@@ -332,11 +344,10 @@ Retained paths take precedence over legacy image environment defaults, including
 paths. Regression coverage supplies those baked defaults and checks the actual
 configured paths, rather than only checking the retained-path helper object.
 
-The first live boot reached the container but exposed direct Firestore calls
-that still depend on ambient Google credentials. Full agent startup therefore
-remains unverified with metadata credentials fenced. A scoped VM control-plane
-path is required before migration; the standalone filesystem proof does not
-waive that requirement.
+The first live boot exposed direct Firestore calls that depended on ambient
+Google credentials. The scoped control broker now permits normal agent startup
+with metadata credentials fenced, as verified by generation 5 above. Remaining
+compatibility paths still need validation before migration.
 
 On 2026-11-23 the clean replacement filesystem proof passed from fixture
 generation 2 (`mapache-vm-35530052c17c57f4310967d3`) to generation 3
@@ -345,7 +356,7 @@ generation 2 (`mapache-vm-35530052c17c57f4310967d3`) to generation 3
 `9850d196d8e77c5e0ce1a72364cbb5a4f5b67217` and passed native executable,
 SQLite, mode, symlink, and locking checks. Verification ran as an offline
 container command from the pinned existing runner image, not as an authenticated
-user session. Hard-loss/open-write recovery, full agent startup, browser state,
+user session. Hard-loss/open-write recovery, browser state,
 package installation, and backup restore remain separate unpassed gates.
 The API-identity preflight now reports no missing checked Compute permissions.
 
@@ -369,10 +380,10 @@ legacy Firestore triggers cannot claim the same work.
 On 2026-11-23 the isolated preflight deployed successfully under
 `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`: unauthenticated requests
 returned 403 and an authenticated operator request returned 200. The deployed
-identity lacked all eight checked Compute permissions; gateway configuration
-was absent and admission remained disabled. This is diagnostic evidence only.
-Next gates remain dedicated VM networking/IAM, authenticated gateway routing,
-an isolated disk replacement proof, and verified canary migration. No existing
+identity initially lacked all eight checked Compute permissions. After the
+dedicated infrastructure grants, preflight reported no missing checked permissions.
+Gateway configuration remains absent and admission disabled. Next gates include
+authenticated gateway routing and verified canary migration. No existing
 workspace has been migrated by this Function.
 
 The Compute bootstrap sets its marker-validation identity explicitly, uses a
