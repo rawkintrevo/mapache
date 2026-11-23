@@ -48,6 +48,15 @@
   // ]
   "indexes": [
     {
+      "collectionGroup": "vmRuntimes_v2",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerUid", "order": "ASCENDING"},
+        {"fieldPath": "apiEnabled", "order": "ASCENDING"},
+        {"fieldPath": "backend", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "workspaces",
       "queryScope": "COLLECTION",
       "fields": [

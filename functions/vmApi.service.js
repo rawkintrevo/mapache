@@ -4,6 +4,7 @@ const {httpError} = require("./backendUtils.helpers");
 const {OPERATIONS} = require("./vmLifecycle.service");
 const {isVmAddress} = require("./vmGatewayResolve.service");
 const {createVmCreationService} = require("./vmCreation.service");
+const {createVmReadService, checkOwned, publicWorkspace} = require("./vmRead.service");
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
@@ -11,10 +12,13 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
     const user = await requireUser(req);
     const uid = user.uid || user.id;
     if (!uid) throw httpError(401, "invalid_auth_token");
-    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(create|access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
+    const reads = createVmReadService({db, now});
+    if (/^\/workspaces\/?$/.test(req.path || "") && req.method === "GET") return {status: 200, body: await reads.list(uid, req.query)};
+    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(create|sessions|access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
     if (!match) throw httpError(404, "not_found");
     const [, workspaceId, action, operationId] = match;
     const wr = db.collection("vmRuntimes_v2").doc(workspaceId);
+    if (action === "sessions" && !operationId && req.method === "GET") return {status: 200, body: await reads.sessions(uid, workspaceId)};
     if (action === "create" && !operationId && req.method === "POST") {
       const body = req.body;
       if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !["requestId", "name"].includes(key))) throw httpError(400, "invalid_vm_request");
@@ -79,13 +83,5 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
   async function ownedWorkspace(ref, uid) {
     const ws = (await ref.get()).data(); checkOwned(ws, uid); return ws;
   }
-}
-function checkOwned(ws, uid) {
-  if (!ws || ws.ownerUid !== uid || ws.backend !== "compute-engine" || ws.apiEnabled !== true) throw httpError(404, "not_found");
-}
-function publicWorkspace(id, ws, time) {
-  return {id, name: ws.name || "Workspace", backend: "compute-engine", generation: ws.generation, state: ws.state,
-    currentSessionId: ws.currentSessionId || null, activeOperationId: ws.activeOperationId || null,
-    ready: ws.state === "active" && !ws.activeOperationId && ws.lifecycleReadyGeneration === ws.generation && !!ws.bootId && ws.leaseExpiresAt > time};
 }
 module.exports = {createVmApiService, ACCESS_TTL_MS};

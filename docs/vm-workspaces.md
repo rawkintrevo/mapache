@@ -301,6 +301,37 @@ including `vm-test`, are not moved or admitted by these tests.
 
 ### Firebase owner API
 
+`functions/vmRead.service.js` supplies browser-safe discovery without exposing
+the isolated Firestore collections to clients. `GET /workspaces` queries the
+authenticated owner, `apiEnabled=true` and `backend=compute-engine`, ordered by
+document ID. `limit` defaults to 50 (maximum 100); `nextCursor` is the last
+returned workspace ID when another page exists. Pass it as `cursor` for the
+next page. Unknown query fields and malformed limits/cursors are rejected.
+The dedicated composite index is recorded in `firestore.indexes.json`; only
+the `vmRuntimes_v2` index needs creating for this read path.
+
+`GET /workspaces/{id}/sessions` transactionally reads the workspace and current
+session. It returns one canonical session (or none when no session is assigned),
+never historic generations. Owner/generation mismatch fails closed. Running
+status requires lifecycle readiness and matching current live boot leases on
+both records. Pending, stopping, stopped and unavailable states remain distinct;
+expired access is not presented as running. The projection includes the stable
+workspace ID, current session ID, generation, runtime kind, agent UI marker,
+and gateway origin only when ready. Credentials, private addresses and raw
+session configuration never appear. Signed access URLs still require the
+separate access endpoint. These endpoints are the prerequisite for frontend
+discovery/subscription integration, which is not yet wired.
+On 2026-11-23 `vmApi_v2` deployed successfully and index `CICAgPj-05MK`
+became ready. The live generation-8 owner proof passed listing, canonical
+session reads, outsider empty-list/session denial, rejected caller owner
+filters, and checks that internal credential/configuration fields are absent.
+The existing signed-access checks also passed; temporary Auth and allowlist
+changes were restored. Evidence: `artifacts/qa/vm-owner-api/probe.json`.
+The targeted index creation command was
+`gcloud firestore indexes composite create --project pi-agents-cloud --collection-group=vmRuntimes_v2 --query-scope=collection --field-config=field-path=ownerUid,order=ascending --field-config=field-path=apiEnabled,order=ascending --field-config=field-path=backend,order=ascending --async`.
+Future normal index deploys can use the checked-in definition. No existing
+Cloud Run handler or Firestore client rule changed for these read endpoints.
+
 `POST /workspaces/{id}/create` accepts only `{requestId, name}` after ordinary
 Firebase authentication/app admission. `functions/vmCreation.service.js`
 requires an enabled backend-only `vmCreationAdmissions_v2/{id}` document with

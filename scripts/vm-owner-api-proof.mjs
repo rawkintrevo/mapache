@@ -71,6 +71,23 @@ async function main() {
       return {status: response.status, body: await response.json()};
     }
     assert.equal((await call('vm-proof-605', 'GET', undefined, '')).status, 401);
+    assert.equal((await call('', 'GET', undefined, '')).status, 401);
+    const listed = await call('?limit=1');
+    assert.equal(listed.status, 200);
+    assert.ok(listed.body.workspaces.some(workspace => workspace.id === 'vm-proof-605'));
+    assert.equal((await call('', 'GET', undefined, tokens.outsider)).body.workspaces.length, 0);
+    assert.equal((await call('?ownerUid=vm-proof-outsider')).status, 400);
+    const currentSessions = await call('vm-proof-605/sessions');
+    assert.equal(currentSessions.status, 200);
+    assert.equal(currentSessions.body.sessions.length, 1);
+    assert.equal(currentSessions.body.sessions[0].id, currentSessions.body.workspace.canonicalSessionId);
+    assert.equal(currentSessions.body.sessions[0].generation, setup.generation);
+    assert.equal(currentSessions.body.sessions[0].status, 'running');
+    assert.equal((await call('vm-proof-605/sessions', 'GET', undefined, tokens.outsider)).status, 404);
+    for (const field of ['controlToken', 'browserToken', 'shutdownToken', 'privateAddress', 'runnerImage']) {
+      assert.ok(!JSON.stringify([listed.body, currentSessions.body]).includes(`"${field}"`));
+    }
+    result.ownerDiscovery = true; result.canonicalSessionProjection = true;
     assert.equal((await call('vm-proof-605', 'GET', undefined, 'invalid-token')).status, 401);
     assert.equal((await call('vm-proof-605', 'GET', undefined, tokens.outsider)).status, 404);
     assert.equal((await call('vm-proof-605/pause', 'POST', {expectedGeneration: setup.generation, requestId: nonce}, tokens.outsider)).status, 404);
