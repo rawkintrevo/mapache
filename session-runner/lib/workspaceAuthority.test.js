@@ -270,3 +270,23 @@ test("automation authority is session-scoped and rejects a duplicate boot withou
   assert.equal(store.workspace.agentRuntimeBootInstanceId, undefined);
   assert.equal(store.sessions["auto-run-1"].agentRuntimeBootInstanceId, null);
 });
+
+test("failed shutdown retains only the admitted boot for final-save retries", async () => {
+  const store = initialStore();
+  const authority = createWorkspaceAuthority({admin, config: config("session-a", 1), db: store.db, instanceId: "boot-a"});
+  const duplicate = createWorkspaceAuthority({admin, config: config("session-a", 1), db: store.db, instanceId: "boot-b"});
+  try {
+    await authority.acquire();
+    store.workspace.agentRuntimeState = "stopping";
+    store.sessions["session-a"].status = "stop_failed";
+    assert.equal(await authority.renew(), true);
+    assert.equal(await authority.assertCurrentWriter(), true);
+    await assert.rejects(() => duplicate.acquire(), {code: "workspace_runtime_authority_denied"});
+    store.workspace.agentRuntimeGeneration = 2;
+    await assert.rejects(() => authority.assertCurrentWriter(), {code: "workspace_runtime_generation_mismatch"});
+    assert.equal(authority.isCurrentWriter(), false);
+  } finally {
+    await authority.release();
+    await duplicate.release();
+  }
+});

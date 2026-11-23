@@ -1376,3 +1376,15 @@ Recovery also cleared the failed provisioning operation and restored its
 released reservation after confirming no admitted boot, then reconciled running
 state only after authenticated agent readiness. Do not clear a live boot's
 reservation as a generic startup workaround.
+
+### Retrying a failed shutdown
+
+`session-runner/lib/workspaceAuthority.js` retains write authority for the
+already admitted main-runtime boot when a final-save timeout leaves its session
+`stop_failed` and workspace `stopping`. Renewal and final-save retries still
+validate the exact boot, session, generation, and admitted authority. A fresh
+boot cannot acquire authority in `stop_failed`; generation changes and explicit
+revocation still fence the old process. This requires a rebuilt runner revision.
+Older processes that already lost their in-memory authority require controlled
+recovery after verifying their durable checkpoint; changing Firestore status
+alone cannot re-admit them.

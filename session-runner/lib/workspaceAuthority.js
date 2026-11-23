@@ -258,7 +258,12 @@ function createWorkspaceAuthority({
     return db.runTransaction(callback);
   }
 
-  function validateReservation(workspace, session) {
+  function validateReservation(workspace, session, {existingBoot = false} = {}) {
+    const sessionState = String(session.status || "").trim().toLowerCase();
+    // Failed shutdown retains the process for another final-save attempt. Only
+    // its already admitted boot may keep writing; acquire stays fail-closed.
+    const retryingShutdown = existingBoot && !automationRuntime && sessionState === "stop_failed" &&
+      String(workspace.agentRuntimeState || "").trim().toLowerCase() === "stopping";
     if (workspace.agentUiVersion !== "pi-web-ui-v1" || session.agentUiVersion !== "pi-web-ui-v1") {
       throw authorityError("workspace_runtime_authority_denied");
     }
@@ -271,7 +276,7 @@ function createWorkspaceAuthority({
           (config.automationRunId && String(session.automationRunId || "").trim() !== String(config.automationRunId))) {
         throw authorityError("workspace_runtime_authority_denied");
       }
-      if (!ADMISSION_SESSION_STATES.has(String(session.status || "").trim().toLowerCase())) {
+      if (!ADMISSION_SESSION_STATES.has(sessionState)) {
         throw authorityError("workspace_runtime_authority_denied");
       }
       return;
@@ -283,13 +288,13 @@ function createWorkspaceAuthority({
       throw authorityError("workspace_runtime_authority_denied");
     }
     if (!ADMISSION_WORKSPACE_STATES.has(String(workspace.agentRuntimeState || "").trim().toLowerCase()) ||
-      !ADMISSION_SESSION_STATES.has(String(session.status || "").trim().toLowerCase())) {
+      (!ADMISSION_SESSION_STATES.has(sessionState) && !retryingShutdown)) {
       throw authorityError("workspace_runtime_authority_denied");
     }
   }
 
   function validateCurrent(workspace, session) {
-    validateReservation(workspace, session);
+    validateReservation(workspace, session, {existingBoot: true});
     if (!matchesCurrent(workspace, session) || (!automationRuntime && String(workspace.agentRuntimeAuthorityState || "").trim().toLowerCase() !== "admitted") ||
         (automationRuntime && String(session.agentRuntimeAuthorityState || "").trim().toLowerCase() !== "admitted")) {
       throw authorityError("workspace_writer_authority_lost");
