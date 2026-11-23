@@ -428,7 +428,7 @@ test("a failed parallel installation upload never publishes a partial manifest",
   const storage = createStorage({failOnUploadNumber: 3});
   const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
   await assert.rejects(publisher.publishWorkspaceFiles({
-    files: Array.from({length: 129}, (_, i) => ({path: `.local/lib/tool-${i}`, content: "tool"})),
+    files: Array.from({length: 129}, (_, i) => ({path: `src/tool-${i}`, content: "tool"})),
   }), /injected upload failure/);
   assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
   assert.equal([...storage.objects.keys()].some((key) => key.endsWith("/manifest.json")), false);
@@ -451,4 +451,26 @@ test("capture rejects a symlink into excluded files before uploading or publishi
       (error) => error.code === "checkpoint_unsafe_symlink");
   assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
   assert.equal(storage.uploads.length, 0);
+});
+
+test("bundle upload failure never publishes and corrupt bundles never replace the live workspace", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "bundle-failure-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root);
+  const store = admittedStore();
+  const failedStorage = createStorage({failOnUploadNumber: 1});
+  const files = [{path: ".local/bin/tool", content: "saved tool"}];
+  await assert.rejects(createAgentCheckpointService({admin, config, db: store.db, storage: failedStorage})
+      .publishWorkspaceFiles({files}), /injected upload failure/);
+  assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
+  const storage = createStorage();
+  const saved = await createAgentCheckpointService({admin, config, db: store.db, storage}).publishWorkspaceFiles({files});
+  assert.equal(saved.manifest.files[0].storage, "workspace-bundle-v1");
+  const bundlePath = saved.manifest.files[0].bundle.objectPath;
+  storage.objects.set(`${config.bucketName}/${bundlePath}`, Buffer.from("corrupted!"));
+  await fs.mkdir(config.workspaceDir);
+  await fs.writeFile(path.join(config.workspaceDir, "sentinel"), "keep");
+  const restore = require("./agentCheckpointRestore.service").createAgentCheckpointRestoreService({config, db: store.db, storage});
+  await assert.rejects(restore.restoreWorkspaceFiles(), {code: "checkpoint_checksum_mismatch"});
+  assert.equal(await fs.readFile(path.join(config.workspaceDir, "sentinel"), "utf8"), "keep");
 });

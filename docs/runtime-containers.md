@@ -91,12 +91,30 @@ Workspace tool trees under `/workspace/.local` include nested `node_modules` in
 immutable checkpoints. `lib/workspacePath.helpers.js` retains the ordinary
 project dependency exclusion elsewhere and still honors explicit workspace
 exclusion policies. Before uploading a capture, `lib/agentCheckpoint.service.js`
-checks that every collected symlink target is represented by a captured file or
-nonempty directory. An excluded target rejects publication instead of creating a
+uses `lib/checkpointSymlinkPlan.js` to check that every collected symlink
+target resolves through captured files or nonempty directories. An excluded target rejects publication instead of creating a
 checkpoint that the strict restore validator cannot load. Existing incomplete
 checkpoints require recovery; changing the filter does not recreate omitted
 package payloads. This change requires a rebuilt `gcp-runner` image and new
 service revisions.
+
+Small regular files under `.local` (at most 1 MiB each) use immutable 8 MiB
+bundles, owned by `lib/checkpointWorkspaceBundles.js`. Manifest entries keep
+individual paths, modes, lengths, and SHA-256 hashes, plus the bundle's
+capture-scoped path, length/hash, and byte offset. Symlinks remain explicit
+manifest entries. Larger files, deferred large-file pointers, and files outside
+`.local` keep their existing representation. Publication retains the 64 MiB
+batch budget and publishes the manifest only after all bundle/object uploads
+succeed. Restore verifies the entire bundle and each selected file before
+installing the staged tree; it retains at most two completed bundles and one
+bundle download in addition to the existing staging budget. Raw concatenated
+bytes carry no extraction paths or archive traversal semantics.
+
+The updated runner reads both older per-file captures and bundled captures.
+Older images cannot read bundled captures: rollback requires a compatible image
+or an explicitly selected older checkpoint, with the usual data-recovery review.
+This is a compatibility repair for existing local/checkpoint workspaces, not a
+replacement for evaluating durable mounted HOME/workspace storage.
 
 Blank/local workspaces persist workspace installs through immutable checkpoints,
 not a GCS FUSE workspace mount. A restart only restores a published manifest;
