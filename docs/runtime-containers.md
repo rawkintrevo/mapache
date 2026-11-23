@@ -91,7 +91,7 @@ Blank/local workspaces persist workspace installs through immutable checkpoints,
 not a GCS FUSE workspace mount. A restart only restores a published manifest;
 objects from an interrupted upload are not a complete backup. Workspace
 checkpoint publication in `lib/agentCheckpoint.service.js` uploads batches of
-at most eight files and 64 MiB of declared content (larger files run alone).
+at most 64 files and 64 MiB of declared content (larger files run alone).
 Failures drain the current batch and never publish a partial manifest.
 
 This contract uses GCS FUSE for user-wide installs and shared workspaces. Installers that
@@ -1388,3 +1388,8 @@ revocation still fence the old process. This requires a rebuilt runner revision.
 Older processes that already lost their in-memory authority require controlled
 recovery after verifying their durable checkpoint; changing Firestore status
 alone cannot re-admit them.
+
+The upload batch request limit is also 64 so large trees of small SDK files
+can finish a final save within the shutdown budget. The independent 64 MiB
+content budget, oversized-file isolation, failure draining, and atomic manifest
+publication remain unchanged.

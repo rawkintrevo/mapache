@@ -15,7 +15,7 @@ async function uploadCheckpointBatches({files, sizeOf, upload}) {
   }
   for (const file of files) {
     const size = await sizeOf(file);
-    if (batch.length && (batch.length >= 8 || bytes + size > 64 * 1024 * 1024)) await drain();
+    if (batch.length && (batch.length >= 64 || bytes + size > 64 * 1024 * 1024)) await drain();
     batch.push(file);
     bytes += size;
   }
