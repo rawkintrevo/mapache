@@ -8,7 +8,7 @@ const {COMPUTE_ENGINE_BACKEND, createRuntimeDescriptor} = require("./runtimeProv
 test("legacy sessions remain on Cloud Run while VM sessions dispatch to Compute Engine", async () => {
   const calls = [];
   const cloudRun = {
-    provisionSessionService: async () => { calls.push("cloud-run"); return "cloud"; },
+    provisionSessionService: async (...args) => { calls.push({kind: "cloud-run", args}); return "cloud"; },
     patchSessionService: async () => { calls.push("cloud-patch"); return "cloud-patch"; },
     deleteSessionService: async () => { calls.push("cloud-delete"); return true; },
   };
@@ -24,10 +24,16 @@ test("legacy sessions remain on Cloud Run while VM sessions dispatch to Compute 
     runtimeProvider: createRuntimeDescriptor({backend: COMPUTE_ENGINE_BACKEND, workspaceId: "workspace-1", ownerUid: "owner-1"}),
   };
 
-  assert.equal(await service.provisionSessionService({id: "workspace-1", ownerUid: "owner-1"}, {}, legacy), "cloud");
+  const workspace = {id: "workspace-1", ownerUid: "owner-1"};
+  const sessionRef = {id: "session-1"};
+  assert.equal(await service.provisionSessionService(workspace, sessionRef, legacy), "cloud");
   assert.equal(await service.provisionSessionService({}, {}, vm), "compute");
   assert.equal(await service.patchSessionService({}, vm), "compute-patch");
-  assert.deepEqual(calls, ["cloud-run", "compute-engine", "compute-patch"]);
+  assert.deepEqual(calls, [
+    {kind: "cloud-run", args: [workspace, sessionRef, legacy]},
+    "compute-engine",
+    "compute-patch",
+  ]);
 });
 
 test("provider dispatch fails closed for a missing VM implementation", async () => {
