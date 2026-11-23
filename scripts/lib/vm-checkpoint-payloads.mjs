@@ -7,8 +7,7 @@ const hash = () => createHash('sha256');
 const validHash = value => /^[a-f0-9]{64}$/.test(value || '');
 const relative = value => typeof value === 'string' && value && !value.includes('\0') && !value.includes('\\') && !value.split('/').some(p => !p || p === '.' || p === '..');
 
-export async function verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) {
-  try {
+export function checkpointPayloadGroups({manifest, manifestRef}) {
     const groups = new Map();
     const paths = new Set();
     if (!relative(manifest.storagePrefix) || !relative(manifestRef.objectPath) || !manifestRef.objectPath.startsWith(`${manifest.storagePrefix}/`)) throw Error('payload_namespace_invalid');
@@ -36,6 +35,12 @@ export async function verifyCheckpointPayloads({manifest, manifestRef, openObjec
       group.files.push({offset, byteLength: file.byteLength, sha256: file.sha256});
     }
     try { assertCapturedSymlinkTargets(manifest.files); } catch { throw Error('payload_symlink_invalid'); }
+    return groups;
+}
+
+export async function verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) {
+  try {
+    const groups = checkpointPayloadGroups({manifest, manifestRef});
     const plannedBytes = [...groups.values()].reduce((sum, group) => sum + group.byteLength, 0);
     if (!Number.isSafeInteger(plannedBytes) || !Number.isSafeInteger(budget.remaining) || plannedBytes > budget.remaining) throw Error('payload_budget_exceeded');
     budget.remaining -= plannedBytes;

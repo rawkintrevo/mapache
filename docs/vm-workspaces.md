@@ -737,6 +737,36 @@ are covered; real destination ENOSPC and full-disk recovery are not yet proven.
 Run `node --test scripts/lib/vm-import-stage.test.mjs`. This local maintenance
 component needs no Function, Hosting or runner deployment.
 
+`scripts/lib/vm-checkpoint-import.mjs` adapts published agent and workspace
+checkpoints to that transfer stage. Planning verifies manifest bytes/hash and
+the expected workspace/session/runtime-generation/boot/prefix/bucket identity,
+then pins each unique payload's current object generation. The trusted caller
+must obtain the expected identity from owned registry records. The resulting
+private plan records file modes, paths, tombstones, source generations and bundle
+offsets. Its digest is bound into the staging operation. Path/ancestor conflicts,
+unsupported file kinds/modes, unsafe links and overlapping agent destinations
+fail before payload staging. Existing payload validators are shared through
+`checkpointPayloadGroups` rather than duplicated.
+
+Staging downloads each unique ordinary, bundle or large-file-v1 object once,
+reuses verified local bytes on retry, and checks every bundle slice before
+returning the planned entries. Deferred large files contain their real bytes,
+not pointer JSON. Agent paths map to retained `agent/sessions`, `agent/pi`,
+`agent/ui` and `agent/ui/uploads`; workspace paths map to `workspace`.
+This does not yet install those files, apply modes/links/tombstones, validate
+application-level history/settings, recover absent directories, or select
+authority among multiple source formats. The plan contains private filenames;
+keep it in mode-0600 local evidence, never broad console logs.
+
+On 2026-11-23, a read-only cloud/local-write proof staged the real `vm-test`
+published captures: 36 agent objects/entries (1,236,845 bytes) and eight workspace
+objects/entries (29,047 bytes). Evidence and private plans are under
+`artifacts/qa/vm-checkpoint-import/`, with summary `result.json`. No source,
+provider descriptor, VM, disk or production deployment changed. Fixture tests
+cover bundle slices, real deferred bytes, executable-mode metadata, agent path
+mapping, resume without remote reads, and identity/path/mode/hash/budget failures:
+`node --test scripts/lib/vm-checkpoint-import.test.mjs`.
+
 Cutover is:
 
 ```text
