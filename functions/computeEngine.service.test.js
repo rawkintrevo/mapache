@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const {createHash} = require("node:crypto");
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 
@@ -38,13 +39,13 @@ test("VM startup creates a labeled retained disk and a private instance without 
         return {data: {status: "DONE"}};
       }
       if (request.method === "POST" && request.url.endsWith("/instances")) {
-        instance = {name: request.data.name, status: "RUNNING", labels: request.data.labels, selfLink: `${request.url}/${request.data.name}`};
+        instance = {name: request.data.name, status: "RUNNING", labels: request.data.labels, disks: request.data.disks, selfLink: `${request.url}/${request.data.name}`};
         return {data: {status: "DONE"}};
       }
       throw new Error(`unexpected ${request.method} ${request.url}`);
     },
   });
-  const result = await service.start(descriptor({ownerUid: "OwnerWithUppercase123", workspaceId: "WorkspaceID456"}), {runnerImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:abc"});
+  const result = await service.start(descriptor({ownerUid: "OwnerWithUppercase123", workspaceId: "WorkspaceID456"}), {allowCreateDisk: true, runnerImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:abc"});
   assert.equal(result.state, "running");
   const instanceRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/instances"));
   assert.equal(instanceRequest.data.disks[1].autoDelete, false);
@@ -78,4 +79,82 @@ test("ownership labels prevent cleanup of another workspace", async () => {
     },
   });
   await assert.rejects(service.pause(descriptor()), /ownership/);
+});
+
+function lifecycleFixture() {
+  const d = descriptor();
+  const prefix = "https://www.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/us-central1-a";
+  const hash = value => createHash("sha256").update(value).digest("hex").slice(0, 63);
+  const labels = {"mapache-owner-uid": hash(d.ownerUid), "mapache-workspace-id": hash(d.workspaceId), "mapache-runtime-provider": "compute-engine"};
+  const state = {
+    disk: {name: d.dataDiskName, selfLink: `${prefix}/disks/${d.dataDiskName}`, status: "READY", labels, users: []},
+    instance: {name: d.instanceName, status: "RUNNING", labels,
+      disks: [{boot: false, source: `${prefix}/disks/${d.dataDiskName}`, autoDelete: false, mode: "READ_WRITE"}]},
+    mutations: [], leaveInstance: false, delete404: false,
+  };
+  const missing = () => Object.assign(new Error("missing"), {response: {status: 404}});
+  const service = createComputeEngineService({projectId: "pi-agents-cloud", request: async request => {
+    if (request.method === "GET") {
+      const value = request.url.includes("/instances/") ? state.instance : state.disk;
+      if (!value) throw missing();
+      return {data: value};
+    }
+    state.mutations.push(request);
+    if (request.method === "DELETE") {
+      if (!state.leaveInstance) state.instance = null;
+      if (state.delete404) throw missing();
+      return {data: {status: "DONE"}};
+    }
+    throw new Error("unexpected mutation");
+  }});
+  return {state, service, d};
+}
+
+test("pause retains admission until instance absence and disk detachment are confirmed", async () => {
+  const f = lifecycleFixture();
+  f.state.leaveInstance = true;
+  await assert.rejects(f.service.pause(f.d), error => error.code === "runtime_instance_deletion_pending");
+  f.state.leaveInstance = false;
+  f.state.disk.users = ["old-instance"];
+  await assert.rejects(f.service.pause(f.d), error => error.code === "runtime_data_disk_attached");
+  f.state.disk.users = [];
+  const result = await f.service.pause(f.d);
+  assert.equal(result.instanceDeleted, true);
+  assert.equal(result.dataDiskRetained, true);
+  assert.equal(f.state.mutations.length, 2, "reconciliation after confirmed absence does not delete again");
+});
+
+test("missing retained storage cannot be reported as a successful pause", async () => {
+  const f = lifecycleFixture(); f.state.disk = null; f.state.instance = null;
+  await assert.rejects(f.service.pause(f.d), error => error.code === "runtime_data_disk_missing");
+  await assert.rejects(f.service.start(f.d), error => error.code === "runtime_data_disk_missing");
+  assert.equal(f.state.mutations.length, 0);
+});
+
+test("duplicate delete racing with a completed worker reconciles safely", async () => {
+  const f = lifecycleFixture(); f.state.delete404 = true;
+  assert.equal((await f.service.pause(f.d)).state, "stopped");
+  assert.equal(f.state.disk.name, f.d.dataDiskName);
+});
+
+test("start retries adopt only the correct retained attachment and never restart expired boots", async () => {
+  const f = lifecycleFixture();
+  assert.equal((await f.service.start(f.d)).instance.name, f.d.instanceName);
+  assert.equal(f.state.mutations.length, 0);
+  f.state.instance.status = "TERMINATED";
+  await assert.rejects(f.service.start(f.d), error => error.code === "runtime_generation_replacement_required");
+  f.state.instance.status = "RUNNING";
+  for (const override of [{autoDelete: true}, {mode: "READ_ONLY"}, {source: "https://attacker.example/disks/data"}]) {
+    const original = f.state.instance.disks[0];
+    f.state.instance.disks[0] = {...original, ...override};
+    await assert.rejects(f.service.start(f.d), error => error.code === "runtime_data_disk_attachment_mismatch");
+    f.state.instance.disks[0] = original;
+  }
+  assert.equal(f.state.mutations.length, 0);
+});
+
+test("replacement cannot attach while another instance is still a disk user", async () => {
+  const f = lifecycleFixture(); f.state.instance = null; f.state.disk.users = ["old-instance"];
+  await assert.rejects(f.service.start(f.d, {runnerImage: "pinned"}), error => error.code === "runtime_data_disk_attached");
+  assert.equal(f.state.mutations.length, 0);
 });

@@ -45,7 +45,7 @@ if (['start', 'replace'].includes(action)) {
       if (ss.data().ownerUid !== descriptor.ownerUid || !cs.exists ||
           !['reserved', 'active'].includes(ss.data().state) ||
           tokenHash(cs.data().controlToken) !== ss.data().controlTokenHash) throw new Error('fixture_session_conflict');
-      return cs.data();
+      return {...cs.data(), allowCreateDisk: ss.data().allowCreateDisk === true && ss.data().state === 'reserved' && !ss.data().bootId};
     }
     if (cs.exists) throw new Error('fixture_credentials_conflict');
     const credentials = {ownerUid: descriptor.ownerUid, generation: descriptor.generation,
@@ -54,12 +54,14 @@ if (['start', 'replace'].includes(action)) {
     tx.set(workspaceRef, {ownerUid: descriptor.ownerUid, backend: 'compute-engine', currentSessionId: sessionId,
       generation: descriptor.generation, state: 'reserved'});
     tx.set(sessionRef, {ownerUid: descriptor.ownerUid, generation: descriptor.generation, state: 'reserved',
+      allowCreateDisk: !ws.exists,
       controlTokenHash: tokenHash(credentials.controlToken), authSelection: {harness: 'pi', providers: {}}, runtimeProvider: descriptor});
-    return credentials;
+    return {...credentials, allowCreateDisk: !ws.exists};
   });
 }
 const options = {
   operationId: `fixture-605-${action}-${generation}`,
+  allowCreateDisk: secrets?.allowCreateDisk === true,
   runnerImage: image,
   subnetwork: 'projects/pi-agents-cloud/regions/us-central1/subnetworks/mapache-vm-v2-us-central1',
   timeoutMs: 240000,

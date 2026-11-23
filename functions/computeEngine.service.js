@@ -122,10 +122,20 @@ function createComputeEngineService(dependencies = {}) {
       if (error.code === "compute_not_found") return null;
       throw error;
     });
-    if (!current) return {state: "stopped", instanceDeleted: true, dataDiskRetained: true};
-    assertOwnership(current, descriptor);
-    await deleteResource(instanceUrl(descriptor), options, descriptor);
-    return {state: "stopped", instanceDeleted: true, dataDiskRetained: true, operation: current.operation || null};
+    if (current) {
+      assertOwnership(current, descriptor);
+      // Duplicate workers can both observe the instance before one deletes it.
+      await deleteResource(instanceUrl(descriptor), options, descriptor).catch((error) => {
+        if (error?.response?.status !== 404 && error?.code !== 404) throw error;
+      });
+    }
+    // A completed DELETE is not permission to release writer admission while
+    // the disk still reports an attachment, or if retained data is missing.
+    const observed = await inspect(descriptor);
+    if (observed.instance) throw computeError("runtime_instance_deletion_pending", "VM disappearance is not yet confirmed");
+    if (!observed.disk) throw computeError("runtime_data_disk_missing", "Retained data disk is missing; automatic recovery is disabled");
+    if (observed.disk.users.length) throw computeError("runtime_data_disk_attached", "Retained data disk is still attached; writer admission remains held");
+    return {state: "stopped", instanceDeleted: true, dataDiskRetained: true, operation: current?.operation || null};
   }
 
   async function deleteOwnedInstance(rawDescriptor, options = {}) {
@@ -142,7 +152,7 @@ function createComputeEngineService(dependencies = {}) {
     if (disk) assertOwnership(disk, descriptor);
     return {
       descriptor,
-      disk: disk ? {name: disk.name, sizeGb: Number(disk.sizeGb), status: disk.status, labels: disk.labels || {}} : null,
+      disk: disk ? {name: disk.name, sizeGb: Number(disk.sizeGb), status: disk.status, labels: disk.labels || {}, users: disk.users || []} : null,
       instance: instance ? {name: instance.name, status: instance.status, labels: instance.labels || {}, selfLink: instance.selfLink} : null,
       state: instance?.status === "RUNNING" ? "running" : "stopped",
       observedAt: new Date().toISOString(),
@@ -162,6 +172,9 @@ function createComputeEngineService(dependencies = {}) {
         throw computeError("runtime_data_disk_resize_required", "Data disk is smaller than the requested capacity");
       }
       return existing;
+    }
+    if (options.allowCreateDisk !== true) {
+      throw computeError("runtime_data_disk_missing", "Retained data disk is missing; only an explicitly admitted new workspace may create one");
     }
     const sizeGb = Number(options.sizeGb || dataDiskSizeGb);
     if (!Number.isSafeInteger(sizeGb) || sizeGb < 10 || sizeGb > 4096) {
@@ -193,10 +206,9 @@ function createComputeEngineService(dependencies = {}) {
     });
     if (existing) {
       assertOwnership(existing, descriptor);
+      assertInstanceDisk(existing, descriptor);
       if (existing.status === "TERMINATED") {
-        const response = await requestImpl({url: `${instanceUrl(descriptor)}/start`, method: "POST"});
-        await waitForOperation(response.data, descriptor, options);
-        return getInstance(descriptor);
+        throw computeError("runtime_generation_replacement_required", "A stopped VM requires a new generation and credentials; do not restart its expired boot");
       }
       if (existing.status !== "RUNNING" && existing.status !== "PROVISIONING" && existing.status !== "STAGING") {
         throw computeError("runtime_instance_unusable", `Instance is ${existing.status}`);
@@ -204,6 +216,7 @@ function createComputeEngineService(dependencies = {}) {
       return existing;
     }
     const disk = options.disk || await ensureDataDisk(descriptor, options);
+    if (disk.users?.length) throw computeError("runtime_data_disk_attached", "Retained disk still has a writer attachment; replacement must wait");
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/instances`,
       method: "POST",
@@ -213,7 +226,18 @@ function createComputeEngineService(dependencies = {}) {
     await waitForOperation(response.data, descriptor, options);
     const created = await getInstance(descriptor);
     assertOwnership(created, descriptor);
+    assertInstanceDisk(created, descriptor);
     return created;
+  }
+
+  function assertInstanceDisk(instance, descriptor) {
+    const expected = `${zoneUrl(descriptor)}/disks/${descriptor.dataDiskName}`;
+    const sourceUrls = [expected, expected.replace("https://compute.googleapis.com/", "https://www.googleapis.com/")];
+    const dataDisks = (instance.disks || []).filter((disk) => !disk.boot);
+    if (dataDisks.length !== 1 || !sourceUrls.includes(dataDisks[0].source) ||
+        dataDisks[0].autoDelete !== false || dataDisks[0].mode !== "READ_WRITE") {
+      throw computeError("runtime_data_disk_attachment_mismatch", "VM attachment does not match the admitted retained disk");
+    }
   }
 
   async function getDisk(descriptor) {

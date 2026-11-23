@@ -154,7 +154,44 @@ The browser case is `e2e/qa/cases/vm-gateway-fixture.json`, with evidence under
 network traffic; the exact upstream Device Center `409 NOT_PAIRED` response is
 expected for this deliberately unpaired fixture. This is not model chat,
 Chrome desktop, upload/resume, or migration acceptance. Real replacement
-reconnect and stale-connection fencing still require a live replacement test.
+reconnect and stale-connection fencing are exercised separately below.
+
+`scripts/vm-gateway-replacement-proof.mjs GENERATION PINNED_IMAGE` keeps the
+scope fixed to the synthetic fixture. It first revokes the gateway route while
+the VM remains alive and checks that an existing socket closes within 12 seconds.
+It then restores that route, opens another connection, replaces the disposable
+compute, updates the route to the new generation, and polls actual agent health.
+Finally it rejects the old still-unexpired browser token, old health credential,
+and old WebSocket handshake before reconnecting with fresh credentials. It does
+not restart a slow boot or infer health from Compute RUNNING.
+
+On 2026-11-23 generation 5 -> 6 passed: live route revocation closed the socket
+in 5,370 ms; replacement and successful reconnection took 190,012 ms including
+the cold image pull. Generation 6 is `mapache-vm-044cc7581096c8e0f32f4afd`, with
+the same retained disk `mapache-ws-efaf283eb879545a0e7ba4d3` and pinned image.
+Its normal in-container runtime proof and filesystem verifier also passed,
+including the original generation-2 Git HEAD, SQLite, native binary, mode,
+symlink and lock checks. A repeated start adopted that exact existing instance
+and its correct retained disk. Evidence is
+`artifacts/qa/vm-gateway-replacement/result.json`. These observations do not
+establish open-write crash recovery, browser-profile persistence, or full
+worker-crash reconciliation.
+
+Compute lifecycle operations now fail closed when pause cannot confirm instance
+absence and an unattached retained disk. `inspect()` exposes the disk's users
+for reconciliation. Start refuses a disk still attached to another instance,
+and retries adopt an existing instance only if its one data disk is the admitted
+READ_WRITE attachment with auto-delete disabled. A TERMINATED VM requires a
+new generation and credentials, rather than restarting an expired admitted boot.
+A missing disk is never silently replaced with an empty one: creation requires
+explicit `allowCreateDisk` authority for a new workspace. The fixture records
+that authority only on its initial reservation and stops using it once a boot
+has been admitted. Interrupted first-disk initialization still requires durable
+controller reconciliation before production use. These helper changes are used
+by the local fixture; the production async lifecycle worker remains outstanding.
+No legacy Functions using this helper were redeployed. The isolated preflight
+is selectively redeployed with the current Functions source package; it does
+not enable VM admission or perform lifecycle mutations.
 
 The Compute Engine runtime identity is
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. It receives only the
