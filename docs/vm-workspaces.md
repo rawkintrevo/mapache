@@ -234,6 +234,37 @@ Pricing references: [Compute Engine pricing](https://cloud.google.com/products/c
 
 ## Release and verification gates
 
+### Isolated rollout Functions
+
+`vmRuntimePreflight_v2` is an IAM-private, read-only HTTP Function owned by
+`functions/vmRuntimePreflight.service.js`. It checks the deployed API identity
+for Compute permissions and gateway configuration without changing workspace
+admission, session documents, or Hosting routes. It always reports live release
+validation as outstanding; configured permissions alone are not readiness.
+Deploy it independently with
+`firebase deploy --only functions:vmRuntimePreflight_v2 --project pi-agents-cloud`.
+Existing API, provisioning triggers, and Cloud Run services retain their deployed
+revisions. Future VM workers must use separate names and isolated records so
+legacy Firestore triggers cannot claim the same work.
+
+On 2026-11-23 the isolated preflight deployed successfully under
+`mapache-api@pi-agents-cloud.iam.gserviceaccount.com`: unauthenticated requests
+returned 403 and an authenticated operator request returned 200. The deployed
+identity lacked all eight checked Compute permissions; gateway configuration
+was absent and admission remained disabled. This is diagnostic evidence only.
+Next gates remain dedicated VM networking/IAM, authenticated gateway routing,
+an isolated disk replacement proof, and verified canary migration. No existing
+workspace has been migrated by this Function.
+
+The Compute bootstrap sets its marker-validation identity explicitly, uses a
+bounded ext4 volume label and an explicit attached-disk device name. Compute
+request IDs are deterministic UUIDs scoped to each resource and operation.
+Ownership label values are case-sensitive identity hashes because Firebase IDs
+can contain uppercase characters forbidden in Compute label values; the disk
+marker retains the full original identity for filesystem verification.
+These fixes require deployment of the eventual VM worker, not a runner image
+rebuild; they are not evidence of a successful live VM replacement.
+
 The current branch includes local contract/fixture coverage for descriptor
 validation, Compute Engine request construction, ownership checks, retained-disk
 identity, and the VM runner path. The live gates still require an isolated

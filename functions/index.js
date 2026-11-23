@@ -570,6 +570,25 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
   writable: false,
 });
 
+// Independently deployed, IAM-authenticated diagnostics for the VM rollout.
+// No Hosting rewrite or legacy API/trigger replacement is needed.
+exports.vmRuntimePreflight_v2 = onRequest({
+  invoker: "private",
+  timeoutSeconds: 60,
+}, async (req, res) => {
+  if (req.method !== "GET") {
+    res.set("Allow", "GET").status(405).json({error: "method_not_allowed"});
+    return;
+  }
+  try {
+    const {createVmRuntimePreflight} = require("./vmRuntimePreflight.service");
+    res.json(await createVmRuntimePreflight({auth})());
+  } catch (error) {
+    logger.error("VM preflight failed", {code: error.code || "preflight_failed"});
+    res.status(503).json({error: "vm_preflight_unavailable"});
+  }
+});
+
 exports.api = onRequest({
   cors: true,
   timeoutSeconds: 540,

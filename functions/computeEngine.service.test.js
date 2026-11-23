@@ -44,10 +44,23 @@ test("VM startup creates a labeled retained disk and a private instance without 
       throw new Error(`unexpected ${request.method} ${request.url}`);
     },
   });
-  const result = await service.start(descriptor(), {runnerImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:abc"});
+  const result = await service.start(descriptor({ownerUid: "OwnerWithUppercase123", workspaceId: "WorkspaceID456"}), {runnerImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:abc"});
   assert.equal(result.state, "running");
   const instanceRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/instances"));
   assert.equal(instanceRequest.data.disks[1].autoDelete, false);
+  assert.equal(instanceRequest.data.disks[1].deviceName, result.descriptor.dataDiskName);
+  for (const value of Object.values(instanceRequest.data.labels)) {
+    assert.match(value, /^[a-z0-9_-]{1,63}$/);
+  }
+  const script = instanceRequest.data.metadata.items[0].value;
+  assert.ok(script.indexOf("OWNER_UID=") < script.indexOf("grep -q"));
+  assert.ok(script.indexOf("WORKSPACE_ID=") < script.indexOf("grep -q"));
+  const diskRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/disks"));
+  const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-5[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}$/;
+  assert.match(diskRequest.params.requestId, uuidPattern);
+  assert.match(instanceRequest.params.requestId, uuidPattern);
+  assert.notEqual(diskRequest.params.requestId, instanceRequest.params.requestId);
+  assert.match(instanceRequest.data.metadata.items[0].value, /mkfs.ext4 -L mapache-data/);
   assert.match(instanceRequest.data.metadata.items[0].value, /docker run/);
   assert.doesNotMatch(instanceRequest.data.metadata.items[0].value, /gce-container-declaration|konlet/);
   assert.match(instanceRequest.data.metadata.items[0].value, /runner\/health|MAPACHE_RUNTIME_PROVIDER|mapache-runner/);

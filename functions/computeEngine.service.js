@@ -1,6 +1,7 @@
 "use strict";
 
 const {GoogleAuth} = require("google-auth-library");
+const {createHash} = require("node:crypto");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
 const COMPUTE_API = "https://compute.googleapis.com/compute/v1";
@@ -169,7 +170,7 @@ function createComputeEngineService(dependencies = {}) {
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/disks`,
       method: "POST",
-      params: {requestId: operationId(options.operationId || descriptor.workspaceId)},
+      params: {requestId: operationId(`disk:${descriptor.dataDiskName}:${options.operationId || descriptor.generation}`)},
       data: {
         name: descriptor.dataDiskName,
         sizeGb,
@@ -206,7 +207,7 @@ function createComputeEngineService(dependencies = {}) {
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/instances`,
       method: "POST",
-      params: {requestId: operationId(options.operationId || descriptor.workspaceId)},
+      params: {requestId: operationId(`instance:${descriptor.instanceName}:${options.operationId || descriptor.generation}`)},
       data: instanceBody(descriptor, disk, {...options, allowNewDisk: disk._mapacheCreated === true}),
     });
     await waitForOperation(response.data, descriptor, options);
@@ -234,7 +235,7 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   async function deleteResource(url, options = {}, descriptor = null) {
-    const response = await requestImpl({url, method: "DELETE", params: {requestId: operationId(options.operationId || "delete")}});
+    const response = await requestImpl({url, method: "DELETE", params: {requestId: operationId(`delete:${url}:${options.operationId || descriptor?.generation}`)}});
     await waitForOperation(response.data, descriptor, options);
   }
 
@@ -287,7 +288,7 @@ function createComputeEngineService(dependencies = {}) {
       labels,
       disks: [
         {boot: true, autoDelete: true, type: "PERSISTENT", initializeParams: {sourceImage: options.bootImage || "projects/cos-cloud/global/images/family/cos-stable"}},
-        {boot: false, autoDelete: false, type: "PERSISTENT", mode: "READ_WRITE", source: disk.selfLink || `${zoneUrl(descriptor)}/disks/${descriptor.dataDiskName}`},
+        {boot: false, autoDelete: false, deviceName: descriptor.dataDiskName, type: "PERSISTENT", mode: "READ_WRITE", source: disk.selfLink || `${zoneUrl(descriptor)}/disks/${descriptor.dataDiskName}`},
       ],
       networkInterfaces: [{subnetwork: options.subnetwork || `regions/${descriptor.region}/subnetworks/default`}],
       serviceAccounts: [{email: runnerServiceAccount, scopes: ["https://www.googleapis.com/auth/logging.write", "https://www.googleapis.com/auth/monitoring.write", "https://www.googleapis.com/auth/devstorage.read_only"]}],
@@ -301,12 +302,14 @@ function createComputeEngineService(dependencies = {}) {
     return [
       "#!/bin/bash",
       "set -euo pipefail",
+      `WORKSPACE_ID=${shellQuote(descriptor.workspaceId)}`,
+      `OWNER_UID=${shellQuote(descriptor.ownerUid)}`,
       `DATA_DEVICE=/dev/disk/by-id/google-${descriptor.dataDiskName}`,
       "test -b \"$DATA_DEVICE\"",
       "mkdir -p /var/lib/mapache/workspace",
       "if ! blkid \"$DATA_DEVICE\" >/dev/null 2>&1; then",
       `  test \"${options.allowNewDisk === true ? "true" : "false"}\" = true`,
-      `  mkfs.ext4 -L ${shellQuote(`mapache-${descriptor.workspaceId}`)} \"$DATA_DEVICE\"`,
+      "  mkfs.ext4 -L mapache-data \"$DATA_DEVICE\"",
       "fi",
       "mountpoint -q /var/lib/mapache/workspace || mount -o noatime \"$DATA_DEVICE\" /var/lib/mapache/workspace",
       "if [ -e /var/lib/mapache/workspace/.mapache-vm-disk.json ]; then",
@@ -317,6 +320,7 @@ function createComputeEngineService(dependencies = {}) {
       `  printf '%s\\n' ${shellQuote(JSON.stringify({version: 1, kind: "retained-disk", workspaceId: descriptor.workspaceId, ownerUid: descriptor.ownerUid, generation: descriptor.generation, operationId: options.operationId || null}))} > /var/lib/mapache/workspace/.mapache-vm-disk.json`,
       "fi",
       "# Docker is invoked by the startup script; deprecated container declarations are not used.",
+      "mkdir -p /var/lib/mapache/workspace/credentials",
       `docker pull ${shellQuote(image)}`,
       `docker run --rm --name mapache-runner --privileged=false --shm-size=${shellQuote(options.shmSize || "2g")} ${runtimeMountArgs()} ${runtimeEnvArgs(descriptor, options)} ${shellQuote(image)}`,
     ].join("\n");
@@ -347,22 +351,28 @@ function createComputeEngineService(dependencies = {}) {
 
   function ownershipLabels(descriptor, options = {}) {
     return {
-      "mapache-owner-uid": descriptor.ownerUid,
-      "mapache-workspace-id": descriptor.workspaceId,
-      "mapache-operation-id": String(options.operationId || descriptor.generation),
+      "mapache-owner-uid": identityLabel(descriptor.ownerUid),
+      "mapache-workspace-id": identityLabel(descriptor.workspaceId),
+      "mapache-operation-id": identityLabel(String(options.operationId || descriptor.generation)),
       "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
     };
   }
 
   function assertOwnership(resource, descriptor) {
     const labels = resource?.labels || {};
-    if (labels["mapache-owner-uid"] !== descriptor.ownerUid || labels["mapache-workspace-id"] !== descriptor.workspaceId || labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
+    if (labels["mapache-owner-uid"] !== identityLabel(descriptor.ownerUid) || labels["mapache-workspace-id"] !== identityLabel(descriptor.workspaceId) || labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
       throw computeError("runtime_resource_ownership_mismatch", "Compute resource ownership labels do not match the admitted workspace");
     }
   }
 
   function operationId(value) {
-    return String(value || "operation").replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 64) || "operation";
+    const hash = createHash("sha256").update(String(value)).digest("hex");
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+  }
+
+  function identityLabel(value) {
+    // Firebase IDs may contain uppercase characters; GCE label values cannot.
+    return createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
   }
 
   function shellQuote(value) {
