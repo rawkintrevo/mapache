@@ -67,5 +67,8 @@ export async function deleteSessionState(state, sessionId, dispatch) {
 async function refreshSessionsForSelectedWorkspace(state, selectedSessionId, dispatch) {
   const data = await state.api.getSessions(state.selectedWorkspaceId);
   state.sessions = data.sessions || [];
+  if (state.api.isVmWorkspace?.(state.selectedWorkspaceId) && !state.sessions.some(session => session.id === selectedSessionId)) {
+    selectedSessionId = state.sessions[0]?.id || null;
+  }
   dispatch({type: APP_ACTIONS.SET_SELECTED_SESSION, sessionId: selectedSessionId});
 }

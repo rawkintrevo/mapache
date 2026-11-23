@@ -320,7 +320,9 @@ workspace ID, current session ID, generation, runtime kind, agent UI marker,
 and gateway origin only when ready. Credentials, private addresses and raw
 session configuration never appear. Signed access URLs still require the
 separate access endpoint. These endpoints are the prerequisite for frontend
-discovery/subscription integration, which is not yet wired.
+discovery/subscription integration. The opt-in frontend adapter now consumes
+them; see [Frontend architecture](./frontend-architecture.md) for its gate,
+supported actions and remaining full-shell validation.
 On 2026-11-23 `vmApi_v2` deployed successfully and index `CICAgPj-05MK`
 became ready. The live generation-8 owner proof passed listing, canonical
 session reads, outsider empty-list/session denial, rejected caller owner

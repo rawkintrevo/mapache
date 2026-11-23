@@ -293,8 +293,10 @@ async function refreshAll() {
     await workspaceController.refreshWorkspaceList();
     automationsController.setWorkspace(state.selectedWorkspaceId);
     await loadSessions();
-    await piPanelsController.loadMcpServers();
-    await googleWorkspaceController.loadGoogleWorkspace({silent: true});
+    if (!state.api.isVmWorkspace?.(state.selectedWorkspaceId)) {
+      await piPanelsController.loadMcpServers();
+      await googleWorkspaceController.loadGoogleWorkspace({silent: true});
+    }
     await piPanelsController.loadPiAuth();
     if (state.activePage === "admin" && state.profile?.isAdmin === true) {
       await adminController.loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});

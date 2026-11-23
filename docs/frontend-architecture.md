@@ -45,6 +45,34 @@ React. The subscription resolves the workspace's canonical runtime; access URLs
 are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
+The VM crossover client is opt-in at build time with
+`VITE_VM_WORKSPACES_ENABLED=true`. `src/services/vmWorkspaceApi.js` wraps the
+existing API client, merges owner-admitted VM listings, and routes current
+session reads, pause/start/replacement, and signed access to `vmApi_v2`.
+Legacy workspace calls retain their existing endpoints. VM identity is retained
+for the lifetime of the authenticated client even if later listing omits it,
+so stale callbacks cannot fall through to a Cloud Run mutation. Conflicting
+provider IDs, repeated pagination cursors and stale session actions fail
+explicitly; endpoint errors never trigger a provider fallback.
+
+The session subscription controller polls VM session views every three seconds
+after each completed request; it does not attach a legacy Firestore listener.
+Detaching suppresses late responses, and read errors clear stale session state.
+Lifecycle refresh selects the current generation after replacement. Initial
+workspace selection skips the legacy workspace MCP/Google config reads for VM
+records. Global account credential management remains available; unsupported
+VM-scoped actions return an explicit unavailable error. This is temporary
+crossover coverage, not removal of the central configuration requirements.
+Creation UI, configuration/automation/request/upload routing and live full-shell
+acceptance remain unfinished. Builds without the flag keep the old behavior.
+
+`e2e/qa/cases/vm-client-routing.json` exercises the production power control
+and VM adapter with synthetic responses via the local Vite fixture. CDP QA
+passed Stop -> Start -> fresh-generation access, with no legacy calls or
+unexpected console/network errors. Evidence is in
+`artifacts/qa/vm-client-routing/`; this fixture is not live Firebase full-shell
+acceptance. The browser harness is `scripts/vm-client-browser-proof.mjs`.
+
 On the first authenticated refresh, `src/utils/userTimezone.js` initializes a
 missing profile timezone from the browser's IANA timezone (falling back to
 `UTC`) through `PATCH /api/me`. Existing saved timezones are never overwritten;

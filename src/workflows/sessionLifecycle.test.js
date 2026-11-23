@@ -1,5 +1,14 @@
 import {describe, expect, test, vi} from "vitest";
-import {editSessionState, retryProvisioningSessionState, setSessionLongRunningState, setWorkspaceRuntimePolicyState} from "./sessionLifecycle.js";
+import {editSessionState, restartSessionState, retryProvisioningSessionState, setSessionLongRunningState, setWorkspaceRuntimePolicyState} from "./sessionLifecycle.js";
+
+test("VM replacement refresh selects the new canonical generation", async () => {
+  const dispatch = vi.fn();
+  const state = {selectedWorkspaceId: "vm", sessions: [{id: "old"}], api: {
+    isVmWorkspace: () => true, restartSession: vi.fn(), getSessions: vi.fn(async () => ({sessions: [{id: "new"}]})),
+  }};
+  await restartSessionState(state, "old", dispatch);
+  expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({sessionId: "new"}));
+});
 
 describe("session edit workflow", () => {
   test("renames and resizes only the fields that changed", async () => {

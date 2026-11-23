@@ -36,6 +36,14 @@ async function flushPromises() {
 }
 
 describe("sessionSubscriptionController", () => {
+  test("admitted VM sessions use the owner API and never attach a legacy Firestore listener", async () => {
+    const fixture = createFixture();
+    fixture.state.api = {isVmWorkspace: () => true, getSessions: vi.fn(async () => ({sessions: [{id: "vm-current", status: "running"}]}))};
+    await fixture.controller.loadSessions();
+    expect(fixture.listeners.size).toBe(0);
+    expect(fixture.state.selectedSessionId).toBe("vm-current");
+    fixture.controller.detach();
+  });
   test("replaces the old workspace listener and rejects stale snapshots", async () => {
     const fixture = createFixture();
     const firstLoad = fixture.controller.loadSessions();

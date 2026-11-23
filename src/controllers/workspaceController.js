@@ -143,8 +143,10 @@ export function createWorkspaceController({
     resetWorkspacePanels();
     await runBusy(async () => {
       await loadSessions();
-      await loadMcpServers();
-      await loadGoogleWorkspace();
+      if (!state.api.isVmWorkspace?.(workspaceId)) {
+        await loadMcpServers();
+        await loadGoogleWorkspace();
+      }
       await loadSelectedSessionAccess();
     }, "Working...", OPERATION_KEYS.WORKSPACE_SELECT);
   }

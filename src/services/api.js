@@ -1,4 +1,5 @@
 import {createGoogleWorkspaceQaMock} from "./googleWorkspaceQaMock.js";
+import {withVmWorkspaces} from "./vmWorkspaceApi.js";
 
 function encodePathQuery(value) {
   return encodeURIComponent(encodeURIComponent(String(value || "")));
@@ -316,7 +317,9 @@ export function createApiClient(getToken) {
         `/api/github/connect?returnTo=${encodeURIComponent(window.location.href)}`,
     ),
   };
-  return {...api, ...createGoogleWorkspaceQaMock()};
+  const client = {...api, ...createGoogleWorkspaceQaMock()};
+  return import.meta.env.VITE_VM_WORKSPACES_ENABLED === "true" ?
+    withVmWorkspaces(client, (path, options) => request(getToken, path, options)) : client;
 }
 
 async function request(getToken, path, options = {}) {
