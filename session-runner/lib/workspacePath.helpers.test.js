@@ -53,3 +53,10 @@ test("builds normalized workspace remote paths", () => {
   assert.equal(pathHelpers.workspaceRemotePath("/src//app.js"), "users/u/workspaces/w/src/app.js");
   assert.equal(pathHelpers.normalizeRemoteWorkspacePath("users/u/workspaces/w/src/app.js"), "src/app.js");
 });
+
+test("workspace tool dependencies survive default exclusions but respect explicit policy", () => {
+  const pathHelpers = helpers();
+  assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".local/lib/node_modules/firebase-tools/lib/bin/firebase.js"), false);
+  assert.equal(pathHelpers.shouldIgnoreWorkspacePath(".local/lib/node_modules/tool/node_modules/dependency/index.js"), false);
+  assert.equal(helpers({workspaceSyncPolicyExclude: [".local"]}).shouldIgnoreWorkspacePath(".local/lib/node_modules/tool/index.js"), true);
+});

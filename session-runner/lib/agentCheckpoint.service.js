@@ -9,6 +9,8 @@ const {publishLargeFile, parsePointer, shouldDefer} = require("./workspaceLargeF
 const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 const {uploadCheckpointBatches} = require("./checkpointUploadBatch");
+const {assertCapturedSymlinkTargets} = require("./checkpointSymlinkPlan");
+const {STORAGE: BUNDLE_STORAGE, bundleWorkspaceSources, encodeWorkspaceBundle} = require("./checkpointWorkspaceBundles");
 
 const CHECKPOINT_VERSION = 1;
 const WORKSPACE_FILE_NAMESPACE = "workspace-files";
@@ -281,7 +283,11 @@ async function publishWorkspaceFiles({
     workspaceId: workspaceId || config.workspaceId,
   });
   if (typeof assertCurrentWriter === "function") await assertCurrentWriter();
-  const sourceFiles = files || await collectWorkspaceFiles({fsImpl, root: sourceRoot, shouldIgnore});
+  const sourceFiles = (files || await collectWorkspaceFiles({fsImpl, root: sourceRoot, shouldIgnore}))
+      .map((file) => ({...file, path: validateRelativePath(file.path, "workspace file")}));
+  if (new Set(sourceFiles.map((file) => file.path)).size !== sourceFiles.length) {
+    throw checkpointError("checkpoint_manifest_invalid", "Workspace checkpoint contains duplicate paths");
+  }
   let publicationBase = basePointer;
   let previousPaths = [];
   let previousManifest = null;
@@ -322,14 +328,23 @@ async function publishWorkspaceFiles({
   const objectRefs = [];
 
   await uploadCheckpointBatches({
-    files: sourceFiles,
+    files: await bundleWorkspaceSources({files: sourceFiles, fsImpl, sourceRoot}),
     sizeOf: async (file) => {
+      if (file.kind === BUNDLE_STORAGE) return file.byteLength;
       if (file.kind === "symlink") return 0;
       if (file.content !== undefined) return Buffer.byteLength(Buffer.isBuffer(file.content) ? file.content : String(file.content));
       const localPath = file.localPath || resolveStagingPath(sourceRoot, file.path);
       return (await fsImpl.promises.lstat(localPath)).size;
     },
     upload: async (sourceFile) => {
+      if (sourceFile.kind === BUNDLE_STORAGE) {
+        const encoded = await encodeWorkspaceBundle({source: sourceFile, fsImpl, basePath});
+        await writeImmutableObject({bucketName: config.bucketName, content: encoded.content,
+          contentType: "application/octet-stream", objectPath: encoded.bundle.objectPath, storage, uploadObject});
+        manifest.files.push(...encoded.files);
+        objectRefs.push({bucketName: config.bucketName, ...encoded.bundle});
+        return;
+      }
       const relativePath = validateRelativePath(sourceFile.path, "workspace file");
       const kind = sourceFile.kind || "workspace-file";
       if (kind === "symlink") {
@@ -593,6 +608,7 @@ async function collectWorkspaceFiles({fsImpl, root, shouldIgnore}) {
   if (!rootStat.isDirectory()) throw checkpointError("checkpoint_workspace_invalid", "Workspace root is not a directory");
   const files = [];
   await walkWorkspace({fsImpl, root: resolvedRoot, currentDir: resolvedRoot, files, shouldIgnore});
+  assertCapturedSymlinkTargets(files);
   return files;
 }
 

@@ -87,11 +87,41 @@ directories to installation guidance. The normal workspace home archive
 excludes `.local` so user-wide files are not copied into a workspace-specific
 home archive.
 
+Workspace tool trees under `/workspace/.local` include nested `node_modules` in
+immutable checkpoints. `lib/workspacePath.helpers.js` retains the ordinary
+project dependency exclusion elsewhere and still honors explicit workspace
+exclusion policies. Before uploading a capture, `lib/agentCheckpoint.service.js`
+uses `lib/checkpointSymlinkPlan.js` to check that every collected symlink
+target resolves through captured files or nonempty directories. An excluded
+target rejects publication instead of creating a
+checkpoint that the strict restore validator cannot load. Existing incomplete
+checkpoints require recovery; changing the filter does not recreate omitted
+package payloads. This change requires a rebuilt `gcp-runner` image and new
+service revisions.
+
+Small regular files under `.local` (at most 1 MiB each) use immutable 8 MiB
+bundles, owned by `lib/checkpointWorkspaceBundles.js`. Manifest entries keep
+individual paths, modes, lengths, and SHA-256 hashes, plus the bundle's
+capture-scoped path, length/hash, and byte offset. Symlinks remain explicit
+manifest entries. Larger files, deferred large-file pointers, and files outside
+`.local` keep their existing representation. Publication retains the 64 MiB
+batch budget and publishes the manifest only after all bundle/object uploads
+succeed. Restore verifies the entire bundle and each selected file before
+installing the staged tree; it retains at most two completed bundles and one
+bundle download in addition to the existing staging budget. Raw concatenated
+bytes carry no extraction paths or archive traversal semantics.
+
+The updated runner reads both older per-file captures and bundled captures.
+Older images cannot read bundled captures: rollback requires a compatible image
+or an explicitly selected older checkpoint, with the usual data-recovery review.
+This is a compatibility repair for existing local/checkpoint workspaces, not a
+replacement for evaluating durable mounted HOME/workspace storage.
+
 Blank/local workspaces persist workspace installs through immutable checkpoints,
 not a GCS FUSE workspace mount. A restart only restores a published manifest;
 objects from an interrupted upload are not a complete backup. Workspace
 checkpoint publication in `lib/agentCheckpoint.service.js` uploads batches of
-at most 64 files and 64 MiB of declared content (larger files run alone).
+at most 64 objects and 64 MiB of declared content (larger files run alone).
 Failures drain the current batch and never publish a partial manifest.
 
 This contract uses GCS FUSE for user-wide installs and shared workspaces. Installers that
@@ -1393,3 +1423,40 @@ The upload batch request limit is also 64 so large trees of small SDK files
 can finish a final save within the shutdown budget. The independent 64 MiB
 content budget, oversized-file isolation, failure draining, and atomic manifest
 publication remain unchanged.
+
+
+### npm installation recovery (#603)
+
+On 2026-11-23, `install-test` failed before opening port 8080 because its
+published checkpoint retained `.local/bin/firebase` but excluded the target
+under `.local/lib/node_modules`. The original 38,145-entry capture remains
+intact. Recovery reinstalled Firebase CLI 15.37.0, whose version was recorded in
+the saved transcript; its newly resolved dependencies are not claimed to be
+byte-identical to the omitted installation. Full restoration and checksums were
+verified before cutover. Firebase 15.37.0 and gcloud 594.0.1 executed afterward.
+
+The first normal restart exposed the second failure: a 58,062-entry periodic
+per-file capture took about 192 seconds, exceeding the 120-second shutdown
+budget while the final save waited behind it. Bundling 56,930 small tool files
+into 80 objects reduced a live 58,063-entry capture (including a verification
+marker) to 37.5 seconds. The next final capture took about 38 seconds, and
+production checkpoint restore took 60–69 seconds. The original probe and
+shutdown budgets were not increased.
+
+Cloud Build `c2c336ce-3794-4097-b0cb-e901747d680c` produced the repair image
+`sha256:bcc87e5cf02b4891d1c175c09fe728a799ee475347e53d8da932b7f38064b508`,
+layering the tested checkpoint files over the then-current `gcp-runner` image.
+The canonical `gcp-runner` tag was promoted to this digest so ordinary backend
+recreation retains the repair. Existing running services receive it on their
+next restart. The implementation source is tracked by PR #604; keep subsequent
+full image builds compatible with the bundled checkpoint format.
+
+Two backend-managed restarts subsequently completed (generations 10 and 11),
+with no manual checkpoint-pointer or lifecycle-state correction in those cycles.
+Each replacement returned authenticated `/runner/health` 200 with
+`agentRuntime.ready=true`, executed both installed CLIs and Firebase's native
+and JavaScript dependencies, and retained the verification marker from the
+previous runner. Authenticated `/agent/` returned HTML 200 after the final
+restart. The marker was then removed. The operator invoked the repository's
+canonical lifecycle service with production configuration; this was not browser
+UI QA. No Functions code or deployment changed.

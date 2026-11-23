@@ -386,6 +386,40 @@ test("workspace install tree publishes concurrently and restores executable link
   assert.equal(execFileSync(path.join(bin, "tool"), {encoding: "utf8"}), "installed\n");
 });
 
+test("npm workspace install preserves node_modules, nested dependencies and executable links across two restarts", async (t) => {
+  const {createAgentCheckpointRestoreService} = require("./agentCheckpointRestore.service");
+  const {createWorkspacePathHelpers} = require("./workspacePath.helpers");
+  const {execFileSync} = require("node:child_process");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "tool-checkpoint-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root, {workspaceSyncPolicyExclude: []});
+  const bin = path.join(config.workspaceDir, ".local/bin");
+  const lib = path.join(config.workspaceDir, ".local/lib/node_modules/tool");
+  await fs.mkdir(bin, {recursive: true});
+  await fs.mkdir(lib, {recursive: true});
+  await fs.writeFile(path.join(lib, "tool"), '#!/bin/sh\ncat "$(dirname "$0")/../lib/node_modules/tool/data-0"\n', {mode: 0o755});
+  await fs.symlink("../lib/node_modules/tool/tool", path.join(bin, "tool"));
+  for (let i = 0; i < 25; i++) await fs.writeFile(path.join(lib, `data-${i}`), "installed\n");
+  await fs.mkdir(path.join(lib, "node_modules/dependency"), {recursive: true});
+  await fs.writeFile(path.join(lib, "node_modules/dependency/index.js"), "nested dependency");
+  const store = admittedStore();
+  const storage = createStorage();
+  const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
+  const {shouldIgnoreWorkspacePath} = createWorkspacePathHelpers({config});
+  const saved = await publisher.publishWorkspaceFiles({shouldIgnore: shouldIgnoreWorkspacePath});
+  assert.equal(saved.manifest.files.length, 28);
+  for (let restart = 0; restart < 2; restart++) {
+    await fs.rm(config.workspaceDir, {recursive: true});
+    await fs.mkdir(config.workspaceDir);
+    const restore = createAgentCheckpointRestoreService({config, db: store.db, storage});
+    await restore.restoreCheckpoint({shouldIgnore: shouldIgnoreWorkspacePath});
+    assert.equal(await fs.readlink(path.join(bin, "tool")), "../lib/node_modules/tool/tool");
+    assert.equal(execFileSync(path.join(bin, "tool"), {encoding: "utf8"}), "installed\n");
+    assert.equal(await fs.readFile(path.join(lib, "node_modules/dependency/index.js"), "utf8"), "nested dependency");
+    await publisher.publishWorkspaceFiles({shouldIgnore: shouldIgnoreWorkspacePath});
+  }
+});
+
 test("a failed parallel installation upload never publishes a partial manifest", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "tool-checkpoint-failure-"));
   t.after(() => fs.rm(root, {recursive: true, force: true}));
@@ -394,9 +428,49 @@ test("a failed parallel installation upload never publishes a partial manifest",
   const storage = createStorage({failOnUploadNumber: 3});
   const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
   await assert.rejects(publisher.publishWorkspaceFiles({
-    files: Array.from({length: 129}, (_, i) => ({path: `.local/lib/tool-${i}`, content: "tool"})),
+    files: Array.from({length: 129}, (_, i) => ({path: `src/tool-${i}`, content: "tool"})),
   }), /injected upload failure/);
   assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
   assert.equal([...storage.objects.keys()].some((key) => key.endsWith("/manifest.json")), false);
   assert.equal(storage.uploads.length, 63);
+});
+
+test("capture rejects a symlink into excluded files before uploading or publishing", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "excluded-tool-checkpoint-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root, {workspaceSyncPolicyExclude: [".local/lib"]});
+  await fs.mkdir(path.join(config.workspaceDir, ".local/bin"), {recursive: true});
+  await fs.mkdir(path.join(config.workspaceDir, ".local/lib"), {recursive: true});
+  await fs.writeFile(path.join(config.workspaceDir, ".local/lib/tool"), "tool");
+  await fs.symlink("../lib/tool", path.join(config.workspaceDir, ".local/bin/tool"));
+  const store = admittedStore();
+  const storage = createStorage();
+  const publisher = createAgentCheckpointService({admin, config, db: store.db, storage});
+  const {shouldIgnoreWorkspacePath} = require("./workspacePath.helpers").createWorkspacePathHelpers({config});
+  await assert.rejects(publisher.publishWorkspaceFiles({shouldIgnore: shouldIgnoreWorkspacePath}),
+      (error) => error.code === "checkpoint_unsafe_symlink");
+  assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
+  assert.equal(storage.uploads.length, 0);
+});
+
+test("bundle upload failure never publishes and corrupt bundles never replace the live workspace", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "bundle-failure-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  const config = configFor(root);
+  const store = admittedStore();
+  const failedStorage = createStorage({failOnUploadNumber: 1});
+  const files = [{path: ".local/bin/tool", content: "saved tool"}];
+  await assert.rejects(createAgentCheckpointService({admin, config, db: store.db, storage: failedStorage})
+      .publishWorkspaceFiles({files}), /injected upload failure/);
+  assert.equal(store.workspace.agentRuntimeWorkspaceFiles, undefined);
+  const storage = createStorage();
+  const saved = await createAgentCheckpointService({admin, config, db: store.db, storage}).publishWorkspaceFiles({files});
+  assert.equal(saved.manifest.files[0].storage, "workspace-bundle-v1");
+  const bundlePath = saved.manifest.files[0].bundle.objectPath;
+  storage.objects.set(`${config.bucketName}/${bundlePath}`, Buffer.from("corrupted!"));
+  await fs.mkdir(config.workspaceDir);
+  await fs.writeFile(path.join(config.workspaceDir, "sentinel"), "keep");
+  const restore = require("./agentCheckpointRestore.service").createAgentCheckpointRestoreService({config, db: store.db, storage});
+  await assert.rejects(restore.restoreWorkspaceFiles(), {code: "checkpoint_checksum_mismatch"});
+  assert.equal(await fs.readFile(path.join(config.workspaceDir, "sentinel"), "utf8"), "keep");
 });

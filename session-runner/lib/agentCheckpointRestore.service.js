@@ -8,6 +8,7 @@ const {agentSnapshotStoragePrefix, parseCompleteJsonl} = require("./agentSnapsho
 const {CHECKPOINT_VERSION, WORKSPACE_FILE_NAMESPACE, validateRelativePath} = require("./agentCheckpoint.service");
 const {shouldDefer, encodePointer} = require("./workspaceLargeFiles");
 const {stageCheckpointFiles} = require("./checkpointRestoreStaging");
+const {STORAGE: BUNDLE_STORAGE, createWorkspaceBundleReader} = require("./checkpointWorkspaceBundles");
 const {isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 function isAutomationRuntime(config = {}) {
@@ -256,8 +257,13 @@ async function buildWorkspacePlan({config, fsImpl, pointer, shouldIgnore, stageD
       objectPath: expectedObjectPath(pointer, manifest, relativePath, entry.kind),
       deferred: shouldDefer(entry, config), symlink: false});
   }
+  const readBundle = createWorkspaceBundleReader({
+    basePath: `${namespace}/${WORKSPACE_FILE_NAMESPACE}/${pointer.generation}/${pointer.bootInstanceId}/${pointer.captureId}`,
+    bucketName: pointer.manifest.bucketName,
+    storage,
+  });
   await stageCheckpointFiles({files, fsImpl, stageFile: async ({entry, relativePath, stagedPath, objectPath, deferred}) => {
-    const content = deferred ? encodePointer(entry) : await downloadObject({
+    const content = entry.storage === BUNDLE_STORAGE ? await readBundle(entry) : deferred ? encodePointer(entry) : await downloadObject({
       bucketName: pointer.manifest.bucketName,
       expected: entry,
       label: relativePath,
