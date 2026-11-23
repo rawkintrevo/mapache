@@ -63,9 +63,28 @@ workspace selection skips the legacy workspace MCP/Google config reads for VM
 records. Global account credential management remains available; unsupported
 VM-scoped actions return an explicit unavailable error. This is temporary
 crossover coverage, not removal of the central configuration requirements.
-Creation UI, configuration/automation/request/upload routing and full-shell
+Creation UI, remaining configuration/automation/request/upload routing and full-shell
 creation/lifecycle acceptance remain unfinished. Builds without the flag keep
 the old behavior.
+
+VM workspace editing selects `VmWorkspaceEditModal` from `ModalStack`, while
+legacy workspaces retain `WorkspaceEditModal`. The VM editor loads versioned
+configuration and the existing account credential/environment catalogs, displays
+labels rather than secret values, and saves explicit provider/environment
+selections through the VM adapter. It retains the version and generation loaded
+by the editor; the adapter never substitutes a newer version before saving.
+Conflicts preserve the draft and offer an explicit reload. Saves display pending
+restart status without triggering lifecycle operations; reloading shows the
+backend's applied status. Unknown/deleted selections remain visible until the
+user clears them. Late responses are ignored after close or workspace changes.
+Resources, metadata, defaults and other VM configuration controls remain pending.
+
+`e2e/qa/cases/vm-configuration.json` and
+`node scripts/vm-client-browser-proof.mjs vm-configuration` exercise the real
+modal stack/editor/adapter with synthetic backend responses. Pending, conflict,
+reload and applied-state screenshots are in `artifacts/qa/vm-configuration/`.
+This complements the live owner-API revision proof in [VM Workspaces](./vm-workspaces.md);
+it does not claim live full-shell configuration editing or a Hosting rollout.
 
 `e2e/qa/cases/vm-client-routing.json` exercises the production power control
 and VM adapter with synthetic responses via the local Vite fixture. CDP QA

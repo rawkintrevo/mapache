@@ -553,7 +553,9 @@ edits require a process restart and do not change a running process environment.
 Deleted selected auth entries fail the versioned session's startup broker call.
 Failures remain visible through lifecycle operation status.
 
-The machine properties UI, reusable defaults, hot application, and other central
+The VM workspace editor now supports provider/environment selections and
+pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).
+Remaining machine properties, reusable defaults, hot application, and other central
 bindings below remain release work. `node scripts/vm-owner-api-proof.mjs
 configuration` checks stopped saves, stale/foreign rejection, pending status,
 and applied version after a real pause/start of the fixed synthetic fixture.

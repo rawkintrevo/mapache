@@ -1,0 +1,19 @@
+{
+  "id": "vm-configuration",
+  "title": "VM workspace settings show safe selections, pending status and stale-save recovery",
+  "baseUrl": "http://127.0.0.1:5174/e2e/qa/fixtures/vm-configuration.html",
+  "artifactsDir": "artifacts/qa/vm-configuration",
+  "scope": "Synthetic browser integration through production ModalStack, VM editor and API adapter. Live backend pending/applied behavior is covered separately by vm-owner-api-proof configuration.",
+  "steps": [
+    {"assert": "Applied settings load; credential secret is absent from the rendered page"},
+    {"assert": "Choose Work account and Service, save, and observe restart-required status without lifecycle actions"},
+    {"capture": "pending screenshot"},
+    {"assert": "Advance the synthetic server version, deselect Service and save; conflict preserves the unsaved selection and explains reload"},
+    {"capture": "conflict screenshot"},
+    {"assert": "Reload restores saved selections; simulate healthy application and reload to show applied status"},
+    {"assert": "Only configuration saves occur, with original expected versions 2 and 3; no legacy mutations or unexpected console/network errors"},
+    {"capture": "screenshot"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

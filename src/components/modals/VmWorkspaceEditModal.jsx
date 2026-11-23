@@ -1,0 +1,93 @@
+import {useEffect, useRef, useState} from "react";
+import {Button} from "../common/Button.jsx";
+import {ModalBackdrop} from "./ModalBackdrop.jsx";
+import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
+
+function message(error) {
+  if (/vm_configuration_version_mismatch|vm_generation_mismatch/.test(error.message || "")) return "This workspace changed since you opened its settings. Reload saved settings before saving again.";
+  if (/vm_operation_in_progress/.test(error.message || "")) return "The workspace is starting or stopping. Wait for it to finish, then reload saved settings.";
+  if (/vm_auth_entry_unavailable|vm_environment_entry_unavailable/.test(error.message || "")) return "A selected credential or variable is no longer available. Reload saved settings and update your selections.";
+  return "Could not load or save workspace settings. Please try again.";
+}
+
+export function VmWorkspaceEditModal({workspace, api, onClose}) {
+  const [config, setConfig] = useState(null);
+  const [providers, setProviders] = useState({});
+  const [environmentIds, setEnvironmentIds] = useState([]);
+  const [entries, setEntries] = useState([]);
+  const [environment, setEnvironment] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const sequence = useRef(0);
+  async function reload() {
+    const request = ++sequence.current;
+    setBusy(true); setError(""); setSaved(false);
+    try {
+      const [next, auth, env] = await Promise.all([api.getMachineConfiguration(workspace.id), api.getPiAuth(), api.getGenericEnvironmentKeys()]);
+      if (request !== sequence.current) return;
+      setConfig(next); setProviders({...next.desired.authSelection.providers});
+      setEnvironmentIds([...next.desired.environmentEntryIds]);
+      const available = Object.entries(auth.entries || {}).map(([id, entry]) => ({id, providerKey: entry.providerKey, label: entry.label}));
+      for (const providerKey of Object.keys(auth.providers || {})) {
+        if (!available.some(entry => entry.providerKey === providerKey)) available.push({id: `legacy-${providerKey}`, providerKey, label: piAuthProviderLabel(providerKey)});
+      }
+      setEntries(available); setEnvironment(env.entries || []);
+    } catch (failure) { if (request === sequence.current) setError(message(failure)); }
+    finally { if (request === sequence.current) setBusy(false); }
+  }
+  useEffect(() => {
+    void reload();
+    return () => { sequence.current++; };
+  }, [workspace.id, api]);
+  async function save(event) {
+    event.preventDefault();
+    const request = sequence.current;
+    setBusy(true); setError(""); setSaved(false);
+    try {
+      const next = await api.updateMachineConfiguration(workspace.id, {
+        expectedGeneration: config.generation, expectedVersion: config.desiredVersion,
+        authSelection: {harness: "pi", providers}, environmentEntryIds: environmentIds,
+      });
+      if (request === sequence.current) { setConfig(next); setSaved(true); }
+    } catch (failure) { if (request === sequence.current) setError(message(failure)); }
+    finally { if (request === sequence.current) setBusy(false); }
+  }
+  const keys = [...new Set([...entries.map(entry => entry.providerKey), ...Object.keys(providers)])].filter(Boolean).sort();
+  const variables = [...environment, ...environmentIds.filter(id => !environment.some(entry => entry.id === id))
+      .map(id => ({id, label: "Unavailable saved variable"}))];
+  return <ModalBackdrop onClose={onClose}>
+    <section aria-labelledby="vm-settings-title" aria-modal="true" className="modal-panel" role="dialog">
+      <div className="modal-heading"><h2 id="vm-settings-title">Settings for {workspace.name}</h2>
+        <Button aria-label="Close" variant="secondary" onClick={onClose}>Close</Button></div>
+      <p>Selections apply on the next start or restart. Saving does not interrupt the running agent or start a stopped workspace.</p>
+      {error ? <div role="alert" className="error">{error}</div> : null}
+      {config ? <p role="status">{saved ? "Saved. " : ""}{config.restartRequired ? "Restart required to apply saved settings." : config.state === "applied" ? "Saved settings are applied." : "Current settings have not been tracked as an applied revision yet."}</p> : null}
+      {busy ? <p role="status">Working…</p> : null}
+      {config ? <form className="modal-form" onSubmit={save}>
+        <fieldset disabled={busy}><legend>Provider credentials</legend>
+          {!keys.length ? <p>No saved provider credentials.</p> : keys.map(key => <label key={key}>
+            <span>{piAuthProviderLabel(key)}</span>
+            <select aria-label={`${piAuthProviderLabel(key)} credential`} value={providers[key] || ""} onChange={event => {
+              setSaved(false); const next = {...providers};
+              if (event.target.value) next[key] = event.target.value; else delete next[key];
+              setProviders(next);
+            }}><option value="">None</option>
+              {providers[key] && !entries.some(entry => entry.id === providers[key] && entry.providerKey === key) ? <option value={providers[key]}>Unavailable saved credential</option> : null}
+              {entries.filter(entry => entry.providerKey === key).map(entry => <option key={entry.id} value={entry.id}>{entry.label || piAuthProviderLabel(key)}</option>)}
+            </select>
+          </label>)}
+        </fieldset>
+        <fieldset disabled={busy}><legend>Environment variables</legend>
+          {!variables.length ? <p>No saved environment variables.</p> : variables.map(entry => <label className="checkbox-label" key={entry.id}>
+            <input type="checkbox" checked={environmentIds.includes(entry.id)} onChange={event => {
+              setSaved(false); setEnvironmentIds(event.target.checked ? [...environmentIds, entry.id] : environmentIds.filter(id => id !== entry.id));
+            }} />{entry.label || entry.name}{entry.label && entry.name ? ` (${entry.name})` : ""}
+          </label>)}
+        </fieldset>
+        <div className="modal-form-actions"><Button disabled={busy} type="submit">Save settings</Button></div>
+      </form> : null}
+      <Button disabled={busy} variant="secondary" onClick={reload}>Reload saved settings</Button>
+    </section>
+  </ModalBackdrop>;
+}

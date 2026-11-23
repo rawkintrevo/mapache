@@ -18,6 +18,8 @@ export function withVmWorkspaces(legacy, request, {requestId = () => crypto.rand
     }});
   }
   const routed = {
+    getMachineConfiguration: id => vmRequest(id, "/configuration"),
+    updateMachineConfiguration: (id, body) => vmRequest(id, "/configuration", {method: "PATCH", body}),
     getSessions: id => read(id),
     restartSession: (id, sessionId) => lifecycle(id, sessionId, "restart"),
     stopSession: (id, sessionId) => lifecycle(id, sessionId, "pause"),

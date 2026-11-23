@@ -7,6 +7,7 @@ import {McpServersModal} from "./McpServersModal.jsx";
 import {PiAuthManageModal} from "./PiAuthManageModal.jsx";
 import {WorkspaceModal} from "./WorkspaceModal.jsx";
 import {WorkspaceEditModal} from "./WorkspaceEditModal.jsx";
+import {VmWorkspaceEditModal} from "./VmWorkspaceEditModal.jsx";
 import {WorkspaceRequestGrantsModal} from "./WorkspaceRequestGrantsModal.jsx";
 import {hasPendingOperations} from "../../state/pendingOperations.js";
 
@@ -31,6 +32,9 @@ export function ModalStack(props) {
         />
       ) : null}
       {state.workspaceEditModalOpen && props.selectedWorkspace ? (
+        props.selectedWorkspace.backend === "compute-engine" ? <VmWorkspaceEditModal
+          key={props.selectedWorkspace.id} workspace={props.selectedWorkspace} api={state.api} onClose={modals.closeWorkspaceEditModal}
+        /> :
         <WorkspaceEditModal
           busy={busy}
           error={state.error}

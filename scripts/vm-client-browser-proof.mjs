@@ -3,7 +3,9 @@ import {mkdir, writeFile, readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const require = createRequire(import.meta.url);
 const {WebSocket} = require('../vm-gateway/node_modules/ws');
-const manifest = JSON.parse(await readFile('e2e/qa/cases/vm-client-routing.json', 'utf8'));
+const caseId = process.argv[2] || 'vm-client-routing';
+assert.ok(['vm-client-routing', 'vm-configuration'].includes(caseId));
+const manifest = JSON.parse(await readFile(`e2e/qa/cases/${caseId}.json`, 'utf8'));
 const directory = manifest.artifactsDir;
 await mkdir(directory, {recursive: true});
 const endpoint = 'http://127.0.0.1:9223';
@@ -40,11 +42,48 @@ async function waitText(text) {
   }
   throw new Error(`missing session state: ${text}`);
 }
+async function waitBody(text) {
+  for (let i = 0; i < 80; i++) {
+    if (await evaluate(`document.body.textContent.includes(${JSON.stringify(text)})`)) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error(`missing text: ${text}`);
+}
+async function clickButton(label) {
+  await evaluate(`[...document.querySelectorAll('button')].find(el => el.textContent.trim() === ${JSON.stringify(label)}).click()`);
+}
+async function captureScreen(name) {
+  const shot = await call('Page.captureScreenshot', {format: 'png'});
+  await writeFile(`${directory}/${name}.png`, Buffer.from(shot.data, 'base64'));
+}
 let failureReason;
 try {
   await call('Page.enable'); await call('Runtime.enable'); await call('Network.enable');
   await call('Emulation.setDeviceMetricsOverride', {width: 1100, height: 700, deviceScaleFactor: 1, mobile: false});
   await call('Page.navigate', {url: manifest.baseUrl});
+  if (caseId === 'vm-configuration') {
+    await waitBody('Saved settings are applied.');
+    assert.equal(await evaluate('document.body.textContent.includes("fixture-secret-never-render")'), false);
+    await evaluate(`const select = document.querySelector('select'); select.value = 'key'; select.dispatchEvent(new Event('change', {bubbles: true})); document.querySelector('input[type="checkbox"]').click()`);
+    await clickButton('Save settings');
+    await waitBody('Saved. Restart required'); await captureScreen('pending');
+    await evaluate(`window.vmConfigurationFixture.advance(); document.querySelector('input[type="checkbox"]').click()`);
+    await clickButton('Save settings');
+    await waitBody('This workspace changed');
+    assert.equal(await evaluate('document.querySelector("input[type=checkbox]").checked'), false);
+    await captureScreen('conflict');
+    await clickButton('Reload saved settings');
+    for (let i = 0; i < 80 && await evaluate('!!document.querySelector("[role=alert]") || !document.querySelector("input[type=checkbox]").checked'); i++) await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await evaluate('document.querySelector("input[type=checkbox]").checked'), true);
+    await evaluate('window.vmConfigurationFixture.apply()'); await clickButton('Reload saved settings');
+    await waitBody('Saved settings are applied.');
+    const proof = await evaluate('window.vmProof');
+    assert.equal(proof.legacyCalls, 0);
+    assert.deepEqual(proof.actions.map(action => [action.expectedGeneration, action.expectedVersion]), [[11, 2], [11, 3]]);
+    assert.deepEqual(proof.actions[0].authSelection.providers, {openai: 'key'});
+    assert.deepEqual(proof.actions[0].environmentEntryIds, ['env']);
+    await writeFile(`${directory}/proof.json`, JSON.stringify(proof, null, 2));
+  } else {
   await waitText('s1: running');
   for (const [label, state] of [['Stop workspace', 's1: stopped'], ['Start workspace', 's2: running']]) {
     await evaluate(`document.querySelector('[aria-haspopup="menu"]').click()`);
@@ -59,6 +98,8 @@ try {
   assert.deepEqual(proof.actions.map(a => [a.path.split('/').pop(), a.body.expectedGeneration]), [['pause', 1], ['start', 1], ['access', 2]]);
   assert.deepEqual(errors, []); assert.ok(network.every(response => response.status < 400));
   await writeFile(`${directory}/proof.json`, JSON.stringify(proof, null, 2));
+  }
+  assert.deepEqual(errors, []); assert.ok(network.every(response => response.status < 400));
   const screenshot = await call('Page.captureScreenshot', {format: 'png'});
   await writeFile(`${directory}/screen.png`, Buffer.from(screenshot.data, 'base64'));
 } catch (error) { failureReason = error.message; }

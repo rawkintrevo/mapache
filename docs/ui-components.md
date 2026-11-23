@@ -33,6 +33,7 @@ This index maps significant React components to their current responsibilities.
 | `WorkspaceRequestGrantsModal` | `src/components/modals/WorkspaceRequestGrantsModal.jsx` | Owner-managed directional workspace request permissions and revocation for the selected source workspace. |
 | `WorkspaceModal` | `src/components/modals/WorkspaceModal.jsx` | Creates blank/GitHub workspaces and chooses saved environment keys. |
 | `WorkspaceEditModal` | `src/components/modals/WorkspaceEditModal.jsx` | Renames a workspace and edits versioned machine settings: resources, durable disk growth, idle policy, and redacted credential/connection/gateway IDs. |
+| `VmWorkspaceEditModal` | `src/components/modals/VmWorkspaceEditModal.jsx` | VM-only provider/environment selection editor with pending/applied status, version-fenced saves and explicit conflict reload. |
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth, then returns to Google Workspace account management. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |
 | `ProfilePage` | `src/components/profile/ProfilePage.jsx` | Account profile, usage, and GitHub connector controls. |

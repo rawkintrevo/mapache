@@ -4,6 +4,7 @@ import {withVmWorkspaces, pollVmSessions} from "./vmWorkspaceApi.js";
 function fixture() {
   const workspace = {id: "vm", backend: "compute-engine", generation: 8, state: "active", currentSessionId: "s8"};
   const legacy = {getWorkspaces: vi.fn(async () => ({workspaces: [{id: "old"}]})), getSessions: vi.fn(),
+    getMachineConfiguration: vi.fn(), updateMachineConfiguration: vi.fn(),
     stopSession: vi.fn(), restartSession: vi.fn(), getSessionAccessUrls: vi.fn(), deleteWorkspace: vi.fn()};
   const request = vi.fn(async (url, options) => {
     if (url.endsWith("/workspaces")) return {workspaces: [workspace], nextCursor: null};
@@ -14,6 +15,17 @@ function fixture() {
   return {api, legacy, request, workspace};
 }
 describe("VM frontend provider routing", () => {
+  it("preserves the editor's expected version when routing configuration saves", async () => {
+    const f = fixture(); await f.api.getWorkspaces();
+    await f.api.getMachineConfiguration("vm");
+    expect(f.request.mock.lastCall[0]).toMatch(/\/vm\/configuration$/);
+    const patch = {expectedGeneration: 7, expectedVersion: 2, environmentEntryIds: []};
+    await f.api.updateMachineConfiguration("vm", patch);
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/configuration$/), {method: "PATCH", body: patch});
+    expect(f.legacy.updateMachineConfiguration).not.toHaveBeenCalled();
+    await f.api.updateMachineConfiguration("old", patch);
+    expect(f.legacy.updateMachineConfiguration).toHaveBeenCalledWith("old", patch);
+  });
   it("keeps legacy calls unchanged and routes VM generation-aware actions without legacy fallback", async () => {
     const f = fixture(); expect((await f.api.getWorkspaces()).workspaces.map(w => w.id)).toEqual(["old", "vm"]);
     await f.api.stopSession("old", "legacy-session"); expect(f.legacy.stopSession).toHaveBeenCalledWith("old", "legacy-session");
