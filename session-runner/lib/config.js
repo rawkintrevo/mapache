@@ -25,6 +25,10 @@ const {
   normalizeRuntimeStorageMode,
   privateRuntimePaths,
 } = require("./runtimeStorage.helpers");
+const {
+  RETAINED_DISK_STORAGE_MODE,
+  retainedDiskPaths,
+} = require("./retainedDiskStorage");
 const {SHARED_WORKSPACE_STORAGE_MODE} = require("./sharedWorkspace.helpers");
 
 function normalizeWorkspaceSourceMode(value) {
@@ -75,20 +79,27 @@ function parseJsonObject(value, fallback = null) {
 }
 
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
-  const workspaceDir = process.env.WORKSPACE_DIR || "/workspace";
+  const runtimeProvider = normalizeEnvString(process.env.MAPACHE_RUNTIME_PROVIDER || process.env.RUNTIME_PROVIDER || "cloud-run").toLowerCase() || "cloud-run";
+  const retainedDiskMode = runtimeProvider === "compute-engine" ||
+    normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase() === RETAINED_DISK_STORAGE_MODE;
+  const retainedDiskRoot = retainedDiskMode ? path.resolve(process.env.MAPACHE_RETAINED_DISK_ROOT || "/var/lib/mapache/workspace") : "";
+  const retainedPaths = retainedDiskMode ? retainedDiskPaths(retainedDiskRoot) : null;
+  const workspaceDir = path.resolve(process.env.WORKSPACE_DIR || retainedPaths?.workspace || "/workspace");
   const workspaceLocalBinDir = path.resolve(
       process.env.MAPACHE_WORKSPACE_BIN_DIR || path.join(workspaceDir, ".local", "bin"),
   );
   const userLocalBinDir = path.resolve(process.env.MAPACHE_USER_BIN_DIR || "/root/.local/bin");
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
   const requestedWorkspaceMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase();
-  const workspaceStorageMode = [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(requestedWorkspaceMode) ? requestedWorkspaceMode : "legacy";
+  const workspaceStorageMode = retainedDiskMode ? RETAINED_DISK_STORAGE_MODE :
+    [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(requestedWorkspaceMode) ? requestedWorkspaceMode : "legacy";
   const automationRunId = isAutomationRuntime(runtimeKind) ?
     String(process.env.MAPACHE_AUTOMATION_RUN_ID || process.env.AUTOMATION_RUN_ID || "").trim() : "";
   const requestedRuntimeStorageMode = normalizeRuntimeStorageMode(
     process.env.MAPACHE_RUNTIME_STORAGE_MODE || process.env.RUNTIME_STORAGE_MODE,
   );
-  const runtimeStorageMode = [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(workspaceStorageMode) ? "private" : requestedRuntimeStorageMode;
+  const runtimeStorageMode = retainedDiskMode ? RETAINED_DISK_STORAGE_MODE :
+    [SHARED_WORKSPACE_STORAGE_MODE, AUTOMATION_STORAGE_MODE].includes(workspaceStorageMode) ? "private" : requestedRuntimeStorageMode;
   const runtimeIdentity = normalizeRuntimeIdentity(
       process.env.MAPACHE_RUNTIME_ID || process.env.RUN_ID || process.env.SESSION_ID,
   );
@@ -98,11 +109,11 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     runtimeRoot: process.env.MAPACHE_RUNTIME_ROOT && process.env.MAPACHE_RUNTIME_ID ? process.env.MAPACHE_RUNTIME_ROOT : "",
   }) : null;
   const legacyHomeDir = path.resolve(process.env.MAPACHE_HOME_DIR || process.env.HOME || "/root");
-  const homeDir = privatePaths?.homeDir || legacyHomeDir;
+  const homeDir = retainedPaths?.home || privatePaths?.homeDir || legacyHomeDir;
   const piHomeDir = path.join(homeDir, ".pi");
   const agentUiVersion = normalizeEnvString(process.env.MAPACHE_AGENT_UI_VERSION);
   const agentRuntimeEnabled = agentUiVersion === "pi-web-ui-v1";
-  const agentStateRoot = path.resolve(privatePaths?.agentStateRoot || process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
+  const agentStateRoot = path.resolve(retainedPaths?.agent || privatePaths?.agentStateRoot || process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
   const piWebUiRoot = path.resolve(process.env.MAPACHE_PI_WEB_UI_ROOT || "/opt/mapache/pi-web-ui");
   const piWebUiDataDir = path.resolve(privatePaths?.piWebUiDataDir || process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
   const piWebUiPiDir = path.resolve(privatePaths?.piAgentDir || process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
@@ -117,14 +128,14 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const prefix = normalizePrefix(process.env.STORAGE_PREFIX || "");
   const homeStorageBucketName = process.env.HOME_STORAGE_BUCKET || bucketName;
   const homeStoragePrefix = normalizePrefix(process.env.HOME_STORAGE_PREFIX || "");
-  const homeSyncMode = isPrivateRuntimeStorageMode(runtimeStorageMode) ? "ephemeral" :
+  const homeSyncMode = retainedDiskMode || isPrivateRuntimeStorageMode(runtimeStorageMode) ? "ephemeral" :
     normalizeEnvString(process.env.HOME_SYNC_MODE) || "persistent";
   const homeArchiveName = normalizeEnvString(process.env.HOME_ARCHIVE_NAME) || "home.tar.gz";
   const piSessionDir = privatePaths?.piSessionDir || (agentRuntimeEnabled ? piWebUiSessionDir :
     normalizeEnvString(process.env.PI_SESSION_DIR) || path.join(piAgentDir, "mapache-sessions", process.env.SESSION_ID || "session"));
-  const piSessionStorageBucket = isPrivateRuntimeStorageMode(runtimeStorageMode) ? "" :
+  const piSessionStorageBucket = retainedDiskMode || isPrivateRuntimeStorageMode(runtimeStorageMode) ? "" :
     process.env.PI_SESSION_STORAGE_BUCKET || bucketName;
-  const piSessionStoragePrefix = isPrivateRuntimeStorageMode(runtimeStorageMode) ? "" :
+  const piSessionStoragePrefix = retainedDiskMode || isPrivateRuntimeStorageMode(runtimeStorageMode) ? "" :
     normalizePrefix(process.env.PI_SESSION_STORAGE_PREFIX || "");
   const harnessId = "pi";
   const workspaceSourceMode = normalizeWorkspaceSourceMode(process.env.WORKSPACE_SOURCE_TYPE);
@@ -137,7 +148,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
-  const browserQaDir = path.resolve(privatePaths?.browserQaDir || process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
+  const browserQaDir = path.resolve(retainedPaths?.caches || privatePaths?.browserQaDir || process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
   const piMcpConfigPath = privatePaths?.piMcpConfigPath || path.join(workspaceDir, ".mcp.json");
   const piWebUiControlPath = privatePaths?.piWebUiControlPath || normalizeEnvString(process.env.PI_WEB_UI_CONTROL_PATH);
   const privateGitDir = workspaceStorageMode === SHARED_WORKSPACE_STORAGE_MODE && !isAutomationRuntime(runtimeKind) ?
@@ -157,6 +168,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
     agentAccessAudience: "agent",
     agentRuntimeEnabled,
+    chromeSandboxEnabled: retainedDiskMode && !envFlag(process.env.CHROME_DISABLE_SANDBOX),
+    chromeDesktopMinimal: retainedDiskMode,
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
     startupSmoke: envFlag(process.env.MAPACHE_STARTUP_SMOKE),
     automationAgentApiUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_API_URL),
@@ -311,6 +324,10 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     workspaceSyncPolicyExclude,
     workspaceSyncPolicyMode,
     runtimeIdentity,
+    runtimeProvider,
+    retainedDiskMode,
+    retainedDiskRoot,
+    retainedDiskPaths: retainedPaths,
     runtimeStorageMode,
   };
 }

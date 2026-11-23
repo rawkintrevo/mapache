@@ -264,3 +264,32 @@ test("shared GCS workspace mode forces private runtime roots and carries its gen
     }
   }
 });
+
+test("compute-engine config maps all durable roots to the retained disk", () => {
+  const names = ["MAPACHE_RUNTIME_PROVIDER", "MAPACHE_RETAINED_DISK_ROOT", "WORKSPACE_ID", "OWNER_UID", "SESSION_ID", "MAPACHE_AGENT_RUNTIME_GENERATION"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    MAPACHE_RUNTIME_PROVIDER: "compute-engine",
+    MAPACHE_RETAINED_DISK_ROOT: "/mnt/mapache-data",
+    WORKSPACE_ID: "workspace-1",
+    OWNER_UID: "owner-1",
+    SESSION_ID: "session-1",
+    MAPACHE_AGENT_RUNTIME_GENERATION: "2",
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.retainedDiskMode, true);
+    assert.equal(config.workspaceStorageMode, "retained-disk");
+    assert.equal(config.workspaceDir, "/mnt/mapache-data/workspace");
+    assert.equal(config.homeDir, "/mnt/mapache-data/home");
+    assert.equal(config.retainedDiskPaths.browser, "/mnt/mapache-data/browser/profile");
+    assert.equal(config.chromeDesktopMinimal, true);
+    assert.equal(config.chromeSandboxEnabled, true);
+    assert.equal(config.piSessionStorageBucket, "");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

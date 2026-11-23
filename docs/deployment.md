@@ -4,6 +4,9 @@
 
 This page owns Firebase Hosting, Cloud Functions, Cloud Run runner image, CI, and service-account deployment assumptions.
 
+The gated Compute Engine workspace rollout, retained disks, gateway contract,
+and VM-specific deploy prerequisites are maintained in [VM Workspaces](./vm-workspaces.md).
+
 ## Read When
 
 Read this before changing Firebase config, deployment workflows, Cloud Functions service accounts, Cloud Run runner image selection/provisioning, Firestore/Storage rules, or GitHub Actions deployment behavior.

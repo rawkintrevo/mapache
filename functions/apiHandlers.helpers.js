@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({activeInstancesService = {}, agentAuthService, automationCleanupService = {}, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, workspaceTicketsService = {}, workspaceRequestGrantsService = {}, browserEgressService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({activeInstancesService = {}, agentAuthService, automationCleanupService = {}, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, workspaceTicketsService = {}, workspaceRequestGrantsService = {}, browserEgressService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, machineConfigurationService = {}, githubService, googleWorkspaceService = {}, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -48,6 +48,8 @@ function createApiHandlers({activeInstancesService = {}, agentAuthService, autom
     deleteWorkspace: workspaceService.deleteWorkspace,
     getWorkspaceMcpConfig: workspaceService.getWorkspaceMcpConfig,
     saveWorkspaceMcpConfig: workspaceService.saveWorkspaceMcpConfig,
+    getMachineConfiguration: machineConfigurationService.getConfiguration,
+    updateMachineConfiguration: machineConfigurationService.updateConfiguration,
     listConnectedRepos: githubService.listConnectedRepos,
     createGithubConnectUrl: githubService.createGithubConnectUrl,
     getGithubConnection: githubService.getGithubConnection,

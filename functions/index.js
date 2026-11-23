@@ -73,10 +73,14 @@ const {
 const {createWorkspaceAutomationDeletionService} = require("./workspaceAutomationDeletion.service");
 const {createWorkspaceSharedStorageService} = require("./workspaceSharedStorage.service");
 const {createWorkspaceStorageMigrationService} = require("./workspaceStorageMigration.service");
+const {createMachineConfigurationService} = require("./machineConfiguration.service");
 const {
   createCloudRunService,
   runnerServiceAccountValue,
 } = require("./cloudRun.service");
+const {createComputeEngineService} = require("./computeEngine.service");
+const {createRuntimeProviderService} = require("./runtimeProvider.service");
+const {isRuntimeProviderEnabled} = require("./runtimeProvider.helpers");
 const {
   SESSION_RESOURCE_ERROR_CODE,
   normalizeSessionResources,
@@ -243,6 +247,8 @@ const sessionCreationService = createSessionCreationService({
   reserveWorkspaceSyncSession,
   resolveHarness,
   resolveRunnerImage,
+  runtimeGatewayBaseUrl: () => process.env.VM_RUNTIME_GATEWAY_BASE_URL || "",
+  runtimeProviderEnabled: () => isRuntimeProviderEnabled(),
   requireWorkspace,
   runnerServiceAccountValue,
   sessionCollection,
@@ -289,11 +295,21 @@ const cloudRunService = createCloudRunService({
   releaseWorkspaceSyncWriterLease,
   automationOperationTimeoutMs: AUTOMATION_PROVISIONING_TIMEOUT_MS,
 });
+const computeEngineService = createComputeEngineService({
+  admin,
+  markMachineConfigurationApplied: (...args) => machineConfigurationService.markApplied(...args),
+  projectId: "pi-agents-cloud",
+  runnerServiceAccount: runnerServiceAccountValue() || "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
+});
+const runtimeProviderService = createRuntimeProviderService({
+  cloudRunService,
+  computeEngineService,
+});
 const {
   deleteSessionService,
   patchSessionService,
   provisionSessionService,
-} = cloudRunService;
+} = runtimeProviderService;
 Object.assign(lifecycleDependencies, {
   deleteSessionService,
   patchSessionService,
@@ -382,6 +398,7 @@ const workspaceSharedStorageService = createWorkspaceSharedStorageService({
   requireWorkspace,
   storage,
 });
+const machineConfigurationService = createMachineConfigurationService({admin, db, requireWorkspace});
 const workspaceStorageMigrationService = createWorkspaceStorageMigrationService({
   admin,
   db,
@@ -408,6 +425,8 @@ const workspaceService = createWorkspaceService({
   workspaceAutomationDeletionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
+  runtimeGatewayBaseUrl: () => process.env.VM_RUNTIME_GATEWAY_BASE_URL || "",
+  runtimeProviderEnabled: () => isRuntimeProviderEnabled(),
   workspaceStorageMigrationService,
 });
 const automationDefinitionsService = createAutomationDefinitionsService({
@@ -488,7 +507,12 @@ function googleMcpTokenRefreshUrl() {
   return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/googleMcpToken`;
 }
 
-const workspaceUploadsService = createWorkspaceUploadsService({requireWorkspace, storage});
+const workspaceUploadsService = createWorkspaceUploadsService({
+  browserAccessTtlMs: SESSION_BROWSER_ACCESS_TTL_MS,
+  requireWorkspace,
+  sessionCollection,
+  storage,
+});
 
 const API_HANDLERS = createApiHandlers({
   activeInstancesService,
@@ -504,6 +528,7 @@ const API_HANDLERS = createApiHandlers({
   openAiCodexAuthService,
   qaFaultHarnessService,
   workspaceService,
+  machineConfigurationService,
   githubService,
   googleWorkspaceService: googleWorkspaceApiService,
   operations: {

@@ -97,6 +97,10 @@ Firebase preview and production workflows should keep mirroring this fast set: i
 
 ## Slower Checks
 
+Disposable VM provider fixtures and retained-disk migration contracts are
+listed in [VM Workspaces](./vm-workspaces.md). The live VM harness remains
+explicit and must use an isolated `pi-agents-cloud` workspace and retained disk.
+
 Run slower checks when a change touches the related subsystem:
 
 - Backend routing or ownership: route/contract tests and Firebase emulator checks when available.

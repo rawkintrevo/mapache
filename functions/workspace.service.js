@@ -27,6 +27,10 @@ const {
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
+const {
+  COMPUTE_ENGINE_BACKEND,
+  createRuntimeDescriptor,
+} = require("./runtimeProvider.helpers");
 
 const ACTIVE_SESSION_STATUSES = new Set([
   "running",
@@ -194,9 +198,28 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     createdAt: now,
     updatedAt: now,
   };
+  const useComputeEngine = dependencies.runtimeProviderEnabled?.() === true;
+  if (useComputeEngine) {
+    doc.runtimeBackend = COMPUTE_ENGINE_BACKEND;
+    doc.runtimeProviderVersion = 1;
+  }
   const ref = await workspaceDb.collection("workspaces").add(doc);
+  if (useComputeEngine) {
+    await ref.update({runtimeProvider: createRuntimeDescriptor({
+      backend: COMPUTE_ENGINE_BACKEND,
+      workspaceId: ref.id,
+      ownerUid: uid,
+      region: process.env.SESSION_REGION || "us-central1",
+      gateway: runtimeGatewayPayload(dependencies.runtimeGatewayBaseUrl?.()),
+    })});
+  }
   const snap = await ref.get();
   return toClientDoc(snap);
+}
+
+function runtimeGatewayPayload(value) {
+  const baseUrl = String(value || process.env.VM_RUNTIME_GATEWAY_BASE_URL || "").trim();
+  return baseUrl ? {baseUrl} : null;
 }
 
 async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) {
@@ -405,6 +428,27 @@ function serializeWorkspaceForClient(value) {
       configured: Boolean(serialized.sharedStorage.bucketName),
       state: serialized.sharedStorage.state || serialized.sharedStorageState || "legacy",
       errorCode: serialized.sharedStorage.errorCode || serialized.sharedStorageErrorCode || null,
+    };
+  }
+  if (serialized.machineConfig) {
+    const config = serialized.machineConfig;
+    const desired = config.desired && typeof config.desired === "object" ? config.desired : {};
+    serialized.machineConfig = {
+      version: Number(config.version) || 1,
+      desiredVersion: Number(config.desiredVersion) || 0,
+      appliedVersion: Number(config.appliedVersion) || 0,
+      state: config.state || "applied",
+      desired: {
+        description: typeof desired.description === "string" ? desired.description : "",
+        resources: desired.resources || null,
+        diskSizeGb: desired.diskSizeGb != null && Number.isSafeInteger(Number(desired.diskSizeGb)) ? Number(desired.diskSizeGb) : null,
+        idleStopMinutes: desired.idleStopMinutes ?? null,
+        piAuthEntryId: desired.piAuthEntryId || null,
+        environmentEntryIds: Array.isArray(desired.environmentEntryIds) ? desired.environmentEntryIds : [],
+        googleConnectionId: desired.googleConnectionId || null,
+        gatewayId: desired.gatewayId || null,
+      },
+      pending: Number(config.desiredVersion) !== Number(config.appliedVersion),
     };
   }
   delete serialized.sharedStorageOperationId;

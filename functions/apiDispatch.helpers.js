@@ -135,6 +135,8 @@ const ROUTE_DISPATCHERS = Object.freeze({
     ["GET", "workspaceRuntimePolicy", jsonResult(({handlers, route, user}) => handlers.getWorkspaceRuntimePolicy(user.uid, route.workspaceId))],
     ["PATCH", "workspaceRuntimePolicy", namedJsonResult("workspace", ({handlers, req, route, user}) =>
       handlers.updateWorkspaceRuntimePolicy(user.uid, route.workspaceId, req.body || {}))],
+    ["GET", "machineConfig", jsonResult(({handlers, route, user}) => handlers.getMachineConfiguration(user.uid, route.workspaceId))],
+    ["PATCH", "machineConfig", jsonResult(({handlers, req, route, user}) => handlers.updateMachineConfiguration(user.uid, route.workspaceId, req.body || {}))],
   ]),
   sessions: Object.freeze([
     ["GET", "sessions", namedJsonResult("sessions", ({handlers, route, user}) => handlers.listSessions(user.uid, route.workspaceId))],
