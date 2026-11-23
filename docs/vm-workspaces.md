@@ -789,6 +789,33 @@ explicit empty directories/directory modes from other source formats, archive
 and shared-tree merging, tombstone reconciliation, HOME recovery and full-disk
 capacity/error handling remain required before machine import is complete.
 
+`scripts/lib/vm-archive-import.mjs` now stages a generation-pinned HOME or
+browser archive and publishes a private `archive-plan.json`. The source-plan
+identity binds owner/workspace, the full archive descriptor and the destination
+(`home` or `browser/profile`); changing that selection cannot reuse the operation.
+The archive verifier's opt-in `includeManifest` mode computes file hashes while
+streaming and records explicit directories/modes, original symlink text and
+hard links resolved to their captured file. Ordinary inventory output still
+omits all member names. Resume rehashes the local archive and does not download
+it again when its bytes match.
+
+Import planning rejects unsupported special permission bits, conflicting modes
+on one hard-linked inode, dangling/cyclic links, and semantic escapes through
+symlink chains (including `..` after following a link). Modes 0000–0777 are
+represented; applying unreadable modes requires the eventual privileged
+maintenance importer. This is stronger than integrity-only archive inspection.
+The stage retains the compressed bytes and per-member plan, without extracting
+files, changing ownership, assembling a complete machine or approving cutover.
+Source ownership/authority selection remains the coordinator's responsibility.
+
+The real `vm-test` browser archive passed these stricter rules on 2026-11-23:
+48,086,059 compressed bytes, 104,847,360 expanded tar bytes, 119 directories and
+324 files. Private local evidence is under
+`artifacts/qa/vm-browser-archive-import/`; `result.json` contains only descriptor
+metadata and aggregate counts. No cloud writes or deployments were needed.
+Tests: `node --test scripts/lib/vm-archive-import.test.mjs
+scripts/lib/vm-archive-verifier.test.mjs`.
+
 Cutover is:
 
 ```text

@@ -14,7 +14,7 @@ function archivePath(value) {
 
 // Parse in memory without creating files, links or directories. File bodies are
 // drained through bounded streams; only header metadata is retained for checks.
-export async function verifyGzipTar({stream, byteLength, sha256, maxCompressedBytes, maxExpandedBytes, maxEntries}) {
+export async function verifyGzipTar({stream, byteLength, sha256, maxCompressedBytes, maxExpandedBytes, maxEntries, includeManifest = false}) {
   let compressedBytes = 0; let expandedBytes = 0; let fileBytes = 0;
   const digest = createHash('sha256'); const entries = new Map(); const counts = {};
   try {
@@ -44,11 +44,19 @@ export async function verifyGzipTar({stream, byteLength, sha256, maxCompressedBy
           if (!header.linkname || path.posix.isAbsolute(header.linkname) || /[\\\0]/.test(header.linkname)) throw Error('archive_link_invalid');
           target = archivePath(path.posix.join(path.posix.dirname(name), header.linkname));
         } else if (header.type === 'link') target = archivePath(header.linkname);
-        entries.set(name, {type: header.type, target});
+        if (includeManifest && (!Number.isInteger(header.mode) || header.mode < 0 || header.mode > 0o777)) throw Error('archive_mode_unsupported');
+        const entry = {type: header.type, target};
+        entries.set(name, entry);
+        if (includeManifest) {
+          Object.assign(entry, {mode: header.mode, byteLength: header.size});
+          if (header.type === 'symlink') entry.linkname = header.linkname;
+        }
         counts[header.type] = (counts[header.type] || 0) + 1;
         fileBytes += header.size;
         if (!Number.isSafeInteger(fileBytes) || fileBytes > maxExpandedBytes) throw Error('archive_expansion_limit');
-        body.on('end', next); body.resume();
+        const fileHash = includeManifest && header.type === 'file' ? createHash('sha256') : null;
+        if (fileHash) body.on('data', chunk => fileHash.update(chunk));
+        body.on('end', () => { if (fileHash) entry.sha256 = fileHash.digest('hex'); next(); }); body.resume();
       } catch (error) { extract.destroy(error); }
     });
     await pipeline(stream, compressed, createGunzip(), expanded, extract);
@@ -64,15 +72,52 @@ export async function verifyGzipTar({stream, byteLength, sha256, maxCompressedBy
         const visited = new Set([name]); let target = entry.target;
         while (entries.get(target)?.type === 'link' && !visited.has(target)) { visited.add(target); target = entries.get(target).target; }
         if (visited.has(target) || entries.get(target)?.type !== 'file') throw Error('archive_hardlink_invalid');
+        if (includeManifest) {
+          const source = entries.get(target);
+          if (entry.mode !== source.mode) throw Error('archive_hardlink_mode_conflict');
+          Object.assign(entry, {target, byteLength: source.byteLength, sha256: source.sha256});
+        }
+      }
+    }
+    if (includeManifest) {
+      const directories = new Set(['.']);
+      for (const [name, entry] of entries) {
+        if (entry.type === 'directory') directories.add(name);
+        let parent = path.posix.dirname(name);
+        while (parent !== '.') { directories.add(parent); parent = path.posix.dirname(parent); }
+      }
+      for (const [name, entry] of entries) {
+        if (entry.type !== 'symlink') continue;
+        const stack = path.posix.dirname(name) === '.' ? [] : path.posix.dirname(name).split('/');
+        const pending = entry.linkname.split('/'); let hops = 0;
+        while (pending.length) {
+          const part = pending.shift();
+          if (!part || part === '.') continue;
+          if (part === '..') {
+            if (!stack.length) throw Error('archive_link_invalid');
+            stack.pop(); continue;
+          }
+          const candidate = [...stack, part].join('/');
+          const target = entries.get(candidate);
+          if (target?.type === 'symlink') {
+            if (++hops > 40) throw Error('archive_link_invalid');
+            pending.unshift(...target.linkname.split('/'));
+          } else {
+            if (!target && !directories.has(candidate)) throw Error('archive_link_invalid');
+            if (pending.length && !directories.has(candidate)) throw Error('archive_link_invalid');
+            stack.push(part);
+          }
+        }
       }
     }
     return {status: 'verified', compressedBytes, expandedBytes, fileBytes, entries: entries.size, types: counts,
+      ...(includeManifest ? {privateManifest: [...entries].map(([path, entry]) => ({path, ...entry}))} : {}),
       scope: 'gzip/tar integrity and safe member layout; no extraction or application-level restore performed'};
   } catch (error) {
     stream.destroy?.();
     const allowed = new Set(['archive_budget_or_descriptor_invalid', 'archive_size_mismatch', 'archive_expansion_limit', 'archive_path_invalid',
       'archive_type_unsupported', 'archive_entry_limit', 'archive_duplicate_path', 'archive_size_invalid', 'archive_link_invalid',
-      'archive_checksum_mismatch', 'archive_non_directory_ancestor', 'archive_hardlink_invalid']);
+      'archive_checksum_mismatch', 'archive_non_directory_ancestor', 'archive_hardlink_invalid', 'archive_mode_unsupported', 'archive_hardlink_mode_conflict']);
     return {status: 'blocked', reason: allowed.has(error.message) ? error.message : 'archive_stream_or_format_invalid'};
   }
 }
