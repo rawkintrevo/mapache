@@ -753,7 +753,7 @@ reuses verified local bytes on retry, and checks every bundle slice before
 returning the planned entries. Deferred large files contain their real bytes,
 not pointer JSON. Agent paths map to retained `agent/sessions`, `agent/pi`,
 `agent/ui` and `agent/ui/uploads`; workspace paths map to `workspace`.
-This does not yet install those files, apply modes/links/tombstones, validate
+The adapter itself does not install files, apply modes/links/tombstones, validate
 application-level history/settings, recover absent directories, or select
 authority among multiple source formats. The plan contains private filenames;
 keep it in mode-0600 local evidence, never broad console logs.
@@ -766,6 +766,28 @@ provider descriptor, VM, disk or production deployment changed. Fixture tests
 cover bundle slices, real deferred bytes, executable-mode metadata, agent path
 mapping, resume without remote reads, and identity/path/mode/hash/budget failures:
 `node --test scripts/lib/vm-checkpoint-import.test.mjs`.
+
+`scripts/lib/vm-import-tree.mjs` assembles a selected checkpoint under its private
+stage's `tree/`, using the plan's retained-disk path mappings. It streams file
+slices with a 64 KiB buffer, verifies each hash, preserves file permission bits,
+syncs files/directories and publishes files without replacing existing targets.
+Safe captured symlinks are recreated; implied parent directories use mode 0700.
+It records the exact plan before writes, verifies existing entries on resume,
+and rejects unknown files, changed bytes/modes and symlinked parent directories.
+A final full-tree comparison precedes `checkpoint-tree.json`. That receipt is
+evidence for the selected checkpoint only: it is neither the VM disk marker nor
+cutover approval, and must never replace revalidation of a mutable destination.
+
+Fixture validation executes a restored tool through its symlink and kills a
+real child process after file publication but before completion; retry verifies
+the published file and finishes the remaining tree. The real `vm-test` local
+proof assembled 36 agent files/10 implied directories and eight workspace
+files/10 implied directories, using only previously staged bytes (no network).
+Private summary: `artifacts/qa/vm-checkpoint-import/tree-result.json`. No agents
+were launched and no cloud data/resources changed. Application validation,
+explicit empty directories/directory modes from other source formats, archive
+and shared-tree merging, tombstone reconciliation, HOME recovery and full-disk
+capacity/error handling remain required before machine import is complete.
 
 Cutover is:
 

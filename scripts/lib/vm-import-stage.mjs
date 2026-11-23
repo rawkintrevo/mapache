@@ -7,15 +7,15 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = code => { throw Object.assign(Error(code), {code}); };
 const validHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
-async function syncDirectory(directory) {
+export async function syncDirectory(directory) {
   const handle = await fs.open(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try { await handle.sync(); } finally { await handle.close(); }
 }
-async function plainDirectory(directory) {
+export async function plainDirectory(directory) {
   const stat = await fs.lstat(directory);
   if (!stat.isDirectory() || (stat.mode & 0o077) !== 0 || stat.uid !== process.getuid()) fail('import_stage_directory_invalid');
 }
-async function readPlain(file, limit) {
+export async function readPlain(file, limit) {
   const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const stat = await handle.stat();
@@ -23,7 +23,7 @@ async function readPlain(file, limit) {
     return await handle.readFile();
   } finally { await handle.close(); }
 }
-async function publishRecord(directory, name, bytes) {
+export async function publishRecord(directory, name, bytes) {
   const temporary = path.join(directory, `.partial-${randomUUID()}`);
   const target = path.join(directory, name);
   const handle = await fs.open(temporary, 'wx', 0o600);
