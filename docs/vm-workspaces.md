@@ -712,9 +712,30 @@ cloud resource changed. Full #614 inventory and all cutover gates remain open.
 Inventory is read-only and accounts for blank, GitHub, shared-storage,
 checkpoint, bundle-v1, HOME archive, owner-tool, large-file-v1, running, and
 failed-stop workspaces. SSH-backed machines are reported unsupported for
-automatic migration. The importer writes a new owned disk using bounded
+automatic migration. The planned complete importer writes a new owned disk using bounded
 streams, a journal, source generations, create-only destination writes, and a
 ready marker. It never changes authority or deletes the source.
+
+The first importer component, `scripts/lib/vm-import-stage.mjs`, stages actual
+object bytes into a private local directory. An immutable identity binds the
+owner, workspace, operation and source-plan digest. Each transfer journals its
+bucket/object/generation/size/hash, streams to a unique partial file, checks
+size/hash, syncs it and publishes with a create-only hard link. Resume rehashes
+existing objects rather than trusting the journal. A crash between publication
+and return is safe to retry; partial files from a killed process remain
+unpublished and are not reused. No source data is changed.
+
+This component requires a trusted destination disk with exclusive maintenance
+access; it does not prove Compute ownership, enforce source-plan membership,
+assemble filesystem paths/modes/links, or emit a disk-ready marker. An interruption
+before initial identity publication fails closed and requires inspection of that
+uninitialized staging directory. Cleanup of abandoned partial files and disk
+capacity checks remain coordinator work. Tests include a real child-process
+SIGKILL during transfer, content/mode revalidation, identity mismatches, generation
+changes, corrupt/truncated streams and symlink refusal. Injected source failures
+are covered; real destination ENOSPC and full-disk recovery are not yet proven.
+Run `node --test scripts/lib/vm-import-stage.test.mjs`. This local maintenance
+component needs no Function, Hosting or runner deployment.
 
 Cutover is:
 
