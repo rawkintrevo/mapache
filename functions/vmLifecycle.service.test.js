@@ -104,6 +104,30 @@ test("stopped machine retains environment references and resolves edited values 
   assert.equal(f.creates[0].env.MY_API_KEY, "edited-while-stopped");
 });
 
+test("desired machine selections override old-session selections and become applied only after health", async () => {
+  const f = fixture();
+  f.ws().machineConfig = {desiredVersion: 3, appliedVersion: 2, state: "pending-restart",
+    desired: {authSelection: {harness: "pi", providers: {}}, environmentEntryIds: ["selected"]}};
+  f.docs.get("vmRuntimes_v2/workspace/sessions/old").environmentEntryIds = ["obsolete"];
+  f.docs.set("users/owner/private/environmentKeys/entries/selected", {ownerUid: "owner", name: "KEY", value: "current-value"});
+  const {operationId} = await f.request();
+  for (let i = 0; i < 5; i++) await f.service.step(operationId);
+  assert.equal(f.ws().machineConfig.appliedVersion, 2);
+  assert.equal(f.op(operationId).phase, "health");
+  const session = f.docs.get(`vmRuntimes_v2/workspace/sessions/${f.ws().currentSessionId}`);
+  assert.equal(session.configVersion, 3);
+  assert.deepEqual(session.environmentEntryIds, ["selected"]);
+  assert.equal(f.creates[0].env.KEY, "current-value");
+  // Even a newer backend edit cannot be overwritten by this older completion.
+  f.ws().machineConfig.desiredVersion = 4;
+  f.ws().machineConfig.desired.environmentEntryIds = [];
+  await finish(f, operationId);
+  assert.equal(f.ws().machineConfig.appliedVersion, 3);
+  assert.equal(f.ws().machineConfig.desiredVersion, 4);
+  assert.equal(f.ws().machineConfig.state, "pending-restart");
+  assert.deepEqual(f.ws().machineConfig.desired.environmentEntryIds, []);
+});
+
 test("duplicate requests share one operation and competing requests cannot acquire the machine", async () => {
   const f = fixture();
   const [a, b] = await Promise.all([f.request(), f.request()]);

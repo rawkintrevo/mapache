@@ -106,3 +106,13 @@ test("auth returns only centrally selected credentials and never an owner-wide d
   assert.deepEqual(result.data.providers, {});
   assert.ok(!JSON.stringify(result).includes("unselected-secret"));
 });
+
+test("versioned configuration cannot silently materialize a deleted provider selection", async () => {
+  const h = harness();
+  h.session.configVersion = 1;
+  h.session.authSelection = {harness: "pi", providers: {openai: "deleted"}};
+  await h.call("lease.acquire");
+  await assert.rejects(h.call("auth.get"), /vm_auth_entry_unavailable/);
+  h.session.authSelection.providers = {};
+  assert.deepEqual((await h.call("auth.get")).data.entries, {});
+});

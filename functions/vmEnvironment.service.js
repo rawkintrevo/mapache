@@ -10,11 +10,11 @@ function validateVmEnvironmentName(name) {
   }
 }
 
-async function resolveVmEnvironment({db, ownerUid, entryIds = []}) {
+async function resolveVmEnvironment({db, ownerUid, entryIds = [], read = ref => ref.get()}) {
   if (!Array.isArray(entryIds) || entryIds.length > 50) throw httpError(400, "invalid_vm_environment_entries");
   const ids = normalizeEnvironmentEntryIds(entryIds);
-  const entries = await Promise.all(ids.map(id => db.collection("users").doc(ownerUid)
-      .collection("private").doc("environmentKeys").collection("entries").doc(id).get()));
+  const entries = await Promise.all(ids.map(id => read(db.collection("users").doc(ownerUid)
+      .collection("private").doc("environmentKeys").collection("entries").doc(id))));
   const env = {};
   for (const snapshot of entries) {
     const data = snapshot.data();

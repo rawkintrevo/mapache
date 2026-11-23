@@ -528,6 +528,49 @@ Usage records distinguish active VM time, retained disk, and background work.
 
 ## Configuration contract
 
+### Implemented VM auth/environment revisions
+
+`functions/vmConfiguration.service.js` serves owner-authenticated
+`GET` and `PATCH /workspaces/{id}/configuration` through `vmApi_v2`.
+PATCH requires `expectedGeneration` and `expectedVersion`, plus at least one of
+`authSelection: {harness: "pi", providers: {provider: entryId}}` or
+`environmentEntryIds: [entryId]`. Only selected owner-private references are
+accepted; unknown fields, direct credentials, infrastructure overrides and
+stale saves are rejected. Partial saves retain the other selection; explicit
+empty selections clear them. Owner-default inheritance is not implemented yet.
+
+The backend-only workspace `machineConfig` stores `desiredVersion`,
+`appliedVersion`, `desired`, and `state`. Existing machines without this record
+return `unversioned` with their current session references. A save increments
+the desired version and returns `pending-restart`, without touching the current
+session or starting compute. Saves during lifecycle operations are rejected.
+The next start/replacement copies desired references and `configVersion` into
+its new session. Healthy, generation/boot/lease-fenced lifecycle completion
+records that version as applied; an older completion never replaces newer
+desired settings. Applied version means the last healthy launch's selection
+revision, not an immutable version of private credential values. Private entry
+edits require a process restart and do not change a running process environment.
+Deleted selected auth entries fail the versioned session's startup broker call.
+Failures remain visible through lifecycle operation status.
+
+The machine properties UI, reusable defaults, hot application, and other central
+bindings below remain release work. `node scripts/vm-owner-api-proof.mjs
+configuration` checks stopped saves, stale/foreign rejection, pending status,
+and applied version after a real pause/start of the fixed synthetic fixture.
+
+Live verification on 2026-11-23 paused generation 10, saved revision 1 while
+stopped, rejected a stale save, then started generation 11 and observed revision
+1 as applied only after healthy launch. Owner isolation and agent/shell access
+also passed; temporary API admission/auth state was restored. Evidence:
+`artifacts/qa/vm-owner-api/configuration.json`; start operation:
+`1977e861d998de7357678d532769487f66c79888c36fdeed6232cc9d952b7bb3`.
+Deployment used `firebase deploy --project pi-agents-cloud --only
+functions:vmApi_v2,functions:vmLifecycleWorker_v2,functions:vmLifecycleReconcile_v2,functions:vmRuntimeControl_v2`.
+All four Functions are ACTIVE under `mapache-api`; existing Cloud Run functions,
+Hosting and runner images were not redeployed.
+
+### Complete crossover target
+
 The control plane stores desired machine configuration separately from the
 runtime's applied version. Supported centrally managed selections include Pi
 auth/config, environment entries, MCP definitions, Google Workspace bindings,

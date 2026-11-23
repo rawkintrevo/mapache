@@ -79,6 +79,7 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
         const selected = {};
         for (const [provider, entryId] of Object.entries(selection.providers || {})) {
           if (Object.hasOwn(entries, entryId) && entries[entryId].providerKey === provider) selected[entryId] = entries[entryId];
+          else if (session.configVersion) throw httpError(409, "vm_auth_entry_unavailable");
         }
         return {selection, data: {providers: {}, entries: selected}};
       }

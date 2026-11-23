@@ -17,7 +17,7 @@ const base = 'https://us-central1-pi-agents-cloud.cloudfunctions.net';
 const uids = ['vm-proof-owner', 'vm-proof-outsider'];
 
 async function main() {
-  assert.ok(['probe', 'cycle', 'create', 'shell'].includes(mode));
+  assert.ok(['probe', 'cycle', 'create', 'shell', 'configuration'].includes(mode));
   admin.initializeApp({projectId: project});
   const db = admin.firestore(); const auth = admin.auth();
   const preexistingUsers = new Set();
@@ -100,7 +100,7 @@ async function main() {
     let generation = setup.generation;
     if (mode === 'shell') result.shell = await liveShellProof({customToken: ownerCustomToken});
     if (mode === 'create') result.creation = await proveOwnerCreation({db, call, outsiderToken: tokens.outsider, nonce});
-    if (mode === 'cycle') {
+    if (mode === 'cycle' || mode === 'configuration') {
       async function lifecycle(action) {
         const request = {expectedGeneration: generation, requestId: `${action}-${nonce}`};
         const first = await call(`vm-proof-605/${action}`, 'POST', request);
@@ -124,8 +124,40 @@ async function main() {
       const paused = await lifecycle('pause');
       assert.equal((await call('vm-proof-605')).body.workspace.state, 'stopped');
       assert.equal((await call('vm-proof-605/access', 'POST', {expectedGeneration: generation})).status, 409);
+      let savedConfiguration;
+      if (mode === 'configuration') {
+        const before = await call('vm-proof-605/configuration');
+        assert.equal(before.status, 200);
+        // Never erase an operator's independently configured fixture selection.
+        assert.deepEqual(before.body.desired, {authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: []});
+        assert.equal((await call('vm-proof-605/configuration', 'GET', undefined, tokens.outsider)).status, 404);
+        const patch = {expectedGeneration: generation, expectedVersion: before.body.desiredVersion,
+          authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: []};
+        const saved = await call('vm-proof-605/configuration', 'PATCH', patch);
+        assert.equal(saved.status, 200);
+        savedConfiguration = saved.body;
+        assert.equal(saved.body.desiredVersion, before.body.desiredVersion + 1);
+        assert.equal(saved.body.appliedVersion, before.body.appliedVersion);
+        assert.equal(saved.body.state, 'pending-restart');
+        assert.equal(saved.body.restartRequired, true);
+        assert.equal((await call('vm-proof-605/configuration', 'PATCH', patch)).status, 409);
+        const stopped = (await call('vm-proof-605')).body.workspace;
+        assert.equal(stopped.state, 'stopped');
+        assert.equal(stopped.activeOperationId, null);
+        assert.equal(stopped.generation, generation);
+      }
       const started = await lifecycle('start'); generation = started.generation;
       result.pauseOperationId = paused.operationId; result.startOperationId = started.operationId;
+      if (mode === 'configuration') {
+        const applied = await call('vm-proof-605/configuration');
+        assert.equal(applied.status, 200);
+        assert.equal(applied.body.desiredVersion, savedConfiguration.desiredVersion);
+        assert.equal(applied.body.appliedVersion, savedConfiguration.desiredVersion);
+        assert.equal(applied.body.state, 'applied');
+        assert.equal(applied.body.restartRequired, false);
+        result.configuration = {savedWhileStopped: true, staleSaveRejected: true,
+          crossOwnerDenied: true, appliedAfterStart: true, appliedVersion: applied.body.appliedVersion};
+      }
     }
     const status = await call('vm-proof-605');
     assert.equal(status.status, 200); assert.equal(status.body.workspace.ready, true);

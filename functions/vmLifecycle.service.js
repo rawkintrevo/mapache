@@ -74,6 +74,12 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         if (ws.state !== "active" || ws.currentSessionId !== op.sessionId || !ws.bootId ||
             !(ws.leaseExpiresAt > now()) || session?.state !== "active" || session.bootId !== ws.bootId ||
             !(session.leaseExpiresAt > now())) throw httpError(409, "vm_readiness_authority_lost");
+        if (op.configVersion) {
+          if (session.configVersion !== op.configVersion || !ws.machineConfig || ws.machineConfig.desiredVersion < op.configVersion ||
+              ws.machineConfig.appliedVersion > op.configVersion) throw httpError(409, "vm_configuration_authority_lost");
+          workspaceFields.machineConfig = {...ws.machineConfig, appliedVersion: op.configVersion,
+            state: ws.machineConfig.desiredVersion === op.configVersion ? "applied" : "pending-restart"};
+        }
       }
       tx.update(ref, {phase: nextPhase, claim: null, lastError: null, updatedAtMs: now(), ...fields});
       if (Object.keys(workspaceFields).length) tx.update(wr, workspaceFields);
@@ -112,13 +118,16 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           const descriptor = normalizeRuntimeDescriptor({...operation.descriptor, generation, instanceName: null});
           const secrets = {ownerUid: operation.ownerUid, generation, controlToken: randomBytes(32).toString("hex"),
             browserToken: randomBytes(32).toString("hex"), shutdownToken: randomBytes(32).toString("hex")};
+          const config = w.data().machineConfig;
+          const selected = config?.desired || saved;
+          const configVersion = config?.desiredVersion || 0;
           tx.set(cr, secrets);
           tx.set(sr, {ownerUid: operation.ownerUid, generation, state: "reserved", runtimeProvider: descriptor,
-            authSelection: saved.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
-            environmentEntryIds: saved.environmentEntryIds || [],
+            authSelection: selected.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
+            environmentEntryIds: selected.environmentEntryIds || [], configVersion,
             controlTokenHash: tokenHash(secrets.controlToken)});
           tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
-          tx.update(ref, {phase: "provision", descriptor, sessionId, claim: null, updatedAtMs: now()});
+          tx.update(ref, {phase: "provision", descriptor, sessionId, configVersion, claim: null, updatedAtMs: now()});
         });
       } else if (operation.phase === "provision") {
         const currentWorkspace = (await wr.get()).data();
