@@ -115,6 +115,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     region,
     generation: 1,
   });
+  const configuredRuntimeDataDiskSizeGb = Number(workspace.machineConfig?.desired?.diskSizeGb);
   let runnerImage;
   try {
     runnerImage = dependencies.resolveRunnerImage({imageKey: AGENT_IMAGE_KEY});
@@ -199,7 +200,9 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...sessionHomePolicyMetadata(workspace),
     ...markedAgentSessionMetadata(workspace),
     machineConfigDesiredVersion: Number(workspace.machineConfig?.desiredVersion) || 0,
-    runtimeDataDiskSizeGb: Number(workspace.machineConfig?.desired?.diskSizeGb) || undefined,
+    ...(Number.isFinite(configuredRuntimeDataDiskSizeGb) && configuredRuntimeDataDiskSizeGb > 0 ? {
+      runtimeDataDiskSizeGb: configuredRuntimeDataDiskSizeGb,
+    } : {}),
     ...envMetadata,
     ...credentialSelection,
     resources,
