@@ -42,7 +42,7 @@ function fixture() {
     start: async (descriptor, options) => {
       assert.equal(options.allowCreateDisk, false);
       assert.ok(options.env.MAPACHE_VM_CONTROL_TOKEN.length >= 32);
-      creates.push({operationId: options.operationId, instanceName: descriptor.instanceName});
+      creates.push({operationId: options.operationId, instanceName: descriptor.instanceName, env: options.env});
       const ws = docs.get("vmRuntimes_v2/workspace");
       Object.assign(ws, {state: "active", bootId: "new-boot", leaseExpiresAt: Number.MAX_SAFE_INTEGER});
       Object.assign(docs.get(`vmRuntimes_v2/workspace/sessions/${ws.currentSessionId}`), {state: "active", bootId: "new-boot", leaseExpiresAt: Number.MAX_SAFE_INTEGER});
@@ -60,6 +60,49 @@ async function finish(f, id) {
   for (let i = 0; i < 10 && f.op(id).status === "pending"; i++) await f.service.step(id);
   assert.equal(f.op(id).status, "succeeded");
 }
+
+test("replacement resolves only retained selections from current owner-private environment entries", async () => {
+  const f = fixture();
+  f.docs.get("vmRuntimes_v2/workspace/sessions/old").environmentEntryIds = ["selected"];
+  f.docs.set("users/owner/private/environmentKeys/entries/selected", {ownerUid: "owner", name: "MY_API_KEY", value: "new-private-value"});
+  f.docs.set("users/owner/private/environmentKeys/entries/other", {ownerUid: "owner", name: "OTHER_API_KEY", value: "unselected-private-value"});
+  const {operationId} = await f.request();
+  await finish(f, operationId);
+  const session = f.docs.get(`vmRuntimes_v2/workspace/sessions/${f.ws().currentSessionId}`);
+  assert.deepEqual(session.environmentEntryIds, ["selected"]);
+  assert.equal(f.creates[0].env.MY_API_KEY, "new-private-value");
+  assert.equal(f.creates[0].env.OTHER_API_KEY, undefined);
+  for (const record of [session, f.op(operationId), f.ws()]) assert.ok(!JSON.stringify(record).includes("private-value"));
+});
+
+test("deleted selected environment prevents provisioning and retains the operation for recovery", async () => {
+  const f = fixture();
+  f.docs.get("vmRuntimes_v2/workspace/sessions/old").environmentEntryIds = ["deleted"];
+  const {operationId} = await f.request();
+  for (let i = 0; i < 3; i++) await f.service.step(operationId);
+  await assert.rejects(f.service.step(operationId), /vm_environment_entry_unavailable/);
+  assert.equal(f.creates.length, 0);
+  assert.equal(f.ws().activeOperationId, operationId);
+  assert.equal(f.op(operationId).phase, "provision");
+  f.docs.set("users/owner/private/environmentKeys/entries/deleted", {ownerUid: "owner", name: "RESTORED_KEY", value: "restored-value"});
+  f.advance();
+  await finish(f, operationId);
+  assert.equal(f.creates.length, 1);
+  assert.equal(f.creates[0].env.RESTORED_KEY, "restored-value");
+});
+
+test("stopped machine retains environment references and resolves edited values on the next start", async () => {
+  const f = fixture();
+  f.docs.get("vmRuntimes_v2/workspace/sessions/old").environmentEntryIds = ["selected"];
+  f.docs.set("users/owner/private/environmentKeys/entries/selected", {ownerUid: "owner", name: "MY_API_KEY", value: "before-pause"});
+  const pause = await f.request({action: "pause"});
+  await finish(f, pause.operationId);
+  assert.equal(f.creates.length, 0);
+  f.docs.get("users/owner/private/environmentKeys/entries/selected").value = "edited-while-stopped";
+  const start = await f.request({action: "start", requestId: "next-start"});
+  await finish(f, start.operationId);
+  assert.equal(f.creates[0].env.MY_API_KEY, "edited-while-stopped");
+});
 
 test("duplicate requests share one operation and competing requests cannot acquire the machine", async () => {
   const f = fixture();

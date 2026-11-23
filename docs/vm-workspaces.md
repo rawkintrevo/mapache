@@ -267,7 +267,7 @@ operations cannot take the workspace while it holds `activeOperationId`.
 The phases are quiesce -> delete -> reserve -> provision -> route -> health.
 Pause completes after confirmed deletion/detachment. Start skips quiesce but
 still confirms old compute absence. Reservation atomically creates one fresh
-session/generation and credentials, retaining selected authentication and model
+session/generation and credentials, retaining selected authentication, environment entry IDs, and model
 scope read from the old session after quiesce/deletion, including final shutdown
 saves rather than an earlier enqueue snapshot. Provision retries use the same Compute operation ID and cannot create a
 missing retained disk. Gateway routing changes only to the current owned VM;
@@ -276,6 +276,33 @@ Compute RUNNING is insufficient. Browser requests are denied while stopping;
 the controller's distinct health/shutdown credential remains allowed until the
 lease is released. Failed/unreachable quiesce is recorded explicitly before
 deletion; it is not reported as successful graceful shutdown.
+
+`functions/vmEnvironment.service.js` resolves only those selected environment
+entries from the owner's private store at provisioning time. Values are injected
+into Compute bootstrap, never copied into workspace/session/operation records.
+Missing/deleted or foreign entries, duplicate variable names, and reserved
+runtime/path variables stop provisioning with a value-free error. Editing an
+entry affects the next process launch; an already running process keeps its
+environment. This preserves existing selections across replacement; the
+versioned machine editor and inheritance described below remain outstanding.
+
+The fixed synthetic-fixture proof is `node scripts/vm-environment-proof.mjs
+seed`, followed by replacement through `vm-lifecycle-fixture.mjs`, then
+`vm-environment-proof.mjs verify` and `cleanup`. It uses a non-secret marker,
+checks the actual new container environment over IAP, and removes its selected
+reference and private entry after verification. It refuses to overwrite existing
+selections or run during a lifecycle operation.
+
+Live proof on 2026-11-23 replaced `vm-proof-605` generation 9 with generation 10
+through operation `02e44651ff1c87688b63b9d8fd4ff0007df71836992adfbd8afbe1e3280a1ae1`.
+The new container received the selected marker value; runner health, agent
+readiness, metadata fencing, retained child paths, Git/SQLite/native executable,
+permissions, symlink and locking checks passed. The proof selection/private entry
+were removed afterward. Evidence is under `artifacts/qa/vm-environment/` and
+`artifacts/qa/vm-lifecycle/`. Only `vmLifecycleWorker_v2` and
+`vmLifecycleReconcile_v2` were deployed with `--project pi-agents-cloud`, both
+running as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. No runner image
+or existing Cloud Run service revision was required for this environment fix.
 
 Each worker invocation has a 540-second hard platform timeout and a 15-minute
 exclusive claim. An uncertain cloud effect or exception retains the claim and

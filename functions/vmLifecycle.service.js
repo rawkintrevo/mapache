@@ -3,6 +3,7 @@ const {createHash, randomBytes, randomUUID} = require("node:crypto");
 const {normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {tokenHash} = require("./vmRuntimeControl.service");
 const {httpError} = require("./backendUtils.helpers");
+const {resolveVmEnvironment} = require("./vmEnvironment.service");
 
 const OPERATIONS = "vmLifecycleOperations_v2";
 // Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
@@ -114,6 +115,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           tx.set(cr, secrets);
           tx.set(sr, {ownerUid: operation.ownerUid, generation, state: "reserved", runtimeProvider: descriptor,
             authSelection: saved.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
+            environmentEntryIds: saved.environmentEntryIds || [],
             controlTokenHash: tokenHash(secrets.controlToken)});
           tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
           tx.update(ref, {phase: "provision", descriptor, sessionId, claim: null, updatedAtMs: now()});
@@ -123,12 +125,15 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         assertOperation(currentWorkspace, operation, operationId);
         const credentials = (await db.collection("vmRuntimeCredentials_v2").doc(operation.sessionId).get()).data();
         if (credentials?.ownerUid !== operation.ownerUid || credentials.generation !== operation.descriptor.generation) throw httpError(409, "vm_credentials_mismatch");
+        const session = (await wr.collection("sessions").doc(operation.sessionId).get()).data();
+        if (session?.ownerUid !== operation.ownerUid || session.generation !== operation.descriptor.generation) throw httpError(409, "vm_session_mismatch");
+        const environment = await resolveVmEnvironment({db, ownerUid: operation.ownerUid, entryIds: session.environmentEntryIds || []});
         await compute.start(operation.descriptor, {operationId: `${operationId}-create`, timeoutMs: 240000,
           allowCreateDisk: false, allowInitializeDisk: operation.action === "create" && operation.descriptor.generation === 1 &&
             currentWorkspace.initialOperationId === operationId && !currentWorkspace.bootId,
           runnerImage: operation.runnerImage,
           subnetwork: "projects/pi-agents-cloud/regions/us-central1/subnetworks/mapache-vm-v2-us-central1",
-          env: {GCLOUD_PROJECT: "pi-agents-cloud", MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
+          env: {...environment, GCLOUD_PROJECT: "pi-agents-cloud", MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
             MAPACHE_VM_CONTROL_URL: "https://us-central1-pi-agents-cloud.cloudfunctions.net/vmRuntimeControl_v2",
             MAPACHE_VM_CONTROL_TOKEN: credentials.controlToken, SESSION_ID: operation.sessionId,
             SESSION_BROWSER_TOKEN_SECRET: credentials.browserToken, SESSION_SHUTDOWN_TOKEN: credentials.shutdownToken,
