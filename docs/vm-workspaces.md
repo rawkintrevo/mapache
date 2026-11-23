@@ -318,6 +318,10 @@ caches, and the retained user-local executable directory. Owners are
 `session-runner/lib/runnerEnvironment.js` and `session-runner/lib/config.js`.
 Temporary sockets/locks remain under container `/tmp`. Changes to these files
 require a new canary runner image; existing Cloud Run images are unaffected.
+Retained paths take precedence over legacy image environment defaults, including
+`WORKSPACE_DIR`, `CHROME_PROFILE_DIR`, `PREVIEW_STATIC_ROOT`, and user-local tool
+paths. Regression coverage supplies those baked defaults and checks the actual
+configured paths, rather than only checking the retained-path helper object.
 
 The first live boot reached the container but exposed direct Firestore calls
 that still depend on ambient Google credentials. Full agent startup therefore

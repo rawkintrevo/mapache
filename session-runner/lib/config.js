@@ -84,12 +84,12 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase() === RETAINED_DISK_STORAGE_MODE;
   const retainedDiskRoot = retainedDiskMode ? path.resolve(process.env.MAPACHE_RETAINED_DISK_ROOT || "/var/lib/mapache/workspace") : "";
   const retainedPaths = retainedDiskMode ? retainedDiskPaths(retainedDiskRoot) : null;
-  const workspaceDir = path.resolve(process.env.WORKSPACE_DIR || retainedPaths?.workspace || "/workspace");
+  const workspaceDir = path.resolve(retainedPaths?.workspace || process.env.WORKSPACE_DIR || "/workspace");
   const workspaceLocalBinDir = path.resolve(
       process.env.MAPACHE_WORKSPACE_BIN_DIR || path.join(workspaceDir, ".local", "bin"),
   );
-  const userLocalBinDir = path.resolve(process.env.MAPACHE_USER_BIN_DIR ||
-    (retainedPaths ? path.join(retainedPaths.home, ".local", "bin") : "/root/.local/bin"));
+  const userLocalBinDir = path.resolve(retainedPaths ? path.join(retainedPaths.home, ".local", "bin") :
+    process.env.MAPACHE_USER_BIN_DIR || "/root/.local/bin");
   const runtimeKind = normalizeRuntimeKind(process.env.MAPACHE_RUNTIME_KIND || process.env.RUNTIME_KIND);
   const requestedWorkspaceMode = normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase();
   const workspaceStorageMode = retainedDiskMode ? RETAINED_DISK_STORAGE_MODE :
@@ -116,9 +116,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const agentRuntimeEnabled = agentUiVersion === "pi-web-ui-v1";
   const agentStateRoot = path.resolve(retainedPaths?.agent || privatePaths?.agentStateRoot || process.env.MAPACHE_AGENT_STATE_ROOT || "/var/lib/mapache/agent");
   const piWebUiRoot = path.resolve(process.env.MAPACHE_PI_WEB_UI_ROOT || "/opt/mapache/pi-web-ui");
-  const piWebUiDataDir = path.resolve(privatePaths?.piWebUiDataDir || process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
-  const piWebUiPiDir = path.resolve(privatePaths?.piAgentDir || process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
-  const piWebUiSessionDir = path.resolve(privatePaths?.piSessionDir || process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
+  const piWebUiDataDir = path.resolve(retainedPaths ? path.join(agentStateRoot, "ui") : privatePaths?.piWebUiDataDir || process.env.MAPACHE_PI_WEB_UI_DATA_DIR || path.join(agentStateRoot, "ui"));
+  const piWebUiPiDir = path.resolve(retainedPaths ? path.join(agentStateRoot, "pi") : privatePaths?.piAgentDir || process.env.MAPACHE_PI_WEB_UI_PI_DIR || path.join(agentStateRoot, "pi"));
+  const piWebUiSessionDir = path.resolve(retainedPaths ? path.join(agentStateRoot, "sessions") : privatePaths?.piSessionDir || process.env.MAPACHE_PI_WEB_UI_SESSION_DIR || path.join(agentStateRoot, "sessions"));
   const adapterHomeDir = isPrivateRuntimeStorageMode(runtimeStorageMode) ?
     path.resolve(process.env.MAPACHE_IMAGE_HOME_DIR || "/root") : legacyHomeDir;
   const piMcpAdapterPath = normalizeEnvString(process.env.PI_WEB_MCP_ADAPTER_PATH) ||
@@ -206,7 +206,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     chromeDesktopRestartBackoffMs: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_BACKOFF_MS, 250) : 0,
     chromeDesktopRestartMaxAttempts: chromeEnabled ? positiveNumber(process.env.CHROME_DESKTOP_RESTART_MAX_ATTEMPTS, 3) : 0,
     chromeNoVncPort: chromeEnabled ? positiveNumber(process.env.CHROME_NOVNC_PORT, 6080) : 0,
-    chromeProfileDir: chromeEnabled ? path.resolve(privatePaths?.chromeProfileDir || process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
+    chromeProfileDir: chromeEnabled ? path.resolve(retainedPaths?.browser || privatePaths?.chromeProfileDir || process.env.CHROME_PROFILE_DIR || "/var/lib/mapache/chrome/profile") : "",
     chromeProfileInitialization: parseJsonObject(process.env.MAPACHE_CHROME_PROFILE_INITIALIZATION),
     chromeProfileSeed,
     chromeProfileSeedConfigError: chromeProfileSeedRaw && !chromeProfileSeed ? "chrome_profile_seed_descriptor_invalid" : "",
@@ -302,7 +302,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     previewEnabled,
     previewInjectLogger: previewEnabled && envFlag(process.env.PREVIEW_INJECT_LOGGER, true),
     previewLogLimit: positiveNumber(process.env.PREVIEW_LOG_LIMIT, 500),
-    previewStaticRoot: path.resolve(process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
+    previewStaticRoot: path.resolve(retainedPaths ? path.join(workspaceDir, "build") : process.env.PREVIEW_STATIC_ROOT || path.join(workspaceDir, "build")),
     runnerCapabilities,
     runtimeKind,
     sessionBrowserTokenSecret: normalizeEnvString(process.env.SESSION_BROWSER_TOKEN_SECRET),

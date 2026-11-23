@@ -266,7 +266,7 @@ test("shared GCS workspace mode forces private runtime roots and carries its gen
 });
 
 test("compute-engine config maps all durable roots to the retained disk", () => {
-  const names = ["MAPACHE_RUNTIME_PROVIDER", "MAPACHE_RETAINED_DISK_ROOT", "WORKSPACE_ID", "OWNER_UID", "SESSION_ID", "MAPACHE_AGENT_RUNTIME_GENERATION"];
+  const names = ["MAPACHE_RUNTIME_PROVIDER", "MAPACHE_RETAINED_DISK_ROOT", "WORKSPACE_ID", "OWNER_UID", "SESSION_ID", "MAPACHE_AGENT_RUNTIME_GENERATION", "WORKSPACE_DIR", "CHROME_PROFILE_DIR", "PREVIEW_STATIC_ROOT", "MAPACHE_USER_BIN_DIR", "RUNNER_CAPABILITIES"];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   Object.assign(process.env, {
     MAPACHE_RUNTIME_PROVIDER: "compute-engine",
@@ -275,6 +275,11 @@ test("compute-engine config maps all durable roots to the retained disk", () => 
     OWNER_UID: "owner-1",
     SESSION_ID: "session-1",
     MAPACHE_AGENT_RUNTIME_GENERATION: "2",
+    WORKSPACE_DIR: "/workspace",
+    CHROME_PROFILE_DIR: "/var/lib/mapache/chrome/profile",
+    PREVIEW_STATIC_ROOT: "/workspace/build",
+    MAPACHE_USER_BIN_DIR: "/root/.local/bin",
+    RUNNER_CAPABILITIES: JSON.stringify({chrome: true}),
   });
   try {
     const config = createConfig();
@@ -284,6 +289,8 @@ test("compute-engine config maps all durable roots to the retained disk", () => 
     assert.equal(config.homeDir, "/mnt/mapache-data/home");
     assert.equal(config.userLocalBinDir, "/mnt/mapache-data/home/.local/bin");
     assert.equal(config.retainedDiskPaths.browser, "/mnt/mapache-data/browser/profile");
+    assert.equal(config.chromeProfileDir, "/mnt/mapache-data/browser/profile");
+    assert.equal(config.previewStaticRoot, "/mnt/mapache-data/workspace/build");
     assert.equal(config.chromeDesktopMinimal, true);
     assert.equal(config.chromeSandboxEnabled, true);
     assert.equal(config.piSessionStorageBucket, "");
