@@ -59,6 +59,40 @@ proved that the disk is new, then mounts it. An existing disk must already have
 the expected filesystem and marker; a missing marker, wrong owner, wrong
 workspace, or unexpected populated root stops startup.
 
+Initial creation evidence is persisted on the disk as its original operation
+label and `mapache-created-generation`. A worker that stops after disk creation
+can retry that same operation/generation with explicit `allowCreateDisk=true`;
+it no longer depends on an in-memory `_mapacheCreated` property. Ordinary
+resume/replacement keeps creation authority off, even if the original labels
+remain. A different operation or generation cannot borrow that authority.
+The bootstrap accepts only a successful signature probe or the explicit
+no-signature result, mounts ext4, and permits creation of a missing identity
+marker only for the admitted initial operation on an empty filesystem.
+Probe errors, unmarked retained disks and populated unmarked roots fail closed.
+The lifecycle API still needs initial workspace reservation/admission; this
+low-level recovery contract does not enable new user VM creation by itself.
+
+`functions/computeEngine.creation.test.js` injects loss of the disk-create
+response, reconstructs the service and runs the generated storage bootstrap in
+Bash with stubbed device calls. It covers recovery, retained-disk refusal,
+wrong operation/generation, probe errors, and marker ownership.
+`scripts/vm-initial-disk-proof.mjs disk|boot|inspect|pause` is the isolated live
+equivalent, fixed to `vm-initial-disk-proof-605`; disk creation and boot must be
+separate invocations. It supplies no runner credentials or gateway route and
+tests host storage initialization only. After evidence collection, pause it,
+verify detachment and delete only this proof disk to avoid idle storage cost.
+Compute bootstrap edits apply to newly created VMs; existing VMs do not need
+a runner image rebuild. Deploy the isolated worker and reconciler with
+`firebase deploy --only functions:vmLifecycleWorker_v2,functions:vmLifecycleReconcile_v2 --project pi-agents-cloud`.
+On 2026-11-23 that selective deployment succeeded. The separate-process live
+proof created disk `mapache-ws-766db742df3a8c426b5b2487`, exited, and then booted
+VM `mapache-vm-74b946c7ce56ea96b777dffc`. SSH confirmed an ext4 mount and the
+expected workspace/owner/generation/operation marker. Evidence is under
+`artifacts/qa/vm-initial-disk/`. This is storage-bootstrap evidence, not an
+authenticated agent or end-to-end new-workspace creation test.
+After verification the proof VM was deleted, its disk detachment confirmed,
+and the dedicated proof disk deleted. The main `vm-proof-605` fixture remains.
+
 | Data | Container path | Backing | Lifetime | Writer |
 | --- | --- | --- | --- | --- |
 | Workspace and `.git` | `/workspace` | retained disk | workspace lifetime | main VM only |

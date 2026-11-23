@@ -190,13 +190,12 @@ function createComputeEngineService(dependencies = {}) {
         name: descriptor.dataDiskName,
         sizeGb,
         type: `${zoneUrl(descriptor)}/diskTypes/${dataDiskType}`,
-        labels: ownershipLabels(descriptor, options),
+        labels: {...ownershipLabels(descriptor, options), "mapache-created-generation": String(descriptor.generation)},
       },
     });
     await waitForOperation(response.data, descriptor, options);
     const created = await getDisk(descriptor);
     assertOwnership(created, descriptor);
-    created._mapacheCreated = true;
     return created;
   }
 
@@ -223,7 +222,11 @@ function createComputeEngineService(dependencies = {}) {
       url: `${zoneUrl(descriptor)}/instances`,
       method: "POST",
       params: {requestId: operationId(`instance:${descriptor.instanceName}:${options.operationId || descriptor.generation}`)},
-      data: instanceBody(descriptor, disk, {...options, allowNewDisk: disk._mapacheCreated === true}),
+      // Creation authority survives a worker restart, but cannot be borrowed
+      // by a later generation, another operation, or an ordinary resume.
+      data: instanceBody(descriptor, disk, {...options, allowNewDisk: options.allowCreateDisk === true &&
+        disk.labels?.["mapache-created-generation"] === String(descriptor.generation) &&
+        disk.labels?.["mapache-operation-id"] === identityLabel(String(options.operationId || descriptor.generation))}),
     });
     await waitForOperation(response.data, descriptor, options);
     const created = await getInstance(descriptor);
@@ -334,15 +337,19 @@ function createComputeEngineService(dependencies = {}) {
       `DATA_DEVICE=/dev/disk/by-id/google-${descriptor.dataDiskName}`,
       "test -b \"$DATA_DEVICE\"",
       "mkdir -p /var/lib/mapache/workspace",
-      "if ! blkid \"$DATA_DEVICE\" >/dev/null 2>&1; then",
+      "BLKID_STATUS=0",
+      "blkid -p \"$DATA_DEVICE\" >/dev/null 2>&1 || BLKID_STATUS=$?",
+      "if [ \"$BLKID_STATUS\" != 0 ]; then",
+      "  test \"$BLKID_STATUS\" = 2 # No signature; I/O/probe errors must not authorize formatting.",
       `  test \"${options.allowNewDisk === true ? "true" : "false"}\" = true`,
       "  mkfs.ext4 -L mapache-data \"$DATA_DEVICE\"",
       "fi",
-      "mountpoint -q /var/lib/mapache/workspace || mount -o noatime \"$DATA_DEVICE\" /var/lib/mapache/workspace",
+      "mountpoint -q /var/lib/mapache/workspace || mount -t ext4 -o noatime \"$DATA_DEVICE\" /var/lib/mapache/workspace",
       "if [ -e /var/lib/mapache/workspace/.mapache-vm-disk.json ]; then",
       "  grep -q \"\\\"workspaceId\\\"[[:space:]]*:[[:space:]]*\\\"${WORKSPACE_ID}\\\"\" /var/lib/mapache/workspace/.mapache-vm-disk.json",
       "  grep -q \"\\\"ownerUid\\\"[[:space:]]*:[[:space:]]*\\\"${OWNER_UID}\\\"\" /var/lib/mapache/workspace/.mapache-vm-disk.json",
       "else",
+      `  test \"${options.allowNewDisk === true ? "true" : "false"}\" = true`,
       "  if find /var/lib/mapache/workspace -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit | grep -q .; then exit 42; fi",
       `  printf '%s\\n' ${shellQuote(JSON.stringify({version: 1, kind: "retained-disk", workspaceId: descriptor.workspaceId, ownerUid: descriptor.ownerUid, generation: descriptor.generation, operationId: options.operationId || null}))} > /var/lib/mapache/workspace/.mapache-vm-disk.json`,
       "fi",
