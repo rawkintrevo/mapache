@@ -13,6 +13,13 @@ function createPiModelScopeService({admin, config, db}) {
   }
 
   function sessionRef() {
+    if (config.vmControl) return {
+      get: async () => {
+        const result = await config.vmControl.call("models.get");
+        return {exists: true, data: () => ({piScopedModels: result.models})};
+      },
+      set: async (update) => config.vmControl.call("models.set", {models: update.piScopedModels}),
+    };
     return db.collection("workspaces").doc(config.workspaceId).collection("sessions").doc(config.sessionId);
   }
 

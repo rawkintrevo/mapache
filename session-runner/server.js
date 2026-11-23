@@ -58,10 +58,12 @@ const {createAutomationExecutionService} = require("./lib/automationExecution.se
 const {createAutomationAgentApiService} = require("./lib/automationAgentApi.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
+const {createVmRuntimeControlClient, createVmWorkspaceAuthority} = require("./lib/vmRuntimeControl");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 const {isAutomationRuntime} = require("./lib/runtimePaths");
 
 const config = createConfig(runnerEnvironment);
+if (config.retainedDiskMode) config.vmControl = createVmRuntimeControlClient({config});
 applyMapacheToolPath(config);
 config.browserEgressEnabled = Boolean(browserEgressConfig);
 const browserAccess = createBrowserAccessVerifier({
@@ -90,7 +92,11 @@ const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chro
 const preview = createPreviewService(config, {browserQa});
 let piWebUi = null;
 let automationExecution = null;
-const workspaceAuthority = createWorkspaceAuthority({
+const workspaceAuthority = config.vmControl ? createVmWorkspaceAuthority({
+  client: config.vmControl,
+  config,
+  onLost: () => piWebUi?.stop?.(),
+}) : createWorkspaceAuthority({
   admin,
   config,
   db,
@@ -178,7 +184,7 @@ automationExecution = createAutomationExecutionService({
   piWebUi,
   workspaceAuthority,
 });
-const checkpointScheduler = createAgentCheckpointScheduler({
+const checkpointScheduler = config.retainedDiskMode ? null : createAgentCheckpointScheduler({
   activity,
   automationArtifacts,
   agentSnapshot,

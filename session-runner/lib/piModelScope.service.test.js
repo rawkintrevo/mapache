@@ -107,6 +107,18 @@ test("normalizes invalid and duplicate model patterns", () => {
   assert.deepEqual(normalizeScopedModels([" openai/gpt-5.5 ", "", null, "openai/gpt-5.5"]), ["openai/gpt-5.5"]);
 });
 
+test("VM model scope uses the session broker instead of Firestore", async (t) => {
+  const calls = [];
+  const h = createHarness(t, {}, {}, {vmControl: {call: async (action, payload) => {
+    calls.push({action, payload});
+    return {models: ["selected/model"]};
+  }}});
+  await h.service.restore();
+  assert.deepEqual(h.readSettings().enabledModels, ["selected/model"]);
+  assert.deepEqual(h.session(), {});
+  assert.equal(calls[0].action, "models.get");
+});
+
 test("parses Pi list-models table output", () => {
   assert.deepEqual(parsePiModelList([
     "provider      model       context  max-out  thinking  images",

@@ -327,6 +327,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     runtimeIdentity,
     runtimeProvider,
     retainedDiskMode,
+    vmControlUrl: retainedDiskMode ? normalizeEnvString(process.env.MAPACHE_VM_CONTROL_URL) : "",
+    vmControlToken: retainedDiskMode ? normalizeEnvString(process.env.MAPACHE_VM_CONTROL_TOKEN) : "",
     retainedDiskRoot,
     retainedDiskPaths: retainedPaths,
     runtimeStorageMode,

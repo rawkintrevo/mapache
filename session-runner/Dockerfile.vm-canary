@@ -1,0 +1,9 @@
+# Code-only VM canary over a fully built, immutable runner image. Dependency
+# changes fail the comparison and require the normal gcp-runner build first.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY package.json package-lock.json /tmp/mapache-canary-package/
+RUN cmp /tmp/mapache-canary-package/package.json /app/package.json \
+ && cmp /tmp/mapache-canary-package/package-lock.json /app/package-lock.json
+COPY lib /app/lib
+COPY server.js /app/server.js

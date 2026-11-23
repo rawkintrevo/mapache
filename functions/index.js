@@ -570,6 +570,20 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
   writable: false,
 });
 
+// Session-token authenticated VM coordination, isolated from legacy records.
+exports.vmRuntimeControl_v2 = onRequest({
+  invoker: "public",
+  timeoutSeconds: 60,
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmRuntimeControlService} = require("./vmRuntimeControl.service");
+    res.json(await createVmRuntimeControlService({db, admin})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_control_unavailable"});
+  }
+});
+
 // Independently deployed, IAM-authenticated diagnostics for the VM rollout.
 // No Hosting rewrite or legacy API/trigger replacement is needed.
 exports.vmRuntimePreflight_v2 = onRequest({

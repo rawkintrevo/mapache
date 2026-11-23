@@ -236,6 +236,51 @@ Pricing references: [Compute Engine pricing](https://cloud.google.com/products/c
 
 ### Isolated rollout Functions
 
+`vmRuntimeControl_v2` provides session-token authenticated coordination through
+the backend-only `vmRuntimes_v2` registry. This registry does not trigger the
+legacy workspace session workers. Each operation verifies the stored token
+hash, owner, current session, generation, state, and admitted boot. One boot
+can acquire the reservation; expired/released boots cannot reclaim it. A
+45-second lease renews every five seconds; unavailable coordination revokes
+runner admission and stops the managed agent child. Only the controller may
+reserve a new generation after fencing the old compute.
+
+The broker supports authority acquire/check/renew/release, constrained activity
+and history, model selection, and selected canonical agent credentials. It
+does not expose generic Firestore reads, arbitrary update fields, owner-wide
+credential maps, or provisioning actions. The HTTP Function is network-public
+because the VM has no Google identity token; every action requires the separate
+session control token. Browser access tokens do not authorize these actions.
+Control tokens travel over HTTPS and are never accepted as browser credentials.
+`scripts/vm-control-probe.mjs` creates unique synthetic registry records, tests
+the deployed broker, then deletes only those probe records. On 2026-11-23 its
+live checks passed concurrent boot fencing (one 200/one 409), wrong-token 404,
+stale-generation rejection, arbitrary-write rejection, model-selection round
+trip, and expired-lease rejection. This is control-plane evidence, not VM
+browser/session acceptance.
+
+The fixture controller stores its raw bootstrap material in the backend-only
+`vmRuntimeCredentials_v2` collection, while the registry stores only its control
+token hash. This is a synthetic fixture controller, not the production migration
+coordinator. `scripts/vm-crossover-fixture.mjs` now reserves an isolated generation
+and starts the normal runner without startup-smoke mode. Its registry and secret
+records are retained for repeatable inspection and are not user workspace data.
+
+Runner VM operations use `session-runner/lib/vmRuntimeControl.js`; Cloud Run
+keeps its existing authority implementation. VM startup requires an explicit
+`MAPACHE_VM_CONTROL_URL` and `MAPACHE_VM_CONTROL_TOKEN` and never falls back to
+ambient metadata credentials. VM Chrome startup uses the retained profile in
+place, clearing only stale process locks. Legacy Chrome seed/archive timers and
+agent checkpoint uploads are disabled for this backend; independent disk backup
+and migration/recovery operations remain required release gates.
+
+For code-only canaries affecting `lib/` and `server.js`,
+`session-runner/cloudbuild.vm-canary.yaml` builds on an immutable `_BASE_IMAGE`
+and publishes only `_IMAGE`. It compares both package manifests to the base
+image and refuses dependency changes. Other source/dependency changes require
+the full gcp-runner build. Its ordinary startup smoke is a compatibility check;
+the live VM broker/lease/agent path must still be verified separately.
+
 The isolated proof uses synthetic identity `vm-proof-605` / `vm-proof-owner`;
 `scripts/vm-crossover-fixture.mjs` accepts no user workspace ID. Its operations
 are `inspect`, `start`, `pause`, and `replace`, followed by a generation and

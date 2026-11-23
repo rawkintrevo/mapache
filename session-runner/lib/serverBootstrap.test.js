@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 
-test("server bootstrap wires activity authority before consumers and reaches lifecycle startup", () => {
+for (const retainedDiskMode of [false, true]) test(`server bootstrap wires ${retainedDiskMode ? "VM" : "Cloud Run"} authority before consumers`, () => {
   const noop = () => {};
   const service = new Proxy({}, {get: () => noop});
   const activity = {};
@@ -19,8 +19,22 @@ test("server bootstrap wires activity authority before consumers and reaches lif
     http: {createServer: () => service},
     express,
     ws: {WebSocketServer: function() { return service; }},
+    "./lib/config": {createConfig: () => ({retainedDiskMode})},
+    "./lib/vmRuntimeControl": {
+      createVmRuntimeControlClient: () => {
+        assert.equal(retainedDiskMode, true);
+        return service;
+      },
+      createVmWorkspaceAuthority: () => {
+        assert.equal(retainedDiskMode, true);
+        return {...service, isCurrentWriter};
+      },
+    },
     "./lib/workspaceAuthority": {
-      createWorkspaceAuthority: () => ({...service, isCurrentWriter}),
+      createWorkspaceAuthority: () => {
+        assert.equal(retainedDiskMode, false);
+        return {...service, isCurrentWriter};
+      },
     },
     "./lib/activity": {
       createActivityService: (options) => {
