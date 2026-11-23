@@ -597,6 +597,47 @@ file into `/uploads` after size/checksum and create-only checks pass.
 
 ## Migration and recovery state machines
 
+### Read-only registry and published-manifest inventory
+
+Run `node scripts/vm-migration-inventory.mjs --project pi-agents-cloud` to
+paginate the legacy workspace/session registries and the isolated VM registry.
+`--workspace <id>` restricts legacy inspection; `--output <new-local-file>`
+chooses a create-only report. The command never pauses, writes Firestore/GCS,
+provisions resources, or switches authority. It downloads only published
+checkpoint manifests, capped at 16 MiB each, using the observed object generation
+and checking the published checksum, identity, schema and file descriptors.
+Console output contains aggregate counts; the local report has mode `0600` and
+contains stable workspace/owner IDs, capture/object generations, format counts,
+validation categories and blockers, without file names or credential values.
+
+`scripts/lib/vm-migration-inventory.mjs` recognizes per-file, workspace-bundle-v1,
+large-file-v1 and symlink entries; classifies Git/shared-tree references,
+never-started, active and failed-stop records; and excludes SSH and N64 from
+automatic migration. It does not equate a published manifest with verified
+payload recovery. Shared trees, flat prefixes and legacy internal spellings,
+HOME/browser archives, owner tools, uploads/private Git, orphan captures and
+live-only state still need deeper inventory. Every record explicitly remains
+unready for cutover. The byte count covers only readable manifests; the disk
+lower bound uses 30% headroom and a 64 GiB floor, while the actual disk size,
+downtime and full cost estimates remain unknown. Registry reads are not an
+atomic snapshot and must be repeated under migration admission before cutover.
+
+Tests: `node --test scripts/lib/vm-migration-inventory.test.mjs`. This maintenance
+command does not require Function or runner deployment. The existing migration
+coordinator is not invoked by the dry run.
+
+The 2026-11-23 read-only scan accounted for 85 legacy workspace records and one
+isolated VM fixture: 27 inactive, 57 with no session records and one excluded SSH
+workspace. Of the published sources inspected, 41 manifests passed integrity and
+identity checks, 15 referenced missing objects, one had an identity/schema
+mismatch, and one had an invalid reference; one shared tree remained unread.
+These counts describe references, not distinct recoverable machines. Valid
+manifests described 4,566,849,928 logical bytes, excluding unverified external
+state. The requested `vm-test` workspace had readable agent/workspace manifests
+but unverified payloads and archives; it was not migrated. Evidence is the local
+mode-0600 `artifacts/qa/vm-migration-inventory/registry-final.json`. No source or
+cloud resource changed. Full #614 inventory and all cutover gates remain open.
+
 Inventory is read-only and accounts for blank, GitHub, shared-storage,
 checkpoint, bundle-v1, HOME archive, owner-tool, large-file-v1, running, and
 failed-stop workspaces. SSH-backed machines are reported unsupported for
