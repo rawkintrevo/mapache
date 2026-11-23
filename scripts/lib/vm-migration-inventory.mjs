@@ -7,7 +7,7 @@ const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
 // Inventory deliberately cannot publish a pointer, pause a writer or create a
 // resource. Only the injected reader can access storage; no write API is used.
-export async function inspectMigrationSource({workspaceId, workspace, sessions, readManifest}) {
+export async function inspectMigrationSource({workspaceId, workspace, sessions, readManifest, verifyPayloads}) {
   const blockers = new Set();
   const formats = new Set();
   const sources = [];
@@ -65,7 +65,9 @@ export async function inspectMigrationSource({workspaceId, workspace, sessions, 
       source.fileCount = manifest.files.length; source.formats = counts;
       knownLogicalBytes += source.logicalBytes;
       if (workspace.agentRuntimeGeneration && pointer.generation !== workspace.agentRuntimeGeneration) blockers.add('checkpoint_predates_current_runtime_generation');
-      blockers.add('checkpoint_payload_verification_required');
+      if (verifyPayloads) source.payloadVerification = await verifyPayloads(manifest, ref);
+      if (source.payloadVerification?.status === 'verified') source.validation = 'manifest-and-payloads-verified';
+      if (source.payloadVerification?.status !== 'verified') blockers.add('checkpoint_payload_verification_required');
     } catch (error) {
       // Fixed categories only: no GCS errors, file names or credential values.
       const allowed = new Set(['invalid_reference', 'manifest_checksum_mismatch', 'manifest_identity_or_schema_mismatch', 'manifest_entry_invalid', 'manifest_storage_unsupported', 'manifest_bundle_invalid', 'manifest_object_missing', 'manifest_object_not_found', 'manifest_access_denied', 'manifest_size_mismatch']);

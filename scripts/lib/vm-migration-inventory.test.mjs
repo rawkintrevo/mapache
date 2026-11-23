@@ -71,3 +71,15 @@ test('inspection does not mutate inputs and exposes no credential values', async
   assert.deepEqual(f.data, before);
   assert.ok(!JSON.stringify(result).includes('do-not-export'));
 });
+
+test('verified payloads remove only their own blocker, never authorize cutover', async () => {
+  const good = await fixture().inspect({verifyPayloads: async () => ({status: 'verified', objects: 0, verifiedBytes: 0})});
+  assert.ok(!good.blockers.includes('checkpoint_payload_verification_required'));
+  assert.equal(good.sources[0].validation, 'manifest-and-payloads-verified');
+  assert.equal(good.readyForCutover, false);
+  assert.ok(good.blockers.includes('home_browser_owner_tools_uploads_and_private_git_require_inventory'));
+  const bad = await fixture().inspect({verifyPayloads: async () => ({status: 'blocked', reason: 'payload_object_not_found'})});
+  assert.ok(bad.blockers.includes('checkpoint_payload_verification_required'));
+  assert.equal(bad.sources[0].validation, 'manifest-verified-payloads-unverified');
+  assert.equal(bad.sources[0].payloadVerification.reason, 'payload_object_not_found');
+});

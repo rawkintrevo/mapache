@@ -626,6 +626,27 @@ Tests: `node --test scripts/lib/vm-migration-inventory.test.mjs`. This maintenan
 command does not require Function or runner deployment. The existing migration
 coordinator is not invoked by the dry run.
 
+For bounded payload verification, add `--workspace <id> --verify-bytes <bytes>`.
+This opt-in requires a single workspace and an explicit total download budget.
+`scripts/lib/vm-checkpoint-payloads.mjs` streams generation-pinned ordinary and
+large-file-v1 objects; it reads each bundle once, verifies its whole-object hash
+and every referenced file slice across stream chunks, and validates captured
+symlink targets. Namespace, descriptor, size, checksum and budget failures remain
+explicit blockers. No payload bytes or filenames are written into the report;
+an aggregate digest records the verified object identities/generations/hashes.
+The manifest integrity result and payload result are separate fields. Passing
+payload checks removes only the checkpoint-payload blocker, never the remaining
+archive/live-state checks or the cutover gate. Run both inventory and payload
+tests with `node --test scripts/lib/vm-migration-inventory.test.mjs
+scripts/lib/vm-checkpoint-payloads.test.mjs`.
+
+On 2026-11-23, `vm-test` payload verification with a 100 MiB budget checked 36
+agent objects (1,236,845 bytes) and eight workspace objects (29,047 bytes).
+All matched their recorded sizes and hashes. Evidence:
+`artifacts/qa/vm-migration-inventory/vm-test-payloads-verified.json` (local mode 0600).
+This is published-checkpoint recovery evidence, not a complete-machine export,
+archive verification, or migration. No cloud writes or deployments were needed.
+
 The 2026-11-23 read-only scan accounted for 85 legacy workspace records and one
 isolated VM fixture: 27 inactive, 57 with no session records and one excluded SSH
 workspace. Of the published sources inspected, 41 manifests passed integrity and

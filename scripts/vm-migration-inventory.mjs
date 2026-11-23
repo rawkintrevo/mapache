@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {inspectMigrationSource} from './lib/vm-migration-inventory.mjs';
+import {verifyCheckpointPayloads} from './lib/vm-checkpoint-payloads.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const workspaceFields = ['ownerUid', 'source', 'imageKey', 'runtimeProvider.backend', 'status', 'lifecycle', 'deleted',
@@ -13,11 +14,13 @@ async function main() {
   const args = process.argv.slice(2);
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!['--project', '--output', '--workspace'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
+    if (!['--project', '--output', '--workspace', '--verify-bytes'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
     options[args[i]] = args[i + 1];
   }
   if (options['--project'] !== 'pi-agents-cloud') throw Error('explicit_project_required');
   if (options['--workspace'] && !/^[A-Za-z0-9_-]{1,128}$/.test(options['--workspace'])) throw Error('invalid_workspace');
+  const budget = {remaining: Number(options['--verify-bytes'] || 0)};
+  if (options['--verify-bytes'] && (!options['--workspace'] || !Number.isSafeInteger(budget.remaining) || budget.remaining < 1)) throw Error('payload_verification_requires_workspace_and_byte_budget');
   admin.initializeApp({projectId: 'pi-agents-cloud'});
   const db = admin.firestore(); const storage = admin.storage();
   async function* pages(collection, fields) {
@@ -45,6 +48,18 @@ async function main() {
     }
   }
   const records = [];
+  async function openObject(ref) {
+    try {
+      const [metadata] = await storage.bucket(ref.bucketName).file(ref.objectPath).getMetadata();
+      if (Number(metadata.size) !== ref.byteLength) throw Error('payload_size_mismatch');
+      return {generation: metadata.generation, stream: storage.bucket(ref.bucketName).file(ref.objectPath, {generation: metadata.generation}).createReadStream()};
+    } catch (error) {
+      if (Number(error.code) === 404) throw Error('payload_object_not_found');
+      if ([401, 403].includes(Number(error.code))) throw Error('payload_access_denied');
+      if (error.message === 'payload_size_mismatch') throw error;
+      throw Error('payload_unavailable');
+    }
+  }
   const workspaces = options['--workspace'] ? (await db.collection('workspaces')
       .where(admin.firestore.FieldPath.documentId(), '==', options['--workspace']).select(...workspaceFields).get()).docs : pages(db.collection('workspaces'), workspaceFields);
   if (options['--workspace'] && !workspaces.length) throw Error('workspace_not_found');
@@ -52,7 +67,8 @@ async function main() {
     if (!doc.exists) throw Error('workspace_not_found');
     const sessions = [];
     for await (const session of pages(doc.ref.collection('sessions'), sessionFields)) sessions.push({id: session.id, ...session.data()});
-    records.push(await inspectMigrationSource({workspaceId: doc.id, workspace: doc.data(), sessions, readManifest}));
+    records.push(await inspectMigrationSource({workspaceId: doc.id, workspace: doc.data(), sessions, readManifest,
+      verifyPayloads: options['--verify-bytes'] ? (manifest, manifestRef) => verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) : undefined}));
   }
   const vmRecords = [];
   for await (const doc of pages(db.collection('vmRuntimes_v2'), ['ownerUid', 'generation', 'state'])) {
