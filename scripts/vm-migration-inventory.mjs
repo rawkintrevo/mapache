@@ -5,6 +5,7 @@ import path from 'node:path';
 import {inspectMigrationSource} from './lib/vm-migration-inventory.mjs';
 import {verifyCheckpointPayloads} from './lib/vm-checkpoint-payloads.mjs';
 import {storageCandidates, inventoryStorageMetadata, inspectBrowserSeedMetadata} from './lib/vm-storage-metadata.mjs';
+import {verifyGzipTar} from './lib/vm-archive-verifier.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const workspaceFields = ['ownerUid', 'source', 'imageKey', 'runtimeProvider.backend', 'status', 'lifecycle', 'deleted',
@@ -17,7 +18,7 @@ async function main() {
   const args = process.argv.slice(2);
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!['--project', '--output', '--workspace', '--verify-bytes', '--list-objects', '--default-bucket', '--tools-bucket'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
+    if (!['--project', '--output', '--workspace', '--verify-bytes', '--list-objects', '--default-bucket', '--tools-bucket', '--verify-archive-bytes', '--archive-expanded-bytes'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
     options[args[i]] = args[i + 1];
   }
   if (options['--project'] !== 'pi-agents-cloud') throw Error('explicit_project_required');
@@ -26,6 +27,10 @@ async function main() {
   if (options['--verify-bytes'] && (!options['--workspace'] || !Number.isSafeInteger(budget.remaining) || budget.remaining < 1)) throw Error('payload_verification_requires_workspace_and_byte_budget');
   const maxObjects = Number(options['--list-objects'] || 0);
   if (options['--list-objects'] && (!options['--workspace'] || !Number.isSafeInteger(maxObjects) || maxObjects < 1 || maxObjects > 100000)) throw Error('storage_inventory_requires_workspace_and_object_budget');
+  let archiveBudget = Number(options['--verify-archive-bytes'] || 0);
+  const maxExpandedBytes = Number(options['--archive-expanded-bytes'] || 0);
+  if ((options['--verify-archive-bytes'] || options['--archive-expanded-bytes']) && (!maxObjects || !Number.isSafeInteger(archiveBudget) || archiveBudget < 1 ||
+      !Number.isSafeInteger(maxExpandedBytes) || maxExpandedBytes < 1)) throw Error('archive_verification_requires_listing_and_explicit_limits');
   admin.initializeApp({projectId: 'pi-agents-cloud'});
   const db = admin.firestore(); const storage = admin.storage();
   async function* pages(collection, fields) {
@@ -95,6 +100,12 @@ async function main() {
           return {content: Buffer.concat(chunks), generation: metadata.generation};
         },
         readObjectMetadata: async ref => (await storage.bucket(ref.bucketName).file(ref.objectPath, {generation: ref.generation}).getMetadata())[0],
+        verifyArchive: options['--verify-archive-bytes'] ? async descriptor => {
+          if (descriptor.byteLength > archiveBudget) return {status: 'blocked', reason: 'archive_download_budget_exceeded'};
+          archiveBudget -= descriptor.byteLength;
+          return verifyGzipTar({stream: storage.bucket(descriptor.bucketName).file(descriptor.objectPath, {generation: descriptor.objectGeneration}).createReadStream(),
+            byteLength: descriptor.byteLength, sha256: descriptor.sha256, maxCompressedBytes: descriptor.byteLength, maxExpandedBytes, maxEntries: 100000});
+        } : undefined,
       }),
     });
     records.push(record);

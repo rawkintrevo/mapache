@@ -674,6 +674,29 @@ source authority still require verification. Evidence:
 Run metadata tests with `node --test scripts/lib/vm-storage-metadata.test.mjs`.
 No production resources or data were changed.
 
+Add `--verify-archive-bytes <total-compressed-budget>` and
+`--archive-expanded-bytes <per-archive-limit>` together with `--list-objects`
+to verify current browser seed payloads. `scripts/lib/vm-archive-verifier.mjs`
+streams the generation-pinned object through SHA-256, gzip and `tar-stream`,
+checking the descriptor size/hash, expansion budget, 100,000-entry limit,
+member paths, supported types, duplicate members and link layout. It drains
+file bodies without extracting files or logging member names. Descriptor and
+archive results stay separate; neither implies a successful Chrome restore or
+cutover readiness. Tests: `node --test scripts/lib/vm-archive-verifier.test.mjs
+scripts/lib/vm-storage-metadata.test.mjs`.
+
+The selected `vm-test` browser archive passed on 2026-11-23: 48,086,059 compressed
+bytes, 104,847,360 expanded tar bytes, 119 directories and 324 files (104,542,504
+file bytes). Evidence: `artifacts/qa/vm-migration-inventory/vm-test-archive.json`
+(0600). No extraction or browser launch was performed. Separate read-only
+version and soft-delete listings found zero objects under both HOME prefix
+spellings; bucket versioning was disabled and soft-delete retention was seven
+days. Evidence: `artifacts/qa/vm-migration-inventory/vm-test-home-history.json`.
+The recorded Cloud Run service no longer exists. These observations leave full
+HOME recovery unproven; they do not establish that the workspace never had
+live-only HOME files. No Function, runner or Hosting deployment is needed for
+this maintenance-tool change.
+
 The 2026-11-23 read-only scan accounted for 85 legacy workspace records and one
 isolated VM fixture: 27 inactive, 57 with no session records and one excluded SSH
 workspace. Of the published sources inspected, 41 manifests passed integrity and

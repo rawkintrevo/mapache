@@ -110,7 +110,7 @@ export async function inventoryStorageMetadata({candidates, unresolved, listPage
     scope: 'current object metadata only; no archive extraction, content verification, source authority selection or consistent filesystem snapshot'};
 }
 
-export async function inspectBrowserSeedMetadata({workspaceId, workspacePrefix, bucketName, readPointer, readObjectMetadata}) {
+export async function inspectBrowserSeedMetadata({workspaceId, workspacePrefix, bucketName, readPointer, readObjectMetadata, verifyArchive}) {
   try {
     const {content, generation} = await readPointer();
     if (content.length > 65536) throw Error('browser_seed_pointer_too_large');
@@ -119,7 +119,9 @@ export async function inspectBrowserSeedMetadata({workspaceId, workspacePrefix, 
     catch { throw Error('browser_seed_descriptor_invalid'); }
     const metadata = await readObjectMetadata({bucketName, objectPath: descriptor.objectPath, generation: descriptor.objectGeneration});
     if (String(metadata.generation) !== String(descriptor.objectGeneration) || Number(metadata.size) !== descriptor.byteLength) throw Error('browser_seed_object_mismatch');
-    return {status: 'descriptor-verified-payload-unverified', pointerGeneration: String(generation),
+    const archive = verifyArchive ? await verifyArchive(descriptor) : undefined;
+    return {status: archive?.status === 'verified' ? 'descriptor-and-archive-verified' : 'descriptor-verified-payload-unverified', pointerGeneration: String(generation),
+      ...(archive ? {archive} : {}),
       seedVersion: descriptor.seedVersion, objectGeneration: String(descriptor.objectGeneration), byteLength: descriptor.byteLength, capturedAt: descriptor.capturedAt};
   } catch (error) {
     return {status: 'blocked', reason: ['browser_seed_pointer_too_large', 'browser_seed_descriptor_invalid', 'browser_seed_object_mismatch'].includes(error.message) ? error.message :

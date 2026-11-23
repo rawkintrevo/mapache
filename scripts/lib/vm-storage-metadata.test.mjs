@@ -64,12 +64,17 @@ test('browser pointer selects only the owned versioned object and never implies 
     bucketName: workspace.bucket, objectPath: `${workspace.storagePrefix}/.mapache-internal/chrome-profile-seeds/v1/versions/version-123/profile.tar.gz`,
     objectGeneration: '456', byteLength: 123, sha256: 'a'.repeat(64), capturedAt: '2026-11-23T00:00:00Z'};
   let reads = 0;
-  const inspect = () => inspectBrowserSeedMetadata({workspaceId: 'workspace', workspacePrefix: workspace.storagePrefix, bucketName: workspace.bucket,
+  const inspect = verifyArchive => inspectBrowserSeedMetadata({workspaceId: 'workspace', workspacePrefix: workspace.storagePrefix, bucketName: workspace.bucket, verifyArchive,
     readPointer: async () => ({content: Buffer.from(JSON.stringify(descriptor)), generation: '123'}),
     readObjectMetadata: async ref => { reads++; assert.equal(ref.generation, '456'); return {generation: '456', size: '123'}; }});
   const good = await inspect(); assert.equal(good.status, 'descriptor-verified-payload-unverified'); assert.equal(reads, 1);
+  const verified = await inspect(async selected => { assert.deepEqual(selected, descriptor); return {status: 'verified', entries: 4}; });
+  assert.equal(verified.status, 'descriptor-and-archive-verified');
+  const blocked = await inspect(async () => ({status: 'blocked', reason: 'archive_checksum_mismatch'}));
+  assert.equal(blocked.status, 'descriptor-verified-payload-unverified');
+  assert.equal(blocked.archive.reason, 'archive_checksum_mismatch');
   descriptor.sourceWorkspaceId = 'foreign';
-  assert.equal((await inspect()).reason, 'browser_seed_descriptor_invalid'); assert.equal(reads, 1);
+  assert.equal((await inspect(() => assert.fail('invalid descriptor must not download'))).reason, 'browser_seed_descriptor_invalid'); assert.equal(reads, 3);
   descriptor.sourceWorkspaceId = 'workspace'; descriptor.byteLength = 100;
   assert.equal((await inspect()).reason, 'browser_seed_object_mismatch');
 });
