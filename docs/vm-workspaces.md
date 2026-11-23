@@ -845,6 +845,20 @@ agent/browser launch. Evidence:
 validation, HOME recovery, source merging and full-machine cutover are still
 outstanding. No Function, Hosting or runner deployment is needed for this tool.
 
+The isolated local browser proof is documented in
+[restored profile checks](../e2e/qa/migration/vm-browser-profile-checks.md) and
+implemented by `scripts/vm-browser-profile-proof.mjs`. It uses an owned Chrome
+DevTools pipe inside a new user/network namespace with no external interfaces,
+operating only on a disposable copy. On 2026-11-23, Chrome 148.0.7778.178 opened
+the restored profile and rendered the synthetic test page, then exited with
+code zero. All 20 existing SQLite databases passed before launch; all 22 present
+after close passed. The source filesystem fingerprint was unchanged, and the
+owned Chrome process/profile were cleaned up. Private result:
+`artifacts/qa/vm-browser-profile-proof/result.json`.
+This does not establish VM/noVNC behavior, runner-version compatibility,
+encrypted credential recovery or external login validity. No cloud deployment
+or source/provider change occurred.
+
 Cutover is:
 
 ```text
