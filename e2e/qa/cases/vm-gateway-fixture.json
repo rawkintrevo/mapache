@@ -1,0 +1,19 @@
+{
+  "id": "vm-gateway-fixture",
+  "title": "Private VM gateway renders the authenticated agent",
+  "baseUrl": "https://mapache-vm-gateway-v2-pxyyg7zwda-uc.a.run.app/agent/",
+  "artifactsDir": "artifacts/qa/vm-gateway-fixture",
+  "requires": {
+    "chromeDevtools": true,
+    "fixture": "Only vm-proof-605 owned by vm-proof-owner, with a live generation and the isolated gateway route installed",
+    "setup": "scripts/vm-gateway-fixture.mjs browser GENERATION prepares a two-minute HttpOnly cookie from the backend-only synthetic credentials, navigates this exact origin via CDP, and executes these assertions. No real-user credentials or model calls. If the unconfigured synthetic agent shows .setup-modal, assert its Mapache Authentication Center notice and dismiss its .modal-close button before capturing the composer.",
+    "cleanup": "Remove the fixture cookie and close the harness-created page; stop only the fallback Chrome process started for this case. Leave fixture VM/data in place for replacement validation."
+  },
+  "steps": [
+    {"assert": "agent-rendered", "expected": "Agent body has visible text and a textarea or contenteditable message composer; Loading session has cleared, with no access-denied or startup-error page."},
+    {"assert": "gateway-network", "expected": "Main document and application bundles respond successfully; no unexpected failed HTTP requests or browser exceptions. The synthetic VM is not paired with an upstream Device Center hub: only GET /agent/api/device-center/shared-rooms returning 409 with body code NOT_PAIRED is expected. Other 409 responses fail."},
+    {"capture": "screenshot", "fileName": "agent.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

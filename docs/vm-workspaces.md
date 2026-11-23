@@ -93,6 +93,69 @@ stale cookies and old generations are rejected. VM IP changes and replacement
 are handled by updating the backend-owned gateway target and reconnecting with
 fresh access material.
 
+### Isolated gateway implementation
+
+`vm-gateway/` is a streaming HTTP/WebSocket proxy deployed as the separate
+`mapache-vm-gateway-v2` Cloud Run service. User compute remains on the VM.
+The gateway uses Direct VPC egress to the dedicated subnet and network tag
+`mapache-vm-gateway-v2`; firewall `mapache-vm-v2-gateway` permits only that
+source tag to reach TCP 8080 on `mapache-vm-v2` instances. No public VM IP or
+runner port is created. Direct VPC configuration follows the
+[Cloud Run documentation](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc).
+
+Its dedicated identity `mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com`
+has only invocation access to the new `vmGatewayResolve_v2` Function, not
+Firestore or stored credentials. The Function runs as `mapache-api` and
+transactionally checks a backend-owned `vmGatewayRoutes_v2/{hostname}` mapping,
+workspace/session ownership, active generation, matching boot, and live lease.
+Browser credentials must be signed for the current session; agent paths also
+require the agent audience and generation. Health requires the separate shutdown
+credential. A supplied cross-origin Origin is rejected. The Function returns
+only a private target and bounded authority deadline, never a stored secret.
+Both resolver and proxy reject targets outside the dedicated `10.90.0.0/24`
+subnet and port 8080. The controller, not a runner/client, writes routes.
+
+HTTP bodies and WebSocket frames stream with backpressure. Long-lived requests
+reauthorize at most every five seconds and close by the authorization deadline
+(at most ten seconds), even when the resolver hangs. Target/generation/boot
+changes close the old connection. Connections also close after 55 minutes,
+below the gateway's one-hour Cloud Run request timeout; clients must reconnect.
+The initial canary caps the gateway at two instances with concurrency 80,
+256 MiB and zero minimum instances. Each active long-lived connection currently
+requires approximately 720 resolver requests and 2,880 Firestore document reads
+per hour. Capacity, reconnect behavior, and measured cost remain release gates;
+there is no production-scale authorization cache yet.
+
+The current hostname belongs only to `vm-proof-605`. Unknown hosts fail closed.
+General rollout still needs isolated origins per workspace; a shared origin
+for mutually untrusted workspace applications is not acceptable. No DNS,
+Hosting rewrite, existing API, or legacy Cloud Run service was changed.
+
+Deploy the resolver separately:
+`firebase deploy --only functions:vmGatewayResolve_v2 --project pi-agents-cloud`.
+Its declared invoker preserves the dedicated gateway grant across deployments.
+Build `vm-gateway/Dockerfile` to a new immutable image and deploy only
+`mapache-vm-gateway-v2`, with the dedicated service account, network/subnet/tag,
+private-ranges-only egress, and `VM_GATEWAY_RESOLVER_URL` set to the new Function.
+The initial gateway image is
+`sha256:d2f1b9febefefdcc0c696346a3ca6b9c116ce2500b049b32a6e9a55cf8484c32`
+(build `ab715c7b-da1b-466c-8c8b-3a4250ec772e`). Existing runners need no image
+change for this proxy. The separate runtime broker now accepts bounded `shell`
+and `shell_stdout` history streams, requiring its own selective redeploy.
+
+`scripts/vm-gateway-fixture.mjs route|probe|browser GENERATION` is restricted to
+the synthetic identity. Route setup verifies Compute ownership, subnet, no
+external IP, and the current registry generation. Live generation-5 probes
+passed agent HTML and 17 bundles, authenticated health, wrong-token/audience/
+generation/origin rejection, and a real shell WebSocket returning retained
+workspace/HOME paths. Unauthenticated resolver invocation returned 403.
+The browser case is `e2e/qa/cases/vm-gateway-fixture.json`, with evidence under
+`artifacts/qa/vm-gateway-fixture/`. It checks a settled composer and successful
+network traffic; the exact upstream Device Center `409 NOT_PAIRED` response is
+expected for this deliberately unpaired fixture. This is not model chat,
+Chrome desktop, upload/resume, or migration acceptance. Real replacement
+reconnect and stale-connection fencing still require a live replacement test.
+
 The Compute Engine runtime identity is
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. It receives only the
 runtime scopes needed for logging, monitoring, and the runner's approved

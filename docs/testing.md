@@ -13,6 +13,10 @@ Locations:
 - `functions/*.helpers.test.js` for backend helper modules.
 - Frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
 - Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. Native upstream persistence and managed-agent boundary helpers follow this pattern.
+- Isolated VM gateway tests run with `npm --prefix vm-gateway ci` and
+  `npm --prefix vm-gateway test`: real HTTP streaming and WebSocket relay,
+  generation changes, hung authorization, and private-target validation.
+  Resolver authorization tests live in `functions/vmGatewayResolve.service.test.js`.
 
 Default commands:
 

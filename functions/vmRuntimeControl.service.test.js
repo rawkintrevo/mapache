@@ -74,6 +74,14 @@ test("stop cannot be undone by an idempotent acquire retry", async () => {
   assert.equal(h.workspace.state, "stopping");
 });
 
+test("shell history uses the scoped broker without permitting arbitrary streams", async () => {
+  const h = harness();
+  await h.call("lease.acquire");
+  await h.call("history", {payload: {stream: "shell", data: "opened bash"}});
+  await h.call("history", {payload: {stream: "shell_stdout", data: "output"}});
+  await assert.rejects(h.call("history", {payload: {stream: "arbitrary", data: "output"}}), /invalid_history/);
+});
+
 test("activity is constrained to telemetry and cannot alter admission or credentials", async () => {
   const h = harness();
   await h.call("lease.acquire");

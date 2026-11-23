@@ -94,7 +94,7 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
       }
       if (body.action === "history") {
         const {stream, data} = body.payload || {};
-        if (!["stdout", "stderr", "stdin", "system"].includes(stream) || typeof data !== "string" || data.length > 4096) throw httpError(400, "invalid_history");
+        if (!["stdout", "stderr", "stdin", "system", "shell", "shell_stdout"].includes(stream) || typeof data !== "string" || data.length > 4096) throw httpError(400, "invalid_history");
         tx.set(sessionRef.collection("terminalHistory").doc(), {stream, data, createdAt: timestamp()});
         return {ok: true};
       }

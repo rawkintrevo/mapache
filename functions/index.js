@@ -570,6 +570,20 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
   writable: false,
 });
 
+// IAM-private gateway resolver: deploy independently of all legacy handlers.
+exports.vmGatewayResolve_v2 = onRequest({
+  invoker: "mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com",
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmGatewayResolveService} = require("./vmGatewayResolve.service");
+    res.json(await createVmGatewayResolveService({db})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "gateway_unavailable"});
+  }
+});
+
 // Session-token authenticated VM coordination, isolated from legacy records.
 exports.vmRuntimeControl_v2 = onRequest({
   invoker: "public",
