@@ -1,7 +1,9 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const {DEFAULT_BUCKET} = require("./backendConfig");
 const {httpError} = require("./backendUtils.helpers");
+const {signSessionBrowserAccessToken} = require("./preview.service");
 const MAX_UPLOAD_BYTES = 1024 ** 3;
 
 function uploadsForWorkspace(workspace) {
@@ -28,12 +30,23 @@ function validateUpload(body = {}) {
   return {name, size};
 }
 
-function createWorkspaceUploadsService({requireWorkspace, storage}) {
+function createWorkspaceUploadsService({requireWorkspace, sessionCollection, storage, browserAccessTtlMs = 60 * 60 * 1000}) {
   return {
     async createUpload(uid, workspaceId, body, origin) {
       const workspace = await requireWorkspace(uid, workspaceId);
       if (workspace.source?.type === "ssh") throw httpError(409, "uploads_require_cloud_workspace");
       const {name, size} = validateUpload(body);
+      const runtime = workspace.runtimeProvider || workspace.runtimeProviderDescriptor;
+      if (runtime?.backend === "compute-engine") {
+        const session = await activeWorkspaceSession(workspace, sessionCollection);
+        const gateway = String(session?.serviceUrl || runtime.gateway?.baseUrl || "").trim();
+        if (!gateway) throw httpError(409, "workspace_upload_gateway_unavailable");
+        if (!session?.browserAccessTokenSecret) throw httpError(409, "workspace_upload_access_unavailable");
+        const operationId = crypto.randomUUID();
+        const token = signSessionBrowserAccessToken(session, Date.now() + browserAccessTtlMs);
+        const uploadUrl = `${gateway.replace(/\/+$/, "")}/workspace/uploads/${operationId}?name=${encodeURIComponent(name)}&size=${size}&mapache_access=${encodeURIComponent(token)}`;
+        return {uploadUrl, path: `/uploads/${name}`, size, mode: "retained-disk", operationId};
+      }
       const descriptor = uploadsForWorkspace(workspace);
       const file = storage.bucket(descriptor.bucketName).file(`${descriptor.prefix}/${name}`);
       const [exists] = await file.exists();
@@ -48,6 +61,12 @@ function createWorkspaceUploadsService({requireWorkspace, storage}) {
       return {uploadUrl, path: `/uploads/${name}`, size};
     },
   };
+
+  async function activeWorkspaceSession(workspace, collection) {
+    if (typeof collection !== "function" || !workspace.canonicalSessionId) return null;
+    const snapshot = await collection(workspace.id).doc(workspace.canonicalSessionId).get();
+    return snapshot.exists ? {id: snapshot.id, ...snapshot.data()} : null;
+  }
 }
 
 async function buildUploadsStorageTemplate(workspace, storage) {

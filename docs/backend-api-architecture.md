@@ -3,6 +3,10 @@
 This page owns the Cloud Functions API, Firestore ownership boundaries, and
 Cloud Run provisioning contract.
 
+The retained-disk Compute Engine provider, trusted runtime descriptor, machine
+configuration API, and migration authority contract are defined in [VM
+Workspaces](./vm-workspaces.md); this page remains the control-plane owner map.
+
 ## Canonical owners
 
 - Entrypoint and dependency composition: `functions/index.js`
@@ -30,6 +34,7 @@ Cloud Run provisioning contract.
 - Durable HTTP ticket adapter over shared runs: `functions/workspaceTickets.service.js`
 - Directional interworkspace grants and caller-safe broker requests: `functions/workspaceRequestGrants.service.js` and `functions/automationAgentApi.service.js`
 - Owner-wide active compute inventory: `functions/activeInstances.service.js`
+- Disposable VM provider and migration boundary: [VM Workspaces](./vm-workspaces.md)
 
 ## Current API boundary
 

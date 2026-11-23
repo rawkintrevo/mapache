@@ -239,6 +239,7 @@ module.exports = {
   createPreviewService,
   publicPreviewContentType,
   publicPreviewPath,
+  signSessionBrowserAccessToken,
   signSessionAgentAccessToken,
   shouldServePublicPreviewIndexFallback,
 };

@@ -37,6 +37,7 @@ export function ModalStack(props) {
           workspace={props.selectedWorkspace}
           onClose={modals.closeWorkspaceEditModal}
           onSave={workspaces.renameWorkspace}
+          onSaveMachineConfiguration={workspaces.saveMachineConfiguration}
         />
       ) : null}
       {state.authModalOpen ? (

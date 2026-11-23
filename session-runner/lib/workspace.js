@@ -11,6 +11,7 @@ const {normalizeRelativeWorkspacePath} = require("./utils");
 const {assertSharedWorkspaceMount, isMountedWorkspaceMode} = require("./sharedWorkspace.helpers");
 
 const {assertAutomationStorageMounts, isAutomationStorageMode} = require("./automationStorage.helpers");
+const {prepareRetainedDisk} = require("./retainedDiskStorage");
 
 function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
@@ -24,6 +25,15 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   });
 
   async function ensureWorkspace() {
+    if (config.retainedDiskMode) {
+      await prepareRetainedDisk({
+        root: config.retainedDiskRoot,
+        workspaceId: config.workspaceId,
+        ownerUid: config.ownerUid,
+        generation: Number(config.agentRuntimeGeneration) || 1,
+        operationId: config.sessionId,
+      });
+    }
     if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await assertSharedWorkspaceMount(config);
       await assertAutomationStorageMounts(config);
@@ -42,6 +52,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function prepareWorkspaceSource() {
+    if (config.retainedDiskMode) return {ok: true, skipped: true, reason: "retained_disk_authoritative"};
     if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await assertSharedWorkspaceMount(config);
       return {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
@@ -55,6 +66,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   }
 
   async function syncDown() {
+    if (config.retainedDiskMode) return {ok: true, skipped: true, reason: "retained_disk_authoritative"};
     if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       return {ok: true, skipped: true, reason: "shared_gcsfuse_authoritative"};
     }
@@ -87,6 +99,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
 
   async function restoreCheckpoint() {
     if (config.startupSmoke) return {ok: true, skipped: true, reason: "startup_smoke"};
+    if (config.retainedDiskMode) return {ok: true, skipped: true, reason: "retained_disk_authoritative"};
     if (!config.agentRuntimeEnabled || !checkpointRestore?.restoreCheckpoint) {
       return {ok: true, skipped: true};
     }
@@ -99,6 +112,7 @@ function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher,
   async function syncUp(options = {}) {
     await options.assertCurrentWriter?.();
     await auth.synchronizeAuth({materialize: true});
+    if (config.retainedDiskMode) return {conflicts: [], skipped: true, reason: "retained_disk_authoritative"};
     if (isMountedWorkspaceMode(config.workspaceStorageMode)) {
       await git.archiveSharedWorkspaceGit?.();
       return {conflicts: [], skipped: true, reason: "shared_gcsfuse_authoritative"};

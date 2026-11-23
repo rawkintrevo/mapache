@@ -45,6 +45,7 @@ const ROUTE_METHODS = Object.freeze(Object.fromEntries([
   ["workspace", ["PATCH", "DELETE"]],
   ["workspaceMcp", ["GET", "PUT"]],
   ["workspaceRuntimePolicy", ["GET", "PATCH"]],
+  ["machineConfig", ["GET", "PATCH"]],
   ["sessions", ["GET", "POST"]],
   ["session", ["PATCH", "DELETE"]],
   ["sessionLongRunning", ["PATCH"]],

@@ -78,7 +78,7 @@ function createChromeDesktopService(config = {}, deps = {}) {
         "-nopw",
       ], {DISPLAY: config.chromeDisplay});
       startProcess("windowManager", "openbox", [], {DISPLAY: config.chromeDisplay});
-      startProcess("taskbar", "tint2", [], {DISPLAY: config.chromeDisplay});
+      if (!config.chromeDesktopMinimal) startProcess("taskbar", "tint2", [], {DISPLAY: config.chromeDisplay});
       startChromium();
       if (state === "failed" || !allRequiredProcessesRunning()) {
         throw new Error("Chrome desktop process supervision failed during startup");
@@ -129,8 +129,8 @@ function createChromeDesktopService(config = {}, deps = {}) {
       "--no-first-run",
       "--no-default-browser-check",
       "--disable-background-networking",
-      "--disable-dev-shm-usage",
-      "--no-sandbox",
+      ...(config.chromeDesktopMinimal ? [] : ["--disable-dev-shm-usage"]),
+      ...(config.chromeSandboxEnabled === true ? [] : ["--no-sandbox"]),
       ...browserProxyArgs(config.browserEgressEnabled),
       "about:blank",
     ];
@@ -262,7 +262,9 @@ function createChromeDesktopService(config = {}, deps = {}) {
   }
 
   function allRequiredProcessesRunning() {
-    return REQUIRED_PROCESS_NAMES.every((name) => processes.has(name));
+    const required = config.chromeDesktopMinimal ?
+      REQUIRED_PROCESS_NAMES.filter((name) => name !== "taskbar") : REQUIRED_PROCESS_NAMES;
+    return required.every((name) => processes.has(name));
   }
 
   function status() {

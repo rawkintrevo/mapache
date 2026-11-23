@@ -47,6 +47,7 @@ const {
   provisioningSessionId,
   resolveCloudRunServiceId,
 } = require("./provisioning.helpers");
+const {runtimeDescriptorForWorkspace} = require("./runtimeProvider.helpers");
 
 function createSessionCreationService(dependencies = {}) {
   return {
@@ -99,7 +100,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...payload,
     ...(payload.resources || {}),
   }, {
-    defaultResources: workspace.resources || (process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
+    defaultResources: workspace.machineConfig?.desired?.resources || workspace.resources || (process.env.SESSION_CPU || process.env.SESSION_MEMORY ?
       {cpu: DEFAULT_CPU, memory: DEFAULT_MEMORY} : undefined),
   });
   const idleTimeoutMinutes = positiveNumber(
@@ -108,6 +109,12 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   );
   const serviceId = runtimeKind === "automation" ?
     automationCloudRunServiceId(automationRunId) : resolveCloudRunServiceId(sessionRef.id);
+  const runtimeProvider = runtimeDescriptorForWorkspace(workspace, {
+    workspaceId,
+    ownerUid: uid,
+    region,
+    generation: 1,
+  });
   let runnerImage;
   try {
     runnerImage = dependencies.resolveRunnerImage({imageKey: AGENT_IMAGE_KEY});
@@ -132,6 +139,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     await resolveAutomationCredentialSelection({uid, workspace: {...workspace, id: workspaceId}, sessions: sessionCollectionRef}) : {
       environmentEntryIds: [...new Set([
         ...(Array.isArray(workspace.environmentEntryIds) ? workspace.environmentEntryIds : []),
+        ...(Array.isArray(workspace.machineConfig?.desired?.environmentEntryIds) ? workspace.machineConfig.desired.environmentEntryIds : []),
         ...(Array.isArray(payload.environmentEntryIds) ? payload.environmentEntryIds : []),
       ])],
     };
@@ -177,6 +185,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     imageKey: runnerImage.key,
     harnessId,
     sessionType: "cloud",
+    ...(runtimeProvider ? {runtimeProvider} : {}),
     terminalKind: harness?.terminalKind || runnerImage.terminalKind || "shell",
     capabilities: runnerImage.capabilities,
     serviceAccount: dependencies.runnerServiceAccountValue() || null,
@@ -189,6 +198,8 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     ...sessionSyncPolicyMetadata(workspace),
     ...sessionHomePolicyMetadata(workspace),
     ...markedAgentSessionMetadata(workspace),
+    machineConfigDesiredVersion: Number(workspace.machineConfig?.desiredVersion) || 0,
+    runtimeDataDiskSizeGb: Number(workspace.machineConfig?.desired?.diskSizeGb) || undefined,
     ...envMetadata,
     ...credentialSelection,
     resources,

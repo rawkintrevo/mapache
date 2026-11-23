@@ -2,11 +2,30 @@
 
 function registerWorkspaceRoutes({
   app,
+  diskUpload,
+  hasBrowserAccess,
   hasRunnerAccess,
   shutdown,
   snapshotChromeProfile,
   workspaceSync,
 }) {
+  if (diskUpload && typeof hasBrowserAccess === "function") {
+    app.put("/workspace/uploads/:operationId", async (req, res) => {
+      if (!hasBrowserAccess(req)) {
+        res.status(404).json({error: "not_found"});
+        return;
+      }
+      await diskUpload.handle(req, res);
+    });
+    app.delete("/workspace/uploads/:operationId", async (req, res) => {
+      if (!hasBrowserAccess(req)) {
+        res.status(404).json({error: "not_found"});
+        return;
+      }
+      await diskUpload.handle(req, res);
+    });
+  }
+
   app.post("/workspace/chrome-profile/snapshot", async (req, res) => {
     if (!hasRunnerAccess(req)) {
       res.status(404).json({error: "not_found"});

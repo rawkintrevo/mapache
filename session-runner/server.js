@@ -39,6 +39,7 @@ const {
 } = require("./lib/terminal");
 const {createShellSession} = require("./lib/shell");
 const {createWorkspaceService} = require("./lib/workspace");
+const {createDiskUploadService} = require("./lib/diskUpload.service");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
@@ -121,6 +122,7 @@ const workspace = createWorkspaceService({
   git,
   storage,
 });
+const diskUpload = config.retainedDiskMode ? createDiskUploadService({config}) : null;
 const workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
   syncUp: workspace.syncUp,
@@ -266,6 +268,8 @@ registerBrowserRoutes({
 registerPreviewRoutes({app, browserQa, config, hasRunnerAccess, preview, requireBrowserAccess, storage});
 registerWorkspaceRoutes({
   app,
+  diskUpload,
+  hasBrowserAccess,
   hasRunnerAccess,
   shutdown: runnerLifecycle.shutdown,
   snapshotChromeProfile: chromeProfileSnapshots.snapshot,

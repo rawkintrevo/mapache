@@ -200,3 +200,26 @@ test("office egress flags apply to the normal persistent browser and its restart
   }
   await service.stop();
 });
+
+test("retained-disk browser uses the minimal desktop and keeps the Chromium sandbox", async () => {
+  const calls = [];
+  const service = createChromeDesktopService(config({
+    chromeDesktopMinimal: true,
+    chromeSandboxEnabled: true,
+  }), {
+    spawn: (command, args) => {
+      calls.push({command, args});
+      const child = new EventEmitter(); child.kill = () => {};
+      return child;
+    },
+    fs: {promises: {mkdir: async () => {}, rm: async () => {}}},
+    displayReady: async () => true,
+  });
+  await service.start();
+  assert.deepEqual(calls.map((call) => call.command), ["Xvfb", "x11vnc", "openbox", "chromium"]);
+  const chromium = calls.find((call) => call.command === "chromium");
+  assert.equal(chromium.args.includes("--no-sandbox"), false);
+  assert.equal(chromium.args.includes("--disable-dev-shm-usage"), false);
+  assert.equal(service.status().taskbar, false);
+  await service.stop();
+});

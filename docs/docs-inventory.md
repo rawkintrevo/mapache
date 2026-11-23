@@ -21,6 +21,7 @@ This page classifies every file under `docs/` and `adrs/` as of 2026-06-17 and r
 | `docs/pi-extension-manager.md` | Active wiki | Retirement note for the former Mapache package manager; upstream owns extensions. |
 | `docs/pi-skills-manager.md` | Active wiki | Upstream skills ownership and retained startup seeding contract. |
 | `docs/runtime-containers.md` | Active wiki | Runtime image, terminal, preview, sync, and runner behavior. |
+| `docs/vm-workspaces.md` | Active wiki | Disposable VM provider, retained disks, migration, cost, and rollout contract. |
 | `docs/session-runner-architecture.md` | Active wiki | Short runner module map and responsibilities. |
 | `docs/subsystem-map.md` | Active wiki | Major code area to doc/runtime responsibility map. |
 | `docs/testing.md` | Active wiki | Test pyramid and verification commands. |

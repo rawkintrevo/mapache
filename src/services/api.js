@@ -178,6 +178,15 @@ export function createApiClient(getToken) {
         `/api/workspaces/${encodeURIComponent(workspaceId)}/runtime-policy`,
         {method: "PATCH", body},
     ),
+    getMachineConfiguration: (workspaceId) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/machine-config`,
+    ),
+    updateMachineConfiguration: (workspaceId, body) => request(
+        getToken,
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/machine-config`,
+        {method: "PATCH", body},
+    ),
     getWorkspaceRequestGrants: (workspaceId) => request(
         getToken,
         `/api/workspaces/${encodeURIComponent(workspaceId)}/request-grants`,

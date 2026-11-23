@@ -27,6 +27,7 @@ Mapache Tools is a Firebase and Cloud Run app for browser-managed cloud agent se
 | Local file uploads and `/uploads` mount | [Workspace uploads](./workspace-uploads.md) | [Runtime containers](./runtime-containers.md) |
 | Google Workspace MCP connections and OAuth | [Google Workspace MCP connectivity](./google-workspace-connectivity.md) | [Backend API architecture](./backend-api-architecture.md), [Runtime containers](./runtime-containers.md), [Deployment](./deployment.md) |
 | Runtime container images, PTY, terminal, preview, workspace sync | [Runtime containers](./runtime-containers.md) | [Session runner architecture](./session-runner-architecture.md) |
+| Disposable VM compute and retained workspace filesystems | [VM Workspaces](./vm-workspaces.md) | [Runtime containers](./runtime-containers.md), [Deployment](./deployment.md), [Testing](./testing.md) |
 | Runner harness catalog, auth/skills/subagents capability routing, shared image metadata | [Runner harnesses](./runner-harnesses.md) | [Runtime containers](./runtime-containers.md), [Backend API architecture](./backend-api-architecture.md), [Frontend architecture](./frontend-architecture.md) |
 | SSH-backed dev-machine sessions and signed-key setup | [Runtime containers](./runtime-containers.md) | [SSH-backed sessions guide](./guides/ssh-backed-sessions.md), [Backend API architecture](./backend-api-architecture.md) |
 | GitHub-backed workspaces, repo picker, PR behavior | [GitHub workspaces](./github-workspaces.md) | [ADR index](./decisions.md), [GitHub App setup guide](./guides/github-app-setup.md) |

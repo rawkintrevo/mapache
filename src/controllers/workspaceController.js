@@ -122,6 +122,19 @@ export function createWorkspaceController({
     return !state.error;
   }
 
+  async function saveMachineConfiguration(workspaceId, payload) {
+    if (!workspaceId) return false;
+    await runBusy(async () => {
+      try {
+        await state.api.updateMachineConfiguration(workspaceId, payload || {});
+        await refreshWorkspaceList();
+      } catch (error) {
+        throw new Error(friendlyWorkspaceError(error));
+      }
+    }, "Saving machine settings...", OPERATION_KEYS.WORKSPACE_RENAME);
+    return !state.error;
+  }
+
   async function selectWorkspace(workspaceId) {
     dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "workspace"});
     dispatch({type: APP_ACTIONS.SET_SELECTED_WORKSPACE, workspaceId});
@@ -141,6 +154,7 @@ export function createWorkspaceController({
     deleteWorkspace,
     refreshWorkspaceList,
     renameWorkspace,
+    saveMachineConfiguration,
     selectWorkspace,
   };
 }

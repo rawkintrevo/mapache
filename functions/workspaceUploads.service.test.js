@@ -1,4 +1,5 @@
 "use strict";
+const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
 const {MAX_UPLOAD_BYTES, validateUpload, uploadsForWorkspace, createWorkspaceUploadsService, buildUploadsStorageTemplate} = require("./workspaceUploads.service");
 const {routeRequest} = require("./apiRoutes.helpers");
@@ -48,5 +49,25 @@ const {dispatchApiRoute} = require("./apiDispatch.helpers");
     handlers: {createWorkspaceUpload: service.createUpload}});
   assert.equal(response.status, 201);
   assert.equal(response.body.path, "/uploads/route.csv");
+
+  const vmWorkspace = {
+    id: "vm-workspace",
+    canonicalSessionId: "session-1",
+    runtimeProvider: {backend: "compute-engine", gateway: {baseUrl: "https://gateway.example"}},
+  };
+  const vmSession = {id: "session-1", serviceUrl: "https://gateway.example", browserAccessTokenSecret: "session-secret", agentRuntimeGeneration: 2};
+  const vmService = createWorkspaceUploadsService({
+    browserAccessTtlMs: 60_000,
+    requireWorkspace: async () => vmWorkspace,
+    sessionCollection: () => ({doc: () => ({get: async () => ({exists: true, id: vmSession.id, data: () => vmSession})})}),
+    storage,
+  });
+  const vmUpload = await vmService.createUpload("u", "vm-workspace", {name: "vm.csv", size: 10});
+  const vmUrl = new URL(vmUpload.uploadUrl);
+  const [payload, signature] = vmUrl.searchParams.get("mapache_access").split(".");
+  const expected = crypto.createHmac("sha256", vmSession.browserAccessTokenSecret).update(payload).digest("base64url");
+  assert.equal(signature, expected);
+  assert.equal(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")).sid, vmSession.id);
+  assert.equal(vmUrl.pathname, "/workspace/uploads/" + vmUpload.operationId);
   console.log("workspace uploads tests passed");
 })().catch((error) => {console.error(error); process.exitCode = 1;});
