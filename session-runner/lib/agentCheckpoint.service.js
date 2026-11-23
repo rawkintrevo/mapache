@@ -582,6 +582,7 @@ async function recordCheckpointError({
 
 async function getCheckpointStatus({config = {}, db} = {}) {
   const fallback = {lastCheckpointAt: null, checkpointError: null};
+  if (config.retainedDiskMode) return fallback;
   if (!db || typeof db.collection !== "function" || !config.workspaceId || !config.sessionId) return fallback;
   const workspaceRef = workspaceDocument(db, config.workspaceId);
   const sessionRef = sessionDocument(workspaceRef, config.sessionId);

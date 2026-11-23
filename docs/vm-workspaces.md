@@ -281,6 +281,15 @@ image and refuses dependency changes. Other source/dependency changes require
 the full gcp-runner build. Its ordinary startup smoke is a compatibility check;
 the live VM broker/lease/agent path must still be verified separately.
 
+The broker-enabled generation-4 fixture completed normal startup (smoke mode
+off), acquired its control-plane lease, launched Pi Web UI, and returned the
+authenticated agent page and application bundles successfully. That image still
+predated the baked-path precedence correction, so it is startup evidence only.
+`scripts/vm-runtime-proof.cjs` is the stronger in-container check for authenticated
+health, functional agent readiness, blocked metadata-token access, retained
+workspace, and retained child HOME. The health path skips legacy Firestore
+checkpoint reads for VM storage; backups are a separate concern.
+
 The isolated proof uses synthetic identity `vm-proof-605` / `vm-proof-owner`;
 `scripts/vm-crossover-fixture.mjs` accepts no user workspace ID. Its operations
 are `inspect`, `start`, `pause`, and `replace`, followed by a generation and

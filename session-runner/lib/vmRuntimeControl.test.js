@@ -3,9 +3,16 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createVmRuntimeControlClient, createVmWorkspaceAuthority} = require("./vmRuntimeControl");
+const {createAgentCheckpointService} = require("./agentCheckpoint.service");
 
 const config = {workspaceId: "workspace", sessionId: "session", agentRuntimeGeneration: "3",
   vmControlUrl: "https://control.example", vmControlToken: "a".repeat(64)};
+
+test("VM health does not query legacy checkpoint Firestore state", async () => {
+  const service = createAgentCheckpointService({config: {...config, retainedDiskMode: true},
+    db: new Proxy({}, {get: () => { throw new Error("Firestore forbidden"); }})});
+  assert.deepEqual(await service.status(), {lastCheckpointAt: null, checkpointError: null});
+});
 
 test("VM control requests bind identity and refuse redirects", async () => {
   let sent;

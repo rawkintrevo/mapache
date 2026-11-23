@@ -35,6 +35,8 @@ function createWorkspaceProcessEnvironment(config, baseEnv = process.env) {
     env.XDG_STATE_HOME = path.join(config.homeDir, ".local", "state");
     // Locks/sockets and temporary files belong to the current container.
     env.TMPDIR = "/tmp";
+    env.WORKSPACE_DIR = config.workspaceDir;
+    env.PI_CODING_AGENT_DIR = config.piAgentDir;
   }
   if (config?.workspaceStorageMode === "shared-gcsfuse-v1" && config.privateGitDir) {
     env.GIT_DIR = config.privateGitDir;
