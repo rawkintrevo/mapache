@@ -1105,10 +1105,12 @@ uploads remain blockers for final capture after the reservation.
 
 Operation IDs are scoped to a workspace. Repeating the same request returns
 the existing operation. A different observation cannot reuse its ID.
-Aborting a reserved, quiesced or prefix-captured operation atomically releases both fences only if they
-still belong to it, the source scope and generation are unchanged, and no
-VM authority exists. The reservation, quiesce and abort methods require a
-trusted admission policy. Production Functions expose the existing preflight
+Aborting a reserved, quiesced or prefix-captured operation atomically releases
+both fences only if they still belong to it, the source scope and generation
+are unchanged, and no VM authority exists. An operation with an imported
+destination disk must complete the ownership-checked destination cleanup
+transition before abort can release its fences. The reservation, quiesce and
+abort methods require a trusted admission policy. Production Functions expose the existing preflight
 and IAM-private GET status at `vmMigrationStatus_v2`, which takes
 `workspaceId`, `ownerUid` and `operationId`. The coordinator's mutation
 methods have no production entry point.
@@ -1122,6 +1124,21 @@ the writer blockers observed at reservation; successful quiesce clears that
 list only after the provider and Storage observations commit. `readyForCutover`
 remains false until a separately reviewed authority-switch implementation is
 available.
+
+If a verified import created a destination disk, the coordinator will not
+release the migration fences through `abort` until the validation boot has been
+cleaned and the exact detached destination disk has been deleted. The
+ownership-checked cleanup transition records `destinationDiskCleanedAtMs` and
+is resumable; a missing, attached, foreign, or ambiguous disk remains blocked.
+The operator entry point is:
+
+```bash
+node scripts/vm-migration-cleanup-destination.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID
+```
+
+This removes only the imported destination disk named by the coordinator's
+operation. It never deletes the source disk or changes workspace authority.
 
 The coordinator records a `quiesced` receipt only when the exact operation
 owns both fences and the source scope still matches the reservation. It

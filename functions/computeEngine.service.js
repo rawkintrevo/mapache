@@ -35,6 +35,7 @@ function createComputeEngineService(dependencies = {}) {
     ensureInstance: (descriptor, options) => ensureInstance(descriptor, options),
     inspect: (descriptor) => inspect(descriptor),
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
+    deleteMigrationImportedDisk: (descriptor, options) => deleteMigrationImportedDisk(descriptor, options),
     ensureMigrationValidationClone: (descriptor, options) => ensureMigrationValidationClone(descriptor, options),
     startMigrationValidationVm: (descriptor, options) => startMigrationValidationVm(descriptor, options),
     deleteMigrationValidationResources: (descriptor, options) => deleteMigrationValidationResources(descriptor, options),
@@ -229,6 +230,7 @@ function createComputeEngineService(dependencies = {}) {
       if (disk.users?.length) throw computeError("runtime_migration_disk_unverified", "Migration disk is still attached");
       return result;
     }
+
     const {instanceName, instanceId} = maintenance;
     const refuse = () => computeError("runtime_migration_maintenance_attachment_unverified");
     if (typeof instanceName !== "string" || !/^[a-z][a-z0-9-]{0,62}$/.test(instanceName) ||
@@ -247,6 +249,28 @@ function createComputeEngineService(dependencies = {}) {
         attachments[0].deviceName !== descriptor.dataDiskName || attachments[0].boot !== false ||
         attachments[0].autoDelete !== false || attachments[0].mode !== "READ_ONLY") throw refuse();
     return {...result, instanceId, attachmentTimestamp: disk.lastAttachTimestamp};
+  }
+
+  async function deleteMigrationImportedDisk(rawDescriptor, {operationId, diskId, timeoutMs = 240000} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    if (typeof operationId !== "string" || !operationId || !/^[1-9][0-9]{0,19}$/.test(String(diskId || ""))) {
+      throw computeError("runtime_migration_disk_cleanup_invalid", "Migration disk cleanup identity is invalid");
+    }
+    const disk = await getDisk(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (!disk) return {diskDeleted: true, diskId: String(diskId)};
+    assertOwnership(disk, descriptor);
+    assertDiskCreation(disk, descriptor, operationId);
+    if (disk.name !== descriptor.dataDiskName || String(disk.id) !== String(diskId) || disk.status !== "READY" ||
+        !Array.isArray(disk.users) || disk.users.length) {
+      throw computeError("runtime_migration_disk_cleanup_unverified", "Migration disk is not the detached admitted destination");
+    }
+    const diskUrl = `${zoneUrl(descriptor)}/disks/${descriptor.dataDiskName}`;
+    await deleteResource(diskUrl, {operationId, timeoutMs}, descriptor).catch(error => {
+      if (error?.response?.status !== 404 && error?.code !== 404) throw error;
+    });
+    const remaining = await getDisk(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (remaining) throw computeError("runtime_migration_disk_cleanup_pending", "Migration disk deletion is not confirmed");
+    return {diskDeleted: true, diskId: String(diskId)};
   }
 
   async function ensureMigrationValidationClone(rawDescriptor, {

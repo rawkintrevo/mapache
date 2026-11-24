@@ -13,6 +13,7 @@ const {CRC32C} = require("@google-cloud/storage");
 const tar = require("tar-stream");
 const {createVmMigrationCoordinator} = require("./vmMigrationCoordinator.service");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
+const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 const {createWorkspaceSharedStorageService, deriveWorkspaceBucketName} = require("./workspaceSharedStorage.service");
 const {createWorkspaceService} = require("./workspace.service");
 const {createMachineConfigurationService} = require("./machineConfiguration.service");
@@ -183,6 +184,68 @@ test("quiesce records a historical receipt only for stable source and fence obse
     assert.equal((await coordinator.abort(input)).phase, "aborted");
     assert.equal((await workspaceFence.get()).exists, false);
     assert.equal((await prefix.get()).exists, false);
+  } finally {
+    await app.delete();
+  }
+});
+
+test("abort cannot release fences until an imported destination disk is cleaned", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucket = "fixture-bucket";
+    const source = db.collection("workspaces").doc(workspaceId);
+    await source.create({ownerUid, bucket, storagePrefix: `workspaces/${ownerUid}/staging`, agentRuntimeGeneration: 7});
+    const target = {ownerUid, workspaceId};
+    const {observationSha256} = await createVmMigrationPreflight({db})(target);
+    const input = {...target, operationId: "cleanup-destination", observationSha256};
+    const digest = "a".repeat(64);
+    const destinationBase = {zone: "us-central1-a", region: "us-central1", generation: 1,
+      operationId: "destination", diskId: "123"};
+    const descriptor = createRuntimeDescriptor({backend: COMPUTE_ENGINE_BACKEND, ...target,
+      zone: destinationBase.zone, region: destinationBase.region, generation: destinationBase.generation});
+    const destination = {...destinationBase, diskName: descriptor.dataDiskName};
+    let deleteCalls = 0;
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true,
+      inspectCompute: async () => ({recordedComputeClear: true, providerObservationSha256: digest,
+        blockers: [], discovery: {scannedRegionsClear: true, evidenceSha256: "b".repeat(64)}}),
+      inspectStorage: async () => ({stable: true, firstSha256: "c".repeat(64), secondSha256: "c".repeat(64), blockers: []}),
+      inspectDestinationDisk: async (actual, options) => {
+        assert.equal(actual.dataDiskName, descriptor.dataDiskName);
+        assert.equal(options.operationId, destination.operationId);
+        return {diskId: destination.diskId, diskName: destination.diskName, zone: destination.zone, lastAttachTimestamp: null};
+      },
+      deleteImportedDisk: async (actual, options) => {
+        assert.equal(actual.dataDiskName, descriptor.dataDiskName);
+        assert.deepEqual(options, {operationId: destination.operationId, diskId: destination.diskId});
+        deleteCalls++;
+        return {diskDeleted: true, diskId: destination.diskId};
+      },
+      now: () => 42,
+    });
+    await coordinator.reserve(input);
+    await coordinator.confirmQuiesced(input);
+    const operation = db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`);
+    await operation.update({phase: "disk-import-verified", importDestination: destination,
+      diskImport: {receiptSha256: digest, diskLastAttachTimestamp: null, components: ["workspace"],
+        selectedEntries: 1, verifiedAtMs: 42}, validation: {cleanedAtMs: 42}});
+    const before = await coordinator.getStatus(input);
+    assert.equal(before.nextAction, "cleanup-imported-disk");
+    assert.equal(before.destinationDiskCleanedAtMs, null);
+    await assert.rejects(coordinator.abort(input), {publicMessage: "vm_migration_disk_cleanup_required"});
+    const cleaned = await coordinator.cleanupImportedDisk(input);
+    assert.equal(cleaned.nextAction, "review-cutover-gates");
+    assert.equal(cleaned.destinationDiskCleanedAtMs, 42);
+    assert.equal(deleteCalls, 1);
+    assert.deepEqual(await coordinator.cleanupImportedDisk(input), cleaned);
+    assert.equal(deleteCalls, 1);
+    const aborted = await coordinator.abort(input);
+    assert.equal(aborted.phase, "aborted");
+    assert.equal(aborted.sourceRetained, true);
   } finally {
     await app.delete();
   }

@@ -158,3 +158,37 @@ test("replacement cannot attach while another instance is still a disk user", as
   await assert.rejects(f.service.start(f.d, {runnerImage: "pinned"}), error => error.code === "runtime_data_disk_attached");
   assert.equal(f.state.mutations.length, 0);
 });
+
+test("imported-disk cleanup requires the exact detached operation-owned disk", async () => {
+  const d = descriptor({generation: 3});
+  const label = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
+  const state = {disk: {name: d.dataDiskName, id: "123", status: "READY", users: [],
+    labels: {"mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+      "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND, "mapache-created-generation": "3",
+      "mapache-operation-id": label("destination")}}, mutations: []};
+  const missing = () => Object.assign(new Error("missing"), {response: {status: 404}});
+  const service = createComputeEngineService({projectId: "pi-agents-cloud", request: async request => {
+    if (request.method === "GET") {
+      if (!state.disk) throw missing();
+      return {data: state.disk};
+    }
+    state.mutations.push(request);
+    if (request.method === "DELETE") {
+      state.disk = null;
+      return {data: {status: "DONE"}};
+    }
+    throw new Error(`unexpected ${request.method} ${request.url}`);
+  }});
+
+  const result = await service.deleteMigrationImportedDisk(d, {operationId: "destination", diskId: "123"});
+  assert.deepEqual(result, {diskDeleted: true, diskId: "123"});
+  assert.equal(state.mutations.length, 1);
+
+  state.disk = {name: d.dataDiskName, id: "123", status: "READY", users: ["attached-instance"], labels: {
+    "mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+    "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND, "mapache-created-generation": "3",
+    "mapache-operation-id": label("destination")}};
+  await assert.rejects(service.deleteMigrationImportedDisk(d, {operationId: "destination", diskId: "123"}),
+      error => error.code === "runtime_migration_disk_cleanup_unverified");
+  assert.equal(state.mutations.length, 1);
+});
