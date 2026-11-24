@@ -1324,9 +1324,37 @@ the source capture, imported components and destination fields, then
 rechecks that the exact disk is ready and detached. Before committing
 `disk-import-verified` it compares the Firestore operation, source and
 both fences again. Read-only status reports the verified components and
-timestamp. It keeps cutover readiness false. These mutation methods still
-need a production maintenance evidence channel, full source coverage,
-boot validation, an authority switch and rollback.
+timestamp. It keeps cutover readiness false.
+
+The trusted operator command reads evidence from an explicitly selected
+private maintenance VM. Install the maintenance helper and its local
+module dependencies under `/opt/mapache-maintenance`, enroll that VM's
+SSH host key, and unmount and reattach the registered disk as a read-only,
+non-boot, non-autodelete device before verification.
+
+```bash
+node scripts/vm-verify-migration-disk.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \
+  --maintenance-instance INSTANCE_NAME --maintenance-id INSTANCE_ID
+```
+
+The operator's credentials need Compute read and disk detach access,
+IAP SSH access and restricted Firestore access to the operation. The
+remote helper checks its Compute metadata identity, mounts ext4 without
+journal replay, requires a read-only block device and verifies the
+marker, receipt, merge-plan hash and installed file contents. It unmounts
+before returning. The operator command checks the provider disk and VM
+IDs and the read-only attachment before and after the IAP read, then
+detaches the disk. The coordinator checks detachment before recording its
+receipt. This command requires an existing registered, fenced operation.
+If the disk detaches and the Firestore verification fails, recheck source
+authority before reattaching for another read. Full source coverage, boot
+validation, authority switch and rollback remain unfinished.
+
+A live synthetic proof verified the captured receipt and installed files
+over strict-host-key IAP on a read-only attachment, then verified the same
+disk's detachment in Compute. Evidence is in
+`artifacts/qa/vm-retained-import/maintenance-evidence.log`.
 
 The emulator passes a locally installed receipt through coordinator
 verification and rejects a substituted capture, a same-name provider

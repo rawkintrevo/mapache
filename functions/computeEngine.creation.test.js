@@ -123,3 +123,29 @@ test("migration observation requires the exact creation operation and an unattac
   }
   assert.equal(f.state.diskCreates, 1);
 });
+
+test("maintenance observation binds the sole read-only attachment to the private instance ID", async () => {
+  const f = fixture();
+  const service = f.service();
+  await service.ensureDataDisk(f.descriptor, f.options);
+  const base = "https://www.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/" + f.descriptor.zone;
+  const maintenance = {instanceName: "maintenance", instanceId: "9007199254740994"};
+  const timestamp = "2026-11-23T00:00:00.000Z";
+  Object.assign(f.state.disk, {id: "9007199254740993", zone: base, users: [base + "/instances/maintenance"], lastAttachTimestamp: timestamp});
+  const attachment = {source: base + "/disks/" + f.descriptor.dataDiskName,
+    deviceName: f.descriptor.dataDiskName, boot: false, autoDelete: false, mode: "READ_ONLY"};
+  f.state.instance = {id: maintenance.instanceId, name: maintenance.instanceName, status: "RUNNING",
+    networkInterfaces: [{}], disks: [attachment]};
+  const read = () => service.inspectMigrationDisk(f.descriptor, {operationId: f.options.operationId, maintenance});
+  const observed = await read();
+  assert.equal(observed.attachmentTimestamp, timestamp);
+  assert.equal(observed.instanceId, maintenance.instanceId);
+  attachment.mode = "READ_WRITE";
+  await assert.rejects(read(), {code: "runtime_migration_maintenance_attachment_unverified"});
+  attachment.mode = "READ_ONLY";
+  f.state.instance.id = "9007199254740995";
+  await assert.rejects(read(), {code: "runtime_migration_maintenance_attachment_unverified"});
+  f.state.instance.id = maintenance.instanceId;
+  f.state.disk.users.push(base + "/instances/another");
+  await assert.rejects(read(), {code: "runtime_migration_maintenance_attachment_unverified"});
+});

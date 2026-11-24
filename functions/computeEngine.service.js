@@ -208,7 +208,7 @@ function createComputeEngineService(dependencies = {}) {
     }
   }
 
-  async function inspectMigrationDisk(rawDescriptor, {operationId} = {}) {
+  async function inspectMigrationDisk(rawDescriptor, {operationId, maintenance} = {}) {
     const descriptor = descriptorFor(rawDescriptor);
     if (typeof operationId !== "string" || !operationId) throw computeError("runtime_disk_operation_required");
     const disk = await getDisk(descriptor);
@@ -216,10 +216,32 @@ function createComputeEngineService(dependencies = {}) {
     assertDiskCreation(disk, descriptor, operationId);
     if (disk.name !== descriptor.dataDiskName || typeof disk.id !== "string" || !/^[1-9][0-9]{0,19}$/.test(disk.id) ||
         disk.status !== "READY" || !disk.zone?.endsWith("/zones/" + descriptor.zone) ||
-        (disk.users !== undefined && (!Array.isArray(disk.users) || disk.users.length))) {
-      throw computeError("runtime_migration_disk_unverified", "Migration disk identity or detachment is unverified");
+        (disk.users !== undefined && !Array.isArray(disk.users))) {
+      throw computeError("runtime_migration_disk_unverified", "Migration disk identity is unverified");
     }
-    return {diskId: disk.id, diskName: disk.name, zone: descriptor.zone};
+    const result = {diskId: disk.id, diskName: disk.name, zone: descriptor.zone};
+    if (!maintenance) {
+      if (disk.users?.length) throw computeError("runtime_migration_disk_unverified", "Migration disk is still attached");
+      return result;
+    }
+    const {instanceName, instanceId} = maintenance;
+    const refuse = () => computeError("runtime_migration_maintenance_attachment_unverified");
+    if (typeof instanceName !== "string" || !/^[a-z][a-z0-9-]{0,62}$/.test(instanceName) ||
+        typeof instanceId !== "string" || !/^[1-9][0-9]{0,19}$/.test(instanceId)) throw refuse();
+    const base = zoneUrl(descriptor);
+    const instanceUrl = base + "/instances/" + instanceName;
+    const diskUrl = base + "/disks/" + descriptor.dataDiskName;
+    const equivalent = (actual, expected) => actual === expected || actual === expected.replace("compute.googleapis.com", "www.googleapis.com");
+    if (disk.users?.length !== 1 || !equivalent(disk.users[0], instanceUrl) ||
+        !Number.isFinite(Date.parse(disk.lastAttachTimestamp))) throw refuse();
+    const instance = await getResource(instanceUrl);
+    const attachments = (instance.disks || []).filter(attachment => equivalent(attachment.source, diskUrl));
+    if (instance.id !== instanceId || instance.name !== instanceName || instance.status !== "RUNNING" ||
+        instance.networkInterfaces?.length !== 1 || instance.networkInterfaces[0].accessConfigs?.length ||
+        instance.networkInterfaces[0].ipv6AccessConfigs?.length || attachments.length !== 1 ||
+        attachments[0].deviceName !== descriptor.dataDiskName || attachments[0].boot !== false ||
+        attachments[0].autoDelete !== false || attachments[0].mode !== "READ_ONLY") throw refuse();
+    return {...result, instanceId, attachmentTimestamp: disk.lastAttachTimestamp};
   }
 
   async function ensureInstance(rawDescriptor, options = {}) {

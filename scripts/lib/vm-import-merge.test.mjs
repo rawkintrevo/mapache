@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {assembleMergedImport} from './vm-import-merge.mjs';
-import {importToRetainedDisk} from './vm-disk-import.mjs';
+import {importToRetainedDisk, readRetainedDiskReceipt} from './vm-disk-import.mjs';
+import {createMaintenanceEvidenceReader} from './vm-maintenance-evidence.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 async function fixture(t) {
@@ -164,6 +165,32 @@ test('retained disk resume binds the source capture and the separate destination
   assert.equal(receipt.destination.generation, config.generation);
   assert.match(receipt.destination.diskName, /^mapache-ws-/);
   assert.deepEqual(await importToRetainedDisk(config, options), receipt);
+  const maintenance = {instanceName: 'maintenance', instanceId: '9007199254740993'};
+  const destination = {...receipt.destination, region: 'us-central1', zone: 'us-central1-a', diskId: '9007199254740994'};
+  const input = {ownerUid: config.ownerUid, workspaceId: config.workspaceId, destination, prefixCapture};
+  let changed = false;
+  let attachmentReads = 0;
+  let releases = 0;
+  const checkMount = async (_root, device, opts) => {
+    assert.match(device, /^\/dev\/disk\/by-id\/google-mapache-ws-/);
+    assert.equal(opts.readOnly, true);
+  };
+  const read = createMaintenanceEvidenceReader({maintenance,
+    compute: {inspectMigrationDisk: async () => ({diskId: destination.diskId, diskName: destination.diskName,
+      instanceId: maintenance.instanceId, attachmentTimestamp: changed ? String(++attachmentReads) : 'same'})},
+    readMountedReceipt: async args => ({instanceId: maintenance.instanceId,
+      receipt: await readRetainedDiskReceipt({...args, mountRoot: config.mountRoot}, {checkMount})}),
+    releaseAttachment: async () => { releases++; },
+  });
+  changed = true;
+  await assert.rejects(read(input), /maintenance_disk_attachment_changed/);
+  assert.equal(releases, 0);
+  changed = false;
+  assert.deepEqual(await read(input), {diskId: destination.diskId, receipt});
+  assert.equal(releases, 1);
+  await fs.writeFile(path.join(config.mountRoot, 'workspace/a'), 'wrong');
+  await assert.rejects(read(input), /import_tree_destination_changed/);
+  assert.equal(releases, 1);
 });
 
 test('disk import rejects ordinary directories, a foreign marker and existing workspace data', async t => {
