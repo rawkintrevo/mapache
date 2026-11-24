@@ -354,3 +354,11 @@ Evidence: Owner-scoped auth/environment selection APIs and the opt-in VM modal s
 Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, metadata/resources/disk growth/idle/schedules/cost UX, revocation/disk-restore semantics and full authenticated modal/reconnect QA. Current tests cover only the selected auth/environment subset.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+## Continuation evidence — 2026-11-24
+
+The PR's full-tested runner image `sha256:19382971d1c23ac740ca1635cd6e1edbaca362214f299d3588363b9fe85b5279` passed the live owner/API sequence on the fixed synthetic workspace. The private owner probe passed discovery, canonical-session projection, anonymous and cross-owner denial, stale-generation denial, browser/API credential separation, and signed access URLs. The deployed lifecycle cycle passed pause/start idempotency and generation 13 to 14; the stopped-configuration proof passed save-while-stopped, stale-save rejection, cross-owner denial, and apply-after-start through generation 15. The current fixture is generation 15, active and lifecycle-ready, with API admission disabled after the proof.
+
+The owner-creation proof also passed after the documented temporary `create-proof` gateway revision tag was attached: duplicate suppression, owner-derived admission, forged infrastructure rejection, signed agent access, pause, and exact resource cleanup. The tag was removed immediately afterward; the creation workspace, admission, route, credentials and dedicated disk are absent. The browser `vm-live-shell` scenario produced a passing result with no console errors, a live VM Agent iframe, resource meters, signed VM API/access calls, and no legacy workspace listener. Its sanitized evidence remains under `artifacts/qa/vm-live-shell/`.
+
+The fixed fixture replacement harness now preserves existing registry admission/configuration fields and explicitly retains lifecycle admission across generation replacement. This correction is committed as `6a509b3` on PR #629. Remaining live evidence includes a real model turn, broader runner/browser/sandbox and backup/recovery matrices, migration writer drain and authority-switch rehearsal, and the release/canary gates; these proofs do not establish user-workspace cutover.
