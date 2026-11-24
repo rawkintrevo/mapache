@@ -22,6 +22,7 @@ const DRAIN_AFTER_FREEZE = new Set([
 const ALIAS_LIMIT = 500;
 const DIGEST = /^[a-f0-9]{64}$/;
 const DISK_ID = /^[1-9][0-9]{0,19}$/;
+const RUNNER_IMAGE = /^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/;
 const CAPTURE_COMPONENTS = new Set(["agent", "browser", "home", "workspace"]);
 const versionStamp = ({updateTime}) => [updateTime.seconds, updateTime.nanoseconds];
 
@@ -79,6 +80,7 @@ function verifyDiskReceipt(evidence, record) {
 
 function createVmMigrationCoordinator({
   db, authorize = async () => false, inspectCompute, inspectStorage, inspectDestinationDisk, readDiskImportEvidence,
+  ensureValidationClone,
   defaultBucket = DEFAULT_BUCKET, now = Date.now,
 }) {
   function refs(input) {
@@ -96,6 +98,8 @@ function createVmMigrationCoordinator({
       prefixCapturedObjects: record.prefixCapture?.objectCount ?? null,
       diskImportVerifiedAtMs: record.diskImport?.verifiedAtMs ?? null,
       diskImportedComponents: record.diskImport?.components ?? null,
+      validationReservedAtMs: record.validation?.reservedAtMs ?? null,
+      validationCloneVerifiedAtMs: record.validation?.cloneVerifiedAtMs ?? null,
       readyForCutover: false};
   }
   function requireOwner(record, input) {
@@ -262,7 +266,7 @@ function createVmMigrationCoordinator({
     const disk = await inspectDestinationDisk(descriptor, {operationId});
     if (disk?.diskName !== descriptor.dataDiskName || disk.zone !== zone ||
         typeof disk.diskId !== "string" || !DISK_ID.test(disk.diskId)) throw httpError(409, "vm_migration_disk_unverified");
-    return {diskId: disk.diskId, diskName: disk.diskName};
+    return {diskId: disk.diskId, diskName: disk.diskName, lastAttachTimestamp: disk.lastAttachTimestamp ?? null};
   }
 
   async function readImportState(transaction, input, references, completed = []) {
@@ -287,8 +291,8 @@ function createVmMigrationCoordinator({
     }
     const read = transaction => readImportState(transaction, input, references);
     const before = await db.runTransaction(read, {readOnly: true});
-    const disk = await inspectDisk(input, destination);
-    const importDestination = {...destination, ...disk};
+    const {diskId, diskName} = await inspectDisk(input, destination);
+    const importDestination = {...destination, diskId, diskName};
     return db.runTransaction(async transaction => {
       const current = await read(transaction);
       if (current.record.importDestination) {
@@ -326,9 +330,109 @@ function createVmMigrationCoordinator({
       if (!current.observation) return status(current.record);
       if (before.observation.observationSha256 !== current.observation.observationSha256 ||
           before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_disk_observation_stale");
-      const update = {phase: "disk-import-verified", diskImport: {...verified, verifiedAtMs: now()}};
+      const update = {phase: "disk-import-verified", diskImport: {...verified, diskLastAttachTimestamp: disk.lastAttachTimestamp,
+        verifiedAtMs: now()}};
       transaction.update(references.operation, update);
       return status({...current.record, ...update});
+    });
+  }
+
+  async function readValidationState(transaction, input, references) {
+    const current = await readFencedSource(transaction, input, references, {
+      phases: ["disk-import-verified"], completed: [], invalidPhase: "vm_migration_validation_phase_invalid",
+    });
+    if (!matchesQuiesce(current) || !DIGEST.test(current.record.diskImport?.receiptSha256 || "")) {
+      throw httpError(409, "vm_migration_validation_source_changed");
+    }
+    return current;
+  }
+
+  async function assertValidationSource(input, record) {
+    const disk = await inspectDisk(input, record.importDestination);
+    if (disk.diskId !== record.importDestination.diskId ||
+        disk.lastAttachTimestamp !== (record.diskImport.diskLastAttachTimestamp ?? null)) {
+      throw httpError(409, "vm_migration_validation_source_disk_changed");
+    }
+  }
+
+  async function reserveValidationBoot(input) {
+    const references = refs(input);
+    if (typeof input.runnerImage !== "string" || !RUNNER_IMAGE.test(input.runnerImage)) {
+      throw httpError(400, "vm_migration_validation_image_invalid");
+    }
+    if (!inspectDestinationDisk || !await authorize(input, "reserve-validation-boot")) {
+      throw httpError(409, "vm_migration_validation_unverified");
+    }
+    const read = transaction => readValidationState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    await assertValidationSource(input, before.record);
+    const key = createHash("sha256").update(input.workspaceId + ":" + input.operationId).digest("hex").slice(0, 24);
+    const validation = {reservedAtMs: now(), runnerImage: input.runnerImage, operationId: "validate-" + key,
+      cloneDiskName: "mapache-val-disk-" + key, instanceName: "mapache-val-vm-" + key,
+      receiptSha256: before.record.diskImport.receiptSha256};
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.validation) {
+        const existing = current.record.validation;
+        if (existing.runnerImage !== input.runnerImage || existing.receiptSha256 !== validation.receiptSha256) {
+          throw httpError(409, "vm_migration_validation_reservation_conflict");
+        }
+        return status(current.record);
+      }
+      if (before.authorityStamps !== current.authorityStamps ||
+          before.observation.observationSha256 !== current.observation.observationSha256) {
+        throw httpError(409, "vm_migration_validation_observation_stale");
+      }
+      transaction.update(references.operation, {validation});
+      return status({...current.record, validation});
+    });
+  }
+
+  async function prepareValidationClone(input) {
+    const references = refs(input);
+    if (!inspectDestinationDisk || !ensureValidationClone || !await authorize(input, "prepare-validation-clone")) {
+      throw httpError(409, "vm_migration_validation_unverified");
+    }
+    const read = transaction => readValidationState(transaction, input, references);
+    const initial = await db.runTransaction(read, {readOnly: true});
+    if (!initial.record.validation || initial.record.validation.receiptSha256 !== initial.record.diskImport.receiptSha256) {
+      throw httpError(409, "vm_migration_validation_reservation_missing");
+    }
+    await assertValidationSource(input, initial.record);
+    await db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.validation?.cloneRequestedAtMs !== undefined) return;
+      if (initial.authorityStamps !== current.authorityStamps ||
+          initial.observation.observationSha256 !== current.observation.observationSha256) {
+        throw httpError(409, "vm_migration_validation_observation_stale");
+      }
+      transaction.update(references.operation, {"validation.cloneRequestedAtMs": now()});
+    });
+    const before = await db.runTransaction(read, {readOnly: true});
+    const {validation, importDestination: destination, diskImport} = before.record;
+    const descriptor = createRuntimeDescriptor({backend: COMPUTE_ENGINE_BACKEND, workspaceId: input.workspaceId, ownerUid: input.ownerUid,
+      zone: destination.zone, region: destination.region, generation: destination.generation});
+    const clone = await ensureValidationClone(descriptor, {sourceOperationId: destination.operationId, sourceDiskId: destination.diskId,
+      sourceLastAttachTimestamp: diskImport.diskLastAttachTimestamp ?? null, cloneDiskName: validation.cloneDiskName,
+      operationId: validation.operationId});
+    if (clone?.cloneDiskName !== validation.cloneDiskName || clone.sourceDiskId !== destination.diskId ||
+        typeof clone.cloneDiskId !== "string" || !DISK_ID.test(clone.cloneDiskId) || clone.cloneDiskId === destination.diskId) {
+      throw httpError(409, "vm_migration_validation_clone_unverified");
+    }
+    await assertValidationSource(input, before.record);
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.validation?.cloneDiskId) {
+        if (current.record.validation.cloneDiskId !== clone.cloneDiskId) throw httpError(409, "vm_migration_validation_clone_conflict");
+        return status(current.record);
+      }
+      if (before.authorityStamps !== current.authorityStamps ||
+          before.observation.observationSha256 !== current.observation.observationSha256) {
+        throw httpError(409, "vm_migration_validation_observation_stale");
+      }
+      const verified = {...validation, cloneDiskId: clone.cloneDiskId, cloneVerifiedAtMs: now()};
+      transaction.update(references.operation, {validation: verified});
+      return status({...current.record, validation: verified});
     });
   }
 
@@ -387,6 +491,7 @@ function createVmMigrationCoordinator({
       if (!["reserved", "quiesced", "prefix-captured", "disk-import-verified"].includes(record.phase)) {
         throw httpError(409, "vm_migration_abort_phase_invalid");
       }
+      if (record.validation?.cloneRequestedAtMs !== undefined) throw httpError(409, "vm_migration_validation_cleanup_required");
       const prefixFence = storageFenceRef(db, record.scope, input.ownerUid);
       const [workspace, workspaceFence, prefix, destination] = await Promise.all([
         transaction.get(source), transaction.get(fence), transaction.get(prefixFence),
@@ -409,7 +514,8 @@ function createVmMigrationCoordinator({
       return status({...record, ...update});
     });
   }
-  return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport, abort};
+  return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport,
+    reserveValidationBoot, prepareValidationClone, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

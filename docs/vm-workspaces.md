@@ -1356,6 +1356,19 @@ over strict-host-key IAP on a read-only attachment, then verified the same
 disk's detachment in Compute. Evidence is in
 `artifacts/qa/vm-retained-import/maintenance-evidence.log`.
 
+Before validation boot, the coordinator reserves an immutable image digest
+and deterministic names for a temporary disk and VM. It uses the verified
+import receipt and requires the original detached disk ID and attachment
+timestamp to still match. A persisted clone request precedes the Compute
+write. Compute copies the original disk to a separate validation disk,
+checks the clone's ownership and validation labels, and verifies the
+provider's exact source disk ID. Retries reuse that clone. The coordinator
+rechecks the fenced source before recording its ID. Once cloning is
+requested, abort requires reconciliation of the copy before releasing
+legacy authority. This transition creates neither a VM nor a user route.
+Isolated validation boot, resource cleanup and cutover still need wiring.
+[Compute Engine disk reference](https://docs.cloud.google.com/compute/docs/reference/rest/v1/disks/get)
+
 The emulator passes a locally installed receipt through coordinator
 verification and rejects a substituted capture, a same-name provider
 disk replacement and a concurrent Firestore record change. A separate

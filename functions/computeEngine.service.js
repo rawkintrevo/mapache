@@ -35,6 +35,7 @@ function createComputeEngineService(dependencies = {}) {
     ensureInstance: (descriptor, options) => ensureInstance(descriptor, options),
     inspect: (descriptor) => inspect(descriptor),
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
+    ensureMigrationValidationClone: (descriptor, options) => ensureMigrationValidationClone(descriptor, options),
     pause: (descriptor, options) => pause(descriptor, options),
     start: (descriptor, options) => start(descriptor, options),
     replace: (descriptor, options) => replace(descriptor, options),
@@ -219,7 +220,9 @@ function createComputeEngineService(dependencies = {}) {
         (disk.users !== undefined && !Array.isArray(disk.users))) {
       throw computeError("runtime_migration_disk_unverified", "Migration disk identity is unverified");
     }
-    const result = {diskId: disk.id, diskName: disk.name, zone: descriptor.zone};
+    const result = {diskId: disk.id, diskName: disk.name, zone: descriptor.zone,
+      ...(disk.lastAttachTimestamp ? {lastAttachTimestamp: disk.lastAttachTimestamp} : {}),
+      ...(disk.type ? {diskType: disk.type} : {})};
     if (!maintenance) {
       if (disk.users?.length) throw computeError("runtime_migration_disk_unverified", "Migration disk is still attached");
       return result;
@@ -242,6 +245,54 @@ function createComputeEngineService(dependencies = {}) {
         attachments[0].deviceName !== descriptor.dataDiskName || attachments[0].boot !== false ||
         attachments[0].autoDelete !== false || attachments[0].mode !== "READ_ONLY") throw refuse();
     return {...result, instanceId, attachmentTimestamp: disk.lastAttachTimestamp};
+  }
+
+  async function ensureMigrationValidationClone(rawDescriptor, {
+    sourceOperationId, sourceDiskId, sourceLastAttachTimestamp, cloneDiskName, operationId, timeoutMs = 240000,
+  } = {}) {
+    const source = descriptorFor(rawDescriptor);
+    if (typeof cloneDiskName !== "string" || !/^mapache-val-disk-[a-f0-9]{24}$/.test(cloneDiskName) ||
+        cloneDiskName === source.dataDiskName || typeof operationId !== "string" || !operationId) {
+      throw computeError("runtime_validation_clone_invalid");
+    }
+    const target = descriptorFor({...source, dataDiskName: cloneDiskName});
+    const checkSource = async () => {
+      const disk = await inspectMigrationDisk(source, {operationId: sourceOperationId});
+      if (disk.diskId !== sourceDiskId || (disk.lastAttachTimestamp ?? null) !== sourceLastAttachTimestamp) {
+        throw computeError("runtime_validation_source_disk_changed");
+      }
+      return disk;
+    };
+    const sourceDisk = await checkSource();
+    let clone = await getDisk(target).catch(error => {
+      if (error.code === "compute_not_found") return null;
+      throw error;
+    });
+    const sourceUrl = zoneUrl(source) + "/disks/" + source.dataDiskName;
+    if (!clone) {
+      const response = await requestImpl({url: zoneUrl(target) + "/disks", method: "POST",
+        params: {requestId: diskCloneRequestId(operationId, sourceDiskId)},
+        data: {name: cloneDiskName, sourceDisk: sourceUrl, type: sourceDisk.diskType || zoneUrl(source) + "/diskTypes/" + dataDiskType,
+          labels: {...ownershipLabels(target, {operationId}), "mapache-created-generation": String(target.generation),
+            "mapache-validation-only": "true"}}});
+      await waitForOperation(response.data, target, {timeoutMs});
+      clone = await getDisk(target);
+    }
+    assertOwnership(clone, target);
+    assertDiskCreation(clone, target, operationId);
+    if (clone.name !== cloneDiskName || typeof clone.id !== "string" || !/^[1-9][0-9]{0,19}$/.test(clone.id) ||
+        clone.id === sourceDiskId || clone.sourceDiskId !== sourceDiskId ||
+        ![sourceUrl, sourceUrl.replace("compute.googleapis.com", "www.googleapis.com")].includes(clone.sourceDisk) ||
+        clone.status !== "READY" || clone.labels?.["mapache-validation-only"] !== "true" ||
+        clone.users !== undefined && (!Array.isArray(clone.users) || clone.users.length)) {
+      throw computeError("runtime_validation_clone_unverified");
+    }
+    await checkSource();
+    return {cloneDiskId: clone.id, cloneDiskName, sourceDiskId};
+  }
+
+  function diskCloneRequestId(validationOperationId, sourceDiskId) {
+    return operationId("migration-validation-clone:" + validationOperationId + ":" + sourceDiskId);
   }
 
   async function ensureInstance(rawDescriptor, options = {}) {

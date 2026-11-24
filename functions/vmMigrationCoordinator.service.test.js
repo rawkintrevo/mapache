@@ -449,6 +449,9 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     let changeOperationDuringRead = false;
     const initialDiskId = "9007199254740993";
     let diskId = initialDiskId;
+    let diskLastAttachTimestamp;
+    let cloneDiskId = "9007199254740997";
+    let changeDuringClone = false;
     let receiptFile;
     let substituteEvidence = false;
     let changeDuringEvidence = false;
@@ -462,7 +465,13 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true, inspectStorage,
       inspectDestinationDisk: async (descriptor, {operationId}) => {
         assert.equal(operationId, "destination");
-        return {diskId, diskName: descriptor.dataDiskName, zone: descriptor.zone};
+        return {diskId, diskName: descriptor.dataDiskName, zone: descriptor.zone, lastAttachTimestamp: diskLastAttachTimestamp};
+      },
+      ensureValidationClone: async (descriptor, options) => {
+        assert.equal(descriptor.dataDiskName, receiptDestinationDiskName);
+        assert.equal(options.sourceDiskId, initialDiskId);
+        if (changeDuringClone) await operation.update({changedDuringClone: true});
+        return {cloneDiskId, cloneDiskName: options.cloneDiskName, sourceDiskId: options.sourceDiskId};
       },
       readDiskImportEvidence: async ({destination}) => {
         assert.equal(destination.diskId, initialDiskId);
@@ -553,8 +562,9 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     const {retainedDiskMarker, DISK_MARKER_NAME} = require("../session-runner/lib/retainedDiskStorage");
     await fs.writeFile(path.join(mountRoot, DISK_MARKER_NAME), JSON.stringify(retainedDiskMarker({...source, ...destination})));
     const {importToRetainedDisk} = await import("../scripts/lib/vm-disk-import.mjs");
-    await importToRetainedDisk({...source, mountRoot, generation: destination.generation,
+    const receipt = await importToRetainedDisk({...source, mountRoot, generation: destination.generation,
       operationId: destination.operationId, sources, maxBytes: 4096, prefixCapture: merged.prefixCapture}, {checkMount: async () => {}});
+    const receiptDestinationDiskName = receipt.destination.diskName;
     receiptFile = path.join(mountRoot, ".mapache-import-stage/disk-import-receipt.json");
     substituteEvidence = true;
     await assert.rejects(coordinator.verifyDiskImport(input), {publicMessage: "vm_migration_disk_receipt_invalid"});
@@ -571,6 +581,27 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     assert.deepEqual(verified.diskImportedComponents, ["browser", "home", "workspace"]);
     assert.equal(verified.readyForCutover, false);
     assert.ok(!JSON.stringify(verified).includes(initialDiskId));
+    await assert.rejects(coordinator.prepareValidationClone(input), {publicMessage: "vm_migration_validation_reservation_missing"});
+    const runnerImage = "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:" + "a".repeat(64);
+    await assert.rejects(coordinator.reserveValidationBoot({...input, runnerImage: "latest"}),
+        {publicMessage: "vm_migration_validation_image_invalid"});
+    diskLastAttachTimestamp = "2026-11-23T00:00:00Z";
+    await assert.rejects(coordinator.reserveValidationBoot({...input, runnerImage}),
+        {publicMessage: "vm_migration_validation_source_disk_changed"});
+    diskLastAttachTimestamp = undefined;
+    const reserved = await coordinator.reserveValidationBoot({...input, runnerImage});
+    assert.equal(typeof reserved.validationReservedAtMs, "number");
+    assert.deepEqual(await coordinator.reserveValidationBoot({...input, runnerImage}), reserved);
+    changeDuringClone = true;
+    await assert.rejects(coordinator.prepareValidationClone(input), {publicMessage: "vm_migration_validation_observation_stale"});
+    await assert.rejects(coordinator.abort(input), {publicMessage: "vm_migration_validation_cleanup_required"});
+    changeDuringClone = false;
+    const prepared = await coordinator.prepareValidationClone(input);
+    assert.equal(typeof prepared.validationCloneVerifiedAtMs, "number");
+    assert.deepEqual(await coordinator.prepareValidationClone(input), prepared);
+    cloneDiskId = "9007199254740998";
+    await assert.rejects(coordinator.prepareValidationClone(input), {publicMessage: "vm_migration_validation_clone_conflict"});
+    assert.equal(prepared.readyForCutover, false);
     assert.ok(!(await db.collection("vmRuntimes_v2").doc(workspaceId).get()).exists);
     const chunk = chunks.doc("0");
     const original = (await chunk.get()).get("rowsJson");
@@ -579,8 +610,7 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     await chunk.update({rowsJson: original});
     await prefixFence.update({changedAt: 1});
     await assert.rejects(coordinator.getCapturedPrefix(input), {publicMessage: "vm_migration_prefix_capture_source_changed"});
-    await coordinator.abort(input);
-    await assert.rejects(coordinator.getCapturedPrefix(input), {publicMessage: "vm_migration_prefix_capture_phase_invalid"});
+    await assert.rejects(coordinator.abort(input), {publicMessage: "vm_migration_validation_cleanup_required"});
   } finally {
     await app.delete();
   }

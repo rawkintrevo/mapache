@@ -5,6 +5,7 @@ const {mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync} = require("
 const {tmpdir} = require("node:os");
 const {join} = require("node:path");
 const {spawnSync} = require("node:child_process");
+const {createHash} = require("node:crypto");
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
@@ -113,7 +114,7 @@ test("migration observation requires the exact creation operation and an unattac
   const zone = "https://compute.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/" + f.descriptor.zone;
   Object.assign(f.state.disk, {id: stringId, zone});
   assert.deepEqual(await service.inspectMigrationDisk(f.descriptor, request),
-      {diskId: stringId, diskName: f.descriptor.dataDiskName, zone: f.descriptor.zone});
+      {diskId: stringId, diskName: f.descriptor.dataDiskName, zone: f.descriptor.zone, diskType: f.state.disk.type});
   await assert.rejects(service.inspectMigrationDisk(f.descriptor, {operationId: "another"}), {code: "runtime_data_disk_creation_conflict"});
   for (const invalid of [{id: Number(stringId)}, {users: ["foreign-instance"]}, {zone: "other-zone"}, {status: "CREATING"}]) {
     const previous = f.state.disk;
@@ -148,4 +149,41 @@ test("maintenance observation binds the sole read-only attachment to the private
   f.state.instance.id = maintenance.instanceId;
   f.state.disk.users.push(base + "/instances/another");
   await assert.rejects(read(), {code: "runtime_migration_maintenance_attachment_unverified"});
+});
+
+test("validation clone uses exact source identity and retries without another provider write", async () => {
+  const descriptor = createRuntimeDescriptor({backend: "compute-engine", workspaceId: "clone-proof", ownerUid: "owner", generation: 1});
+  const cloneDiskName = "mapache-val-disk-" + "b".repeat(24);
+  const sourceDiskId = "9007199254740993";
+  const operationId = "validation";
+  const sourceOperationId = "import";
+  const base = "https://compute.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/" + descriptor.zone;
+  const label = value => createHash("sha256").update(value).digest("hex").slice(0, 63);
+  const source = {name: descriptor.dataDiskName, id: sourceDiskId, zone: base, status: "READY", users: [],
+    labels: {"mapache-owner-uid": label("owner"), "mapache-workspace-id": label("clone-proof"),
+      "mapache-created-generation": "1", "mapache-operation-id": label(sourceOperationId), "mapache-runtime-provider": "compute-engine"}};
+  let clone;
+  let writes = 0;
+  const compute = createComputeEngineService({projectId: "pi-agents-cloud", request: async req => {
+    if (req.method === "POST") {
+      writes++;
+      assert.equal(req.data.sourceDisk, base + "/disks/" + descriptor.dataDiskName);
+      assert.equal(req.data.labels["mapache-validation-only"], "true");
+      clone = {...req.data, sourceDiskId, id: "9007199254740994", status: "READY"};
+      return {data: {status: "DONE"}};
+    }
+    const disk = req.url.endsWith(cloneDiskName) ? clone : source;
+    if (!disk) throw Object.assign(Error("not found"), {code: 404});
+    return {data: disk};
+  }});
+  const run = () => compute.ensureMigrationValidationClone(descriptor, {cloneDiskName, sourceDiskId,
+    sourceOperationId, operationId, sourceLastAttachTimestamp: null});
+  const result = await run();
+  assert.deepEqual(await run(), result);
+  assert.equal(writes, 1);
+  clone.sourceDiskId = "9007199254740995";
+  await assert.rejects(run(), {code: "runtime_validation_clone_unverified"});
+  source.lastAttachTimestamp = "2026-11-23T00:00:00Z";
+  await assert.rejects(run(), {code: "runtime_validation_source_disk_changed"});
+  assert.equal(writes, 1);
 });
