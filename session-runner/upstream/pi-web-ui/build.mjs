@@ -156,8 +156,8 @@ export async function applyPatches(sourceDir, manifest, patchRoot = PATCH_ROOT) 
 		const patchPath = join(patchRoot, relativePatch.replace(/^patches\//, ""));
 		if (!existsSync(patchPath)) fail("patch is missing: " + relativePatch);
 		try {
-			await run("git", ["apply", "--check", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
-			await run("git", ["apply", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
+			await run("git", ["apply", "--check", "--unidiff-zero", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
+			await run("git", ["apply", "--unidiff-zero", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
 		} catch (error) {
 			fail("patch baseline rejected for " + relativePatch + ": " + error.message);
 		}

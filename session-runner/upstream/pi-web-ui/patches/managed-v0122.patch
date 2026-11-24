@@ -4760,6 +4760,9 @@ diff --git a/tests/unit/universal-commands.test.ts b/tests/unit/universal-comman
 index 5b4dd25..395a05c 100644
 --- a/tests/unit/universal-commands.test.ts
 +++ b/tests/unit/universal-commands.test.ts
+@@ -380,1 +380,1 @@ describe("通用底座与多引擎 / 和 @ 命令体系测试", () => {
+-			await new Promise((r) => setTimeout(r, 10));
++			await vi.waitFor(() => expect(executedPrompts).toEqual(["首个问题"]));
 @@ -430,7 +430,7 @@ describe("通用底座与多引擎 / 和 @ 命令体系测试", () => {
  			});
  

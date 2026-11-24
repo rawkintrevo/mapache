@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {lstatSync, mkdtempSync, mkdirSync, readlinkSync, symlinkSync, writeFileSync} from "node:fs";
+import {lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
@@ -57,6 +57,25 @@ test("the patch stage rejects a mismatched baseline", async () => {
 		() => applyPatches(sourceDir, {patches: ["patches/fixture.patch"]}, join(patchRoot, "patches")),
 		/patch baseline rejected/,
 	);
+});
+
+test("the patch stage accepts an exact zero-context hunk", async () => {
+	const sourceDir = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-zero-context-test-"));
+	const patchRoot = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-zero-context-patches-"));
+	mkdirSync(join(patchRoot, "patches"));
+	writeFileSync(join(sourceDir, "baseline.txt"), "expected\n");
+	writeFileSync(join(patchRoot, "patches", "fixture.patch"), [
+		"diff --git a/baseline.txt b/baseline.txt",
+		"--- a/baseline.txt",
+		"+++ b/baseline.txt",
+		"@@ -1 +1 @@",
+		"-expected",
+		"+patched",
+		"",
+	].join("\n"));
+
+	await applyPatches(sourceDir, {patches: ["patches/fixture.patch"]}, join(patchRoot, "patches"));
+	assert.equal(readFileSync(join(sourceDir, "baseline.txt"), "utf8"), "patched\n");
 });
 
 test("runtime copy rewrites absolute npm links to portable relative links", () => {
