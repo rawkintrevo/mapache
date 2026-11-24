@@ -1,13 +1,13 @@
 # VM crossover #605 handoff
 
-Handoff date: 2026-11-23 (America/Chicago). Implementation goal is **paused at the user's request**. Ticket reconciliation and preservation/testing of existing work were authorized for handoff; this does not resume feature implementation.
+Handoff date: 2026-11-23 (America/Chicago). Implementation is paused for handoff.
 
 ## Start here
 
 - Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
 - Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
-- Last implementation commit before handoff packaging: `95c9ee8`. The handoff commit also includes tests and publication of the previously unfinished shared-tree provenance inventory check.
-- Rough overall estimate: **45%**, a judgment estimate, not a checklist percentage. No real existing workspace has completed cutover. Every issue stays open; checked criteria below describe scoped evidence, not issue completion.
+- Last published implementation commit is `8159da1`. GitHub preview build and deploy checks passed at that revision.
+- Rough overall estimate: **50%** by engineering judgment. No real existing workspace has completed cutover. Every issue stays open; checked criteria below describe scoped evidence, not issue completion.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -24,7 +24,7 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 - Current session: `vm-1977e861d998de7357678d53-g11`.
 - VM `mapache-vm-0d357714e0867ab67c057652` is RUNNING in `us-central1-a`, machine type `e2-standard-2`.
 - Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 64 GiB `pd-balanced`. The running VM, retained disk and private networking continue to incur costs. Nothing was stopped or deleted for this handoff.
-- Dedicated gateway: `mapache-vm-gateway-v2`. Isolated VM Functions are separately deployed; legacy Functions were not redeployed for recent migration work. No Hosting deployment for the opt-in VM frontend.
+- Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` were verified ACTIVE in `pi-agents-cloud`. The server-side writer guards and Firestore/Storage rules are staged on the branch. No Hosting deployment for the opt-in VM frontend.
 - Pinned runner image: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:885a04f85bc34d8987523624f2c7bd9fe704b0121d483971adfe227299c7b3b8`.
 - Registry/control collections: `vmRuntimes_v2`, `vmRuntimeCredentials_v2`, `vmLifecycleOperations_v2`, `vmGatewayRoutes_v2`. Never dump credential documents, Compute bootstrap metadata or full environment values.
 - The real `vm-test` is a different, unmigrated legacy workspace. Its recorded Cloud Run service is absent; do not confuse its local recovered files with the running synthetic VM.
@@ -43,8 +43,8 @@ Do not repeatedly retry these known absent sources without new evidence. Continu
 - `vm-test` checkpoint recovery: 36 agent files/objects (1,236,845 bytes), eight workspace files/objects (29,047 bytes); locally assembled/verified.
 - Browser archive: 48,086,059 compressed bytes, 324 files, 119 archived directories plus one implied parent; locally restored and verified.
 - Disposable-copy Chrome proof: Chrome 148.0.7778.178 rendered a synthetic page in a network namespace with no external interfaces and exited zero. SQLite passed for 20 databases before/22 after. Source fingerprint unchanged; owned Chrome/profile cleaned. This is not headed VM/noVNC, sandbox, encrypted credential or external login evidence.
-- Owner tools: three files/65,988 bytes staged, five directory markers; fixed GCS FUSE 0755 modes captured. Assembly/merging/sharing semantics remain incomplete.
-- Transfer, checkpoint assembly and archive extraction passed real child-process SIGKILL/retry tests. These do not establish Cloud Function worker crash reconciliation, abrupt VM open-write recovery, ENOSPC or complete disk import.
+- Owner tools: three files (65,988 bytes) and five directory markers assembled under `home/.local`. The four-source local candidate contains 371 files and 146 directories. Shared-owner writer reconciliation remains open.
+- Transfer, checkpoint assembly and archive extraction passed real child-process SIGKILL/retry tests. A separate synthetic proof interrupted publication on a real GCE Persistent Disk, resumed, then booted the ordinary COS runner with the imported disk. Authenticated `/runner/health` reported the agent ready after startup and the imported executable and history matched. The disposable proof resources were cleaned up. Cloud Function worker crash reconciliation, abrupt VM open-write recovery, ENOSPC and all-format real import remain open.
 
 Private ignored evidence remains on this workstation under `artifacts/qa/`: `vm-migration-inventory/`, `vm-checkpoint-import/`, `vm-browser-archive-import/`, `vm-browser-profile-proof/`, `vm-owner-tools-import/`, `vm-shared-tree-inventory/{initial,handoff}.json`, `vm-gateway-replacement/`, `vm-lifecycle/`, `vm-owner-api/`, `vm-environment/`, `vm-configuration/` and `vm-client-routing/`.
 
@@ -58,26 +58,26 @@ These directories do **not** travel with Git. They can contain private restored 
 - Migration: `scripts/vm-migration-inventory.mjs`; `scripts/lib/vm-{migration-inventory,checkpoint-payloads,storage-metadata,archive-verifier,import-stage,checkpoint-import,import-tree,archive-import,archive-tree,owner-tools-import,shared-tree-authority}.mjs`.
 - Source sharing provenance checks only original bucket/marker/control identity. HNS folder inventory, mutable current contents and writer reconciliation remain unverified; never use the legacy ensure/validate service in read-only inventory because it can repair IAM.
 
-Handoff checks: **35 focused migration tests passed**, including four tests for the previously unfinished shared-tree work; the real read-only CLI reports the missing shared bucket and keeps `readyForCutover=false`. Syntax, diff and docs checks are required for the handoff commit. No Functions code changed and no deployment is required.
+## Cutover state and unpublished work
 
-Re-run focused checks with:
+- The live read-only preflight saw the recorded `vm-test` Cloud Run service absent and no unfinished recorded operations. A regional scan found zero matches in 31 current service templates in `us-central1`. Historical revisions, other regions and remaining writer paths still require reconciliation.
+- Two bounded Storage listings agreed for 568 objects. An initial combined check detected a Firestore observation change and refused the result. A separate Storage-only check was stable. The missing persistent HOME blocker remains.
+- The Firestore emulator proved one reservation winner, stale-observation and shared-prefix refusal, and atomic release of the workspace and Storage fences. The production endpoints expose read-only preflight and status. No production reservation or writer drain is authorized by those endpoints.
+- One uncommitted change to `functions/vmMigrationCoordinator.service.js` remains in the original checkout. It sketches a guarded `confirmQuiesced` transition. It checks ownership of both fences, records Compute and Storage observation digests, and rechecks Firestore and fence versions before committing. Syntax passed. The transition has no emulator race coverage, deployment or production wiring. A fresh clone can resume from the published reservation code and this description if the original checkout is unavailable.
+
+## Checks and continuation
+
+The published implementation passed 109 focused backend tests and a separate Firestore emulator reservation race test. The retained-disk proof passed the 41 focused migration tests available at that increment. Earlier frontend evidence covered 281 tests, normal and VM-enabled builds, and synthetic Chrome DevTools routing and editor QA. Full live authenticated frontend acceptance remains open.
 
 ```bash
-node --test scripts/lib/vm-shared-tree-authority.test.mjs scripts/lib/vm-owner-tools-import.test.mjs scripts/lib/vm-archive-import.test.mjs scripts/lib/vm-checkpoint-import.test.mjs scripts/lib/vm-import-stage.test.mjs scripts/lib/vm-archive-verifier.test.mjs scripts/lib/vm-checkpoint-payloads.test.mjs scripts/lib/vm-migration-inventory.test.mjs scripts/lib/vm-storage-metadata.test.mjs
+node --test functions/vm*.test.js functions/{sessionLifecycle,cloudRun,sessionCreation,workspaceUploads,sessionResize,workspaceSessionReservation,automationRuns,automationAdmission,automationProvisioning,workspaceRequestRuntime,workspaceAutomationDeletion}.service.test.js
+firebase emulators:exec --only firestore --project demo-mapache-cutover 'node --test functions/vmMigrationCoordinator.service.test.js'
 npm run docs:check
 ```
 
-Earlier frontend evidence: 54 test files/281 tests, normal and VM-enabled builds, synthetic CDP routing/editor QA. Those were not rerun for this documentation/read-only inventory handoff. Review each proof's scope before using it to close a requirement.
-
-## Recommended next work after explicit resume
-
-1. Finish source adapters and reconciliation: HNS folders/current shared objects/private Git, owner-tool assembly, source overlap/tombstone handling, unpublished/live-only state. Treat missing sources as explicit cases, not empty filesystems.
-2. Prove a complete representative fixture import into a new owned retained disk with no agent/browser writer; include capacity/real ENOSPC, huge files, interrupted initialization and partial cleanup. Validate actual runtime/apps on that disk.
-3. Finish #613/#623/#621/#622 compatibility: central settings/defaults/integrations, stopped-machine schedules/requests, headed browser/sandbox, direct resumable uploads and resource edits.
-4. Implement exclusive writer freeze/authority switch and lossless rollback after new writes (#616), VM backups/recovery/cost controls (#617), and worker-failure reconciliation.
-5. Pass the full #618 release matrix before canary/cohorts (#619). Retire nothing under #620 until reconciliation and retention gates pass.
-
-Continue reporting concrete outcomes and update the individual tickets as work changes. Maintain one PR and distinguish new passing partial checks from full issue completion.
+1. For #616, review the draft quiesce transition. Test changed source/fence races, incomplete provider scans, missing HOME, idempotency and abort before destination authority. Establish how to verify deployed fence coverage and drain all writers, including old upload URIs and pre-existing operations. Revalidate before final capture. Bind the verified disk import to the atomic provider switch and rehearse lossless rollback after VM writes.
+2. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. Extend the disk import proof to representative complete data, capacity and recovery, then validate the runtime and app on the imported disk.
+3. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.
 
 ## Ticket-by-ticket reconciliation
 
@@ -139,7 +139,7 @@ Fully evidenced original acceptance criteria: 4.
 
 ### #613: Not implemented end to end — contract only
 
-Evidence: The intended external scheduler wake-up, request grants, isolated outputs and tool-sharing semantics are documented. Owner-tool source bytes can now be verified/staged locally.
+Evidence: The intended external scheduler wake-up, request grants, isolated outputs and tool-sharing semantics are documented. Owner-tool source bytes were verified and assembled locally.
 
 Remaining: Implement and verify stopped-target scheduled/Run-now/request wake-up, cancellation, concurrency, read-only inputs, durable outputs, safe idle shutdown, cross-machine tool sharing and correct usage accounting. No full acceptance criterion is met.
 
@@ -147,27 +147,27 @@ Fully evidenced original acceptance criteria: none; partial evidence does not sa
 
 ### #614: Partial — registry and several source formats verified
 
-Evidence: Read-only inventory accounted for 85 legacy workspace records plus one isolated VM fixture. It reports IDs/owners/generations and source blockers; selected vm-test checkpoints, browser archive and owner tools were verified. The formerly unfinished shared-tree provenance check is now tested and reports shared_bucket_not_found for the sole shared-tree record.
+Evidence: Read-only inventory accounted for 85 legacy workspace records plus one isolated VM fixture. It reports IDs/owners/generations and source blockers; selected vm-test checkpoints, browser archive and owner tools were verified. The deployed preflight also compared 568 object generations and reported the missing HOME. The formerly unfinished shared-tree provenance check is now tested and reports shared_bucket_not_found for the sole shared-tree record.
 
 Remaining: Complete hierarchical folder/current shared-object/private-Git/unpublished/live-only reconciliation, consistent final captures, actual disk sizing, downtime and costs. vm-test HOME recovery is unproven; the shared bucket returns 404. Neither is an empty-source success.
 
 Fully evidenced original acceptance criteria: 1, 3.
 
-### #615: Partial — local resumable recovery tools verified
+### #615: Partial — synthetic disk import and ordinary runner startup passed
 
-Evidence: Generation-pinned object staging, per-file/bundle/large-file checkpoint assembly and archive extraction preserve verified bytes, supported modes, links and empty archive directories. Real process-kill recovery passed. vm-test restored 44 checkpoint files and 324 browser files locally; owner tools (3 files/65,988 bytes) are staged.
+Evidence: Verified checkpoints, browser files and owner tools were merged locally. A disposable GCE Persistent Disk import resumed after interruption and booted the ordinary runner with imported executable and history data intact.
 
-Remaining: Finish shared-tree/private-Git/all-format support, owner-tool assembly, source merging/authority, new owned-disk import, application/dependency verification, capacity/real ENOSPC/huge-file recovery, initialization interruption and partial-file cleanup. Local receipts are not VM-ready/cutover markers.
+Remaining: Resolve shared-tree, private-Git and missing HOME sources. Verify a complete real import, application and dependency behavior, real ENOSPC, huge files, interruption and cleanup.
 
-Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+Fully evidenced original acceptance criteria: none.
 
-### #616: Not implemented — cutover/rollback design only
+### #616: Partial — read-only preflight deployed and reservation tested
 
-Evidence: The intended freeze/quiesce/final-capture/import/compare-and-swap/validate state machine is documented. No existing workspace has been cut over and no source has been deleted.
+Evidence: Deployed read-only operator preflight and status. Workspace and Storage prefix reservation and pre-switch release passed Firestore transaction tests. The live Compute and Storage checks are recorded above.
 
-Remaining: Implement the exclusive-writer migration coordinator, crash/race/idempotency tests, owner-visible status and lossless reverse export/rollback after VM writes. Do not flip authority back to a stale checkpoint.
+Remaining: Deploy and verify writer fencing, drain existing writers, test and wire quiesce, bind final capture and import to the operation, switch authority atomically and rehearse rollback after new VM writes. Owner-visible migration status remains open.
 
-Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+Fully evidenced original acceptance criteria: none.
 
 ### #617: Not implemented for VM release — policy recorded
 
@@ -179,7 +179,7 @@ Fully evidenced original acceptance criteria: none; partial evidence does not sa
 
 ### #618: Partial — isolated proofs, release gate unmet
 
-Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The current focused migration suite has 35 passing tests.
+Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The synthetic retained-disk import and ordinary VM runner startup passed. The published backend suite passed 109 focused tests plus the separate reservation emulator test.
 
 Remaining: Complete all formats/failure transitions, real VM desktop/security/browser matrix, two-machine settings/inheritance, schedules and requests waking stopped machines, upload/resize/disk-full/backup tests, a real model turn and numeric rollout thresholds.
 
@@ -224,5 +224,3 @@ Evidence: Owner-scoped auth/environment selection APIs and the opt-in VM modal s
 Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, metadata/resources/disk growth/idle/schedules/cost UX, revocation/disk-restore semantics and full authenticated modal/reconnect QA. Current tests cover only the selected auth/environment subset.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
-
-
