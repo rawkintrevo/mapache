@@ -3,7 +3,7 @@
 const {createHash} = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
 const {isWorkspaceStorageMigrationActive} = require("./runtimeReservation.helpers");
-const {vmMigrationFenceRef, legacySharedStorageClaims} = require("./vmMigrationFence.helpers");
+const {vmMigrationFenceRef, legacySharedStorageClaims, legacyRecoveryReservation} = require("./vmMigrationFence.helpers");
 const {vmLegacyUploadRef} = require("./vmLegacyUploadAdmission.service");
 
 const SESSION_LIMIT = 500;
@@ -63,15 +63,17 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
   const destinationRef = db.collection("vmRuntimes_v2").doc(workspaceId);
   const uploadRef = vmLegacyUploadRef(db, workspaceId);
   const pendingUploads = uploadRef.collection("pending").limit(1);
+  const recoveryRef = legacyRecoveryReservation(db, workspaceId);
   const sessions = workspaceRef.collection("sessions").limit(SESSION_LIMIT + 1);
   const runs = db.collection("automationRuns").where("workspaceId", "==", workspaceId)
       .where("status", "in", ACTIVE_RUNS).limit(RUN_LIMIT + 1);
   const workspace = await transaction.get(workspaceRef);
   if (!workspace.exists || workspace.get("ownerUid") !== ownerUid) throw httpError(404, "vm_migration_source_not_found");
-  const [destination, fence, sessionList, runList, uploads, pending, sharedStorage] = await Promise.all([
+  const [destination, fence, sessionList, runList, uploads, pending, sharedStorage, recovery, recoveryWrites] = await Promise.all([
     transaction.get(destinationRef), transaction.get(vmMigrationFenceRef(db, workspaceId)),
     transaction.get(sessions), transaction.get(runs), transaction.get(uploadRef), transaction.get(pendingUploads),
     transaction.get(legacySharedStorageClaims(db, workspaceId).limit(1)),
+    transaction.get(recoveryRef), transaction.get(recoveryRef.collection("pending").limit(1)),
   ]);
   const sessionRecords = sessionList.docs.slice(0, SESSION_LIMIT);
   const runRecords = runList.docs.slice(0, RUN_LIMIT);
@@ -79,6 +81,8 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
   if (fence.exists) result.blockers.push("migration_fence_already_exists");
   if (pending.size) result.blockers.push("legacy_upload_issuance_unresolved");
   if (sharedStorage.size) result.blockers.push("legacy_shared_storage_iam_unresolved");
+  if (recovery.get("state") === "reserved") result.blockers.push("legacy_storage_recovery_reservation_unresolved");
+  if (recoveryWrites.size) result.blockers.push("legacy_storage_recovery_write_unresolved");
   const drainUntilMs = uploads.get("drainUntilMs");
   if (uploads.exists && (!Number.isSafeInteger(drainUntilMs) || drainUntilMs > now())) {
     result.blockers.push("legacy_upload_sessions_require_drain");
@@ -87,7 +91,8 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
   if (truncated) result.blockers.push("legacy_writer_inventory_truncated");
   const observedSourceGeneration = workspace.get("agentRuntimeGeneration");
   const stamp = snapshot => [snapshot.ref.path, snapshot.updateTime?.seconds ?? null, snapshot.updateTime?.nanoseconds ?? null];
-  const evidence = [workspace, destination, fence, uploads, ...pending.docs, ...sharedStorage.docs, ...sessionRecords, ...runRecords].map(stamp)
+  const evidence = [workspace, destination, fence, uploads, recovery, ...pending.docs, ...sharedStorage.docs,
+    ...recoveryWrites.docs, ...sessionRecords, ...runRecords].map(stamp)
       .sort(([a], [b]) => a.localeCompare(b));
   return {...result, workspace: workspace.data(), workspaceId,
     sessions: sessionRecords.map(snapshot => ({...snapshot.data(), id: snapshot.id || snapshot.ref.path.split("/").at(-1)})),

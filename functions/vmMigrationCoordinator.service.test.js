@@ -9,6 +9,7 @@ const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 const {createWorkspaceSharedStorageService, deriveWorkspaceBucketName} = require("./workspaceSharedStorage.service");
 const {createWorkspaceService} = require("./workspace.service");
 const {createMachineConfigurationService} = require("./machineConfiguration.service");
+const {createWorkspaceStorageBackupService} = require("./workspaceStorageBackup.service");
 
 test("reservation and abort are atomic under concurrent callers and fail closed on changed authority", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
@@ -82,6 +83,9 @@ test("quiesce records a historical receipt only for stable source and fence obse
     await source.create({ownerUid, bucket: defaultBucket, storagePrefix: `workspaces/${ownerUid}/staging`,
       agentRuntimeGeneration: 7});
     const target = {ownerUid, workspaceId};
+    const maintenance = db.collection("workspaceStorageRecoveryReservations").doc(workspaceId);
+    await maintenance.create({ownerUid, workspaceId, state: "reserved", reservationId: "old-recovery",
+      expiresAt: "2000-01-01T00:00:00Z"});
     const {observationSha256} = await createVmMigrationPreflight({db})(target);
     const input = {...target, observationSha256, operationId: "quiesce"};
     const workspaceFence = db.collection("vmMigrationFences_v2").doc(workspaceId);
@@ -99,6 +103,13 @@ test("quiesce records a historical receipt only for stable source and fence obse
       inspectStorage: async () => storageProbe()};
     const coordinator = createVmMigrationCoordinator({...options, authorize: async () => true});
     const reserved = await coordinator.reserve(input);
+    await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_writers_not_drained"});
+    const recovery = createWorkspaceStorageBackupService({db, admin});
+    await recovery.releaseMaintenanceReservation(ownerUid, workspaceId, "old-recovery");
+    const recoveryWrite = maintenance.collection("pending").doc("orphan");
+    await recoveryWrite.create({ownerUid});
+    await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_writers_not_drained"});
+    await recoveryWrite.delete();
     await assert.rejects(createVmMigrationCoordinator(options).confirmQuiesced(input),
         {publicMessage: "vm_migration_quiesce_unverified"});
     const pending = db.doc(`vmLegacyUploads_v2/${workspaceId}/pending/unresolved`);
@@ -257,6 +268,66 @@ test("reserved workspace stays listable while legacy metadata and settings remai
     assert.equal((await workspace.get()).get("mcpConfig.version"), 1);
     assert.equal((await machine.markApplied(workspaceId, 1)).appliedVersion, 1);
   } finally {
+    await app.delete();
+  }
+});
+
+test("an in-flight legacy restore blocks maintenance release and remains visible after fencing", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  const providerStarted = Promise.withResolvers();
+  const providerDone = Promise.withResolvers();
+  let restore;
+  try {
+    const db = app.firestore();
+    const projectId = "demo-mapache-cutover";
+    const projectNumber = "1234567890";
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucketName = deriveWorkspaceBucketName(projectNumber, workspaceId);
+    const workspace = db.collection("workspaces").doc(workspaceId);
+    await workspace.create({ownerUid, sharedStorage: {bucketName, projectId, projectNumber}});
+    const object = {
+      name: "fixture.txt",
+      metadata: {generation: "1", timeDeleted: "2026-01-01T01:00:00.000Z", size: "1"},
+      restore: async () => {
+        providerStarted.resolve();
+        await providerDone.promise;
+        return {generation: "2", size: "1"};
+      },
+    };
+    const storage = {bucket: () => ({
+      getMetadata: async () => [{
+        name: bucketName, project: projectId, projectNumber, location: "US-CENTRAL1", storageClass: "STANDARD",
+        labels: {"mapache-workspace-id": workspaceId, "mapache-owner-uid": ownerUid},
+        hierarchicalNamespace: {enabled: true}, versioning: {enabled: false},
+        iamConfiguration: {uniformBucketLevelAccess: {enabled: true}, publicAccessPrevention: "enforced"},
+        softDeletePolicy: {retentionDurationSeconds: 604800},
+      }],
+      getFiles: async () => [[object], null],
+    })};
+    const backup = createWorkspaceStorageBackupService({db, admin, storage, projectId, now: () => new Date("2026-01-02")});
+    const {reservationId} = await backup.acquireMaintenanceReservation(ownerUid, workspaceId);
+    const restoreObject = () => backup.restoreGeneration(ownerUid, workspaceId, reservationId, {objectPath: object.name, generation: "1"});
+    restore = restoreObject();
+    await Promise.race([providerStarted.promise, restore]);
+    const probe = () => createVmMigrationPreflight({db})({workspaceId, ownerUid});
+    const unresolved = "legacy_storage_recovery_write_unresolved";
+    assert.ok((await probe()).blockers.includes(unresolved));
+    await db.collection("vmMigrationFences_v2").doc(workspaceId).create({ownerUid, operationId: "fixture"});
+    await assert.rejects(backup.releaseMaintenanceReservation(ownerUid, workspaceId, reservationId),
+        {publicMessage: "workspace_recovery_write_unresolved"});
+    await assert.rejects(restoreObject(), {publicMessage: "workspace_vm_migration_active"});
+    providerDone.resolve();
+    assert.equal((await restore).restoredGeneration, "2");
+    assert.ok(!(await probe()).blockers.includes(unresolved));
+    assert.ok((await probe()).blockers.includes("legacy_storage_recovery_reservation_unresolved"));
+    await backup.releaseMaintenanceReservation(ownerUid, workspaceId, reservationId);
+    assert.ok(!(await probe()).blockers.includes("legacy_storage_recovery_reservation_unresolved"));
+  } finally {
+    providerDone.resolve();
+    await restore?.catch(() => {});
     await app.delete();
   }
 });

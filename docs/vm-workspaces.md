@@ -1060,6 +1060,20 @@ record quiesce. Deployed legacy handlers may still have untracked work until
 the staged guards roll out and existing requests drain. A shared-tree
 source still requires its own Storage scope and writer-reconciliation proof.
 
+The legacy `scripts/workspace-storage-recovery.mjs` CLI uses
+`functions/workspaceStorageBackup.service.js`. The service checks the VM
+fence when reserving maintenance, starting a restore or tree recovery, and
+publishing the recovery pointer. Provider writes are serialized by a claim
+under `workspaceStorageRecoveryReservations/{workspaceId}/pending`.
+The claim survives interrupted or ambiguous writes, and release refuses
+while a claim remains. Preflight blocks quiesce for a pending claim or
+any unreleased reservation, including an expired reservation. A matching
+expired reservation can be explicitly released after confirming the prior
+process and its Storage requests are settled. If a claim remains, reconcile
+its provider writes before removing the claim through trusted maintenance
+access. Old CLI copies without the fence and claim checks must also drain
+before a production operator can attest writer quiescence.
+
 The Firestore/Storage emulator test runs with
 `firebase emulators:exec --only firestore,storage --project mapache-rules-test 'node storage.rules.test.cjs && node firestore.rules.test.cjs'`.
 It covers owner reads under a fence, refusal of fenced creates/replacements/

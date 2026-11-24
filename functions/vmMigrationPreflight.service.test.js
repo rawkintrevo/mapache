@@ -5,7 +5,7 @@ const test = require("node:test");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 
 function fixture({workspace = {}, sessions = [], runs = [], destination, fence, uploads, pending = [],
-  sharedStorageClaims = [], version = 1} = {}) {
+  sharedStorageClaims = [], recovery, recoveryWrites = [], version = 1} = {}) {
   const workspacePath = "workspaces/fixture";
   const pathSnapshots = new Map();
   const snapshot = (path, data) => ({
@@ -17,8 +17,10 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
   pathSnapshots.set("vmRuntimes_v2/fixture", snapshot("vmRuntimes_v2/fixture", destination));
   pathSnapshots.set("vmMigrationFences_v2/fixture", snapshot("vmMigrationFences_v2/fixture", fence));
   pathSnapshots.set("vmLegacyUploads_v2/fixture", snapshot("vmLegacyUploads_v2/fixture", uploads));
+  pathSnapshots.set("workspaceStorageRecoveryReservations/fixture", snapshot("workspaceStorageRecoveryReservations/fixture", recovery));
   for (const [path, values] of [[workspacePath + "/sessions", sessions], ["automationRuns", runs],
-    ["vmLegacyUploads_v2/fixture/pending", pending], ["vmLegacySharedStorage_v2/fixture/pending", sharedStorageClaims]]) {
+    ["vmLegacyUploads_v2/fixture/pending", pending], ["vmLegacySharedStorage_v2/fixture/pending", sharedStorageClaims],
+    ["workspaceStorageRecoveryReservations/fixture/pending", recoveryWrites]]) {
     pathSnapshots.set(path, {size: values.length, docs: values.map((row, i) => snapshot(path + "/" + i, row))});
   }
   const ref = path => ({

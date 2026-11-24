@@ -7,8 +7,9 @@ const {
   assertSharedBucketContract,
 } = require("./workspaceSharedStorage.service");
 const {httpError} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission, legacyRecoveryReservation,
+  RECOVERY_RESERVATION_COLLECTION} = require("./vmMigrationFence.helpers");
 
-const RECOVERY_RESERVATION_COLLECTION = "workspaceStorageRecoveryReservations";
 const RECOVERY_POINTER_FIELD = "sharedStorageRecovery";
 const RECOVERY_VERSION = 1;
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
@@ -39,7 +40,7 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
   const randomId = dependencies.randomId || (() => crypto.randomUUID());
   const projectId = String(dependencies.projectId || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "").trim();
   const workspaceDocument = (workspaceId) => db.collection("workspaces").doc(workspaceId);
-  const reservationDocument = (workspaceId) => db.collection(RECOVERY_RESERVATION_COLLECTION).doc(workspaceId);
+  const reservationDocument = (workspaceId) => legacyRecoveryReservation(db, workspaceId);
 
   return {
     acquireMaintenanceReservation: (uid, workspaceId, options) => acquireMaintenanceReservation(uid, workspaceId, options),
@@ -64,7 +65,9 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
       const workspace = {id: workspaceSnap.id || targetWorkspaceId, ...workspaceSnap.data()};
       assertOwner(workspace, ownerUid);
       assertWorkspaceAvailable(workspace);
+      await assertVmMigrationAdmission(transaction, db, targetWorkspaceId);
       await assertPaused(readSessions(transaction, workspaceRef, targetWorkspaceId));
+      await assertNoRecoveryWrites(transaction, reservationRef);
       const existingSnap = await transaction.get(reservationRef);
       const existing = existingSnap?.exists ? existingSnap.data() || {} : null;
       if (existing && existing.state === "reserved" && !isExpired(existing.expiresAt, timestamp)) {
@@ -92,18 +95,17 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
   }
 
   async function releaseMaintenanceReservation(uid, workspaceId, reservationId, details = {}) {
-    const reservation = await assertReservation(uid, workspaceId, reservationId);
-    const ref = reservationDocument(workspaceId);
-    const next = {
-      ...reservation,
-      state: "released",
-      releasedAt: currentDate().toISOString(),
-      updatedAt: currentDate().toISOString(),
-      retention: details.retention || reservation.retention || null,
-      releaseReason: String(details.reason || "operator_complete").slice(0, 120),
-    };
-    await ref.update(next);
-    return publicReservation(next);
+    return db.runTransaction(async transaction => {
+      const ref = reservationDocument(requiredId(workspaceId, "workspace_id"));
+      const reservation = await assertReservation(uid, workspaceId, reservationId, transaction, {allowExpired: true});
+      await assertNoRecoveryWrites(transaction, ref);
+      const releasedAt = currentDate().toISOString();
+      const next = {...reservation, state: "released", releasedAt, updatedAt: releasedAt,
+        retention: details.retention || reservation.retention || null,
+        releaseReason: String(details.reason || "operator_complete").slice(0, 120)};
+      transaction.update(ref, next);
+      return publicReservation(next);
+    });
   }
 
   async function checkRetention(uid, workspaceId, options = {}) {
@@ -151,7 +153,7 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
   }
 
   async function restoreGeneration(uid, workspaceId, reservationId, options = {}) {
-    const reservation = await assertReservation(uid, workspaceId, reservationId);
+    await assertReservation(uid, workspaceId, reservationId);
     const {bucket, binding} = await validatedBucket(await loadWorkspace(uid, workspaceId));
     const objectPath = safeObjectPath(options.objectPath || options.name, "object_path");
     const sourceGeneration = positiveGeneration(options.generation, "generation");
@@ -159,6 +161,7 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
     if (!candidate) throw backupError("workspace_recovery_generation_not_found", 404);
     const restoreOptions = {generation: sourceGeneration};
     if (options.restoreToken) restoreOptions.restoreToken = String(options.restoreToken);
+    const claim = await beginRecoveryWrite(uid, workspaceId, reservationId, binding, "restore");
     const restored = await restoreFile(candidate, restoreOptions);
     const metadata = await restoredMetadata(restored, candidate);
     const evidence = await verifyObjectEvidence(metadata, options, restored || candidate);
@@ -172,7 +175,7 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
       size: Number(metadata.size || 0),
       ...evidence,
     };
-    await updateReservationRetention(reservation, null);
+    await claim.delete();
     return result;
   }
 
@@ -185,9 +188,14 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
     const controlManifestPath = `${treePrefix}/.mapache-internal/recovery-control.json`;
     const copied = [];
     let totalBytes = 0;
+    let claim;
     for (const entry of manifest.objects) {
       const candidate = await findSoftDeletedFile(bucket, entry.objectPath, entry.generation);
-      if (!candidate) throw backupError("workspace_recovery_source_unavailable", 409, {objectPath: entry.objectPath, generation: entry.generation});
+      if (!candidate) {
+        await claim?.delete();
+        throw backupError("workspace_recovery_source_unavailable", 409, {objectPath: entry.objectPath, generation: entry.generation});
+      }
+      claim ||= await beginRecoveryWrite(uid, workspaceId, reservationId, binding, "recover-tree");
       const restored = await restoreFile(candidate, {
         generation: entry.generation,
         ...(entry.restoreToken ? {restoreToken: entry.restoreToken} : {}),
@@ -223,6 +231,7 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
       operationId: reservation.reservationId,
       workspaceId,
     };
+    claim ||= await beginRecoveryWrite(uid, workspaceId, reservationId, binding, "recover-tree");
     await saveJson(bucket.file(readyMarkerPath), readyMarker);
     const control = {
       version: RECOVERY_VERSION,
@@ -240,6 +249,7 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
       publishedAt: currentDate().toISOString(),
     };
     await saveJson(bucket.file(controlManifestPath), control);
+    await claim.delete();
     const pointer = {
       version: RECOVERY_VERSION,
       state: "ready",
@@ -259,7 +269,6 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
   }
 
   async function publishRecoveryPointer(uid, workspaceId, reservationId, pointer) {
-    const reservation = await assertReservation(uid, workspaceId, reservationId);
     const workspaceRef = workspaceDocument(workspaceId);
     let published;
     await db.runTransaction(async (transaction) => {
@@ -268,7 +277,9 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
       const workspace = workspaceSnap.data() || {};
       assertOwner(workspace, uid);
       assertWorkspaceAvailable(workspace);
-      await assertPaused(readSessions(transaction, workspaceRef, workspaceId));
+      await assertVmMigrationAdmission(transaction, db, workspaceId);
+      const reservation = await assertReservation(uid, workspaceId, reservationId, transaction);
+      await assertNoRecoveryWrites(transaction, reservationDocument(workspaceId));
       published = {
         ...pointer,
         publishedAt: pointer.publishedAt || currentDate().toISOString(),
@@ -283,20 +294,46 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
     return published;
   }
 
-  async function assertReservation(uid, workspaceId, reservationId) {
+  async function assertNoRecoveryWrites(transaction, reservationRef) {
+    const pending = await transaction.get(reservationRef.collection("pending").limit(1));
+    if (pending.docs.length) throw backupError("workspace_recovery_write_unresolved");
+  }
+
+  async function beginRecoveryWrite(uid, workspaceId, reservationId, binding, kind) {
+    const reservationRef = reservationDocument(workspaceId);
+    const claim = reservationRef.collection("pending").doc(crypto.randomUUID());
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(workspaceDocument(workspaceId));
+      if (!snapshot.exists) throw backupError("workspace_not_found", 404);
+      const workspace = snapshot.data();
+      assertOwner(workspace, uid);
+      assertWorkspaceAvailable(workspace);
+      await assertVmMigrationAdmission(transaction, db, workspaceId);
+      if (workspace.sharedStorage?.bucketName !== binding.bucketName) throw backupError("workspace_storage_descriptor_changed");
+      await assertReservation(uid, workspaceId, reservationId, transaction);
+      await assertNoRecoveryWrites(transaction, reservationRef);
+      transaction.create(claim, {reservationId, ownerUid: uid, bucketName: binding.bucketName, kind,
+        startedAtMs: currentDate().getTime()});
+      transaction.update(reservationRef, {lastWriteClaimId: claim.id});
+    });
+    return claim;
+  }
+
+  async function assertReservation(uid, workspaceId, reservationId, transaction, {allowExpired = false} = {}) {
     const ownerUid = requiredId(uid, "owner_uid");
     const targetWorkspaceId = requiredId(workspaceId, "workspace_id");
     const cleanReservationId = requiredId(reservationId, "reservation_id");
-    const snap = await reservationDocument(targetWorkspaceId).get();
+    const ref = reservationDocument(targetWorkspaceId);
+    const snap = await (transaction ? transaction.get(ref) : ref.get());
     if (!snap?.exists) throw backupError("workspace_recovery_reservation_not_found", 404);
     const reservation = snap.data() || {};
     if (reservation.reservationId !== cleanReservationId || reservation.ownerUid !== ownerUid) {
       throw backupError("workspace_recovery_reservation_mismatch", 409);
     }
-    if (reservation.state !== "reserved" || isExpired(reservation.expiresAt, currentDate())) {
+    if (reservation.state !== "reserved" || (!allowExpired && isExpired(reservation.expiresAt, currentDate()))) {
       throw backupError("workspace_recovery_reservation_expired", 409);
     }
-    await assertPaused(readSessions(null, workspaceDocument(targetWorkspaceId), targetWorkspaceId));
+    await assertPaused(readSessions(transaction, workspaceDocument(targetWorkspaceId), targetWorkspaceId));
     return reservation;
   }
 
@@ -365,7 +402,12 @@ function createWorkspaceStorageBackupService(dependencies = {}) {
 
   async function updateReservationRetention(reservation, retention) {
     if (!retention) return;
-    await reservationDocument(reservation.workspaceId).update({retention, updatedAt: currentDate().toISOString()});
+    const ref = reservationDocument(reservation.workspaceId);
+    await db.runTransaction(async transaction => {
+      const current = (await transaction.get(ref)).data();
+      if (current?.state !== "reserved" || current.reservationId !== reservation.reservationId) return;
+      transaction.update(ref, {retention, updatedAt: currentDate().toISOString()});
+    });
   }
 
   async function readObjectMetadata(file) {
