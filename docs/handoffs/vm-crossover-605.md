@@ -172,7 +172,7 @@ Remaining: Drain existing writers and make the verified stages available to an e
 
 Fully evidenced original acceptance criteria: none.
 
-### #617: Partial — policy, durable scheduler, and provider receipts implemented; lifecycle remains open
+### #617: Partial — policy, durable scheduler, restore evidence boundary, and provider receipts implemented; lifecycle remains open
 
 Evidence: A daily crash-consistent snapshot/14-day retention target and separate application-consistent migration capture are documented. Normal pause retains the data disk; that is not a backup.
 
@@ -187,14 +187,20 @@ exclusive claims and retry timestamps around provider calls, verifies ready
 snapshots into `vmBackups_v2/{workspaceId}/items`, creates guarded retention
 delete operations, and refuses reservations behind a migration fence.
 `vmBackupReconcile_v2` is a 15-minute opt-in scheduler; no current VM record
-has been opted in. Existing legacy storage backup code is not VM evidence.
+has been opted in. `functions/vmBackupRecovery.service.js` now reserves only
+verified owned backups, creates fresh-target restore receipts, requires an
+injected runtime/file verifier, measures the declared 24-hour RPO and one-hour
+RTO targets, and records sanitized startup-timing reports with bounded retry on
+transient readiness errors. Existing legacy storage backup code is not VM
+evidence.
 
-Remaining: Perform a real fresh-disk/fresh-VM file and runtime verification
-with measured RPO/RTO; reconcile asynchronous provider operations before
-declaring deletion complete; inventory Compute resources before orphan cleanup;
-surface startup/attach/mount timings and actual costs; and publish the
-disk-full/zone-loss runbooks. No production snapshot, restore, retention
-deletion, or synthetic-fixture mutation was performed.
+Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
+fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
+reconcile asynchronous provider operations before declaring deletion complete;
+inventory Compute resources before orphan cleanup; surface startup/attach/mount
+timings and actual costs; and publish the disk-full/zone-loss runbooks. No
+production snapshot, restore, retention deletion, or synthetic-fixture
+mutation was performed.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 

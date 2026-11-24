@@ -4,6 +4,8 @@ const {createHash, randomUUID} = require("node:crypto");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 const {
+  DEFAULT_RPO_TARGET_MS,
+  DEFAULT_RTO_TARGET_MS,
   SNAPSHOT_INTERVAL_MS,
   backupPolicy,
   createBackupRecord,
@@ -98,7 +100,8 @@ function createVmBackupSchedulerService({db, backup, now = Date.now, logger = co
       const record = createBackupRecord({workspaceId, ownerUid, operationId,
         sourceDisk: descriptor.dataDiskName, sourceDiskId: descriptor.dataDiskName,
         sourceGeneration: descriptor.generation, consistency: consistency || "crash-consistent",
-        retentionDays, capturedAt});
+        retentionDays, capturedAt, rpoTargetMs: normalizedPolicy(runtime.backupPolicy).rpoTargetMs,
+        rtoTargetMs: normalizedPolicy(runtime.backupPolicy).rtoTargetMs});
       tx.set(operationRef, {
         version: 1,
         kind: "compute-engine-backup",
@@ -241,10 +244,17 @@ function normalizedPolicy(value = {}) {
     schedule: value.schedule || defaults.schedule,
     intervalMs: Number.isSafeInteger(Number(value.intervalMs)) && Number(value.intervalMs) >= SNAPSHOT_INTERVAL_MS ? Number(value.intervalMs) : defaults.intervalMs,
     retentionDays: value.retentionDays === undefined ? defaults.retentionDays : value.retentionDays,
+    rpoTargetMs: durationOrDefault(value.rpoTargetMs, DEFAULT_RPO_TARGET_MS),
+    rtoTargetMs: durationOrDefault(value.rtoTargetMs, DEFAULT_RTO_TARGET_MS),
     consistency,
     lastScheduledSlotMs: value.lastScheduledSlotMs || null,
     lastScheduledOperationId: value.lastScheduledOperationId || null,
   };
+}
+
+function durationOrDefault(value, fallback) {
+  const duration = Number(value);
+  return Number.isSafeInteger(duration) && duration > 0 ? duration : fallback;
 }
 
 function isEligible(runtime = {}) {

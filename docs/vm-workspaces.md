@@ -1405,11 +1405,12 @@ the receipt remains an evidence gate, not permission to switch authority by
 itself.
 
 Backups are separate from retained storage. The selected initial policy is
-daily crash-consistent snapshots with a 14-day retention target, plus an
-operator-rehearsed restore to a fresh disk/VM. Application-consistent captures
-are required before a migration cutover or any operation that claims a tighter
-RPO. Cleanup first fences admissions, confirms compute absence and disk
-detachment, and only then applies the explicit tombstone/backup policy.
+daily crash-consistent snapshots with a 14-day retention target, a 24-hour RPO
+target, and a one-hour RTO target for an operator-rehearsed restore to a fresh
+disk/VM. Application-consistent captures are required before a migration
+cutover or any operation that claims a tighter RPO. Cleanup first fences
+admissions, confirms compute absence and disk detachment, and only then applies
+the explicit tombstone/backup policy.
 
 The policy contract is implemented in
 `functions/vmBackupPolicy.helpers.js` and consumed by
@@ -1446,11 +1447,21 @@ migration fence exists. The worker records provider acceptance and deletion
 state, but it does not claim fresh-VM file/runtime verification.
 
 This is durable scheduling and provider-operation plumbing, not evidence of a
-live backup, restore rehearsal, measured RPO/RTO, Compute inventory, or actual
-cost dashboard. Fresh-VM verification, provider-operation reconciliation,
-stranded-resource inventory, numeric cost measurements, and disk-full/zone-loss
-runbooks remain release work. No production snapshot, restore, retention
-deletion, or synthetic-fixture mutation was invoked by this change.
+`functions/vmBackupRecovery.service.js` adds the durable restore boundary. It
+requires a verified owner-matched backup record and an opt-in VM policy before
+creating a fresh target-disk receipt. A runtime adapter must then attest the
+fresh VM's authenticated readiness, user-file digest, runtime-state digest, and
+startup-stage timings. The controller records a sanitized
+`vmBackupRecoveryReports_v2` report with measured RPO/RTO and fails closed on a
+digest or target mismatch; transient runtime readiness errors retain a bounded
+retry. The adapter is intentionally not wired to a production VM boot yet, so
+these reports are contract/test evidence rather than a live recovery claim.
+
+Fresh-VM verification with a real runtime adapter, asynchronous provider
+operation reconciliation, stranded-resource inventory, numeric cost
+measurements, and disk-full/zone-loss runbooks remain release work. No
+production snapshot, restore, retention deletion, or synthetic-fixture
+mutation was invoked by this change.
 
 The read-only inventory's `--list-objects` mode also checks shared-tree bucket
 ownership, HNS layout, generation-ready marker and original import control

@@ -29,6 +29,8 @@ test("backup policy selects daily crash-consistent snapshots and bounded retenti
     intervalMs: 24 * 60 * 60 * 1000,
     retentionDays: 14,
     maxRetentionDays: 90,
+    rpoTargetMs: 24 * 60 * 60 * 1000,
+    rtoTargetMs: 60 * 60 * 1000,
     defaultConsistency: "crash-consistent",
     migrationConsistency: "application-consistent",
   });
@@ -42,6 +44,7 @@ test("application-consistent records require a quiesce receipt", () => {
     sourceDisk: "disk-1", sourceGeneration: 1, consistency: "application-consistent", quiescedAt: capturedAt, capturedAt});
   assert.equal(record.recoverablePoint.sourceGeneration, 1);
   assert.equal(record.quiescedAt, capturedAt);
+  assert.deepEqual(record.recoveryTargets, {rpoMs: 24 * 60 * 60 * 1000, rtoMs: 60 * 60 * 1000});
 });
 
 test("retention planning never deletes in-progress, unverified, or migration snapshots", () => {

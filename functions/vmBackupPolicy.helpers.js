@@ -4,6 +4,8 @@ const VM_BACKUP_POLICY_VERSION = 1;
 const DEFAULT_SNAPSHOT_RETENTION_DAYS = 14;
 const MAX_SNAPSHOT_RETENTION_DAYS = 90;
 const SNAPSHOT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_RPO_TARGET_MS = SNAPSHOT_INTERVAL_MS;
+const DEFAULT_RTO_TARGET_MS = 60 * 60 * 1000;
 const BYTES_PER_GIB = 1024 ** 3;
 const CONSISTENCY_MODES = new Set(["crash-consistent", "application-consistent"]);
 const ACTIVE_BACKUP_STATES = new Set(["creating", "restoring", "verification-pending"]);
@@ -15,6 +17,8 @@ function backupPolicy() {
     intervalMs: SNAPSHOT_INTERVAL_MS,
     retentionDays: DEFAULT_SNAPSHOT_RETENTION_DAYS,
     maxRetentionDays: MAX_SNAPSHOT_RETENTION_DAYS,
+    rpoTargetMs: DEFAULT_RPO_TARGET_MS,
+    rtoTargetMs: DEFAULT_RTO_TARGET_MS,
     defaultConsistency: "crash-consistent",
     migrationConsistency: "application-consistent",
   };
@@ -53,6 +57,10 @@ function createBackupRecord(input = {}) {
     },
     state: "creating",
     verification: {state: "pending", verifiedAt: null, restoreOperationId: null},
+    recoveryTargets: {
+      rpoMs: durationValue(input.rpoTargetMs, DEFAULT_RPO_TARGET_MS, "rpo_target"),
+      rtoMs: durationValue(input.rtoTargetMs, DEFAULT_RTO_TARGET_MS, "rto_target"),
+    },
     retention: {retentionDays, expiresAt},
   };
 }
@@ -71,6 +79,7 @@ function markBackupVerified(record, evidence = {}) {
       diskName: evidence.diskName ? String(evidence.diskName) : null,
       runtimeReady: evidence.runtimeReady === true,
       fileDigest: evidence.fileDigest ? String(evidence.fileDigest) : null,
+      runtimeStateDigest: evidence.runtimeStateDigest ? String(evidence.runtimeStateDigest) : null,
     },
   };
 }
@@ -246,6 +255,14 @@ function retentionDaysValue(value) {
   return days;
 }
 
+function durationValue(value, fallback, label) {
+  const duration = value === undefined ? fallback : Number(value);
+  if (!Number.isSafeInteger(duration) || duration < 1 || duration > 365 * 24 * 60 * 60 * 1000) {
+    throw policyError(`vm_backup_${label}_invalid`);
+  }
+  return duration;
+}
+
 function positiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1) throw policyError(`vm_backup_${label}_invalid`);
@@ -285,6 +302,8 @@ module.exports = {
   ACTIVE_BACKUP_STATES,
   CONSISTENCY_MODES,
   DEFAULT_SNAPSHOT_RETENTION_DAYS,
+  DEFAULT_RPO_TARGET_MS,
+  DEFAULT_RTO_TARGET_MS,
   MAX_SNAPSHOT_RETENTION_DAYS,
   SNAPSHOT_INTERVAL_MS,
   VM_BACKUP_POLICY_VERSION,
