@@ -77,7 +77,7 @@ firebase emulators:exec --only firestore --project demo-mapache-cutover 'node --
 npm run docs:check
 ```
 
-1. For #616, the disposable clone-boot path has passed readiness and cleanup evidence, including empty validation credentials, retry/recovery of the clone identity, lease fencing and ID-checked teardown. A lease deadline does not delete cloud resources. Remaining #616 work is writer fencing/drainage, verified authority switching and rollback.
+1. For #616, the disposable clone-boot path has passed readiness and cleanup evidence, including empty validation credentials, retry/recovery of the clone identity, lease fencing and ID-checked teardown. A lease deadline does not delete cloud resources. The guarded legacy Functions and Firestore/Storage rules were deployed on 2026-11-24; remaining #616 work is drainage evidence, verified authority switching and rollback.
 2. Verify deployed legacy writer fencing and drainage, including old upload URIs, outstanding operations and integration bindings. Bind verified source, import and clone evidence to the atomic authority switch and rehearse rollback after real VM writes.
 3. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. Extend the disk import proof to representative complete data, capacity and recovery, then validate the runtime and app on the imported disk.
 4. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.

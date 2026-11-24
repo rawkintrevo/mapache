@@ -981,8 +981,10 @@ creation and deletion.
 
 The emulator verifies owner metadata edits, denial of direct provider and
 source edits, privacy of the fence document, denial under an empty fence,
-and behavior after fence release. These rule changes are in the draft;
-production rollout must be coordinated with the backend writer checks.
+and behavior after fence release. The rules and backend writer checks were
+deployed together on 2026-11-24 with
+`firebase deploy --only functions --project pi-agents-cloud` and
+`firebase deploy --only firestore:rules,storage --project pi-agents-cloud`.
 Rules apply to Firebase clients. Admin SDK operations, existing session
 dispatch, queued workers and signed Storage writes need their own admission
 and drain checks.
@@ -1023,10 +1025,14 @@ It can still poll an operation already submitted before the fence. The
 preflight includes the fence in its observation digest and reports
 unfinished provisioning or resize records even if the session says stopped.
 Runtime-side writers and operations without a durable claim still require
-provider reconciliation and confirmed quiesce before migration.
-Only the updated read-only preflight is deployed in this increment. The
-legacy server guards and Firestore rules require coordinated rollout and do
-not yet authorize creating production fences.
+provider reconciliation and confirmed quiesce before migration. The guarded
+legacy handlers, Firestore/Storage rules, and read-only preflight/status are
+deployed as of 2026-11-24; representative active revisions are `api-00316-riq`,
+`provisionqueuedsession-00150-gug`, `provisionautomationrun-00089-des`,
+`reconcileworkspaceruntimeschedules-00058-vab`,
+`vmmigrationpreflight-v2-00014-ror`, and `vmmigrationstatus-v2-00013-suh`, all
+running as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. Deployment
+does not authorize creating production migration fences or switching authority.
 
 The draft legacy upload issuer now records its intent under
 `vmLegacyUploads_v2/{workspaceId}/pending/{operationId}` in a transaction
@@ -1040,8 +1046,10 @@ reconcile it. The preflight distinguishes unresolved issuance from an
 active drain deadline.
 
 Cloud Storage resumable session URIs remain usable for up to one week.
-The current legacy deployment can still issue untracked URIs. An empty
-ledger is insufficient evidence that there are no active upload sessions.
+New issuance now records the pending intent before returning a URI, but URIs
+issued by older revisions remain possible until their provider sessions expire
+or are reconciled. An empty ledger is insufficient evidence that there are no
+active upload sessions.
 Disabling all old issuance paths and proving that earlier sessions have
 expired or been canceled remains part of the final capture gate. Direct
 Firebase Storage SDK writes have a separate draft guard in `storage.rules`.
@@ -1052,7 +1060,7 @@ while preserving owner reads and writes in sibling prefixes. The key is the
 actual Storage path segment, which can differ from the Firestore workspace
 ID. Before creating a fence, the coordinator must verify that the bucket and
 prefix uniquely identify the source and account for custom paths and aliases.
-The rules need cross-service Firestore access and a coordinated rollout.
+The rules now have the required cross-service Firestore access in production.
 Other GCS writers require their own quiesce and access revocation checks.
 [Cloud Storage resumable uploads](https://docs.cloud.google.com/storage/docs/resumable-uploads)
 
@@ -1066,8 +1074,8 @@ storage identity. A successful provider response clears the claim. An
 ambiguous failure or an interrupted worker leaves the claim for
 reconciliation. Preflight reports `legacy_shared_storage_iam_unresolved`
 while any claim remains, and the coordinator can reserve a fence but cannot
-record quiesce. Deployed legacy handlers may still have untracked work until
-the staged guards roll out and existing requests drain. A shared-tree
+record quiesce. The guarded handlers are deployed, while claims or provider
+requests that began before the rollout still require reconciliation. A shared-tree
 source still requires its own Storage scope and writer-reconciliation proof.
 
 The legacy `scripts/workspace-storage-recovery.mjs` CLI uses
@@ -1088,7 +1096,8 @@ The Firestore/Storage emulator test runs with
 `firebase emulators:exec --only firestore,storage --project mapache-rules-test 'node storage.rules.test.cjs && node firestore.rules.test.cjs'`.
 It covers owner reads under a fence, refusal of fenced creates/replacements/
 deletes, a neighboring unfenced prefix, foreign access and release. Production
-changes for this increment are limited to the read-only preflight.
+rules and guarded Functions are deployed, but no production migration fence has
+been created.
 
 Compute absence and final Storage generations need separate verification after
 quiesce. Do not reuse the legacy migration record as an authoritative
