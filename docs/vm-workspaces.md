@@ -325,9 +325,11 @@ error objects, which can contain bootstrap credentials. Health-not-ready retries
 wait at least 15 seconds and are picked up by the minute scheduler.
 
 The first controller is deliberately limited to admitted canaries: reconciliation
-scans up to 100 pending operations and runs up to four at a time. Paginated cohort
-reconciliation, operator repair/UI flows,
-resource resizing, richer machine properties/capabilities and end-to-end worker
+scans pages of up to 100 pending operations, walking by document-ID cursor across
+at most ten pages until it finds four eligible operations, and runs those four at
+a time. A page cap keeps the minute-trigger invocation bounded; a later tick can
+continue through the remaining cohort. Operator repair/UI flows, resource
+resizing, richer machine properties/capabilities and end-to-end worker
 termination tests remain required before broad rollout. Unit tests inject loss
 after each external phase and verify stable operation/instance IDs, admission,
 duplicate suppression and readiness fencing; these are not real process-kill
