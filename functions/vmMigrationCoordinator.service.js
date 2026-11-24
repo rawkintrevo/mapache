@@ -5,6 +5,7 @@ const {httpError} = require("./backendUtils.helpers");
 const {vmMigrationFenceRef} = require("./vmMigrationFence.helpers");
 const {identify, observeVmMigration} = require("./vmMigrationPreflight.service");
 const {covers, resolveMigrationPrefix} = require("./vmMigrationStorageScope.helpers");
+const {prepareStorageCapture, MAX_CAPTURE_CHUNKS} = require("./vmMigrationStorageObservation.service");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -16,6 +17,7 @@ const DRAIN_AFTER_FREEZE = new Set([
 ]);
 const ALIAS_LIMIT = 500;
 const DIGEST = /^[a-f0-9]{64}$/;
+const versionStamp = ({updateTime}) => [updateTime.seconds, updateTime.nanoseconds];
 
 function ownsFence(snapshot, identity) {
   return snapshot.exists && ["workspaceId", "operationId", "ownerUid"].every(key => snapshot.get(key) === identity[key]);
@@ -50,6 +52,8 @@ function createVmMigrationCoordinator({
     return {workspaceId: record.workspaceId, operationId: record.operationId, phase: record.phase,
       sourceGeneration: record.sourceGeneration, reservedAtMs: record.reservedAtMs, releasedAtMs: record.releasedAtMs ?? null,
       quiescedAtMs: record.quiesce?.confirmedAtMs ?? null,
+      prefixCapturedAtMs: record.prefixCapture?.confirmedAtMs ?? null,
+      prefixCapturedObjects: record.prefixCapture?.objectCount ?? null,
       readyForCutover: false};
   }
   function requireOwner(record, input) {
@@ -96,13 +100,13 @@ function createVmMigrationCoordinator({
       return status(record);
     });
   }
-  async function readQuiesceState(transaction, input, {operation, fence}) {
+  async function readFencedSource(transaction, input, {operation, fence}, {phase, completed, invalidPhase}) {
     const previous = await transaction.get(operation);
     if (!previous.exists) throw httpError(404, "vm_migration_operation_not_found");
     const record = previous.data();
     requireOwner(record, input);
-    if (record.phase === "quiesced") return {record};
-    if (record.phase !== "reserved") throw httpError(409, "vm_migration_quiesce_phase_invalid");
+    if (completed.includes(record.phase)) return {record};
+    if (record.phase !== phase) throw httpError(409, invalidPhase);
     const observation = await observeVmMigration(transaction, {db, workspaceId: input.workspaceId, ownerUid: input.ownerUid, now});
     const scope = resolveMigrationPrefix(observation.workspace, input.ownerUid, defaultBucket);
     const prefixFence = storageFenceRef(db, scope, input.ownerUid);
@@ -120,8 +124,23 @@ function createVmMigrationCoordinator({
     }
     if (candidates.size > ALIAS_LIMIT || candidates.docs.some(doc => doc.id !== input.workspaceId &&
         referencesPrefix(doc.data(), scope, defaultBucket))) throw httpError(409, "vm_migration_storage_prefix_conflict");
-    const stamps = [previous, workspaceFence, prefix].map(({updateTime}) => [updateTime.seconds, updateTime.nanoseconds]);
-    return {record, observation, authorityStamps: JSON.stringify(stamps)};
+    const fenceVersions = JSON.stringify([workspaceFence, prefix].map(versionStamp));
+    return {record, observation, fenceVersions, authorityStamps: JSON.stringify([versionStamp(previous), fenceVersions])};
+  }
+
+  async function readProviders(input, {workspace, sessions}, includeInventory = false) {
+    const identity = {workspace, workspaceId: input.workspaceId, ownerUid: input.ownerUid};
+    const [compute, storage] = await Promise.all([
+      inspectCompute(sessions, identity), inspectStorage({...identity, sessions}, {includeInventory}),
+    ]);
+    if (compute?.recordedComputeClear !== true || compute.discovery?.scannedRegionsClear !== true ||
+        !Array.isArray(compute.blockers) || compute.blockers.length || !DIGEST.test(compute.providerObservationSha256 || "") ||
+        !DIGEST.test(compute.discovery.evidenceSha256 || "")) throw httpError(409, "vm_migration_compute_not_quiesced");
+    if (storage?.stable !== true || !Array.isArray(storage.blockers) || storage.blockers.length ||
+        !DIGEST.test(storage.firstSha256 || "") ||
+        storage.firstSha256 !== storage.secondSha256) throw httpError(409, "vm_migration_storage_not_quiesced");
+    return {providerSha256: compute.providerObservationSha256, discoverySha256: compute.discovery.evidenceSha256,
+      storageSha256: storage.secondSha256, inventory: storage.inventory};
   }
 
   async function confirmQuiesced(input) {
@@ -129,29 +148,103 @@ function createVmMigrationCoordinator({
     if (!inspectCompute || !inspectStorage || !await authorize(input, "quiesce")) {
       throw httpError(409, "vm_migration_quiesce_unverified");
     }
-    const before = await db.runTransaction(transaction => readQuiesceState(transaction, input, references), {readOnly: true});
-    if (before.record.phase === "quiesced") return status(before.record);
-    const {workspace, sessions} = before.observation;
-    const identity = {workspace, workspaceId: input.workspaceId, ownerUid: input.ownerUid};
-    const [compute, storage] = await Promise.all([inspectCompute(sessions, identity), inspectStorage({...identity, sessions})]);
-    if (compute?.recordedComputeClear !== true || compute.discovery?.scannedRegionsClear !== true ||
-        !Array.isArray(compute.blockers) || compute.blockers.length || !DIGEST.test(compute.providerObservationSha256 || "") ||
-        !DIGEST.test(compute.discovery.evidenceSha256 || "")) throw httpError(409, "vm_migration_compute_not_quiesced");
-    if (storage?.stable !== true || !Array.isArray(storage.blockers) || storage.blockers.length ||
-        !DIGEST.test(storage.firstSha256 || "") ||
-        storage.firstSha256 !== storage.secondSha256) throw httpError(409, "vm_migration_storage_not_quiesced");
-
+    const read = transaction => readFencedSource(transaction, input, references, {
+      phase: "reserved", completed: ["quiesced", "prefix-captured"], invalidPhase: "vm_migration_quiesce_phase_invalid",
+    });
+    const before = await db.runTransaction(read, {readOnly: true});
+    if (!before.observation) return status(before.record);
+    const {providerSha256, discoverySha256, storageSha256} = await readProviders(input, before.observation);
     return db.runTransaction(async transaction => {
-      const current = await readQuiesceState(transaction, input, references);
-      if (current.record.phase === "quiesced") return status(current.record);
+      const current = await read(transaction);
+      if (!current.observation) return status(current.record);
       if (before.observation.observationSha256 !== current.observation.observationSha256 ||
           before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_quiesce_observation_stale");
       const update = {phase: "quiesced", quiesce: {confirmedAtMs: now(), observationSha256: current.observation.observationSha256,
-        providerSha256: compute.providerObservationSha256, discoverySha256: compute.discovery.evidenceSha256,
-        storageSha256: storage.secondSha256}};
+        fenceVersions: current.fenceVersions, providerSha256, discoverySha256, storageSha256}};
       transaction.update(references.operation, update);
       return status({...current.record, ...update});
     });
+  }
+
+  async function capturePrefix(input) {
+    const references = refs(input);
+    if (!inspectCompute || !inspectStorage || !await authorize(input, "capture-prefix")) {
+      throw httpError(409, "vm_migration_prefix_capture_unverified");
+    }
+    const read = transaction => readFencedSource(transaction, input, references, {
+      phase: "quiesced", completed: ["prefix-captured"], invalidPhase: "vm_migration_prefix_capture_phase_invalid",
+    });
+    const before = await db.runTransaction(read, {readOnly: true});
+    if (!before.observation) return status(before.record);
+    const {quiesce, scope} = before.record;
+    if (!matchesQuiesce(before)) {
+      throw httpError(409, "vm_migration_prefix_capture_source_changed");
+    }
+    const providers = await readProviders(input, before.observation, true);
+    if (["providerSha256", "discoverySha256", "storageSha256"].some(key => providers[key] !== quiesce[key])) {
+      throw httpError(409, "vm_migration_prefix_capture_provider_changed");
+    }
+    let prepared;
+    try {
+      prepared = prepareStorageCapture(scope, providers.inventory, quiesce.storageSha256);
+    } catch (error) {
+      throw httpError(409, error.message);
+    }
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (!current.observation) return status(current.record);
+      if (before.observation.observationSha256 !== current.observation.observationSha256 ||
+          before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_prefix_capture_stale");
+      const {sha256, chunks, objectCount} = prepared;
+      const inventory = references.operation.collection("prefixInventory");
+      for (const [index, rowsJson] of chunks.entries()) {
+        transaction.create(inventory.doc(String(index)), {rowsJson});
+      }
+      const update = {phase: "prefix-captured",
+        prefixCapture: {version: 1, confirmedAtMs: now(), sha256, chunkCount: chunks.length, objectCount}};
+      transaction.update(references.operation, update);
+      return status({...current.record, ...update});
+    });
+  }
+
+  function matchesQuiesce({record, observation, fenceVersions}) {
+    return record.quiesce?.observationSha256 === observation.observationSha256 &&
+      record.quiesce.fenceVersions === fenceVersions;
+  }
+
+  async function getCapturedPrefix(input) {
+    const references = refs(input);
+    if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
+    return db.runTransaction(async transaction => {
+      const current = await readFencedSource(transaction, input, references, {
+        phase: "prefix-captured", completed: [], invalidPhase: "vm_migration_prefix_capture_phase_invalid",
+      });
+      if (!matchesQuiesce(current)) throw httpError(409, "vm_migration_prefix_capture_source_changed");
+      const {prefixCapture: capture, scope, quiesce} = current.record;
+      if (capture?.version !== 1 || capture.sha256 !== quiesce.storageSha256 ||
+          !Number.isSafeInteger(capture.chunkCount) || capture.chunkCount < 0 || capture.chunkCount > MAX_CAPTURE_CHUNKS) {
+        throw httpError(409, "legacy_storage_capture_invalid");
+      }
+      const inventory = references.operation.collection("prefixInventory");
+      const chunks = await Promise.all(Array.from({length: capture.chunkCount}, (_, index) =>
+        transaction.get(inventory.doc(String(index)))));
+      try {
+        const rows = chunks.flatMap(snapshot => {
+          const value = JSON.parse(snapshot.get("rowsJson"));
+          if (!Array.isArray(value)) throw Error("invalid capture chunk");
+          return value;
+        });
+        const prepared = prepareStorageCapture(scope, rows, capture.sha256);
+        if (prepared.objectCount !== capture.objectCount || prepared.chunks.some((value, index) =>
+          value !== chunks[index]?.get("rowsJson")) || prepared.chunks.length !== capture.chunkCount) {
+          throw Error("invalid capture chunk");
+        }
+        const {workspaceId, ownerUid, operationId, sourceGeneration} = current.record;
+        return {workspaceId, ownerUid, operationId, sourceGeneration, scope, sha256: capture.sha256, rows};
+      } catch {
+        throw httpError(409, "legacy_storage_capture_invalid");
+      }
+    }, {readOnly: true});
   }
 
   async function abort(input) {
@@ -163,7 +256,7 @@ function createVmMigrationCoordinator({
       const record = previous.data();
       requireOwner(record, input);
       if (record.phase === "aborted") return status(record);
-      if (!["reserved", "quiesced"].includes(record.phase)) throw httpError(409, "vm_migration_abort_phase_invalid");
+      if (!["reserved", "quiesced", "prefix-captured"].includes(record.phase)) throw httpError(409, "vm_migration_abort_phase_invalid");
       const prefixFence = storageFenceRef(db, record.scope, input.ownerUid);
       const [workspace, workspaceFence, prefix, destination] = await Promise.all([
         transaction.get(source), transaction.get(fence), transaction.get(prefixFence),
@@ -186,7 +279,7 @@ function createVmMigrationCoordinator({
       return status({...record, ...update});
     });
   }
-  return {getStatus, reserve, confirmQuiesced, abort};
+  return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

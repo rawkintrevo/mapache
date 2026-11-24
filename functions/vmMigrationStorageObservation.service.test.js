@@ -49,3 +49,13 @@ test("foreign Storage, repeated listing cursors and out-of-prefix metadata fail 
   assert.deepEqual((await run(async () => ({objects: [{...archive, name: prefix + "-other/object"}]}))(identity)).blockers,
       ["legacy_storage_listing_invalid"]);
 });
+
+test("inventory is internal and is only returned for a clear observation", async () => {
+  const observe = run(async () => ({objects: [record("z"), archive, record("a")]}));
+  const result = await observe(identity, {includeInventory: true});
+  assert.deepEqual(result.inventory.map(([name]) => name), [archive.name, record("a").name, record("z").name]);
+  assert.ok(!Object.hasOwn(await observe(identity), "inventory"));
+  const incomplete = await run(async () => ({objects: [record("a")]}))(identity, {includeInventory: true});
+  assert.ok(!Object.hasOwn(incomplete, "inventory"));
+  assert.ok(incomplete.blockers.includes("legacy_persistent_home_archive_missing"));
+});

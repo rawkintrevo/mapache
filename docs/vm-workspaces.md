@@ -1105,7 +1105,7 @@ uploads remain blockers for final capture after the reservation.
 
 Operation IDs are scoped to a workspace. Repeating the same request returns
 the existing operation. A different observation cannot reuse its ID.
-Aborting a reserved or quiesced operation atomically releases both fences only if they
+Aborting a reserved, quiesced or prefix-captured operation atomically releases both fences only if they
 still belong to it, the source scope and generation are unchanged, and no
 VM authority exists. The reservation, quiesce and abort methods require a
 trusted admission policy. Production Functions expose the existing preflight
@@ -1125,15 +1125,32 @@ Successful retries return the existing timestamped receipt.
 A quiesce policy must attest rollout of all writer fences and verify drainage
 outside those bounded observations, including existing runner operations,
 regions and revisions outside the scan, previously issued upload URIs, and
-other Storage writers. Status can report the quiesce timestamp and still
-reports `readyForCutover=false`. A later capture must revalidate the receipt
-and acquire generation-pinned content. Capture, authority switching and
-rollback after VM writes require further implementation and validation.
+other Storage writers.
 
-Emulator tests exercise reservation, quiesce and release with real Firestore
+The internal `capturePrefix` transition rechecks the Firestore state and
+versions of both fences against the quiesce receipt. It repeats Compute
+discovery and the Storage generation comparison. Only matching evidence
+can commit. It writes the ordered object inventory in chunks under the
+operation's private `prefixInventory` subcollection and updates the phase
+to `prefix-captured` in the same transaction. The inventory identifies the
+exact name, generation, metageneration, length and CRC32C of each object.
+The capture is capped at 3,000 objects and 4 MiB of serialized chunk data.
+The internal `getCapturedPrefix` reader checks the record, source and
+fences and reconstructs the inventory only when it hashes to the receipt.
+An abort leaves the chunks for operator inspection and disables this
+reader for the operation.
+
+Status exposes only the timestamp and count for the captured prefix and
+continues to report `readyForCutover=false`. The inventory pins the owned
+prefix. Source data outside it, including owner-wide tools and unsupported
+shared trees, requires separate authority and reconciliation. Content
+download and verification at these pinned generations, import, authority
+switching and rollback after VM writes remain open.
+
+Emulator tests exercise reservation, quiesce, prefix capture and release with real Firestore
 transactions. They cover competing requests, stale observations, duplicate
-retries, alias conflicts, incomplete provider observations, blocked Storage
-and refusal to release after authority changes.
+retries, alias conflicts, incomplete provider observations, blocked Storage,
+capture corruption and refusal to release after authority changes.
 
 ```bash
 firebase emulators:exec --only firestore --project demo-mapache-cutover \

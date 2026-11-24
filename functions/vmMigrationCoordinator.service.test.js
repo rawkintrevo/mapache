@@ -12,6 +12,7 @@ const {createMachineConfigurationService} = require("./machineConfiguration.serv
 const {createWorkspaceStorageBackupService} = require("./workspaceStorageBackup.service");
 const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSchedule.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
+const {createVmMigrationStorageObserver} = require("./vmMigrationStorageObservation.service");
 
 test("reservation and abort are atomic under concurrent callers and fail closed on changed authority", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
@@ -385,6 +386,73 @@ test("migration detects a pre-fence scheduler lease and denies its subsequent Cl
   } finally {
     continueStop.resolve();
     await reconcile?.catch(() => {});
+    await app.delete();
+  }
+});
+
+test("prefix capture binds immutable object generations to the fenced quiesce receipt", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucket = "fixture-bucket";
+    const prefix = `workspaces/${ownerUid}/staging`;
+    const workspace = db.collection("workspaces").doc(workspaceId);
+    await workspace.create({ownerUid, bucket, storagePrefix: prefix, agentRuntimeGeneration: 7});
+    const operation = db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/capture`);
+    const chunks = operation.collection("prefixInventory");
+    const prefixFence = db.doc(`vmMigrationStorageFences_v2/${bucket}/owners/${ownerUid}/prefixes/staging`);
+    let generation = "100";
+    let changeOperationDuringRead = false;
+    const inspectStorage = createVmMigrationStorageObserver({defaultBucket: bucket, listPage: async () => ({
+      objects: Array.from({length: 70}, (_, index) => ({name: `${prefix}/private-${index.toString().padStart(2, "0")}`,
+        generation, metageneration: "1", size: "8", crc32c: "valid"})),
+    })});
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true, inspectStorage,
+      inspectCompute: async () => {
+        if (changeOperationDuringRead) await operation.update({concurrentChange: true});
+        return {recordedComputeClear: true, providerObservationSha256: "a".repeat(64), blockers: [],
+          discovery: {scannedRegionsClear: true, evidenceSha256: "b".repeat(64)}};
+      },
+    });
+    const source = {workspaceId, ownerUid};
+    const {observationSha256} = await createVmMigrationPreflight({db})(source);
+    const input = {...source, operationId: "capture", observationSha256};
+    await coordinator.reserve(input);
+    await assert.rejects(coordinator.capturePrefix(input), {publicMessage: "vm_migration_prefix_capture_phase_invalid"});
+    await coordinator.confirmQuiesced(input);
+    generation = "101";
+    await assert.rejects(coordinator.capturePrefix(input), {publicMessage: "vm_migration_prefix_capture_provider_changed"});
+    generation = "100";
+    changeOperationDuringRead = true;
+    await assert.rejects(coordinator.capturePrefix(input), {publicMessage: "vm_migration_prefix_capture_stale"});
+    assert.equal((await chunks.get()).size, 0);
+    changeOperationDuringRead = false;
+    const captured = await coordinator.capturePrefix(input);
+    assert.equal(captured.phase, "prefix-captured");
+    assert.equal(captured.prefixCapturedObjects, 70);
+    assert.equal(captured.readyForCutover, false);
+    assert.ok(!JSON.stringify(captured).includes("private-"));
+    assert.deepEqual(await coordinator.capturePrefix(input), captured);
+    assert.equal((await chunks.get()).size, 2);
+    const inventory = await coordinator.getCapturedPrefix(input);
+    assert.equal(inventory.operationId, input.operationId);
+    assert.equal(inventory.sourceGeneration, 7);
+    assert.equal(inventory.rows.length, 70);
+    assert.deepEqual(inventory.rows[0], [`${prefix}/private-00`, ["100", "1", "8", "valid"]]);
+    const chunk = chunks.doc("0");
+    const original = (await chunk.get()).get("rowsJson");
+    await chunk.update({rowsJson: original.replace('"100"', '"101"')});
+    await assert.rejects(coordinator.getCapturedPrefix(input), {publicMessage: "legacy_storage_capture_invalid"});
+    await chunk.update({rowsJson: original});
+    await prefixFence.update({changedAt: 1});
+    await assert.rejects(coordinator.getCapturedPrefix(input), {publicMessage: "vm_migration_prefix_capture_source_changed"});
+    await coordinator.abort(input);
+    await assert.rejects(coordinator.getCapturedPrefix(input), {publicMessage: "vm_migration_prefix_capture_phase_invalid"});
+  } finally {
     await app.delete();
   }
 });
