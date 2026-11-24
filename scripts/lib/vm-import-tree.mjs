@@ -25,6 +25,13 @@ export async function verifyEntry(target, entry) {
     if (hash.digest('hex') !== entry.sha256) fail('import_tree_destination_changed');
   } finally { await handle.close(); }
 }
+async function verifyDirectory(target, mode, complete) {
+  const stat = await fs.lstat(target);
+  const actualMode = stat.mode & 0o7777;
+  if (!stat.isDirectory() || stat.uid !== process.getuid() ||
+      (actualMode !== mode && (complete || actualMode !== 0o700))) fail('import_stage_directory_invalid');
+}
+
 async function inspectTree(root, entries, directories, complete) {
   const found = new Set();
   async function visit(relative) {
@@ -32,7 +39,7 @@ async function inspectTree(root, entries, directories, complete) {
       const child = relative ? `${relative}/${name}` : name;
       const target = path.join(root, child);
       if (directories.has(child)) {
-        await plainDirectory(target); await visit(child);
+        await verifyDirectory(target, directories.get(child), complete); await visit(child);
       } else {
         const entry = entries.get(child);
         if (!entry) fail('import_tree_unexpected_entry');
@@ -42,7 +49,7 @@ async function inspectTree(root, entries, directories, complete) {
     }
   }
   await visit('');
-  if (complete && [...directories, ...entries.keys()].some(name => !found.has(name))) fail('import_tree_missing_entry');
+  if (complete && [...directories.keys(), ...entries.keys()].some(name => !found.has(name))) fail('import_tree_missing_entry');
 }
 async function copySlice({source, temporary, entry}) {
   const input = await fs.open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -65,6 +72,12 @@ async function copySlice({source, temporary, entry}) {
 // Assemble only the selected checkpoint in its owned private stage. A checkpoint
 // tree is NOT a complete machine disk and cannot authorize a provider cutover.
 export async function assembleCheckpointTree({plan, staged, afterPublish = async () => {}}) {
+  return assembleStagedTree({plan, staged, afterPublish, receiptName: 'checkpoint-tree.json',
+    scope: 'selected checkpoint tree verified; not a complete machine import or cutover approval'});
+}
+
+// Both callers supply a verified plan within an exclusively managed stage.
+export async function assembleStagedTree({plan, staged, receiptName, scope, afterPublish = async () => {}}) {
   if (digest(JSON.stringify(plan.document)) !== plan.sha256 || staged.sourcePlanSha256 !== plan.sha256 ||
       JSON.stringify(staged.entries.map(({stagedObjectKey: _key, ...entry}) => entry)) !== JSON.stringify(plan.document.entries)) fail('import_tree_plan_changed');
   const stage = staged.stage;
@@ -74,20 +87,43 @@ export async function assembleCheckpointTree({plan, staged, afterPublish = async
   const identity = JSON.parse(identityBytes);
   if (digest(identityBytes) !== stage.identitySha256 || identity.sourcePlanSha256 !== plan.sha256 ||
       identity.workspaceId !== plan.document.workspaceId || identity.ownerUid !== plan.document.ownerUid) fail('import_tree_identity_mismatch');
-  const entries = new Map(staged.entries.map(entry => [entry.path, entry]));
-  const directories = new Set();
-  for (const entry of entries.values()) {
+  const entries = new Map();
+  const directories = new Map();
+  for (const entry of staged.entries) {
+    if (typeof entry.path !== 'string' || /[\\\0]/.test(entry.path) ||
+        entry.path.split('/').some(part => !part || part === '.' || part === '..') ||
+        entries.has(entry.path) || directories.has(entry.path)) fail('import_tree_path_invalid');
+    if (entry.kind === 'directory') {
+      if (![0o700, 0o755].includes(entry.mode)) fail('import_tree_directory_mode_invalid');
+      directories.set(entry.path, entry.mode);
+    } else {
+      if (!['file', 'symlink'].includes(entry.kind)) fail('import_tree_entry_invalid');
+      entries.set(entry.path, entry);
+    }
     if (entry.kind === 'file' && !/^[a-f0-9]{64}$/.test(entry.stagedObjectKey || '')) fail('import_tree_source_invalid');
+  }
+  for (const entry of staged.entries) {
     let parent = path.posix.dirname(entry.path);
-    while (parent !== '.') { directories.add(parent); parent = path.posix.dirname(parent); }
+    while (parent !== '.') {
+      if (entries.has(parent)) fail('import_tree_path_invalid');
+      if (!directories.has(parent)) directories.set(parent, 0o700);
+      parent = path.posix.dirname(parent);
+    }
   }
   const tree = path.join(stage.root, 'tree');
   const partials = path.join(stage.root, 'tree-partials');
   await publishRecord(stage.root, 'tree-plan.json', Buffer.from(JSON.stringify({sourcePlanSha256: plan.sha256, entries: staged.entries})));
   await directory(tree); await directory(partials); await syncDirectory(stage.root);
-  await inspectTree(tree, entries, directories, false);
-  for (const relative of [...directories].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
-    await directory(path.join(tree, relative)); await syncDirectory(path.dirname(path.join(tree, relative)));
+  const complete = await pathExists(path.join(stage.root, receiptName));
+  await inspectTree(tree, entries, directories, complete);
+  const ordered = [...directories].sort(([a], [b]) => a.split('/').length - b.split('/').length || a.localeCompare(b));
+  for (const [relative, mode] of ordered) {
+    const target = path.join(tree, relative);
+    if (!await pathExists(target)) {
+      await fs.mkdir(target, {mode: 0o700});
+      await syncDirectory(path.dirname(target));
+    }
+    await verifyDirectory(target, mode, complete);
   }
   for (const entry of entries.values()) {
     const target = path.join(tree, entry.path);
@@ -108,10 +144,21 @@ export async function assembleCheckpointTree({plan, staged, afterPublish = async
     }
     await verifyEntry(target, entry);
   }
+  for (const [relative, mode] of ordered.reverse()) {
+    const target = path.join(tree, relative);
+    if (((await fs.lstat(target)).mode & 0o7777) === mode) continue;
+    const handle = await fs.open(target, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try { await handle.chmod(mode); await handle.sync(); } finally { await handle.close(); }
+  }
   await inspectTree(tree, entries, directories, true);
   const receipt = {schemaVersion: 1, sourcePlanSha256: plan.sha256, files: staged.entries.filter(e => e.kind === 'file').length,
     symlinks: staged.entries.filter(e => e.kind === 'symlink').length, directories: directories.size,
-    scope: 'selected checkpoint tree verified; not a complete machine import or cutover approval'};
-  await publishRecord(stage.root, 'checkpoint-tree.json', Buffer.from(JSON.stringify(receipt)));
+    scope};
+  await publishRecord(stage.root, receiptName, Buffer.from(JSON.stringify(receipt)));
   return receipt;
+}
+
+async function pathExists(target) {
+  try { await fs.lstat(target); return true; }
+  catch (error) { if (error.code === 'ENOENT') return false; throw error; }
 }

@@ -6,7 +6,7 @@ import {Readable} from 'node:stream';
 import * as fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {planOwnerToolsImport, stageOwnerToolsImport} from './vm-owner-tools-import.mjs';
+import {assembleOwnerToolsTree, planOwnerToolsImport, stageOwnerToolsImport} from './vm-owner-tools-import.mjs';
 const require = createRequire(import.meta.url);
 const {CRC32C} = require('../../functions/node_modules/@google-cloud/storage');
 const {userToolsStorageForOwner} = require('../../functions/userToolsStorage.service.js');
@@ -33,6 +33,21 @@ test('owner mount semantics, empty/implicit directories and cloud checksums surv
   assert.equal(result.summary.files, 1); assert.equal(result.summary.directoryMarkers, 2); assert.equal(result.summary.implicitDirectories, 1);
   assert.equal(result.summary.verifiedBytes, 9);
   await stageOwnerToolsImport({...options, openSource: () => assert.fail('resume should use verified objects')});
+  await assert.rejects(assembleOwnerToolsTree({plan, staged: result, afterPublish: () => {
+    throw Error('interrupted_after_publication');
+  }}), /interrupted_after_publication/);
+  const receipt = await assembleOwnerToolsTree({plan, staged: result});
+  assert.equal(receipt.files, 1);
+  const home = path.join(options.root, 'tree/home/.local');
+  assert.equal(await fs.readFile(path.join(home, 'bin/tool'), 'utf8'), 'tool-data');
+  const empty = path.join(home, 'empty');
+  assert.deepEqual(await fs.readdir(empty), []);
+  for (const name of [empty, path.join(home, 'bin/tool'), path.join(home, 'bin'), home]) {
+    assert.equal((await fs.stat(name)).mode & 0o777, 0o755);
+  }
+  assert.deepEqual(await assembleOwnerToolsTree({plan, staged: result}), receipt);
+  await fs.chmod(empty, 0o700);
+  await assert.rejects(assembleOwnerToolsTree({plan, staged: result}), /directory_invalid/);
 });
 test('wrong owner, incomplete listing, ambiguous metadata, conflicts and budget fail before reads', async () => {
   for (const change of [a => { a.ownerUid = 'foreign'; }, a => { a.bucketName = ''; }, a => { a.listingComplete = false; },

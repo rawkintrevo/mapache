@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import path from 'node:path';
 import {openImportStage, stageImportObject, publishRecord} from './vm-import-stage.mjs';
+import {assembleStagedTree} from './vm-import-tree.mjs';
 const require = createRequire(import.meta.url);
 const {CRC32C} = require('../../functions/node_modules/@google-cloud/storage');
 const {userToolsStorageForOwner} = require('../../functions/userToolsStorage.service.js');
@@ -81,9 +82,10 @@ export async function stageOwnerToolsImport({root, operationId, plan, openSource
   if (!Number.isSafeInteger(maxBytes) || !Number.isSafeInteger(total) || total > maxBytes) fail('tools_budget_exceeded');
   const stage = await openImportStage({root, ownerUid: document.ownerUid, workspaceId: document.workspaceId, operationId, sourcePlanSha256: plan.sha256});
   const entries = [];
+  const objects = new Map(document.objects.map(object => [object.objectPath, object]));
   for (const entry of document.entries) {
     if (entry.kind === 'directory') { entries.push({...entry}); continue; }
-    const source = document.objects.find(object => object.objectPath === entry.objectPath);
+    const source = objects.get(entry.objectPath);
     const object = await stageImportObject({stage, descriptor: source, openSource, maxBytes});
     entries.push({...entry, stagedObjectKey: object.key});
   }
@@ -91,4 +93,14 @@ export async function stageOwnerToolsImport({root, operationId, plan, openSource
   return {stage, entries, summary: {files: entries.filter(e => e.kind === 'file').length, directoryMarkers: entries.filter(e => e.kind === 'directory' && !e.implicit).length,
     implicitDirectories: entries.filter(e => e.implicit).length,
     verifiedBytes: total, sourcePlanSha256: plan.sha256, scope: 'owner tools staged; source sharing, merge and destination assembly not changed'}};
+}
+
+export async function assembleOwnerToolsTree({plan, staged, afterPublish}) {
+  return assembleStagedTree({
+    plan,
+    staged: {...staged, sourcePlanSha256: staged.summary.sourcePlanSha256},
+    afterPublish,
+    receiptName: 'owner-tools-tree.json',
+    scope: 'selected owner tools verified in a private tree',
+  });
 }

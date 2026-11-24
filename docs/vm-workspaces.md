@@ -880,15 +880,29 @@ plans map both explicit markers and implicit directories to retained
 is not a consistent snapshot: other owner workspaces can still write this
 shared source, so final writer reconciliation remains necessary. Staging does
 not alter owner-wide sharing or choose how this source merges with a HOME
-archive. Destination assembly remains outstanding for this format.
+archive.
+
+`assembleOwnerToolsTree` uses the checkpoint tree assembler to place staged
+files and directories under the private stage's `tree/home/.local`. The
+assembler binds the output to the staged plan, uses create-only publication,
+and checks contents and modes before writing `owner-tools-tree.json`.
+Directories start at 0700 during assembly and receive their planned 0755
+mode before final verification. The stage itself stays private. Parent
+directories outside the captured tools tree use 0700. Source timestamps
+remain in the plan and are not applied. The receipt covers this source tree
+only. Combining it with other sources still requires a conflict policy and
+final writer reconciliation.
 
 The real `vm-test` owner-tools proof verified and staged three files totaling
 65,988 bytes and captured five empty directory markers on 2026-11-23. Private
 evidence: `artifacts/qa/vm-owner-tools-import/result.json` and
-`stage/owner-tools-plan.json`. No cloud source data or deployment changed.
+`stage/owner-tools-plan.json`. The local assembly proof verified all three
+files, five recorded directories and the implied HOME directory without
+remote reads. Its receipt is `artifacts/qa/vm-owner-tools-import/tree-result.json`.
 Tests: `node --test scripts/lib/vm-owner-tools-import.test.mjs` (owner identity,
 listing/budget/metadata refusal, CRC-only sources, generation/checksum failure,
-fixed mount modes, timestamps and resume without remote reads).
+fixed mount modes, timestamps, interrupted assembly, revalidation and
+resume without remote reads).
 
 Cutover is:
 
