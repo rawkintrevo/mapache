@@ -486,7 +486,7 @@ async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
   const session = sessionSnap.data();
   assertMainSession(session);
-  await deleteSessionForWorkspace(sessionRef, session, {reason: "deleted"}, dependencies);
+  await deleteSessionForWorkspace(sessionRef, session, {reason: "deleted", workspaceId, requireMigrationAdmission: true}, dependencies);
   return {ok: true};
 }
 
@@ -496,10 +496,15 @@ async function deleteSession(uid, workspaceId, sessionId, dependencies = {}) {
 async function deleteSessionForWorkspace(sessionRef, session, options = {}, dependencies = {}) {
   assertMainSession(session);
   assertNoActiveResize(session);
-  await sessionRef.update(sessionStatusUpdate(session, "deleting", {
+  const deleting = sessionStatusUpdate(session, "deleting", {
     ...runtimeSessionStateUpdate(session, "stopping"),
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
-  }));
+  });
+  if (options.requireMigrationAdmission) {
+    await admitLegacySessionUpdate(options.workspaceId || session.workspaceId, sessionRef, session, deleting, dependencies);
+  } else {
+    await sessionRef.update(deleting);
+  }
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }

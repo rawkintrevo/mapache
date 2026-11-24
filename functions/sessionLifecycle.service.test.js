@@ -141,6 +141,19 @@ assert.strictEqual(isIdleSession({
   );
   assert.strictEqual(currentSession.name, "Fenced name");
   assert.deepEqual(calls, []);
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    serviceUrl: "https://runner",
+    shutdownToken: "token",
+  };
+  calls.length = 0;
+  await assert.rejects(
+      lifecycle.deleteSession("user-1", "workspace-1", "session-1"),
+      {publicMessage: "workspace_vm_migration_active"},
+  );
+  assert.strictEqual(currentSession.status, "running");
+  assert.deepEqual(calls, []);
   fenced = false;
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token", resources: {cpu: "1"}};
   const lookedUp = await lifecycle.requireSession("user-1", "workspace-1", "session-1");
