@@ -251,6 +251,7 @@ function writeBuildInfo(sourceDir, manifest, release, sourceFiles, sdk, piAi, ad
 		piAi,
 		piMcpAdapter: adapter,
 		patches: manifest.patches,
+		testMode: cache.testMode || "full",
 	};
 	writeFileSync(join(sourceDir, "build-info.json"), JSON.stringify(info, null, 2) + "\n", "utf8");
 }
@@ -444,7 +445,8 @@ export async function buildUpstream(options = {}) {
 					expectedBuildInfo.packageVersion !== resolvedSource.version ||
 					expectedBuildInfo.piSdkVersion !== sdk.version ||
 					expectedBuildInfo.piAi?.version !== installedPiAi.version ||
-					expectedBuildInfo.piMcpAdapterVersion !== adapter.version) {
+					expectedBuildInfo.piMcpAdapterVersion !== adapter.version ||
+					expectedBuildInfo.testMode !== "full") {
 					rmSync(resolve(options.outputDir), {recursive: true, force: true});
 					cacheDecision = {
 						status: "miss",
@@ -484,6 +486,7 @@ export async function buildUpstream(options = {}) {
 		cacheDecision = {
 			...cacheDecision,
 			buildElapsedMs: Date.now() - buildStartedAt,
+			testMode: options.skipTests ? "fast" : "full",
 		};
 		writeBuildInfo(sourceDir, manifest, resolvedSource, sourceFiles, {
 			package: sdk.package,

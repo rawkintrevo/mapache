@@ -125,6 +125,11 @@ Run slower checks when a change touches the related subsystem:
   produce a different key and a miss. Save the Cloud Build URLs and the `cache decision`,
   `reason`, and `elapsedMs` lines in the release evidence. The image build also fails unless
   its started container serves `/agent/` and every referenced JavaScript bundle.
+- Runner image iteration may use the explicit `fast` upstream test mode described in
+  [Deployment](./deployment.md). It is a development feedback loop only: the fast image
+  runs typecheck, production build, Docker construction, and runner smoke checks, but
+  skips upstream `npm test`, does not publish the shared runtime cache, and requires a
+  subsequent default full-mode build before release or VM rollout.
 - One-off HubSpot export changes: `node --test scripts/hubspotPiWebExport.test.mjs`.
   These fixtures stay local and verify restricted inventory matching, dry-run defaults,
   quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary

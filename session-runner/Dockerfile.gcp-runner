@@ -20,11 +20,19 @@ RUN npm install -g chrome-devtools-mcp@1.6.0
 WORKDIR /app
 
 FROM mapache-base AS pi-web-ui-builder
+ARG MAPACHE_UPSTREAM_TEST_MODE=full
 COPY upstream ./upstream
 COPY pi-web-ui-build-inputs.json /app/pi-web-ui-build-inputs.json
 COPY pi-web-ui-cache.tar.gz /app/pi-web-ui-cache.tar.gz
-RUN echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+RUN case "${MAPACHE_UPSTREAM_TEST_MODE}" in \
+      full) test_args="" ;; \
+      fast) test_args="--skip-tests" ;; \
+      *) echo "unsupported MAPACHE_UPSTREAM_TEST_MODE: ${MAPACHE_UPSTREAM_TEST_MODE}" >&2; exit 2 ;; \
+    esac \
+  && echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+  && echo "Mapache pi-web-ui upstream test mode: ${MAPACHE_UPSTREAM_TEST_MODE}" \
   && MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
+    ${test_args} \
     --output-dir /opt/mapache/pi-web-ui \
     --build-inputs /app/pi-web-ui-build-inputs.json \
     --cache-archive /app/pi-web-ui-cache.tar.gz
