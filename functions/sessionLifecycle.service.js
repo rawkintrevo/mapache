@@ -81,13 +81,14 @@ async function requireSession(uid, workspaceId, sessionId, dependencies = {}) {
 
 async function renameSession(uid, workspaceId, sessionId, payload, dependencies = {}) {
   const {sessionRef, sessionSnap} = await requireSession(uid, workspaceId, sessionId, dependencies);
-  assertMainSession(sessionSnap.data());
+  const session = sessionSnap.data();
+  assertMainSession(session);
   const name = cleanName(payload && payload.name);
   if (!name) throw httpError(400, "invalid_session_name");
-  await sessionRef.update({
+  await admitLegacySessionUpdate(workspaceId, sessionRef, session, {
     name,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
-  });
+  }, dependencies);
   return toClientDoc(await sessionRef.get());
 }
 

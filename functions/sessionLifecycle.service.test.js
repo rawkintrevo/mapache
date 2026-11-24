@@ -127,6 +127,20 @@ assert.strictEqual(isIdleSession({
     assert.deepEqual(calls, []);
     assert.equal(currentSession.status, "running");
   }
+  currentSession = {
+    ownerUid: "user-1",
+    name: "Fenced name",
+    status: "running",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
+  calls.length = 0;
+  await assert.rejects(
+      lifecycle.renameSession("user-1", "workspace-1", "session-1", {name: "Should not publish"}),
+      {publicMessage: "workspace_vm_migration_active"},
+  );
+  assert.strictEqual(currentSession.name, "Fenced name");
+  assert.deepEqual(calls, []);
   fenced = false;
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token", resources: {cpu: "1"}};
   const lookedUp = await lifecycle.requireSession("user-1", "workspace-1", "session-1");

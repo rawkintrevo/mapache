@@ -1038,8 +1038,9 @@ The checked-in server admission paths use `functions/vmMigrationFence.helpers.js
 to read the backend-only fence in the same Firestore transaction as new
 session reservation, resize enqueue/claim, automation enqueue/admission/
 provisioning, automation definition/settings CRUD, new workspace-request ticket
-creation, fresh dispatch to an existing runner, or the initial workspace
-deletion tombstone. A fence blocks these
+creation, session rename or session-bound Pi auth/environment selection, fresh
+dispatch to an existing runner, or the initial workspace deletion tombstone. A
+fence blocks these
 transitions without consuming the queued job or initiating deletion. Existing
 request claims can still be observed
 and reconciled. The coordinator must account for work committed before the
