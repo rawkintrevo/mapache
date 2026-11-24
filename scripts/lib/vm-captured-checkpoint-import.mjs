@@ -3,9 +3,9 @@ import {createRequire} from 'node:module';
 import {planCheckpointImport, stageCheckpointImport} from './vm-checkpoint-import.mjs';
 import {assembleCheckpointTree} from './vm-import-tree.mjs';
 import {publishRecord} from './vm-import-stage.mjs';
+import {openCapturedStorage} from './vm-captured-storage.mjs';
 
 const require = createRequire(import.meta.url);
-const {prepareStorageCapture} = require('../../functions/vmMigrationStorageObservation.service.js');
 const {agentSnapshotStoragePrefix} = require('../../session-runner/lib/agentSnapshot.service.js');
 const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
 const MANIFEST_KINDS = {agent: 'mapache-agent-state-snapshot', workspace: 'mapache-workspace-file-state'};
@@ -14,13 +14,8 @@ const fail = reason => { throw Error(reason); };
 
 export async function importCapturedCheckpoint({input, kind, root, maxBytes, readCapture, storage}) {
   if (!Object.hasOwn(MANIFEST_KINDS, kind) || !Number.isSafeInteger(maxBytes) || maxBytes < 1) fail('captured_import_input_invalid');
-  const capture = await readCapture(input);
-  const {workspaceId, ownerUid, operationId, sourceGeneration, scope, sha256, rows, checkpointPointers, mainSessionIds} = capture;
-  if (workspaceId !== input.workspaceId || ownerUid !== input.ownerUid || operationId !== input.operationId) {
-    fail('captured_import_identity_mismatch');
-  }
-  prepareStorageCapture(scope, rows, sha256);
-  const objects = new Map(rows);
+  const {capture, lookup, openSource, assertCurrent} = await openCapturedStorage({input, readCapture, storage});
+  const {workspaceId, ownerUid, operationId, sourceGeneration, scope, sha256, checkpointPointers, mainSessionIds} = capture;
   const pointer = checkpointPointers?.[kind];
   const ref = pointer?.manifest;
   if (!ref) fail('captured_import_checkpoint_missing');
@@ -34,34 +29,6 @@ export async function importCapturedCheckpoint({input, kind, root, maxBytes, rea
     .find(prefix => ref.objectPath.startsWith(prefix + '/'));
   if (!storagePrefix) fail('captured_import_manifest_invalid');
   if (ref.byteLength > maxBytes) fail('captured_import_budget_exceeded');
-
-  function lookup({bucketName, objectPath, byteLength, generation}) {
-    const row = objects.get(objectPath);
-    if (bucketName !== scope.bucket || !row) fail('captured_import_object_unlisted');
-    const [pinnedGeneration, metageneration, size, crc32c] = row;
-    // The installed Storage client converts its generation option to Number.
-    if (!Number.isSafeInteger(Number(pinnedGeneration))) fail('captured_import_generation_unsupported');
-    if ((byteLength !== undefined && byteLength !== Number(size)) ||
-        (generation !== undefined && generation !== pinnedGeneration)) fail('captured_import_object_changed');
-    return {generation: pinnedGeneration, metageneration, size, crc32c};
-  }
-
-  async function openSource(ref) {
-    const pinned = lookup(ref);
-    const file = storage.bucket(ref.bucketName).file(ref.objectPath, {generation: pinned.generation});
-    let metadata;
-    try {
-      [metadata] = await file.getMetadata();
-    } catch (error) {
-      if (Number(error.code) === 404) fail('captured_import_object_missing');
-      if ([401, 403].includes(Number(error.code))) fail('captured_import_object_access_denied');
-      throw error;
-    }
-    if (metadata.name !== ref.objectPath || String(metadata.generation) !== pinned.generation ||
-        String(metadata.metageneration) !== pinned.metageneration || String(metadata.size) !== pinned.size ||
-        (metadata.crc32c ?? null) !== pinned.crc32c) fail('captured_import_object_changed');
-    return {generation: pinned.generation, stream: file.createReadStream({decompress: false})};
-  }
 
   // The manifest comes from the recorded generation and its bytes must match
   // the Firestore pointer before they can select any other Storage objects.
@@ -90,6 +57,6 @@ export async function importCapturedCheckpoint({input, kind, root, maxBytes, rea
 
   // Local staged bytes can remain after a failure. The caller only receives a
   // success result while the same capture is still admissible for this operation.
-  if ((await readCapture(input)).sha256 !== sha256) fail('captured_import_identity_mismatch');
+  await assertCurrent();
   return {checkpointKind: kind, captureSha256: sha256, ...receipt, readyForCutover: false};
 }

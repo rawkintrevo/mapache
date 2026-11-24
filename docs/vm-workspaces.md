@@ -1164,8 +1164,34 @@ metageneration, superseded checkpoint or inactive capture blocks the
 result. Generations outside the installed SDK's safe integer range are
 refused before a request. The CLI rechecks the operation after local
 assembly. A local tree receipt records byte verification and does not
-authorize disk import or cutover. Archives, owner tools, other legacy
-formats, disk import binding, authority switching and rollback remain open.
+authorize disk import or cutover.
+
+The captured archive CLI stages HOME or the browser profile against the
+same operation. Use a separate private stage for each archive.
+
+```bash
+node scripts/vm-import-captured-archive.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \
+  --kind home --root /absolute/private/home-stage \
+  --max-compressed-bytes 104857600 --max-expanded-bytes 1073741824 --max-entries 100000
+```
+
+HOME follows the frozen workspace policy, including the canonical and
+historical internal-directory spellings. Browser recovery uses a pinned
+canonical-session seed, then a captured current seed descriptor, then the
+legacy archive when no seed is selected. Every object and pointer must come
+from the captured prefix at its recorded generation. Selected seeds are
+verified against their published hash. For older archives without a
+published hash, the CLI streams one pinned download, verifies captured
+CRC32C and computes the SHA-256 for the stage. The archive plan binds that
+digest to the operation and capture. Extraction enforces expanded-byte
+and entry limits, then rechecks source authority. For legacy archives the
+stage needs room for both the temporary compressed download and the
+verified copy during import.
+
+The checkpoint and archive trees can be merged locally with the existing
+verified tree merger. Owner tools, other legacy formats, disk import
+binding, authority switching and rollback remain open.
 
 Emulator tests exercise reservation, quiesce, prefix capture and release with real Firestore
 transactions. They cover competing requests, stale observations, duplicate

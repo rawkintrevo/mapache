@@ -8,9 +8,9 @@ import {verifyGzipTar} from './vm-archive-verifier.mjs';
 // The caller proves the descriptor belongs to this owner/workspace and selects
 // its authority. These are the only supported archive destinations at present.
 export async function stageArchiveImport({root, ownerUid, workspaceId, operationId, destination, descriptor,
-  openSource, maxCompressedBytes, maxExpandedBytes, maxEntries}) {
+  openSource, maxCompressedBytes, maxExpandedBytes, maxEntries, prefixCapture}) {
   if (!['home', 'browser/profile'].includes(destination)) throw Error('archive_destination_invalid');
-  const sourcePlan = {schemaVersion: 1, ownerUid, workspaceId, destination, descriptor};
+  const sourcePlan = {schemaVersion: 1, ownerUid, workspaceId, destination, descriptor, ...(prefixCapture ? {prefixCapture} : {})};
   const sourcePlanSha256 = createHash('sha256').update(JSON.stringify(sourcePlan)).digest('hex');
   const stage = await openImportStage({root, ownerUid, workspaceId, operationId, sourcePlanSha256});
   const object = await stageImportObject({stage, descriptor, openSource, maxBytes: maxCompressedBytes});

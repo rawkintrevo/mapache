@@ -7,6 +7,7 @@ const {identify, observeVmMigration} = require("./vmMigrationPreflight.service")
 const {covers, resolveMigrationPrefix} = require("./vmMigrationStorageScope.helpers");
 const {prepareStorageCapture, MAX_CAPTURE_CHUNKS} = require("./vmMigrationStorageObservation.service");
 const {isMainRuntime} = require("./runtimePaths.helpers");
+const {sessionHomePolicyMetadata} = require("./sessionCreation.service");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -242,9 +243,14 @@ function createVmMigrationCoordinator({
         }
         const {workspaceId, ownerUid, operationId, sourceGeneration} = current.record;
         const {workspace, sessions} = current.observation;
+        const mainSessions = sessions.filter(isMainRuntime);
+        const canonical = mainSessions.find(session => session.id === workspace.canonicalSessionId) ||
+          (mainSessions.length === 1 ? mainSessions[0] : null);
         return {workspaceId, ownerUid, operationId, sourceGeneration, scope, sha256: capture.sha256, rows,
           checkpointPointers: {agent: workspace.agentRuntimeCheckpoint ?? null, workspace: workspace.agentRuntimeWorkspaceFiles ?? null},
-          mainSessionIds: sessions.filter(isMainRuntime).map(session => session.id)};
+          mainSessionIds: mainSessions.map(session => session.id),
+          archivePolicy: {home: sessionHomePolicyMetadata(workspace), chromeSeed: canonical?.chromeProfileSeed ?? null,
+            ambiguousChromeSeed: !canonical && mainSessions.some(session => session.chromeProfileSeed)}};
       } catch {
         throw httpError(409, "legacy_storage_capture_invalid");
       }

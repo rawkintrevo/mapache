@@ -7,7 +7,10 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const {Readable} = require("node:stream");
+const {gzipSync} = require("node:zlib");
 const admin = require("firebase-admin");
+const {CRC32C} = require("@google-cloud/storage");
+const tar = require("tar-stream");
 const {createVmMigrationCoordinator} = require("./vmMigrationCoordinator.service");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 const {createWorkspaceSharedStorageService, deriveWorkspaceBucketName} = require("./workspaceSharedStorage.service");
@@ -417,8 +420,25 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
         sha256: digest(file)}], tombstones: []}));
     const checkpoint = {generation: 7, bootInstanceId: "boot",
       manifest: {bucketName: bucket, objectPath: manifestPath, byteLength: manifest.length, sha256: digest(manifest)}};
-    const contents = new Map([[manifestPath, manifest], [filePath, file]]);
-    await workspace.create({ownerUid, bucket, storagePrefix: prefix, agentRuntimeGeneration: 7,
+    async function archive(bytes) {
+      const pack = tar.pack();
+      pack.entry({name: "fixture.txt", mode: 0o640}, bytes);
+      pack.finalize();
+      const chunks = [];
+      for await (const chunk of pack) chunks.push(chunk);
+      return gzipSync(Buffer.concat(chunks));
+    }
+    const home = "verified HOME";
+    const profile = "verified browser profile";
+    const contents = new Map([[manifestPath, manifest], [filePath, file],
+      [prefix + "/.mapache-internal/home/home.tar.gz", await archive(home)],
+      [prefix + "/.mapache-internal/chrome/chrome-profile.tar.gz", await archive(profile)]]);
+    const checksum = content => {
+      const crc = new CRC32C();
+      crc.update(content);
+      return crc.toString();
+    };
+    await workspace.create({ownerUid, bucket, storagePrefix: prefix, agentRuntimeGeneration: 7, homePolicy: {mode: "persistent"},
       agentRuntimeWorkspaceFiles: checkpoint});
     await workspace.collection("sessions").doc("fixture-main").create({ownerUid, runtimeKind: "main", status: "stopped"});
     await workspace.collection("sessions").doc("fixture-background").create({ownerUid, runtimeKind: "automation", status: "stopped"});
@@ -431,7 +451,7 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
       objects: [
         ...Array.from({length: 70}, (_, index) => ({name: `${prefix}/private-${index.toString().padStart(2, "0")}`,
           generation, metageneration: "1", size: "8", crc32c: "valid"})),
-        ...[...contents].map(([name, content]) => ({name, generation, metageneration: "1", size: String(content.length), crc32c: "valid"})),
+        ...[...contents].map(([name, content]) => ({name, generation, metageneration: "1", size: String(content.length), crc32c: checksum(content)})),
       ],
     })});
     const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true, inspectStorage,
@@ -456,7 +476,7 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     changeOperationDuringRead = false;
     const captured = await coordinator.capturePrefix(input);
     assert.equal(captured.phase, "prefix-captured");
-    assert.equal(captured.prefixCapturedObjects, 72);
+    assert.equal(captured.prefixCapturedObjects, 74);
     assert.equal(captured.readyForCutover, false);
     assert.ok(!JSON.stringify(captured).includes("private-"));
     assert.deepEqual(await coordinator.capturePrefix(input), captured);
@@ -466,29 +486,44 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     assert.equal(inventory.sourceGeneration, 7);
     assert.deepEqual(inventory.checkpointPointers, {workspace: checkpoint, agent: null});
     assert.deepEqual(inventory.mainSessionIds, ["fixture-main"]);
-    assert.equal(inventory.rows.length, 72);
+    assert.equal(inventory.rows.length, 74);
     assert.deepEqual(inventory.rows.find(([name]) => name === `${prefix}/private-00`),
         [`${prefix}/private-00`, ["100", "1", "8", "valid"]]);
     const folder = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-capture-emulator-"));
     t.after(() => fs.rm(folder, {recursive: true, force: true}));
     const root = path.join(folder, "stage");
     const {importCapturedCheckpoint} = await import("../scripts/lib/vm-captured-checkpoint-import.mjs");
+    const {importCapturedArchive} = await import("../scripts/lib/vm-captured-archive-import.mjs");
+    const {assembleMergedImport} = await import("../scripts/lib/vm-import-merge.mjs");
     const readGenerations = [];
-    const imported = await importCapturedCheckpoint({input, kind: "workspace", root, maxBytes: 4096,
-      readCapture: coordinator.getCapturedPrefix,
-      storage: {bucket: name => {
-        assert.equal(name, bucket);
-        return {file: (name, options) => {
-          readGenerations.push(options.generation);
-          const content = contents.get(name);
-          return {getMetadata: async () => [{name, generation: "100", metageneration: "1", size: String(content.length), crc32c: "valid"}],
-            createReadStream: () => Readable.from([content])};
-        }};
-      }},
-    });
+    const storage = {bucket: name => {
+      assert.equal(name, bucket);
+      return {file: (name, options) => {
+        readGenerations.push(options.generation);
+        const content = contents.get(name);
+        return {getMetadata: async () => [{name, generation: "100", metageneration: "1", size: String(content.length),
+          crc32c: checksum(content)}], createReadStream: () => Readable.from([content])};
+      }};
+    }};
+    const readCapture = coordinator.getCapturedPrefix;
+    const imported = await importCapturedCheckpoint({input, kind: "workspace", root, maxBytes: 4096, readCapture, storage});
     assert.equal(imported.captureSha256, inventory.sha256);
-    assert.deepEqual(readGenerations, ["100", "100"]);
-    assert.deepEqual(await fs.readFile(path.join(root, "tree/workspace/file.txt")), file);
+    const sources = [{kind: "checkpoint", root, planFile: path.join(root, "checkpoint-plan.json")}];
+    for (const kind of ["home", "browser"]) {
+      const archiveRoot = path.join(folder, kind);
+      const archive = await importCapturedArchive({input, kind, root: archiveRoot, readCapture, storage,
+        maxCompressedBytes: 4096, maxExpandedBytes: 4096, maxEntries: 20});
+      assert.equal(archive.captureSha256, inventory.sha256);
+      sources.push({kind: "archive", root: archiveRoot});
+    }
+    assert.deepEqual(readGenerations, ["100", "100", "100", "100"]);
+    const mergedRoot = path.join(folder, "merged");
+    const merged = await assembleMergedImport({root: mergedRoot, ownerUid, workspaceId, operationId: input.operationId,
+      sources, maxBytes: 4096});
+    assert.equal(merged.files, 3);
+    assert.deepEqual(await fs.readFile(path.join(mergedRoot, "tree/workspace/file.txt")), file);
+    assert.equal(await fs.readFile(path.join(mergedRoot, "tree/home/fixture.txt"), "utf8"), home);
+    assert.equal(await fs.readFile(path.join(mergedRoot, "tree/browser/profile/fixture.txt"), "utf8"), profile);
     const chunk = chunks.doc("0");
     const original = (await chunk.get()).get("rowsJson");
     await chunk.update({rowsJson: original.replace('"100"', '"101"')});
