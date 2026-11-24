@@ -229,6 +229,16 @@ bytes, headroom percentage, storage mode, and measurement time. An unknown
 probe remains explicitly unknown; provider capacity is not treated as guest
 headroom.
 
+The guest-side expansion step is now represented by the guarded operator
+command `scripts/vm-grow-filesystem.mjs`. It requires the stopped, owner-matched
+runtime and exact detached disk, an explicitly identified private maintenance
+VM, and `--confirm-grow`; it attaches the disk read/write, runs `e2fsck -pf`
+and `resize2fs` through the installed remote helper, verifies the retained-disk
+marker and read-only `statfs` projection, then detaches the disk. It does not
+start a workspace VM, change authority, or release writer admission. A normal
+start and authenticated health check are still required after the operator
+action; fresh-VM recovery and release evidence remain open.
+
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 surface backup/runtime startup, attach, and mount timings and actual costs; and

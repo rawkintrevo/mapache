@@ -88,11 +88,38 @@ owner and generation checks are complete.
    foreign storage, polls the named Compute operation, and confirms the new
    provider capacity. It does not resize the guest filesystem or release
    writer admission.
-6. After the provider expansion, complete the guest filesystem check and
-   verify the exact disk identity, mount, ownership, and authenticated
-   `/runner/health` readiness before releasing admission. Record the measured
-   attach/mount/health timings in the operation evidence. Do not substitute a
-   blind VM restart for a resize.
+6. After provider expansion, use a separately selected private Linux
+   maintenance VM. Install the checked-in remote helper and its dependencies
+   under `/opt/mapache-maintenance` on that VM, verify its Compute instance ID
+   and strict-host-key IAP access, then run the guarded filesystem action:
+
+   ```bash
+   node scripts/vm-grow-filesystem.mjs \
+     --project=pi-agents-cloud \
+     --workspace=WORKSPACE_ID \
+     --owner=OWNER_UID \
+     --generation=GENERATION \
+     --size-gb=NEW_SIZE_GIB \
+     --maintenance-instance=MAINTENANCE_INSTANCE \
+     --maintenance-id=MAINTENANCE_INSTANCE_ID \
+     --confirm-grow
+   ```
+
+   The action rechecks the stopped runtime, migration/backup fences, exact
+   owner-labelled disk and provider capacity; attaches only that disk
+   read/write to the exact maintenance instance; runs `e2fsck -pf` and
+   `resize2fs`; mounts it read-only for a marker and `statfs` check; and
+   detaches it before returning bounded timing and capacity evidence. It
+   refuses a mounted disk, non-ext4 filesystem, marker mismatch, public
+   maintenance instance, or identity mismatch. It never starts the workspace
+   VM, changes Firestore authority, or releases writer admission.
+7. Start the workspace only through its normal lifecycle operation and verify
+   the exact disk identity, mount, ownership, and authenticated
+   `/runner/health` readiness before releasing admission. The health response's
+   bounded `disk` projection must report the grown guest capacity; provider
+   size alone is not sufficient. Record the attach, filesystem, mount, and
+   health timings in the operation evidence. Do not substitute a blind VM
+   restart for a resize.
 
 If the disk cannot be made usable, a restore may proceed only from a verified,
 owner-matched backup to a fresh target disk. The current restore controller
