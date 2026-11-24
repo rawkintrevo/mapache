@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {buildAutomationRun, normalizeRunSnapshot} = require("./automationValidation.helpers");
 const {deterministicCronRunId} = require("./automationRuns.service");
+const {hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 const {
   automationOccurrencesBetween,
   formatLocalMinute,
@@ -83,6 +84,14 @@ async function processDefinition(definition, tickDate, dependencies = {}) {
         String(workspace.lifecycle || workspace.status || "").trim().toLowerCase(),
     )) {
       result = {ignored: true, workspaceUnavailable: true};
+      return;
+    }
+    // The scheduler writes both the run record and the definition's next-run
+    // pointer directly, so it cannot rely on enqueueRun's fence check. Leave
+    // both untouched while migration owns the workspace writer fence; the
+    // next tick can evaluate the same occurrence after an abort/release.
+    if (await hasVmMigrationFence(transaction, firestore, workspaceId)) {
+      result = {ignored: true, migrationFenced: true};
       return;
     }
     const schedule = tickSchedule(current, tickDate);

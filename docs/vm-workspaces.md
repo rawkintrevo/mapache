@@ -1007,11 +1007,13 @@ the observed prefix. Final capture still requires verified writer quiesce,
 generation-pinned content validation and coverage of the remaining sources.
 
 The endpoint reports both `readyForFreeze` and `readyForCutover` as false.
-The existing `sharedStorageMigration` state is checked by Cloud Run
-session reservation and automation enqueue, but those checks do not fence
-already queued workers or dispatch to an existing session. Workspace
-deletion and other conflicting operations need the same transactional
-admission contract. The checked-in Firestore rules protect backend-owned
+The migration fence is checked by Cloud Run session reservation, automation
+enqueue, and the minute scheduler's direct run/pointer transaction. A fenced
+scheduled occurrence therefore remains pending without advancing `nextRunAt`,
+while already queued workers and dispatch to an existing session still require
+the separate queue/admission and writer-drain checks below. Workspace deletion
+and other conflicting operations need the same transactional admission
+contract. The checked-in Firestore rules protect backend-owned
 runtime authority, source descriptors and storage pointers on client create
 and update. They use the presence of a backend-only document at
 `vmMigrationFences_v2/{workspaceId}` to reject direct client creates,

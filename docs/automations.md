@@ -103,7 +103,10 @@ run records.
   enqueue tests use its real serializer without committing database writes.
 - The minute scheduler validates the feature flag and schedule occurrence,
   records missed ranges as skipped history, and never creates a second pending
-  occurrence for one definition.
+  occurrence for one definition. It rechecks the VM migration fence in the
+  same transaction as the definition and run writes; a fenced tick leaves both
+  the occurrence and `nextRunAt` pointer untouched so an abort/release can
+  resume it without replaying or losing the schedule.
 - Definitions default to `missedRunPolicy=skip`. The opt-in `latest` policy
   accepts one newest missed occurrence inside `catchUpWindowMinutes` (1 to
   10080, default 1440), preserves the current due occurrence when present,
