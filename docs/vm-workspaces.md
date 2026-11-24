@@ -1100,6 +1100,10 @@ and enforce every matching migration fence in the transaction that publishes
 installation access, so an unrelated owner remains independent while a fenced
 GitHub workspace cannot lose or gain connection authority mid-migration.
 
+The GitHub runner token-refresh broker also checks the workspace fence before
+minting and again before returning a token. A running legacy session therefore
+cannot obtain fresh GitHub write authority after migration admission begins.
+
 Browser egress gateway assignment writes use the same boundary. A fenced
 workspace cannot be removed from or added to a shared gateway assignment, and
 the transaction also guards the route’s existing workspace IDs so a stale

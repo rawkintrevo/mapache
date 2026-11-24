@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const {httpError} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {cleanGithubNumericId, cleanGithubValue} = require("./githubClient.service");
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
@@ -40,6 +41,7 @@ async function refreshAccessToken(request = {}, dependencies) {
       source?.mode !== "connected" || sourceInstallationId !== installationId || sourceRepoId !== repoId) {
     throw httpError(409, "github_token_refresh_source_changed");
   }
+  await assertMigrationAdmission(workspaceId, dependencies);
   await dependencies.githubConnection.requireGithubInstallationForUser(session.ownerUid, installationId);
   const minted = await dependencies.githubClient.createGithubInstallationToken(installationId);
   const repos = await dependencies.githubClient.listGithubInstallationRepositories(installationId, minted.token);
@@ -47,7 +49,14 @@ async function refreshAccessToken(request = {}, dependencies) {
   if (!repo || cleanGithubValue(repo.clone_url) !== cleanGithubValue(session.sourceRepoUrl)) {
     throw httpError(403, "github_token_refresh_repo_forbidden");
   }
+  await assertMigrationAdmission(workspaceId, dependencies);
   return {accessToken: minted.token, expiresAt: minted.expiresAt};
+}
+
+async function assertMigrationAdmission(workspaceId, dependencies) {
+  await dependencies.db.runTransaction(async transaction => {
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+  });
 }
 
 function cleanId(value, errorCode) {

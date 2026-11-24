@@ -15,7 +15,13 @@ function harness(overrides = {}) {
   };
   const workspace = {ownerUid: "uid-1", source: {type: "github", mode: "connected", connection: {installationId: "42", repoId: "99"}}};
   const service = createGithubAutomationTokenBrokerService({
-    db: {collection: () => ({doc: () => ({get: async () => ({exists: true, data: () => workspace})})})},
+    db: {
+      collection: (name) => ({doc: () => ({get: async () => ({
+        exists: name === "vmMigrationFences_v2" ? overrides.fenced === true : true,
+        data: () => name === "vmMigrationFences_v2" ? {operationId: "migration-1"} : workspace,
+      })})}),
+      runTransaction: async (callback) => callback({get: (ref) => ref.get()}),
+    },
     sessionCollection: () => ({doc: () => ({get: async () => ({exists: true, data: () => ({...session, ...overrides.session})})})}),
     githubConnection: {requireGithubInstallationForUser: async () => ({})},
     githubClient: {
@@ -31,6 +37,8 @@ function harness(overrides = {}) {
   assert.deepEqual(result, {accessToken: "fresh", expiresAt: "2030-01-01T00:00:00.000Z"});
   await assert.rejects(() => harness().refreshAccessToken(request({workspaceId: "workspace-1", sessionId: "session-1"}, "wrong")), (error) => error.status === 404 && error.publicMessage === "not_found");
   await assert.rejects(() => harness({session: {status: "stopped"}}).refreshAccessToken(request({workspaceId: "workspace-1", sessionId: "session-1"})), (error) => error.status === 409);
+  await assert.rejects(() => harness({fenced: true}).refreshAccessToken(request({workspaceId: "workspace-1", sessionId: "session-1"})),
+      (error) => error.status === 409 && error.publicMessage === "workspace_vm_migration_active");
   await assert.rejects(() => harness().refreshAccessToken({...request({workspaceId: "workspace-1", sessionId: "session-1"}), method: "GET"}), (error) => error.status === 405);
   console.log("GitHub automation-token broker service tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });
