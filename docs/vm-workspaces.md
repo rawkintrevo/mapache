@@ -1154,6 +1154,42 @@ After a complete imported disk has been retained and the disposable validation
 boot has been cleaned, an operator can perform a bounded, read-only review of
 the destination runtime:
 
+Before that review, the normal destination runtime must be staged from the
+verified imported disk. The guarded operator entry point is:
+
+```bash
+node scripts/vm-migration-destination-runtime.mjs start \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --runner-image PINNED_IMAGE \
+  --confirm destination-start
+```
+
+The command requires the operation to remain `disk-import-verified`, the
+validation clone to be cleaned, both migration fences to belong to the
+operation, and the exact imported disk to be detached and identity-checked.
+It creates a deterministic `vmRuntimes_v2` destination session, credentials,
+and gateway route bound to the operation. The registry keeps `apiEnabled=false`
+and `migrationAuthority=legacy`; the route remains unusable until the pinned
+runner has acquired the expected control lease. The command then verifies
+authenticated `GET /runner/health` with `agentReady=true`.
+It never switches authority or releases either fence. A retry reuses only an
+identical destination identity and configuration.
+
+If the staging attempt must be removed before cutover, use the explicit cleanup
+action:
+
+```bash
+node scripts/vm-migration-destination-runtime.mjs cleanup \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm destination-cleanup
+```
+
+Cleanup disables the route, stops only the operation-owned VM, confirms the
+imported disk is detached, and removes only the staged runtime/session/route
+records. It retains the imported disk, source workspace, and both migration
+fences. It refuses after destination authority has been exposed; use the
+rollback action for that state.
+
 ```bash
 node scripts/vm-migration-review-cutover.mjs --project pi-agents-cloud \
   --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID
