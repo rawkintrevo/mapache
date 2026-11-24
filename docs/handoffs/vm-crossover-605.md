@@ -1,6 +1,6 @@
 # VM crossover #605 handoff
 
-Handoff date: 2026-11-23 (America/Chicago). Implementation is paused for handoff.
+Handoff date: 2026-11-23 (America/Chicago). Implementation has resumed on the same branch and PR.
 
 ## Start here
 
@@ -12,7 +12,7 @@ Handoff date: 2026-11-23 (America/Chicago). Implementation is paused for handoff
 
 ## Authorization and invariants
 
-The user authorized #605 and all 18 children, work on this same branch/PR, and isolated deployments. Prefer new function names ending in `_v2`; preserve existing Cloud Run operation. Implementation remains paused until the user resumes it.
+The user authorized #605 and all 18 children, work on this same branch/PR, and isolated deployments. Prefer new function names ending in `_v2` and preserve existing Cloud Run operation.
 
 All cloud commands must explicitly target `pi-agents-cloud`. Functions use `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`; runner VMs/services use `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. The alternative `mapache-session-runner` identity does not exist. Health is exclusively `/runner/health`. Do not change old writer/provider authority, delete source data, or claim migration based on local import receipts. Do not launch both old and new workspace writers.
 
@@ -58,12 +58,12 @@ These directories do **not** travel with Git. They can contain private restored 
 - Migration: `scripts/vm-migration-inventory.mjs`; `scripts/lib/vm-{migration-inventory,checkpoint-payloads,storage-metadata,archive-verifier,import-stage,checkpoint-import,import-tree,archive-import,archive-tree,owner-tools-import,shared-tree-authority}.mjs`.
 - Source sharing provenance checks only original bucket/marker/control identity. HNS folder inventory, mutable current contents and writer reconciliation remain unverified; never use the legacy ensure/validate service in read-only inventory because it can repair IAM.
 
-## Cutover state and unpublished work
+## Cutover state
 
 - The live read-only preflight saw the recorded `vm-test` Cloud Run service absent and no unfinished recorded operations. A regional scan found zero matches in 31 current service templates in `us-central1`. Historical revisions, other regions and remaining writer paths still require reconciliation.
 - Two bounded Storage listings agreed for 568 objects. An initial combined check detected a Firestore observation change and refused the result. A separate Storage-only check was stable. The missing persistent HOME blocker remains.
 - The Firestore emulator proved one reservation winner, stale-observation and shared-prefix refusal, and atomic release of the workspace and Storage fences. The production endpoints expose read-only preflight and status. No production reservation or writer drain is authorized by those endpoints.
-- One uncommitted change to `functions/vmMigrationCoordinator.service.js` remains in the original checkout. It sketches a guarded `confirmQuiesced` transition. It checks ownership of both fences, records Compute and Storage observation digests, and rechecks Firestore and fence versions before committing. Syntax passed. The transition has no emulator race coverage, deployment or production wiring. A fresh clone can resume from the published reservation code and this description if the original checkout is unavailable.
+- The coordinator's `confirmQuiesced` transition checks ownership of both fences, records Compute and Storage observation digests, and rechecks Firestore, the operation and both fences before committing. Emulator tests cover stale observations, concurrent retries and a pre-switch abort. The transition has no production mutation entry point.
 
 ## Checks and continuation
 
@@ -75,7 +75,7 @@ firebase emulators:exec --only firestore --project demo-mapache-cutover 'node --
 npm run docs:check
 ```
 
-1. For #616, review the draft quiesce transition. Test changed source/fence races, incomplete provider scans, missing HOME, idempotency and abort before destination authority. Establish how to verify deployed fence coverage and drain all writers, including old upload URIs and pre-existing operations. Revalidate before final capture. Bind the verified disk import to the atomic provider switch and rehearse lossless rollback after VM writes.
+1. For #616, establish how to verify deployed fence coverage and drain all writers, including old upload URIs and pre-existing operations. Revalidate before final capture. Bind the verified disk import to the atomic provider switch and rehearse lossless rollback after VM writes.
 2. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. Extend the disk import proof to representative complete data, capacity and recovery, then validate the runtime and app on the imported disk.
 3. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.
 

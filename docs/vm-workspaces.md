@@ -1058,18 +1058,35 @@ uploads remain blockers for final capture after the reservation.
 
 Operation IDs are scoped to a workspace. Repeating the same request returns
 the existing operation. A different observation cannot reuse its ID.
-Aborting a reserved operation atomically releases both fences only if they
+Aborting a reserved or quiesced operation atomically releases both fences only if they
 still belong to it, the source scope and generation are unchanged, and no
-VM authority exists. The reservation and abort methods require a trusted
-admission policy. Production Functions expose only the existing preflight
+VM authority exists. The reservation, quiesce and abort methods require a
+trusted admission policy. Production Functions expose the existing preflight
 and IAM-private GET status at `vmMigrationStatus_v2`, which takes
-`workspaceId`, `ownerUid` and `operationId`. No production writer invokes the
-coordinator methods yet. Quiesce, capture, authority switching and rollback
-after VM writes require further implementation and validation.
+`workspaceId`, `ownerUid` and `operationId`. The coordinator's mutation
+methods have no production entry point.
 
-An emulator test exercises both reservation and release with real Firestore
-transactions, including competing requests, stale observations, duplicate
-retries, alias conflicts, and refusal to release after authority changes:
+The coordinator records a `quiesced` receipt only when the exact operation
+owns both fences and the source scope still matches the reservation. It
+checks the Firestore writer inventory, bounded Compute observation and
+regional discovery, and two matching Storage generation listings with no
+blockers. Before committing the receipt, it re-reads the Firestore inventory
+and compares the operation and both fence versions. If the source generation
+changes after reservation, resolve that authority change before proceeding.
+Successful retries return the existing timestamped receipt.
+
+A quiesce policy must attest rollout of all writer fences and verify drainage
+outside those bounded observations, including existing runner operations,
+regions and revisions outside the scan, previously issued upload URIs, and
+other Storage writers. Status can report the quiesce timestamp and still
+reports `readyForCutover=false`. A later capture must revalidate the receipt
+and acquire generation-pinned content. Capture, authority switching and
+rollback after VM writes require further implementation and validation.
+
+Emulator tests exercise reservation, quiesce and release with real Firestore
+transactions. They cover competing requests, stale observations, duplicate
+retries, alias conflicts, incomplete provider observations, blocked Storage
+and refusal to release after authority changes.
 
 ```bash
 firebase emulators:exec --only firestore --project demo-mapache-cutover \
