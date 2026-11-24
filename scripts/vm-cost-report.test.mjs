@@ -22,7 +22,7 @@ test("CLI writes a new report and refuses to overwrite evidence", async () => {
   const inputPath = path.join(directory, "worksheet.json");
   const outputPath = path.join(directory, "report.json");
   const worksheet = {
-    project: "pi-agents-cloud", usageCapturedAt: "2026-11-24T10:00:00.000Z",
+    project: "pi-agents-cloud", usagePeriod: "monthly", usageCapturedAt: "2026-11-24T10:00:00.000Z",
     ratesCapturedAt: "2026-11-24T10:05:00.000Z", rateSource: "test",
     usage: Object.fromEntries([
       "retainedDiskGiB", "snapshotGiB", "computeActiveHours", "gatewayForwardingRuleHours",

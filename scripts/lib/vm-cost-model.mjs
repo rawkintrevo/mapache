@@ -61,6 +61,7 @@ export function buildVmCostReport(input, {generatedAt = new Date()} = {}) {
     project: input.project,
     generatedAt: generated,
     evidence: {
+      usagePeriod: input.usagePeriod,
       usageCapturedAt: input.usageCapturedAt,
       ratesCapturedAt: input.ratesCapturedAt,
       rateSource: input.rateSource,
@@ -73,8 +74,9 @@ export function buildVmCostReport(input, {generatedAt = new Date()} = {}) {
 
 function validateInput(input) {
   if (!isPlainObject(input)) throw costError("cost_input_object_required");
-  exactKeys(input, ["project", "usageCapturedAt", "ratesCapturedAt", "rateSource", "usage", "rates"], "cost_input");
+  exactKeys(input, ["project", "usagePeriod", "usageCapturedAt", "ratesCapturedAt", "rateSource", "usage", "rates"], "cost_input");
   if (input.project !== PROJECT_ID) throw costError("explicit_project_required");
+  if (input.usagePeriod !== "monthly") throw costError("usage_period_must_be_monthly");
   validTimestamp(input.usageCapturedAt, "usageCapturedAt");
   validTimestamp(input.ratesCapturedAt, "ratesCapturedAt");
   if (typeof input.rateSource !== "string" || input.rateSource.trim().length < 1 || input.rateSource.length > 512) {

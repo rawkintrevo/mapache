@@ -259,7 +259,7 @@ inventing comparison evidence.
 
 The read-only operator helper `scripts/vm-cost-report.mjs` now turns a complete
 usage/rate worksheet into a numeric monthly report. It requires explicit
-retained-disk, snapshots, compute, gateway, NAT, egress, logging/operations,
+monthly-equivalent usage plus retained-disk, snapshots, compute, gateway, NAT, egress, logging/operations,
 migration-overlap, and failed/orphaned-resource values and preserves the usage
 and rate source timestamps. Missing values fail closed; explicit zeroes remain
 numeric. It makes no cloud calls and does not change the inventory's deliberate

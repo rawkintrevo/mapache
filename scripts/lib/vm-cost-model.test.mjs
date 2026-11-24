@@ -4,6 +4,7 @@ import {buildVmCostReport} from "./vm-cost-model.mjs";
 
 const input = {
   project: "pi-agents-cloud",
+  usagePeriod: "monthly",
   usageCapturedAt: "2026-11-24T10:00:00.000Z",
   ratesCapturedAt: "2026-11-24T10:05:00.000Z",
   rateSource: "operator billing export 2026-11-24",
@@ -28,6 +29,7 @@ test("cost report produces complete numeric line items and total", () => {
   assert.equal(report.complete, true);
   assert.equal(report.totalMonthlyUsd, 48.868);
   assert.deepEqual(report.evidence, {
+    usagePeriod: input.usagePeriod,
     usageCapturedAt: input.usageCapturedAt,
     ratesCapturedAt: input.ratesCapturedAt,
     rateSource: input.rateSource,
@@ -45,6 +47,7 @@ test("missing, string, negative, extra, and wrong-project inputs fail closed", (
     ["negative rate", value => { value.rates.computeUsdPerHour = -1; }, /rates_computeUsdPerHour_must_be_non_negative_number/],
     ["extra usage", value => { value.usage.unpriced = 1; }, /usage_fields_incomplete/],
     ["wrong project", value => { value.project = "other-project"; }, /explicit_project_required/],
+    ["non-monthly usage", value => { value.usagePeriod = "daily"; }, /usage_period_must_be_monthly/],
   ];
   for (const [, mutate, expected] of cases) {
     const candidate = structuredClone(input);

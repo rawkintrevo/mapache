@@ -1831,6 +1831,7 @@ is valid, but an omitted value is never treated as zero.
 ```json
 {
   "project": "pi-agents-cloud",
+  "usagePeriod": "monthly",
   "usageCapturedAt": "2026-11-24T10:00:00.000Z",
   "ratesCapturedAt": "2026-11-24T10:05:00.000Z",
   "rateSource": "operator billing export 2026-11-24",
@@ -1874,7 +1875,8 @@ node scripts/vm-cost-report.mjs \
   --output=NEW_COST_REPORT_JSON
 ```
 
-The command reads and writes local JSON only; it does not query or mutate
+The command treats the supplied usage quantities as monthly-equivalent and
+reads and writes local JSON only; it does not query or mutate
 Google Cloud, Firestore, Compute, gateway, NAT, or billing resources. Its
 complete report contains one numeric line item per supplied meter, rate/source
 timestamps, and `totalMonthlyUsd`. This is a worksheet, not measured billing
