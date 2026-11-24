@@ -7,6 +7,8 @@ const admin = require("firebase-admin");
 const {createVmMigrationCoordinator} = require("./vmMigrationCoordinator.service");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 const {createWorkspaceSharedStorageService, deriveWorkspaceBucketName} = require("./workspaceSharedStorage.service");
+const {createWorkspaceService} = require("./workspace.service");
+const {createMachineConfigurationService} = require("./machineConfiguration.service");
 
 test("reservation and abort are atomic under concurrent callers and fail closed on changed authority", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
@@ -205,6 +207,56 @@ test("legacy IAM repair remains visible to preflight while a VM fence prevents a
   } finally {
     releaseProvider.resolve();
     await repair?.catch(() => {});
+    await app.delete();
+  }
+});
+
+test("reserved workspace stays listable while legacy metadata and settings remain frozen", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const defaultBucket = "fixture-bucket";
+    const workspace = db.collection("workspaces").doc(workspaceId);
+    const session = workspace.collection("sessions").doc("stopped");
+    await workspace.create({ownerUid, name: "Original", bucket: defaultBucket,
+      storagePrefix: `workspaces/${ownerUid}/staging`, canonicalSessionId: "missing"});
+    await session.create({ownerUid, runtimeKind: "main", status: "stopped"});
+    const settings = createWorkspaceService({db, admin});
+    const machine = createMachineConfigurationService({db, admin});
+    const initialConfig = await machine.updateConfiguration(ownerUid, workspaceId, {description: "pending"});
+    const target = {ownerUid, workspaceId};
+    const probe = createVmMigrationPreflight({db});
+    const {observationSha256} = await probe(target);
+    const args = {...target, observationSha256, operationId: "metadata"};
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket, authorize: async () => true});
+    await coordinator.reserve(args);
+    const frozenDigest = (await probe(target)).observationSha256;
+    const listed = await settings.listWorkspaces(ownerUid);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].canonicalSessionId, "missing");
+    const rename = {name: "Renamed", resources: {sizeKey: "medium"}};
+    await assert.rejects(settings.renameWorkspace(ownerUid, workspaceId, rename),
+        {publicMessage: "workspace_vm_migration_active"});
+    await assert.rejects(settings.saveWorkspaceMcpConfig(ownerUid, workspaceId, {}),
+        {publicMessage: "workspace_vm_migration_active"});
+    await assert.rejects(machine.updateConfiguration(ownerUid, workspaceId, {description: "blocked"}),
+        {publicMessage: "workspace_vm_migration_active"});
+    assert.deepEqual(await machine.markApplied(workspaceId, 1), initialConfig);
+    assert.equal((await probe(target)).observationSha256, frozenDigest);
+
+    await coordinator.abort(args);
+    assert.equal((await settings.listWorkspaces(ownerUid))[0].canonicalSessionId, session.id);
+    const renamed = await settings.renameWorkspace(ownerUid, workspaceId, rename);
+    assert.equal(renamed.name, "Renamed");
+    assert.deepEqual((await session.get()).get("resources"), renamed.resources);
+    await settings.saveWorkspaceMcpConfig(ownerUid, workspaceId, {});
+    assert.equal((await workspace.get()).get("mcpConfig.version"), 1);
+    assert.equal((await machine.markApplied(workspaceId, 1)).appliedVersion, 1);
+  } finally {
     await app.delete();
   }
 });

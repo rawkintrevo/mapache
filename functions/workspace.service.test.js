@@ -81,7 +81,10 @@ async function testRenameWorkspace() {
   };
   const dependencies = {
     admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
-    db: {collection: () => ({doc: () => workspaceRef})},
+    db: {
+      collection: name => ({doc: () => name === "workspaces" ? workspaceRef : {get: async () => ({exists: false})}}),
+      runTransaction: body => body({get: reference => reference.get(), update: (reference, update) => reference.update(update)}),
+    },
   };
 
   const renamed = await renameWorkspace("user-1", "workspace-1", {name: "  New name  "}, dependencies);
@@ -135,27 +138,26 @@ async function testCreateWorkspaceUsesManagedDefaults() {
 
 async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
   let workspace = {ownerUid: "user-1", canonicalSessionId: null};
-  const workspaceRef = {
-    async update(update) {
-      workspace = {...workspace, ...update};
-    },
-  };
   const sessions = [
     {id: "stopped", status: "stopped", updatedAt: "2026-09-13T12:00:00Z"},
     {id: "running", status: "running", updatedAt: "2026-09-13T11:00:00Z"},
     {id: "auto-run-a", runtimeKind: "automation", status: "running", updatedAt: "2026-09-14T12:00:00Z"},
     {id: "auto-run-b", runtimeKind: "automation", status: "running", updatedAt: "2026-09-15T12:00:00Z"},
   ];
+  const workspaceRef = {
+    async get() {
+      return {exists: true, id: "workspace-1", data: () => workspace};
+    },
+    collection: () => ({get: async () => ({docs: sessions.map(session => ({id: session.id, data: () => session}))})}),
+    async update(update) {
+      workspace = {...workspace, ...update};
+    },
+  };
   const dependencies = {
     admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
     db: {
-      collection: () => ({
-        doc: () => ({
-          collection: () => ({
-            get: async () => ({docs: sessions.map((session) => ({id: session.id, data: () => session, ref: {}}))}),
-          }),
-        }),
-      }),
+      collection: () => ({doc: () => ({get: async () => ({exists: false})})}),
+      runTransaction: body => body({get: reference => reference.get(), update: (reference, update) => reference.update(update)}),
     },
   };
   const adopted = await ensureCanonicalSession("user-1", {

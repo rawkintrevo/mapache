@@ -57,3 +57,18 @@ test("stale configuration writes are rejected", async () => {
   await service.updateConfiguration("owner-1", "workspace-1", {description: "first"});
   await assert.rejects(service.updateConfiguration("owner-1", "workspace-1", {expectedVersion: 0}), /machine_configuration_conflict/);
 });
+
+test("a migration fence blocks desired changes and applied callbacks", async () => {
+  const {db, service} = setup();
+  const workspace = "workspaces/workspace-1";
+  const fence = "vmMigrationFences_v2/workspace-1";
+  const config = await service.updateConfiguration("owner-1", "workspace-1", {description: "pending"});
+  db.data.set(fence, {});
+  await assert.rejects(service.updateConfiguration("owner-1", "workspace-1", {description: "blocked"}),
+      {publicMessage: "workspace_vm_migration_active"});
+  assert.deepEqual(await service.markApplied("workspace-1", 1), config);
+  assert.equal(db.data.get(workspace).machineConfig.appliedVersion, 0);
+  db.data.delete(fence);
+  assert.equal((await service.markApplied("workspace-1", 1)).appliedVersion, 1);
+  assert.equal((await service.markApplied("workspace-1", 0)).appliedVersion, 1);
+});

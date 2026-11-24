@@ -995,6 +995,15 @@ deletion tombstone. A fence blocks these transitions without consuming the
 queued job or initiating deletion. Existing request claims can still be observed
 and reconciled. The coordinator must account for work committed before the
 fence, including resumed deletions and already submitted cloud operations.
+Legacy workspace listing in `functions/workspace.service.js` continues to
+return fenced workspaces without repairing their canonical session pointers.
+Unfenced repairs check the workspace, fence and candidate sessions in one
+transaction. Workspace rename and resource edits, including propagation to
+the canonical session, and MCP config saves use the same admission check.
+Legacy desired configuration changes and applied-version callbacks in
+`functions/machineConfiguration.service.js` also read the fence before
+writing. An older applied callback cannot lower the recorded applied version.
+The emulator exercises these paths while reserved and after abort.
 Direct legacy restart and resize now check the fence in the same transaction
 that records the lifecycle transition, before a Cloud Run patch or a stop for
 recreation. The update also rejects a changed session state or operation
