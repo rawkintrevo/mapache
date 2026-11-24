@@ -14,7 +14,8 @@ const DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
  */
 function createRetainedDiskDigestService({root, fsImpl = fs, maxEntries = DEFAULT_MAX_ENTRIES,
   maxBytes = DEFAULT_MAX_BYTES} = {}) {
-  const diskRoot = path.resolve(String(root || ""));
+  const rawRoot = String(root || "").trim();
+  const diskRoot = rawRoot ? path.resolve(rawRoot) : "";
   const entryLimit = boundedLimit(maxEntries, DEFAULT_MAX_ENTRIES, 1, 100_000);
   const byteLimit = boundedLimit(maxBytes, DEFAULT_MAX_BYTES, 1, 4 * 1024 * 1024 * 1024);
 

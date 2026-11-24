@@ -37,3 +37,8 @@ test("retained disk digest refuses a byte-limit overrun", async () => {
     await fs.promises.rm(root, {recursive: true, force: true});
   }
 });
+
+test("retained disk digest never defaults an empty root to the process directory", async () => {
+  await assert.rejects(createRetainedDiskDigestService({root: ""}).digest(),
+    error => error.code === "retained_digest_root_invalid");
+});
