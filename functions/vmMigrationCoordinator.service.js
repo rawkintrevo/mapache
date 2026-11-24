@@ -4,6 +4,7 @@ const {DEFAULT_BUCKET} = require("./backendConfig");
 const {httpError} = require("./backendUtils.helpers");
 const {vmMigrationFenceRef} = require("./vmMigrationFence.helpers");
 const {identify, observeVmMigration} = require("./vmMigrationPreflight.service");
+const {covers, resolveMigrationPrefix} = require("./vmMigrationStorageScope.helpers");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -11,20 +12,6 @@ const DRAIN_AFTER_FREEZE = new Set([
   "legacy_upload_sessions_require_drain",
 ]);
 const ALIAS_LIMIT = 500;
-const covers = (prefix, candidate) => typeof candidate === "string" &&
-  (candidate === prefix || candidate.startsWith(prefix + "/"));
-
-function resolvePrefix(workspace, ownerUid, defaultBucket) {
-  const bucket = workspace.bucket || workspace.workspaceStorageBucket || defaultBucket;
-  const prefix = workspace.storagePrefix || workspace.workspaceStoragePrefix;
-  const match = typeof prefix === "string" && /^workspaces\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+)$/.exec(prefix);
-  if (!bucket || bucket !== defaultBucket || !match || match[1] !== ownerUid || [".", ".."].includes(match[2]) ||
-      workspace.sharedStorage || (workspace.homePolicy?.storagePrefix &&
-        (!covers(prefix, workspace.homePolicy.storagePrefix) || (workspace.homePolicy.bucket && workspace.homePolicy.bucket !== bucket)))) {
-    throw httpError(409, "vm_migration_storage_scope_unverified");
-  }
-  return {bucket, prefix, workspaceKey: match[2]};
-}
 
 function storageFenceRef(db, scope, ownerUid) {
   return db.collection("vmMigrationStorageFences_v2").doc(scope.bucket)
@@ -79,7 +66,7 @@ function createVmMigrationCoordinator({db, authorize = async () => false, defaul
       const observation = await observeVmMigration(transaction, {db, workspaceId: input.workspaceId, ownerUid: input.ownerUid, now});
       if (observation.observationSha256 !== input.observationSha256) throw httpError(409, "vm_migration_observation_stale");
       if (observation.blockers.some(blocker => !DRAIN_AFTER_FREEZE.has(blocker))) throw httpError(409, "vm_migration_source_blocked");
-      const scope = resolvePrefix(observation.workspace, input.ownerUid, defaultBucket);
+      const scope = resolveMigrationPrefix(observation.workspace, input.ownerUid, defaultBucket);
       const prefixFence = storageFenceRef(db, scope, input.ownerUid);
       const [existingPrefixFence, candidates] = await Promise.all([
         transaction.get(prefixFence),
@@ -122,7 +109,7 @@ function createVmMigrationCoordinator({db, authorize = async () => false, defaul
           data.deleted === true || [data.status, data.lifecycle].some(state => ["deleting", "deleted"].includes(state)) ||
           generation !== record.sourceGeneration || [data.runtimeProvider, data.runtimeProviderDescriptor]
               .some(provider => provider && provider.backend !== "cloud-run") ||
-          JSON.stringify(resolvePrefix(data, input.ownerUid, defaultBucket)) !== JSON.stringify(record.scope)) {
+          JSON.stringify(resolveMigrationPrefix(data, input.ownerUid, defaultBucket)) !== JSON.stringify(record.scope)) {
         throw httpError(409, "vm_migration_authority_changed");
       }
       const update = {phase: "aborted", releasedAtMs: now()};

@@ -94,21 +94,27 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
     sourceGeneration: Number.isSafeInteger(observedSourceGeneration) ? observedSourceGeneration : null};
 }
 
-function createVmMigrationPreflight({db, now = Date.now, inspectCompute}) {
-  return async ({workspaceId, ownerUid, checkCompute = false}) => {
+function createVmMigrationPreflight({db, now = Date.now, inspectCompute, inspectStorage}) {
+  return async ({workspaceId, ownerUid, checkCompute = false, checkStorage = false}) => {
     const read = () => db.runTransaction(transaction => observeVmMigration(transaction, {db, workspaceId, ownerUid, now}), {readOnly: true});
     const {workspace, sessions, ...result} = await read();
     let compute;
-    if (checkCompute && inspectCompute && !result.blockers.includes("legacy_writer_inventory_truncated")) {
-      compute = await inspectCompute(sessions, {workspace, workspaceId, ownerUid});
-      if ((await read()).observationSha256 !== result.observationSha256) {
-        compute = {...compute, recordedComputeClear: false,
+    let storage;
+    if (!result.blockers.includes("legacy_writer_inventory_truncated")) {
+      [compute, storage] = await Promise.all([
+        checkCompute && inspectCompute ? inspectCompute(sessions, {workspace, workspaceId, ownerUid}) : undefined,
+        checkStorage && inspectStorage ? inspectStorage({workspace, workspaceId, ownerUid, sessions}) : undefined,
+      ]);
+      if ((compute || storage) && (await read()).observationSha256 !== result.observationSha256) {
+        if (compute) compute = {...compute, recordedComputeClear: false,
           ...(compute.discovery ? {discovery: {...compute.discovery, scannedRegionsClear: false}} : {}),
           blockers: [...compute.blockers, "legacy_compute_source_changed"]};
+        if (storage) storage = {...storage, stable: false, blockers: [...storage.blockers, "legacy_storage_source_changed"]};
       }
     }
-    return {...result, ...(compute ? {compute} : {}), readOnly: true, readyForFreeze: false, readyForCutover: false,
-      blockers: [...result.blockers, ...(compute?.blockers || []), "legacy_admission_fence_unverified",
+    return {...result, ...(compute ? {compute} : {}), ...(storage ? {storage} : {}), readOnly: true,
+      readyForFreeze: false, readyForCutover: false,
+      blockers: [...result.blockers, ...(compute?.blockers || []), ...(storage?.blockers || []), "legacy_admission_fence_unverified",
         "live_compute_and_storage_authority_unverified", "untracked_legacy_upload_sessions_unverified"]};
   };
 }

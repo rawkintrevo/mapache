@@ -31,8 +31,10 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
     assert.deepEqual(options, {readOnly: true});
     return body({get: async query => { reads.push(query.path); return pathSnapshots.get(query.path); }});
   }};
-  return {reads, pathSnapshots, inspect: (ownerUid = "owner", inspectCompute) =>
-    createVmMigrationPreflight({db, now: () => 5, inspectCompute})({workspaceId: "fixture", ownerUid, checkCompute: !!inspectCompute})};
+  return {reads, pathSnapshots, inspect: (ownerUid = "owner", inspectCompute, inspectStorage) =>
+    createVmMigrationPreflight({db, now: () => 5, inspectCompute, inspectStorage})({
+      workspaceId: "fixture", ownerUid, checkCompute: !!inspectCompute, checkStorage: !!inspectStorage,
+    })};
 }
 
 test("reports possibly live and failed legacy writers without exposing record contents", async () => {
@@ -96,4 +98,14 @@ test("provider absence observation is invalidated when the source changes during
   assert.equal(data.compute.recordedComputeClear, false);
   assert.ok(data.blockers.includes("legacy_compute_source_changed"));
   assert.equal(data.readyForCutover, false);
+});
+
+test("matching Storage listings are invalidated when a workspace pointer changes", async () => {
+  const f = fixture();
+  const data = await f.inspect("owner", undefined, async () => {
+    f.pathSnapshots.get("workspaces/fixture").updateTime.nanoseconds++;
+    return {stable: true, blockers: []};
+  });
+  assert.equal(data.storage.stable, false);
+  assert.ok(data.blockers.includes("legacy_storage_source_changed"));
 });

@@ -659,10 +659,16 @@ exports.vmMigrationPreflight_v2 = onRequest({invoker: "private", timeoutSeconds:
   try {
     const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
     const {createVmLegacyComputeObserver} = require("./vmLegacyComputeObservation.service");
+    const {createVmMigrationStorageObserver} = require("./vmMigrationStorageObservation.service");
     const inspectCompute = createVmLegacyComputeObserver({auth, projectNumber: "299764728235",
       defaultRegion: DEFAULT_REGION, defaultBucket: DEFAULT_BUCKET});
-    res.json(await createVmMigrationPreflight({db, inspectCompute})({workspaceId: req.query.workspaceId,
-      ownerUid: req.query.ownerUid, checkCompute: req.query.checkCompute === "1"}));
+    const inspectStorage = createVmMigrationStorageObserver({defaultBucket: DEFAULT_BUCKET, listPage: async ({bucketName, ...options}) => {
+      const [, , response] = await storage.bucket(bucketName).getFiles({...options, autoPaginate: false,
+        fields: "nextPageToken,items(name,generation,metageneration,size,crc32c)"});
+      return {objects: response.items || [], nextPageToken: response.nextPageToken};
+    }});
+    res.json(await createVmMigrationPreflight({db, inspectCompute, inspectStorage})({workspaceId: req.query.workspaceId,
+      ownerUid: req.query.ownerUid, checkCompute: req.query.checkCompute === "1", checkStorage: req.query.checkStorage === "1"}));
   } catch (error) {
     res.status(error.status || 503).json({error: error.publicMessage || "vm_migration_preflight_unavailable"});
   }

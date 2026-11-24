@@ -946,6 +946,23 @@ current service templates in those regions. Other regions, tagged historical
 revisions, and aliases outside the matched prefix still require reconciliation.
 See the [Cloud Run services list API](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.services/list).
 
+Pass `checkStorage=1` to compare two paginated listings of the
+workspace's owned prefix on the default bucket. The observer uses the same
+prefix validator as the reservation coordinator. A conflicting bucket or
+prefix in session metadata blocks the observation. Each pass covers up to
+3,000 live objects and hashes sorted names, generations, metagenerations,
+sizes and CRC32C metadata. The response exposes digests and counts.
+Duplicate objects, repeated page cursors and exceeded limits block the
+result. Changes in the Firestore observation invalidate the comparison.
+
+When the workspace declares persistent HOME, the check reports a missing
+archive if the configured object is absent in both internal spellings.
+A stable listing can still have this blocker. The initial `vm-test`
+provider check returned identical digests for 568 live objects and
+`legacy_persistent_home_archive_missing`. This is metadata evidence for
+the observed prefix. Final capture still requires verified writer quiesce,
+generation-pinned content validation and coverage of the remaining sources.
+
 The endpoint reports both `readyForFreeze` and `readyForCutover` as false.
 The existing `sharedStorageMigration` state is checked by Cloud Run
 session reservation and automation enqueue, but those checks do not fence
