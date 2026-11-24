@@ -35,8 +35,18 @@ async function main() {
     if (action === 'seed') {
       assert.ok(!e.exists, 'proof already seeded');
       assert.deepEqual(session.environmentEntryIds || [], [], 'preserve existing selections');
-      tx.create(er, {ownerUid, name, value, proofWorkspaceId: workspaceId, seedGeneration: w.generation});
+      const previousMachineConfig = w.machineConfig && typeof w.machineConfig === 'object' ? {
+        ...w.machineConfig,
+        ...(w.machineConfig.desired ? {desired: {...w.machineConfig.desired}} : {}),
+      } : null;
+      tx.create(er, {ownerUid, name, value, proofWorkspaceId: workspaceId, seedGeneration: w.generation, previousMachineConfig});
       tx.update(sr, {environmentEntryIds: [entryId]});
+      if (previousMachineConfig) {
+        tx.update(wr, {machineConfig: {...previousMachineConfig,
+          desiredVersion: previousMachineConfig.desiredVersion + 1,
+          desired: {...previousMachineConfig.desired, environmentEntryIds: [entryId]},
+          state: 'pending-restart'}});
+      }
     } else {
       const entry = e.data();
       assert.equal(entry?.proofWorkspaceId, workspaceId);
@@ -45,10 +55,17 @@ async function main() {
       assert.deepEqual(session.environmentEntryIds, [entryId]);
       if (action === 'verify') {
         assert.equal(w.generation, entry.seedGeneration + 1);
+        if (w.machineConfig) {
+          assert.deepEqual(w.machineConfig.desired.environmentEntryIds, [entryId]);
+          assert.equal(w.machineConfig.appliedVersion, w.machineConfig.desiredVersion);
+          assert.equal(w.machineConfig.state, 'applied');
+        }
         assert.ok(!JSON.stringify(w).includes(value));
         assert.ok(!JSON.stringify(session).includes(value));
       } else {
         tx.update(sr, {environmentEntryIds: []});
+        if (entry.previousMachineConfig) tx.update(wr, {machineConfig: entry.previousMachineConfig});
+        else if (w.machineConfig) tx.update(wr, {machineConfig: admin.firestore.FieldValue.delete()});
         tx.delete(er);
       }
     }

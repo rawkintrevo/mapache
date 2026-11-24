@@ -51,9 +51,11 @@ if (['start', 'replace'].includes(action)) {
     if (cs.exists) throw new Error('fixture_credentials_conflict');
     const credentials = {ownerUid: descriptor.ownerUid, generation: descriptor.generation,
       controlToken: randomBytes(32).toString('hex'), browserToken: randomBytes(32).toString('hex'), shutdownToken: randomBytes(32).toString('hex')};
+    const previousWorkspace = ws.exists ? ws.data() : {};
+    const previousSession = ss.exists ? ss.data() : (ws.exists && previousWorkspace.currentSessionId ?
+      (await tx.get(workspaceRef.collection('sessions').doc(previousWorkspace.currentSessionId))).data() || {} : {});
     tx.set(secretRef, credentials);
     tx.set(workspaceRef, {
-      ...(ws.exists ? ws.data() : {}),
       ownerUid: descriptor.ownerUid,
       backend: 'compute-engine',
       currentSessionId: sessionId,
@@ -61,10 +63,20 @@ if (['start', 'replace'].includes(action)) {
       state: 'reserved',
       // This fixed workspace is the explicitly admitted lifecycle fixture.
       lifecycleEnabled: true,
+      ...(Object.hasOwn(previousWorkspace, 'apiEnabled') ? {apiEnabled: previousWorkspace.apiEnabled} : {}),
+      ...(typeof previousWorkspace.name === 'string' ? {name: previousWorkspace.name} : {}),
+      ...(typeof previousWorkspace.runnerImage === 'string' ? {runnerImage: previousWorkspace.runnerImage} : {}),
+      ...(typeof previousWorkspace.gatewayHost === 'string' ? {gatewayHost: previousWorkspace.gatewayHost} : {}),
+      ...(previousWorkspace.machineConfig && typeof previousWorkspace.machineConfig === 'object' ? {machineConfig: previousWorkspace.machineConfig} : {}),
     });
     tx.set(sessionRef, {ownerUid: descriptor.ownerUid, generation: descriptor.generation, state: 'reserved',
       allowCreateDisk: !ws.exists,
-      controlTokenHash: tokenHash(credentials.controlToken), authSelection: {harness: 'pi', providers: {}}, runtimeProvider: descriptor});
+      controlTokenHash: tokenHash(credentials.controlToken),
+      authSelection: previousSession.authSelection || {harness: 'pi', providers: {}},
+      piScopedModels: Array.isArray(previousSession.piScopedModels) ? previousSession.piScopedModels : [],
+      environmentEntryIds: Array.isArray(previousSession.environmentEntryIds) ? previousSession.environmentEntryIds : [],
+      ...(Number.isSafeInteger(previousSession.configVersion) ? {configVersion: previousSession.configVersion} : {}),
+      runtimeProvider: descriptor});
     return {...credentials, allowCreateDisk: !ws.exists};
   });
 }
