@@ -1173,7 +1173,13 @@ and `migrationAuthority=legacy`; the route remains unusable until the pinned
 runner has acquired the expected control lease. The command then verifies
 authenticated `GET /runner/health` with `agentReady=true`.
 It never switches authority or releases either fence. A retry reuses only an
-identical destination identity and configuration.
+identical destination identity and configuration. If a prior attempt left the
+runtime or session stopping, or left the route enabled before readiness was
+committed, a retry first returns the operation-owned records to a hidden
+reserved state. The final ready write rechecks the operation, runtime, session,
+route, legacy authority, and authenticated health in one Firestore transaction;
+cleanup or an authority change therefore cannot be overwritten by a stale
+health poll.
 
 If the staging attempt must be removed before cutover, use the explicit cleanup
 action:

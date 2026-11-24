@@ -182,7 +182,7 @@ Fully evidenced original acceptance criteria: none; partial evidence does not sa
 
 ### #618: Partial — isolated proofs, release gate unmet
 
-Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The synthetic retained-disk import and ordinary VM runner startup passed. Clone copy passed independently. The dedicated validation clone's runner boot and cleanup have yet to be exercised. The current Functions suite and seven existing coordinator emulator cases passed.
+Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The synthetic retained-disk import and ordinary VM runner startup passed. Clone copy and the dedicated validation clone's runner boot/readiness/cleanup passed, including authenticated `/runner/health` and post-run resource absence checks. The current Functions suite and coordinator emulator cases passed.
 
 Remaining: Complete all formats/failure transitions, real VM desktop/security/browser matrix, two-machine settings/inheritance, schedules and requests waking stopped machines, upload/resize/disk-full/backup tests, a real model turn and numeric rollout thresholds.
 

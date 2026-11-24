@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertDestinationRuntimeReady,
   createDestinationSeed,
+  destinationReservationNeedsReset,
   parseDestinationRuntimeArgs,
   parseGatewayUrl,
 } from "./vm-migration-destination-runtime.mjs";
@@ -43,4 +45,29 @@ test("destination seed binds the normal runtime to the imported disk while hidde
   assert.equal(seed.session.controlTokenHash.length, 64);
   assert.equal(seed.operation.sourceGeneration, 7);
   assert.equal(seed.operation.destinationGeneration, 8);
+});
+
+test("ready attestation requires the operation-owned hidden runtime to still be active", () => {
+  const input = {workspaceId: "workspace-605", ownerUid: "owner-605", operationId: "operation-605"};
+  const operation = {workspaceId: input.workspaceId, ownerUid: input.ownerUid, operationId: input.operationId,
+    phase: "disk-import-verified", destinationRuntime: {state: "reserved", sessionId: "session-605", gatewayHost: "gateway.run.app"}};
+  const runtime = {ownerUid: input.ownerUid, backend: "compute-engine", migrationOperationId: input.operationId,
+    apiEnabled: false, migrationAuthority: "legacy", state: "active", generation: 8,
+    currentSessionId: "session-605", gatewayHost: "gateway.run.app"};
+  const session = {ownerUid: input.ownerUid, generation: 8, state: "active"};
+  const route = {workspaceId: input.workspaceId, ownerUid: input.ownerUid, migrationOperationId: input.operationId,
+    generation: 8, sessionId: "session-605", enabled: true, migrationAuthority: "legacy"};
+  assert.doesNotThrow(() => assertDestinationRuntimeReady({operation, runtime, session, route, input,
+    health: {status: 200, agentReady: true}}));
+  assert.throws(() => assertDestinationRuntimeReady({operation, runtime: {...runtime, apiEnabled: true}, session, route, input,
+    health: {status: 200, agentReady: true}}), /destination_runtime_authority_changed/);
+  assert.throws(() => assertDestinationRuntimeReady({operation, runtime, session, route: {...route, enabled: false}, input,
+    health: {status: 200, agentReady: true}}), /destination_runtime_authority_changed/);
+});
+
+test("a partial stop resets reservation state before retrying an existing VM", () => {
+  assert.equal(destinationReservationNeedsReset({runtime: {state: "reserved"}, session: {state: "reserved"}, route: {enabled: false}}), false);
+  assert.equal(destinationReservationNeedsReset({runtime: {state: "active"}, session: {state: "active"}, route: {enabled: true}}), false);
+  assert.equal(destinationReservationNeedsReset({runtime: {state: "stopping"}, session: {state: "active"}, route: {enabled: true}}), true);
+  assert.equal(destinationReservationNeedsReset({runtime: {state: "reserved"}, session: {state: "reserved"}, route: {enabled: true}}), true);
 });

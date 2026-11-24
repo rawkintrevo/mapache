@@ -147,3 +147,30 @@ export function safeDestinationStatus({workspaceId, operationId, destinationGene
     state, apiEnabled: false, sourceRetained: true, destinationDiskRetained: true,
     readyForCutoverReview: health};
 }
+
+export function destinationReservationNeedsReset({runtime, session, route}) {
+  const runtimeState = runtime?.state;
+  const sessionState = session?.state;
+  return !["reserved", "active"].includes(runtimeState) || !["reserved", "active"].includes(sessionState) ||
+    (route?.enabled === true && (runtimeState !== "active" || sessionState !== "active"));
+}
+
+export function assertDestinationRuntimeReady({operation, runtime, session, route, input, health}) {
+  if (!operation || !runtime || !session || !route || !input ||
+      operation.workspaceId !== input.workspaceId || operation.ownerUid !== input.ownerUid ||
+      operation.operationId !== input.operationId || operation.phase !== "disk-import-verified" ||
+      !["reserved", "ready"].includes(operation.destinationRuntime?.state) ||
+      operation.destinationRuntime?.sessionId !== runtime.currentSessionId ||
+      operation.destinationRuntime?.gatewayHost !== runtime.gatewayHost ||
+      runtime.ownerUid !== input.ownerUid || runtime.backend !== "compute-engine" ||
+      runtime.migrationOperationId !== input.operationId || runtime.apiEnabled !== false ||
+      runtime.migrationAuthority !== "legacy" || runtime.state !== "active" ||
+      session.ownerUid !== input.ownerUid || session.generation !== runtime.generation ||
+      session.state !== "active" || route.workspaceId !== input.workspaceId ||
+      route.ownerUid !== input.ownerUid || route.migrationOperationId !== input.operationId ||
+      route.generation !== runtime.generation || route.sessionId !== runtime.currentSessionId ||
+      route.enabled !== true || route.migrationAuthority !== "legacy" ||
+      health?.status !== 200 || health.agentReady !== true) {
+    throw Error("destination_runtime_authority_changed");
+  }
+}

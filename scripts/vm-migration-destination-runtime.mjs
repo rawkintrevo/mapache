@@ -3,11 +3,13 @@ import {execFileSync} from "node:child_process";
 import {createRequire} from "node:module";
 import {
   CONTROL_URL,
+  destinationReservationNeedsReset,
   PROJECT_ID,
   REGION,
   RUNNER_IMAGE,
   SUBNETWORK,
   createDestinationSeed,
+  assertDestinationRuntimeReady,
   parseDestinationRuntimeArgs,
   parseGatewayUrl,
   safeDestinationStatus,
@@ -151,9 +153,10 @@ async function setRouteEnabled(db, input, context, address) {
     const ss = session.data() || {};
     const rr = route.data() || {};
     if (!runtime.exists || ws.ownerUid !== input.ownerUid || ws.migrationOperationId !== input.operationId ||
-        ws.currentSessionId !== runtimeData.currentSessionId || ss.ownerUid !== input.ownerUid || ss.generation !== ws.generation ||
+        ws.currentSessionId !== runtimeData.currentSessionId || ws.apiEnabled !== false || ws.migrationAuthority !== "legacy" ||
+        ss.ownerUid !== input.ownerUid || ss.generation !== ws.generation || !["reserved", "active"].includes(ss.state) ||
         rr.workspaceId !== input.workspaceId || rr.ownerUid !== input.ownerUid || rr.migrationOperationId !== input.operationId ||
-        rr.generation !== ws.generation || rr.sessionId !== ws.currentSessionId ||
+        rr.generation !== ws.generation || rr.sessionId !== ws.currentSessionId || rr.migrationAuthority !== "legacy" ||
         (rr.enabled === true && rr.address !== address)) {
       throw Error("destination_runtime_route_authority_lost");
     }
@@ -173,7 +176,9 @@ async function resetReservation(db, input, context) {
     const rr = currentRoute.data() || {};
     if (!currentRuntime.exists || ws.ownerUid !== input.ownerUid || ws.migrationOperationId !== input.operationId ||
         ws.apiEnabled === true || ws.migrationAuthority !== "legacy" || ss.ownerUid !== input.ownerUid ||
-        rr.workspaceId !== input.workspaceId || rr.ownerUid !== input.ownerUid || rr.migrationOperationId !== input.operationId) {
+        ss.generation !== ws.generation || rr.workspaceId !== input.workspaceId || rr.ownerUid !== input.ownerUid ||
+        rr.migrationOperationId !== input.operationId || rr.generation !== ws.generation ||
+        rr.sessionId !== ws.currentSessionId || rr.migrationAuthority !== "legacy") {
       throw Error("destination_runtime_authority_changed");
     }
     tx.update(runtime, {state: "reserved", bootId: null, leaseExpiresAt: 0});
@@ -211,8 +216,13 @@ async function waitForReady({db, input, gateway, context, timeoutMs = START_TIME
 async function markReady(db, input, health) {
   await db.runTransaction(async tx => {
     const op = await tx.get(operationRef(db, input));
+    const runtime = await tx.get(runtimeRef(db, input));
+    const runtimeData = runtime.data() || {};
+    const session = await tx.get(runtimeRef(db, input).collection("sessions").doc(runtimeData.currentSessionId || "invalid"));
+    const route = await tx.get(db.collection("vmGatewayRoutes_v2").doc(runtimeData.gatewayHost || "invalid"));
     const record = op.data() || {};
-    if (!op.exists || record.ownerUid !== input.ownerUid || record.phase !== "disk-import-verified") throw Error("destination_runtime_operation_changed");
+    assertDestinationRuntimeReady({operation: op.exists ? record : null, runtime: runtime.exists ? runtimeData : null,
+      session: session.exists ? session.data() : null, route: route.exists ? route.data() : null, input, health});
     tx.update(operationRef(db, input), {destinationRuntime: {...(record.destinationRuntime || {}), state: "ready", health, readyAtMs: Date.now()}, updatedAtMs: Date.now()});
   });
 }
@@ -226,12 +236,15 @@ async function startDestination({db, compute, input, options}) {
   const destination = record.importDestination;
   const disk = await compute.inspectMigrationDisk(descriptor, {operationId: destination.operationId});
   if (disk.diskId !== destination.diskId || disk.diskName !== destination.diskName) throw Error("destination_runtime_disk_changed");
+  const initialRuntime = context.runtime.data();
+  const initialSession = context.session.data();
+  const initialRoute = context.route.data();
+  if (destinationReservationNeedsReset({runtime: initialRuntime, session: initialSession, route: initialRoute})) {
+    await resetReservation(db, input, context);
+    context = await readContext(db, input);
+  }
   const observed = await compute.inspect(descriptor);
   if (!observed.instance) {
-    if (context.runtime.data().state !== "reserved") {
-      await resetReservation(db, input, context);
-      context = await readContext(db, input);
-    }
     await compute.start(descriptor, {operationId: destination.operationId, runnerImage, allowCreateDisk: false,
       subnetwork: SUBNETWORK, timeoutMs: 240000, env: runnerEnvironment({sessionId: context.runtime.data().currentSessionId, credentials: context.credentials})});
   } else {
