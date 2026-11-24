@@ -7,7 +7,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation is 
 - Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
 - Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
 - The last verified clone-copy increment is `773098d`. The PR head preserves the clone-boot implementation, and the validation boot operator path is now implemented and has passed a disposable live proof on the continuation branch.
-- Rough overall estimate: **50%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Rough overall estimate: **72%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -362,3 +362,16 @@ The PR's full-tested runner image `sha256:19382971d1c23ac740ca1635cd6e1edbaca362
 The owner-creation proof also passed after the documented temporary `create-proof` gateway revision tag was attached: duplicate suppression, owner-derived admission, forged infrastructure rejection, signed agent access, pause, and exact resource cleanup. The tag was removed immediately afterward; the creation workspace, admission, route, credentials and dedicated disk are absent. The browser `vm-live-shell` scenario produced a passing result with no console errors, a live VM Agent iframe, resource meters, signed VM API/access calls, and no legacy workspace listener. Its sanitized evidence remains under `artifacts/qa/vm-live-shell/`.
 
 The fixed fixture replacement harness now preserves existing admission/configuration fields and selected session references without carrying stale generation boot/lease state into a replacement. The environment proof now exercises versioned machine configuration so the deployed lifecycle worker resolves owner-private values at launch, then restores the prior configuration. These corrections are committed on PR #629. Remaining live evidence includes a real model turn, broader runner/browser/sandbox and backup/recovery matrices, migration writer drain and authority-switch rehearsal, and the release/canary gates; these proofs do not establish user-workspace cutover.
+
+The next executor increment is `ece9f72`: native automation now rechecks the
+durable terminal state after child startup and at the submission boundary, so a
+startup cancellation or child exit cannot issue a late prompt submission. The
+focused executor suite passed 13/13, and the full repository check passed with
+526 runner tests (523 passed, 3 skipped), 283 frontend tests, and both builds.
+The hosted full runner image for this commit passed in Cloud Build
+`b0c3697f-fbc1-447b-8803-2a937446985f` (12m39s total; 7m55s Docker step), with
+digest `sha256:20a9f2335c63513d3a98b0398b07cc6aa4729a4b6a27b8d53ef3e518f36b84fe`.
+That exact image passed the real local pi-web vertical slice 2/2 in about 60s.
+This closes the code/test/image race-safety gate; live provider/model execution,
+stopped-target scheduling, cross-machine tools, usage accounting, migration
+cutover/rollback, recovery, and release cohorts remain open.
