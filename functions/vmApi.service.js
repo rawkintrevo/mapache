@@ -6,6 +6,7 @@ const {isVmAddress} = require("./vmGatewayResolve.service");
 const {createVmCreationService} = require("./vmCreation.service");
 const {createVmReadService, checkOwned, publicWorkspace} = require("./vmRead.service");
 const {createVmConfigurationService} = require("./vmConfiguration.service");
+const {createVmBackupStatusService} = require("./vmBackupStatus.service");
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
@@ -15,7 +16,7 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
     if (!uid) throw httpError(401, "invalid_auth_token");
     const reads = createVmReadService({db, now});
     if (/^\/workspaces\/?$/.test(req.path || "") && req.method === "GET") return {status: 200, body: await reads.list(uid, req.query)};
-    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(create|configuration|sessions|access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
+    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|sessions|access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
     if (!match) throw httpError(404, "not_found");
     const [, workspaceId, action, operationId] = match;
     const wr = db.collection("vmRuntimes_v2").doc(workspaceId);
@@ -25,6 +26,9 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
         patch: req.method === "PATCH" ? req.body : undefined})};
     }
     if (action === "sessions" && !operationId && req.method === "GET") return {status: 200, body: await reads.sessions(uid, workspaceId)};
+    if (action === "backup" && !operationId && req.method === "GET") {
+      return {status: 200, body: await createVmBackupStatusService({db, now}).getWorkspace({workspaceId, ownerUid: uid})};
+    }
     if (action === "create" && !operationId && req.method === "POST") {
       const body = req.body;
       if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !["requestId", "name"].includes(key))) throw httpError(400, "invalid_vm_request");

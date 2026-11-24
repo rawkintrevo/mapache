@@ -14,7 +14,14 @@ function fixture() {
   const route = {ownerUid: "owner", workspaceId: "workspace", generation: 7, sessionId: "session", enabled: true, address: "10.90.0.12"};
   const docs = new Map([["vmRuntimes_v2/workspace", ws], ["vmRuntimes_v2/workspace/sessions/session", session],
     ["vmRuntimeCredentials_v2/session", credentials], ["vmGatewayRoutes_v2/fixture.example.com", route]]);
-  const ref = path => ({path, doc: id => ref(`${path}/${id}`), collection: id => ref(`${path}/${id}`), get: async () => ({data: () => docs.get(path)})});
+  const ref = path => ({path, doc: id => ref(`${path}/${id}`), collection: id => ref(`${path}/${id}`),
+    get: async () => ({exists: docs.has(path), data: () => docs.get(path)}),
+    where: (field, operator, value) => ({limit: () => ({get: async () => ({docs: [...docs.entries()]
+      .filter(([key, data]) => key.startsWith(`${path}/`) && !key.slice(path.length + 1).includes("/") &&
+        (operator !== "==" || data[field] === value)).map(([key, data]) => ({id: key.slice(path.length + 1), data: () => data}))})})}),
+    limit: () => ({get: async () => ({docs: [...docs.entries()]
+      .filter(([key]) => key.startsWith(`${path}/`) && !key.slice(path.length + 1).includes("/"))
+      .map(([key, data]) => ({id: key.slice(path.length + 1), data: () => data}))})})});
   const calls = [];
   const service = createVmApiService({now: () => time, db: {collection: ref, runTransaction: fn => fn({get: r => r.get()})},
     requireUser: async req => {
@@ -26,6 +33,37 @@ function fixture() {
     call: (path = "/workspaces/workspace/access", body = {expectedGeneration: 7}, method = "POST", uid = "owner") =>
       service({path, body, method, authenticatedUid: uid})};
 }
+
+test("backup status is owner-scoped and exposes bounded recovery diagnostics without secrets", async () => {
+  const f = fixture();
+  f.docs.set("vmBackupInventoryReports_v2/workspace", {
+    ownerUid: "owner", observedAt: "2026-01-01T00:00:00.000Z",
+    compute: {instancePresent: true, instanceStatus: "RUNNING", instanceRunning: true, diskPresent: true,
+      diskStatus: "READY", diskAttached: true, diskSizeGb: 64, headroomKnown: false},
+    backups: {observed: 2, providerObserved: 2, verified: 1, backupAgeMs: 1000, oldestPending: false,
+      retentionCandidates: [{name: "snapshot-1", reason: "retention_expired"}], held: [], quarantined: []},
+    strandedResources: {diskDetached: false, instanceWithoutDisk: false, diskWithoutInstance: false,
+      ownedInstanceCount: 1, ownedDiskCount: 1, unexpectedOwnedInstances: [], unexpectedOwnedDisks: [], resourceInventoryKnown: true},
+    cost: {retainedStorageMonthlyUsd: 6.4, snapshotStorageMonthlyUsd: 0.13, computeMonthlyUsd: null,
+      totalKnownMonthlyUsd: 6.53, ratesAreEstimates: true, unknownComponents: ["compute", "network"]},
+  });
+  f.docs.set("vmBackupRecoveryOperations_v2/recovery-1", {ownerUid: "owner", workspaceId: "workspace",
+    status: "pending", phase: "verify", attempts: 2, createdAtMs: 100, updatedAtMs: 200,
+    lastError: "runner_not_ready", backupId: "backup-1", restoreReceipt: {targetDisk: "secret-disk"}});
+  f.docs.set("vmBackupRecoveryReports_v2/workspace/reports/recovery-1", {ownerUid: "owner", workspaceId: "workspace",
+    operationId: "recovery-1", verifiedAt: "2026-01-01T00:01:00.000Z", runtimeReady: false,
+    startupStageTimingsMs: {boot: 20, secret: -1}, rpoMs: 10, rtoMs: 20, rpoTargetMs: 100, rtoTargetMs: 100,
+    rpoWithinTarget: true, rtoWithinTarget: true, passed: false, failureCode: "runner_not_ready", fileDigest: "private"});
+  const result = await f.call("/workspaces/workspace/backup", {}, "GET");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.inventory.cost.totalKnownMonthlyUsd, 6.53);
+  assert.equal(result.body.recovery.latestOperation.phase, "verify");
+  assert.deepEqual(result.body.recovery.latestReport.startupStageTimingsMs, {boot: 20});
+  assert.ok(!JSON.stringify(result.body).includes("secret-disk"));
+  assert.ok(!JSON.stringify(result.body).includes("private"));
+  f.ws.ownerUid = "foreign";
+  await assert.rejects(f.call("/workspaces/workspace/backup", {}, "GET"), /not_found/);
+});
 
 test("Firebase identity and app admission precede every owner-scoped operation", async () => {
   const f = fixture();

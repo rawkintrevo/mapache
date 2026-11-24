@@ -212,6 +212,12 @@ unknown compute/gateway/network cost components. It never authorizes cleanup
 or deletes an orphan; provider pagination and ownership filtering remain
 bounded at the backup-service boundary.
 
+The owner-scoped `GET /workspaces/{workspaceId}/backup` projection now exposes
+that inventory together with bounded recovery phase/error and RPO/RTO evidence.
+It omits provider addresses, disk IDs, content digests, credentials, and raw
+provider errors; it never authorizes cleanup. This is the diagnostics contract,
+not proof of a fresh-VM restore or a numeric cost meter.
+
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 surface backup/runtime startup, attach, and mount timings and actual costs; and

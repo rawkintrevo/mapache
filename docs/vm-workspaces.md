@@ -459,6 +459,7 @@ address from the caller. All responses use `Cache-Control: no-store`.
 | `POST /workspaces/{id}/access` | `{expectedGeneration}`; owner-scoped signed runner URLs only after lifecycle readiness and matching live session/route authority |
 | `POST /workspaces/{id}/start`, `/pause`, `/replace` | `{expectedGeneration, requestId}`; queues the isolated lifecycle operation, with API admission rechecked in its reservation transaction |
 | `GET /workspaces/{id}/operations/{operationId}` | Safe progress/error fields only for the same owner and workspace |
+| `GET /workspaces/{id}/backup` | Owner-scoped backup inventory, cost-known/unknown components, stranded-resource state, and sanitized recovery diagnostics |
 
 Access credentials expire after 15 minutes. The same agent-audience/generation
 credential is used for Agent, Shell and Preview URLs so a sibling surface cannot
@@ -470,6 +471,14 @@ generation/boot/lease on requests and long connections. A signed runner token
 is not a Firebase API credential. Chrome URLs are returned only when the
 session records that capability. This endpoint does not yet replace the
 frontend's legacy API wiring or admit/migrate an existing workspace.
+
+The backup status projection is read-only. It combines the latest inventory
+report with bounded recovery-operation and recovery-report diagnostics, and
+omits provider addresses, disk IDs, content digests, credentials, and raw
+provider errors. `cleanupAllowed` remains false in this projection; an
+unexpected or stranded resource is evidence for an operator, never permission
+to delete it. Missing billing meters remain in `unknownComponents` rather than
+being represented as zero cost.
 
 `vmFixtureAuth_v2` is an IAM-private test helper, restricted to the fixed
 `vm-proof-owner` and `vm-proof-outsider` identities while the synthetic workspace
