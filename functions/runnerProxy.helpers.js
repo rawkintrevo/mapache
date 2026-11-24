@@ -35,7 +35,14 @@ function classifyRunnerResponseError({status, data, rawBody, fallbackError = "ru
   return explicitError || cleanName(fallbackError) || "runner_request_failed";
 }
 
+function runnerRequestUrl(serviceUrl, routePath, accessToken = "") {
+  const baseUrl = `${String(serviceUrl || "").replace(/\/+$/, "")}${routePath}`;
+  const token = String(accessToken || "").trim();
+  return token ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}mapache_access=${encodeURIComponent(token)}` : baseUrl;
+}
+
 module.exports = {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
+  runnerRequestUrl,
 };

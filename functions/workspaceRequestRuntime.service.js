@@ -46,6 +46,7 @@ function createWorkspaceRequestRuntimeService(dependencies = {}) {
     modelHttpTimeoutMs: dependencies.modelHttpTimeoutMs || WORKSPACE_REQUEST_MODEL_HTTP_TIMEOUT_MS,
     runtimeStartupTimeoutMs: dependencies.runtimeStartupTimeoutMs || WORKSPACE_REQUEST_RUNTIME_STARTUP_TIMEOUT_MS,
     runtimeStartupPollIntervalMs: dependencies.runtimeStartupPollIntervalMs || WORKSPACE_REQUEST_RUNTIME_STARTUP_POLL_INTERVAL_MS,
+    vmRuntime: dependencies.vmRuntime,
   };
   if (typeof shared.createSession !== "function" || typeof shared.restartSession !== "function") {
     throw new Error("Workspace request runtime requires normal session lifecycle dependencies.");
@@ -244,7 +245,7 @@ async function reconcileWorkspaceRequest(runId, dependencies = {}) {
   const cancelRequested = status === "stopping" || normalize(run.desiredOutcome) === "canceled";
   if (status === "provisioning") return provisionWorkspaceRequest(runId, dependencies);
 
-  const session = await readSession(run.workspaceId, run.sessionId, dependencies);
+  const session = await readRunSession(run, dependencies, {wake: !cancelRequested});
   if (!session || !isRunningSession(session)) {
     if (cancelRequested) {
       await markOutcome(runId, "canceled", "workspace_request_canceled", {}, dependencies, dispatchExpectation(run, dependencies));
@@ -268,7 +269,7 @@ async function reconcileWorkspaceRequest(runId, dependencies = {}) {
 async function cancelWorkspaceRequest(runId, dependencies = {}) {
   const run = await readRun(runId, dependencies);
   if (!run || !isSharedWorkspaceRequest(run)) return {skipped: "not_shared_runtime", runId};
-  const session = await readSession(run.workspaceId, run.sessionId, dependencies);
+  const session = await readRunSession(run, dependencies, {wake: false});
   const expectation = dispatchExpectation(run, dependencies);
   if (!session || !isRunningSession(session)) {
     await markOutcome(runId, "canceled", "workspace_request_canceled", {}, dependencies, expectation);
@@ -301,6 +302,18 @@ async function cancelWorkspaceRequest(runId, dependencies = {}) {
 }
 
 async function ensureNormalRuntime(run, dependencies = {}) {
+  if (dependencies.vmRuntime && typeof dependencies.vmRuntime.ensureReady === "function") {
+    const vmSession = await dependencies.vmRuntime.ensureReady(run.ownerUid, run.workspaceId, {
+      requestId: `workspace-request-${run.runId || run.workspaceId}`,
+    });
+    if (vmSession) {
+      return {
+        session: vmSession,
+        workspace: {id: run.workspaceId, ownerUid: run.ownerUid, name: "VM workspace"},
+        vm: true,
+      };
+    }
+  }
   const workspace = await dependencies.requireWorkspace(run.ownerUid, run.workspaceId);
   let session = await findCanonicalSession(workspace, run.workspaceId, dependencies);
   if (!session) {
@@ -336,6 +349,21 @@ async function readSession(workspaceId, sessionId, dependencies = {}) {
   if (!id) return null;
   const snap = await dependencies.sessionCollection(workspaceId).doc(id).get();
   return snap.exists ? {id: snap.id, ...snap.data()} : null;
+}
+
+async function readRunSession(run, dependencies = {}, {wake = true} = {}) {
+  if (dependencies.vmRuntime) {
+    if (wake && typeof dependencies.vmRuntime.ensureReady === "function") {
+      const vmSession = await dependencies.vmRuntime.ensureReady(run.ownerUid, run.workspaceId, {
+        requestId: `workspace-request-${run.runId || run.workspaceId}`,
+      });
+      if (vmSession) return vmSession;
+    } else if (typeof dependencies.vmRuntime.readSession === "function") {
+      const vmSession = await dependencies.vmRuntime.readSession(run.ownerUid, run.workspaceId);
+      if (vmSession) return vmSession;
+    }
+  }
+  return readSession(run.workspaceId, run.sessionId, dependencies);
 }
 
 async function readRun(runId, dependencies = {}) {
@@ -401,6 +429,10 @@ async function claimDispatch(runId, session, dependencies = {}) {
 }
 
 async function markDispatched(runId, session, response, dependencies = {}, run = {}, expectation = {}, options = {}) {
+  if (isVmRunnerSession(session) && dependencies.vmRuntime?.readSession) {
+    const current = await dependencies.vmRuntime.readSession(run.ownerUid, run.workspaceId);
+    if (!current || !isRunningSession(current) || !sameRuntimeIdentity(current, session)) return false;
+  }
   const now = serverTimestamp(dependencies.admin);
   let written = false;
   await dependencies.db.runTransaction(async (transaction) => {
@@ -411,7 +443,7 @@ async function markDispatched(runId, session, response, dependencies = {}, run =
     if (TERMINAL_STATUSES.has(normalize(current.status)) || normalize(current.desiredOutcome) === "canceled" ||
         normalize(current.status) === "stopping") return;
     if (!claimMatches(current, expectation)) return;
-    const sessionRef = dependencies.sessionCollection?.(current.workspaceId)?.doc(session.id);
+    const sessionRef = isVmRunnerSession(session) ? null : dependencies.sessionCollection?.(current.workspaceId)?.doc(session.id);
     const sessionSnap = sessionRef ? await transaction.get(sessionRef) : null;
     if (sessionSnap && (!sessionSnap.exists || !isRunningSession({id: sessionSnap.id, ...sessionSnap.data()}) ||
         !sameRuntimeIdentity({sessionId: session.id, generation: session.agentRuntimeGeneration}, {id: sessionSnap.id, agentRuntimeGeneration: sessionSnap.data()?.agentRuntimeGeneration}))) return;
@@ -642,7 +674,7 @@ async function markDispatchObservation(runId, session, expectation, observation 
 
 async function repairInterruptedWorkspaceRequest(run, dependencies = {}) {
   const sessionId = String(run.sessionId || run.dispatchClaim?.sessionId || "").trim();
-  const session = await readSession(run.workspaceId, sessionId, dependencies);
+  const session = await readRunSession(run, dependencies);
   if (!session || !isRunningSession(session) || !matchingRuntimeGeneration(run, session)) {
     return {retained: true, runId: run.runId, repair: "awaiting_matching_runtime"};
   }
@@ -663,6 +695,10 @@ async function repairInterruptedWorkspaceRequest(run, dependencies = {}) {
 }
 
 async function applyInterruptedRepair(run, session, request, nextStatus, terminal, expectation, dependencies = {}) {
+  if (isVmRunnerSession(session) && dependencies.vmRuntime?.readSession) {
+    const current = await dependencies.vmRuntime.readSession(run.ownerUid, run.workspaceId);
+    if (!current || !isRunningSession(current) || !sameRuntimeIdentity(current, session)) return false;
+  }
   const now = serverTimestamp(dependencies.admin);
   const runRef = dependencies.db.collection("automationRuns").doc(run.runId);
   const ticketId = String(run.ticketId || ticketReference(run) || "").trim();
@@ -672,7 +708,7 @@ async function applyInterruptedRepair(run, session, request, nextStatus, termina
     const runSnap = await transaction.get(runRef);
     const ticketRef = dependencies.db.collection("workspaceTickets").doc(ticketId);
     const ticketSnap = await transaction.get(ticketRef);
-    const sessionRef = dependencies.sessionCollection?.(run.workspaceId)?.doc(session.id);
+    const sessionRef = isVmRunnerSession(session) ? null : dependencies.sessionCollection?.(run.workspaceId)?.doc(session.id);
     const sessionSnap = sessionRef ? await transaction.get(sessionRef) : null;
     const current = runSnap.exists ? runSnap.data() || {} : {};
     if (!runSnap.exists || !ticketSnap.exists || sessionSnap && (!sessionSnap.exists ||
@@ -860,6 +896,11 @@ function runnerTerminalStatus(request = {}) {
 function isSharedWorkspaceRequest(run = {}) {
   return run.executionRoute === SHARED_RUNTIME_EXECUTION_ROUTE ||
     run.workspaceRunRequest?.executionRoute === SHARED_RUNTIME_EXECUTION_ROUTE;
+}
+
+function isVmRunnerSession(session = {}) {
+  return String(session.runtimeProvider?.backend || session.runtimeProviderDescriptor?.backend || "").trim().toLowerCase() === "compute-engine" &&
+    Boolean(String(session.runnerAccessToken || "").trim());
 }
 
 function isRunningSession(session = {}) {

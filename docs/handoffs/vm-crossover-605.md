@@ -141,11 +141,11 @@ Remaining: Complete real VM Chrome/VNC/CDP, upload/download and supported previe
 
 Fully evidenced original acceptance criteria: 4.
 
-### #613: Not implemented end to end — contract only
+### #613: Partial — VM request wake-up adapter implemented, end-to-end gate remains open
 
-Evidence: The intended external scheduler wake-up, request grants, isolated outputs and tool-sharing semantics are documented. Owner-tool source bytes were verified and assembled locally.
+Evidence: `functions/vmWorkspaceRuntime.service.js` now recognizes an owner-matched Compute Engine workspace, submits one idempotent durable `start` lifecycle request for a stopped machine, waits for the current generation's boot/lease/gateway/readiness authority, and creates a short-lived agent access token without putting credentials in the ticket or run contract. The existing shared workspace-request broker reuses that canonical VM runner, re-reads VM identity before acknowledging dispatch, and retains the existing no-blind-replay and cancellation rules. Focused tests cover stopped-target wake-up, ready-target reuse, owner isolation, and request dispatch without a Cloud Run sibling. The request contract documentation records the VM path.
 
-Remaining: Implement and verify stopped-target scheduled/Run-now/request wake-up, cancellation, concurrency, read-only inputs, durable outputs, safe idle shutdown, cross-machine tool sharing and correct usage accounting. No full acceptance criterion is met.
+Remaining: Deploy and exercise this path against an eligible live VM with a real external request and model discovery, then implement and verify stopped-target scheduled/Run-now execution, cancellation races, concurrency, read-only inputs, durable outputs, safe idle/scheduled shutdown, cross-machine tool sharing, and correct usage accounting. No full #613 acceptance criterion is met.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 

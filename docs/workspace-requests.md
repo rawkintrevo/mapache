@@ -40,6 +40,21 @@ create a ticket or dispatch a prompt. The overall model-discovery budget is
 120 seconds, which leaves room for catalog initialization after Cloud Run is
 ready.
 
+For a workspace whose backend-owned `vmRuntimes_v2/{workspaceId}` record uses
+`backend: compute-engine`, `functions/vmWorkspaceRuntime.service.js` takes the
+VM path instead. A stopped admitted VM receives one idempotent durable
+`start` lifecycle request, the adapter waits for the current generation's
+`active` state, boot, lease, gateway route and authenticated runner readiness,
+then mints a short-lived `aud: agent` access token. The broker sends that token
+as the gateway query credential and keeps the runner shutdown credential in the
+server-side request header; neither credential is stored in the ticket, run
+contract, or caller projection. A ready VM is reused, so requests never create
+a second writer or a sibling Cloud Run session against the retained disk.
+Generation changes are re-read before dispatch and ambiguous outcomes retain
+the existing no-blind-replay behavior. If the VM is fenced, not lifecycle
+admitted, missing its current session/credentials, or cannot become ready in
+the bounded startup window, the request fails closed.
+
 The runner catalog request has separate deadlines: the Functions-to-runner HTTP
 call allows 45 seconds, while the pi-web-ui control socket allows 30 seconds
 for first-client initialization and catalog work instead of the 5-second
@@ -76,8 +91,11 @@ discover, choose a currently available exact pair, and submit a new request
 with a new idempotency key.
 
 The request is admitted into the target workspace's normal `runtimeKind: main`
-session. If that session does not exist it is created through the normal session
-lifecycle; if it is stopped, the existing restart path is used. An explicit
+session. For legacy Cloud Run workspaces, if that session does not exist it is
+created through the normal session lifecycle; if it is stopped, the existing
+restart path is used. For Compute Engine workspaces, the canonical VM session
+is the only target and a stopped machine is woken through the durable VM
+lifecycle described above. An explicit
 request model wins; if omitted, the target runner inherits
 the model and provider-key choice most recently saved for `/workspace`. This
 selection is restored from the target's pinned UI checkpoint. Only

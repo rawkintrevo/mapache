@@ -63,6 +63,7 @@ const {createAutomationRunsService} = require("./automationRuns.service");
 const {createWorkspaceTicketsService} = require("./workspaceTickets.service");
 const {createWorkspaceRequestGrantsService} = require("./workspaceRequestGrants.service");
 const {createWorkspaceRequestRuntimeService} = require("./workspaceRequestRuntime.service");
+const {createVmWorkspaceRuntimeService} = require("./vmWorkspaceRuntime.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
@@ -83,6 +84,7 @@ const {
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createRuntimeProviderService} = require("./runtimeProvider.service");
 const {isRuntimeProviderEnabled} = require("./runtimeProvider.helpers");
+const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
 const {
   SESSION_RESOURCE_ERROR_CODE,
   normalizeSessionResources,
@@ -111,6 +113,7 @@ const {createSessionLogsService} = require("./sessionLogs.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
+  runnerRequestUrl,
 } = require("./runnerProxy.helpers");
 const {createProvisioningWorker} = require("./provisioning.worker");
 const {
@@ -312,6 +315,10 @@ const {
   patchSessionService,
   provisionSessionService,
 } = runtimeProviderService;
+const vmWorkspaceRuntimeService = createVmWorkspaceRuntimeService({
+  db,
+  lifecycle: createVmLifecycleAdapter({db}),
+});
 Object.assign(lifecycleDependencies, {
   deleteSessionService,
   patchSessionService,
@@ -339,6 +346,7 @@ const workspaceRequestRuntimeService = createWorkspaceRequestRuntimeService({
   requireWorkspace,
   restartSession,
   sessionCollection,
+  vmRuntime: vmWorkspaceRuntimeService,
 });
 const automationProvisioningService = createAutomationProvisioningService({
   admin,
@@ -1124,7 +1132,8 @@ async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
   try {
-    const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}${routePath}`, {
+    const runnerUrl = runnerRequestUrl(session.serviceUrl, routePath, session.runnerAccessToken);
+    const response = await fetch(runnerUrl, {
       method: options.method || "GET",
       headers: {
         "x-shutdown-token": session.shutdownToken,
