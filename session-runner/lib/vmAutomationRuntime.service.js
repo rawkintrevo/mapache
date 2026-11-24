@@ -208,9 +208,13 @@ function spawnSandboxed({
   inputRoot,
   options,
   outputRoot,
+  retainedDiskRoot,
   spawnImpl,
   stateRoot,
 }) {
+  const hiddenRoot = retainedDiskRoot || childConfig.retainedDiskRoot;
+  if (!hiddenRoot) throw runtimeError("vm_automation_retained_root_missing");
+  const runRoot = path.dirname(inputRoot);
   const sandboxArgs = [
     "--die-with-parent",
     "--new-session",
@@ -219,13 +223,20 @@ function spawnSandboxed({
     "--uid", "0",
     "--gid", "0",
     "--ro-bind", "/", "/",
-    "--tmpfs", childConfig.originalWorkspaceDir || "/var/lib/mapache/workspace/workspace",
+    // Hide the complete retained-disk root. Overlaying only WORKSPACE leaves
+    // sibling automation runs, private state, and other retained paths
+    // reachable through the namespace's otherwise read-only root mount.
+    "--tmpfs", hiddenRoot,
+    "--dir", path.dirname(runRoot),
+    "--dir", runRoot,
+    // The child config intentionally keeps host-looking absolute paths for
+    // startup and diagnostics. Re-bind only this run's trees at those paths
+    // after hiding the retained root.
+    "--bind", outputRoot, outputRoot,
+    "--ro-bind", inputRoot, inputRoot,
+    "--bind", stateRoot, stateRoot,
     "--bind", outputRoot, "/workspace",
     "--ro-bind", inputRoot, "/workspace-input",
-    "--bind", path.join(stateRoot, "home"), path.join(stateRoot, "home"),
-    "--bind", path.join(stateRoot, "pi"), path.join(stateRoot, "pi"),
-    "--bind", path.join(stateRoot, "sessions"), path.join(stateRoot, "sessions"),
-    "--bind", path.join(stateRoot, "ui"), path.join(stateRoot, "ui"),
     "--proc", "/proc",
     "--dev", "/dev",
     "--tmpfs", "/tmp",

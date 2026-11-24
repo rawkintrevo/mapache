@@ -1356,12 +1356,13 @@ disk, copies the workspace into the input tree while filtering
 `.mapache-internal` and rejecting links that escape the workspace, and starts a
 run-private Pi child through `/usr/bin/bwrap`.
 
-Inside the child namespace, the copied input is read-only at
-`/workspace-input`; the live host workspace path is overlaid with an empty
-temporary filesystem; and only the run's retained-disk output tree is writable
-at `/workspace`. Child home, Pi configuration, sessions, and control sockets
-use the run's private state tree. Terminal cleanup removes input and ephemeral
-state after the run reaches a durable outcome, while output remains at
+Inside the child namespace, the complete retained-disk root is overlaid with an
+empty temporary filesystem before only this run's trees are rebound. The copied
+input is read-only at `/workspace-input`; the live workspace and sibling run
+directories are not reachable; and only the run's retained-disk output tree is
+writable at `/workspace`. Child home, Pi configuration, sessions, and control
+sockets use the run's private state tree. Terminal cleanup removes input and
+ephemeral state after the run reaches a durable outcome, while output remains at
 `/var/lib/mapache/workspace/automation-runs/{runId}/output` for the published
 automation artifact contract.
 

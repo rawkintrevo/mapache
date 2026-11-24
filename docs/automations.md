@@ -125,11 +125,12 @@ run records.
   control route. The runner's `vmAutomationRuntime.service.js` creates one
   run-scoped child Pi process inside a bubblewrap user/mount namespace. It
   copies the workspace while excluding `.mapache-internal` and unsafe links,
-  exposes that copy read-only at `/workspace-input`, hides the live retained
-  workspace, and exposes only the run's retained-disk output directory as
-  writable `/workspace`. Child home, Pi state, sessions, and control files are
-  private to the run and are removed after terminal cleanup; durable output is
-  retained and published through `workspaceOutput`.
+  exposes that copy read-only at `/workspace-input`, hides the complete retained
+  disk before rebinding only this run's input/output/state trees, and exposes
+  only the run's retained-disk output directory as writable `/workspace`. Child
+  home, Pi state, sessions, and control files are private to the run and are
+  removed after terminal cleanup; durable output is retained and published
+  through `workspaceOutput`.
 - The VM-native path never creates a dedicated Cloud Run session and generic
   cleanup never sends a Compute-backed run through the Cloud Run deletion
   provider. Durable runner routes support start, status, and cancellation after

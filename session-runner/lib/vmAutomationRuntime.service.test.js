@@ -71,6 +71,7 @@ test("isolatedPort is stable and stays in the private automation range", () => {
 test("spawnSandboxed keeps the launcher cwd on the host and hides the live workspace", () => {
   const calls = [];
   const outputRoot = "/var/lib/mapache/workspace/automation-runs/run-605/output";
+  const retainedDiskRoot = "/var/lib/mapache/workspace";
   const stateRoot = "/var/lib/mapache/workspace/automation-runs/run-605/state";
   const result = spawnSandboxed({
     args: ["/usr/local/lib/pi-web-ui/index.js"],
@@ -80,6 +81,7 @@ test("spawnSandboxed keeps the launcher cwd on the host and hides the live works
     inputRoot: "/var/lib/mapache/workspace/automation-runs/run-605/input",
     options: {env: {KEEP: "1"}, stdio: ["ignore", "pipe", "pipe"]},
     outputRoot,
+    retainedDiskRoot,
     spawnImpl: (...arguments_) => {
       calls.push(arguments_);
       return {pid: 1234};
@@ -94,7 +96,9 @@ test("spawnSandboxed keeps the launcher cwd on the host and hides the live works
   assert.equal(calls[0][2].env.WORKSPACE_DIR, "/workspace");
   assert.deepEqual(calls[0][1].slice(-2), ["/usr/bin/node", "/usr/local/lib/pi-web-ui/index.js"]);
   assert.ok(calls[0][1].includes("--unshare-user"));
-  assert.ok(calls[0][1].includes("--ro-bind"));
-  assert.ok(calls[0][1].includes("/workspace-input"));
   assert.ok(calls[0][1].includes("--tmpfs"));
+  assert.deepEqual(calls[0][1].slice(calls[0][1].indexOf("--tmpfs"), calls[0][1].indexOf("--tmpfs") + 2), ["--tmpfs", retainedDiskRoot]);
+  assert.ok(calls[0][1].includes("--bind"));
+  assert.ok(calls[0][1].includes("/workspace-input"));
+  assert.deepEqual(calls[0][1].slice(calls[0][1].indexOf("--ro-bind", 4), calls[0][1].indexOf("--ro-bind", 4) + 3), ["--ro-bind", "/", "/"]);
 });
