@@ -6,6 +6,7 @@ import {inspectMigrationSource} from './lib/vm-migration-inventory.mjs';
 import {verifyCheckpointPayloads} from './lib/vm-checkpoint-payloads.mjs';
 import {storageCandidates, inventoryStorageMetadata, inspectBrowserSeedMetadata} from './lib/vm-storage-metadata.mjs';
 import {verifyGzipTar} from './lib/vm-archive-verifier.mjs';
+import {inspectSharedTreeAuthority} from './lib/vm-shared-tree-authority.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
 const workspaceFields = ['ownerUid', 'source', 'imageKey', 'runtimeProvider.backend', 'status', 'lifecycle', 'deleted',
@@ -78,6 +79,18 @@ async function main() {
     const sessions = [];
     for await (const session of pages(doc.ref.collection('sessions'), sessionFields)) sessions.push({id: session.id, ...session.data()});
     const record = await inspectMigrationSource({workspaceId: doc.id, workspace: doc.data(), sessions, readManifest,
+      inspectSharedTree: maxObjects ? args => inspectSharedTreeAuthority({...args,
+        readBucketMetadata: async bucket => (await storage.bucket(bucket).getMetadata())[0],
+        readJsonObject: async ({bucketName, objectPath, maxBytes}) => {
+          const [metadata] = await storage.bucket(bucketName).file(objectPath).getMetadata();
+          if (!Number.isSafeInteger(Number(metadata.size)) || Number(metadata.size) > maxBytes) throw Error('shared_json_invalid');
+          const chunks = []; let size = 0;
+          for await (const chunk of storage.bucket(bucketName).file(objectPath, {generation: metadata.generation}).createReadStream()) {
+            size += chunk.length; if (size > maxBytes) throw Error('shared_json_invalid'); chunks.push(chunk);
+          }
+          return {content: Buffer.concat(chunks), generation: metadata.generation};
+        },
+      }) : undefined,
       verifyPayloads: options['--verify-bytes'] ? (manifest, manifestRef) => verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) : undefined});
     if (maxObjects) record.storageMetadata = await inventoryStorageMetadata({
       ...storageCandidates({workspace: doc.data(), sessions, defaultBucket: options['--default-bucket'], toolsBucket: options['--tools-bucket']}), maxObjects,

@@ -7,7 +7,7 @@ const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
 // Inventory deliberately cannot publish a pointer, pause a writer or create a
 // resource. Only the injected reader can access storage; no write API is used.
-export async function inspectMigrationSource({workspaceId, workspace, sessions, readManifest, verifyPayloads}) {
+export async function inspectMigrationSource({workspaceId, workspace, sessions, readManifest, verifyPayloads, inspectSharedTree}) {
   const blockers = new Set();
   const formats = new Set();
   const sources = [];
@@ -25,8 +25,9 @@ export async function inspectMigrationSource({workspaceId, workspace, sessions, 
   if (workspace.source?.type === 'github') formats.add('git-backed');
   if (workspace.sharedStorage?.bucketName) {
     formats.add('shared-gcs-tree');
+    const authority = inspectSharedTree ? await inspectSharedTree({workspaceId, workspace}) : undefined;
     sources.push({kind: 'shared-tree', bucketName: workspace.sharedStorage.bucketName,
-      generation: workspace.sharedStorage.storageGeneration || null, validation: 'not-read'});
+      generation: workspace.sharedStorage.storageGeneration || null, validation: authority?.status || 'not-read', ...(authority ? {authority} : {})});
     blockers.add('shared_tree_marker_and_objects_not_verified');
   }
   let knownLogicalBytes = 0;

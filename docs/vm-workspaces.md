@@ -5,6 +5,11 @@ backend introduced by #605. Firebase Hosting, Auth, Firestore, Cloud Storage,
 and Cloud Functions remain the control plane. The VM feature is disabled until
 the isolated proof and release gates in this page have passed.
 
+The [2026-11-23 handoff](./handoffs/vm-crossover-605.md) records the paused
+implementation state, issue-by-issue evidence, live fixture, recovery gaps and
+next steps. It distinguishes implemented behavior from the target contracts
+below; the crossover is not complete.
+
 ## Decision summary
 
 Each managed workspace is one logical machine with a stable workspace ID and a
@@ -907,6 +912,17 @@ operator-rehearsed restore to a fresh disk/VM. Application-consistent captures
 are required before a migration cutover or any operation that claims a tighter
 RPO. Cleanup first fences admissions, confirms compute absence and disk
 detachment, and only then applies the explicit tombstone/backup policy.
+
+The read-only inventory's `--list-objects` mode also checks shared-tree bucket
+ownership, HNS layout, generation-ready marker and original import control
+identity through `scripts/lib/vm-shared-tree-authority.mjs`. It does not invoke
+legacy helpers that repair IAM. Missing/denied buckets, invalid provenance and
+missing control records remain distinct outcomes; verified original provenance
+does not verify current mutable objects or HNS folders and never clears cutover
+blockers. The handoff scan of the sole shared-tree record returned
+`shared_bucket_not_found`. Private evidence:
+`artifacts/qa/vm-shared-tree-inventory/handoff.json`. Four focused tests cover
+valid provenance, refusal paths and preservation of migration blockers.
 
 ## Cost model and guardrails
 
