@@ -1445,6 +1445,10 @@ delete operation instead of deleting an unverified, foreign, migration, or
 rollback-protected snapshot. The scheduler refuses reservations while a VM
 migration fence exists. The worker records provider acceptance and deletion
 state, but it does not claim fresh-VM file/runtime verification.
+Compute provider operations are polled by bounded location-aware operation
+receipts; retention does not mark a snapshot deleted while a named provider
+delete is still pending, and retries reuse that receipt rather than issuing a
+second delete.
 
 The same opt-in scheduler performs a read-only inventory pass for each
 eligible VM and writes `vmBackupInventoryReports_v2/{workspaceId}`. The report

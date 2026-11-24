@@ -194,6 +194,11 @@ RTO targets, and records sanitized startup-timing reports with bounded retry on
 transient readiness errors. Existing legacy storage backup code is not VM
 evidence.
 
+Compute snapshot delete and restore receipts now poll named zonal, regional, or
+global provider operations before completion; a pending retention delete keeps
+its provider operation in the durable retry record and never issues a blind
+second delete. The operation-polling boundary is covered by focused tests.
+
 The same opt-in scheduler now writes a read-only
 `vmBackupInventoryReports_v2/{workspaceId}` report. It records instance/disk
 presence and attachment, backup age, retention holds/quarantine decisions,

@@ -135,11 +135,16 @@ function createComputeEngineBackupService(dependencies = {}) {
         }),
       },
     });
-    return {...receipt, diskName: target, operation: response.data};
+    const operation = await waitForOperation(response.data, descriptor);
+    return {...receipt, diskName: target, operation};
   }
 
   async function deleteSnapshot(rawDescriptor, snapshotName, options = {}) {
     const descriptor = normalizeRuntimeDescriptor(rawDescriptor, {workspaceId: rawDescriptor.workspaceId, ownerUid: rawDescriptor.ownerUid});
+    if (options.providerOperation) {
+      const operation = await waitForOperation(options.providerOperation, descriptor);
+      return {deleted: operationComplete(operation), pending: !operationComplete(operation), operation};
+    }
     const snapshot = await inspectSnapshot(descriptor, snapshotName);
     if (!options.snapshotRecord) {
       const error = new Error("vm_backup_deletion_guard_required");
@@ -156,7 +161,42 @@ function createComputeEngineBackupService(dependencies = {}) {
       computeAbsent: options.computeAbsent, diskDetached: options.diskDetached,
       admissionsBlocked: options.admissionsBlocked});
     const response = await requestImpl({url: `${baseUrl()}/global/snapshots/${encodeURIComponent(snapshot.name)}`, method: "DELETE"});
-    return {deleted: true, operation: response.data};
+    const operation = await waitForOperation(response.data, descriptor);
+    return {deleted: operationComplete(operation), pending: !operationComplete(operation), operation};
+  }
+
+  async function waitForOperation(operation, descriptor, timeoutMs = 240000) {
+    if (!operation?.name || operationComplete(operation)) return operation || null;
+    const deadline = Date.now() + timeoutMs;
+    let current = operation;
+    while (!operationComplete(current)) {
+      if (Date.now() > deadline) {
+        const error = new Error("vm_backup_provider_operation_timeout");
+        error.code = "vm_backup_provider_operation_timeout";
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000, Math.max(1, deadline - Date.now()))));
+      const response = await requestImpl({url: operationUrl(current), method: "GET"});
+      current = response.data;
+    }
+    if (current?.error?.errors?.length) {
+      const error = new Error("vm_backup_provider_operation_failed");
+      error.code = "vm_backup_provider_operation_failed";
+      throw error;
+    }
+    return current;
+  }
+
+  function operationComplete(operation) {
+    return !operation || String(operation.status || "").toUpperCase() === "DONE" || operation.done === true;
+  }
+
+  function operationUrl(operation) {
+    const operationName = encodeURIComponent(String(operation.name).split("/").pop());
+    const location = String(operation.zone || operation.region || "");
+    if (location.includes("/zones/")) return `${baseUrl()}/zones/${encodeURIComponent(location.split("/").pop())}/operations/${operationName}`;
+    if (location.includes("/regions/")) return `${baseUrl()}/regions/${encodeURIComponent(location.split("/").pop())}/operations/${operationName}`;
+    return `${baseUrl()}/global/operations/${operationName}`;
   }
 
   function costSummary({retainedGiB = 0, changedSnapshotGiB = 0, diskRate = 0.10, snapshotRate = 0.065} = {}) {

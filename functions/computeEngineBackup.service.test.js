@@ -95,3 +95,29 @@ test("snapshot deletion requires an expired verified policy receipt", async () =
   assert.equal(result.deleted, true);
   assert.equal(calls.at(-1).method, "DELETE");
 });
+
+test("snapshot deletion polls a named provider operation before reporting completion", async () => {
+  let polls = 0;
+  const service = createComputeEngineBackupService({
+    request: async request => {
+      if (request.method === "GET" && request.url.includes("/operations/")) {
+        polls++;
+        return {data: {name: "operation-1", status: polls > 0 ? "DONE" : "PENDING"}};
+      }
+      if (request.method === "GET") return {data: {name: "snapshot-1", labels: {
+        "mapache-owner-uid": "owner-1", "mapache-workspace-id": "workspace-1", "mapache-runtime-provider": "compute-engine",
+      }}};
+      return {data: {name: "operation-1", status: "PENDING", zone: "zones/us-central1-a"}};
+    },
+  });
+  const record = markBackupVerified({...createBackupRecord({workspaceId: "workspace-1", ownerUid: "owner-1", operationId: "backup-1",
+    sourceDisk: "disk-1", sourceGeneration: 1, capturedAt: "2026-01-01T00:00:00.000Z", retentionDays: 1})},
+  {workspaceId: "workspace-1", ownerUid: "owner-1", operationId: "backup-1", verifiedAt: "2026-01-01T00:01:00.000Z"});
+  const first = await service.deleteSnapshot(descriptor, "snapshot-1", {snapshotRecord: {...record, name: "snapshot-1"},
+    ownerUid: "owner-1", workspaceId: "workspace-1", now: "2026-01-03T00:00:00.000Z"});
+  assert.equal(first.deleted, true);
+  assert.equal(polls, 1);
+  const pending = await service.deleteSnapshot(descriptor, "snapshot-1", {providerOperation: {name: "operation-1", status: "PENDING", zone: "zones/us-central1-a"}});
+  assert.equal(pending.deleted, true);
+  assert.equal(polls, 2);
+});

@@ -210,8 +210,13 @@ function createVmBackupSchedulerService({db, backup, now = Date.now, logger = co
   async function deleteExpiredSnapshot(operation, operationRef, claimId) {
     const result = await backup.deleteSnapshot(operation.descriptor, operation.snapshotRecord.name, {
       snapshotRecord: operation.snapshotRecord, mode: "retention", ownerUid: operation.ownerUid,
-      workspaceId: operation.workspaceId, now: new Date(now()),
+      workspaceId: operation.workspaceId, now: new Date(now()), providerOperation: operation.providerOperation,
     });
+    if (result.deleted !== true) {
+      await commit(operationRef, claimId, operation, {providerOperation: result.operation || operation.providerOperation || null,
+        nextAttemptAtMs: now() + RETRY_MS, lastError: "vm_backup_delete_pending"});
+      return {claimed: true, pending: true};
+    }
     const backupRef = db.collection(BACKUPS).doc(operation.workspaceId).collection("items").doc(operation.backupRecordId);
     await backupRef.set({...operation.snapshotRecord, state: "deleted", deletedAt: new Date(now()).toISOString(), deleteOperation: result.operation || null});
     await commit(operationRef, claimId, operation, {phase: "complete", status: "succeeded", completedAtMs: now(), lastError: null});

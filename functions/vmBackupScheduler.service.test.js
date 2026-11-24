@@ -111,6 +111,35 @@ test("expired verified snapshots become ownership-bound retention operations", a
   assert.equal(db.docs("vmBackups_v2/workspace-1/items")[0].data.state, "deleted");
 });
 
+test("retention keeps a pending provider delete retryable", async () => {
+  const db = memoryDb();
+  const descriptor = createRuntimeDescriptor({backend: "compute-engine", workspaceId: "workspace-1", ownerUid: "owner-1"});
+  db.seed("vmRuntimes_v2/workspace-1", {ownerUid: "owner-1", backend: "compute-engine", generation: 1, state: "stopped", lifecycleEnabled: true,
+    runtimeProvider: descriptor, backupPolicy: {enabled: true, schedule: "daily", lastScheduledSlotMs: NOW}});
+  db.seed("vmBackups_v2/workspace-1/items/backup-1", {name: "snapshot-1", workspaceId: "workspace-1", ownerUid: "owner-1", state: "verified",
+    verification: {state: "verified"}, retention: {expiresAt: "2026-01-01T00:00:00.000Z"}});
+  let clock = NOW;
+  let calls = 0;
+  const service = createVmBackupSchedulerService({db, now: () => clock, backup: {
+    createSnapshot: async () => ({name: "unused"}),
+    inspectSnapshot: async () => ({status: "READY"}),
+    deleteSnapshot: async (_descriptor, _name, options) => {
+      calls++;
+      if (!options.providerOperation) return {deleted: false, operation: {name: "delete-1", status: "PENDING"}};
+      return {deleted: true, operation: {name: "delete-1", status: "DONE"}};
+    },
+  }});
+  await service.runTick();
+  let operation = db.docs("vmBackupOperations_v2")[0].data;
+  assert.equal(operation.status, "pending");
+  assert.equal(operation.lastError, "vm_backup_delete_pending");
+  clock = operation.nextAttemptAtMs + 1;
+  await service.runTick();
+  operation = db.docs("vmBackupOperations_v2")[0].data;
+  assert.equal(operation.status, "succeeded");
+  assert.equal(calls, 2);
+});
+
 function memoryDb() {
   const values = new Map();
   const db = {
