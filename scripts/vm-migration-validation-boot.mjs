@@ -10,6 +10,7 @@ const {createRuntimeDescriptor} = require("../functions/runtimeProvider.helpers.
 const {VALIDATION_COLLECTION} = require("../functions/vmRuntimeControl.service.js");
 
 const PROJECT = "pi-agents-cloud";
+const STORAGE_BUCKET = "pi-agents-cloud.firebasestorage.app";
 const REGION = "us-central1";
 const GATEWAY_SERVICE = "mapache-vm-gateway-v2";
 const CONTROL_URL = `https://${REGION}-${PROJECT}.cloudfunctions.net/vmMigrationValidationControl_v2`;
@@ -43,7 +44,7 @@ function gatewayUrl(options) {
   const raw = options.get("--gateway-url") || execFileSync("gcloud", ["run", "services", "describe", GATEWAY_SERVICE,
     "--region", REGION, "--project", PROJECT, "--format=value(status.url)"], {encoding: "utf8"}).trim();
   const url = new URL(raw);
-  if (url.protocol !== "https:" || !url.hostname.endsWith(".a.run.app") || url.username || url.password || url.search || url.hash) {
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".run.app") || url.username || url.password || url.search || url.hash) {
     throw Error("validation_gateway_url_invalid");
   }
   return url;
@@ -55,8 +56,11 @@ function validationSessionId(operationId) {
   return `validation-${match[1]}`;
 }
 
-function routeHost(gateway, operationId) {
-  return `validation-${operationId.slice("validate-".length)}.${gateway.hostname}`;
+function routeHost(gateway, _operationId) {
+  // Cloud Run only routes its exact service hostname. A synthetic subdomain
+  // under *.a.run.app is rejected at the platform edge before the proxy can
+  // forward it, so validation must use a dedicated gateway service/hostname.
+  return gateway.hostname;
 }
 
 function operationRef(db, workspaceId, operationId) {
@@ -225,6 +229,7 @@ async function main() {
   const coordinator = createVmMigrationCoordinator({db, inspectDestinationDisk: compute.inspectMigrationDisk,
     ensureValidationClone: compute.ensureMigrationValidationClone, startValidationVm: compute.startMigrationValidationVm,
     deleteValidationResources: compute.deleteMigrationValidationResources,
+    defaultBucket: STORAGE_BUCKET,
     authorize: async (_, requested) => ["reserve-validation-boot", "prepare-validation-clone", "start-validation-boot", "cleanup-validation-boot"].includes(requested)});
   const input = {workspaceId: options.get("--workspace"), ownerUid: options.get("--owner"), operationId: options.get("--operation")};
   let gateway;

@@ -1390,6 +1390,12 @@ against `vmMigrationValidationRuntimes_v2`; it cannot read or route through the
 ordinary `vmRuntimes_v2` registry. The broker returns an empty auth/model scope,
 so owner-wide credentials are not copied into the validation boot.
 
+The route Host must be the exact hostname of the Cloud Run gateway service.
+Cloud Run rejects a synthetic validation subdomain at the platform edge before
+the gateway can receive it. For a disposable proof, use a dedicated temporary
+gateway service and pass its HTTPS `.run.app` URL with `--gateway-url`; do not
+change the existing production gateway's route set for this purpose.
+
 Cleanup is part of the command, including health timeout and Compute-start
 failure paths. It cooperatively shuts down the runner when possible, releases
 the short lease, checks the validation-only labels, exact clone/source disk IDs,
@@ -1398,6 +1404,15 @@ clone disk. Finally it removes the temporary route, validation credentials and
 registry documents while retaining sanitized operation evidence. An interrupted
 run can be completed with the same command's `cleanup` action. A started
 instance alone is insufficient for cutover.
+
+On 2026-11-24, a disposable `pi-agents-cloud` fixture completed this command
+with a newly published pinned runner image. Authenticated `/runner/health`
+returned HTTP 200 with the expected workspace/session and ready Agent runtime.
+The command then reported `instanceDeleted=true` and `diskDeleted=true`; direct
+post-run checks found no validation VM or clone disk, no validation route or
+credential document, and the source disk detached and READY. This proves the
+clone boot/readiness/cleanup milestone only; writer drainage, authority switch,
+rollback and full application acceptance remain separate migration gates.
 [Compute Engine disk reference](https://docs.cloud.google.com/compute/docs/reference/rest/v1/disks/get)
 
 The emulator passes a locally installed receipt through coordinator
