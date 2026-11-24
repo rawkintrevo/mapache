@@ -2,6 +2,7 @@
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
+const {FENCE_ERROR, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 const {
   isActiveAutomationStatus,
   isTerminalAutomationStatus,
@@ -54,6 +55,10 @@ async function admitNextEligibleRun(workspaceId, dependencies = {}) {
       transaction.get(sessionsRef),
     ]);
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    if (await hasVmMigrationFence(transaction, firestore, normalizedWorkspaceId)) {
+      result = {admitted: false, workspaceId: normalizedWorkspaceId, reason: FENCE_ERROR};
+      return;
+    }
 
     const workspace = workspaceSnap.data() || {};
     if (workspace.deleted === true || ["deleting", "deleted"].includes(normalize(workspace.lifecycle || workspace.status))) {

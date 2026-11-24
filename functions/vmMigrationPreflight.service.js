@@ -3,6 +3,7 @@
 const {createHash} = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
 const {isWorkspaceStorageMigrationActive} = require("./runtimeReservation.helpers");
+const {vmMigrationFenceRef} = require("./vmMigrationFence.helpers");
 
 const SESSION_LIMIT = 500;
 const RUN_LIMIT = 100;
@@ -60,17 +61,19 @@ function createVmMigrationPreflight({db}) {
     return db.runTransaction(async transaction => {
       const workspace = await transaction.get(workspaceRef);
       if (!workspace.exists || workspace.get("ownerUid") !== ownerUid) throw httpError(404, "vm_migration_source_not_found");
-      const [destination, sessionList, runList] = await Promise.all([
-        transaction.get(destinationRef), transaction.get(sessions), transaction.get(runs),
+      const [destination, fence, sessionList, runList] = await Promise.all([
+        transaction.get(destinationRef), transaction.get(vmMigrationFenceRef(db, workspaceId)),
+        transaction.get(sessions), transaction.get(runs),
       ]);
       const sessionRecords = sessionList.docs.slice(0, SESSION_LIMIT);
       const runRecords = runList.docs.slice(0, RUN_LIMIT);
       const result = classify(workspace.data(), sessionRecords.map(s => s.data()), runRecords.map(s => s.data()), destination.exists);
+      if (fence.exists) result.blockers.push("migration_fence_already_exists");
       const truncated = sessionList.size > SESSION_LIMIT || runList.size > RUN_LIMIT;
       if (truncated) result.blockers.push("legacy_writer_inventory_truncated");
       const observedSourceGeneration = workspace.get("agentRuntimeGeneration");
       const stamp = snapshot => [snapshot.ref.path, snapshot.updateTime?.seconds ?? null, snapshot.updateTime?.nanoseconds ?? null];
-      const evidence = [workspace, destination, ...sessionRecords, ...runRecords].map(stamp)
+      const evidence = [workspace, destination, fence, ...sessionRecords, ...runRecords].map(stamp)
           .sort(([a], [b]) => a.localeCompare(b));
       return {...result, workspaceId, readOnly: true, readyForFreeze: false, readyForCutover: false,
         // This fingerprint binds the observed records, not Cloud Run or Storage.

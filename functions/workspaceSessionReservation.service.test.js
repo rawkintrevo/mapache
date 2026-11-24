@@ -29,6 +29,7 @@ function createFakeFirestore(initialWorkspace, initialSessions = {}) {
     workspace: clone(initialWorkspace),
     sessions: new Map(Object.entries(initialSessions).map(([id, session]) => [id, clone(session)])),
   };
+  const fenceRef = {};
   const workspaceRef = {
     id: "workspace-1",
     collection(name) {
@@ -44,6 +45,7 @@ function createFakeFirestore(initialWorkspace, initialSessions = {}) {
   };
 
   function snapshot(ref) {
+    if (ref === fenceRef) return {exists: state.fenced === true};
     if (ref === workspaceRef) {
       return {exists: true, data: () => clone(state.workspace)};
     }
@@ -63,6 +65,7 @@ function createFakeFirestore(initialWorkspace, initialSessions = {}) {
 
   const firestore = {
     collection(name) {
+      if (name === "vmMigrationFences_v2") return {doc: () => fenceRef};
       assert.strictEqual(name, "workspaces");
       return {doc: (id) => {
         assert.strictEqual(id, "workspace-1");
@@ -127,6 +130,13 @@ function sessionRef(sessionsRef, id) {
 }
 
 (async () => {
+  const frozen = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
+  frozen.state.fenced = true;
+  const fencedService = createWorkspaceSessionReservationService({db: frozen.firestore, admin});
+  await assert.rejects(fencedService.reserveChromeWorkspaceSession("workspace-1",
+      sessionRef(frozen.sessionsRef, "frozen"), session("frozen", "operation-frozen")),
+  {publicMessage: "workspace_vm_migration_active"});
+  assert.equal(frozen.state.sessions.size, 0);
   const equal = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
   const equalService = createWorkspaceSessionReservationService({db: equal.firestore, admin});
   const equalA = session("session-equal", "operation-equal");

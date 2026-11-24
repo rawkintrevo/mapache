@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 
-function fixture({workspace = {}, sessions = [], runs = [], destination, version = 1} = {}) {
+function fixture({workspace = {}, sessions = [], runs = [], destination, fence, version = 1} = {}) {
   const workspacePath = "workspaces/fixture";
   const pathSnapshots = new Map();
   const snapshot = (path, data) => ({
@@ -14,6 +14,7 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, version
   });
   pathSnapshots.set(workspacePath, snapshot(workspacePath, {ownerUid: "owner", agentRuntimeGeneration: 3, ...workspace}));
   pathSnapshots.set("vmRuntimes_v2/fixture", snapshot("vmRuntimes_v2/fixture", destination));
+  pathSnapshots.set("vmMigrationFences_v2/fixture", snapshot("vmMigrationFences_v2/fixture", fence));
   for (const [path, values] of [[workspacePath + "/sessions", sessions], ["automationRuns", runs]]) {
     pathSnapshots.set(path, {size: values.length, docs: values.map((row, i) => snapshot(path + "/" + i, row))});
   }
@@ -60,4 +61,7 @@ test("inventory truncation and apparently stopped source both fail closed", asyn
   const paused = await fixture({sessions: [{status: "stopped"}]}).inspect();
   assert.equal(paused.counts.possiblyActiveSessions, 0);
   assert.deepEqual(paused.blockers, ["legacy_admission_fence_unverified", "live_compute_and_storage_authority_unverified"]);
+  const fenced = await fixture({fence: {}}).inspect();
+  assert.ok(fenced.blockers.includes("migration_fence_already_exists"));
+  assert.notEqual(fenced.observationSha256, (await fixture().inspect()).observationSha256);
 });

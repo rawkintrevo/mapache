@@ -1,5 +1,7 @@
 "use strict";
 
+const {FENCE_ERROR, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
+
 const crypto = require("node:crypto");
 const logger = require("firebase-functions/logger");
 
@@ -167,6 +169,9 @@ async function claimAutomationRun(runRef, runId, dependencies = {}) {
     }
     if (String(run.status || "").trim().toLowerCase() !== "provisioning") {
       return {action: "skip", reason: `status_${String(run.status || "unknown").trim().toLowerCase()}`};
+    }
+    if (await hasVmMigrationFence(transaction, dependencies.db, run.workspaceId)) {
+      return {action: "skip", reason: FENCE_ERROR};
     }
 
     const contextResolution = resolveWorkspaceRunContext(run.workspaceRunRequest, workspace);

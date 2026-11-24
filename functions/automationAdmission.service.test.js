@@ -181,6 +181,14 @@ function harness({limit = 1, mainStatus = "stopped", runs = []} = {}) {
   return db;
 }
 
+test("leaves queued work pending under a migration fence", async () => {
+  const db = harness({runs: [{runId: "run-a", pendingRunId: true}]});
+  db.data.set("vmMigrationFences_v2/workspace-1", {});
+  assert.equal((await admitNextEligibleRun("workspace-1", {db, admin})).reason, "workspace_vm_migration_active");
+  assert.equal(db.read("automationRuns/run-a").status, "queued");
+  assert.equal(db.read("workspaces/workspace-1/automations/automation-1").pendingRunId, "run-a");
+});
+
 test("admits only one concurrent run at the limit and clears its pending pointer", async () => {
   const db = harness({limit: 1, runs: [
     {runId: "run-a", pendingRunId: true},

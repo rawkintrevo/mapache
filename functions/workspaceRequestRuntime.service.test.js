@@ -77,6 +77,14 @@ function setup(overrides = {}) {
   return {calls, db, service};
 }
 
+test("fenced workspace gets no new runner dispatch even with a running session", async () => {
+  const {calls, db, service} = setup();
+  db.values.set("vmMigrationFences_v2/target", {});
+  assert.deepEqual(await service.provision("run-1"), {skipped: "workspace_vm_migration_active", runId: "run-1"});
+  assert.equal(calls.length, 0);
+  assert.equal(db.values.get("automationRuns/run-1").dispatchClaim, undefined);
+});
+
 test("dispatches an incoming request into the existing normal runtime exactly once", async () => {
   const {calls, db, service} = setup();
   const result = await service.provision("run-1");

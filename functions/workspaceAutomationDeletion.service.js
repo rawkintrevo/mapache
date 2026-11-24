@@ -1,5 +1,7 @@
 "use strict";
 
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
+
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
 const {
@@ -161,6 +163,7 @@ async function markWorkspaceDeleting(uid, workspaceId, dependencies = {}) {
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const workspace = workspaceSnap.data() || {};
     if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
     const operationSnap = await transaction.get(opRef);
     if (operationSnap.exists && operationSnap.data()?.state === "complete") return;
     const now = serverTimestamp(dependencies);

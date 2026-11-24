@@ -149,6 +149,14 @@ function harness({deleteService = true} = {}) {
   return {calls, db, service};
 }
 
+test("fenced workspace deletion cannot create a tombstone or start cleanup", async () => {
+  const {calls, db, service} = harness();
+  db.data.set("vmMigrationFences_v2/workspace-1", {});
+  await assert.rejects(service.deleteWorkspace("user-1", "workspace-1"), {publicMessage: "workspace_vm_migration_active"});
+  assert.equal(calls.length, 0);
+  assert.equal(db.data.has(`${DELETION_OPERATION_COLLECTION}/workspace-1`), false);
+});
+
 test("workspace deletion tombstones first, waits for service absence, and preserves usage ledger", async () => {
   const {calls, db, service} = harness();
   const operation = await service.deleteWorkspace("user-1", "workspace-1");

@@ -1,5 +1,7 @@
 "use strict";
 
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
+
 const {randomUUID} = require("node:crypto");
 const {httpError, toClientDoc} = require("./backendUtils.helpers");
 const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
@@ -26,6 +28,7 @@ function createSessionResizeService({admin, db, requireSession, resizeSession, n
       if (!snapshot.exists) throw httpError(404, "session_not_found");
       const session = snapshot.data();
       if (!isSupportedProvisioningSession(session)) throw httpError(400, "unsupported_runner");
+      await assertVmMigrationAdmission(transaction, db, workspaceId);
       if (ACTIVE_RESIZE_STATES.has(session.resizeOperationState)) {
         if (session.resizeRequestedResources?.cpu === resources.cpu && session.resizeRequestedResources?.memory === resources.memory) return;
         throw httpError(409, "session_resize_in_progress");
@@ -54,6 +57,7 @@ function createSessionResizeService({admin, db, requireSession, resizeSession, n
       if (!snapshot.exists) return null;
       const current = snapshot.data();
       if (current.resizeOperationId !== operationId || !ACTIVE_RESIZE_STATES.has(current.resizeOperationState)) return null;
+      await assertVmMigrationAdmission(transaction, db, event.params.workspaceId);
       if (current.resizeOperationState === "running" && now() - Number(current.resizeOperationStartedAt) < CLAIM_TIMEOUT_MS) {
         // Retried delivery must wait for completion or the previous invocation's timeout.
         throw new Error("session_resize_worker_active");

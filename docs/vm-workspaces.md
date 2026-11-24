@@ -945,8 +945,24 @@ and behavior after fence release. These rule changes are in the draft;
 production rollout must be coordinated with the backend writer checks.
 Rules apply to Firebase clients. Admin SDK operations, existing session
 dispatch, queued workers and signed Storage writes need their own admission
-and drain checks. Compute
-absence and final Storage generations need separate verification after
+and drain checks.
+
+The checked-in server admission paths use `functions/vmMigrationFence.helpers.js`
+to read the backend-only fence in the same Firestore transaction as new
+session reservation, resize enqueue/claim, automation enqueue/admission/
+provisioning, fresh dispatch to an existing runner, or the initial workspace
+deletion tombstone. A fence blocks these transitions without consuming the
+queued job or initiating deletion. Existing request claims can still be observed
+and reconciled. The coordinator must account for work committed before the
+fence, including resumed deletions and already submitted cloud operations.
+Direct legacy restart paths without a new reservation, runner-side work and
+signed Storage writes still need full coverage. The preflight now includes the
+fence in its observation digest and reports its presence as a blocker.
+Only the updated read-only preflight is deployed in this increment. The
+legacy server guards and Firestore rules require coordinated rollout and do
+not yet authorize creating production fences.
+
+Compute absence and final Storage generations need separate verification after
 quiesce. Do not reuse the legacy migration record as an authoritative
 VM cutover lock.
 

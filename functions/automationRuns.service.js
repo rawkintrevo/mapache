@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError, serialize} = require("./backendUtils.helpers");
 const {assertWorkspaceStorageMigrationAllowed} = require("./runtimeReservation.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {
   AUTOMATION_RUN_STATUSES,
   buildAutomationRun,
@@ -82,6 +83,7 @@ async function enqueueRun(input = {}, dependencies = {}) {
 
     const workspace = assertWorkspace(workspaceSnap, actorUid, workspaceId);
     assertWorkspaceStorageMigrationAllowed(workspace);
+    await assertVmMigrationAdmission(transaction, firestore, workspaceId);
     const definition = definitionSnap.exists ? definitionSnap.data() || {} : null;
     let sourceRun = null;
 
@@ -243,6 +245,7 @@ async function enqueueWorkspaceRun(input = {}, dependencies = {}) {
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const workspace = workspaceSnap.data() || {};
     if (workspace.ownerUid !== actorUid) throw httpError(403, "workspace_forbidden");
+    await assertVmMigrationAdmission(transaction, firestore, workspaceId);
     const resources = normalizeSessionResources(request.resources || workspace.resources || {});
     const resolvedModelSelection = request.model || savedModelSelection(workspace);
     const admittedRequest = normalizeWorkspaceRunRequest({

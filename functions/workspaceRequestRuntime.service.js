@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
+const {FENCE_ERROR, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
 const {normalizeModelCatalog, normalizeModelSelection, savedModelSelection} = require("./workspaceRequestModels.service");
 const {classifyWorkspaceRequestFailure, errorDescriptor} = require("./workspaceRequestErrors.helpers");
@@ -173,6 +174,7 @@ async function provisionWorkspaceRequest(runId, dependencies = {}) {
 
   const claim = await claimDispatch(runId, runtime.session, dependencies);
   if (claim.action === "terminal") return {skipped: "terminal", runId};
+  if (claim.action === "fenced") return {skipped: FENCE_ERROR, runId};
   if (claim.action === "canceled") {
     await markOutcome(runId, "canceled", "workspace_request_canceled", {}, dependencies, claim);
     return {canceled: true, runId};
@@ -370,6 +372,10 @@ async function claimDispatch(runId, session, dependencies = {}) {
     if (existingClaim) {
       const stale = dispatchClaimIsStale(existingClaim, session, dependencies);
       result = dispatchClaimResult(stale ? "stale_claim" : "active_claim", run, existingClaim, stale ? "claim_stale" : null);
+      return;
+    }
+    if (await hasVmMigrationFence(transaction, dependencies.db, run.workspaceId)) {
+      result = {action: "fenced"};
       return;
     }
     const now = serverTimestamp(dependencies.admin);

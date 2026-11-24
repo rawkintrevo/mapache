@@ -2,6 +2,7 @@
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {assertMainAdmissionAllowed} = require("./automationAdmission.service");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {cleanName, httpError} = require("./backendUtils.helpers");
 const {findActiveChromeSession, isChromeSession} = require("./chromeReservation.helpers");
 const {isActiveGithubWorkspaceSession} = require("./sessionLifecycle.helpers");
@@ -61,6 +62,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       throw httpError(409, "workspace_unavailable");
     }
     assertWorkspaceStorageMigrationAllowed(workspace);
+    await assertVmMigrationAdmission(transaction, firestore, workspaceId);
     const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
     const existing = sessions.find((candidate) => candidate.id === sessionRef.id) || null;
     if (existing && existing.ownerUid && session.ownerUid && existing.ownerUid !== session.ownerUid) {
