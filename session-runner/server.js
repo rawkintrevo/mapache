@@ -57,6 +57,7 @@ const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
 const {createAutomationArtifactsService} = require("./lib/automationArtifacts.service");
 const {createAutomationExecutionService} = require("./lib/automationExecution.service");
+const {createVmAutomationRuntimeFactory} = require("./lib/vmAutomationRuntime.service");
 const {createAutomationAgentApiService} = require("./lib/automationAgentApi.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
@@ -186,10 +187,12 @@ piWebUi = createPiWebUiProcess(config, {
 });
 const agentSnapshot = createAgentSnapshotService({config});
 const automationArtifacts = createAutomationArtifactsService({admin, config, db, storage});
+const createNativeRuntime = config.retainedDiskMode ? createVmAutomationRuntimeFactory({config}) : null;
 automationExecution = createAutomationExecutionService({
   admin,
   config,
   db,
+  createNativeRuntime,
   piWebUi,
   workspaceAuthority,
 });
@@ -294,7 +297,7 @@ registerWorkspaceRoutes({
   workspaceSync,
 });
 registerQaFaultRoutes({app, faultHarness: qaFaultHarness, hasRunnerAccess});
-registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace});
+registerAgentRoutes({app, automationExecution, hasRunnerAccess, piWebUi, workspace});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 
 wss.on("connection", (socket, request) => {

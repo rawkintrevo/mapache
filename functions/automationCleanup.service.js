@@ -27,6 +27,7 @@ function createAutomationCleanupService(dependencies = {}) {
     sessionCollection: dependencies.sessionCollection,
     deliverRunSinks: dependencies.deliverRunSinks || deliverRunSinks,
     cancelWorkspaceRequest: dependencies.cancelWorkspaceRequest,
+    requestRunnerJson: dependencies.requestRunnerJson,
     vmRuntime: dependencies.vmRuntime,
     wakeQueue: dependencies.wakeQueue,
   };
@@ -153,6 +154,9 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   if (isSharedWorkspaceRequest(run)) {
     return cleanupSharedWorkspaceRequest(run, runRef, normalizedRunId, dependencies);
   }
+  if (run.executionRoute === "vm-native-v1") {
+    return cleanupVmAutomationRun(run, runRef, normalizedRunId, dependencies);
+  }
   if (typeof dependencies.inspectOom === "function") {
     try {
       await dependencies.inspectOom(normalizedRunId);
@@ -245,6 +249,50 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   }
 }
 
+async function cleanupVmAutomationRun(initialRun, runRef, runId, dependencies = {}) {
+  let run = initialRun;
+  if (!isTerminalAutomationStatus(run.status)) {
+    if (typeof dependencies.vmRuntime?.ensureReady !== "function" ||
+        typeof dependencies.requestRunnerJson !== "function") {
+      return markCleanupError(runRef, runId, {code: "vm_automation_cleanup_unavailable"}, dependencies);
+    }
+    let session;
+    try {
+      session = await dependencies.vmRuntime.ensureReady(run.ownerUid, run.workspaceId, {
+        requestId: `automation-cleanup-${runId}`,
+      });
+      const response = await dependencies.requestRunnerJson(session, `/automation/runs/${encodeURIComponent(runId)}/cancel`, {
+        body: {runId},
+        failureError: "vm_automation_cancel_failed",
+        method: "POST",
+        unavailableError: "vm_automation_runner_unreachable",
+      });
+      if (!response || response.ok === false) {
+        return markCleanupError(runRef, runId, {code: response?.error || "vm_automation_cancel_failed"}, dependencies);
+      }
+    } catch (error) {
+      return markCleanupError(runRef, runId, error, dependencies);
+    }
+    const latest = await runRef.get();
+    if (!latest.exists) return {runId, skipped: "run_missing"};
+    run = {runId, ...latest.data()};
+    if (!isTerminalAutomationStatus(run.status)) return {runId, cleaned: false, cancelRequested: true};
+  }
+
+  const finalized = await finalizeRun(runRef, runId, {}, dependencies);
+  if (!finalized) return {runId, skipped: "run_missing"};
+  await dependencies.deliverRunSinks(runRef, runId, dependencies);
+  try {
+    const released = await dependencies.releaseAutomationSlot(runId, {serviceAbsent: true});
+    if (!released?.released && released?.workspaceId) throw cleanupError("automation_slot_release_failed");
+    if (typeof dependencies.scheduleRetry === "function") await dependencies.scheduleRetry(runId);
+    return {runId, cleaned: true, released: released?.released !== false, vmNative: true};
+  } catch (error) {
+    await markCleanupError(runRef, runId, {code: "automation_slot_release_failed"}, dependencies);
+    return {runId, cleaned: false, error: "automation_slot_release_failed"};
+  }
+}
+
 async function cleanupSharedWorkspaceRequest(initialRun, runRef, runId, dependencies = {}) {
   let run = initialRun;
   if (!isTerminalAutomationStatus(run.status)) {
@@ -279,7 +327,9 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
         throw cleanupError("unsupported_sink");
       }
       if (declared.kind === "workspace_output") {
-        if (!run.workspaceOutput?.prefix) throw cleanupError("workspace_output_not_published");
+        if (!run.workspaceOutput?.prefix && run.workspaceOutput?.storageMode !== "retained-disk") {
+          throw cleanupError("workspace_output_not_published");
+        }
         delivery = {workspaceOutputPublished: run.workspaceOutput};
       } else {
         const ticketId = String(declared.reference || run.ticketId || "").trim();

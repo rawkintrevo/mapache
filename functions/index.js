@@ -380,6 +380,7 @@ const automationCleanupService = createAutomationCleanupService({
   scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
   sessionCollection,
   cancelWorkspaceRequest: workspaceRequestRuntimeService.cancel,
+  requestRunnerJson,
   vmRuntime: vmWorkspaceRuntimeService,
   wakeQueue: wakeAutomationQueue,
 });
@@ -401,6 +402,7 @@ const automationReconciliationService = createAutomationReconciliationService({
   reconcileWorkspaceRequest: workspaceRequestRuntimeService.reconcile,
   requestRunnerJson,
   sessionCollection,
+  vmRuntime: vmWorkspaceRuntimeService,
 });
 
 const workspaceSharedStorageService = createWorkspaceSharedStorageService({

@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim AS mapache-base
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fd-find fonts-liberation gh git gzip novnc openbox openssh-client python3 make g++ ripgrep tar tint2 websockify wmctrl x11-utils x11vnc xvfb \
+  && apt-get install -y --no-install-recommends bash bubblewrap ca-certificates chromium curl fd-find fonts-liberation gh git gzip novnc openbox openssh-client python3 make g++ ripgrep tar tint2 websockify wmctrl x11-utils x11vnc xvfb \
   && ln -s /usr/bin/fdfind /usr/local/bin/fd \
   && ln -s /usr/bin/python3 /usr/local/bin/python \
   && python --version \

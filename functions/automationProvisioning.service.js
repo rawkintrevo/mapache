@@ -13,6 +13,7 @@ const {isTerminalAutomationStatus, transitionAutomationRun} = require("./automat
 const {selectAutomationChromeProfileSeed} = require("./chromeProfileSeed.service");
 const {resolveWorkspaceRunContext} = require("./workspaceRunContract.helpers");
 const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
+const {automationOutputFolderName} = require("./automationStorage.service");
 
 const AUTOMATION_PROVISIONING_TIMEOUT_MS = 15 * 60 * 1000;
 const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
@@ -24,6 +25,7 @@ function createAutomationProvisioningService(dependencies = {}) {
     db: dependencies.db || defaultDb,
     featureEnabled: dependencies.featureEnabled,
     provisionSessionService: dependencies.provisionSessionService,
+    requestRunnerJson: dependencies.requestRunnerJson,
     requireWorkspace: dependencies.requireWorkspace,
     sessionCollection: dependencies.sessionCollection,
     storage: dependencies.storage,
@@ -95,9 +97,7 @@ async function provisionAutomationRun(runId, dependencies = {}) {
   }
   if (typeof dependencies.vmRuntime?.isVmWorkspace === "function" &&
       await dependencies.vmRuntime.isVmWorkspace(run.ownerUid, run.workspaceId)) {
-    const errorCode = "vm_automation_execution_not_admitted";
-    await markAutomationRunFailure(runRef, errorCode, null, dependencies);
-    return {provisioned: false, runId: normalizedRunId, error: errorCode};
+    return provisionVmAutomationRun(runRef, run, dependencies);
   }
   let sessionRef;
   try {
@@ -158,6 +158,90 @@ async function provisionAutomationRun(runId, dependencies = {}) {
     });
     return {provisioned: false, runId: normalizedRunId, error: failureCode};
   }
+}
+
+async function provisionVmAutomationRun(runRef, run, dependencies = {}) {
+  const runId = run.runId;
+  try {
+    if (typeof dependencies.vmRuntime?.ensureReady !== "function" ||
+        typeof dependencies.requestRunnerJson !== "function") {
+      throw automationError("vm_automation_dispatch_unavailable");
+    }
+    const session = await dependencies.vmRuntime.ensureReady(run.ownerUid, run.workspaceId, {
+      requestId: `automation-${runId}`,
+    });
+    if (!session?.id || !session.serviceUrl || !session.shutdownToken) {
+      throw automationError("vm_runtime_session_unavailable");
+    }
+    const folderName = automationOutputFolderName({
+      name: run.snapshot?.name,
+      runAt: run.createdAt,
+      runId,
+      timezone: run.snapshot?.timezone,
+    });
+    const attached = await attachVmAutomationRun(runRef, run, session, folderName, dependencies);
+    if (!attached) return {skipped: "run_stopping", runId};
+    await dispatchVmAutomationRun(session, runId, dependencies);
+    return {provisioned: true, runId, sessionId: session.id, executionRoute: "vm-native-v1"};
+  } catch (error) {
+    const failureCode = stableAutomationFailureCode(error);
+    await markAutomationRunFailure(runRef, failureCode, null, dependencies);
+    logger.warn("VM automation provisioning failed", {runId, workspaceId: run.workspaceId, code: failureCode});
+    return {provisioned: false, runId, error: failureCode};
+  }
+}
+
+async function attachVmAutomationRun(runRef, run, session, folderName, dependencies = {}) {
+  const now = (dependencies.admin || defaultAdmin).firestore.FieldValue.serverTimestamp();
+  return dependencies.db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(runRef);
+    if (!snapshot.exists) return false;
+    const current = snapshot.data() || {};
+    if (isTerminalAutomationStatus(current.status) || current.status === "stopping" || current.desiredOutcome === "canceled") {
+      return false;
+    }
+    const next = transitionAutomationRun(current, "running", {
+      sessionId: session.id,
+      executionRoute: "vm-native-v1",
+      provisioningState: "ready",
+      dispatchState: current.dispatchState || "pending",
+      startedAt: current.startedAt || now,
+      workspaceOutput: current.workspaceOutput || {
+        id: run.runId,
+        folderName,
+        path: `/automations/${folderName}`,
+        storageMode: "retained-disk",
+      },
+      provisioningClaim: {
+        ...(current.provisioningClaim || run.provisioningClaim || {}),
+        sessionId: session.id,
+        state: "complete",
+        executionRoute: "vm-native-v1",
+        completedAt: now,
+      },
+      updatedAt: now,
+    });
+    transaction.update(runRef, next);
+    return true;
+  });
+}
+
+async function dispatchVmAutomationRun(session, runId, dependencies = {}) {
+  const response = await dependencies.requestRunnerJson(session, "/automation/runs", {
+    body: {runId},
+    failureError: "vm_automation_dispatch_failed",
+    method: "POST",
+    unavailableError: "vm_automation_runner_unreachable",
+  });
+  if (!response || response.ok === false) {
+    throw automationError(response?.error || "vm_automation_dispatch_failed");
+  }
+  await dependencies.db.collection("automationRuns").doc(runId).update({
+    dispatchState: "accepted",
+    dispatchAcceptedAt: (dependencies.admin || defaultAdmin).firestore.FieldValue.serverTimestamp(),
+    updatedAt: (dependencies.admin || defaultAdmin).firestore.FieldValue.serverTimestamp(),
+  });
+  return response;
 }
 
 async function claimAutomationRun(runRef, runId, dependencies = {}) {

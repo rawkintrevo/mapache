@@ -119,16 +119,27 @@ run records.
   deadline because creating the first SDK conversation and selecting its model
   can exceed the five-second shutdown/quiesce deadline. The upstream socket
   allows 75 seconds so the runner remains the earlier timeout authority.
-- Compute Engine workspaces are an explicit safety boundary until a VM-native
-  isolated automation executor exists. Provisioning fails closed with
-  `vm_automation_execution_not_admitted` before creating a dedicated session or
-  sibling service. Cleanup also refuses to dispatch an existing Compute-backed
-  automation session through the generic runtime provider because that provider
-  owns the canonical VM; it records
-  `vm_automation_cleanup_not_admitted` for operator recovery. A failed admission
-  with no dedicated session is finalized without a runtime deletion. This keeps
-  scheduled automation from pausing or deleting the user's VM and does not claim
-  VM automation compatibility.
+- Compute Engine workspaces use the `vm-native-v1` automation route. Provisioning
+  wakes or reuses the owner-matched canonical VM, records its current generation
+  and session, then dispatches only the run ID to the authenticated runner
+  control route. The runner's `vmAutomationRuntime.service.js` creates one
+  run-scoped child Pi process inside a bubblewrap user/mount namespace. It
+  copies the workspace while excluding `.mapache-internal` and unsafe links,
+  exposes that copy read-only at `/workspace-input`, hides the live retained
+  workspace, and exposes only the run's retained-disk output directory as
+  writable `/workspace`. Child home, Pi state, sessions, and control files are
+  private to the run and are removed after terminal cleanup; durable output is
+  retained and published through `workspaceOutput`.
+- The VM-native path never creates a dedicated Cloud Run session and generic
+  cleanup never sends a Compute-backed run through the Cloud Run deletion
+  provider. Durable runner routes support start, status, and cancellation after
+  a runner restart, while reconciliation rechecks `/runner/health` and the
+  run-specific status before deciding interruption. If VM admission, generation
+  identity, retained-disk layout, bubblewrap, or the runner contract is not
+  available, provisioning/cleanup fails closed. Focused tests cover the
+  boundary, but live stopped-target execution, cancellation races under real
+  process loss, cross-machine tools, usage accounting, and release acceptance
+  remain open.
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.

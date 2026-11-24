@@ -305,3 +305,52 @@ test("runner health probes use the canonical unreserved endpoint", async () => {
   });
   assert.equal((await service.reconcile()).healthy, 1);
 });
+
+test("VM-native reconciliation retries an unacknowledged dispatch without replaying a claimed run", async () => {
+  const runnerCalls = [];
+  const runs = [makeRun({
+    executionRoute: "vm-native-v1",
+    sessionId: "vm-session-1",
+    dispatchState: "pending",
+  })];
+  const {db, service} = harness(runs, {
+    requestRunnerJson: async (session, route, options) => {
+      runnerCalls.push({session, route, options});
+      return {ok: true, runId: "run-1", status: "running"};
+    },
+    vmRuntime: {
+      ensureReady: async () => ({id: "vm-session-1", serviceUrl: "https://vm.example", shutdownToken: "shutdown"}),
+      readSession: async () => ({id: "vm-session-1", serviceUrl: "https://vm.example", shutdownToken: "shutdown"}),
+    },
+  });
+
+  const result = await service.reconcile();
+  assert.equal(result.healthy, 1);
+  assert.deepEqual(runnerCalls.map((call) => call.route), ["/automation/runs", "/automation/runs/run-1"]);
+  assert.equal(db.data.get("automationRuns/run-1").dispatchState, "accepted");
+});
+
+test("VM-native reconciliation trusts an existing execution claim instead of replaying it", async () => {
+  const runnerCalls = [];
+  const runs = [makeRun({
+    executionRoute: "vm-native-v1",
+    sessionId: "vm-session-1",
+    dispatchState: "pending",
+    executionStartedAt: "CLAIMED",
+  })];
+  const {db, service} = harness(runs, {
+    requestRunnerJson: async (_session, route) => {
+      runnerCalls.push(route);
+      return {ok: true, runId: "run-1", status: "running"};
+    },
+    vmRuntime: {
+      ensureReady: async () => assert.fail("claimed run must not be replayed"),
+      readSession: async () => ({id: "vm-session-1", serviceUrl: "https://vm.example", shutdownToken: "shutdown"}),
+    },
+  });
+
+  const result = await service.reconcile();
+  assert.equal(result.healthy, 1);
+  assert.deepEqual(runnerCalls, ["/automation/runs/run-1"]);
+  assert.equal(db.data.get("automationRuns/run-1").dispatchState, "accepted");
+});

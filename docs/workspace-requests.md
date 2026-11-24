@@ -56,13 +56,23 @@ the existing no-blind-replay behavior. If the VM is fenced, not lifecycle
 admitted, missing its current session/credentials, or cannot become ready in
 the bounded startup window, the request fails closed.
 
-Scheduled automation still uses the dedicated Cloud Run automation contract.
-Until a VM-native isolated automation executor is admitted, the automation
-provisioner detects a Compute Engine workspace and records
-`vm_automation_execution_not_admitted` without creating an automation session,
-starting a sibling service, or allowing cleanup to pause the canonical VM.
-This is an intentional safety boundary; it does not satisfy stopped-target
-scheduled/Run-now execution.
+Scheduled automation continues to use the dedicated Cloud Run automation
+contract for legacy workspaces. For an admitted Compute Engine workspace, the
+provisioner instead wakes or reuses the canonical VM and dispatches the run to
+its authenticated `/automation/runs` control route. The runner starts one
+private VM-native child runtime for that run: it copies a filtered workspace
+snapshot to retained-disk input, mounts that snapshot read-only at
+`/workspace-input`, hides the live workspace mount, and binds a durable
+run-specific output directory at `/workspace`. The child is stopped and its
+ephemeral state is removed after completion; the output directory remains on
+the retained disk and is referenced by the run's `workspaceOutput` record.
+
+The native path never creates a sibling Cloud Run session or pauses/deletes the
+canonical VM. It fails closed when VM admission, the current generation, the
+runner control contract, the retained-disk layout, or the sandbox runtime is
+not available. The implementation is covered by focused emulator/unit tests,
+but a live stopped-target scheduled/Run-now execution and the complete
+cross-machine/release acceptance matrix remain unproven.
 
 The runner catalog request has separate deadlines: the Functions-to-runner HTTP
 call allows 45 seconds, while the pi-web-ui control socket allows 30 seconds
@@ -176,8 +186,10 @@ guarded repair path restores the existing run and re-delivers its result; it
 does not reopen canceled runs, replace a newer ticket pointer, or replay the
 prompt. Acknowledgment, cancellation, and outcome writes are transactional, so
 stale workers cannot overwrite a newer outcome. Cancellation is recorded before
-the runner interrupt and is safe to repeat. Scheduled automations retain their
-separate private-runner lifecycle and are not routed through these endpoints.
+the runner interrupt and is safe to repeat. Legacy Cloud Run scheduled
+automations retain their separate private-runner lifecycle. VM-native scheduled
+automations use the canonical VM only to start, monitor, and cancel their
+run-scoped private child runtime through the bounded runner routes above.
 GitHub request context remains read-only, while the normal workspace sync and
 credential boundaries remain authoritative.
 

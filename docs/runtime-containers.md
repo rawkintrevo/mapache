@@ -1346,6 +1346,32 @@ Creation, restart, resize, and recreation derive the bucket and prefix from the
 owner-checked workspace record and refresh the session metadata; stale session
 storage fields cannot select another workspace's `/automations` prefix.
 
+### VM-native automation runtime
+
+Compute Engine main runners keep the retained workspace as the one canonical
+writer. A `vm-native-v1` run does not create a sibling Cloud Run service or
+mount a second writer. `session-runner/lib/vmAutomationRuntime.service.js`
+creates `automation-runs/{runId}/input`, `state`, and `output` on the retained
+disk, copies the workspace into the input tree while filtering
+`.mapache-internal` and rejecting links that escape the workspace, and starts a
+run-private Pi child through `/usr/bin/bwrap`.
+
+Inside the child namespace, the copied input is read-only at
+`/workspace-input`; the live host workspace path is overlaid with an empty
+temporary filesystem; and only the run's retained-disk output tree is writable
+at `/workspace`. Child home, Pi configuration, sessions, and control sockets
+use the run's private state tree. Terminal cleanup removes input and ephemeral
+state after the run reaches a durable outcome, while output remains at
+`/var/lib/mapache/workspace/automation-runs/{runId}/output` for the published
+automation artifact contract.
+
+The `gcp-runner` image must contain Debian's `bubblewrap` package. Rebuild and
+publish the pinned runner image, then recreate/restart VM runners before
+expecting this route on an existing machine. The native executor is unit-tested
+and wired through provisioning, cleanup, and reconciliation; a live stopped-VM
+run, full model/provider proof, and complete migration release matrix are still
+required before broad enablement.
+
 ## Local file uploads
 
 The navbar Upload file action sends local files directly to Cloud Storage using
