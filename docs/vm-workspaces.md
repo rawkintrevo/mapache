@@ -1094,6 +1094,12 @@ recheck every workspace bound to that connection in the write transaction, so
 global connection records remain owner-scoped and reusable by other unfenced
 workspaces without mutating a fenced binding.
 
+GitHub owner-level OAuth callback and disconnect writes use the same rule for
+owners with connected GitHub workspaces. They inspect those workspace sources
+and enforce every matching migration fence in the transaction that publishes
+installation access, so an unrelated owner remains independent while a fenced
+GitHub workspace cannot lose or gain connection authority mid-migration.
+
 Browser egress gateway assignment writes use the same boundary. A fenced
 workspace cannot be removed from or added to a shared gateway assignment, and
 the transaction also guards the route’s existing workspace IDs so a stale
