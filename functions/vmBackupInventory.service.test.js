@@ -21,6 +21,8 @@ test("inventory reports backup age, stranded state, retention decisions, and unk
     ]});
   assert.equal(report.strandedResources.diskWithoutInstance, true);
   assert.equal(report.backups.backupAgeMs, 24 * 60 * 60 * 1000);
+  assert.equal(report.backups.sourceDigestsVerified, 0);
+  assert.equal(report.backups.sourceDigestsMissing, 1);
   assert.deepEqual(report.backups.retentionCandidates.map(item => item.name), ["verified"]);
   assert.deepEqual(report.backups.quarantined.map(item => item.name), ["foreign"]);
   assert.equal(report.strandedResources.cleanupAllowed, false);

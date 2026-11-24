@@ -62,10 +62,12 @@ function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}
   const instance = compute.instance || null;
   const instanceRunning = instance?.status === "RUNNING";
   const diskSizeGb = finitePositive(disk?.sizeGb);
+  const ownedSnapshots = snapshots.filter(snapshot => snapshot?.workspaceId === workspaceId && snapshot?.ownerUid === ownerUid);
+  const verifiedSnapshots = ownedSnapshots.filter(snapshot => isVerifiedSnapshot(snapshot));
+  const sourceDigestSnapshots = verifiedSnapshots.filter(snapshot => hasSourceDigests(snapshot));
   const snapshotGiB = providerSnapshots.reduce((total, snapshot) => total + (finitePositive(snapshot?.storageBytes) ||
     (finitePositive(snapshot?.diskSizeGb) || 0) * 1024 ** 3), 0) / 1024 ** 3;
-  const lastVerified = snapshots
-      .filter(snapshot => snapshot?.verification?.state === "verified" || snapshot?.state === "verified")
+  const lastVerified = verifiedSnapshots
       .map(snapshot => Date.parse(snapshot.verification?.verifiedAt || snapshot.verifiedAt || snapshot.capturedAt || ""))
       .filter(Number.isFinite)
       .sort((a, b) => b - a)[0] || null;
@@ -97,9 +99,11 @@ function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}
     backups: {
       observed: snapshots.length,
       providerObserved: providerSnapshots.length,
-      verified: snapshots.filter(snapshot => snapshot?.verification?.state === "verified" || snapshot?.state === "verified").length,
+      verified: verifiedSnapshots.length,
+      sourceDigestsVerified: sourceDigestSnapshots.length,
+      sourceDigestsMissing: verifiedSnapshots.length - sourceDigestSnapshots.length,
       backupAgeMs,
-      oldestPending: snapshots.some(snapshot => ["creating", "restoring", "verification-pending"].includes(snapshot?.state)),
+      oldestPending: ownedSnapshots.some(snapshot => ["creating", "restoring", "verification-pending"].includes(snapshot?.state)),
       retentionCandidates: retention.delete,
       held: retention.hold,
       quarantined: retention.quarantine,
@@ -118,6 +122,15 @@ function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}
     },
     cost,
   };
+}
+
+function isVerifiedSnapshot(snapshot) {
+  return snapshot?.verification?.state === "verified" || snapshot?.state === "verified";
+}
+
+function hasSourceDigests(snapshot) {
+  return typeof snapshot?.verification?.fileDigest === "string" && snapshot.verification.fileDigest.length > 0 &&
+    typeof snapshot?.verification?.runtimeStateDigest === "string" && snapshot.verification.runtimeStateDigest.length > 0;
 }
 
 function summarizeProviderResources(resources) {

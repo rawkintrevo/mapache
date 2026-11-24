@@ -55,7 +55,8 @@ test("backup status is owner-scoped and exposes bounded recovery diagnostics wit
     ownerUid: "owner", observedAt: "2026-01-01T00:00:00.000Z",
     compute: {instancePresent: true, instanceStatus: "RUNNING", instanceRunning: true, diskPresent: true,
       diskStatus: "READY", diskAttached: true, diskSizeGb: 64, headroomKnown: false},
-    backups: {observed: 2, providerObserved: 2, verified: 1, backupAgeMs: 1000, oldestPending: false,
+    backups: {observed: 2, providerObserved: 2, verified: 1, sourceDigestsVerified: 0, sourceDigestsMissing: 1,
+      backupAgeMs: 1000, oldestPending: false,
       retentionCandidates: [{name: "snapshot-1", reason: "retention_expired"}], held: [], quarantined: []},
     strandedResources: {diskDetached: false, instanceWithoutDisk: false, diskWithoutInstance: false,
       ownedInstanceCount: 1, ownedDiskCount: 1, unexpectedOwnedInstances: [], unexpectedOwnedDisks: [], resourceInventoryKnown: true},
@@ -72,6 +73,8 @@ test("backup status is owner-scoped and exposes bounded recovery diagnostics wit
   const result = await f.call("/workspaces/workspace/backup", {}, "GET");
   assert.equal(result.status, 200);
   assert.equal(result.body.inventory.cost.totalKnownMonthlyUsd, 6.53);
+  assert.equal(result.body.inventory.backups.sourceDigestsVerified, 0);
+  assert.equal(result.body.inventory.backups.sourceDigestsMissing, 1);
   assert.equal(result.body.recovery.latestOperation.phase, "verify");
   assert.deepEqual(result.body.recovery.latestReport.startupStageTimingsMs, {boot: 20});
   assert.ok(!JSON.stringify(result.body).includes("secret-disk"));

@@ -36,7 +36,11 @@ The response is expected to identify the current phase, `phaseTimingsMs`,
 `phaseStartedAtMs`, and any bounded `failedPhase`, `lastError`, and
 `lastErrorAtMs`. Capture the read-only
 `vmBackupInventoryReports_v2/{workspaceId}` report as well; it must not be
-interpreted as cleanup authorization.
+interpreted as cleanup authorization. Its `backups.sourceDigestsVerified` count
+identifies provider-verified snapshots with both source file and runtime-state
+digests; `sourceDigestsMissing` identifies provider-verified snapshots that
+remain usable as crash-consistent storage but cannot satisfy file/runtime
+recovery verification.
 
 For an operator with the required IAM role, inspect only the exact resources
 already recorded by the backend:

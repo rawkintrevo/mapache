@@ -217,7 +217,9 @@ The owner-scoped `GET /workspaces/{workspaceId}/backup` projection now exposes
 that inventory together with bounded recovery phase/error and RPO/RTO evidence.
 It omits provider addresses, disk IDs, content digests, credentials, and raw
 provider errors; it never authorizes cleanup. This is the diagnostics contract,
-not proof of a fresh-VM restore or a numeric cost meter.
+not proof of a fresh-VM restore or a numeric cost meter. Its backup inventory
+also distinguishes provider-verified snapshots with both source file/runtime
+digests from verified-but-undigested snapshots without exposing the digests.
 
 The explicit expansion-only `scripts/vm-resize-disk.mjs` command now covers
 the detached Compute resize step after owner, generation, and migration-fence

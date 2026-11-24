@@ -68,6 +68,8 @@ function sanitizeInventory(report = {}, ownerUid) {
       observed: boundedCount(report.backups?.observed),
       providerObserved: boundedCount(report.backups?.providerObserved),
       verified: boundedCount(report.backups?.verified),
+      sourceDigestsVerified: boundedCount(report.backups?.sourceDigestsVerified),
+      sourceDigestsMissing: boundedCount(report.backups?.sourceDigestsMissing),
       backupAgeMs: finiteNonNegative(report.backups?.backupAgeMs),
       oldestPending: report.backups?.oldestPending === true,
       retentionCandidates: boundedReasons(report.backups?.retentionCandidates),

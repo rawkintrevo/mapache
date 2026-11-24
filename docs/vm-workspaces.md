@@ -477,8 +477,11 @@ report with bounded recovery-operation and recovery-report diagnostics, and
 omits provider addresses, disk IDs, content digests, credentials, and raw
 provider errors. `cleanupAllowed` remains false in this projection; an
 unexpected or stranded resource is evidence for an operator, never permission
-to delete it. Missing billing meters remain in `unknownComponents` rather than
-being represented as zero cost.
+to delete it. Inventory counts now distinguish provider-verified backups with
+both source file/runtime digests from verified-but-undigested snapshots, so an
+owner can see whether a backup is eligible for file/runtime recovery without
+receiving the digests themselves. Missing billing meters remain in
+`unknownComponents` rather than being represented as zero cost.
 
 `vmFixtureAuth_v2` is an IAM-private test helper, restricted to the fixed
 `vm-proof-owner` and `vm-proof-outsider` identities while the synthetic workspace
