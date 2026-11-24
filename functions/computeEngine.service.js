@@ -36,6 +36,7 @@ function createComputeEngineService(dependencies = {}) {
     inspect: (descriptor) => inspect(descriptor),
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
     ensureMigrationValidationClone: (descriptor, options) => ensureMigrationValidationClone(descriptor, options),
+    startMigrationValidationVm: (descriptor, options) => startMigrationValidationVm(descriptor, options),
     pause: (descriptor, options) => pause(descriptor, options),
     start: (descriptor, options) => start(descriptor, options),
     replace: (descriptor, options) => replace(descriptor, options),
@@ -295,6 +296,47 @@ function createComputeEngineService(dependencies = {}) {
     return operationId("migration-validation-clone:" + validationOperationId + ":" + sourceDiskId);
   }
 
+  async function startMigrationValidationVm(rawDescriptor, {operationId, cloneDiskId, sourceDiskId, runnerImage, sessionId, credentials} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    const key = /^mapache-val-disk-([a-f0-9]{24})$/.exec(descriptor.dataDiskName)?.[1];
+    if (projectId !== "pi-agents-cloud" || !key || descriptor.instanceName !== "mapache-val-vm-" + key ||
+        operationId !== "validate-" + key || sessionId !== "validation-" + key ||
+        typeof cloneDiskId !== "string" || !/^[1-9][0-9]{0,19}$/.test(cloneDiskId) || cloneDiskId === sourceDiskId ||
+        typeof sourceDiskId !== "string" || !/^[1-9][0-9]{0,19}$/.test(sourceDiskId) ||
+        !/^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/.test(runnerImage || "") ||
+        !["controlToken", "browserToken", "shutdownToken"].every(name => /^[a-f0-9]{64}$/.test(credentials?.[name] || ""))) {
+      throw computeError("runtime_validation_boot_invalid");
+    }
+    const checkClone = async () => {
+      const disk = await ensureDataDisk(descriptor, {operationId, requireCreationMatch: true});
+      if (disk.id !== cloneDiskId || disk.sourceDiskId !== sourceDiskId || disk.labels?.["mapache-validation-only"] !== "true") {
+        throw computeError("runtime_validation_clone_unverified");
+      }
+      return disk;
+    };
+    const disk = await checkClone();
+    const instance = await ensureInstance(descriptor, {operationId, disk, runnerImage, validationOnly: true, timeoutMs: 240000,
+      subnetwork: "projects/pi-agents-cloud/regions/us-central1/subnetworks/mapache-vm-v2-us-central1", env: {
+        GCLOUD_PROJECT: projectId, MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1", MAPACHE_PI_MODEL_CATALOG_REFRESH: "false",
+        MAPACHE_VM_CONTROL_URL: "https://us-central1-pi-agents-cloud.cloudfunctions.net/vmMigrationValidationControl_v2",
+        MAPACHE_VM_CONTROL_TOKEN: credentials.controlToken, SESSION_ID: sessionId,
+        SESSION_BROWSER_TOKEN_SECRET: credentials.browserToken, SESSION_SHUTDOWN_TOKEN: credentials.shutdownToken,
+        RUNNER_CAPABILITIES: JSON.stringify({terminal: true, preview: false, chrome: false, previewQa: false, functions: false}),
+      }});
+    const attached = await checkClone();
+    const url = instanceUrl(descriptor);
+    if (typeof instance.id !== "string" || !/^[1-9][0-9]{0,19}$/.test(instance.id) ||
+        instance.labels?.["mapache-validation-only"] !== "true" ||
+        instance.labels?.["mapache-operation-id"] !== identityLabel(operationId) ||
+        instance.networkInterfaces?.length !== 1 || instance.networkInterfaces[0].accessConfigs?.length ||
+        instance.networkInterfaces[0].ipv6AccessConfigs?.length ||
+        !instance.networkInterfaces[0].subnetwork?.endsWith("/subnetworks/mapache-vm-v2-us-central1") ||
+        attached.users?.length !== 1 || ![url, url.replace("compute.googleapis.com", "www.googleapis.com")].includes(attached.users[0])) {
+      throw computeError("runtime_validation_instance_unverified");
+    }
+    return {instanceId: instance.id, instanceName: instance.name, cloneDiskId};
+  }
+
   async function ensureInstance(rawDescriptor, options = {}) {
     const descriptor = descriptorFor(rawDescriptor);
     const existing = await getInstance(descriptor).catch((error) => {
@@ -406,7 +448,7 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   function instanceBody(descriptor, disk, options) {
-    const labels = ownershipLabels(descriptor, options);
+    const labels = {...ownershipLabels(descriptor, options), ...(options.validationOnly ? {"mapache-validation-only": "true"} : {})};
     return {
       name: descriptor.instanceName,
       machineType: `${zoneUrl(descriptor)}/machineTypes/${options.machineType || machineType}`,

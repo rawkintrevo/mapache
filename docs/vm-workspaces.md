@@ -1366,7 +1366,16 @@ provider's exact source disk ID. Retries reuse that clone. The coordinator
 rechecks the fenced source before recording its ID. Once cloning is
 requested, abort requires reconciliation of the copy before releasing
 legacy authority. This transition creates neither a VM nor a user route.
-Isolated validation boot, resource cleanup and cutover still need wiring.
+The handoff checkpoint adds an internal validation boot step. It mounts the
+identified clone on a private Compute instance with the pinned runner image
+and formatting disabled. A separate control endpoint and Firestore registry
+use a validation-session token and verify the original workspace fence on
+every request. The broker returns no centrally managed credentials, and
+validation creates no production runtime record or user route. The 30-minute
+reservation limits lease renewal. It does not stop or remove Compute resources.
+Before using this path, finish the operator entry point and prove isolated
+boot, authenticated runner readiness, credential isolation and cleanup on a
+disposable fixture. A started instance alone is insufficient for cutover.
 [Compute Engine disk reference](https://docs.cloud.google.com/compute/docs/reference/rest/v1/disks/get)
 
 The emulator passes a locally installed receipt through coordinator

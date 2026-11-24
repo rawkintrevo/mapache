@@ -632,6 +632,19 @@ exports.vmRuntimeControl_v2 = onRequest({
 
 // Independently deployed, IAM-authenticated diagnostics for the VM rollout.
 // No Hosting rewrite or legacy API/trigger replacement is needed.
+exports.vmMigrationValidationControl_v2 = onRequest({
+  invoker: "public", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com",
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmRuntimeControlService} = require("./vmRuntimeControl.service");
+    res.json(await createVmRuntimeControlService({db, admin, validation: true})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_control_unavailable"});
+  }
+});
+
 exports.vmRuntimePreflight_v2 = onRequest({
   invoker: "private",
   timeoutSeconds: 60,

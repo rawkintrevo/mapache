@@ -1,13 +1,13 @@
 # VM crossover #605 handoff
 
-Handoff date: 2026-11-23 (America/Chicago). Implementation has resumed on the same branch and PR.
+Handoff date: 2026-11-23 (America/Chicago). Implementation is paused.
 
 ## Start here
 
 - Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
 - Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
-- Last published implementation commit is `8159da1`. GitHub preview build and deploy checks passed at that revision.
-- Rough overall estimate: **50%** by engineering judgment. No real existing workspace has completed cutover. Every issue stays open; checked criteria below describe scoped evidence, not issue completion.
+- The last verified clone-copy increment is `773098d`. The PR head preserves the unfinished clone-boot code for the next owner.
+- Rough overall estimate: **50%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -24,7 +24,7 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 - Current session: `vm-1977e861d998de7357678d53-g11`.
 - VM `mapache-vm-0d357714e0867ab67c057652` is RUNNING in `us-central1-a`, machine type `e2-standard-2`.
 - Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 64 GiB `pd-balanced`. The running VM, retained disk and private networking continue to incur costs. Nothing was stopped or deleted for this handoff.
-- Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` were verified ACTIVE in `pi-agents-cloud`. The server-side writer guards and Firestore/Storage rules are staged on the branch. No Hosting deployment for the opt-in VM frontend.
+- Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` are ACTIVE in `pi-agents-cloud`. Firebase created `vmMigrationValidationControl_v2` and updated `vmMigrationStatus_v2` before the pause. The validation broker accepts runner requests over public HTTPS using a validation-session bearer token. A GET returned 405 and a POST for an unknown validation session returned 404. Anonymous status returned 403. Legacy writer guards and Firestore/Storage rules remain staged, and the opt-in frontend remains off production Hosting.
 - Pinned runner image: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:885a04f85bc34d8987523624f2c7bd9fe704b0121d483971adfe227299c7b3b8`.
 - Registry/control collections: `vmRuntimes_v2`, `vmRuntimeCredentials_v2`, `vmLifecycleOperations_v2`, `vmGatewayRoutes_v2`. Never dump credential documents, Compute bootstrap metadata or full environment values.
 - The real `vm-test` is a different, unmigrated legacy workspace. Its recorded Cloud Run service is absent; do not confuse its local recovered files with the running synthetic VM.
@@ -64,10 +64,12 @@ These directories do **not** travel with Git. They can contain private restored 
 - Two bounded Storage listings agreed for 568 objects. An initial combined check detected a Firestore observation change and refused the result. A separate Storage-only check was stable. The missing persistent HOME blocker remains.
 - The Firestore emulator proved one reservation winner, stale-observation and shared-prefix refusal, and atomic release of the workspace and Storage fences. The production endpoints expose read-only preflight and status. No production reservation or writer drain is authorized by those endpoints.
 - The coordinator's `confirmQuiesced` transition checks ownership of both fences, records Compute and Storage observation digests, and rechecks Firestore, the operation and both fences before committing. Emulator tests cover stale observations, concurrent retries and a pre-switch abort. The transition has no production mutation entry point.
+- The fenced capture binds exact Storage generations to checkpoint, HOME and browser staging. A private read-only maintenance workflow verifies the mounted import receipt and exact provider disk ID before the coordinator accepts the detached destination disk. A live disposable disk copy verified the provider's source disk ID and was removed.
+- The checkpoint adds an internal `startValidationBoot` path using a separate Firestore registry, dedicated broker, short lease deadline and clone-only Compute attachment. Compute instance creation and authenticated runner readiness are separate milestones. Existing tests and negative smoke checks passed. The new boot path still needs dedicated tests and an operator entry point. No validation VM or clone was present in the project at handoff.
 
 ## Checks and continuation
 
-The published implementation passed 109 focused backend tests and a separate Firestore emulator reservation race test. The retained-disk proof passed the 41 focused migration tests available at that increment. Earlier frontend evidence covered 281 tests, normal and VM-enabled builds, and synthetic Chrome DevTools routing and editor QA. Full live authenticated frontend acceptance remains open.
+At handoff, the Functions package suite, all seven existing coordinator Firestore emulator cases, lint and docs checks passed. Prior evidence includes 55 focused import and maintenance cases, 281 frontend tests, normal and VM-enabled builds, and synthetic Chrome DevTools routing and editor QA. Full live authenticated frontend acceptance remains open.
 
 ```bash
 node --test functions/vm*.test.js functions/{sessionLifecycle,cloudRun,sessionCreation,workspaceUploads,sessionResize,workspaceSessionReservation,automationRuns,automationAdmission,automationProvisioning,workspaceRequestRuntime,workspaceAutomationDeletion}.service.test.js
@@ -75,9 +77,10 @@ firebase emulators:exec --only firestore --project demo-mapache-cutover 'node --
 npm run docs:check
 ```
 
-1. For #616, establish how to verify deployed fence coverage and drain all writers, including old upload URIs and pre-existing operations. Revalidate before final capture. Bind the verified disk import to the atomic provider switch and rehearse lossless rollback after VM writes.
-2. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. Extend the disk import proof to representative complete data, capacity and recovery, then validate the runtime and app on the imported disk.
-3. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.
+1. For #616, finish clone-boot tests, the operator entry point, readiness attestation via private authenticated `/runner/health` and ID-checked cleanup. Exercise the full path on a disposable fixture, including lease fencing, copied local credentials, deadline behavior, failure/retry and teardown. A lease deadline does not delete cloud resources.
+2. Verify deployed legacy writer fencing and drainage, including old upload URIs, outstanding operations and integration bindings. Bind verified source, import and clone evidence to the atomic authority switch and rehearse rollback after real VM writes.
+3. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. Extend the disk import proof to representative complete data, capacity and recovery, then validate the runtime and app on the imported disk.
+4. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.
 
 ## Ticket-by-ticket reconciliation
 
@@ -163,9 +166,9 @@ Fully evidenced original acceptance criteria: none.
 
 ### #616: Partial — read-only preflight deployed and reservation tested
 
-Evidence: Deployed read-only operator preflight and status. Workspace and Storage prefix reservation and pre-switch release passed Firestore transaction tests. The live Compute and Storage checks are recorded above.
+Evidence: Deployed read-only operator preflight and status and the separate validation broker. Workspace and Storage reservation, quiesce, pinned capture and import-receipt verification passed emulator checks. Private read-only import evidence and separate validation clone creation were each verified on disposable Compute resources.
 
-Remaining: Deploy and verify writer fencing, drain existing writers, test and wire quiesce, bind final capture and import to the operation, switch authority atomically and rehearse rollback after new VM writes. Owner-visible migration status remains open.
+Remaining: Complete and prove clone boot, readiness and cleanup. Deploy and verify writer fencing, drain existing writers, make verified migration stages available to operators, switch authority atomically and rehearse rollback after new VM writes. Owner-visible migration status remains open.
 
 Fully evidenced original acceptance criteria: none.
 
@@ -179,7 +182,7 @@ Fully evidenced original acceptance criteria: none; partial evidence does not sa
 
 ### #618: Partial — isolated proofs, release gate unmet
 
-Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The synthetic retained-disk import and ordinary VM runner startup passed. The published backend suite passed 109 focused tests plus the separate reservation emulator test.
+Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The synthetic retained-disk import and ordinary VM runner startup passed. Clone copy passed independently. The dedicated validation clone's runner boot and cleanup have yet to be exercised. The current Functions suite and seven existing coordinator emulator cases passed.
 
 Remaining: Complete all formats/failure transitions, real VM desktop/security/browser matrix, two-machine settings/inheritance, schedules and requests waking stopped machines, upload/resize/disk-full/backup tests, a real model turn and numeric rollout thresholds.
 

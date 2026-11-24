@@ -5,10 +5,13 @@ const {httpError} = require("./backendUtils.helpers");
 const {normalizePiAuthEntries, normalizePiAuthProviders} = require("./agentAuth.service");
 
 const COLLECTION = "vmRuntimes_v2";
+const VALIDATION_COLLECTION = "vmMigrationValidationRuntimes_v2";
+const VALIDATION_ACTIONS = new Set(["lease.acquire", "lease.check", "lease.renew", "lease.release",
+  "models.get", "models.set", "auth.get", "activity", "history", "failure"]);
 const LEASE_MS = 45000;
 const TIME_FIELDS = new Set(["runtimeStartedAt", "lastActivityAt", "lastConnectedAt", "lastDisconnectedAt", "shutdownRequestedAt"]);
 
-function createVmRuntimeControlService({db, admin, now = Date.now}) {
+function createVmRuntimeControlService({db, admin, validation = false, now = Date.now}) {
   return async function handle(req) {
     if (req.method !== "POST") throw httpError(405, "method_not_allowed");
     const body = req.body || {};
@@ -19,7 +22,7 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
     const generation = Number(body.generation);
     if (!Number.isSafeInteger(generation) || generation < 1) throw httpError(400, "invalid_generation");
     const token = String(req.get?.("authorization") || "").replace(/^Bearer /, "");
-    const workspaceRef = db.collection(COLLECTION).doc(workspaceId);
+    const workspaceRef = db.collection(validation ? VALIDATION_COLLECTION : COLLECTION).doc(workspaceId);
     const sessionRef = workspaceRef.collection("sessions").doc(sessionId);
     return db.runTransaction(async (tx) => {
       const [ws, ss] = await Promise.all([tx.get(workspaceRef), tx.get(sessionRef)]);
@@ -29,9 +32,16 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
       if (!workspace.ownerUid || session.ownerUid !== workspace.ownerUid || workspace.currentSessionId !== sessionId ||
           workspace.generation !== generation || session.generation !== generation ||
           workspace.backend !== "compute-engine") throw httpError(409, "vm_generation_mismatch");
+      const time = now();
+      if (validation) {
+        const fence = await tx.get(db.collection("vmMigrationFences_v2").doc(workspaceId));
+        if (!workspace.migrationOperationId || workspace.deadlineMs <= time || !Number.isSafeInteger(workspace.deadlineMs) ||
+            workspace.migrationOperationId !== fence.data()?.operationId || workspace.ownerUid !== fence.data()?.ownerUid ||
+            fence.data()?.workspaceId !== workspaceId) throw httpError(409, "vm_validation_authority_lost");
+        if (!VALIDATION_ACTIONS.has(body.action)) throw httpError(400, "unknown_vm_control_action");
+      }
       if (!["reserved", "active", "stopping"].includes(workspace.state) ||
           !["reserved", "active", "stopping"].includes(session.state)) throw httpError(409, "vm_session_unavailable");
-      const time = now();
       const current = session.bootId === bootId && workspace.bootId === bootId &&
         session.leaseExpiresAt > time && workspace.leaseExpiresAt > time;
       const timestamp = () => admin.firestore.FieldValue.serverTimestamp();
@@ -42,7 +52,8 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
         } else if (workspace.state !== "reserved" || session.state !== "reserved") {
           throw httpError(409, "vm_boot_not_reserved");
         }
-        const update = {bootId, state: "active", leaseExpiresAt: time + LEASE_MS, heartbeatAt: timestamp()};
+        const update = {bootId, state: "active", leaseExpiresAt: validation ? Math.min(time + LEASE_MS, workspace.deadlineMs) : time + LEASE_MS,
+          heartbeatAt: timestamp()};
         tx.update(workspaceRef, update);
         tx.update(sessionRef, update);
         return {ok: true, leaseExpiresAt: update.leaseExpiresAt};
@@ -50,7 +61,7 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
       if (!current) throw httpError(409, "vm_writer_authority_lost");
       if (body.action === "lease.check") return {ok: true, leaseExpiresAt: session.leaseExpiresAt};
       if (body.action === "lease.renew") {
-        const update = {leaseExpiresAt: time + LEASE_MS, heartbeatAt: timestamp()};
+        const update = {leaseExpiresAt: validation ? Math.min(time + LEASE_MS, workspace.deadlineMs) : time + LEASE_MS, heartbeatAt: timestamp()};
         tx.update(workspaceRef, update);
         tx.update(sessionRef, update);
         return {ok: true, leaseExpiresAt: update.leaseExpiresAt};
@@ -59,6 +70,11 @@ function createVmRuntimeControlService({db, admin, now = Date.now}) {
         const update = {state: "released", leaseExpiresAt: 0, releasedAt: timestamp()};
         tx.update(workspaceRef, update);
         tx.update(sessionRef, update);
+        return {ok: true};
+      }
+      if (validation) {
+        if (body.action === "auth.get") return {selection: {harness: "pi", providers: {}}, data: {providers: {}, entries: {}}};
+        if (body.action === "models.get") return {models: []};
         return {ok: true};
       }
       if (body.action === "models.get") return {models: session.piScopedModels || []};
@@ -123,4 +139,4 @@ function validToken(token, expected) {
   return timingSafeEqual(Buffer.from(tokenHash(token), "hex"), Buffer.from(expected, "hex"));
 }
 
-module.exports = {COLLECTION, LEASE_MS, createVmRuntimeControlService, tokenHash};
+module.exports = {COLLECTION, VALIDATION_COLLECTION, LEASE_MS, createVmRuntimeControlService, tokenHash};
