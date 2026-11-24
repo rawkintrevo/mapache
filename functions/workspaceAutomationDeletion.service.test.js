@@ -91,7 +91,7 @@ class Db {
   }
 }
 
-function harness({deleteService = true} = {}) {
+function harness({deleteService = true, computeSession = false, computeDiskDetached = true} = {}) {
   const db = new Db();
   db.data.set("workspaces/workspace-1", {
     ownerUid: "user-1",
@@ -101,6 +101,7 @@ function harness({deleteService = true} = {}) {
   });
   db.data.set("workspaces/workspace-1/sessions/main", {
     ownerUid: "user-1", workspaceId: "workspace-1", runtimeKind: "main", status: "running",
+    ...(computeSession ? {runtimeProvider: {backend: "compute-engine"}} : {}),
   });
   db.data.set("workspaces/workspace-1/sessions/auto-run-1", {
     ownerUid: "user-1", workspaceId: "workspace-1", runtimeKind: "automation", runId: "run-1", status: "running",
@@ -127,6 +128,9 @@ function harness({deleteService = true} = {}) {
       calls.push(["main", ref.id]);
       if (!deleteService) throw Object.assign(new Error("service deletion failed"), {code: "cloud_run_delete_failed"});
       await ref.delete();
+      if (session.runtimeProvider?.backend === "compute-engine") {
+        return {serviceAbsent: true, diskDetached: computeDiskDetached};
+      }
     },
     deleteSessionService: async (ref, session) => {
       calls.push(["service", ref.id]);
@@ -175,6 +179,13 @@ test("failed service deletion blocks bucket deletion and leaves a resumable tomb
   await assert.rejects(() => service.deleteWorkspace("user-1", "workspace-1"), /workspace_compute_cleanup_failed/);
   assert.equal(calls.some(([kind]) => kind === "bucket"), false);
   assert.equal(db.data.get("workspaces/workspace-1").deleted, true);
+  assert.equal(db.data.get(`${DELETION_OPERATION_COLLECTION}/workspace-1`).state, "blocked");
+});
+
+test("compute workspace deletion blocks storage cleanup until disk detachment is explicit", async () => {
+  const {calls, db, service} = harness({computeSession: true, computeDiskDetached: false});
+  await assert.rejects(() => service.deleteWorkspace("user-1", "workspace-1"), /workspace_compute_cleanup_unconfirmed/);
+  assert.equal(calls.some(([kind]) => kind === "bucket"), false);
   assert.equal(db.data.get(`${DELETION_OPERATION_COLLECTION}/workspace-1`).state, "blocked");
 });
 

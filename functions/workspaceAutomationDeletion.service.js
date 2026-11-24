@@ -1,6 +1,7 @@
 "use strict";
 
-const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
+const {assertVmMigrationAdmission, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
+const {planWorkspaceComputeCleanup} = require("./vmBackupPolicy.helpers");
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
@@ -95,6 +96,11 @@ async function resumeWorkspaceDeletion(uid, workspaceId, dependencies = {}) {
   const sessionResult = await stopRemainingSessions(workspace, new Set(runResult.cleaned), dependencies);
   if (sessionResult.failed.length) {
     throw deletionError("workspace_compute_cleanup_failed", {failed: sessionResult.failed});
+  }
+  const cleanupPlan = planWorkspaceComputeCleanup({workspace, compute: sessionResult.compute,
+    migration: {fencePresent: await readMigrationFence(workspaceId, dependencies)}});
+  if (cleanupPlan.action !== "apply-backup-retention") {
+    throw deletionError("workspace_compute_cleanup_unconfirmed", {reason: cleanupPlan.reason});
   }
 
   await updateOperation(opRef, {
@@ -277,13 +283,15 @@ async function markRunForDeletion(run, workspace, dependencies = {}) {
 
 async function stopRemainingSessions(workspace, cleanedAutomationRunIds = new Set(), dependencies = {}) {
   const sessions = await listSessionDocs(workspace.id, dependencies);
-  const result = {deleted: [], failed: []};
+  const result = {deleted: [], failed: [], compute: {unknown: false, instanceAbsent: true, diskDetached: true}};
   for (const session of sessions) {
     const sessionRef = dependencies.sessionCollection(workspace.id).doc(session.id);
+    const computeSession = isComputeSession(session);
     try {
       if (isAutomationRuntime(session)) {
         const runId = String(session.automationRunId || session.runId || "").trim();
         if (runId && cleanedAutomationRunIds.has(runId)) {
+          recordComputeCleanup(result.compute, computeSession, {serviceAbsent: true});
           await sessionRef.delete();
           result.deleted.push(session.id);
           continue;
@@ -294,9 +302,11 @@ async function stopRemainingSessions(workspace, cleanedAutomationRunIds = new Se
         });
         const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
         if (details.serviceAbsent !== true) throw deletionError("automation_service_delete_failed");
+        recordComputeCleanup(result.compute, computeSession, details);
         await sessionRef.delete();
       } else if (typeof dependencies.deleteSessionForWorkspace === "function") {
-        await dependencies.deleteSessionForWorkspace(sessionRef, session, {reason: "workspace_deleted"});
+        const details = await dependencies.deleteSessionForWorkspace(sessionRef, session, {reason: "workspace_deleted"});
+        recordComputeCleanup(result.compute, computeSession, details && typeof details === "object" ? details : {});
       } else {
         const deletion = await dependencies.deleteSessionService(sessionRef, session, {
           reason: "workspace_deleted",
@@ -304,6 +314,7 @@ async function stopRemainingSessions(workspace, cleanedAutomationRunIds = new Se
         });
         const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
         if (details.serviceAbsent !== true) throw deletionError("session_delete_failed");
+        recordComputeCleanup(result.compute, computeSession, details);
         await sessionRef.delete();
       }
       result.deleted.push(session.id);
@@ -312,6 +323,24 @@ async function stopRemainingSessions(workspace, cleanedAutomationRunIds = new Se
     }
   }
   return result;
+}
+
+function recordComputeCleanup(compute, computeSession, details = {}) {
+  if (!computeSession) return;
+  compute.unknown = compute.unknown || details.serviceAbsent !== true ||
+    (details.diskDetached !== true && details.dataDiskRetained !== true);
+  compute.instanceAbsent = compute.instanceAbsent && details.serviceAbsent === true;
+  compute.diskDetached = compute.diskDetached && (details.diskDetached === true || details.dataDiskRetained === true);
+}
+
+function isComputeSession(session = {}) {
+  return session.runtimeProvider?.backend === "compute-engine" ||
+    session.runtimeProviderDescriptor?.backend === "compute-engine" ||
+    session.backend === "compute-engine";
+}
+
+async function readMigrationFence(workspaceId, dependencies = {}) {
+  return dependencies.db.runTransaction(transaction => hasVmMigrationFence(transaction, dependencies.db, workspaceId));
 }
 
 async function deleteWorkspaceRecords(workspaceId, dependencies = {}) {

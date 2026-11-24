@@ -1411,6 +1411,32 @@ are required before a migration cutover or any operation that claims a tighter
 RPO. Cleanup first fences admissions, confirms compute absence and disk
 detachment, and only then applies the explicit tombstone/backup policy.
 
+The policy contract is implemented in
+`functions/vmBackupPolicy.helpers.js` and consumed by
+`functions/computeEngineBackup.service.js`. A snapshot receipt records the
+workspace and owner, operation ID, source disk and generation, consistency
+mode, capture time, recoverable point, verification state, and expiry. The
+default crash-consistent path does not imply quiescence; the
+application-consistent path refuses to create a receipt without a quiesce
+timestamp. Retention planning quarantines unknown owners and holds snapshots
+that are unverified, in progress, rollback-protected, or associated with an
+active migration. Workspace-deletion cleanup additionally requires a tombstone,
+blocked admissions, confirmed compute absence, and detached disks; pausing a
+workspace never satisfies that deletion mode. Restore requests require an
+explicit operation ID and a fresh target disk at least as large as the source,
+then return a generation-bound restore receipt for later runtime/file
+verification. Disk headroom is reported as unknown when the guest measurement
+is unavailable rather than being inferred from provisioned size alone.
+Workspace deletion now consumes the same cleanup policy after session deletion
+and rechecks the migration fence; a Compute-backed tombstone cannot proceed to
+storage/record cleanup unless service absence and disk detachment are explicit.
+
+This is the policy and provider boundary, not evidence of a live backup
+schedule or restore rehearsal. Durable Firestore operation records, a bounded
+scheduled worker, fresh-VM file/runtime verification, and Compute inventory
+reconciliation remain release work. No production snapshot, restore, or
+retention deletion is invoked by this change.
+
 The read-only inventory's `--list-objects` mode also checks shared-tree bucket
 ownership, HNS layout, generation-ready marker and original import control
 identity through `scripts/lib/vm-shared-tree-authority.mjs`. It does not invoke

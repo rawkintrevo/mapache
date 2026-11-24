@@ -105,7 +105,7 @@ function createComputeEngineService(dependencies = {}) {
     const descriptor = descriptorFor(session.runtimeProvider || session.runtimeProviderDescriptor);
     const result = await pause(descriptor, options);
     if (typeof markSessionStopped === "function") await markSessionStopped(sessionRef, session, options.reason || "service_deleted");
-    return {serviceAbsent: result.instanceDeleted === true, dataDiskRetained: true};
+    return {serviceAbsent: result.instanceDeleted === true, dataDiskRetained: true, diskDetached: result.dataDiskRetained === true};
   }
 
   async function start(rawDescriptor, options = {}) {

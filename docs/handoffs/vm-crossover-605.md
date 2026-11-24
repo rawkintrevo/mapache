@@ -172,11 +172,23 @@ Remaining: Drain existing writers and make the verified stages available to an e
 
 Fully evidenced original acceptance criteria: none.
 
-### #617: Not implemented for VM release — policy recorded
+### #617: Partial — policy and provider receipts implemented; lifecycle remains open
 
 Evidence: A daily crash-consistent snapshot/14-day retention target and separate application-consistent migration capture are documented. Normal pause retains the data disk; that is not a backup.
 
-Remaining: Implement VM snapshot scheduling/retention, fresh-disk restore with measured RPO/RTO, ownership-checked deletion/orphan cleanup, retry tests, cost visibility and operational recovery guidance. Existing legacy storage backup code is not VM evidence.
+The current checkpoint adds `functions/vmBackupPolicy.helpers.js` and threads it
+through `functions/computeEngineBackup.service.js`. Focused tests cover the
+daily/14-day policy, quiesce-required application consistency, generation-bound
+snapshot and restore receipts, retention holds/quarantine, deletion guards that
+distinguish tombstones from pause, undersized restore refusal, and explicit
+disk-headroom unknowns. Existing legacy storage backup code is not VM evidence.
+
+Remaining: Add durable Firestore backup-operation records and a bounded
+scheduled worker, perform a real fresh-disk/fresh-VM file and runtime
+verification with measured RPO/RTO, inventory Compute resources before orphan
+cleanup, surface startup/attach/mount timings and actual costs, and publish the
+disk-full/zone-loss runbooks. No production snapshot, restore, retention
+deletion, or synthetic-fixture mutation was performed.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 

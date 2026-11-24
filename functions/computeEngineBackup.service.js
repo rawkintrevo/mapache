@@ -2,6 +2,16 @@
 
 const {GoogleAuth} = require("google-auth-library");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
+const {
+  assertSnapshotDeletionAllowed,
+  backupPolicy,
+  createBackupRecord,
+  createRestoreReceipt,
+  diskCapacitySummary,
+  markBackupVerified,
+  markRestoreVerified,
+  planSnapshotRetention,
+} = require("./vmBackupPolicy.helpers");
 
 function createComputeEngineBackupService(dependencies = {}) {
   const auth = dependencies.auth || new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
@@ -9,17 +19,46 @@ function createComputeEngineBackupService(dependencies = {}) {
   const projectId = String(dependencies.projectId || "pi-agents-cloud").trim();
   const now = dependencies.now || (() => new Date().toISOString());
 
-  return {createSnapshot, inspectSnapshot, restoreSnapshot, deleteSnapshot, costSummary};
+  return {
+    createSnapshot,
+    inspectSnapshot,
+    restoreSnapshot,
+    deleteSnapshot,
+    costSummary,
+    backupPolicy,
+    createBackupRecord,
+    createRestoreReceipt,
+    diskCapacitySummary,
+    markBackupVerified,
+    markRestoreVerified,
+    planSnapshotRetention,
+    assertSnapshotDeletionAllowed,
+  };
 
-  async function createSnapshot(rawDescriptor, {snapshotName, operationId, retentionDays = 14} = {}) {
+  async function createSnapshot(rawDescriptor, {
+    snapshotName,
+    operationId,
+    retentionDays,
+    consistency = "crash-consistent",
+    quiescedAt,
+    sourceDiskId,
+    sourceGeneration,
+  } = {}) {
     const descriptor = normalizeRuntimeDescriptor(rawDescriptor, {workspaceId: rawDescriptor.workspaceId, ownerUid: rawDescriptor.ownerUid});
     const name = safeName(snapshotName || `${descriptor.dataDiskName}-${Date.now()}`);
+    const record = createBackupRecord({workspaceId: descriptor.workspaceId, ownerUid: descriptor.ownerUid,
+      operationId, sourceDisk: descriptor.dataDiskName, sourceDiskId, sourceGeneration: sourceGeneration || descriptor.generation,
+      consistency, quiescedAt, retentionDays, capturedAt: now()});
     const response = await requestImpl({
       url: `${diskUrl(descriptor)}/createSnapshot`,
       method: "POST",
-      data: {name, labels: labels(descriptor, operationId, retentionDays), storageLocations: [descriptor.region]},
+      data: {name, labels: labels(descriptor, operationId, record.retention.retentionDays, {
+        consistency: record.consistency,
+        sourceGeneration: record.sourceGeneration,
+        backupState: record.state,
+      }), storageLocations: [descriptor.region]},
     });
-    return {name, operation: response.data, sourceDisk: descriptor.dataDiskName, createdAt: now(), retentionDays};
+    return {...record, name, operation: response.data};
   }
 
   async function inspectSnapshot(rawDescriptor, snapshotName) {
@@ -29,26 +68,67 @@ function createComputeEngineBackupService(dependencies = {}) {
     return response.data;
   }
 
-  async function restoreSnapshot(rawDescriptor, {snapshotName, diskName, sizeGb} = {}) {
+  async function restoreSnapshot(rawDescriptor, {snapshotName, diskName, sizeGb, operationId} = {}) {
     const descriptor = normalizeRuntimeDescriptor(rawDescriptor, {workspaceId: rawDescriptor.workspaceId, ownerUid: rawDescriptor.ownerUid});
     const snapshot = await inspectSnapshot(descriptor, snapshotName);
     const target = safeName(diskName || `${descriptor.dataDiskName}-restore`);
+    if (target === descriptor.dataDiskName) {
+      const error = new Error("vm_backup_restore_target_must_be_fresh");
+      error.code = "vm_backup_restore_target_must_be_fresh";
+      throw error;
+    }
+    const requestedSizeGb = Number(sizeGb || snapshot.diskSizeGb);
+    const sourceSizeGb = Number(snapshot.diskSizeGb);
+    if (!Number.isSafeInteger(requestedSizeGb) || requestedSizeGb < 1 ||
+        !Number.isSafeInteger(sourceSizeGb) || requestedSizeGb < sourceSizeGb) {
+      const error = new Error("vm_backup_restore_size_invalid");
+      error.code = "vm_backup_restore_size_invalid";
+      throw error;
+    }
+    const restoreOperationId = String(operationId || "").trim();
+    if (!restoreOperationId) {
+      const error = new Error("vm_backup_restore_operation_required");
+      error.code = "vm_backup_restore_operation_required";
+      throw error;
+    }
+    const sourceGeneration = Number(snapshot.labels?.["mapache-source-generation"] || descriptor.generation);
+    const receipt = createRestoreReceipt({workspaceId: descriptor.workspaceId, ownerUid: descriptor.ownerUid,
+      operationId: restoreOperationId, sourceSnapshot: snapshot.name, sourceGeneration,
+      targetDisk: target, targetZone: descriptor.zone, targetDiskSizeGb: requestedSizeGb, createdAt: now()});
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/disks`,
       method: "POST",
       data: {
         name: target,
-        sizeGb: Number(sizeGb || snapshot.diskSizeGb),
+        sizeGb: requestedSizeGb,
         sourceSnapshot: snapshot.selfLink,
-        labels: labels(descriptor, `restore-${Date.now()}`),
+        labels: labels(descriptor, restoreOperationId, snapshot.labels?.["mapache-retention-days"] || 14, {
+          consistency: snapshot.labels?.["mapache-consistency"] || "crash-consistent",
+          sourceGeneration,
+          backupState: "restoring",
+        }),
       },
     });
-    return {diskName: target, operation: response.data, sourceSnapshot: snapshot.name};
+    return {...receipt, diskName: target, operation: response.data};
   }
 
-  async function deleteSnapshot(rawDescriptor, snapshotName) {
+  async function deleteSnapshot(rawDescriptor, snapshotName, options = {}) {
     const descriptor = normalizeRuntimeDescriptor(rawDescriptor, {workspaceId: rawDescriptor.workspaceId, ownerUid: rawDescriptor.ownerUid});
     const snapshot = await inspectSnapshot(descriptor, snapshotName);
+    if (!options.snapshotRecord) {
+      const error = new Error("vm_backup_deletion_guard_required");
+      error.code = "vm_backup_deletion_guard_required";
+      throw error;
+    }
+    if (options.snapshotRecord.name !== snapshot.name) {
+      const error = new Error("vm_backup_snapshot_record_mismatch");
+      error.code = "vm_backup_snapshot_record_mismatch";
+      throw error;
+    }
+    assertSnapshotDeletionAllowed({snapshot: options.snapshotRecord, mode: options.mode || "retention",
+      ownerUid: descriptor.ownerUid, workspaceId: descriptor.workspaceId, now: options.now,
+      computeAbsent: options.computeAbsent, diskDetached: options.diskDetached,
+      admissionsBlocked: options.admissionsBlocked});
     const response = await requestImpl({url: `${baseUrl()}/global/snapshots/${encodeURIComponent(snapshot.name)}`, method: "DELETE"});
     return {deleted: true, operation: response.data};
   }
@@ -65,13 +145,16 @@ function createComputeEngineBackupService(dependencies = {}) {
   function baseUrl() { return `https://compute.googleapis.com/compute/v1/projects/${encodeURIComponent(projectId)}`; }
   function zoneUrl(descriptor) { return `${baseUrl()}/zones/${encodeURIComponent(descriptor.zone)}`; }
   function diskUrl(descriptor) { return `${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}`; }
-  function labels(descriptor, operationId, retentionDays) {
+  function labels(descriptor, operationId, retentionDays, extra = {}) {
     return {
       "mapache-owner-uid": descriptor.ownerUid,
       "mapache-workspace-id": descriptor.workspaceId,
       "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
       "mapache-operation-id": String(operationId || "snapshot"),
       "mapache-retention-days": String(retentionDays || 14),
+      ...(extra.consistency ? {"mapache-consistency": String(extra.consistency)} : {}),
+      ...(extra.sourceGeneration ? {"mapache-source-generation": String(extra.sourceGeneration)} : {}),
+      ...(extra.backupState ? {"mapache-backup-state": String(extra.backupState)} : {}),
     };
   }
   function assertOwnership(resource, descriptor) {
