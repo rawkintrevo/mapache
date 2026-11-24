@@ -37,6 +37,7 @@ function classify(workspace, legacySessions, runs, existingVm) {
   }
   if (existingVm) blockers.push("destination_registry_exists");
   if (isWorkspaceStorageMigrationActive(workspace)) blockers.push("legacy_storage_operation_active");
+  if (workspace.runtimeScheduleLease != null) blockers.push("legacy_runtime_schedule_lease_unresolved");
   if (legacySessions.some(session => session.ownerUid && session.ownerUid !== workspace.ownerUid) ||
       runs.some(run => run.ownerUid !== workspace.ownerUid)) blockers.push("legacy_writer_owner_mismatch");
   const failures = legacySessions.filter(session => FAILED_STOP_STATES.has(normalize(session.status)));

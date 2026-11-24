@@ -439,11 +439,13 @@ async function stopSession(uid, workspaceId, sessionId, dependencies = {}, optio
       });
     }
   }
-  await sessionRef.update(sessionStatusUpdate(session, "stopping", {
+  const stopUpdate = sessionStatusUpdate(session, "stopping", {
     ...runtimeSessionStateUpdate(session, "stopping"),
     stopReason: reason,
     updatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
-  }));
+  });
+  if (options.scheduled) await admitLegacySessionUpdate(workspaceId, sessionRef, session, stopUpdate, dependencies);
+  else await sessionRef.update(stopUpdate);
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }

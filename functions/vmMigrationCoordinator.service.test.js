@@ -10,6 +10,8 @@ const {createWorkspaceSharedStorageService, deriveWorkspaceBucketName} = require
 const {createWorkspaceService} = require("./workspace.service");
 const {createMachineConfigurationService} = require("./machineConfiguration.service");
 const {createWorkspaceStorageBackupService} = require("./workspaceStorageBackup.service");
+const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSchedule.service");
+const {createSessionLifecycleService} = require("./sessionLifecycle.service");
 
 test("reservation and abort are atomic under concurrent callers and fail closed on changed authority", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
@@ -328,6 +330,61 @@ test("an in-flight legacy restore blocks maintenance release and remains visible
   } finally {
     providerDone.resolve();
     await restore?.catch(() => {});
+    await app.delete();
+  }
+});
+
+test("migration detects a pre-fence scheduler lease and denies its subsequent Cloud Run stop", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  const stopRequested = Promise.withResolvers();
+  const continueStop = Promise.withResolvers();
+  let reconcile;
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const defaultBucket = "fixture-bucket";
+    const workspace = db.collection("workspaces").doc(workspaceId);
+    const sessionCollection = () => workspace.collection("sessions");
+    const session = sessionCollection().doc("main");
+    await workspace.create({ownerUid, bucket: defaultBucket, storagePrefix: `workspaces/${ownerUid}/staging`,
+      canonicalSessionId: session.id, runtimeScheduleStatus: "open", runtimePolicyRevision: 1,
+      runtimePolicy: {mode: "scheduled", schedule: {days: [1], startTime: "08:00", endTime: "18:00", timezone: "UTC"}}});
+    await session.create({ownerUid, runtimeKind: "main", status: "running"});
+    let stopCalls = 0;
+    const lifecycle = createSessionLifecycleService({db, admin, sessionCollection,
+      requireWorkspace: async () => (await workspace.get()).data(),
+      now: () => new Date("2026-10-19T19:00:00.000Z"),
+      deleteSessionService: async () => { stopCalls++; return true; }});
+    const scheduler = createWorkspaceRuntimeScheduleService({db, admin, sessionCollection,
+      stopSessionForSchedule: async (...args) => {
+        stopRequested.resolve();
+        await continueStop.promise;
+        return lifecycle.stopSessionForSchedule(...args);
+      }});
+    reconcile = scheduler.reconcileWorkspace(workspaceId, new Date("2026-10-19T19:00:00.000Z"));
+    await Promise.race([stopRequested.promise, reconcile]);
+    const target = {ownerUid, workspaceId};
+    const probe = () => createVmMigrationPreflight({db})(target);
+    const leaseBlocker = "legacy_runtime_schedule_lease_unresolved";
+    const before = await probe();
+    assert.ok(before.blockers.includes(leaseBlocker), "lease is visible even past its scheduler TTL");
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket, authorize: async () => true});
+    const args = {...target, observationSha256: before.observationSha256, operationId: "scheduled-stop"};
+    assert.equal((await coordinator.reserve(args)).phase, "reserved");
+    const skipped = await scheduler.reconcileWorkspace(workspaceId, new Date("2026-10-19T23:00:00.000Z"));
+    assert.equal(skipped.reason, "workspace_vm_migration_active");
+    continueStop.resolve();
+    assert.equal((await reconcile).reason, "workspace_vm_migration_active");
+    assert.equal(stopCalls, 0);
+    assert.equal((await session.get()).get("status"), "running");
+    assert.equal((await workspace.get()).get("runtimeScheduleStatus"), "open");
+    assert.ok(!(await probe()).blockers.includes(leaseBlocker));
+  } finally {
+    continueStop.resolve();
+    await reconcile?.catch(() => {});
     await app.delete();
   }
 });

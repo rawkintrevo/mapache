@@ -1004,6 +1004,16 @@ Legacy desired configuration changes and applied-version callbacks in
 `functions/machineConfiguration.service.js` also read the fence before
 writing. An older applied callback cannot lower the recorded applied version.
 The emulator exercises these paths while reserved and after abort.
+The legacy scheduler in `functions/workspaceRuntimeSchedule.service.js`
+checks the fence before claiming a lease or saving runtime policy and
+long-running settings. A previous lease can release under the fence and
+leaves schedule status and errors alone. Scheduled stop admission in
+`functions/sessionLifecycle.service.js` checks the fence in the transaction
+that records the session transition, as scheduled start and restart already
+do. Manual stop remains available to drain admitted runners. Preflight
+reports `legacy_runtime_schedule_lease_unresolved` until the lease is
+released or reconciled. The scheduler TTL can permit another tick in normal
+operation and cannot prove that the first worker finished.
 Direct legacy restart and resize now check the fence in the same transaction
 that records the lifecycle transition, before a Cloud Run patch or a stop for
 recreation. The update also rejects a changed session state or operation
