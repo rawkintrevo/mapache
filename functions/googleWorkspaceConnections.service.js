@@ -20,6 +20,8 @@ function createGoogleWorkspaceConnectionsService(dependencies = {}) {
     listGoogleConnections: (uid) => listGoogleConnections(uid, dependencies),
     updateGoogleConnection: (uid, connectionId, metadata, encryptedCredentials) =>
       updateGoogleConnection(uid, connectionId, metadata, encryptedCredentials, dependencies),
+    assertConnectionMigrationAdmission: (uid, connectionId) =>
+      assertConnectionMigrationAdmission(uid, connectionId, dependencies),
     deleteGoogleConnection: (uid, connectionId) => deleteGoogleConnection(uid, connectionId, dependencies),
     bindGoogleWorkspaceConnection: (uid, workspaceId, payload) =>
       bindGoogleWorkspaceConnection(uid, workspaceId, payload, dependencies),
@@ -78,14 +80,36 @@ async function listGoogleConnections(uid, dependencies = {}) {
 
 async function updateGoogleConnection(uid, connectionId, metadata, encryptedCredentials, dependencies = {}) {
   const ref = connectionRef(uid, cleanConnectionId(connectionId), dependencies);
-  const existing = await ref.get();
-  if (!existing.exists) throw httpError(404, "google_connection_not_found");
-  const current = existing.data() || {};
-  const normalized = normalizeStoredMetadata({...current, ...metadata, connectionId: ref.id}, dependencies, current);
-  const patch = {...normalized};
-  if (encryptedCredentials !== undefined) patch.encryptedCredentials = normalizeEncryptedCredentials(encryptedCredentials);
-  await ref.set(patch, {merge: true});
+  await dependencies.db.runTransaction(async transaction => {
+    const existing = await transaction.get(ref);
+    if (!existing.exists) throw httpError(404, "google_connection_not_found");
+    await assertConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid, ref.id);
+    const current = existing.data() || {};
+    const normalized = normalizeStoredMetadata({...current, ...metadata, connectionId: ref.id}, dependencies, current);
+    const patch = {...normalized};
+    if (encryptedCredentials !== undefined) patch.encryptedCredentials = normalizeEncryptedCredentials(encryptedCredentials);
+    transaction.set(ref, patch, {merge: true});
+  });
   return publicConnectionSummary(await ref.get());
+}
+
+async function assertConnectionMigrationAdmission(uid, connectionId, dependencies = {}) {
+  const cleanId = cleanConnectionId(connectionId);
+  await dependencies.db.runTransaction(async transaction => {
+    const existing = await transaction.get(connectionRef(uid, cleanId, dependencies));
+    if (!existing.exists) throw httpError(404, "google_connection_not_found");
+    await assertConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid, cleanId);
+  });
+}
+
+async function assertConnectionMigrationAdmissionInTransaction(transaction, db, uid, connectionId) {
+  const workspaceSnap = await transaction.get(db.collection("workspaces").where("ownerUid", "==", uid));
+  for (const workspaceDoc of workspaceSnap.docs) {
+    const workspace = workspaceDoc.data() || {};
+    if (workspace[BINDING_FIELD] && workspace[BINDING_FIELD].connectionId === connectionId) {
+      await assertVmMigrationAdmission(transaction, db, workspaceDoc.id);
+    }
+  }
 }
 
 async function deleteGoogleConnection(uid, connectionId, dependencies = {}) {

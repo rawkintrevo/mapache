@@ -140,6 +140,9 @@ async function refreshGoogleConnection(uid, connectionId, dependencies) {
 
 async function refreshGoogleConnectionOnce(uid, connectionId, dependencies) {
   requireConfigured(dependencies.config, "refresh");
+  if (typeof dependencies.connections.assertConnectionMigrationAdmission === "function") {
+    await dependencies.connections.assertConnectionMigrationAdmission(uid, connectionId);
+  }
   const connection = await dependencies.connections.getGoogleConnection(uid, connectionId, {includePrivate: true});
   const refreshToken = decryptSecret(connection.encryptedCredentials, dependencies.config.encryptionKey);
   if (!refreshToken) throw httpError(409, "google_refresh_token_missing");
@@ -170,6 +173,9 @@ async function refreshGoogleConnectionOnce(uid, connectionId, dependencies) {
 }
 
 async function revokeGoogleConnection(uid, connectionId, dependencies) {
+  if (typeof dependencies.connections.assertConnectionMigrationAdmission === "function") {
+    await dependencies.connections.assertConnectionMigrationAdmission(uid, connectionId);
+  }
   const connection = await dependencies.connections.getGoogleConnection(uid, connectionId, {includePrivate: true});
   const refreshToken = decryptSecret(connection.encryptedCredentials, dependencies.config.encryptionKey);
   if (refreshToken) {

@@ -1089,8 +1089,10 @@ bind, unbind, or be implicitly unbound by deleting its connection. OAuth
 callbacks check again before writing the connection, then the binding
 transaction checks the fence at the point of the workspace write. This prevents
 an integration binding callback or cleanup request from publishing after
-quiesce; global connection records remain owner-scoped and reusable by other
-unfenced workspaces.
+quiesce. Refresh, revoke, and other updates to a shared Google connection
+recheck every workspace bound to that connection in the write transaction, so
+global connection records remain owner-scoped and reusable by other unfenced
+workspaces without mutating a fenced binding.
 
 Browser egress gateway assignment writes use the same boundary. A fenced
 workspace cannot be removed from or added to a shared gateway assignment, and

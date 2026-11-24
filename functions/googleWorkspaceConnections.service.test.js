@@ -121,6 +121,11 @@ function metadata(connectionId, email, services = ["gmail"]) {
   }), (error) => error.publicMessage === "workspace_vm_migration_active");
   await assert.rejects(service.unbindGoogleWorkspaceConnection("user-a", "workspace-a"),
     (error) => error.publicMessage === "workspace_vm_migration_active");
+  await assert.rejects(service.updateGoogleConnection("user-a", "connection-a", {status: "revoked"}),
+    (error) => error.publicMessage === "workspace_vm_migration_active");
+  assert.strictEqual((await service.getGoogleConnection("user-a", "connection-a", {includePrivate: true})).metadata.status, "connected");
+  await assert.rejects(service.assertConnectionMigrationAdmission("user-a", "connection-a"),
+    (error) => error.publicMessage === "workspace_vm_migration_active");
   await assert.rejects(service.deleteGoogleConnection("user-a", "connection-a"),
     (error) => error.publicMessage === "workspace_vm_migration_active");
   dependencies.fences.delete("workspace-a");

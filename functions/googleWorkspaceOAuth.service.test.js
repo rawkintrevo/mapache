@@ -80,6 +80,9 @@ function createFakeDb() {
     async assertWorkspaceMigrationAdmission(uid, workspaceId) {
       admissionChecks.push(`${uid}:${workspaceId}`);
     },
+    async assertConnectionMigrationAdmission(uid, connectionId) {
+      admissionChecks.push(`${uid}:${connectionId}`);
+    },
     async getGoogleConnection(uid, id, options = {}) {
       const record = connections.get(`${uid}:${id}`);
       if (!record) {
@@ -167,6 +170,7 @@ function createFakeDb() {
   const refreshed = await oauth.refreshGoogleConnection("user-a", stored.metadata.connectionId);
   assert.strictEqual(refreshed.accessToken, "access-fake");
   assert.strictEqual(calls.length, 1);
+  assert.strictEqual(admissionChecks.at(-1), `user-a:${stored.metadata.connectionId}`);
   const encrypted = encryptSecret("another-secret", "encryption-secret");
   assert.strictEqual(decryptSecret(encrypted, "encryption-secret"), "another-secret");
   await assert.rejects(oauth.completeGoogleConnection({state: params.get("state"), code: "code-fake"}), /replayed_google_oauth_state/);
