@@ -54,10 +54,11 @@ gcloud builds submit session-runner \
   --substitutions=_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-pr-<sha>-fast,_UPSTREAM_TEST_MODE=fast
 ```
 
-Fast mode skips upstream `npm test`, never publishes the runtime cache, and must not
-be promoted to a production revision until a normal full-mode build passes. The
-GitHub workflow rejects publishing a fast build. Use the default substitution for
-release or rollout evidence.
+Fast mode skips upstream `npm test`. It may restore an already-published,
+verified full-mode runtime cache; a fast cache miss never publishes a runtime
+cache and must not be promoted to a production revision until a normal full-mode
+build passes. The GitHub workflow rejects publishing a fast build. Use the
+default substitution for release or rollout evidence.
 
 Workspace-request OOM recovery is a Functions-only change. Deploy `api`,
 `provisionAutomationRun`, `cleanupAutomationRun`,

@@ -425,7 +425,11 @@ export async function buildUpstream(options = {}) {
 		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
 			fail("manifest build.webBasePath must be a single slash-delimited path");
 		}
-		if (!options.skipTests && cacheKey && options.cacheArchivePath) {
+		// A verified full-mode artifact is safe to reuse for a fast iteration build:
+		// the cache identity covers the resolved upstream inputs and managed patches,
+		// while the fast mode only changes whether a cache miss runs npm test. Fast
+		// misses remain unpublished below so they can never become the shared cache.
+		if (cacheKey && options.cacheArchivePath) {
 			const cached = await restoreCacheArtifact({
 				archivePath: options.cacheArchivePath,
 				outputDir: options.outputDir,
@@ -485,6 +489,7 @@ export async function buildUpstream(options = {}) {
 		}
 		cacheDecision = {
 			...cacheDecision,
+			...(options.skipTests ? {status: "disabled", reason: "tests-skipped"} : {}),
 			buildElapsedMs: Date.now() - buildStartedAt,
 			testMode: options.skipTests ? "fast" : "full",
 		};

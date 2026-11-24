@@ -391,6 +391,12 @@ stopped-target scheduled/Run-now execution, cross-machine tools, usage
 accounting, migration cutover/rollback, recovery, and release cohorts remain
 open.
 
+The first automatic PR-fast image attempt showed that disabling cache restore
+made a cache-hit iteration unnecessarily rebuild the upstream runtime. Fast
+mode now restores only a verified full-mode cache when available; a fast cache
+miss remains unpublished. This keeps the full-mode release boundary while
+removing the upstream rebuild from the common unchanged-input iteration path.
+
 The VM request wake path also now handles a request racing an in-flight
 pause/replacement: it waits for the durable operation to commit the machine
 stopped, then submits exactly one generation-pinned, API-admitted start request.

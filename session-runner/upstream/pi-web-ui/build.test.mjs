@@ -31,6 +31,14 @@ test("the manifest is a release policy rather than a manually pinned source", ()
 	assert.equal(manifest.piSdk.releaseChannel, "latest");
 });
 
+test("fast builds may restore a verified full cache but mark cache misses unpublished", () => {
+	// The build path restores the cache before deciding whether to run the
+	// reduced build. A fast cache miss must not be packaged as the shared cache.
+	const source = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
+	assert.match(source, /if \(cacheKey && options\.cacheArchivePath\)/);
+	assert.match(source, /options\.skipTests \? \{status: "disabled", reason: "tests-skipped"\}/);
+});
+
 test("the build rejects a source directory with the wrong revision", async () => {
 	const sourceDir = fixture();
 	await assert.rejects(

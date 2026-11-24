@@ -142,9 +142,10 @@ Run slower checks when a change touches the related subsystem:
   [Deployment](./deployment.md). Pull-request image builds select this mode
   automatically; it is a development feedback loop only. The fast image runs
   typecheck, production build, Docker construction, and runner smoke checks, but
-  skips upstream `npm test`, does not publish the shared runtime cache, and requires a
-  subsequent default full-mode build before release or VM rollout. Main pushes and
-  default manual image runs remain full-mode checks.
+  skips upstream `npm test`. It can reuse a verified full-mode runtime cache;
+  cache misses do not publish the shared runtime cache and require a subsequent
+  default full-mode build before release or VM rollout. Main pushes and default
+  manual image runs remain full-mode checks.
 - One-off HubSpot export changes: `node --test scripts/hubspotPiWebExport.test.mjs`.
   These fixtures stay local and verify restricted inventory matching, dry-run defaults,
   quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary
