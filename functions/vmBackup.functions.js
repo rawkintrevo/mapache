@@ -6,11 +6,13 @@ const {db} = require("./backendContext");
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createComputeEngineBackupService} = require("./computeEngineBackup.service");
 const {createVmBackupInventoryService} = require("./vmBackupInventory.service");
+const {createVmBackupRuntimeEvidenceService} = require("./vmBackupRuntimeEvidence.service");
 const {createVmBackupSchedulerService} = require("./vmBackupScheduler.service");
 
 const backup = createComputeEngineBackupService({projectId: "pi-agents-cloud"});
 const compute = createComputeEngineService({projectId: "pi-agents-cloud"});
-const service = createVmBackupSchedulerService({db, backup});
+const runtimeEvidence = createVmBackupRuntimeEvidenceService({db});
+const service = createVmBackupSchedulerService({db, backup, captureRuntimeEvidence: runtimeEvidence.capture});
 const inventory = createVmBackupInventoryService({db, provider: {
   inspect: compute.inspect, listOwnedResources: compute.listOwnedResources, listSnapshots: backup.listSnapshots,
 }});

@@ -27,7 +27,7 @@ const MAX_SCAN = 100;
  * prevent a later tick from silently creating a second snapshot for the same
  * schedule slot.
  */
-function createVmBackupSchedulerService({db, backup, now = Date.now, logger = console} = {}) {
+function createVmBackupSchedulerService({db, backup, captureRuntimeEvidence, now = Date.now, logger = console} = {}) {
   if (!db || !backup) throw new Error("vm_backup_scheduler_dependencies_required");
 
   return {
@@ -168,6 +168,18 @@ function createVmBackupSchedulerService({db, backup, now = Date.now, logger = co
       if (operation.kind === "compute-engine-backup-retention") return await deleteExpiredSnapshot(operation, operationRef, claimId);
       if (operation.phase === "snapshot") {
         const record = operation.backupRecord;
+        let sourceRuntimeEvidence = null;
+        let sourceRuntimeEvidenceError = null;
+        if (typeof captureRuntimeEvidence === "function") {
+          try {
+            sourceRuntimeEvidence = await captureRuntimeEvidence({workspaceId: operation.workspaceId,
+              ownerUid: operation.ownerUid, descriptor: operation.descriptor});
+          } catch (error) {
+            sourceRuntimeEvidenceError = safeErrorCode(error);
+            logger.warn?.("VM backup source runtime evidence unavailable", {workspaceId: operation.workspaceId,
+              errorCode: sourceRuntimeEvidenceError});
+          }
+        }
         const created = await backup.createSnapshot(operation.descriptor, {
           snapshotName: `mapache-${operation.workspaceId}-${operation.operationId.slice(0, 12)}`,
           operationId,
@@ -177,7 +189,8 @@ function createVmBackupSchedulerService({db, backup, now = Date.now, logger = co
           sourceDiskId: record.sourceDiskId,
           sourceGeneration: record.sourceGeneration,
         });
-        const namedRecord = {...record, name: created.name, providerOperation: created.operation || null};
+        const namedRecord = {...record, name: created.name, providerOperation: created.operation || null,
+          sourceRuntimeEvidence, sourceRuntimeEvidenceError};
         await db.collection(BACKUPS).doc(operation.workspaceId).collection("items").doc(operationId).set(namedRecord);
         await commit(operationRef, claimId, operation, {phase: "verify", backupRecord: namedRecord,
           snapshotName: created.name, lastError: null});
@@ -194,6 +207,8 @@ function createVmBackupSchedulerService({db, backup, now = Date.now, logger = co
           workspaceId: operation.workspaceId, ownerUid: operation.ownerUid, operationId,
           verifiedAt: new Date(now()).toISOString(), restoreOperationId: null,
           diskName: operation.backupRecord.sourceDisk, runtimeReady: true,
+          fileDigest: operation.backupRecord.sourceRuntimeEvidence?.fileDigest,
+          runtimeStateDigest: operation.backupRecord.sourceRuntimeEvidence?.runtimeStateDigest,
         });
         await db.collection(BACKUPS).doc(operation.workspaceId).collection("items").doc(operationId).set(verified);
         await commit(operationRef, claimId, operation, {phase: "complete", status: "succeeded",

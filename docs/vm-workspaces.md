@@ -1466,6 +1466,16 @@ receipts; retention does not mark a snapshot deleted while a named provider
 delete is still pending, and retries reuse that receipt rather than issuing a
 second delete.
 
+When an opted-in source VM is active, the scheduler also calls the authenticated
+runner health and recovery-digest endpoints before snapshot creation. It stores
+the bounded source file/runtime digests and probe timings on the backup record,
+so a later isolated recovery proof can compare the restored tree with the
+captured source. A stopped source has no live runtime attestation; its backup
+remains usable for crash recovery but is explicitly missing a source digest.
+Probe failures do not invent a digest and are retained as a bounded diagnostic
+while the snapshot operation continues under its existing provider retry
+semantics.
+
 The same opt-in scheduler performs a read-only inventory pass for each
 eligible VM and writes `vmBackupInventoryReports_v2/{workspaceId}`. The report
 records whether the owned instance and disk are present, whether the retained
@@ -1489,8 +1499,25 @@ digest or target mismatch; transient runtime readiness errors retain a bounded
 retry. The adapter is intentionally not wired to a production VM boot yet, so
 these reports are contract/test evidence rather than a live recovery claim.
 
-Fresh-VM verification with a real runtime adapter and numeric cost measurements
-remain release work. The read-only inventory now enumerates owned Compute
+The runner's authenticated `/runner/recovery-digest` endpoint produces a
+bounded SHA-256 digest of the retained tree without returning names or content.
+It refuses entry/byte limits and never follows symlinks. This endpoint is
+diagnostic evidence only and is not an authority or cleanup grant.
+
+`scripts/vm-backup-recovery-proof.mjs` is the explicit operator-only isolated
+proof path. With `--confirm-recovery`, it restores a verified backup to a
+deterministic fresh disk, starts a private VM with a pinned image, checks
+authenticated `/runner/health` and `/runner/recovery-digest` through IAP SSH,
+records provider-restore, VM-start, runner-readiness, RPO, and RTO timings, and
+deletes only the exact proof VM and detached proof disk after identity checks.
+The command fails its report when the source backup has no expected file
+digest; a target digest alone is not treated as a source-integrity comparison.
+It never writes Firestore authority, exposes a route, starts a production
+workspace, or deletes the source disk or snapshot. The durable recovery
+controller still does not wire this operator into the production scheduler.
+
+Fresh-VM production verification and numeric cost measurements remain release
+work. The read-only inventory now enumerates owned Compute
 instances/disks before any future cleanup. The fail-closed disk-full/zone-loss procedure is in the
 [VM disk recovery runbook](runbooks/vm-disk-recovery.md). The explicit
 expansion-only operator command `scripts/vm-resize-disk.mjs` covers the

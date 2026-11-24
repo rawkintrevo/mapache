@@ -122,11 +122,39 @@ owner and generation checks are complete.
    restart for a resize.
 
 If the disk cannot be made usable, a restore may proceed only from a verified,
-owner-matched backup to a fresh target disk. The current restore controller
-requires a runtime/file verifier; until that adapter is wired to an isolated
-fresh VM, the safe outcome is
-`vm_restore_runtime_verifier_unwired`, with the original disk and backup
-retained.
+owner-matched backup to a fresh target disk. An isolated operator proof can be
+run only with a pinned image and explicit confirmation:
+
+```bash
+node scripts/vm-backup-recovery-proof.mjs \
+  --project=pi-agents-cloud \
+  --workspace=WORKSPACE_ID \
+  --owner=OWNER_UID \
+  --backup=BACKUP_ID \
+  --runner-image=PINNED_SESSION_RUNNER_DIGEST \
+  --confirm-recovery
+```
+
+The proof uses a deterministic fresh disk/VM, IAP SSH, authenticated
+`/runner/health`, and the bounded `/runner/recovery-digest` endpoint. It records
+provider restore, VM startup, runner readiness, RPO, and RTO timings, then
+requires exact detached-resource cleanup. It fails closed when the backup has
+no source file digest to compare, so a successful VM boot is not by itself a
+recovery claim. It does not publish a route, change Firestore authority, or
+delete the source disk or snapshot. Do not run it against a production
+workspace while the rollout flag is disabled; use a disposable backup fixture.
+
+The durable restore controller still requires this verifier contract to be
+wired separately. Until that production adapter exists, the safe operational
+outcome is `vm_restore_runtime_verifier_unwired`, with the original disk and
+backup retained.
+
+Future crash-consistent backups made while a VM is active carry a source
+digest captured immediately before the snapshot request. Treat that digest as
+the comparison input, not as application-consistency proof: the snapshot may
+still include writes that race the probe. Backups made while stopped, or when
+the authenticated source probe is unavailable, remain explicitly undigested
+and must not be reported as file-verified recovery.
 
 ## Zone-loss procedure
 

@@ -239,6 +239,29 @@ start a workspace VM, change authority, or release writer admission. A normal
 start and authenticated health check are still required after the operator
 action; fresh-VM recovery and release evidence remain open.
 
+The runner now exposes authenticated `/runner/recovery-digest` only on the
+canonical runner surface. It returns a bounded SHA-256 digest and counts for
+the retained tree without returning paths or contents. The operator-only
+`scripts/vm-backup-recovery-proof.mjs` restores a verified backup to a
+deterministic fresh disk, starts a pinned private VM, checks `/runner/health`
+and the digest over IAP SSH, records restore/start/readiness and RPO/RTO
+timings, and cleans up only the exact proof VM and detached disk. It refuses to
+report success when the source backup lacks an expected file digest, and it
+does not write authority, create a route, or delete the source backup/disk.
+The durable production recovery adapter remains unwired; no recovery proof was
+invoked by this change.
+
+The opt-in backup scheduler now captures source `/runner/health` and
+`/runner/recovery-digest` evidence for an active admitted VM before requesting
+a snapshot, storing file/runtime digests and bounded probe timings. Stopped
+sources and probe failures retain an explicit missing-digest state rather than
+inventing comparison evidence.
+The guarded scheduler deployment completed with
+`firebase deploy --only functions:vmBackupReconcile_v2 --project
+pi-agents-cloud`; the active revision is `vmbackupreconcile-v2-00007-zoq` under
+`mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. No VM backup or recovery
+operation was invoked by the deployment.
+
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 surface backup/runtime startup, attach, and mount timings and actual costs; and

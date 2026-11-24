@@ -35,6 +35,28 @@ test("scheduled backup creates a durable operation and verifies a ready snapshot
   assert.equal(backups[0].data.sourceGeneration, 2);
 });
 
+test("scheduled backup carries active source digest into the verified record", async () => {
+  const db = memoryDb();
+  const descriptor = createRuntimeDescriptor({backend: "compute-engine", workspaceId: "workspace-1", ownerUid: "owner-1", generation: 2});
+  db.seed("vmRuntimes_v2/workspace-1", {
+    ownerUid: "owner-1", backend: "compute-engine", generation: 2, state: "active", lifecycleEnabled: true,
+    runtimeProvider: descriptor, backupPolicy: {enabled: true, schedule: "daily"},
+  });
+  const fileDigest = "sha256:" + "a".repeat(64);
+  const service = createVmBackupSchedulerService({db, now: () => NOW, captureRuntimeEvidence: async () => ({
+    runtimeReady: true, fileDigest, runtimeStateDigest: "sha256:" + "b".repeat(64),
+  }), backup: {
+    createSnapshot: async (_descriptor, options) => ({name: options.snapshotName, operation: {status: "DONE"}}),
+    inspectSnapshot: async (_descriptor, name) => ({name, status: "READY"}),
+    deleteSnapshot: async () => ({deleted: true}),
+  }});
+  await service.runTick();
+  await service.runTick();
+  const record = db.docs("vmBackups_v2/workspace-1/items")[0].data;
+  assert.equal(record.verification.fileDigest, fileDigest);
+  assert.equal(record.verification.runtimeStateDigest, "sha256:" + "b".repeat(64));
+});
+
 test("not-ready snapshots stay pending for a later bounded retry", async () => {
   const db = memoryDb();
   const descriptor = createRuntimeDescriptor({backend: "compute-engine", workspaceId: "workspace-1", ownerUid: "owner-1"});

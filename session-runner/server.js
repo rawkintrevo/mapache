@@ -41,6 +41,7 @@ const {createShellSession} = require("./lib/shell");
 const {createWorkspaceService} = require("./lib/workspace");
 const {createDiskUploadService} = require("./lib/diskUpload.service");
 const {createDiskStatusService} = require("./lib/diskStatus");
+const {createRetainedDiskDigestService} = require("./lib/retainedDiskDigest");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
@@ -134,6 +135,9 @@ const diskStatus = createDiskStatusService({
   root: config.retainedDiskRoot || config.workspaceDir,
   storageMode: config.workspaceStorageMode,
 });
+const retainedDiskDigest = config.retainedDiskMode ? createRetainedDiskDigestService({
+  root: config.retainedDiskRoot,
+}) : null;
 const workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
   syncUp: workspace.syncUp,
@@ -271,6 +275,7 @@ registerBrowserRoutes({
   config,
   chromeProfileSeed,
   diskStatus,
+  retainedDiskDigest,
   expressStatic: express.static,
   piWebUi,
   preview,
