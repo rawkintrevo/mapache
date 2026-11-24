@@ -1113,6 +1113,16 @@ and IAM-private GET status at `vmMigrationStatus_v2`, which takes
 `workspaceId`, `ownerUid` and `operationId`. The coordinator's mutation
 methods have no production entry point.
 
+The status projection is intentionally safe for operator display. It reports
+the current phase, completed timestamps, `downtimeStartedAtMs` after quiesce,
+known drain blocker codes, the next bounded action, a recovery instruction and
+that the source remains retained. It never includes credentials, provider
+addresses, object names or private error text. A reserved operation exposes
+the writer blockers observed at reservation; successful quiesce clears that
+list only after the provider and Storage observations commit. `readyForCutover`
+remains false until a separately reviewed authority-switch implementation is
+available.
+
 The coordinator records a `quiesced` receipt only when the exact operation
 owns both fences and the source scope still matches the reservation. It
 checks the Firestore writer inventory, bounded Compute observation and

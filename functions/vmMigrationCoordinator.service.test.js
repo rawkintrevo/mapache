@@ -53,6 +53,10 @@ test("reservation and abort are atomic under concurrent callers and fail closed 
     assert.deepEqual(await coordinator.getStatus(winnerArgs), winner);
     assert.equal(winner.sourceGeneration, 7);
     assert.equal(winner.readyForCutover, false);
+    assert.deepEqual(winner.blockers, []);
+    assert.equal(winner.nextAction, "confirm-quiesced");
+    assert.equal(winner.downtimeStartedAtMs, null);
+    assert.match(winner.recoveryAction, /confirm-quiesced/);
 
     const workspaceFence = db.collection("vmMigrationFences_v2").doc(workspaceId);
     const prefix = db.doc(`vmMigrationStorageFences_v2/${defaultBucket}/owners/${ownerUid}/prefixes/staging`);
@@ -113,6 +117,10 @@ test("quiesce records a historical receipt only for stable source and fence obse
       inspectStorage: async () => storageProbe()};
     const coordinator = createVmMigrationCoordinator({...options, authorize: async () => true});
     const reserved = await coordinator.reserve(input);
+    assert.ok(reserved.blockers.includes("legacy_storage_recovery_reservation_unresolved"));
+    assert.equal(reserved.nextAction, "confirm-quiesced");
+    assert.equal(reserved.downtimeStartedAtMs, null);
+    assert.match(reserved.recoveryAction, /Drain/);
     await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_writers_not_drained"});
     const recovery = createWorkspaceStorageBackupService({db, admin});
     await recovery.releaseMaintenanceReservation(ownerUid, workspaceId, "old-recovery");
@@ -158,6 +166,10 @@ test("quiesce records a historical receipt only for stable source and fence obse
     assert.equal(receipt.phase, "quiesced");
     assert.equal(receipt.readyForCutover, false);
     assert.equal(receipt.quiescedAtMs, 42);
+    assert.deepEqual(receipt.blockers, []);
+    assert.equal(receipt.downtimeStartedAtMs, 42);
+    assert.equal(receipt.nextAction, "capture-prefix");
+    assert.match(receipt.recoveryAction, /capture-prefix/);
     assert.equal((await operation.get()).get("quiesce.storageSha256"), storageDigest);
     const probesBeforeRetry = probes;
     assert.deepEqual(await coordinator.confirmQuiesced(input), receipt);

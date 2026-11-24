@@ -25,6 +25,13 @@ const DIGEST = /^[a-f0-9]{64}$/;
 const DISK_ID = /^[1-9][0-9]{0,19}$/;
 const RUNNER_IMAGE = /^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/;
 const CAPTURE_COMPONENTS = new Set(["agent", "browser", "home", "workspace"]);
+const STATUS_ACTIONS = Object.freeze({
+  reserved: "confirm-quiesced",
+  quiesced: "capture-prefix",
+  "prefix-captured": "verify-disk-import",
+  "disk-import-verified": "validation-boot",
+  aborted: null,
+});
 const versionStamp = ({updateTime}) => [updateTime.seconds, updateTime.nanoseconds];
 
 function ownsFence(snapshot, identity) {
@@ -92,9 +99,22 @@ function createVmMigrationCoordinator({
     return {operation, fence: vmMigrationFenceRef(db, workspaceId), source: db.collection("workspaces").doc(workspaceId)};
   }
   function status(record) {
+    const validation = record.validation || {};
+    const validationAction = record.phase === "disk-import-verified" && !validation.cleanedAtMs ?
+      (validation.instanceId ? "cleanup-validation-boot" : validation.cloneDiskId ? "start-validation-boot" :
+        validation.reservedAtMs ? "prepare-validation-clone" : "reserve-validation-boot") : null;
+    const nextAction = validationAction || STATUS_ACTIONS[record.phase] || null;
+    const blockers = Array.isArray(record.drainBlockers) ? [...record.drainBlockers] : [];
+    let recoveryAction = "Review the migration status and retain the source before retrying.";
+    if (record.phase === "aborted") recoveryAction = "Start a new migration after a fresh read-only preflight.";
+    else if (blockers.length) recoveryAction = "Drain the listed legacy writers, then retry the quiesce action.";
+    else if (record.phase === "disk-import-verified" && validation.cleanedAtMs === undefined) {
+      recoveryAction = "Complete validation boot and ID-checked cleanup before cutover review.";
+    } else if (nextAction) recoveryAction = `Retry the ${nextAction} action after rechecking the recorded source evidence.`;
     return {workspaceId: record.workspaceId, operationId: record.operationId, phase: record.phase,
       sourceGeneration: record.sourceGeneration, reservedAtMs: record.reservedAtMs, releasedAtMs: record.releasedAtMs ?? null,
       quiescedAtMs: record.quiesce?.confirmedAtMs ?? null,
+      downtimeStartedAtMs: record.quiesce?.confirmedAtMs ?? null,
       prefixCapturedAtMs: record.prefixCapture?.confirmedAtMs ?? null,
       prefixCapturedObjects: record.prefixCapture?.objectCount ?? null,
       diskImportVerifiedAtMs: record.diskImport?.verifiedAtMs ?? null,
@@ -104,6 +124,7 @@ function createVmMigrationCoordinator({
       validationBootRequestedAtMs: record.validation?.bootRequestedAtMs ?? null,
       validationInstanceStartedAtMs: record.validation?.instanceStartedAtMs ?? null,
       validationCleanedAtMs: record.validation?.cleanedAtMs ?? null,
+      nextAction, blockers, recoveryAction, sourceRetained: true,
       readyForCutover: false};
   }
   function requireOwner(record, input) {
@@ -143,7 +164,8 @@ function createVmMigrationCoordinator({
       }
       const identity = {workspaceId: input.workspaceId, ownerUid: input.ownerUid, operationId: input.operationId};
       const record = {...identity, phase: "reserved", scope, sourceGeneration: observation.sourceGeneration,
-        observationSha256: observation.observationSha256, reservedAtMs: now()};
+        observationSha256: observation.observationSha256,
+        drainBlockers: observation.blockers.filter(blocker => blocker !== "migration_fence_already_exists"), reservedAtMs: now()};
       transaction.create(operation, record);
       transaction.create(fence, identity);
       transaction.create(prefixFence, identity);
@@ -210,7 +232,7 @@ function createVmMigrationCoordinator({
       if (!current.observation) return status(current.record);
       if (before.observation.observationSha256 !== current.observation.observationSha256 ||
           before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_quiesce_observation_stale");
-      const update = {phase: "quiesced", quiesce: {confirmedAtMs: now(), observationSha256: current.observation.observationSha256,
+      const update = {phase: "quiesced", drainBlockers: [], quiesce: {confirmedAtMs: now(), observationSha256: current.observation.observationSha256,
         fenceVersions: current.fenceVersions, providerSha256, discoverySha256, storageSha256}};
       transaction.update(references.operation, update);
       return status({...current.record, ...update});
