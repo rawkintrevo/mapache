@@ -997,8 +997,33 @@ writer coordination, missing-source decisions, and boot validation.
 
 Focused tests exercise interrupted directory publication, retry,
 ownership rejection and changed destination data. A real tmpfs mount was
-rejected by the production guard. Successful installation on a GCE
-Persistent Disk and runtime validation still need an isolated live proof.
+rejected by the production guard.
+
+On 2026-11-23, `scripts/vm-retained-import-proof.mjs` exercised the
+production mount/device checks on a fresh 10 GiB balanced Persistent Disk
+attached to the private Debian maintenance VM `mapache-import-proof-605`.
+The VM had no service account or external address. The fixture generated
+two synthetic checkpoint trees and seeded its own provisioning marker.
+The `interrupt` invocation killed itself after syncing its first
+published directory and exited 137. `resume` confirmed the disk had one
+published directory and no receipt before continuing. After unmount and
+remount, `verify` confirmed the same receipt, agent history bytes, and
+executable behavior. The installed tree passed the runner's
+`prepareRetainedDisk` check with `initialized=false`. Full runner
+container startup, health, and real workspace cutover remain separate gates.
+Local evidence is `artifacts/qa/vm-retained-import/live.log`. The proof VM
+and disk were detached and deleted after verification.
+
+For a repeat run, create a fresh fixture disk named
+`mapache-ws-9f45ab7766711f54018f3551` in `pi-agents-cloud/us-central1-a`.
+Attach it to a disposable Linux maintenance VM with that exact device name.
+Confirm the fresh device has no filesystem signature before formatting
+it as ext4 and mounting at `/mnt/mapache-import-proof-605`. With Node
+18.20 or newer, run `seed`, then `interrupt` (expect exit 137), then
+`resume`, using a separate process for each and holding an exclusive
+mount-directory lock. Unmount, remount, then run `verify`. The last phase
+also creates the remaining runtime directories, so it is the final phase.
+Unmount and remove the disposable disk and VM after collecting evidence.
 
 ## Cost model and guardrails
 
