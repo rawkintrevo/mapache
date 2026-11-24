@@ -3,13 +3,15 @@
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const {db} = require("./backendContext");
+const {createComputeEngineService} = require("./computeEngine.service");
 const {createComputeEngineBackupService} = require("./computeEngineBackup.service");
 const {createVmBackupInventoryService} = require("./vmBackupInventory.service");
 const {createVmBackupSchedulerService} = require("./vmBackupScheduler.service");
 
 const backup = createComputeEngineBackupService({projectId: "pi-agents-cloud"});
+const compute = createComputeEngineService({projectId: "pi-agents-cloud"});
 const service = createVmBackupSchedulerService({db, backup});
-const inventory = createVmBackupInventoryService({db, provider: backup});
+const inventory = createVmBackupInventoryService({db, provider: {inspect: compute.inspect, listSnapshots: backup.listSnapshots}});
 
 // Workspaces opt in by setting backupPolicy.enabled=true on their backend-owned
 // VM registry document. The existing Cloud Run path and all VM records without
