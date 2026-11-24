@@ -1431,11 +1431,26 @@ Workspace deletion now consumes the same cleanup policy after session deletion
 and rechecks the migration fence; a Compute-backed tombstone cannot proceed to
 storage/record cleanup unless service absence and disk detachment are explicit.
 
-This is the policy and provider boundary, not evidence of a live backup
-schedule or restore rehearsal. Durable Firestore operation records, a bounded
-scheduled worker, fresh-VM file/runtime verification, and Compute inventory
-reconciliation remain release work. No production snapshot, restore, or
-retention deletion is invoked by this change.
+`functions/vmBackupScheduler.service.js` now adds the durable controller
+boundary. A backend-owned `backupPolicy.enabled=true` VM registry record opts
+in to the 15-minute `vmBackupReconcile_v2` scheduler; records without that
+explicit policy remain untouched. Scheduled and manual requests are stored in
+`vmBackupOperations_v2`, keyed to a workspace/generation/request or daily
+schedule slot. Provider calls run outside Firestore transactions under a
+15-minute claim, with a persisted phase, provider receipt, verification retry,
+and bounded error state. Verified backup receipts live under
+`vmBackups_v2/{workspaceId}/items`; retention expiry creates an ownership-bound
+delete operation instead of deleting an unverified, foreign, migration, or
+rollback-protected snapshot. The scheduler refuses reservations while a VM
+migration fence exists. The worker records provider acceptance and deletion
+state, but it does not claim fresh-VM file/runtime verification.
+
+This is durable scheduling and provider-operation plumbing, not evidence of a
+live backup, restore rehearsal, measured RPO/RTO, Compute inventory, or actual
+cost dashboard. Fresh-VM verification, provider-operation reconciliation,
+stranded-resource inventory, numeric cost measurements, and disk-full/zone-loss
+runbooks remain release work. No production snapshot, restore, retention
+deletion, or synthetic-fixture mutation was invoked by this change.
 
 The read-only inventory's `--list-objects` mode also checks shared-tree bucket
 ownership, HNS layout, generation-ready marker and original import control

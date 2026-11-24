@@ -578,6 +578,7 @@ const vmLifecycleFunctions = require("./vmLifecycle.functions");
 exports.vmLifecycle_v2 = vmLifecycleFunctions.vmLifecycle_v2;
 exports.vmLifecycleWorker_v2 = vmLifecycleFunctions.vmLifecycleWorker_v2;
 exports.vmLifecycleReconcile_v2 = vmLifecycleFunctions.vmLifecycleReconcile_v2;
+exports.vmBackupReconcile_v2 = require("./vmBackup.functions").vmBackupReconcile_v2;
 
 exports.vmApi_v2 = onRequest({invoker: "public", cors: true, timeoutSeconds: 60,
   serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
