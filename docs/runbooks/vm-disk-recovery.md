@@ -149,6 +149,27 @@ wired separately. Until that production adapter exists, the safe operational
 outcome is `vm_restore_runtime_verifier_unwired`, with the original disk and
 backup retained.
 
+## Cost evidence
+
+The backup inventory's storage estimate is not a complete cost meter. When a
+release review needs a numeric monthly worksheet, capture current usage and
+rates from the billing/operations sources and run the local, read-only helper:
+
+```bash
+node scripts/vm-cost-report.mjs \
+  --project=pi-agents-cloud \
+  --input=WORKSHEET_JSON \
+  --output=NEW_COST_REPORT_JSON
+```
+
+The worksheet requires explicit retained-disk, snapshot, compute, gateway
+forwarding/processing, NAT hours/processing, egress, logging/operations,
+migration-overlap, and failed/orphaned-resource usage and rates. Missing values
+fail closed; only explicitly supplied zeroes are zero. The helper does not make
+cloud calls or change resources. Check the report's usage/rate timestamps and
+source before using `totalMonthlyUsd`; it is numeric input evidence, not a
+replacement for an actual billing export.
+
 Future crash-consistent backups made while a VM is active carry a source
 digest captured immediately before the snapshot request. Treat that digest as
 the comparison input, not as application-consistency proof: the snapshot may

@@ -1817,6 +1817,70 @@ active VM hours * current machine rate
 + migration overlap + failed/orphaned resource allowance
 ```
 
+### Numeric operator worksheet
+
+The read-only inventory deliberately keeps compute, gateway, NAT, network,
+logging, and operation costs unknown when it does not have current meters and
+rates. To turn a captured usage/rate export into a numeric monthly report, use
+`scripts/vm-cost-report.mjs`. It requires `--project=pi-agents-cloud` and a
+JSON input file containing every usage field and every rate field below; the
+input timestamps and `rateSource` become report evidence. Missing, extra,
+negative, non-numeric, or string values fail closed. An explicit numeric zero
+is valid, but an omitted value is never treated as zero.
+
+```json
+{
+  "project": "pi-agents-cloud",
+  "usageCapturedAt": "2026-11-24T10:00:00.000Z",
+  "ratesCapturedAt": "2026-11-24T10:05:00.000Z",
+  "rateSource": "operator billing export 2026-11-24",
+  "usage": {
+    "retainedDiskGiB": 64,
+    "snapshotGiB": 32,
+    "computeActiveHours": 100,
+    "gatewayForwardingRuleHours": 720,
+    "gatewayProcessingGiB": 10,
+    "natHours": 720,
+    "natProcessingGiB": 8,
+    "networkEgressGiB": 4,
+    "loggingGiB": 2,
+    "operationsCount": 2500,
+    "migrationOverlapHours": 12,
+    "orphanedResourceHours": 3
+  },
+  "rates": {
+    "retainedDiskUsdPerGiBMonth": 0.1,
+    "snapshotUsdPerGiBMonth": 0.065,
+    "computeUsdPerHour": 0.05,
+    "gatewayForwardingUsdPerRuleHour": 0.025,
+    "gatewayProcessingUsdPerGiB": 0.01,
+    "natUsdPerHour": 0.02,
+    "natProcessingUsdPerGiB": 0.001,
+    "networkEgressUsdPerGiB": 0.12,
+    "loggingUsdPerGiB": 0.5,
+    "operationUsdPer1000": 0.2,
+    "migrationOverlapUsdPerHour": 0.05,
+    "orphanedResourceUsdPerHour": 0.1
+  }
+}
+```
+
+Run it with a new output path if a saved report is needed:
+
+```bash
+node scripts/vm-cost-report.mjs \
+  --project=pi-agents-cloud \
+  --input=WORKSHEET_JSON \
+  --output=NEW_COST_REPORT_JSON
+```
+
+The command reads and writes local JSON only; it does not query or mutate
+Google Cloud, Firestore, Compute, gateway, NAT, or billing resources. Its
+complete report contains one numeric line item per supplied meter, rate/source
+timestamps, and `totalMonthlyUsd`. This is a worksheet, not measured billing
+evidence: operators must source the inputs from current billing data and
+runtime observations before using the total as a release threshold.
+
 Hard controls are quotas, admission concurrency, disk-size ceilings, labels,
 orphan reconciliation, and an off-by-default feature flag. Budgets and alerts
 are visibility, not a hard spend cap. The operator dashboard must expose disk

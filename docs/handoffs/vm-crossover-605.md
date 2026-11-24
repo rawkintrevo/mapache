@@ -256,6 +256,16 @@ The opt-in backup scheduler now captures source `/runner/health` and
 a snapshot, storing file/runtime digests and bounded probe timings. Stopped
 sources and probe failures retain an explicit missing-digest state rather than
 inventing comparison evidence.
+
+The read-only operator helper `scripts/vm-cost-report.mjs` now turns a complete
+usage/rate worksheet into a numeric monthly report. It requires explicit
+retained-disk, snapshots, compute, gateway, NAT, egress, logging/operations,
+migration-overlap, and failed/orphaned-resource values and preserves the usage
+and rate source timestamps. Missing values fail closed; explicit zeroes remain
+numeric. It makes no cloud calls and does not change the inventory's deliberate
+unknown-cost behavior. No current billing export was supplied or treated as a
+measured production cost result.
+
 The guarded scheduler deployment completed with
 `firebase deploy --only functions:vmBackupReconcile_v2 --project
 pi-agents-cloud`; the active revision is `vmbackupreconcile-v2-00007-zoq` under
@@ -264,8 +274,8 @@ operation was invoked by the deployment.
 
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
-surface backup/runtime startup, attach, and mount timings and actual costs; and
-publish the numeric cost model. The read-only inventory now enumerates owned
+surface backup/runtime startup, attach, and mount timings and actual measured
+costs; and provide a current billing-backed worksheet. The read-only inventory now enumerates owned
 Compute instances/disks before any future cleanup. The fail-closed
 disk-full/zone-loss procedure is now in
 `docs/runbooks/vm-disk-recovery.md`, but its resize and fresh-VM recovery
