@@ -138,9 +138,10 @@ run records.
   run-specific status before deciding interruption. If VM admission, generation
   identity, retained-disk layout, bubblewrap, or the runner contract is not
   available, provisioning/cleanup fails closed. Focused tests cover the
-  boundary, but live stopped-target execution, cancellation races under real
-  process loss, cross-machine tools, usage accounting, and release acceptance
-  remain open.
+  boundary, including startup cancellation and child-exit races: a native child
+  that exits or is canceled before prompt submission is finalized durably and
+  never receives a late `startAutomation` call. Live stopped-target execution,
+  cross-machine tools, usage accounting, and release acceptance remain open.
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.

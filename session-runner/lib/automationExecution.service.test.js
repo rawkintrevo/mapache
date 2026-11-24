@@ -427,3 +427,93 @@ test("VM-native cancellation finalizes a durable claim after runner restart", as
   assert.equal(db.data.get("automationRuns/run-1").status, "canceled");
   assert.equal(db.data.get("automationRuns/run-1").cleanupState, "pending");
 });
+
+test("VM-native child exit during startup never submits the claimed prompt", async () => {
+  const db = new Db();
+  db.data.set("vmRuntimes_v2/workspace-1", {
+    ownerUid: "user-1", backend: "compute-engine", currentSessionId: "vm-session-1", generation: 7, state: "active",
+  });
+  db.data.set("vmRuntimes_v2/workspace-1/sessions/vm-session-1", {
+    ownerUid: "user-1", generation: 7, state: "active",
+  });
+  db.data.set("automationRuns/run-1", {
+    runId: "run-1", ownerUid: "user-1", workspaceId: "workspace-1", sessionId: "vm-session-1",
+    executionRoute: "vm-native-v1", status: "running", cleanupState: "pending",
+    snapshot: {prompt: "write a report", modelSelection: null},
+  });
+  let submissions = 0;
+  let cleaned = 0;
+  const service = createAutomationExecutionService({
+    admin,
+    config: {
+      agentRuntimeEnabled: true, ownerUid: "user-1", runtimeKind: "main", runtimeProvider: "compute-engine",
+      sessionId: "vm-session-1", workspaceId: "workspace-1", agentRuntimeGeneration: 7,
+    },
+    createNativeRuntime: async ({onExit}) => ({
+      process: {
+        start: async () => {
+          await onExit({error: Object.assign(new Error("child exited"), {code: "automation_process_lost"})});
+        },
+        startAutomation: async () => { submissions += 1; },
+      },
+      cleanup: async () => { cleaned += 1; },
+    }),
+    db,
+    workspaceAuthority: authority(),
+  });
+
+  const result = await service.startRun("run-1");
+  assert.deepEqual(result, {enabled: true, runId: "run-1", interrupted: true, status: "interrupted"});
+  assert.equal(submissions, 0);
+  assert.equal(cleaned, 1);
+  assert.equal(db.data.get("automationRuns/run-1").status, "interrupted");
+});
+
+test("VM-native cancellation during child startup prevents prompt submission", async () => {
+  const db = new Db();
+  db.data.set("vmRuntimes_v2/workspace-1", {
+    ownerUid: "user-1", backend: "compute-engine", currentSessionId: "vm-session-1", generation: 7, state: "active",
+  });
+  db.data.set("vmRuntimes_v2/workspace-1/sessions/vm-session-1", {
+    ownerUid: "user-1", generation: 7, state: "active",
+  });
+  db.data.set("automationRuns/run-1", {
+    runId: "run-1", ownerUid: "user-1", workspaceId: "workspace-1", sessionId: "vm-session-1",
+    executionRoute: "vm-native-v1", status: "running", cleanupState: "pending",
+    snapshot: {prompt: "write a report", modelSelection: null},
+  });
+  let releaseStartup;
+  let startupReached;
+  const startup = new Promise((resolve) => { startupReached = resolve; });
+  const startupGate = new Promise((resolve) => { releaseStartup = resolve; });
+  let submissions = 0;
+  let cleaned = 0;
+  const service = createAutomationExecutionService({
+    admin,
+    config: {
+      agentRuntimeEnabled: true, ownerUid: "user-1", runtimeKind: "main", runtimeProvider: "compute-engine",
+      sessionId: "vm-session-1", workspaceId: "workspace-1", agentRuntimeGeneration: 7,
+    },
+    createNativeRuntime: async () => ({
+      process: {
+        start: async () => { startupReached(); await startupGate; },
+        startAutomation: async () => { submissions += 1; },
+      },
+      cleanup: async () => { cleaned += 1; },
+    }),
+    db,
+    workspaceAuthority: authority(),
+  });
+
+  const pendingStart = service.startRun("run-1");
+  await startup;
+  const canceled = await service.cancelRun("run-1");
+  releaseStartup();
+  const result = await pendingStart;
+
+  assert.equal(canceled.state, "canceled");
+  assert.deepEqual(result, {enabled: true, runId: "run-1", canceled: true, status: "canceled"});
+  assert.equal(submissions, 0);
+  assert.equal(cleaned, 1);
+  assert.equal(db.data.get("automationRuns/run-1").status, "canceled");
+});

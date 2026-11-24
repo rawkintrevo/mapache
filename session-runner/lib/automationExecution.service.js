@@ -117,7 +117,7 @@ function createAutomationExecutionService({
       if (claim.assignment.native) {
         if (typeof createNativeRuntime !== "function") throw automationError("vm_automation_runtime_unavailable");
         execution.runtime = await createNativeRuntime({
-          onExit: ({error} = {}) => void handleProcessExit({error}),
+          onExit: ({error} = {}) => handleProcessExit({error}),
           runId: claim.assignment.runId,
         });
         execution.adapter = execution.runtime.process;
@@ -125,11 +125,16 @@ function createAutomationExecutionService({
       } else {
         execution.adapter = piWebUi;
       }
+      // Startup can race with a runner shutdown, cancellation, or a native
+      // child exit. Once the durable claim has become terminal, never submit
+      // the prompt to a child that is already being torn down.
+      if (executionStartAborted()) return executionStartResult();
       const response = await execution.adapter.startAutomation({
         modelRef: claim.assignment.modelRef || undefined,
         prompt: claim.assignment.native ? nativeAutomationPrompt(claim.assignment.prompt) : automationPrompt(claim.assignment.prompt, config),
         runId: claim.assignment.runId,
       });
+      if (executionStartAborted()) return executionStartResult();
       if (!response || response.ok !== true) {
         throw automationError(normalizeFailureCode(response?.error, "automation_submit_failed"));
       }
@@ -150,6 +155,15 @@ function createAutomationExecutionService({
         conversationId: execution.conversationId,
       };
     } catch (error) {
+      if (executionStartAborted()) {
+        if (!execution?.terminal && stopped) {
+          await writeOutcome("interrupted", "automation_execution_stopped").catch((writeError) => {
+            logger.warn?.("automation stopped-state write failed", safeError(writeError));
+          });
+        }
+        await disposeNativeRuntime();
+        return executionStartResult();
+      }
       const code = normalizeFailureCode(error?.code || error?.message, "automation_submit_failed");
       await writeOutcome("interrupted", code).catch((writeError) => {
         logger.warn?.("automation interruption write failed", safeError(writeError));
@@ -381,6 +395,7 @@ function createAutomationExecutionService({
     clearPollTimer();
     const refs = assignmentRefs();
     const timestamp = serverTimestamp();
+    let committedStatus = null;
     const written = await db.runTransaction(async (transaction) => {
       const [sessionSnap, runSnap] = await Promise.all([
         transaction.get(refs.sessionRef),
@@ -426,9 +441,10 @@ function createAutomationExecutionService({
         ...(normalizedError ? {automationExecutionErrorCode: normalizedError} : {}),
         updatedAt: timestamp,
       });
+      committedStatus = effectiveStatus;
       return true;
     });
-    if (written) execution.terminal = status;
+    if (written) execution.terminal = committedStatus || status;
     return written;
   }
 
@@ -443,6 +459,21 @@ function createAutomationExecutionService({
       void pollOnce();
     }, pollIntervalMs);
     pollTimer?.unref?.();
+  }
+
+  function executionStartAborted() {
+    return stopped || Boolean(execution?.terminal);
+  }
+
+  function executionStartResult() {
+    const terminal = execution?.terminal;
+    return {
+      enabled: true,
+      runId: execution?.runId || currentAssignment()?.runId || null,
+      ...(terminal === "canceled" ? {canceled: true} : {}),
+      ...(terminal === "interrupted" ? {interrupted: true} : {}),
+      ...(terminal ? {status: terminal} : {stopped: true}),
+    };
   }
 
   function clearPollTimer() {
