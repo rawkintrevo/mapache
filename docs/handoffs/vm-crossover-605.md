@@ -218,6 +218,11 @@ It omits provider addresses, disk IDs, content digests, credentials, and raw
 provider errors; it never authorizes cleanup. This is the diagnostics contract,
 not proof of a fresh-VM restore or a numeric cost meter.
 
+The explicit expansion-only `scripts/vm-resize-disk.mjs` command now covers
+the detached Compute resize step after owner, generation, and migration-fence
+checks. It does not resize the guest filesystem or claim fresh-VM recovery;
+those and live cost/release evidence remain open.
+
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 surface backup/runtime startup, attach, and mount timings and actual costs; and
@@ -225,7 +230,7 @@ publish the numeric cost model. The read-only inventory now enumerates owned
 Compute instances/disks before any future cleanup. The fail-closed
 disk-full/zone-loss procedure is now in
 `docs/runbooks/vm-disk-recovery.md`, but its resize and fresh-VM recovery
-actions remain unwired. No
+guest filesystem and fresh-VM recovery actions remain open. No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was performed.
 

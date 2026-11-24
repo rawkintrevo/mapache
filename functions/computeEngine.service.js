@@ -35,6 +35,7 @@ function createComputeEngineService(dependencies = {}) {
     ensureInstance: (descriptor, options) => ensureInstance(descriptor, options),
     inspect: (descriptor) => inspect(descriptor),
     listOwnedResources: (descriptor, options) => listOwnedResources(descriptor, options),
+    resizeDataDisk: (descriptor, options) => resizeDataDisk(descriptor, options),
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
     inspectMigrationRuntime: (descriptor, options) => inspectMigrationRuntime(descriptor, options),
     deleteMigrationImportedDisk: (descriptor, options) => deleteMigrationImportedDisk(descriptor, options),
@@ -182,6 +183,48 @@ function createComputeEngineService(dependencies = {}) {
       instances: instances.filter(resource => hasOwnershipLabels(resource, descriptor)),
       disks: disks.filter(resource => hasOwnershipLabels(resource, descriptor)),
     };
+  }
+
+  async function resizeDataDisk(rawDescriptor, {sizeGb, operationId: operationKey, timeoutMs = 240000} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    if (typeof operationKey !== "string" || !operationKey.trim()) {
+      throw computeError("runtime_data_disk_resize_operation_required", "Data disk resize requires an operation identity");
+    }
+    const requestedSizeGb = Number(sizeGb);
+    if (!Number.isSafeInteger(requestedSizeGb) || requestedSizeGb < 10 || requestedSizeGb > 4096) {
+      throw computeError("runtime_data_disk_resize_size_invalid", "Data disk resize is outside the supported range");
+    }
+    const disk = await getDisk(descriptor);
+    assertOwnership(disk, descriptor);
+    const currentSizeGb = Number(disk.sizeGb);
+    if (!Number.isSafeInteger(currentSizeGb) || currentSizeGb < 10) {
+      throw computeError("runtime_data_disk_resize_current_size_invalid", "Current data disk capacity is invalid");
+    }
+    if (requestedSizeGb < currentSizeGb) {
+      throw computeError("runtime_data_disk_shrink_forbidden", "Data disk capacity can only be expanded");
+    }
+    if (disk.status !== "READY") {
+      throw computeError("runtime_data_disk_resize_unusable", "Data disk is not ready for expansion");
+    }
+    if (Array.isArray(disk.users) && disk.users.length) {
+      throw computeError("runtime_data_disk_resize_attached", "Data disk must be detached before expansion");
+    }
+    if (requestedSizeGb === currentSizeGb) {
+      return {resized: false, diskName: disk.name, diskId: disk.id || null, sizeGb: currentSizeGb};
+    }
+    const response = await requestImpl({
+      url: `${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}/resize`,
+      method: "POST",
+      params: {requestId: operationId(`resize:${descriptor.dataDiskName}:${operationKey}`)},
+      data: {sizeGb: requestedSizeGb},
+    });
+    await waitForOperation(response.data, descriptor, {timeoutMs});
+    const updated = await getDisk(descriptor);
+    assertOwnership(updated, descriptor);
+    if (Number(updated.sizeGb) < requestedSizeGb) {
+      throw computeError("runtime_data_disk_resize_unconfirmed", "Expanded data disk capacity was not confirmed");
+    }
+    return {resized: true, diskName: updated.name, diskId: updated.id || null, sizeGb: Number(updated.sizeGb)};
   }
 
   async function listAggregatedResources(kind, limit) {

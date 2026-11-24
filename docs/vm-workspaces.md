@@ -1493,7 +1493,10 @@ Fresh-VM verification with a real runtime adapter and numeric cost measurements
 remain release work. The read-only inventory now enumerates owned Compute
 instances/disks before any future cleanup. The fail-closed disk-full/zone-loss procedure is in the
 [VM disk recovery runbook](runbooks/vm-disk-recovery.md), but its resize and
-fresh-VM recovery actions remain unwired. No
+fresh-VM recovery actions remain unwired. The explicit expansion-only operator
+command `scripts/vm-resize-disk.mjs` now covers the detached-disk provider step;
+guest filesystem growth, fresh-VM recovery, and release evidence remain open.
+No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was invoked by this change.
 

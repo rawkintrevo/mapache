@@ -71,14 +71,28 @@ owner and generation checks are complete.
 4. Measure guest free space through the supported runtime diagnostic when it is
    available. If it is unavailable, report headroom as unknown. Provisioned
    disk size is not a guest free-space measurement.
-5. There is currently no automatic resize action in the lifecycle contract.
-   Mark the incident `vm_disk_resize_not_wired`, retain the disk, and require
-   an explicitly reviewed capacity change before restarting writers. Do not
-   substitute a blind VM restart for a resize.
-6. After an approved capacity change, verify the exact disk identity, mount,
-   ownership, and authenticated `/runner/health` readiness before releasing
-   admission. Record the measured attach/mount/health timings in the
-   operation evidence.
+5. After confirming the runtime is stopped and no migration fence or active
+   operation exists, an operator may expand the exact detached disk with:
+
+   ```bash
+   node scripts/vm-resize-disk.mjs \
+     --project=pi-agents-cloud \
+     --workspace=WORKSPACE_ID \
+     --owner=OWNER_UID \
+     --generation=GENERATION \
+     --size-gb=NEW_SIZE_GIB \
+     --confirm-resize
+   ```
+
+   The command verifies owner and generation, refuses shrink, attached or
+   foreign storage, polls the named Compute operation, and confirms the new
+   provider capacity. It does not resize the guest filesystem or release
+   writer admission.
+6. After the provider expansion, complete the guest filesystem check and
+   verify the exact disk identity, mount, ownership, and authenticated
+   `/runner/health` readiness before releasing admission. Record the measured
+   attach/mount/health timings in the operation evidence. Do not substitute a
+   blind VM restart for a resize.
 
 If the disk cannot be made usable, a restore may proceed only from a verified,
 owner-matched backup to a fresh target disk. The current restore controller

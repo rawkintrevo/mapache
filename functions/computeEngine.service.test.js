@@ -107,6 +107,33 @@ test("owned resource inventory paginates aggregated Compute listings and filters
   assert.equal(calls.filter(call => call.url.endsWith("/aggregated/instances")).length, 2);
 });
 
+test("data disk expansion requires owned detached storage and never shrinks it", async () => {
+  const d = descriptor();
+  const label = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
+  const labels = {"mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+    "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND};
+  const calls = [];
+  const disk = {name: d.dataDiskName, id: "123", status: "READY", sizeGb: 64, users: [], labels};
+  const service = createComputeEngineService({projectId: "pi-agents-cloud", request: async request => {
+    calls.push(request);
+    if (request.method === "GET") return {data: disk};
+    if (request.method === "POST" && request.url.endsWith("/resize")) {
+      disk.sizeGb = request.data.sizeGb;
+      return {data: {name: "resize-operation", status: "DONE"}};
+    }
+    throw new Error(`unexpected ${request.method} ${request.url}`);
+  }});
+
+  assert.deepEqual(await service.resizeDataDisk(d, {sizeGb: 128, operationId: "resize-1"}),
+    {resized: true, diskName: d.dataDiskName, diskId: "123", sizeGb: 128});
+  assert.equal(calls.filter(call => call.method === "POST").length, 1);
+  await assert.rejects(service.resizeDataDisk(d, {sizeGb: 64, operationId: "resize-2"}),
+    error => error.code === "runtime_data_disk_shrink_forbidden");
+  disk.users = ["https://compute.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/us-central1-a/instances/foreign"];
+  await assert.rejects(service.resizeDataDisk(d, {sizeGb: 256, operationId: "resize-3"}),
+    error => error.code === "runtime_data_disk_resize_attached");
+});
+
 function lifecycleFixture() {
   const d = descriptor();
   const prefix = "https://www.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/us-central1-a";
