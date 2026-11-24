@@ -1037,9 +1037,10 @@ and drain checks.
 The checked-in server admission paths use `functions/vmMigrationFence.helpers.js`
 to read the backend-only fence in the same Firestore transaction as new
 session reservation, resize enqueue/claim, automation enqueue/admission/
-provisioning, fresh dispatch to an existing runner, or the initial workspace
-deletion tombstone. A fence blocks these transitions without consuming the
-queued job or initiating deletion. Existing request claims can still be observed
+provisioning, automation definition/settings CRUD, fresh dispatch to an existing
+runner, or the initial workspace deletion tombstone. A fence blocks these
+transitions without consuming the queued job or initiating deletion. Existing
+request claims can still be observed
 and reconciled. The coordinator must account for work committed before the
 fence, including resumed deletions and already submitted cloud operations.
 Legacy workspace listing in `functions/workspace.service.js` continues to
