@@ -192,3 +192,33 @@ test("imported-disk cleanup requires the exact detached operation-owned disk", a
       error => error.code === "runtime_migration_disk_cleanup_unverified");
   assert.equal(state.mutations.length, 1);
 });
+
+test("migration runtime inspection binds the attached disk and private running instance", async () => {
+  const d = descriptor({generation: 4});
+  const label = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
+  const prefix = "https://compute.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/us-central1-a";
+  const state = {
+    disk: {name: d.dataDiskName, id: "456", status: "READY", lastAttachTimestamp: "2026-11-24T04:00:00Z",
+      zone: prefix,
+      users: [`${prefix}/instances/${d.instanceName}`],
+      labels: {"mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+        "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND, "mapache-created-generation": "4",
+        "mapache-operation-id": label("destination")}},
+    instance: {name: d.instanceName, id: "789", status: "RUNNING",
+      labels: {"mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+        "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND},
+      networkInterfaces: [{networkIP: "10.0.0.7"}],
+      disks: [{boot: false, source: `${prefix}/disks/${d.dataDiskName}`, autoDelete: false, mode: "READ_WRITE",
+        deviceName: d.dataDiskName}]},
+  };
+  const service = createComputeEngineService({projectId: "pi-agents-cloud", request: async request => {
+    if (request.method !== "GET") throw new Error(`unexpected ${request.method} ${request.url}`);
+    return {data: request.url.includes("/instances/") ? state.instance : state.disk};
+  }});
+  const result = await service.inspectMigrationRuntime(d, {operationId: "destination", diskId: "456"});
+  assert.deepEqual(result, {diskId: "456", diskName: d.dataDiskName, zone: d.zone, attached: true,
+    instanceId: "789", instanceName: d.instanceName, instanceReady: true, attachmentTimestamp: "2026-11-24T04:00:00Z"});
+  state.instance.disks[0].mode = "READ_ONLY";
+  await assert.rejects(service.inspectMigrationRuntime(d, {operationId: "destination", diskId: "456"}),
+      error => error.code === "runtime_migration_runtime_unverified");
+});

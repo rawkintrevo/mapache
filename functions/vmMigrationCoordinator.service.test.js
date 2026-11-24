@@ -251,6 +251,54 @@ test("abort cannot release fences until an imported destination disk is cleaned"
   }
 });
 
+test("cutover review binds a live destination attestation without changing authority", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucket = "fixture-bucket";
+    const source = db.collection("workspaces").doc(workspaceId);
+    await source.create({ownerUid, bucket, storagePrefix: `workspaces/${ownerUid}/staging`, agentRuntimeGeneration: 7});
+    const target = {ownerUid, workspaceId};
+    const {observationSha256} = await createVmMigrationPreflight({db})(target);
+    const input = {...target, observationSha256, operationId: "review-cutover"};
+    const receiptSha256 = "a".repeat(64);
+    const destination = {zone: "us-central1-a", region: "us-central1", generation: 2,
+      operationId: "destination", diskId: "123", diskName: "mapache-ws-imported"};
+    const runnerImage = "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:" + "b".repeat(64);
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true,
+      inspectCompute: async () => ({recordedComputeClear: true, providerObservationSha256: "b".repeat(64), blockers: [],
+        discovery: {scannedRegionsClear: true, evidenceSha256: "c".repeat(64)}}),
+      inspectStorage: async () => ({stable: true, firstSha256: "d".repeat(64), secondSha256: "d".repeat(64), blockers: []}),
+      inspectDestinationRuntime: async ({record}) => ({schemaVersion: 1, workspaceId, ownerUid,
+        migrationOperationId: record.operationId, destinationOperationId: destination.operationId,
+        sourceGeneration: record.sourceGeneration, destinationGeneration: destination.generation,
+        diskId: destination.diskId, diskName: destination.diskName, diskReceiptSha256: receiptSha256,
+        sessionId: "vm-destination-session", runtime: {state: "active", generation: destination.generation,
+          runnerImage, gatewayHost: "gateway.example.com", health: {path: "/runner/health", status: 200, agentReady: true},
+          disk: {diskId: destination.diskId, diskName: destination.diskName, attached: true, instanceReady: true}}}),
+    });
+    await coordinator.reserve(input);
+    await coordinator.confirmQuiesced(input);
+    await db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`).update({
+      phase: "disk-import-verified", importDestination: destination,
+      diskImport: {receiptSha256, verifiedAtMs: 42}, validation: {cleanedAtMs: 42},
+    });
+    const review = await coordinator.reviewCutoverGates(input);
+    assert.equal(review.runtimeAttested, true);
+    assert.equal(review.readyForCutover, false);
+    assert.deepEqual(review.blockers, ["authority_switch_not_wired"]);
+    assert.equal(review.sourceAuthority, "legacy");
+    assert.equal((await db.doc(`vmRuntimes_v2/${workspaceId}`).get()).exists, false);
+    assert.equal((await source.get()).get("agentRuntimeGeneration"), 7);
+  } finally {
+    await app.delete();
+  }
+});
+
 test("legacy IAM repair remains visible to preflight while a VM fence prevents a second repair", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
 }, async () => {

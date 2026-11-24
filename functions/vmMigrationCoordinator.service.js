@@ -11,6 +11,7 @@ const {isMainRuntime} = require("./runtimePaths.helpers");
 const {sessionHomePolicyMetadata} = require("./sessionCreation.service");
 const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 const {reserveValidationRuntime} = require("./vmMigrationValidationBoot.service");
+const {cutoverReview, validateDestinationRuntimeEvidence} = require("./vmMigrationCutover.service");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -88,7 +89,7 @@ function verifyDiskReceipt(evidence, record) {
 
 function createVmMigrationCoordinator({
   db, authorize = async () => false, inspectCompute, inspectStorage, inspectDestinationDisk, readDiskImportEvidence,
-  deleteImportedDisk, ensureValidationClone, startValidationVm, deleteValidationResources,
+  inspectDestinationRuntime, deleteImportedDisk, ensureValidationClone, startValidationVm, deleteValidationResources,
   defaultBucket = DEFAULT_BUCKET, now = Date.now,
 }) {
   function refs(input) {
@@ -594,6 +595,30 @@ function createVmMigrationCoordinator({
     });
   }
 
+  async function reviewCutoverGates(input) {
+    const references = refs(input);
+    if (!inspectDestinationRuntime || !await authorize(input, "review-cutover-gates")) {
+      throw httpError(409, "vm_migration_cutover_review_unverified");
+    }
+    const read = transaction => readValidationState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    let runtimeEvidence = null;
+    try {
+      const evidence = await inspectDestinationRuntime({workspaceId: input.workspaceId, ownerUid: input.ownerUid,
+        operationId: input.operationId, record: before.record});
+      runtimeEvidence = validateDestinationRuntimeEvidence(evidence, before.record);
+    } catch {
+      // The operator projection is intentionally bounded. Provider errors and
+      // runtime addresses never become a migration approval or public detail.
+    }
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (before.observation.observationSha256 !== current.observation.observationSha256 ||
+          before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_cutover_review_stale");
+      return cutoverReview(current.record, {runtimeEvidence, sourceBlockers: current.observation.blockers});
+    }, {readOnly: true});
+  }
+
   async function getCapturedPrefix(input) {
     const references = refs(input);
     if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
@@ -676,7 +701,8 @@ function createVmMigrationCoordinator({
     });
   }
   return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport,
-    reserveValidationBoot, prepareValidationClone, startValidationBoot, cleanupValidationBoot, cleanupImportedDisk, abort};
+    reserveValidationBoot, prepareValidationClone, startValidationBoot, cleanupValidationBoot, cleanupImportedDisk,
+    reviewCutoverGates, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

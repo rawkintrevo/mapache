@@ -35,6 +35,7 @@ function createComputeEngineService(dependencies = {}) {
     ensureInstance: (descriptor, options) => ensureInstance(descriptor, options),
     inspect: (descriptor) => inspect(descriptor),
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
+    inspectMigrationRuntime: (descriptor, options) => inspectMigrationRuntime(descriptor, options),
     deleteMigrationImportedDisk: (descriptor, options) => deleteMigrationImportedDisk(descriptor, options),
     ensureMigrationValidationClone: (descriptor, options) => ensureMigrationValidationClone(descriptor, options),
     startMigrationValidationVm: (descriptor, options) => startMigrationValidationVm(descriptor, options),
@@ -249,6 +250,41 @@ function createComputeEngineService(dependencies = {}) {
         attachments[0].deviceName !== descriptor.dataDiskName || attachments[0].boot !== false ||
         attachments[0].autoDelete !== false || attachments[0].mode !== "READ_ONLY") throw refuse();
     return {...result, instanceId, attachmentTimestamp: disk.lastAttachTimestamp};
+  }
+
+  async function inspectMigrationRuntime(rawDescriptor, {operationId, diskId} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    if (typeof operationId !== "string" || !operationId || !/^[1-9][0-9]{0,19}$/.test(String(diskId || ""))) {
+      throw computeError("runtime_migration_runtime_invalid", "Migration runtime identity is invalid");
+    }
+    const disk = await getDisk(descriptor);
+    assertOwnership(disk, descriptor);
+    assertDiskCreation(disk, descriptor, operationId);
+    if (disk.name !== descriptor.dataDiskName || String(disk.id) !== String(diskId) ||
+        disk.status !== "READY" || !Array.isArray(disk.users) || disk.users.length !== 1 ||
+        !disk.zone?.endsWith("/zones/" + descriptor.zone)) {
+      throw computeError("runtime_migration_runtime_unverified", "Migration runtime disk is not the admitted attached disk");
+    }
+    const instance = await getInstance(descriptor);
+    assertOwnership(instance, descriptor);
+    const base = zoneUrl(descriptor);
+    const instanceUrl = `${base}/instances/${descriptor.instanceName}`;
+    const diskUrl = `${base}/disks/${descriptor.dataDiskName}`;
+    const equivalent = (actual, expected) => actual === expected || actual === expected.replace("compute.googleapis.com", "www.googleapis.com");
+    const attachments = (instance.disks || []).filter(attachment => equivalent(attachment.source, diskUrl));
+    const network = instance.networkInterfaces || [];
+    if (disk.users[0] !== instanceUrl && disk.users[0] !== instanceUrl.replace("compute.googleapis.com", "www.googleapis.com")) {
+      throw computeError("runtime_migration_runtime_unverified", "Migration runtime disk is attached to another instance");
+    }
+    if (instance.name !== descriptor.instanceName || instance.status !== "RUNNING" ||
+        network.length !== 1 || network[0].accessConfigs?.length || network[0].ipv6AccessConfigs?.length ||
+        attachments.length !== 1 || attachments[0].deviceName !== descriptor.dataDiskName ||
+        attachments[0].boot !== false || attachments[0].autoDelete !== false || attachments[0].mode !== "READ_WRITE") {
+      throw computeError("runtime_migration_runtime_unverified", "Migration runtime attachment is not verified");
+    }
+    return {diskId: String(disk.id), diskName: disk.name, zone: descriptor.zone, attached: true,
+      instanceId: String(instance.id), instanceName: instance.name, instanceReady: true,
+      attachmentTimestamp: disk.lastAttachTimestamp ?? null};
   }
 
   async function deleteMigrationImportedDisk(rawDescriptor, {operationId, diskId, timeoutMs = 240000} = {}) {

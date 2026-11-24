@@ -168,7 +168,7 @@ Fully evidenced original acceptance criteria: none.
 
 Evidence: Deployed read-only operator preflight and status and the separate validation broker. Workspace and Storage reservation, quiesce, pinned capture and import-receipt verification passed emulator checks. Private read-only import evidence, separate validation clone creation and a disposable validation VM boot were verified on Compute resources. The boot returned authenticated `/runner/health` 200 with the agent runtime ready, then deleted only the validation VM and clone disk and removed its route and credentials.
 
-Remaining: Deploy and verify writer fencing, drain existing writers, make verified migration stages available to operators, switch authority atomically and rehearse rollback after new VM writes. Owner-visible migration status remains open.
+Remaining: Drain existing writers, make verified migration stages available to operators, complete the read-only destination-runtime review, switch authority atomically and rehearse rollback after new VM writes. The review command now binds a backend-owned destination registry, exact attached disk, pinned runner and authenticated `/runner/health` evidence, but intentionally reports `authority_switch_not_wired`; owner-visible migration status remains open.
 
 Fully evidenced original acceptance criteria: none.
 

@@ -1149,6 +1149,29 @@ node scripts/vm-migration-cleanup-destination.mjs --project pi-agents-cloud \
 This removes only the imported destination disk named by the coordinator's
 operation. It never deletes the source disk or changes workspace authority.
 
+After a complete imported disk has been retained and the disposable validation
+boot has been cleaned, an operator can perform a bounded, read-only review of
+the destination runtime:
+
+```bash
+node scripts/vm-migration-review-cutover.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID
+```
+
+The review requires a backend-owned `vmRuntimes_v2` record and matching session
+and gateway route, the exact imported disk attached read/write to the expected
+private VM, a pinned runner image, and an authenticated `GET /runner/health`
+response with a ready Agent runtime. Its attestation is bound to the migration
+operation, source and destination generations, disk identity, and import
+receipt digest. The command never writes Firestore or Compute resources and
+does not expose credentials, gateway addresses, or provider errors. The result
+continues to report `readyForCutover: false` with
+`authority_switch_not_wired`; an atomic authority-switch transaction must bind
+this evidence to the legacy writer fence before any source or route authority
+can change. The validator is owned by
+`functions/vmMigrationCutover.service.js` and provider identity checks by
+`computeEngine.service.js`.
+
 The coordinator records a `quiesced` receipt only when the exact operation
 owns both fences and the source scope still matches the reservation. It
 checks the Firestore writer inventory, bounded Compute observation and
