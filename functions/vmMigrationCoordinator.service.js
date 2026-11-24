@@ -6,6 +6,7 @@ const {vmMigrationFenceRef} = require("./vmMigrationFence.helpers");
 const {identify, observeVmMigration} = require("./vmMigrationPreflight.service");
 const {covers, resolveMigrationPrefix} = require("./vmMigrationStorageScope.helpers");
 const {prepareStorageCapture, MAX_CAPTURE_CHUNKS} = require("./vmMigrationStorageObservation.service");
+const {isMainRuntime} = require("./runtimePaths.helpers");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -240,7 +241,10 @@ function createVmMigrationCoordinator({
           throw Error("invalid capture chunk");
         }
         const {workspaceId, ownerUid, operationId, sourceGeneration} = current.record;
-        return {workspaceId, ownerUid, operationId, sourceGeneration, scope, sha256: capture.sha256, rows};
+        const {workspace, sessions} = current.observation;
+        return {workspaceId, ownerUid, operationId, sourceGeneration, scope, sha256: capture.sha256, rows,
+          checkpointPointers: {agent: workspace.agentRuntimeCheckpoint ?? null, workspace: workspace.agentRuntimeWorkspaceFiles ?? null},
+          mainSessionIds: sessions.filter(isMainRuntime).map(session => session.id)};
       } catch {
         throw httpError(409, "legacy_storage_capture_invalid");
       }

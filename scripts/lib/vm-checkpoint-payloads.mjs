@@ -67,7 +67,8 @@ export async function verifyCheckpointPayloads({manifest, manifestRef, openObjec
   } catch (error) {
     const allowed = new Set(['payload_namespace_invalid', 'payload_descriptor_invalid', 'payload_storage_unsupported', 'payload_bundle_invalid',
       'payload_descriptor_conflict', 'payload_symlink_invalid', 'payload_budget_exceeded', 'payload_size_mismatch', 'payload_checksum_mismatch',
-      'payload_object_not_found', 'payload_access_denied']);
+      'payload_object_not_found', 'payload_access_denied', 'captured_import_object_changed',
+      'captured_import_object_missing', 'captured_import_object_access_denied']);
     return {status: 'blocked', reason: allowed.has(error.message) ? error.message : 'payload_unavailable'};
   }
 }

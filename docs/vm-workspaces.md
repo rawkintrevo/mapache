@@ -1143,9 +1143,29 @@ reader for the operation.
 Status exposes only the timestamp and count for the captured prefix and
 continues to report `readyForCutover=false`. The inventory pins the owned
 prefix. Source data outside it, including owner-wide tools and unsupported
-shared trees, requires separate authority and reconciliation. Content
-download and verification at these pinned generations, import, authority
-switching and rollback after VM writes remain open.
+shared trees, requires separate authority and reconciliation.
+
+The operator CLI stages one published agent or workspace checkpoint against
+the captured prefix and writes a private tree, plan and verification receipt.
+
+```bash
+node scripts/vm-import-captured-checkpoint.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \
+  --kind workspace --root /absolute/private/workspace-stage --max-bytes 104857600
+```
+
+Use `--kind agent` with a separate stage for the agent checkpoint. The
+CLI reads the captured inventory, published pointer and main-session IDs
+under the same Firestore checks. Both the manifest and its payloads must
+belong to the captured bucket and prefix and use the generations and
+metadata in that inventory. Each payload is checked against its manifest
+hash and bundle slices are verified. A missing generation, different
+metageneration, superseded checkpoint or inactive capture blocks the
+result. Generations outside the installed SDK's safe integer range are
+refused before a request. The CLI rechecks the operation after local
+assembly. A local tree receipt records byte verification and does not
+authorize disk import or cutover. Archives, owner tools, other legacy
+formats, disk import binding, authority switching and rollback remain open.
 
 Emulator tests exercise reservation, quiesce, prefix capture and release with real Firestore
 transactions. They cover competing requests, stale observations, duplicate
