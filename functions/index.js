@@ -586,7 +586,9 @@ exports.vmApi_v2 = onRequest({invoker: "public", cors: true, timeoutSeconds: 60,
   try {
     const {createVmApiService} = require("./vmApi.service");
     const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
-    const result = await createVmApiService({db, requireUser, lifecycle: createVmLifecycleAdapter({db})})(req);
+    const {requestVmBackupRestore} = require("./vmBackup.functions");
+    const result = await createVmApiService({db, requireUser, lifecycle: createVmLifecycleAdapter({db}),
+      requestBackupRestore: requestVmBackupRestore})(req);
     res.status(result.status).json(result.body);
   } catch (error) {
     res.status(error.status || 503).json({error: error.publicMessage || "vm_api_unavailable"});
@@ -628,6 +630,22 @@ exports.vmRuntimeControl_v2 = onRequest({
     res.json(await createVmRuntimeControlService({db, admin})(req));
   } catch (error) {
     res.status(error.status || 503).json({error: error.publicMessage || "vm_control_unavailable"});
+  }
+});
+
+// Isolated lease/control plane for disposable backup-recovery VMs. It never
+// reads or writes the normal workspace runtime collections.
+exports.vmBackupRecoveryControl_v2 = onRequest({
+  invoker: "public",
+  timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com",
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmRuntimeControlService} = require("./vmRuntimeControl.service");
+    res.json(await createVmRuntimeControlService({db, admin, recovery: true})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_backup_recovery_control_unavailable"});
   }
 });
 

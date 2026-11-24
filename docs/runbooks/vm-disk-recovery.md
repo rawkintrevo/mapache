@@ -149,9 +149,31 @@ or runtime verification is not terminal until the adapter confirms both the
 operation-owned recovery VM and target disk are gone. A failed cleanup remains
 retryable and keeps the source backup retained.
 
-The durable restore controller still requires this verifier contract to be
-wired separately. Until that production adapter exists, the safe operational
-outcome is `vm_restore_runtime_verifier_unwired`, with the original disk and
+The durable restore controller is wired to the isolated production adapter.
+Before enabling an opted-in restore, configure a dedicated tagged gateway
+revision in `VM_BACKUP_RECOVERY_GATEWAY_HOST` (the hostname must begin with
+`backup-recovery---` and end in `.run.app`) and an immutable `@sha256:` value in
+`SESSION_RUNNER_IMAGE`. Missing or unpinned configuration fails before any
+Firestore, Compute, or route mutation. A configured restore stages only
+`vmBackupRecoveryRuntimes_v2`, `vmBackupRecoveryCredentials_v2`, and a
+`recoveryOnly` gateway route; it never reuses the source workspace runtime or
+authority. The runner leases through `vmBackupRecoveryControl_v2`, and the
+gateway permits only authenticated `/runner/health`,
+`/runner/recovery-digest`, and shutdown. The source disk, snapshot, and normal
+workspace authority remain retained throughout verification.
+
+The owner-facing reservation request is:
+
+```text
+POST /workspaces/{workspaceId}/backup
+{"requestId":"...","backupId":"...","expectedGeneration":N}
+```
+
+Poll `GET /workspaces/{workspaceId}/backup` for the bounded recovery phase and
+report. A successful recovery requires matching source/target file and
+runtime-state digests, authenticated readiness, and measured RPO/RTO. A failed
+verification cannot become terminal until the exact recovery VM and restored
+disk are confirmed absent; uncertain cleanup remains retryable with the source
 backup retained.
 
 ## Cost evidence
@@ -194,11 +216,11 @@ and must not be reported as file-verified recovery.
    Recovery requires a verified snapshot restore to a fresh target in the
    chosen zone, followed by file/runtime digest verification and authenticated
    `/runner/health` readiness.
-4. The current production adapter stops at the durable restore receipt because
-   fresh-VM runtime verification is not yet wired. Record
-   `vm_zone_loss_restore_verifier_unwired`, retain the source disk and verified
-   backups, and escalate for the isolated recovery rehearsal.
-5. Once a future runtime verifier supplies matching file/runtime digests and
+4. Use the isolated recovery adapter only after the dedicated gateway and
+   pinned-image configuration checks pass. If they do not, record
+   `vm_zone_loss_recovery_configuration_unavailable`, retain the source disk
+   and verified backups, and do not create a target disk or VM.
+5. Once the runtime verifier supplies matching file/runtime digests and
    measured RPO/RTO, use the migration authority and rollback gates before
    exposing a replacement route. A successful provider disk-create operation
    alone is never a successful recovery.

@@ -6,6 +6,10 @@ const {httpError} = require("./backendUtils.helpers");
 const VALIDATION_COLLECTION = "vmMigrationValidationRuntimes_v2";
 const VALIDATION_CREDENTIALS = "vmMigrationValidationCredentials_v2";
 const MIGRATION_FENCES = "vmMigrationFences_v2";
+const RECOVERY_COLLECTION = "vmBackupRecoveryRuntimes_v2";
+const RECOVERY_CREDENTIALS = "vmBackupRecoveryCredentials_v2";
+const RECOVERY_PATHS = new Set(["/runner/health", "/runner/recovery-digest", "/shutdown"]);
+const VALIDATION_PATHS = new Set(["/runner/health", "/shutdown"]);
 
 // Called only by the IAM-authenticated gateway. No browser-facing Firestore API.
 function createVmGatewayResolveService({db, now = Date.now}) {
@@ -16,11 +20,14 @@ function createVmGatewayResolveService({db, now = Date.now}) {
         typeof host !== "string" || !/^[a-z0-9][a-z0-9.-]{0,252}$/.test(host) ||
         typeof path !== "string" || !path.startsWith("/") || path.startsWith("//") ||
         path.includes("\\") || /[\x00-\x20\x7f]/.test(path)) throw httpError(400, "invalid_gateway_request");
-    const controlPath = path === "/runner/health" || path === "/shutdown";
+    const controlPath = RECOVERY_PATHS.has(path);
     return db.runTransaction(async (tx) => {
       const route = (await tx.get(db.collection("vmGatewayRoutes_v2").doc(host))).data();
       if (route?.validationOnly === true) {
         return resolveValidationRoute(db, tx, route, {host, path, token, shutdownToken, origin}, now());
+      }
+      if (route?.recoveryOnly === true) {
+        return resolveRecoveryRoute(db, tx, route, {host, path, token, shutdownToken, origin}, now());
       }
       if (!route?.workspaceId || route.enabled !== true) throw httpError(404, "not_found");
       const workspaceRef = db.collection("vmRuntimes_v2").doc(route.workspaceId);
@@ -77,7 +84,7 @@ function createVmGatewayResolveService({db, now = Date.now}) {
 async function resolveValidationRoute(db, tx, route, {host, path, token, shutdownToken, origin}, time) {
   if (!route.enabled || !route.workspaceId || !route.ownerUid || !route.operationId ||
       !route.sessionId || !Number.isSafeInteger(route.generation) || !Number.isSafeInteger(route.deadlineMs) ||
-      !isVmAddress(route.address) || !["/runner/health", "/shutdown"].includes(path) ||
+      !isVmAddress(route.address) || !VALIDATION_PATHS.has(path) ||
       (origin && origin !== `https://${host}`)) throw httpError(404, "not_found");
   const workspaceRef = db.collection(VALIDATION_COLLECTION).doc(route.workspaceId);
   const workspace = await tx.get(workspaceRef);
@@ -102,6 +109,36 @@ async function resolveValidationRoute(db, tx, route, {host, path, token, shutdow
       workspaceData.bootId && sessionData.bootId === workspaceData.bootId &&
       workspaceData.leaseExpiresAt > time && sessionData.leaseExpiresAt > time)) throw httpError(404, "not_found");
   return {address: route.address, port: 8080, sessionId: route.sessionId, generation: route.generation,
+    bootId: workspaceData.bootId, validUntil: Math.min(time + 10000, route.deadlineMs,
+      workspaceData.leaseExpiresAt, sessionData.leaseExpiresAt)};
+}
+
+async function resolveRecoveryRoute(db, tx, route, {host, path, token, shutdownToken, origin}, time) {
+  if (!route.enabled || !route.recoveryOnly || !route.workspaceId || !route.ownerUid || !route.operationId ||
+      !route.sessionId || !Number.isSafeInteger(route.generation) || !Number.isSafeInteger(route.deadlineMs) ||
+      !isVmAddress(route.address) || !RECOVERY_PATHS.has(path) || route.deadlineMs <= time ||
+      (origin && origin !== `https://${host}`)) throw httpError(404, "not_found");
+  const workspaceRef = db.collection(RECOVERY_COLLECTION).doc(route.workspaceId);
+  const workspace = await tx.get(workspaceRef);
+  const workspaceData = workspace.data() || {};
+  const session = await tx.get(workspaceRef.collection("sessions").doc(route.sessionId));
+  const credentials = await tx.get(db.collection(RECOVERY_CREDENTIALS).doc(route.sessionId));
+  const sessionData = session.data() || {};
+  const credentialsData = credentials.data() || {};
+  if (!workspace.exists || !session.exists || !credentials.exists ||
+      workspaceData.recoveryOnly !== true || workspaceData.backend !== "compute-engine" ||
+      workspaceData.ownerUid !== route.ownerUid || workspaceData.currentSessionId !== route.sessionId ||
+      workspaceData.generation !== route.generation || workspaceData.recoveryOperationId !== route.operationId ||
+      sessionData.recoveryOperationId !== route.operationId || sessionData.ownerUid !== route.ownerUid ||
+      sessionData.generation !== route.generation || credentialsData.ownerUid !== route.ownerUid ||
+      credentialsData.generation !== route.generation || !/^[a-f0-9]{64}$/.test(credentialsData.shutdownToken || "")) {
+    throw httpError(404, "not_found");
+  }
+  if (!safeEqual(shutdownToken, credentialsData.shutdownToken)) throw httpError(404, "not_found");
+  if (!(workspaceData.state === "active" && sessionData.state === "active" && workspaceData.bootId &&
+      sessionData.bootId === workspaceData.bootId && workspaceData.leaseExpiresAt > time &&
+      sessionData.leaseExpiresAt > time)) throw httpError(404, "not_found");
+  return {address: route.address, port: 8080, sessionId: route.sessionId, generation: workspaceData.generation,
     bootId: workspaceData.bootId, validUntil: Math.min(time + 10000, route.deadlineMs,
       workspaceData.leaseExpiresAt, sessionData.leaseExpiresAt)};
 }

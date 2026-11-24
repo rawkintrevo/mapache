@@ -128,3 +128,34 @@ test("validation routes use the isolated registry and only expose authenticated 
   f.docs.get("vmMigrationValidationRuntimes_v2/workspace").leaseExpiresAt = 100000;
   await assert.rejects(f.call({path: "/runner/health", token: "", shutdownToken}), /not_found/);
 });
+
+test("backup recovery routes use isolated lease records and expose only health, digest, and shutdown", async () => {
+  const f = fixture();
+  const deadlineMs = 200000;
+  const shutdownToken = "b".repeat(64);
+  f.route.recoveryOnly = true;
+  f.route.operationId = "backup-operation";
+  f.route.sessionId = "backup-session";
+  f.route.generation = 7;
+  f.route.deadlineMs = deadlineMs;
+  f.route.address = "10.90.0.23";
+  f.docs.set("vmBackupRecoveryRuntimes_v2/workspace", {
+    recoveryOnly: true, recoveryOperationId: "backup-operation", backend: "compute-engine", ownerUid: "owner",
+    currentSessionId: "backup-session", generation: 7, state: "active", bootId: "backup-boot", leaseExpiresAt: 150000,
+  });
+  f.docs.set("vmBackupRecoveryRuntimes_v2/workspace/sessions/backup-session", {
+    recoveryOnly: true, recoveryOperationId: "backup-operation", ownerUid: "owner", generation: 7,
+    state: "active", bootId: "backup-boot", leaseExpiresAt: 150000,
+  });
+  f.docs.set("vmBackupRecoveryCredentials_v2/backup-session", {
+    recoveryOperationId: "backup-operation", ownerUid: "owner", generation: 7, shutdownToken,
+  });
+  assert.deepEqual(await f.call({path: "/runner/health", token: "", shutdownToken}), {
+    address: "10.90.0.23", port: 8080, sessionId: "backup-session", generation: 7,
+    bootId: "backup-boot", validUntil: 110000,
+  });
+  await assert.rejects(f.call({path: "/agent/", token: "", shutdownToken}), /not_found/);
+  await assert.rejects(f.call({path: "/runner/recovery-digest", token: "", shutdownToken: "wrong"}), /not_found/);
+  f.docs.get("vmBackupRecoveryRuntimes_v2/workspace").leaseExpiresAt = 100000;
+  await assert.rejects(f.call({path: "/runner/recovery-digest", token: "", shutdownToken}), /not_found/);
+});

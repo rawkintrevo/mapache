@@ -9,7 +9,7 @@ const {createVmConfigurationService} = require("./vmConfiguration.service");
 const {createVmBackupStatusService} = require("./vmBackupStatus.service");
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
-function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
+function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, now = Date.now}) {
   return async function handle(req) {
     const user = await requireUser(req);
     const uid = user.uid || user.id;
@@ -28,6 +28,23 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
     if (action === "sessions" && !operationId && req.method === "GET") return {status: 200, body: await reads.sessions(uid, workspaceId)};
     if (action === "backup" && !operationId && req.method === "GET") {
       return {status: 200, body: await createVmBackupStatusService({db, now}).getWorkspace({workspaceId, ownerUid: uid})};
+    }
+    if (action === "backup" && !operationId && req.method === "POST") {
+      if (typeof requestBackupRestore !== "function") throw httpError(503, "vm_backup_recovery_unavailable");
+      const body = req.body || {};
+      const allowed = ["requestId", "backupId", "expectedGeneration", "targetDiskName", "targetSizeGb"];
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some(key => !allowed.includes(key)) ||
+          typeof body.requestId !== "string" || !body.requestId.trim() ||
+          typeof body.backupId !== "string" || !body.backupId.trim() ||
+          (body.expectedGeneration !== undefined && (!Number.isSafeInteger(body.expectedGeneration) || body.expectedGeneration < 1)) ||
+          (body.targetSizeGb !== undefined && (!Number.isSafeInteger(body.targetSizeGb) || body.targetSizeGb < 1))) {
+        throw httpError(400, "invalid_vm_backup_restore_request");
+      }
+      const result = await requestBackupRestore({workspaceId, ownerUid: uid, requestId: body.requestId,
+        backupId: body.backupId, expectedGeneration: body.expectedGeneration,
+        targetDiskName: body.targetDiskName, targetSizeGb: body.targetSizeGb});
+      return {status: 202, body: result};
     }
     if (action === "create" && !operationId && req.method === "POST") {
       const body = req.body;

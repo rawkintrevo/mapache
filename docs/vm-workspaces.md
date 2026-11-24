@@ -1488,20 +1488,26 @@ bytes (or the snapshot disk-size upper bound). Compute, gateway, NAT, and
 network cost remain explicitly unknown until current billing rates and usage
 meters are supplied; missing rates are never converted to zero.
 
-This is durable scheduling and provider-operation plumbing, not evidence of a
-`functions/vmBackupRecovery.service.js` adds the durable restore boundary. It
-requires a verified owner-matched backup record and an opt-in VM policy before
-creating a fresh target-disk receipt. A runtime adapter must then attest the
-fresh VM's authenticated readiness, user-file digest, runtime-state digest, and
-startup-stage timings. The controller records a sanitized
+This is durable scheduling and provider-operation plumbing. The durable restore
+boundary in `functions/vmBackupRecovery.service.js` requires a verified
+owner-matched backup record and an opt-in VM policy before creating a fresh
+target-disk receipt. `functions/vmBackupRecoveryRuntime.service.js` is now the
+production adapter: it boots the restored disk on a deterministic,
+operation-owned VM; leases it through the isolated
+`vmBackupRecoveryRuntimes_v2` collection and `vmBackupRecoveryControl_v2`;
+exposes only authenticated `/runner/health`, `/runner/recovery-digest`, and
+shutdown through a `recoveryOnly` gateway route; and compares the fresh
+file/runtime evidence and startup timings. The controller records a sanitized
 `vmBackupRecoveryReports_v2` report with measured RPO/RTO and fails closed on a
 digest or target mismatch; transient runtime readiness errors retain a bounded
 retry. A failed verification now requires the adapter to prove exact
 operation-owned instance and disk cleanup; an unconfirmed cleanup remains in a
 bounded retryable `cleanup` phase instead of becoming a terminal failure with
-stranded resources. The adapter is intentionally not wired to a production VM
-boot yet, so these reports are contract/test evidence rather than a live
-recovery claim.
+stranded resources. The scheduled function runs pending recovery operations,
+and the authenticated VM API accepts `POST /workspaces/{workspaceId}/backup`
+restore reservations. The adapter refuses to mutate anything until
+`VM_BACKUP_RECOVERY_GATEWAY_HOST` names a dedicated `backup-recovery---...run.app`
+revision host and `SESSION_RUNNER_IMAGE` is an immutable `@sha256:` image.
 
 The runner's authenticated `/runner/recovery-digest` endpoint produces a
 bounded SHA-256 digest of the retained tree without returning names or content.
@@ -1518,10 +1524,11 @@ The command fails its report when the source backup has no expected file
 digest; a target digest alone is not treated as a source-integrity comparison.
 It never writes Firestore authority, exposes a route, starts a production
 workspace, or deletes the source disk or snapshot. The durable recovery
-controller still does not wire this operator into the production scheduler.
+controller is wired into the production scheduler, but this operator remains a
+separate IAP proof path and is not used by the scheduler.
 
-Fresh-VM production verification and numeric cost measurements remain release
-work. The read-only inventory now enumerates owned Compute
+Fresh-VM production evidence and numeric cost measurements remain release work.
+The read-only inventory now enumerates owned Compute
 instances/disks before any future cleanup. The fail-closed disk-full/zone-loss procedure is in the
 [VM disk recovery runbook](runbooks/vm-disk-recovery.md). The explicit
 expansion-only operator command `scripts/vm-resize-disk.mjs` covers the

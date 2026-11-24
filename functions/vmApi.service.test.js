@@ -23,16 +23,31 @@ function fixture() {
       .filter(([key]) => key.startsWith(`${path}/`) && !key.slice(path.length + 1).includes("/"))
       .map(([key, data]) => ({id: key.slice(path.length + 1), data: () => data}))})})});
   const calls = [];
+  const restoreCalls = [];
   const service = createVmApiService({now: () => time, db: {collection: ref, runTransaction: fn => fn({get: r => r.get()})},
     requireUser: async req => {
       if (!req.authenticatedUid) throw new Error("invalid_auth_token");
       if (req.authenticatedUid === "not-allowed") throw new Error("app_access_not_allowed");
       return {uid: req.authenticatedUid};
-    }, lifecycle: {request: async args => { calls.push(args); return {operationId: "operation", status: "pending"}; }}});
-  return {ws, session, credentials, route, docs, calls, time,
+    }, lifecycle: {request: async args => { calls.push(args); return {operationId: "operation", status: "pending"}; }},
+    requestBackupRestore: async args => { restoreCalls.push(args); return {operationId: "restore-operation", status: "pending"}; }});
+  return {ws, session, credentials, route, docs, calls, restoreCalls, time,
     call: (path = "/workspaces/workspace/access", body = {expectedGeneration: 7}, method = "POST", uid = "owner") =>
       service({path, body, method, authenticatedUid: uid})};
 }
+
+test("backup restore requests are owner-scoped, strict, and durable", async () => {
+  const f = fixture();
+  const result = await f.call("/workspaces/workspace/backup", {
+    requestId: "restore-request", backupId: "backup-1", expectedGeneration: 7, targetSizeGb: 96,
+  });
+  assert.equal(result.status, 202);
+  assert.deepEqual(f.restoreCalls[0], {workspaceId: "workspace", ownerUid: "owner", requestId: "restore-request",
+    backupId: "backup-1", expectedGeneration: 7, targetDiskName: undefined, targetSizeGb: 96});
+  await assert.rejects(f.call("/workspaces/workspace/backup", {requestId: "restore-request"}), /invalid_vm_backup_restore_request/);
+  await assert.rejects(f.call("/workspaces/workspace/backup", {requestId: "restore-request", backupId: "backup-1", ownerUid: "foreign"}),
+    /invalid_vm_backup_restore_request/);
+});
 
 test("backup status is owner-scoped and exposes bounded recovery diagnostics without secrets", async () => {
   const f = fixture();

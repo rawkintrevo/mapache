@@ -46,6 +46,7 @@ function createComputeEngineService(dependencies = {}) {
     start: (descriptor, options) => start(descriptor, options),
     replace: (descriptor, options) => replace(descriptor, options),
     deleteOwnedInstance: (descriptor, options) => deleteOwnedInstance(descriptor, options),
+    deleteOwnedDisk: (descriptor, options) => deleteOwnedDisk(descriptor, options),
     provisionSessionService: (workspace, sessionRef, session, options) => provisionSessionService(workspace, sessionRef, session, options),
     patchSessionService: (sessionRef, session, options) => patchSessionService(sessionRef, session, options),
     deleteSessionService: (sessionRef, session, options) => deleteSessionService(sessionRef, session, options),
@@ -132,6 +133,7 @@ function createComputeEngineService(dependencies = {}) {
     });
     if (current) {
       assertOwnership(current, descriptor);
+      if (options.requireOperationMatch === true) assertOperationMatch(current, options.operationId);
       // Duplicate workers can both observe the instance before one deletes it.
       await deleteResource(instanceUrl(descriptor), options, descriptor).catch((error) => {
         if (error?.response?.status !== 404 && error?.code !== 404) throw error;
@@ -150,6 +152,26 @@ function createComputeEngineService(dependencies = {}) {
     return pause(rawDescriptor, options);
   }
 
+  async function deleteOwnedDisk(rawDescriptor, {operationId: operationKey, timeoutMs = 240000} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    if (typeof operationKey !== "string" || !operationKey.trim()) {
+      throw computeError("runtime_data_disk_cleanup_operation_required", "Data disk cleanup requires an operation identity");
+    }
+    const disk = await getDisk(descriptor).catch((error) => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (!disk) return {diskDeleted: true};
+    assertOwnership(disk, descriptor);
+    assertDiskCreation(disk, descriptor, operationKey);
+    if (disk.status !== "READY" || !Array.isArray(disk.users) || disk.users.length) {
+      throw computeError("runtime_data_disk_cleanup_unverified", "Recovery disk is not the exact detached operation disk");
+    }
+    await deleteResource(`${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}`, {
+      operationId: operationKey, timeoutMs,
+    }, descriptor);
+    const remaining = await getDisk(descriptor).catch((error) => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (remaining) throw computeError("runtime_data_disk_cleanup_pending", "Recovery disk deletion is not confirmed");
+    return {diskDeleted: true};
+  }
+
   async function inspect(rawDescriptor) {
     const descriptor = descriptorFor(rawDescriptor);
     const [disk, instance] = await Promise.all([
@@ -160,7 +182,7 @@ function createComputeEngineService(dependencies = {}) {
     if (disk) assertOwnership(disk, descriptor);
     return {
       descriptor,
-      disk: disk ? {name: disk.name, sizeGb: Number(disk.sizeGb), status: disk.status, labels: disk.labels || {}, users: disk.users || []} : null,
+      disk: disk ? {id: disk.id || null, name: disk.name, sizeGb: Number(disk.sizeGb), status: disk.status, labels: disk.labels || {}, users: disk.users || []} : null,
       instance: instance ? {name: instance.name, status: instance.status, labels: instance.labels || {}, selfLink: instance.selfLink,
         privateAddress: instance.networkInterfaces?.length === 1 && !instance.networkInterfaces[0].accessConfigs?.length &&
           instance.networkInterfaces[0].subnetwork?.endsWith("/subnetworks/mapache-vm-v2-us-central1") ? instance.networkInterfaces[0].networkIP : null} : null,
@@ -287,6 +309,12 @@ function createComputeEngineService(dependencies = {}) {
     if (disk.labels?.["mapache-created-generation"] !== String(descriptor.generation) ||
         disk.labels?.["mapache-operation-id"] !== identityLabel(String(operationId || descriptor.generation))) {
       throw computeError("runtime_data_disk_creation_conflict", "Existing disk belongs to another creation operation");
+    }
+  }
+
+  function assertOperationMatch(instance, operationKey) {
+    if (instance?.labels?.["mapache-operation-id"] !== identityLabel(String(operationKey || ""))) {
+      throw computeError("runtime_instance_operation_mismatch", "Existing recovery VM belongs to another operation");
     }
   }
 
@@ -527,6 +555,7 @@ function createComputeEngineService(dependencies = {}) {
     if (existing) {
       assertOwnership(existing, descriptor);
       assertInstanceDisk(existing, descriptor);
+      if (options.requireOperationMatch === true) assertOperationMatch(existing, options.operationId);
       if (existing.status === "TERMINATED") {
         throw computeError("runtime_generation_replacement_required", "A stopped VM requires a new generation and credentials; do not restart its expired boot");
       }

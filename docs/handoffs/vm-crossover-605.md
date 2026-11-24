@@ -248,8 +248,17 @@ and the digest over IAP SSH, records restore/start/readiness and RPO/RTO
 timings, and cleans up only the exact proof VM and detached disk. It refuses to
 report success when the source backup lacks an expected file digest, and it
 does not write authority, create a route, or delete the source backup/disk.
-The durable production recovery adapter remains unwired; no recovery proof was
-invoked by this change.
+The durable production recovery adapter is now wired through
+`functions/vmBackupRecoveryRuntime.service.js`. It uses isolated recovery
+runtime/session/credential records, a dedicated `recoveryOnly` gateway route,
+the isolated `vmBackupRecoveryControl_v2` lease endpoint, a pinned runner
+image, authenticated `/runner/health` plus `/runner/recovery-digest`, and exact
+VM/disk cleanup before terminal failure. The scheduler reconciles pending
+recovery operations and the owner-scoped VM API can reserve one with
+`POST /workspaces/{workspaceId}/backup`. The adapter fails before mutation when
+`VM_BACKUP_RECOVERY_GATEWAY_HOST` is absent or is not a dedicated
+`backup-recovery---...run.app` host, or when `SESSION_RUNNER_IMAGE` is not
+immutable. No production recovery operation was invoked by this change.
 
 The opt-in backup scheduler now captures source `/runner/health` and
 `/runner/recovery-digest` evidence for an active admitted VM before requesting

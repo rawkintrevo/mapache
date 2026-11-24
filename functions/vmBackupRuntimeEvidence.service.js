@@ -77,7 +77,6 @@ function runtimeStateDigest(health) {
   const safe = {
     ok: health?.ok === true,
     workspaceId: String(health?.workspaceId || ""),
-    sessionId: String(health?.sessionId || ""),
     agentRuntime: {
       ready: health?.agentRuntime?.ready === true,
       state: String(health?.agentRuntime?.state || ""),

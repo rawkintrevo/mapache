@@ -1,5 +1,6 @@
 "use strict";
 
+const {createHash} = require("node:crypto");
 const {GoogleAuth} = require("google-auth-library");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {
@@ -128,11 +129,12 @@ function createComputeEngineBackupService(dependencies = {}) {
         name: target,
         sizeGb: requestedSizeGb,
         sourceSnapshot: snapshot.selfLink,
-        labels: labels(descriptor, restoreOperationId, snapshot.labels?.["mapache-retention-days"] || 14, {
+        labels: {...labels(descriptor, restoreOperationId, snapshot.labels?.["mapache-retention-days"] || 14, {
           consistency: snapshot.labels?.["mapache-consistency"] || "crash-consistent",
           sourceGeneration,
           backupState: "restoring",
-        }),
+        }), "mapache-created-generation": String(descriptor.generation),
+          "mapache-operation-id": operationLabel(restoreOperationId)},
       },
     });
     const operation = await waitForOperation(response.data, descriptor);
@@ -231,6 +233,7 @@ function createComputeEngineBackupService(dependencies = {}) {
       throw error;
     }
   }
+  function operationLabel(value) { return createHash("sha256").update(String(value)).digest("hex").slice(0, 63); }
   function safeName(value) {
     const name = String(value || "").trim();
     if (!/^[a-z][a-z0-9-]{0,62}$/.test(name)) throw new Error("invalid_snapshot_name");

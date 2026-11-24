@@ -6,12 +6,16 @@ const {normalizePiAuthEntries, normalizePiAuthProviders} = require("./agentAuth.
 
 const COLLECTION = "vmRuntimes_v2";
 const VALIDATION_COLLECTION = "vmMigrationValidationRuntimes_v2";
+const RECOVERY_COLLECTION = "vmBackupRecoveryRuntimes_v2";
 const VALIDATION_ACTIONS = new Set(["lease.acquire", "lease.check", "lease.renew", "lease.release",
   "models.get", "models.set", "auth.get", "activity", "history", "failure"]);
+const RECOVERY_ACTIONS = new Set(["lease.acquire", "lease.check", "lease.renew", "lease.release",
+  "models.get", "auth.get", "activity", "history", "failure"]);
 const LEASE_MS = 45000;
 const TIME_FIELDS = new Set(["runtimeStartedAt", "lastActivityAt", "lastConnectedAt", "lastDisconnectedAt", "shutdownRequestedAt"]);
 
-function createVmRuntimeControlService({db, admin, validation = false, now = Date.now}) {
+function createVmRuntimeControlService({db, admin, validation = false, recovery = false, now = Date.now}) {
+  if (validation && recovery) throw new Error("vm_control_mode_conflict");
   return async function handle(req) {
     if (req.method !== "POST") throw httpError(405, "method_not_allowed");
     const body = req.body || {};
@@ -22,7 +26,7 @@ function createVmRuntimeControlService({db, admin, validation = false, now = Dat
     const generation = Number(body.generation);
     if (!Number.isSafeInteger(generation) || generation < 1) throw httpError(400, "invalid_generation");
     const token = String(req.get?.("authorization") || "").replace(/^Bearer /, "");
-    const workspaceRef = db.collection(validation ? VALIDATION_COLLECTION : COLLECTION).doc(workspaceId);
+    const workspaceRef = db.collection(validation ? VALIDATION_COLLECTION : recovery ? RECOVERY_COLLECTION : COLLECTION).doc(workspaceId);
     const sessionRef = workspaceRef.collection("sessions").doc(sessionId);
     return db.runTransaction(async (tx) => {
       const [ws, ss] = await Promise.all([tx.get(workspaceRef), tx.get(sessionRef)]);
@@ -40,6 +44,8 @@ function createVmRuntimeControlService({db, admin, validation = false, now = Dat
             fence.data()?.workspaceId !== workspaceId) throw httpError(409, "vm_validation_authority_lost");
         if (!VALIDATION_ACTIONS.has(body.action)) throw httpError(400, "unknown_vm_control_action");
       }
+      if (recovery && (!workspace.recoveryOnly || workspace.recoveryOperationId !== session.recoveryOperationId ||
+          !RECOVERY_ACTIONS.has(body.action))) throw httpError(404, "not_found");
       if (!["reserved", "active", "stopping"].includes(workspace.state) ||
           !["reserved", "active", "stopping"].includes(session.state)) throw httpError(409, "vm_session_unavailable");
       const current = session.bootId === bootId && workspace.bootId === bootId &&
@@ -72,7 +78,7 @@ function createVmRuntimeControlService({db, admin, validation = false, now = Dat
         tx.update(sessionRef, update);
         return {ok: true};
       }
-      if (validation) {
+      if (validation || recovery) {
         if (body.action === "auth.get") return {selection: {harness: "pi", providers: {}}, data: {providers: {}, entries: {}}};
         if (body.action === "models.get") return {models: []};
         return {ok: true};
