@@ -81,7 +81,7 @@ function verifyDiskReceipt(evidence, record) {
 
 function createVmMigrationCoordinator({
   db, authorize = async () => false, inspectCompute, inspectStorage, inspectDestinationDisk, readDiskImportEvidence,
-  ensureValidationClone, startValidationVm,
+  ensureValidationClone, startValidationVm, deleteValidationResources,
   defaultBucket = DEFAULT_BUCKET, now = Date.now,
 }) {
   function refs(input) {
@@ -103,6 +103,7 @@ function createVmMigrationCoordinator({
       validationCloneVerifiedAtMs: record.validation?.cloneVerifiedAtMs ?? null,
       validationBootRequestedAtMs: record.validation?.bootRequestedAtMs ?? null,
       validationInstanceStartedAtMs: record.validation?.instanceStartedAtMs ?? null,
+      validationCleanedAtMs: record.validation?.cleanedAtMs ?? null,
       readyForCutover: false};
   }
   function requireOwner(record, input) {
@@ -496,6 +497,43 @@ function createVmMigrationCoordinator({
     });
   }
 
+  async function cleanupValidationBoot(input) {
+    const references = refs(input);
+    if (!inspectDestinationDisk || !deleteValidationResources || !await authorize(input, "cleanup-validation-boot")) {
+      throw httpError(409, "vm_migration_validation_unverified");
+    }
+    const read = transaction => readValidationState(transaction, input, references);
+    const initial = await db.runTransaction(read, {readOnly: true});
+    const validation = initial.record.validation;
+    if (!validation?.cloneDiskName || !validation.instanceName || !validation.operationId) {
+      throw httpError(409, "vm_migration_validation_cleanup_missing");
+    }
+    if (validation.cleanedAtMs !== undefined) return status(initial.record);
+    const destination = initial.record.importDestination;
+    const descriptor = createRuntimeDescriptor({backend: COMPUTE_ENGINE_BACKEND, workspaceId: input.workspaceId, ownerUid: input.ownerUid,
+      zone: destination.zone, region: destination.region, generation: destination.generation,
+      dataDiskName: validation.cloneDiskName, instanceName: validation.instanceName});
+    const cloneDiskId = validation.cloneDiskId || (await inspectDestinationDisk(descriptor, {operationId: validation.operationId})).diskId;
+    await assertValidationSource(input, initial.record);
+    const result = await deleteValidationResources(descriptor, {operationId: validation.operationId,
+      cloneDiskId, sourceDiskId: destination.diskId});
+    await assertValidationSource(input, initial.record);
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      const stored = current.record.validation;
+      if (stored.cleanedAtMs !== undefined) return status(current.record);
+      if (initial.authorityStamps !== current.authorityStamps ||
+          initial.observation.observationSha256 !== current.observation.observationSha256) {
+        throw httpError(409, "vm_migration_validation_observation_stale");
+      }
+      const cleanedAtMs = now();
+      const next = {...stored, cleanedAtMs, cleanupInstanceDeleted: result.instanceDeleted === true,
+        cleanupDiskDeleted: result.diskDeleted === true};
+      transaction.update(references.operation, {validation: next});
+      return status({...current.record, validation: next});
+    });
+  }
+
   async function getCapturedPrefix(input) {
     const references = refs(input);
     if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
@@ -575,7 +613,7 @@ function createVmMigrationCoordinator({
     });
   }
   return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport,
-    reserveValidationBoot, prepareValidationClone, startValidationBoot, abort};
+    reserveValidationBoot, prepareValidationClone, startValidationBoot, cleanupValidationBoot, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

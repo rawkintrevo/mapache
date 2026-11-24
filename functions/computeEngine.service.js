@@ -37,6 +37,7 @@ function createComputeEngineService(dependencies = {}) {
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
     ensureMigrationValidationClone: (descriptor, options) => ensureMigrationValidationClone(descriptor, options),
     startMigrationValidationVm: (descriptor, options) => startMigrationValidationVm(descriptor, options),
+    deleteMigrationValidationResources: (descriptor, options) => deleteMigrationValidationResources(descriptor, options),
     pause: (descriptor, options) => pause(descriptor, options),
     start: (descriptor, options) => start(descriptor, options),
     replace: (descriptor, options) => replace(descriptor, options),
@@ -335,6 +336,49 @@ function createComputeEngineService(dependencies = {}) {
       throw computeError("runtime_validation_instance_unverified");
     }
     return {instanceId: instance.id, instanceName: instance.name, cloneDiskId};
+  }
+
+  async function deleteMigrationValidationResources(rawDescriptor, {
+    operationId, cloneDiskId, sourceDiskId, timeoutMs = 240000,
+  } = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    const key = /^mapache-val-disk-([a-f0-9]{24})$/.exec(descriptor.dataDiskName)?.[1];
+    if (projectId !== "pi-agents-cloud" || !key || descriptor.instanceName !== "mapache-val-vm-" + key ||
+        operationId !== "validate-" + key || !/^[1-9][0-9]{0,19}$/.test(cloneDiskId || "") ||
+        !/^[1-9][0-9]{0,19}$/.test(sourceDiskId || "") || cloneDiskId === sourceDiskId) {
+      throw computeError("runtime_validation_cleanup_invalid");
+    }
+    const diskUrl = `${zoneUrl(descriptor)}/disks/${descriptor.dataDiskName}`;
+    const instance = await getInstance(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error));
+    const disk = await getDisk(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (instance) {
+      assertOwnership(instance, descriptor);
+      assertInstanceDisk(instance, descriptor);
+      if (!/^[1-9][0-9]{0,19}$/.test(String(instance.id || "")) || instance.labels?.["mapache-validation-only"] !== "true" ||
+          instance.labels?.["mapache-operation-id"] !== identityLabel(operationId)) {
+        throw computeError("runtime_validation_cleanup_unverified");
+      }
+      await deleteResource(instanceUrl(descriptor), {operationId, timeoutMs}, descriptor);
+    }
+    const currentDisk = await getDisk(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (currentDisk) {
+      assertOwnership(currentDisk, descriptor);
+      assertDiskCreation(currentDisk, descriptor, operationId);
+      if (currentDisk.id !== cloneDiskId || currentDisk.sourceDiskId !== sourceDiskId ||
+          currentDisk.labels?.["mapache-validation-only"] !== "true" ||
+          (currentDisk.users !== undefined && (!Array.isArray(currentDisk.users) || currentDisk.users.length))) {
+        throw computeError("runtime_validation_cleanup_unverified");
+      }
+      await deleteResource(diskUrl, {operationId, timeoutMs}, descriptor);
+    } else if (disk && disk.id !== cloneDiskId) {
+      throw computeError("runtime_validation_cleanup_unverified");
+    }
+    const [remainingInstance, remainingDisk] = await Promise.all([
+      getInstance(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error)),
+      getDisk(descriptor).catch(error => error.code === "compute_not_found" ? null : Promise.reject(error)),
+    ]);
+    if (remainingInstance || remainingDisk) throw computeError("runtime_validation_cleanup_pending");
+    return {instanceDeleted: true, diskDeleted: true, cloneDiskId, sourceDiskId};
   }
 
   async function ensureInstance(rawDescriptor, options = {}) {

@@ -187,3 +187,44 @@ test("validation clone uses exact source identity and retries without another pr
   await assert.rejects(run(), {code: "runtime_validation_source_disk_changed"});
   assert.equal(writes, 1);
 });
+
+test("validation cleanup deletes only the ID-checked clone instance and disk", async () => {
+  const key = "c".repeat(24);
+  const descriptor = createRuntimeDescriptor({backend: "compute-engine", workspaceId: "cleanup-proof", ownerUid: "owner", generation: 1,
+    dataDiskName: `mapache-val-disk-${key}`, instanceName: `mapache-val-vm-${key}`});
+  const operationId = `validate-${key}`;
+  const sourceDiskId = "9007199254740993";
+  const cloneDiskId = "9007199254740994";
+  const base = "https://compute.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/" + descriptor.zone;
+  const label = value => createHash("sha256").update(value).digest("hex").slice(0, 63);
+  const labels = {"mapache-owner-uid": label("owner"), "mapache-workspace-id": label("cleanup-proof"),
+    "mapache-created-generation": "1", "mapache-operation-id": label(operationId), "mapache-runtime-provider": "compute-engine",
+    "mapache-validation-only": "true"};
+  const state = {
+    disk: {name: descriptor.dataDiskName, id: cloneDiskId, sourceDiskId, zone: base, status: "READY", users: [], labels},
+    instance: {id: "9007199254740995", name: descriptor.instanceName, status: "RUNNING", labels,
+      disks: [{source: `${base}/disks/${descriptor.dataDiskName}`, deviceName: descriptor.dataDiskName,
+        boot: false, autoDelete: false, mode: "READ_WRITE"}]},
+  };
+  const deleted = [];
+  const compute = createComputeEngineService({projectId: "pi-agents-cloud", request: async req => {
+    const isDisk = req.url.includes("/disks/");
+    if (req.method === "GET") {
+      const value = isDisk ? state.disk : state.instance;
+      if (!value) throw Object.assign(Error("not found"), {code: 404});
+      return {data: structuredClone(value)};
+    }
+    assert.equal(req.method, "DELETE");
+    deleted.push(isDisk ? "disk" : "instance");
+    if (isDisk) state.disk = null;
+    else state.instance = null;
+    return {data: {status: "DONE"}};
+  }});
+  const result = await compute.deleteMigrationValidationResources(descriptor, {operationId, cloneDiskId, sourceDiskId});
+  assert.deepEqual(result, {instanceDeleted: true, diskDeleted: true, cloneDiskId, sourceDiskId});
+  assert.deepEqual(deleted, ["instance", "disk"]);
+  state.disk = {name: descriptor.dataDiskName, id: cloneDiskId, sourceDiskId: "9007199254740996", zone: base, status: "READY", users: [], labels};
+  await assert.rejects(compute.deleteMigrationValidationResources(descriptor, {operationId, cloneDiskId, sourceDiskId}),
+      {code: "runtime_validation_cleanup_unverified"});
+  assert.deepEqual(deleted, ["instance", "disk"]);
+});

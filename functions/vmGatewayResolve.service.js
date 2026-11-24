@@ -3,6 +3,10 @@
 const {createHmac, timingSafeEqual} = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
 
+const VALIDATION_COLLECTION = "vmMigrationValidationRuntimes_v2";
+const VALIDATION_CREDENTIALS = "vmMigrationValidationCredentials_v2";
+const MIGRATION_FENCES = "vmMigrationFences_v2";
+
 // Called only by the IAM-authenticated gateway. No browser-facing Firestore API.
 function createVmGatewayResolveService({db, now = Date.now}) {
   return async function resolve(req) {
@@ -15,6 +19,9 @@ function createVmGatewayResolveService({db, now = Date.now}) {
     const controlPath = path === "/runner/health" || path === "/shutdown";
     return db.runTransaction(async (tx) => {
       const route = (await tx.get(db.collection("vmGatewayRoutes_v2").doc(host))).data();
+      if (route?.validationOnly === true) {
+        return resolveValidationRoute(db, tx, route, {host, path, token, shutdownToken, origin}, now());
+      }
       if (!route?.workspaceId || route.enabled !== true) throw httpError(404, "not_found");
       const workspaceRef = db.collection("vmRuntimes_v2").doc(route.workspaceId);
       const ws = (await tx.get(workspaceRef)).data();
@@ -65,6 +72,38 @@ function createVmGatewayResolveService({db, now = Date.now}) {
         validUntil: Math.min(time + 10000, expiresAt, ws.leaseExpiresAt, session.leaseExpiresAt)};
     });
   };
+}
+
+async function resolveValidationRoute(db, tx, route, {host, path, token, shutdownToken, origin}, time) {
+  if (!route.enabled || !route.workspaceId || !route.ownerUid || !route.operationId ||
+      !route.sessionId || !Number.isSafeInteger(route.generation) || !Number.isSafeInteger(route.deadlineMs) ||
+      !isVmAddress(route.address) || !["/runner/health", "/shutdown"].includes(path) ||
+      (origin && origin !== `https://${host}`)) throw httpError(404, "not_found");
+  const workspaceRef = db.collection(VALIDATION_COLLECTION).doc(route.workspaceId);
+  const workspace = await tx.get(workspaceRef);
+  const workspaceData = workspace.data() || {};
+  const session = await tx.get(workspaceRef.collection("sessions").doc(route.sessionId));
+  const credentials = await tx.get(db.collection(VALIDATION_CREDENTIALS).doc(route.sessionId));
+  const fence = await tx.get(db.collection(MIGRATION_FENCES).doc(route.workspaceId));
+  const sessionData = session.data() || {};
+  const credentialsData = credentials.data() || {};
+  const fenceData = fence.data() || {};
+  if (!workspace.exists || !session.exists || !credentials.exists || !fence.exists ||
+      workspaceData.backend !== "compute-engine" || workspaceData.ownerUid !== route.ownerUid ||
+      workspaceData.currentSessionId !== route.sessionId || workspaceData.generation !== route.generation ||
+      workspaceData.migrationOperationId !== route.operationId || workspaceData.deadlineMs !== route.deadlineMs ||
+      workspaceData.deadlineMs <= time || fenceData.workspaceId !== route.workspaceId ||
+      fenceData.ownerUid !== route.ownerUid || fenceData.operationId !== route.operationId ||
+      sessionData.ownerUid !== route.ownerUid || sessionData.generation !== route.generation ||
+      credentialsData.ownerUid !== route.ownerUid || credentialsData.generation !== route.generation ||
+      !/^[a-f0-9]{64}$/.test(credentialsData.shutdownToken || "")) throw httpError(404, "not_found");
+  if (!safeEqual(shutdownToken, credentialsData.shutdownToken)) throw httpError(404, "not_found");
+  if (!(["active", "stopping"].includes(workspaceData.state) && ["active", "stopping"].includes(sessionData.state) &&
+      workspaceData.bootId && sessionData.bootId === workspaceData.bootId &&
+      workspaceData.leaseExpiresAt > time && sessionData.leaseExpiresAt > time)) throw httpError(404, "not_found");
+  return {address: route.address, port: 8080, sessionId: route.sessionId, generation: route.generation,
+    bootId: workspaceData.bootId, validUntil: Math.min(time + 10000, route.deadlineMs,
+      workspaceData.leaseExpiresAt, sessionData.leaseExpiresAt)};
 }
 
 function isVmAddress(address) {

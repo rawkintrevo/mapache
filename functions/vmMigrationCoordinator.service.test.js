@@ -452,6 +452,7 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     let diskLastAttachTimestamp;
     let cloneDiskId = "9007199254740997";
     let changeDuringClone = false;
+    let cleanupCalls = 0;
     let receiptFile;
     let substituteEvidence = false;
     let changeDuringEvidence = false;
@@ -472,6 +473,21 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
         assert.equal(options.sourceDiskId, initialDiskId);
         if (changeDuringClone) await operation.update({changedDuringClone: true});
         return {cloneDiskId, cloneDiskName: options.cloneDiskName, sourceDiskId: options.sourceDiskId};
+      },
+      startValidationVm: async (descriptor, options) => {
+        assert.match(descriptor.instanceName, /^mapache-val-vm-[a-f0-9]{24}$/);
+        assert.equal(options.sessionId, descriptor.instanceName.replace("mapache-val-vm-", "validation-"));
+        assert.equal(options.cloneDiskId, "9007199254740997");
+        assert.equal(options.sourceDiskId, initialDiskId);
+        assert.deepEqual(Object.keys(options.credentials).sort(), ["browserToken", "controlToken", "shutdownToken"]);
+        return {instanceId: "9007199254740999", instanceName: descriptor.instanceName, cloneDiskId: options.cloneDiskId};
+      },
+      deleteValidationResources: async (descriptor, options) => {
+        cleanupCalls++;
+        assert.match(descriptor.dataDiskName, /^mapache-val-disk-[a-f0-9]{24}$/);
+        assert.equal(options.cloneDiskId, "9007199254740997");
+        assert.equal(options.sourceDiskId, initialDiskId);
+        return {instanceDeleted: true, diskDeleted: true};
       },
       readDiskImportEvidence: async ({destination}) => {
         assert.equal(destination.diskId, initialDiskId);
@@ -599,9 +615,20 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     const prepared = await coordinator.prepareValidationClone(input);
     assert.equal(typeof prepared.validationCloneVerifiedAtMs, "number");
     assert.deepEqual(await coordinator.prepareValidationClone(input), prepared);
+    const booted = await coordinator.startValidationBoot(input);
+    assert.equal(typeof booted.validationInstanceStartedAtMs, "number");
+    const validationSessionId = (await db.collection("vmMigrationValidationRuntimes_v2").doc(workspaceId).get()).get("currentSessionId");
+    const validationCredentials = await db.collection("vmMigrationValidationCredentials_v2").doc(validationSessionId).get();
+    assert.equal(validationCredentials.get("ownerUid"), ownerUid);
+    assert.deepEqual(Object.keys(validationCredentials.data()).sort(), ["browserToken", "controlToken", "generation", "migrationOperationId", "ownerUid", "shutdownToken"]);
     cloneDiskId = "9007199254740998";
     await assert.rejects(coordinator.prepareValidationClone(input), {publicMessage: "vm_migration_validation_clone_conflict"});
     assert.equal(prepared.readyForCutover, false);
+    const cleaned = await coordinator.cleanupValidationBoot(input);
+    assert.equal(typeof cleaned.validationCleanedAtMs, "number");
+    assert.equal(cleaned.readyForCutover, false);
+    assert.deepEqual(await coordinator.cleanupValidationBoot(input), cleaned);
+    assert.equal(cleanupCalls, 1);
     assert.ok(!(await db.collection("vmRuntimes_v2").doc(workspaceId).get()).exists);
     const chunk = chunks.doc("0");
     const original = (await chunk.get()).get("rowsJson");

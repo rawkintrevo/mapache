@@ -6,7 +6,7 @@ Handoff date: 2026-11-23 (America/Chicago). Implementation is paused.
 
 - Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
 - Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
-- The last verified clone-copy increment is `773098d`. The PR head preserves the unfinished clone-boot code for the next owner.
+- The last verified clone-copy increment is `773098d`. The PR head preserves the clone-boot implementation; the validation boot operator path is now implemented on the continuation branch and still requires a disposable live proof before it can be treated as release evidence.
 - Rough overall estimate: **50%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
@@ -65,7 +65,7 @@ These directories do **not** travel with Git. They can contain private restored 
 - The Firestore emulator proved one reservation winner, stale-observation and shared-prefix refusal, and atomic release of the workspace and Storage fences. The production endpoints expose read-only preflight and status. No production reservation or writer drain is authorized by those endpoints.
 - The coordinator's `confirmQuiesced` transition checks ownership of both fences, records Compute and Storage observation digests, and rechecks Firestore, the operation and both fences before committing. Emulator tests cover stale observations, concurrent retries and a pre-switch abort. The transition has no production mutation entry point.
 - The fenced capture binds exact Storage generations to checkpoint, HOME and browser staging. A private read-only maintenance workflow verifies the mounted import receipt and exact provider disk ID before the coordinator accepts the detached destination disk. A live disposable disk copy verified the provider's source disk ID and was removed.
-- The checkpoint adds an internal `startValidationBoot` path using a separate Firestore registry, dedicated broker, short lease deadline and clone-only Compute attachment. Compute instance creation and authenticated runner readiness are separate milestones. Existing tests and negative smoke checks passed. The new boot path still needs dedicated tests and an operator entry point. No validation VM or clone was present in the project at handoff.
+- The checkpoint adds an internal `startValidationBoot` path using a separate Firestore registry, dedicated broker, short lease deadline and clone-only Compute attachment. `scripts/vm-migration-validation-boot.mjs` now drives reservation, clone preparation, boot, temporary validation-gateway health attestation and ID-checked cleanup. Compute instance creation and authenticated runner readiness remain separate milestones. Focused tests cover the isolated gateway route and clone deletion; no validation VM or clone was present in the project at handoff.
 
 ## Checks and continuation
 
@@ -77,7 +77,7 @@ firebase emulators:exec --only firestore --project demo-mapache-cutover 'node --
 npm run docs:check
 ```
 
-1. For #616, finish clone-boot tests, the operator entry point, readiness attestation via private authenticated `/runner/health` and ID-checked cleanup. Exercise the full path on a disposable fixture, including lease fencing, copied local credentials, deadline behavior, failure/retry and teardown. A lease deadline does not delete cloud resources.
+1. For #616, run the new clone-boot operator path on a disposable fixture and record readiness/cleanup evidence. Exercise the full path including lease fencing, empty validation credentials, deadline behavior, failure/retry and teardown. A lease deadline does not delete cloud resources.
 2. Verify deployed legacy writer fencing and drainage, including old upload URIs, outstanding operations and integration bindings. Bind verified source, import and clone evidence to the atomic authority switch and rehearse rollback after real VM writes.
 3. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. Extend the disk import proof to representative complete data, capacity and recovery, then validate the runtime and app on the imported disk.
 4. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.

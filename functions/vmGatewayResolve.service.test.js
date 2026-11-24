@@ -18,13 +18,16 @@ function fixture() {
   ]);
   const ref = (path) => ({path, doc: (id) => ref(`${path}/${id}`), collection: (id) => ref(`${path}/${id}`)});
   const resolve = createVmGatewayResolveService({now: () => time, db: {
-    collection: ref, runTransaction: (fn) => fn({get: async (r) => ({data: () => docs.get(r.path)})}),
+    collection: ref, runTransaction: (fn) => fn({get: async (r) => {
+      const data = docs.get(r.path);
+      return {exists: data !== undefined, data: () => data};
+    }}),
   }});
   function token(extra = {}, secret = credentials.browserToken) {
     const body = Buffer.from(JSON.stringify({sid: "session", exp: 200, aud: "agent", gen: 5, ...extra})).toString("base64url");
     return `${body}.${createHmac("sha256", secret).update(body).digest("base64url")}`;
   }
-  return {ws, session, credentials, route, token, advance: (ms) => { time += ms; },
+  return {ws, session, credentials, route, docs, token, advance: (ms) => { time += ms; },
     call: (body = {}) => resolve({method: "POST", body: {host, path: "/agent/", token: token(), ...body}})};
 }
 
@@ -93,4 +96,35 @@ test("stopping denies browser traffic but permits authenticated controller shutd
   await assert.rejects(f.call(), /not_found/);
   await assert.rejects(f.call({path: "/shutdown"}), /not_found/);
   await f.call({path: "/shutdown", shutdownToken: "health-secret", token: ""});
+});
+
+test("validation routes use the isolated registry and only expose authenticated health/shutdown", async () => {
+  const f = fixture();
+  const deadlineMs = 200000;
+  const shutdownToken = "a".repeat(64);
+  f.route.validationOnly = true;
+  f.route.operationId = "migration-operation";
+  f.route.sessionId = "validation-session";
+  f.route.generation = 7;
+  f.route.deadlineMs = deadlineMs;
+  f.route.address = "10.90.0.22";
+  f.docs.set("vmMigrationValidationRuntimes_v2/workspace", {
+    backend: "compute-engine", ownerUid: "owner", currentSessionId: "validation-session", generation: 7,
+    migrationOperationId: "migration-operation", deadlineMs, state: "active", bootId: "validation-boot", leaseExpiresAt: 150000,
+  });
+  f.docs.set("vmMigrationValidationRuntimes_v2/workspace/sessions/validation-session", {
+    ownerUid: "owner", generation: 7, state: "active", bootId: "validation-boot", leaseExpiresAt: 150000,
+  });
+  f.docs.set("vmMigrationValidationCredentials_v2/validation-session", {
+    ownerUid: "owner", generation: 7, shutdownToken,
+  });
+  f.docs.set("vmMigrationFences_v2/workspace", {workspaceId: "workspace", ownerUid: "owner", operationId: "migration-operation"});
+  assert.deepEqual(await f.call({path: "/runner/health", token: "", shutdownToken}), {
+    address: "10.90.0.22", port: 8080, sessionId: "validation-session", generation: 7,
+    bootId: "validation-boot", validUntil: 110000,
+  });
+  await assert.rejects(f.call({path: "/agent/", token: "", shutdownToken}), /not_found/);
+  await assert.rejects(f.call({path: "/runner/health", token: "", shutdownToken: "wrong"}), /not_found/);
+  f.docs.get("vmMigrationValidationRuntimes_v2/workspace").leaseExpiresAt = 100000;
+  await assert.rejects(f.call({path: "/runner/health", token: "", shutdownToken}), /not_found/);
 });

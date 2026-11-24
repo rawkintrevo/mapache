@@ -33,6 +33,39 @@ function harness() {
   })};
 }
 
+function validationHarness() {
+  let time = 1000;
+  const token = "a".repeat(64);
+  const workspace = {ownerUid: "owner", backend: "compute-engine", currentSessionId: "session", generation: 1,
+    state: "reserved", migrationOperationId: "migration", deadlineMs: 5000};
+  const session = {ownerUid: "owner", generation: 1, state: "reserved", controlTokenHash: tokenHash(token)};
+  const docs = new Map([
+    ["vmMigrationValidationRuntimes_v2/workspace", workspace],
+    ["vmMigrationValidationRuntimes_v2/workspace/sessions/session", session],
+    ["vmMigrationFences_v2/workspace", {workspaceId: "workspace", ownerUid: "owner", operationId: "migration"}],
+  ]);
+  function ref(path) {
+    return {path, collection: id => ref(`${path}/${id}`), doc: (id = "history") => ref(`${path}/${id}`)};
+  }
+  const service = createVmRuntimeControlService({validation: true, now: () => time,
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "SERVER_TIME"}}},
+    db: {collection: ref, runTransaction: async fn => {
+      const writes = [];
+      const result = await fn({
+        get: async r => ({exists: docs.has(r.path), data: () => docs.get(r.path)}),
+        update: (r, data) => writes.push(() => Object.assign(docs.get(r.path), data)),
+        set: (r, data) => writes.push(() => docs.set(r.path, data)),
+      });
+      writes.forEach(write => write());
+      return result;
+    }},
+  });
+  return {workspace, session, advance: ms => { time += ms; }, call: (action, overrides = {}, presentedToken = token) => service({
+    method: "POST", get: () => `Bearer ${presentedToken}`,
+    body: {workspaceId: "workspace", sessionId: "session", generation: 1, bootId: "boot-a", action, ...overrides},
+  })};
+}
+
 test("one boot is admitted; another boot and stale generation cannot take authority", async () => {
   const h = harness();
   await h.call("lease.acquire");
@@ -115,4 +148,14 @@ test("versioned configuration cannot silently materialize a deleted provider sel
   await assert.rejects(h.call("auth.get"), /vm_auth_entry_unavailable/);
   h.session.authSelection.providers = {};
   assert.deepEqual((await h.call("auth.get")).data.entries, {});
+});
+
+test("validation boots cannot renew past their deadline or read owner credentials", async () => {
+  const h = validationHarness();
+  await h.call("lease.acquire");
+  assert.deepEqual((await h.call("auth.get")).data, {providers: {}, entries: {}});
+  assert.deepEqual(await h.call("models.get"), {models: []});
+  h.advance(4001);
+  await assert.rejects(h.call("lease.renew"), /vm_validation_authority_lost/);
+  assert.equal(h.workspace.state, "active");
 });

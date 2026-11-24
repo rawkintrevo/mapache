@@ -1366,16 +1366,38 @@ provider's exact source disk ID. Retries reuse that clone. The coordinator
 rechecks the fenced source before recording its ID. Once cloning is
 requested, abort requires reconciliation of the copy before releasing
 legacy authority. This transition creates neither a VM nor a user route.
-The handoff checkpoint adds an internal validation boot step. It mounts the
-identified clone on a private Compute instance with the pinned runner image
-and formatting disabled. A separate control endpoint and Firestore registry
-use a validation-session token and verify the original workspace fence on
-every request. The broker returns no centrally managed credentials, and
-validation creates no production runtime record or user route. The 30-minute
-reservation limits lease renewal. It does not stop or remove Compute resources.
-Before using this path, finish the operator entry point and prove isolated
-boot, authenticated runner readiness, credential isolation and cleanup on a
-disposable fixture. A started instance alone is insufficient for cutover.
+The validation boot step mounts the identified clone on a private Compute
+instance with the pinned runner image and formatting disabled. A separate
+control endpoint and Firestore registry use a validation-session token and
+verify the original workspace fence on every request. The broker returns no
+centrally managed credentials, and validation creates no production runtime
+record or user route. The 30-minute reservation limits lease renewal; its
+deadline revokes broker/gateway access but does not delete cloud resources.
+
+`scripts/vm-migration-validation-boot.mjs run` is the operator entry point:
+
+```bash
+node scripts/vm-migration-validation-boot.mjs run \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --runner-image PINNED_IMAGE
+```
+
+It reserves and prepares the clone, starts the validation-only VM, creates a
+temporary backend-owned validation gateway route, and attests the private
+authenticated `/runner/health` response for the expected workspace/session and
+ready Agent runtime. The route authorizes only `/runner/health` and `/shutdown`
+against `vmMigrationValidationRuntimes_v2`; it cannot read or route through the
+ordinary `vmRuntimes_v2` registry. The broker returns an empty auth/model scope,
+so owner-wide credentials are not copied into the validation boot.
+
+Cleanup is part of the command, including health timeout and Compute-start
+failure paths. It cooperatively shuts down the runner when possible, releases
+the short lease, checks the validation-only labels, exact clone/source disk IDs,
+workspace/owner labels and attachment state, then deletes only the clone VM and
+clone disk. Finally it removes the temporary route, validation credentials and
+registry documents while retaining sanitized operation evidence. An interrupted
+run can be completed with the same command's `cleanup` action. A started
+instance alone is insufficient for cutover.
 [Compute Engine disk reference](https://docs.cloud.google.com/compute/docs/reference/rest/v1/disks/get)
 
 The emulator passes a locally installed receipt through coordinator
