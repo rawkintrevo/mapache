@@ -7,7 +7,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation is 
 - Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
 - Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
 - The last verified clone-copy increment is `773098d`. The PR head preserves the clone-boot implementation, and the validation boot operator path is now implemented and has passed a disposable live proof on the continuation branch.
-- Rough overall estimate: **72%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Rough overall estimate: **73%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -375,3 +375,18 @@ That exact image passed the real local pi-web vertical slice 2/2 in about 60s.
 This closes the code/test/image race-safety gate; live provider/model execution,
 stopped-target scheduling, cross-machine tools, usage accounting, migration
 cutover/rollback, recovery, and release cohorts remain open.
+
+The iteration path now has an explicit `npm run check:fast` command for the
+focused VM automation boundary: it passed 94 focused Functions tests and 58
+focused runner tests, plus docs and syntax checks. The full `npm run check`
+remains the handoff/release gate and passed before this workflow-only increment.
+Pull-request runner-image builds now select upstream `fast` mode automatically;
+main pushes and default manual builds remain `full`, and the workflow rejects
+publishing a fast image. The latest successful full image build was Cloud Build
+`a2a4de39-7f2a-4acb-9327-555bd273aca5`: 11m32.8s Cloud Build wall clock,
+7m25.0s Docker build step, digest
+`sha256:8865cc4ebf707393315e38d574d10596ba1a25698d09b3f3a9a99488a752f58b`.
+This is an iteration-velocity improvement only; live provider/model execution,
+stopped-target scheduled/Run-now execution, cross-machine tools, usage
+accounting, migration cutover/rollback, recovery, and release cohorts remain
+open.

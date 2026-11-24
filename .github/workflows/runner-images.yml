@@ -15,6 +15,14 @@ on:
       - "functions/runnerCatalog.helpers.js"
   workflow_dispatch:
     inputs:
+      upstream_test_mode:
+        description: Upstream pi-web-ui validation mode for this image build
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - fast
       publish:
         description: Publish the gcp-runner compatibility tag as well as its immutable revision tag
         required: true
@@ -81,9 +89,14 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PUBLISH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          UPSTREAM_TEST_MODE: ${{ github.event_name == 'pull_request' && 'fast' || (github.event_name == 'workflow_dispatch' && inputs.upstream_test_mode || 'full') }}
         run: |
           wall_start_epoch=$(date +%s)
           wall_start_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$PUBLISH" = "true" ] && [ "$UPSTREAM_TEST_MODE" != "full" ]; then
+            echo "::error::Published runner images require UPSTREAM_TEST_MODE=full"
+            exit 1
+          fi
           if [ "$EVENT_NAME" = "pull_request" ]; then
             source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
           else
@@ -95,7 +108,7 @@ jobs:
             --config session-runner/cloudbuild.gcp-runner.yaml \
             --format='value(id)' \
             --project pi-agents-cloud \
-            --substitutions="_IMAGE=$image")
+            --substitutions="_IMAGE=$image,_UPSTREAM_TEST_MODE=$UPSTREAM_TEST_MODE")
           if [ -z "$build_id" ]; then
             echo "::error::Cloud Build submission did not return a build ID"
             exit 1
@@ -147,14 +160,15 @@ jobs:
             process.stdout.write([format(cloudBuildSeconds), format(dockerSeconds)].join("\t"));
           ' "$timing_json")
           read -r cloud_build_elapsed docker_elapsed <<< "$timing_values"
-          echo "image=$image digest=$digest source=$GITHUB_SHA build=$build_url"
-          echo "build wall clock: Cloud Build=$cloud_build_elapsed, Docker step=$docker_elapsed, GitHub step=${workflow_elapsed_seconds}s (started $wall_start_iso)"
+          echo "image=$image digest=$digest source=$GITHUB_SHA build=$build_url upstream_test_mode=$UPSTREAM_TEST_MODE"
+          echo "build wall clock: Cloud Build=$cloud_build_elapsed, Docker step=$docker_elapsed, GitHub step=${workflow_elapsed_seconds}s (started $wall_start_iso) upstream_test_mode=$UPSTREAM_TEST_MODE"
           {
             echo "### Runner image: gcp-runner"
             echo "- Cloud Build: $build_url"
             echo "- Image: \`$image\`"
             echo "- Digest: \`$digest\`"
             echo "- Source: \`$GITHUB_SHA\`"
+            echo "- Upstream test mode: \`$UPSTREAM_TEST_MODE\`"
             echo "- Cloud Build wall clock: \`$cloud_build_elapsed\`"
             echo "- Docker build step wall clock: \`$docker_elapsed\`"
             echo "- GitHub Actions build-step wall clock: \`${workflow_elapsed_seconds}s\`"

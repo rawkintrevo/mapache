@@ -40,8 +40,12 @@ firebase deploy --only functions --project pi-agents-cloud
 gcloud builds submit session-runner --config session-runner/cloudbuild.gcp-runner.yaml --project pi-agents-cloud
 ```
 
-Runner image builds default to the full upstream `pi-web-ui` test suite. For faster
-iteration, an explicitly tagged preview build may set `_UPSTREAM_TEST_MODE=fast`:
+Runner image builds on pull requests use the fast upstream mode so normal iteration
+does not wait for the full upstream `pi-web-ui` test suite. Fast mode still runs
+upstream typecheck, production build, Docker construction, and the Cloud Build
+runner smoke test. Main pushes and manual runs default to the full upstream suite;
+the manual workflow input may select `fast` for an unpublishable development build.
+An equivalent explicitly tagged preview build may set `_UPSTREAM_TEST_MODE=fast`:
 
 ```bash
 gcloud builds submit session-runner \
@@ -50,10 +54,10 @@ gcloud builds submit session-runner \
   --substitutions=_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-pr-<sha>-fast,_UPSTREAM_TEST_MODE=fast
 ```
 
-Fast mode still runs upstream typecheck, production build, Docker construction, and
-the Cloud Build runner smoke test, but skips upstream `npm test`. It never publishes
-the runtime cache and must not be promoted to a production revision until a normal
-full-mode build passes. Use the default substitution for release or rollout evidence.
+Fast mode skips upstream `npm test`, never publishes the runtime cache, and must not
+be promoted to a production revision until a normal full-mode build passes. The
+GitHub workflow rejects publishing a fast build. Use the default substitution for
+release or rollout evidence.
 
 Workspace-request OOM recovery is a Functions-only change. Deploy `api`,
 `provisionAutomationRun`, `cleanupAutomationRun`,
