@@ -10,6 +10,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation and
 - Commit `1818c9d` closes the VM automation-agent admission gap: VM bootstrap injects the Functions-owned token/API URLs, and token/API admission joins the nested VM session with its separate credential record while fencing generation, boot ID, lease, and explicit API admission.
 - A live probe against `vm-proof-605` minted a token from the deployed `automationAgentToken` revision and received `200` from `/api/agent/workspace-requests/targets`; the temporary API admission was restored to `false`.
 - The same live VM controller path reached `/workspace/models` with the signed browser token plus shutdown-token header and returned `1,698` catalog entries. The fixture has no selected provider credentials, so entries are unavailable and no model turn was attempted.
+- This boundary is now reproducible with `node scripts/vm-automation-agent-proof.mjs`; the live report is sanitized at `artifacts/qa/vm-automation-agent/proof.json` and confirms temporary admission restoration.
 - Rough overall estimate: **75%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 

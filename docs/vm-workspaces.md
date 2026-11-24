@@ -554,6 +554,15 @@ API URLs. Token minting joins the nested VM session with its separate
 credential record and validates the current generation, boot ID, lease, and
 explicit API admission; it does not treat a legacy Cloud Run session record as
 the VM authority.
+The reproducible synthetic-fixture proof is `node scripts/vm-automation-agent-proof.mjs`.
+It temporarily admits only
+`vm-proof-605`, verifies token claims, the authenticated agent target route,
+and the runner model catalog through the signed gateway/shutdown-token path,
+then restores `apiEnabled=false`. The proof never submits a model prompt or
+prints credentials; its sanitized report is written under
+`artifacts/qa/vm-automation-agent/`. A zero available-model count means the
+fixture lacks selected provider credentials and is not evidence of provider
+execution.
 `functions/vmUsage.service.js` writes one operation-keyed ledger entry when a
 VM pause/start/replace transition finishes. The entry accrues active runtime
 from the runner's `runtimeStartedAt` independently from retained-disk
