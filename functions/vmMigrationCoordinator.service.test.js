@@ -360,7 +360,14 @@ test("authority switch atomically hides the legacy source and exposes the verifi
     assert.equal((await db.doc(`vmRuntimes_v2/${workspaceId}`).get()).get("apiEnabled"), true);
     assert.equal((await db.doc(`vmMigrationFences_v2/${workspaceId}`).get()).get("authority"), "destination");
     assert.equal((await db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`).get()).get("phase"), "authority-switched");
-    assert.deepEqual(await coordinator.switchAuthority(input), switched);
+    assert.equal(switched.nextAction, "reconcile-source");
+    const reconciled = await coordinator.reconcileSource(input);
+    assert.equal(reconciled.sourceReconciledAtMs, 99);
+    assert.equal(reconciled.nextAction, null);
+    assert.equal(reconciled.recoveryAction.includes("Retain the legacy source"), true);
+    assert.equal((await db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`).get()).get("sourceReconciliation.state"), "verified");
+    assert.deepEqual(await coordinator.reconcileSource(input), reconciled);
+    assert.deepEqual(await coordinator.switchAuthority(input), reconciled);
   } finally {
     await app.delete();
   }

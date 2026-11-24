@@ -1188,8 +1188,20 @@ hidden destination registry, records the destination authority on the fence,
 and advances the operation to `authority-switched`. It never deletes the source
 workspace, source disk or legacy records. A destination that was already
 exposed, a changed source generation, or a mismatched operation fails closed.
-The production migration workflow has not invoked this action; post-switch
-rollback and complete source reconciliation remain separate gates.
+The production migration workflow has not invoked this action. After a
+successful switch, source reconciliation is a separate read-and-record action
+and requires its own confirmation:
+
+```bash
+node scripts/vm-migration-reconcile-source.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \
+  --confirm source-reconciliation
+```
+
+It rechecks the retained source's fenced Firestore/Storage scope and legacy
+Cloud Run/Storage provider observations, records only bounded digests and
+counts, and never deletes the source. Post-write rollback still requires a
+verified reverse-import receipt and stopped destination writers.
 
 The coordinator records a `quiesced` receipt only when the exact operation
 owns both fences and the source scope still matches the reservation. It

@@ -107,7 +107,10 @@ function createVmMigrationCoordinator({
         validation.reservedAtMs ? "prepare-validation-clone" : "reserve-validation-boot") : null;
     const destinationCleanupAction = record.phase === "disk-import-verified" && validation.cleanedAtMs !== undefined &&
       record.destinationCleanup?.cleanedAtMs === undefined ? "cleanup-imported-disk" : null;
-    const nextAction = destinationCleanupAction || validationAction || STATUS_ACTIONS[record.phase] || null;
+    const sourceReconciliationAction = record.phase === "authority-switched" && !record.sourceReconciliation ?
+      "reconcile-source" : null;
+    const phaseAction = record.phase === "authority-switched" ? sourceReconciliationAction : STATUS_ACTIONS[record.phase] || null;
+    const nextAction = destinationCleanupAction || validationAction || phaseAction;
     const blockers = Array.isArray(record.drainBlockers) ? [...record.drainBlockers] : [];
     let recoveryAction = "Review the migration status and retain the source before retrying.";
     if (record.phase === "aborted") recoveryAction = "Start a new migration after a fresh read-only preflight.";
@@ -116,6 +119,8 @@ function createVmMigrationCoordinator({
       recoveryAction = "Complete validation boot and ID-checked cleanup before cutover review.";
     } else if (destinationCleanupAction) {
       recoveryAction = "Delete the exact imported disk through the ownership-checked cleanup action before abort or cutover review.";
+    } else if (record.sourceReconciliation) {
+      recoveryAction = "Retain the legacy source through the rollback window; do not delete it from this migration action.";
     } else if (nextAction) recoveryAction = `Retry the ${nextAction} action after rechecking the recorded source evidence.`;
     return {workspaceId: record.workspaceId, operationId: record.operationId, phase: record.phase,
       sourceGeneration: record.sourceGeneration, reservedAtMs: record.reservedAtMs, releasedAtMs: record.releasedAtMs ?? null,
@@ -132,6 +137,7 @@ function createVmMigrationCoordinator({
       validationCleanedAtMs: record.validation?.cleanedAtMs ?? null,
       destinationDiskCleanedAtMs: record.destinationCleanup?.cleanedAtMs ?? null,
       authoritySwitchedAtMs: record.authoritySwitch?.switchedAtMs ?? null,
+      sourceReconciledAtMs: record.sourceReconciliation?.reconciledAtMs ?? null,
       authority: record.phase === "authority-switched" ? "destination" : "legacy",
       nextAction, blockers, recoveryAction, sourceRetained: true,
       readyForCutover: false};
@@ -382,6 +388,24 @@ function createVmMigrationCoordinator({
     });
     if (!matchesQuiesce(current) || !DIGEST.test(current.record.diskImport?.receiptSha256 || "")) {
       throw httpError(409, "vm_migration_validation_source_changed");
+    }
+    return current;
+  }
+
+  async function readSourceReconciliationState(transaction, input, references) {
+    const current = await readFencedSource(transaction, input, references, {
+      phases: ["authority-switched"], completed: [], invalidPhase: "vm_migration_source_reconciliation_phase_invalid",
+      allowedBlockers: ["destination_registry_exists"],
+    });
+    const workspace = current.observation.workspace || {};
+    const destination = await transaction.get(db.collection("vmRuntimes_v2").doc(input.workspaceId));
+    const destinationData = destination.data() || {};
+    if (workspace.migrationAuthority !== DESTINATION_AUTHORITY || workspace.migrationOperationId !== input.operationId ||
+        workspace.agentRuntimeAuthorityState !== "released" || workspace.agentRuntimeBootInstanceId ||
+        !destination.exists || destinationData.ownerUid !== input.ownerUid ||
+        destinationData.migrationAuthority !== DESTINATION_AUTHORITY || destinationData.migrationOperationId !== input.operationId ||
+        destinationData.backend !== "compute-engine" || destinationData.apiEnabled !== true || destinationData.state !== "active") {
+      throw httpError(409, "vm_migration_source_reconciliation_authority_changed");
     }
     return current;
   }
@@ -731,6 +755,45 @@ function createVmMigrationCoordinator({
     });
   }
 
+  async function reconcileSource(input) {
+    const references = refs(input);
+    if (!inspectCompute || !inspectStorage || !await authorize(input, "reconcile-source")) {
+      throw httpError(409, "vm_migration_source_reconciliation_unverified");
+    }
+    const existing = await references.operation.get();
+    if (existing.exists) {
+      const existingRecord = existing.data();
+      requireOwner(existingRecord, input);
+      if (existingRecord.sourceReconciliation) return status(existingRecord);
+    }
+    const read = transaction => readSourceReconciliationState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    if (before.record.sourceReconciliation) return status(before.record);
+    const {providerSha256, discoverySha256, storageSha256} = await readProviders(input, before.observation);
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.sourceReconciliation) return status(current.record);
+      if (before.observation.sourceObservationSha256 !== current.observation.sourceObservationSha256 ||
+          before.authorityStamps !== current.authorityStamps) {
+        throw httpError(409, "vm_migration_source_reconciliation_stale");
+      }
+      const reconciledAtMs = now();
+      const sourceReconciliation = {
+        version: 1,
+        state: "verified",
+        reconciledAtMs,
+        sourceGeneration: current.record.sourceGeneration,
+        observedSessions: current.observation.sessions.length,
+        providerSha256,
+        discoverySha256,
+        storageSha256,
+        sourceObservationSha256: current.observation.sourceObservationSha256,
+      };
+      transaction.update(references.operation, {sourceReconciliation, updatedAtMs: reconciledAtMs});
+      return status({...current.record, sourceReconciliation});
+    });
+  }
+
   async function getCapturedPrefix(input) {
     const references = refs(input);
     if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
@@ -814,7 +877,7 @@ function createVmMigrationCoordinator({
   }
   return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport,
     reserveValidationBoot, prepareValidationClone, startValidationBoot, cleanupValidationBoot, cleanupImportedDisk,
-    reviewCutoverGates, switchAuthority, abort};
+    reviewCutoverGates, switchAuthority, reconcileSource, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};
