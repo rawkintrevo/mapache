@@ -9,6 +9,7 @@ const {
 function createFakeDependencies() {
   const users = new Map();
   const workspaces = new Map();
+  const fences = new Map();
   function docFor(map, id, nested = null) {
     const ref = {
       id,
@@ -40,6 +41,12 @@ function createFakeDependencies() {
     };
   }
   const db = {
+    runTransaction: async (callback) => callback({
+      get: (ref) => ref.get(),
+      set: (ref, value, options = {}) => ref.set(value, options),
+      update: (ref, value) => ref.update(value),
+      delete: (ref) => ref.delete(),
+    }),
     collection(name) {
       if (name === "users") return {doc(uid) {
         return {collection(privateName) {
@@ -60,10 +67,11 @@ function createFakeDependencies() {
           }};
         },
       };
+      if (name === "vmMigrationFences_v2") return {doc(id) { return docFor(fences, id); }};
       throw new Error(`unexpected collection ${name}`);
     },
   };
-  return {db, now: () => "2026-08-19T00:00:00.000Z", users, workspaces};
+  return {db, now: () => "2026-08-19T00:00:00.000Z", users, workspaces, fences};
 }
 
 function metadata(connectionId, email, services = ["gmail"]) {
@@ -107,6 +115,15 @@ function metadata(connectionId, email, services = ["gmail"]) {
   await service.bindGoogleWorkspaceConnection("user-a", "workspace-b", {
     connectionId: "connection-b", enabledServices: ["gmail"],
   });
+  dependencies.fences.set("workspace-a", {operationId: "migration-a"});
+  await assert.rejects(service.bindGoogleWorkspaceConnection("user-a", "workspace-a", {
+    connectionId: "connection-b", enabledServices: ["gmail"],
+  }), (error) => error.publicMessage === "workspace_vm_migration_active");
+  await assert.rejects(service.unbindGoogleWorkspaceConnection("user-a", "workspace-a"),
+    (error) => error.publicMessage === "workspace_vm_migration_active");
+  await assert.rejects(service.deleteGoogleConnection("user-a", "connection-a"),
+    (error) => error.publicMessage === "workspace_vm_migration_active");
+  dependencies.fences.delete("workspace-a");
   assert.deepStrictEqual(await service.getGoogleWorkspaceBinding("user-a", "workspace-a"), {
     connectionId: "connection-a", enabledServices: ["gmail"],
   });

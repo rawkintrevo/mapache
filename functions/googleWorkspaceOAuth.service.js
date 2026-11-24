@@ -47,6 +47,9 @@ function createGoogleWorkspaceOAuthService(dependencies = {}) {
 
 async function startGoogleConnection(uid, workspaceId, payload = {}, dependencies) {
   if (typeof dependencies.requireWorkspace === "function") await dependencies.requireWorkspace(uid, workspaceId);
+  if (typeof dependencies.connections.assertWorkspaceMigrationAdmission === "function") {
+    await dependencies.connections.assertWorkspaceMigrationAdmission(uid, workspaceId);
+  }
   const selection = normalizeSelection(payload);
   const reconnect = payload.reconnect === true;
   requireConfigured(dependencies.config, "start");
@@ -83,6 +86,9 @@ async function completeGoogleConnection(query = {}, dependencies) {
   if (query.error) return {status: 400, html: callbackPage(false, "Google authorization was not completed.")};
   if (!stateToken || !code) throw httpError(400, "invalid_google_oauth_callback");
   const context = await dependencies.state.consume(stateToken);
+  if (typeof dependencies.connections.assertWorkspaceMigrationAdmission === "function") {
+    await dependencies.connections.assertWorkspaceMigrationAdmission(context.uid, context.workspaceId);
+  }
   requireConfigured(dependencies.config, "callback");
   const tokenData = await exchangeAuthorizationCode(code, dependencies);
   const identity = await fetchGoogleIdentity(tokenData.access_token, dependencies.fetchImpl);

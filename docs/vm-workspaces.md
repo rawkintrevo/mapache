@@ -1083,6 +1083,15 @@ The rules now have the required cross-service Firestore access in production.
 Other GCS writers require their own quiesce and access revocation checks.
 [Cloud Storage resumable uploads](https://docs.cloud.google.com/storage/docs/resumable-uploads)
 
+Google Workspace OAuth start/callback and workspace binding changes now use the
+same transactional migration-fence admission check. A fenced workspace cannot
+bind, unbind, or be implicitly unbound by deleting its connection. OAuth
+callbacks check again before writing the connection, then the binding
+transaction checks the fence at the point of the workspace write. This prevents
+an integration binding callback or cleanup request from publishing after
+quiesce; global connection records remain owner-scoped and reusable by other
+unfenced workspaces.
+
 Legacy shared-storage reconciliation in
 `functions/workspaceStorageMigration.service.js` checks the workspace fence
 at entry and in the transactions that publish a descriptor or error.
