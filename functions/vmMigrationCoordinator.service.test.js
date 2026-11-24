@@ -331,6 +331,14 @@ test("authority switch atomically hides the legacy source and exposes the verifi
         discovery: {scannedRegionsClear: true, evidenceSha256: "c".repeat(64)}}),
       inspectStorage: async () => ({stable: true, firstSha256: "d".repeat(64), secondSha256: "d".repeat(64), blockers: []}),
       inspectDestinationRuntime: async () => runtimeEvidence,
+      inspectDestinationRollback: async () => ({schemaVersion: 1, workspaceId, ownerUid,
+        migrationOperationId: input.operationId, destinationGeneration: 2,
+        diskId: destination.diskId, diskName: destination.diskName, sessionId,
+        runtime: {state: "stopped", instanceAbsent: true,
+          disk: {diskId: destination.diskId, diskName: destination.diskName, attached: false}},
+        registry: {apiEnabled: false, state: "stopping", generation: 2, currentSessionId: sessionId},
+        session: {state: "stopping", generation: 2},
+        route: {enabled: false, generation: 2, sessionId}}),
       now: () => 99,
     });
     await coordinator.reserve(input);
@@ -368,6 +376,39 @@ test("authority switch atomically hides the legacy source and exposes the verifi
     assert.equal((await db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`).get()).get("sourceReconciliation.state"), "verified");
     assert.deepEqual(await coordinator.reconcileSource(input), reconciled);
     assert.deepEqual(await coordinator.switchAuthority(input), reconciled);
+
+    const draining = await coordinator.beginRollback(input);
+    assert.equal(draining.phase, "rollback-draining");
+    assert.equal(draining.nextAction, "complete-rollback");
+    assert.equal((await source.get()).get("migrationAuthority"), "compute-engine");
+    assert.equal((await destinationRef.get()).get("apiEnabled"), false);
+    assert.equal((await db.doc(`vmGatewayRoutes_v2/${gatewayHost}`).get()).get("enabled"), false);
+    const sourceObservationSha256 = (await createVmMigrationPreflight({db})({workspaceId, ownerUid})).sourceObservationSha256;
+    await assert.rejects(coordinator.completeRollback({...input, reverseImport: {
+      version: 1, state: "verified", format: "old-checkpoint-flip", operationId: input.operationId,
+      sourceGeneration: 7, destinationGeneration: 2, sha256: "e".repeat(64), sourceObservationSha256,
+    }}), {publicMessage: "vm_migration_reverse_import_unverified"});
+    await assert.rejects(coordinator.completeRollback({...input, reverseImport: {
+      version: 1, state: "verified", format: "mapache-reverse-import-v1", operationId: input.operationId,
+      sourceGeneration: 7, destinationGeneration: 2, sha256: "e".repeat(64), sourceObservationSha256: "f".repeat(64),
+    }}), {publicMessage: "vm_migration_reverse_import_stale"});
+    const rolledBack = await coordinator.completeRollback({...input, reverseImport: {
+      version: 1, state: "verified", format: "mapache-reverse-import-v1", operationId: input.operationId,
+      sourceGeneration: 7, destinationGeneration: 2, sha256: "e".repeat(64), sourceObservationSha256,
+    }});
+    assert.equal(rolledBack.phase, "rolled-back");
+    assert.equal(rolledBack.authority, "legacy");
+    assert.equal(rolledBack.rollbackState, "source-restored");
+    assert.equal(rolledBack.nextAction, null);
+    assert.equal((await source.get()).get("migrationAuthority"), "legacy");
+    assert.equal((await destinationRef.get()).get("state"), "stopped");
+    assert.equal((await destinationRef.get()).get("migrationAuthority"), "legacy");
+    assert.equal((await db.doc(`vmMigrationFences_v2/${workspaceId}`).get()).exists, false);
+    assert.equal((await db.doc(`vmMigrationStorageFences_v2/${bucket}/owners/${ownerUid}/prefixes/staging`).get()).exists, false);
+    assert.deepEqual(await coordinator.completeRollback({...input, reverseImport: {
+      version: 1, state: "verified", format: "mapache-reverse-import-v1", operationId: input.operationId,
+      sourceGeneration: 7, destinationGeneration: 2, sha256: "e".repeat(64), sourceObservationSha256,
+    }}), rolledBack);
   } finally {
     await app.delete();
   }

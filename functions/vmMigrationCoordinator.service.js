@@ -24,6 +24,7 @@ const DRAIN_AFTER_FREEZE = new Set([
 const ALIAS_LIMIT = 500;
 const DIGEST = /^[a-f0-9]{64}$/;
 const DISK_ID = /^[1-9][0-9]{0,19}$/;
+const REVERSE_IMPORT_FORMAT = "mapache-reverse-import-v1";
 const RUNNER_IMAGE = /^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/;
 const CAPTURE_COMPONENTS = new Set(["agent", "browser", "home", "workspace"]);
 const STATUS_ACTIONS = Object.freeze({
@@ -32,6 +33,8 @@ const STATUS_ACTIONS = Object.freeze({
   "prefix-captured": "verify-disk-import",
   "disk-import-verified": "review-cutover-gates",
   "authority-switched": "reconcile-source",
+  "rollback-draining": "complete-rollback",
+  "rolled-back": null,
   aborted: null,
 });
 const versionStamp = ({updateTime}) => [updateTime.seconds, updateTime.nanoseconds];
@@ -88,9 +91,63 @@ function verifyDiskReceipt(evidence, record) {
     sourcePlanSha256: receipt.sourcePlanSha256, components: capture.components, selectedEntries: receipt.selectedEntries};
 }
 
+function verifyReverseImportReceipt(receipt, record) {
+  const destinationGeneration = record.importDestination?.generation;
+  if (!receipt || receipt.version !== 1 || receipt.state !== "verified" ||
+      receipt.format !== REVERSE_IMPORT_FORMAT || receipt.operationId !== record.operationId ||
+      receipt.sourceGeneration !== record.sourceGeneration || receipt.destinationGeneration !== destinationGeneration ||
+      !DIGEST.test(receipt.sha256 || "") || !DIGEST.test(receipt.sourceObservationSha256 || "")) {
+    throw httpError(409, "vm_migration_reverse_import_unverified");
+  }
+  return {
+    version: 1,
+    state: "verified",
+    format: REVERSE_IMPORT_FORMAT,
+    operationId: record.operationId,
+    sourceGeneration: record.sourceGeneration,
+    destinationGeneration,
+    sha256: receipt.sha256,
+    sourceObservationSha256: receipt.sourceObservationSha256,
+  };
+}
+
+function verifyDestinationRollbackEvidence(evidence, record) {
+  const destination = record.importDestination;
+  const runtime = evidence?.runtime;
+  const registry = evidence?.registry;
+  const session = evidence?.session;
+  const route = evidence?.route;
+  if (!destination || evidence?.schemaVersion !== 1 || evidence.workspaceId !== record.workspaceId ||
+      evidence.ownerUid !== record.ownerUid || evidence.migrationOperationId !== record.operationId ||
+      evidence.destinationGeneration !== destination.generation || evidence.diskId !== destination.diskId ||
+      evidence.diskName !== destination.diskName || runtime?.state !== "stopped" ||
+      runtime.instanceAbsent !== true || runtime.disk?.diskId !== destination.diskId ||
+      runtime.disk?.diskName !== destination.diskName || runtime.disk?.attached !== false ||
+      registry?.apiEnabled !== false || !["stopping", "stopped"].includes(registry.state) ||
+      registry.generation !== destination.generation || registry.currentSessionId !== evidence.sessionId ||
+      session?.state !== registry.state || session.generation !== destination.generation ||
+      route?.enabled !== false || route.generation !== destination.generation ||
+      route.sessionId !== evidence.sessionId) {
+    throw httpError(409, "vm_migration_destination_writers_not_stopped");
+  }
+  return {
+    version: 1,
+    state: "stopped",
+    workspaceId: record.workspaceId,
+    ownerUid: record.ownerUid,
+    migrationOperationId: record.operationId,
+    destinationGeneration: destination.generation,
+    diskId: destination.diskId,
+    diskName: destination.diskName,
+    sessionId: evidence.sessionId,
+    instanceAbsent: true,
+    diskAttached: false,
+  };
+}
+
 function createVmMigrationCoordinator({
   db, authorize = async () => false, inspectCompute, inspectStorage, inspectDestinationDisk, readDiskImportEvidence,
-  inspectDestinationRuntime, deleteImportedDisk, ensureValidationClone, startValidationVm, deleteValidationResources,
+  inspectDestinationRuntime, inspectDestinationRollback, deleteImportedDisk, ensureValidationClone, startValidationVm, deleteValidationResources,
   defaultBucket = DEFAULT_BUCKET, now = Date.now,
 }) {
   function refs(input) {
@@ -114,6 +171,12 @@ function createVmMigrationCoordinator({
     const blockers = Array.isArray(record.drainBlockers) ? [...record.drainBlockers] : [];
     let recoveryAction = "Review the migration status and retain the source before retrying.";
     if (record.phase === "aborted") recoveryAction = "Start a new migration after a fresh read-only preflight.";
+    else if (record.phase === "rollback-draining") {
+      recoveryAction = "Keep destination access disabled, confirm the exact VM is stopped and reverse-import the current destination state before completing rollback.";
+    }
+    else if (record.phase === "rolled-back") {
+      recoveryAction = "Legacy authority is restored; retain the detached VM disk and reverse-import receipt through the rollback window.";
+    }
     else if (blockers.length) recoveryAction = "Drain the listed legacy writers, then retry the quiesce action.";
     else if (record.phase === "disk-import-verified" && validation.cleanedAtMs === undefined) {
       recoveryAction = "Complete validation boot and ID-checked cleanup before cutover review.";
@@ -138,7 +201,10 @@ function createVmMigrationCoordinator({
       destinationDiskCleanedAtMs: record.destinationCleanup?.cleanedAtMs ?? null,
       authoritySwitchedAtMs: record.authoritySwitch?.switchedAtMs ?? null,
       sourceReconciledAtMs: record.sourceReconciliation?.reconciledAtMs ?? null,
-      authority: record.phase === "authority-switched" ? "destination" : "legacy",
+      rollbackStartedAtMs: record.rollback?.startedAtMs ?? null,
+      rollbackCompletedAtMs: record.rollback?.completedAtMs ?? null,
+      rollbackState: record.rollback?.state ?? null,
+      authority: ["authority-switched", "rollback-draining"].includes(record.phase) ? "destination" : "legacy",
       nextAction, blockers, recoveryAction, sourceRetained: true,
       readyForCutover: false};
   }
@@ -406,6 +472,20 @@ function createVmMigrationCoordinator({
         destinationData.migrationAuthority !== DESTINATION_AUTHORITY || destinationData.migrationOperationId !== input.operationId ||
         destinationData.backend !== "compute-engine" || destinationData.apiEnabled !== true || destinationData.state !== "active") {
       throw httpError(409, "vm_migration_source_reconciliation_authority_changed");
+    }
+    return current;
+  }
+
+  async function readRollbackState(transaction, input, references) {
+    const current = await readFencedSource(transaction, input, references, {
+      phases: ["rollback-draining"], completed: [], invalidPhase: "vm_migration_rollback_phase_invalid",
+      allowedBlockers: ["destination_registry_exists"],
+    });
+    const workspace = current.observation.workspace || {};
+    if (!current.record.sourceReconciliation || workspace.migrationAuthority !== DESTINATION_AUTHORITY ||
+        workspace.migrationOperationId !== input.operationId || workspace.agentRuntimeAuthorityState !== "released" ||
+        workspace.agentRuntimeBootInstanceId) {
+      throw httpError(409, "vm_migration_rollback_authority_changed");
     }
     return current;
   }
@@ -794,6 +874,152 @@ function createVmMigrationCoordinator({
     });
   }
 
+  async function beginRollback(input) {
+    const references = refs(input);
+    if (!await authorize(input, "begin-rollback")) throw httpError(409, "vm_migration_rollback_unverified");
+    const existing = await references.operation.get();
+    if (existing.exists) {
+      const existingRecord = existing.data();
+      requireOwner(existingRecord, input);
+      if (["rollback-draining", "rolled-back"].includes(existingRecord.phase)) return status(existingRecord);
+    }
+    const read = transaction => readSourceReconciliationState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    if (!before.record.sourceReconciliation) throw httpError(409, "vm_migration_source_reconciliation_required");
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (["rollback-draining", "rolled-back"].includes(current.record.phase)) return status(current.record);
+      if (before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_rollback_stale");
+
+      const destinationRef = db.collection("vmRuntimes_v2").doc(input.workspaceId);
+      const destination = await transaction.get(destinationRef);
+      const destinationData = destination.data() || {};
+      const sessionId = destinationData.currentSessionId;
+      const sessionRef = destinationRef.collection("sessions").doc(sessionId || "invalid");
+      const routeRef = db.collection("vmGatewayRoutes_v2").doc(destinationData.gatewayHost || "invalid");
+      const [session, route] = await Promise.all([transaction.get(sessionRef), transaction.get(routeRef)]);
+      const sessionData = session.data() || {};
+      const routeData = route.data() || {};
+      if (!destination.exists || destinationData.ownerUid !== input.ownerUid ||
+          destinationData.backend !== COMPUTE_ENGINE_BACKEND || destinationData.apiEnabled !== true ||
+          destinationData.migrationAuthority !== DESTINATION_AUTHORITY || destinationData.migrationOperationId !== input.operationId ||
+          destinationData.generation !== current.record.importDestination?.generation || destinationData.state !== "active" ||
+          !sessionId || sessionData.ownerUid !== input.ownerUid || sessionData.generation !== destinationData.generation ||
+          sessionData.state !== "active" || routeData.workspaceId !== input.workspaceId ||
+          routeData.ownerUid !== input.ownerUid || routeData.enabled !== true ||
+          routeData.generation !== destinationData.generation || routeData.sessionId !== sessionId) {
+        throw httpError(409, "vm_migration_destination_authority_changed");
+      }
+
+      const startedAtMs = now();
+      const rollback = {version: 1, state: "draining-destination", startedAtMs,
+        sourceGeneration: current.record.sourceGeneration, destinationGeneration: destinationData.generation,
+        destinationSessionId: sessionId};
+      transaction.update(destinationRef, {apiEnabled: false, lifecycleEnabled: false, state: "stopping", rollbackStartedAtMs: startedAtMs});
+      transaction.update(sessionRef, {state: "stopping", rollbackStartedAtMs: startedAtMs});
+      transaction.update(routeRef, {enabled: false, rollbackStartedAtMs: startedAtMs});
+      transaction.update(references.fence, {phase: "rollback-draining", authority: "destination", rollbackStartedAtMs: startedAtMs});
+      transaction.update(references.operation, {phase: "rollback-draining", rollback, updatedAtMs: startedAtMs});
+      return status({...current.record, phase: "rollback-draining", rollback});
+    });
+  }
+
+  async function completeRollback(input) {
+    const references = refs(input);
+    if (!inspectDestinationRollback || !await authorize(input, "complete-rollback")) {
+      throw httpError(409, "vm_migration_rollback_unverified");
+    }
+    const existing = await references.operation.get();
+    if (existing.exists) {
+      const existingRecord = existing.data();
+      requireOwner(existingRecord, input);
+      if (existingRecord.phase === "rolled-back") return status(existingRecord);
+    }
+    const read = transaction => readRollbackState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    const reverseImport = verifyReverseImportReceipt(input.reverseImport, before.record);
+    let destinationEvidence;
+    try {
+      destinationEvidence = verifyDestinationRollbackEvidence(
+          await inspectDestinationRollback({workspaceId: input.workspaceId, ownerUid: input.ownerUid,
+            operationId: input.operationId, record: before.record}), before.record);
+    } catch (error) {
+      if (error?.publicMessage === "vm_migration_destination_writers_not_stopped") throw error;
+      throw httpError(409, "vm_migration_destination_writers_not_stopped");
+    }
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.phase === "rolled-back") return status(current.record);
+      if (before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_rollback_stale");
+      if (reverseImport.sourceObservationSha256 !== current.observation.sourceObservationSha256) {
+        throw httpError(409, "vm_migration_reverse_import_stale");
+      }
+
+      const destinationRef = db.collection("vmRuntimes_v2").doc(input.workspaceId);
+      const destination = await transaction.get(destinationRef);
+      const destinationData = destination.data() || {};
+      const sessionId = destinationData.currentSessionId;
+      const sessionRef = destinationRef.collection("sessions").doc(sessionId || "invalid");
+      const routeRef = db.collection("vmGatewayRoutes_v2").doc(destinationData.gatewayHost || "invalid");
+      const [session, route] = await Promise.all([transaction.get(sessionRef), transaction.get(routeRef)]);
+      const sessionData = session.data() || {};
+      const routeData = route.data() || {};
+      if (!destination.exists || destinationData.ownerUid !== input.ownerUid ||
+          destinationData.backend !== COMPUTE_ENGINE_BACKEND || destinationData.migrationOperationId !== input.operationId ||
+          destinationData.generation !== current.record.importDestination?.generation ||
+          destinationData.apiEnabled !== false || !["stopping", "stopped"].includes(destinationData.state) ||
+          sessionData.ownerUid !== input.ownerUid || sessionData.generation !== destinationData.generation ||
+          !["stopping", "stopped"].includes(sessionData.state) || routeData.workspaceId !== input.workspaceId ||
+          routeData.ownerUid !== input.ownerUid || routeData.enabled !== false ||
+          routeData.generation !== destinationData.generation || routeData.sessionId !== sessionId ||
+          sessionId !== destinationEvidence.sessionId) {
+        throw httpError(409, "vm_migration_destination_writers_changed");
+      }
+
+      const completedAtMs = now();
+      const rollback = {
+        version: 1,
+        state: "source-restored",
+        startedAtMs: current.record.rollback?.startedAtMs ?? null,
+        completedAtMs,
+        sourceGeneration: current.record.sourceGeneration,
+        destinationGeneration: destinationData.generation,
+        destinationSessionId: sessionId,
+        destinationDiskId: destinationEvidence.diskId,
+        destinationDiskRetained: true,
+        destinationWritersStopped: true,
+        destinationEvidence,
+        reverseImport,
+      };
+      transaction.update(references.source, {
+        migrationAuthority: "legacy",
+        migrationRollbackOperationId: input.operationId,
+        migrationRollbackAtMs: completedAtMs,
+        agentRuntimeAuthorityState: "released",
+        agentRuntimeSessionId: null,
+        agentRuntimeState: "stopped",
+        agentRuntimeBootInstanceId: null,
+      });
+      transaction.update(destinationRef, {
+        apiEnabled: false,
+        lifecycleEnabled: false,
+        state: "stopped",
+        migrationAuthority: "legacy",
+        migrationRollbackOperationId: input.operationId,
+        migrationRollbackAtMs: completedAtMs,
+        bootId: null,
+        leaseExpiresAt: 0,
+      });
+      transaction.update(sessionRef, {state: "stopped", bootId: null, leaseExpiresAt: 0,
+        migrationRollbackOperationId: input.operationId, migrationRollbackAtMs: completedAtMs});
+      transaction.update(routeRef, {enabled: false, migrationAuthority: "legacy", migrationRollbackAtMs: completedAtMs});
+      transaction.delete(references.fence);
+      transaction.delete(storageFenceRef(db, current.record.scope, input.ownerUid));
+      transaction.update(references.operation, {phase: "rolled-back", rollback, updatedAtMs: completedAtMs});
+      return status({...current.record, phase: "rolled-back", rollback});
+    });
+  }
+
   async function getCapturedPrefix(input) {
     const references = refs(input);
     if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
@@ -877,7 +1103,7 @@ function createVmMigrationCoordinator({
   }
   return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport,
     reserveValidationBoot, prepareValidationClone, startValidationBoot, cleanupValidationBoot, cleanupImportedDisk,
-    reviewCutoverGates, switchAuthority, reconcileSource, abort};
+    reviewCutoverGates, switchAuthority, reconcileSource, beginRollback, completeRollback, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

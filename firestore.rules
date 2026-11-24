@@ -73,6 +73,8 @@ service cloud.firestore {
         "migrationSourceGeneration",
         "migrationDestinationGeneration",
         "migrationCutoverAtMs",
+        "migrationRollbackOperationId",
+        "migrationRollbackAtMs",
         "syncWriterSessionId",
         "syncWriterLeaseId",
         "syncWriterLeaseUpdatedAt",

@@ -1201,7 +1201,47 @@ node scripts/vm-migration-reconcile-source.mjs --project pi-agents-cloud \
 It rechecks the retained source's fenced Firestore/Storage scope and legacy
 Cloud Run/Storage provider observations, records only bounded digests and
 counts, and never deletes the source. Post-write rollback still requires a
-verified reverse-import receipt and stopped destination writers.
+verified reverse-import receipt and stopped destination writers. The VM-specific
+rollback is a separate two-step operator action. First, it disables the
+destination registry and gateway route, marks the destination as stopping, and
+stops the exact operation-owned VM while retaining its disk:
+
+```bash
+node scripts/vm-migration-rollback.mjs begin \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm rollback-begin
+```
+
+After the current destination filesystem has been reverse-imported into the
+legacy source, create a bounded receipt from that verified maintenance action:
+
+```json
+{
+  "version": 1,
+  "state": "verified",
+  "format": "mapache-reverse-import-v1",
+  "operationId": "OPERATION_ID",
+  "sourceGeneration": 7,
+  "destinationGeneration": 2,
+  "sha256": "<reverse-import-content-sha256>",
+  "sourceObservationSha256": "<post-import-source-observation-sha256>"
+}
+```
+
+Complete the rollback only with that receipt:
+
+```bash
+node scripts/vm-migration-rollback.mjs complete \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm rollback-complete \
+  --receipt /secure/path/reverse-import.json
+```
+
+Completion rechecks the exact detached destination disk, disabled route and
+stopped registry/session, then atomically restores legacy authority and releases
+both migration fences. It retains the destination disk and records sanitized
+receipt evidence. Unsupported, stale, unbound, or pre-import receipts remain
+blocked; the command never deletes the source or destination disk.
 
 The coordinator records a `quiesced` receipt only when the exact operation
 owns both fences and the source scope still matches the reservation. It
@@ -1314,10 +1354,13 @@ generation, destination generation, and a content digest; an unsupported format,
 stale generation, or unbound receipt remains visibly blocked. Flipping back to
 an old checkpoint is never accepted. Sources and destination evidence remain
 through the rollback window. No source is deleted because an import job merely
-reported success. The contract is owned by
-`functions/workspaceMigrationCoordinator.service.js` and covered by its focused
-rollback tests; it is a rollback-evidence gate, not permission to switch VM
-authority.
+reported success. The generic contract is owned by
+`functions/workspaceMigrationCoordinator.service.js`; the VM-specific
+transaction and operator actions are owned by
+`functions/vmMigrationCoordinator.service.js` and
+`scripts/vm-migration-rollback.mjs`. Both are covered by focused rollback tests;
+the receipt remains an evidence gate, not permission to switch authority by
+itself.
 
 Backups are separate from retained storage. The selected initial policy is
 daily crash-consistent snapshots with a 14-day retention target, plus an
