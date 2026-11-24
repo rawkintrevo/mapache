@@ -42,10 +42,11 @@ async function verifyTreeEntry(root, entry) {
   }
 }
 
-async function inspectTree(root, entries, directories, complete) {
+async function inspectTree(root, entries, directories, complete, selectedTop) {
   const found = new Set();
   async function visit(relative) {
     for (const name of await fs.readdir(path.join(root, relative))) {
+      if (!relative && selectedTop && name !== selectedTop) continue;
       const child = relative ? `${relative}/${name}` : name;
       const target = path.join(root, child);
       if (directories.has(child)) {
@@ -60,6 +61,22 @@ async function inspectTree(root, entries, directories, complete) {
   }
   await visit('');
   if (complete && [...directories.keys(), ...entries.keys()].some(name => !found.has(name))) fail('import_tree_missing_entry');
+}
+
+export async function verifyImportSubtree(root, allEntries, top) {
+  const entries = new Map();
+  const directories = new Map();
+  for (const entry of allEntries) {
+    if (entry.path !== top && !entry.path.startsWith(top + '/')) continue;
+    if (entry.kind === 'directory') directories.set(entry.path, entry.mode);
+    else entries.set(entry.path, entry);
+  }
+  for (const name of [...entries.keys(), ...directories.keys()]) {
+    for (let parent = path.posix.dirname(name); parent !== '.'; parent = path.posix.dirname(parent)) {
+      if (!directories.has(parent)) directories.set(parent, 0o700);
+    }
+  }
+  await inspectTree(root, entries, directories, true, top);
 }
 async function copySlice({source, temporary, entry}) {
   const input = await fs.open(source, constants.O_RDONLY | constants.O_NOFOLLOW);

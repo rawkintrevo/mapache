@@ -1,0 +1,131 @@
+import * as fs from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
+import {assembleMergedImport} from './vm-import-merge.mjs';
+import {plainDirectory, publishRecord, readPlain, syncDirectory} from './vm-import-stage.mjs';
+import {verifyImportSubtree} from './vm-import-tree.mjs';
+
+const require = createRequire(import.meta.url);
+const {workspaceDiskName} = require('../../functions/runtimeProvider.helpers.js');
+const {DISK_MARKER_NAME, retainedDiskMarker} = require('../../session-runner/lib/retainedDiskStorage.js');
+const stageName = '.mapache-import-stage';
+const durableRoots = new Set(['home', 'workspace', 'agent', 'browser', 'uploads']);
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+const fail = code => { throw Error(code); };
+
+export async function verifyDiskMount(root, device) {
+  const unescape = field => field.replace(/\\([0-7]{3})/g, (_, number) => String.fromCharCode(parseInt(number, 8)));
+  const mounts = (await fs.readFile('/proc/self/mountinfo', 'utf8')).trim().split('\n').map(line => {
+    const [mount, filesystem] = line.split(' - ');
+    const [, , deviceNumber, base, target, options] = mount.split(' ');
+    const [type, source, superOptions] = filesystem.split(' ');
+    return {deviceNumber, base: unescape(base), target: unescape(target), options, type, source: unescape(source), superOptions};
+  });
+  const exact = mounts.filter(mount => mount.target === root);
+  const mount = exact[0];
+  if (exact.length !== 1 || mount.base !== '/' || mount.type !== 'ext4' ||
+      !mount.options.split(',').includes('rw') || !mount.superOptions.split(',').includes('rw') ||
+      mounts.some(item => item !== mount && (item.deviceNumber === mount.deviceNumber ||
+        item.target.startsWith(root + '/')))) fail('disk_import_mount_invalid');
+  const [mounted, expected] = await Promise.all([fs.stat(mount.source), fs.stat(device)]);
+  if (!mounted.isBlockDevice() || !expected.isBlockDevice() || mounted.rdev !== expected.rdev) fail('disk_import_device_mismatch');
+}
+
+async function readOptional(file, limit) {
+  try { return await readPlain(file, limit); }
+  catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+}
+
+function plannedRoots(entries) {
+  const roots = new Set();
+  for (const entry of entries) {
+    const [top, ...children] = entry.path.split('/');
+    if (!durableRoots.has(top) || (!children.length && entry.kind !== 'directory')) fail('disk_import_path_disallowed');
+    if (entry.kind === 'hardlink' && entry.target.split('/')[0] !== top) fail('disk_import_cross_root_hardlink');
+    roots.add(top);
+  }
+  return roots;
+}
+
+async function requireCapacity(root, entries) {
+  const stat = await fs.statfs(root, {bigint: true});
+  const block = stat.bsize;
+  let fileBlocks = 0n;
+  let entryCount = 0n;
+  for (const entry of entries) {
+    entryCount += BigInt(entry.path.split('/').length);
+    if (entry.kind === 'file') fileBlocks += (BigInt(entry.byteLength) + block - 1n) / block;
+  }
+  // Budget for both copies, metadata and write-ahead records. ENOSPC remains
+  // possible and keeps the import incomplete when the actual allocation fails.
+  if (stat.bavail < 2n * fileBlocks + 8n * entryCount + 128n ||
+      stat.ffree < 4n * entryCount + 32n) fail('disk_import_capacity_insufficient');
+}
+
+// Run on a maintenance host with the positively identified disk mounted and
+// exclusive writer access. The disk was initialized by its provisioning step.
+export async function importToRetainedDisk(config, {checkMount = verifyDiskMount, afterPublish} = {}) {
+  const {mountRoot, ownerUid, workspaceId, generation, operationId, sources, maxBytes} = config;
+  if (typeof mountRoot !== 'string' || !path.isAbsolute(mountRoot) || mountRoot === '/' ||
+      await fs.realpath(mountRoot) !== mountRoot || !Number.isSafeInteger(generation) || generation < 1 ||
+      ![ownerUid, workspaceId, operationId].every(value => typeof value === 'string' && value)) fail('disk_import_config_invalid');
+  const device = '/dev/disk/by-id/google-' + workspaceDiskName(workspaceId);
+  await checkMount(mountRoot, device);
+  const marker = JSON.parse(await readPlain(path.join(mountRoot, DISK_MARKER_NAME), 8192));
+  const expected = retainedDiskMarker({workspaceId, ownerUid, generation, operationId});
+  if (Object.entries(expected).some(([key, value]) => marker[key] !== value)) fail('disk_import_identity_mismatch');
+
+  const root = path.join(mountRoot, stageName);
+  const initialNames = await fs.readdir(mountRoot);
+  const stageExists = initialNames.includes(stageName);
+  if (stageExists) await plainDirectory(root);
+  const intentName = 'disk-import-intent.json';
+  const intentPath = path.join(root, intentName);
+  const intentBytes = await readOptional(intentPath, 8192);
+  const configSha256 = digest(JSON.stringify({device, ownerUid, workspaceId, generation, operationId, sources, maxBytes}));
+  let intent;
+  if (intentBytes) {
+    intent = JSON.parse(intentBytes);
+    if (intent.configSha256 !== configSha256) fail('disk_import_operation_changed');
+  } else {
+    const allowed = new Set([DISK_MARKER_NAME, 'lost+found', stageName]);
+    if (initialNames.some(name => !allowed.has(name))) fail('disk_import_destination_populated');
+    const merged = await assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes}, {
+      beforeStage: async ({document}) => {
+        plannedRoots(document.entries);
+        if (!stageExists) await requireCapacity(mountRoot, document.entries);
+      },
+    });
+    intent = {configSha256, sourcePlanSha256: merged.sourcePlanSha256};
+    await publishRecord(root, intentName, Buffer.from(JSON.stringify(intent)));
+  }
+  const planBytes = await readPlain(path.join(root, 'merge-plan.json'), 64 * 1024 * 1024);
+  if (digest(planBytes) !== intent.sourcePlanSha256) fail('disk_import_plan_changed');
+  const {entries} = JSON.parse(planBytes);
+  const roots = plannedRoots(entries);
+  const tree = path.join(root, 'tree');
+  await plainDirectory(tree);
+  const staged = new Set(await fs.readdir(tree));
+  const installed = new Set(await fs.readdir(mountRoot));
+  const allowed = new Set([DISK_MARKER_NAME, 'lost+found', stageName, ...roots]);
+  if ([...installed].some(name => !allowed.has(name)) ||
+      [...staged].some(name => !roots.has(name)) ||
+      [...roots].some(name => staged.has(name) === installed.has(name))) fail('disk_import_destination_changed');
+  for (const name of roots) {
+    await verifyImportSubtree(staged.has(name) ? tree : mountRoot, entries, name);
+  }
+  for (const name of staged) {
+    // Both paths are on the same disk. Exclusive maintenance access ensures
+    // the checked destination stays absent until rename completes.
+    await fs.rename(path.join(tree, name), path.join(mountRoot, name));
+    await syncDirectory(tree);
+    await syncDirectory(mountRoot);
+    await afterPublish?.();
+  }
+  for (const name of roots) await verifyImportSubtree(mountRoot, entries, name);
+  const receipt = {schemaVersion: 1, ...intent, directoriesPublished: roots.size, selectedEntries: entries.length,
+    scope: 'selected recovery trees verified on the retained disk'};
+  await publishRecord(root, 'disk-import-receipt.json', Buffer.from(JSON.stringify(receipt)));
+  return receipt;
+}

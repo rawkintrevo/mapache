@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {assembleMergedImport} from './vm-import-merge.mjs';
+import {importToRetainedDisk} from './vm-disk-import.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 async function fixture(t) {
@@ -95,4 +96,44 @@ test('keeps archive hard links on one inode and rejects a replaced source link',
   await fs.unlink(alias);
   await fs.copyFile(member, alias);
   await assert.rejects(assembleMergedImport(args), /merge_source_hardlink_changed/);
+});
+
+async function diskFixture(t) {
+  const {source, options} = await fixture(t);
+  const {root: mountRoot, ...rest} = options;
+  const config = {...rest, mountRoot, generation: 1, sources: [
+    await source('first', {'workspace/a': 'alpha'}),
+    await source('second', {'agent/pi/b': 'beta'}),
+  ]};
+  await fs.mkdir(mountRoot);
+  const marker = {version: 1, kind: 'retained-disk', workspaceId: config.workspaceId, ownerUid: config.ownerUid,
+    generation: config.generation, operationId: config.operationId};
+  await fs.writeFile(path.join(mountRoot, '.mapache-vm-disk.json'), JSON.stringify(marker));
+  return config;
+}
+
+test('disk import resumes after publishing only one directory and verifies installed contents', async t => {
+  const config = await diskFixture(t);
+  const options = {checkMount: async (_root, device) => assert.match(device, /^\/dev\/disk\/by-id\/google-mapache-ws-/)};
+  await assert.rejects(importToRetainedDisk(config, {...options, afterPublish: () => {
+    throw Error('simulated_interruption');
+  }}), /simulated_interruption/);
+  await assert.rejects(fs.stat(path.join(config.mountRoot, '.mapache-import-stage/disk-import-receipt.json')), {code: 'ENOENT'});
+  const receipt = await importToRetainedDisk(config, options);
+  assert.equal(receipt.directoriesPublished, 2);
+  assert.equal(await fs.readFile(path.join(config.mountRoot, 'workspace/a'), 'utf8'), 'alpha');
+  assert.equal(await fs.readFile(path.join(config.mountRoot, 'agent/pi/b'), 'utf8'), 'beta');
+  assert.deepEqual(await importToRetainedDisk(config, options), receipt);
+  await fs.writeFile(path.join(config.mountRoot, 'workspace/a'), 'wrong');
+  await assert.rejects(importToRetainedDisk(config, options), /destination_changed/);
+});
+
+test('disk import rejects ordinary directories, a foreign marker and existing workspace data', async t => {
+  const config = await diskFixture(t);
+  await assert.rejects(importToRetainedDisk(config), /mount_invalid/);
+  const options = {checkMount: async () => {}};
+  await assert.rejects(importToRetainedDisk({...config, generation: 2}, options), /identity_mismatch/);
+  await fs.mkdir(path.join(config.mountRoot, 'workspace'));
+  await assert.rejects(importToRetainedDisk(config, options), /destination_populated/);
+  await assert.rejects(fs.stat(path.join(config.mountRoot, '.mapache-import-stage')), {code: 'ENOENT'});
 });

@@ -965,6 +965,41 @@ checkpoints, browser archive and owner tools into 371 files and 146 directories
 under `artifacts/qa/vm-merged-import/`. Reopening the same operation verified
 the same receipt. Full HOME recovery remains unproven.
 
+### Install selected sources on a retained disk
+
+`scripts/vm-import-retained-disk.mjs` provides the maintenance-host path
+for an exclusively attached, initialized retained disk. Run it with the
+runner stopped and with exclusive writer access to the disk. Use a private
+JSON config with the merge inputs above, replacing `root` with an absolute
+`mountRoot` and adding the disk's original `generation`. The operation ID
+must match the disk marker written during provisioning.
+
+```bash
+flock -n "$IMPORT_MOUNT" node scripts/vm-import-retained-disk.mjs "$IMPORT_CONFIG"
+```
+
+The importer checks Linux mount metadata for a writable ext4 filesystem
+mounted at its root, rejects aliases and nested mounts in the maintenance
+namespace, and matches its block device to the workspace's GCE by-id device.
+It also checks the marker's owner, workspace, generation and operation.
+A fresh import accepts the disk marker, ext4's lost+found directory, and
+its own private staging directory. It refuses preexisting runtime data.
+
+The first pass estimates free blocks and inodes for staging plus assembly.
+An allocation failure remains possible, especially on retry. The importer
+records its intent before moving each verified runtime directory to its
+final name on the same disk. On retry, directories already moved must
+match the plan, and unmoved directories must still be present in staging.
+It publishes `.mapache-import-stage/disk-import-receipt.json` after the
+final verification. Staged objects remain on disk for inspection and
+consume extra capacity. The caller still owns Compute attachment and
+writer coordination, missing-source decisions, and boot validation.
+
+Focused tests exercise interrupted directory publication, retry,
+ownership rejection and changed destination data. A real tmpfs mount was
+rejected by the production guard. Successful installation on a GCE
+Persistent Disk and runtime validation still need an isolated live proof.
+
 ## Cost model and guardrails
 
 These are planning estimates, not measured usage. The pricing references were

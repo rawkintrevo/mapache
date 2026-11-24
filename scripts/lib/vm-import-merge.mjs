@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {openImportStage, plainDirectory, readPlain, stageImportObject} from './vm-import-stage.mjs';
+import {openImportStage, plainDirectory, publishRecord, readPlain, stageImportObject} from './vm-import-stage.mjs';
 import {assembleStagedTree, verifyEntry} from './vm-import-tree.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -127,7 +127,7 @@ async function sourceMember(source, entry) {
 }
 
 // The maintenance operator supplies private stages and exclusive destination access.
-export async function assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes}) {
+export async function assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes}, {beforeStage} = {}) {
   if (typeof root !== 'string' || !path.isAbsolute(root) ||
       !Array.isArray(sources) || !sources.length || !Number.isSafeInteger(maxBytes) || maxBytes < 0) fail('merge_input_invalid');
   root = path.resolve(root);
@@ -150,7 +150,9 @@ export async function assembleMergedImport({root, ownerUid, workspaceId, operati
   }
   const document = {schemaVersion: 1, ownerUid, workspaceId, entries, sources: loaded.map(s => s.sourcePlanSha256)};
   const sha256 = digest(JSON.stringify(document));
+  await beforeStage?.({document, sha256});
   const stage = await openImportStage({root, ownerUid, workspaceId, operationId, sourcePlanSha256: sha256});
+  await publishRecord(stage.root, 'merge-plan.json', Buffer.from(JSON.stringify(document)));
   const stagedEntries = [];
   for (const entry of entries) {
     if (entry.kind !== 'file') { stagedEntries.push(entry); continue; }
