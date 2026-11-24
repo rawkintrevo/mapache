@@ -275,7 +275,7 @@ unit-test evidence only.
 
 The guarded scheduler deployment completed with
 `firebase deploy --only functions:vmBackupReconcile_v2 --project
-pi-agents-cloud`; the active revision is `vmbackupreconcile-v2-00007-zoq` under
+pi-agents-cloud`; the active revision is `vmbackupreconcile-v2-00008-gip` under
 `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. No VM backup or recovery
 operation was invoked by the deployment.
 
