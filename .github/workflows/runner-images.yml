@@ -154,7 +154,9 @@ jobs:
             const seconds = (start, end) => Number.isFinite(millis(start)) && Number.isFinite(millis(end)) ?
               Math.max(0, Math.round((millis(end) - millis(start)) / 1000)) : null;
             const docker = (build.steps || []).find((step) => step.id === "build-gcp-runner");
-            const format = (value) => value === null ? "unknown" : `${Math.floor(value / 60)}m ${value % 60}s`;
+            // Keep each duration as one shell word so read does not split minutes
+            // and seconds into separate fields.
+            const format = (value) => value === null ? "unknown" : `${Math.floor(value / 60)}m${value % 60}s`;
             const cloudBuildSeconds = seconds(build.createTime, build.finishTime);
             const dockerSeconds = seconds(docker?.timing?.startTime || docker?.startTime, docker?.timing?.endTime || docker?.endTime);
             process.stdout.write([format(cloudBuildSeconds), format(dockerSeconds)].join("\t"));

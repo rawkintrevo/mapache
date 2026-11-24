@@ -31,6 +31,10 @@ test("runner image digest lookup happens only after a successful build", () => {
   assert.match(workflow, /digest=\$digest source=\$GITHUB_SHA build=\$build_url/);
 });
 
+test("runner image timing values remain single shell fields", () => {
+  assert.match(workflow, /const format = \(value\) => value === null \? "unknown" : `\$\{Math\.floor\(value \/ 60\)\}m\$\{value % 60\}s`/);
+});
+
 test("runner image builds resolve and verify the pi-web-ui cache before packaging", () => {
   assert.match(cloudbuild, /buildInputs\.mjs[\s\S]+--key-output pi-web-ui-cache-key/);
   assert.match(cloudbuild, /gcloud storage cp "\$\$\{cache_uri\}" pi-web-ui-cache\.tar\.gz/);
