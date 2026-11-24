@@ -1092,6 +1092,11 @@ an integration binding callback or cleanup request from publishing after
 quiesce; global connection records remain owner-scoped and reusable by other
 unfenced workspaces.
 
+Browser egress gateway assignment writes use the same boundary. A fenced
+workspace cannot be removed from or added to a shared gateway assignment, and
+the transaction also guards the route’s existing workspace IDs so a stale
+legacy route cannot be rewritten around the fence.
+
 Legacy shared-storage reconciliation in
 `functions/workspaceStorageMigration.service.js` checks the workspace fence
 at entry and in the transactions that publish a descriptor or error.

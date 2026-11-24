@@ -1,6 +1,7 @@
 "use strict";
 
 const {httpError} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {
   browserEgressAssignmentRef,
   gatewayIdForRoute,
@@ -43,6 +44,7 @@ async function setWorkspaceGateway(uid, workspaceId, payload = {}, dependencies 
           candidate.route,
           [...candidate.workspaceIds, workspaceId],
           dependencies,
+          [...candidate.workspaceIds, workspaceId],
       );
       changed = true;
     }
@@ -53,6 +55,7 @@ async function setWorkspaceGateway(uid, workspaceId, payload = {}, dependencies 
           assigned.route,
           assigned.workspaceIds.filter((id) => id !== workspaceId),
           dependencies,
+          assigned.workspaceIds,
       );
     }
     changed = true;
@@ -108,18 +111,29 @@ function serializeGatewaySummary(route) {
   };
 }
 
-async function writeAssignment(uid, route, workspaceIds, dependencies = {}) {
+async function writeAssignment(uid, route, workspaceIds, dependencies = {}, guardWorkspaceIds = workspaceIds) {
   const ref = browserEgressAssignmentRef(dependencies.db, uid, gatewayIdForRoute(route));
   if (!ref) throw httpError(503, "browser_egress_assignment_unavailable");
-  const existing = await ref.get();
-  const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
-  await ref.set({
-    ownerUid: uid,
-    gatewayId: gatewayIdForRoute(route),
-    workspaceIds: normalizeWorkspaceIds(workspaceIds),
-    updatedAt: now,
-    ...(existing.exists ? {} : {createdAt: now}),
-  }, {merge: true});
+  await dependencies.db.runTransaction(async transaction => {
+    const existing = await transaction.get(ref);
+    const existingWorkspaceIds = existing.exists ? normalizeWorkspaceIds(existing.data()?.workspaceIds) : [];
+    const guardedIds = [...new Set([
+      ...existingWorkspaceIds,
+      ...normalizeWorkspaceIds(guardWorkspaceIds),
+      ...normalizeWorkspaceIds(workspaceIds),
+    ])];
+    for (const workspaceId of guardedIds) {
+      await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+    }
+    const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
+    transaction.set(ref, {
+      ownerUid: uid,
+      gatewayId: gatewayIdForRoute(route),
+      workspaceIds: normalizeWorkspaceIds(workspaceIds),
+      updatedAt: now,
+      ...(existing.exists ? {} : {createdAt: now}),
+    }, {merge: true});
+  });
 }
 
 async function listGateways(uid, dependencies = {}) {
@@ -161,17 +175,10 @@ async function saveAssignments(uid, gatewayId, payload = {}, dependencies = {}) 
     throw httpError(403, "workspace_forbidden");
   }
 
-  const ref = browserEgressAssignmentRef(dependencies.db, uid, gatewayIdForRoute(route));
-  if (!ref) throw httpError(503, "browser_egress_assignment_unavailable");
-  const existing = await ref.get();
-  const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
-  await ref.set({
-    ownerUid: uid,
-    gatewayId: gatewayIdForRoute(route),
-    workspaceIds,
-    updatedAt: now,
-    ...(existing.exists ? {} : {createdAt: now}),
-  }, {merge: true});
+  await writeAssignment(uid, route, workspaceIds, dependencies, [
+    ...normalizeWorkspaceIds(route.workspaceIds),
+    ...workspaceIds,
+  ]);
   return serializeGateway(route, workspaceIds, workspaceMap);
 }
 

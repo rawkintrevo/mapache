@@ -57,6 +57,13 @@ class Db {
     this.values = new Map();
   }
 
+  async runTransaction(callback) {
+    return callback({
+      get: (ref) => ref.get(),
+      set: (ref, value, options = {}) => ref.set(value, options),
+    });
+  }
+
   collection(name) {
     return new Query(this, name);
   }
@@ -153,6 +160,22 @@ test("reports and toggles a workspace gateway assignment", async () => {
   assert.equal(disabled.enabled, false);
   assert.equal(disabled.changed, true);
   assert.deepEqual(db.values.get("users/owner/private/browserEgressAssignments/gateways/gateway-a").workspaceIds, ["workspace-2"]);
+});
+
+test("migration fences block gateway assignment removal and reassignment", async () => {
+  const {db, service} = setup();
+  db.values.set("vmMigrationFences_v2/workspace-1", {operationId: "migration-1"});
+
+  await assert.rejects(
+      service.setWorkspaceGateway("owner", "workspace-1", {enabled: false}),
+      (error) => error.status === 409 && error.message === "workspace_vm_migration_active",
+  );
+  assert.equal(db.values.has("users/owner/private/browserEgressAssignments/gateways/gateway-a"), false);
+
+  await assert.rejects(
+      service.saveAssignments("owner", "gateway-a", {workspaceIds: ["workspace-2"]}),
+      (error) => error.status === 409 && error.message === "workspace_vm_migration_active",
+  );
 });
 
 test("requires one gateway when enabling a workspace without an assignment", async () => {
