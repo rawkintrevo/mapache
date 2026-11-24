@@ -25,7 +25,8 @@ const MAX_SCAN = 100;
  * mistaken for a successful recovery.
  */
 function createVmBackupRecoveryService({db, backup, restoreRuntime, now = Date.now, logger = console} = {}) {
-  if (!db || !backup || !restoreRuntime || typeof restoreRuntime.verify !== "function") {
+  if (!db || !backup || !restoreRuntime || typeof restoreRuntime.verify !== "function" ||
+      typeof restoreRuntime.cleanup !== "function") {
     throw new Error("vm_backup_recovery_dependencies_required");
   }
 
@@ -118,12 +119,24 @@ function createVmBackupRecoveryService({db, backup, restoreRuntime, now = Date.n
           descriptor: operation.descriptor, backupRecord: operation.backupRecord,
         });
         const report = recoveryReport(operation, evidence, now());
-        await db.collection(REPORTS).doc(operation.workspaceId).collection("reports").doc(operationId).set(report);
         if (!report.passed) {
-          await commit(operationRef, claimId, operation, {phase: "failed", status: "failed",
-            verification: report, completedAtMs: now(), lastError: report.failureCode});
-          return {claimed: true, passed: false, failureCode: report.failureCode};
+          await db.collection(REPORTS).doc(operation.workspaceId).collection("reports").doc(operationId).set(report);
+          try {
+            const cleanup = await cleanupTarget(operation, report.failureCode);
+            const cleanedReport = {...report, cleanup};
+            await db.collection(REPORTS).doc(operation.workspaceId).collection("reports").doc(operationId).set(cleanedReport);
+            await commit(operationRef, claimId, operation, {phase: "failed", status: "failed",
+              verification: cleanedReport, cleanup, completedAtMs: now(), lastError: report.failureCode});
+            return {claimed: true, passed: false, failureCode: report.failureCode, cleaned: true};
+          } catch (error) {
+            const pendingReport = {...report, cleanup: {state: "pending", failureCode: safeErrorCode(error)}};
+            await db.collection(REPORTS).doc(operation.workspaceId).collection("reports").doc(operationId).set(pendingReport);
+            await commit(operationRef, claimId, operation, {phase: "cleanup", status: "pending",
+              verification: pendingReport, nextAttemptAtMs: now() + RETRY_MS, lastError: safeErrorCode(error)});
+            return {claimed: true, passed: false, failureCode: report.failureCode, cleanupPending: true};
+          }
         }
+        await db.collection(REPORTS).doc(operation.workspaceId).collection("reports").doc(operationId).set(report);
         const verifiedReceipt = markRestoreVerified(operation.restoreReceipt, {
           workspaceId: operation.workspaceId, ownerUid: operation.ownerUid, operationId,
           verifiedAt: report.verifiedAt, runtimeReady: evidence.runtimeReady,
@@ -132,6 +145,15 @@ function createVmBackupRecoveryService({db, backup, restoreRuntime, now = Date.n
         await commit(operationRef, claimId, operation, {phase: "complete", status: "succeeded",
           restoreReceipt: verifiedReceipt, verification: report, completedAtMs: now(), lastError: null});
         return {claimed: true, passed: true, report};
+      }
+      if (operation.phase === "cleanup") {
+        const cleanup = await cleanupTarget(operation, operation.verification?.failureCode || "vm_restore_verification_failed");
+        const report = {...(operation.verification || {}), cleanup};
+        await db.collection(REPORTS).doc(operation.workspaceId).collection("reports").doc(operationId).set(report);
+        await commit(operationRef, claimId, operation, {phase: "failed", status: "failed",
+          verification: report, cleanup, nextAttemptAtMs: null, completedAtMs: now(),
+          lastError: report.failureCode || "vm_restore_verification_failed"});
+        return {claimed: true, passed: false, cleaned: true, failureCode: report.failureCode};
       }
       throw recoveryError("vm_restore_operation_phase_invalid");
     } catch (error) {
@@ -156,6 +178,18 @@ function createVmBackupRecoveryService({db, backup, restoreRuntime, now = Date.n
       tx.update(ref, {claim: null, nextAttemptAtMs: now() + RETRY_MS,
         lastError: safeErrorCode(error), updatedAtMs: now()});
     });
+  }
+
+  async function cleanupTarget(operation, failureCode) {
+    const result = await restoreRuntime.cleanup(operation.restoreReceipt, {
+      operationId: operation.operationId, workspaceId: operation.workspaceId, ownerUid: operation.ownerUid,
+      descriptor: operation.descriptor, backupRecord: operation.backupRecord, failureCode,
+    });
+    if (!result || result.instanceDeleted !== true || result.diskDeleted !== true) {
+      throw recoveryError("vm_restore_cleanup_unconfirmed");
+    }
+    return {state: "complete", instanceDeleted: true, diskDeleted: true,
+      timingsMs: boundedTimings(result.timingsMs)};
   }
 }
 
@@ -200,6 +234,7 @@ function recoveryReport(operation, evidence = {}, observedAtMs) {
     rtoTargetMs,
     rpoWithinTarget: rpoMs !== null && rpoMs <= rpoTargetMs,
     rtoWithinTarget: rtoMs !== null && rtoMs <= rtoTargetMs,
+    cleanup: null,
     passed: !failureCode,
     failureCode,
   };

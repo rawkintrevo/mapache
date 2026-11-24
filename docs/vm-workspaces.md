@@ -1496,8 +1496,12 @@ fresh VM's authenticated readiness, user-file digest, runtime-state digest, and
 startup-stage timings. The controller records a sanitized
 `vmBackupRecoveryReports_v2` report with measured RPO/RTO and fails closed on a
 digest or target mismatch; transient runtime readiness errors retain a bounded
-retry. The adapter is intentionally not wired to a production VM boot yet, so
-these reports are contract/test evidence rather than a live recovery claim.
+retry. A failed verification now requires the adapter to prove exact
+operation-owned instance and disk cleanup; an unconfirmed cleanup remains in a
+bounded retryable `cleanup` phase instead of becoming a terminal failure with
+stranded resources. The adapter is intentionally not wired to a production VM
+boot yet, so these reports are contract/test evidence rather than a live
+recovery claim.
 
 The runner's authenticated `/runner/recovery-digest` endpoint produces a
 bounded SHA-256 digest of the retained tree without returning names or content.

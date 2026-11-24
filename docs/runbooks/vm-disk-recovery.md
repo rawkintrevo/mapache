@@ -144,6 +144,11 @@ recovery claim. It does not publish a route, change Firestore authority, or
 delete the source disk or snapshot. Do not run it against a production
 workspace while the rollout flag is disabled; use a disposable backup fixture.
 
+The durable recovery controller has the same cleanup invariant: a failed digest
+or runtime verification is not terminal until the adapter confirms both the
+operation-owned recovery VM and target disk are gone. A failed cleanup remains
+retryable and keeps the source backup retained.
+
 The durable restore controller still requires this verifier contract to be
 wired separately. Until that production adapter exists, the safe operational
 outcome is `vm_restore_runtime_verifier_unwired`, with the original disk and

@@ -8,6 +8,11 @@ const {createVmBackupRecoveryService} = require("./vmBackupRecovery.service");
 
 const NOW = Date.parse("2026-01-02T00:00:00.000Z");
 
+test("recovery controller requires a cleanup-capable runtime adapter", () => {
+  assert.throws(() => createVmBackupRecoveryService({db: memoryDb(), backup: {}, restoreRuntime: {verify: async () => ({})}}),
+    /vm_backup_recovery_dependencies_required/);
+});
+
 test("restore controller records fresh-disk verification and RPO/RTO evidence", async () => {
   const db = memoryDb();
   seedRuntime(db);
@@ -24,6 +29,7 @@ test("restore controller records fresh-disk verification and RPO/RTO evidence", 
   }, restoreRuntime: {
     verify: async () => ({runtimeReady: true, fileDigest: "sha256:files", runtimeStateDigest: "sha256:runtime",
       diskId: "123", startupStageTimingsMs: {mount: 120, health: 340}}),
+    cleanup: async () => ({instanceDeleted: true, diskDeleted: true}),
   }});
   const requested = await service.requestRestore({workspaceId: "workspace-1", ownerUid: "owner-1", requestId: "restore-request-1",
     backupId: "backup-1", expectedGeneration: 1});
@@ -50,18 +56,59 @@ test("restore verification fails closed on a file digest mismatch", async () => 
   db.seed("vmBackups_v2/workspace-1/items/backup-1", verifiedBackup({verification: {
     state: "verified", verifiedAt: "2026-01-01T00:01:00.000Z", fileDigest: "sha256:expected",
   }}));
+  let cleanupCalls = 0;
   const service = createVmBackupRecoveryService({db, now: () => NOW, backup: {
     restoreSnapshot: async (_descriptor, options) => createRestoreReceipt({workspaceId: "workspace-1", ownerUid: "owner-1",
       operationId: options.operationId, sourceSnapshot: "snapshot-1", sourceGeneration: 1, targetDisk: options.diskName,
       targetZone: "us-central1-a", targetDiskSizeGb: 64, createdAt: new Date(NOW).toISOString()}),
-  }, restoreRuntime: {verify: async () => ({runtimeReady: true, fileDigest: "sha256:wrong", runtimeStateDigest: "sha256:runtime"})}});
+  }, restoreRuntime: {
+    verify: async () => ({runtimeReady: true, fileDigest: "sha256:wrong", runtimeStateDigest: "sha256:runtime"}),
+    cleanup: async () => { cleanupCalls++; return {instanceDeleted: true, diskDeleted: true, timingsMs: {delete: 40}}; },
+  }});
   await service.requestRestore({workspaceId: "workspace-1", ownerUid: "owner-1", requestId: "restore-request-2", backupId: "backup-1"});
   await service.runTick();
   await service.runTick();
   const operation = db.docs("vmBackupRecoveryOperations_v2")[0].data;
   assert.equal(operation.status, "failed");
   assert.equal(operation.lastError, "vm_restore_file_digest_mismatch");
+  assert.deepEqual(operation.cleanup, {state: "complete", instanceDeleted: true, diskDeleted: true, timingsMs: {delete: 40}});
+  assert.equal(cleanupCalls, 1);
   assert.equal(db.docs("vmBackupRecoveryReports_v2/workspace-1/reports")[0].data.passed, false);
+});
+
+test("failed recovery cleanup stays pending until exact resources are confirmed gone", async () => {
+  const db = memoryDb();
+  seedRuntime(db);
+  db.seed("vmBackups_v2/workspace-1/items/backup-1", verifiedBackup({verification: {
+    state: "verified", verifiedAt: "2026-01-01T00:01:00.000Z", fileDigest: "sha256:expected",
+  }}));
+  let clock = NOW;
+  let cleanupAttempts = 0;
+  const service = createVmBackupRecoveryService({db, now: () => clock, backup: {
+    restoreSnapshot: async (_descriptor, options) => createRestoreReceipt({workspaceId: "workspace-1", ownerUid: "owner-1",
+      operationId: options.operationId, sourceSnapshot: "snapshot-1", sourceGeneration: 1, targetDisk: options.diskName,
+      targetZone: "us-central1-a", targetDiskSizeGb: 64, createdAt: new Date(NOW).toISOString()}),
+  }, restoreRuntime: {
+    verify: async () => ({runtimeReady: true, fileDigest: "sha256:wrong", runtimeStateDigest: "sha256:runtime"}),
+    cleanup: async () => {
+      cleanupAttempts++;
+      if (cleanupAttempts === 1) { const error = new Error("delete_pending"); error.code = "vm_restore_cleanup_pending"; throw error; }
+      return {instanceDeleted: true, diskDeleted: true};
+    },
+  }});
+  await service.requestRestore({workspaceId: "workspace-1", ownerUid: "owner-1", requestId: "restore-request-cleanup", backupId: "backup-1"});
+  await service.runTick();
+  await service.runTick();
+  let operation = db.docs("vmBackupRecoveryOperations_v2")[0].data;
+  assert.equal(operation.phase, "cleanup");
+  assert.equal(operation.status, "pending");
+  assert.equal(operation.lastError, "vm_restore_cleanup_pending");
+  clock = operation.nextAttemptAtMs + 1;
+  await service.runTick();
+  operation = db.docs("vmBackupRecoveryOperations_v2")[0].data;
+  assert.equal(operation.status, "failed");
+  assert.deepEqual(operation.cleanup, {state: "complete", instanceDeleted: true, diskDeleted: true, timingsMs: {}});
+  assert.equal(cleanupAttempts, 2);
 });
 
 test("restore reservation refuses foreign backups and migration-fenced workspaces", async () => {
@@ -69,7 +116,7 @@ test("restore reservation refuses foreign backups and migration-fenced workspace
   seedRuntime(db);
   db.seed("vmBackups_v2/workspace-1/items/foreign", verifiedBackup({ownerUid: "other-owner"}));
   const service = createVmBackupRecoveryService({db, now: () => NOW, backup: {restoreSnapshot: async () => { throw new Error("not_called"); }},
-    restoreRuntime: {verify: async () => ({})}});
+    restoreRuntime: {verify: async () => ({}), cleanup: async () => ({instanceDeleted: true, diskDeleted: true})}});
   await assert.rejects(() => service.requestRestore({workspaceId: "workspace-1", ownerUid: "owner-1", requestId: "restore-request-3", backupId: "foreign"}),
     error => error.code === "vm_restore_backup_not_verified");
   db.seed("vmBackups_v2/workspace-1/items/backup-1", verifiedBackup());
@@ -93,7 +140,7 @@ test("transient restore verification errors retain a bounded retry", async () =>
     attempts++;
     if (attempts === 1) { const error = new Error("runner_not_ready"); error.code = "vm_restore_runtime_not_ready"; throw error; }
     return {runtimeReady: true, fileDigest: "sha256:files", runtimeStateDigest: "sha256:runtime"};
-  }}});
+  }, cleanup: async () => ({instanceDeleted: true, diskDeleted: true})}});
   await service.requestRestore({workspaceId: "workspace-1", ownerUid: "owner-1", requestId: "restore-request-5", backupId: "backup-1"});
   await service.runTick();
   await service.runTick();

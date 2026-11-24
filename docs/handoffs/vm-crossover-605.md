@@ -266,6 +266,13 @@ numeric. It makes no cloud calls and does not change the inventory's deliberate
 unknown-cost behavior. No current billing export was supplied or treated as a
 measured production cost result.
 
+The durable recovery controller now also requires its runtime adapter to expose
+exact-operation cleanup. A file/runtime verification mismatch enters a bounded
+retryable `cleanup` phase until both the recovery VM and target disk are
+confirmed absent; it cannot become a terminal failed report while resources are
+unknown. The production runtime adapter remains unwired, so this is contract and
+unit-test evidence only.
+
 The guarded scheduler deployment completed with
 `firebase deploy --only functions:vmBackupReconcile_v2 --project
 pi-agents-cloud`; the active revision is `vmbackupreconcile-v2-00007-zoq` under
