@@ -4,6 +4,7 @@ const {normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {tokenHash} = require("./vmRuntimeControl.service");
 const {httpError} = require("./backendUtils.helpers");
 const {resolveVmEnvironment} = require("./vmEnvironment.service");
+const {recordVmUsageInTransaction} = require("./vmUsage.service");
 
 const OPERATIONS = "vmLifecycleOperations_v2";
 // Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
@@ -41,6 +42,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       if (descriptor.backend !== "compute-engine" || descriptor.generation !== ws.generation) throw httpError(409, "vm_descriptor_mismatch");
       const startedAtMs = now();
       const operation = {workspaceId, ownerUid, action, oldGeneration: ws.generation,
+        oldWorkspaceState: ws.state, oldSessionState: ss.state,
         oldSessionId: ws.currentSessionId, descriptor, runnerImage: ws.runnerImage, gatewayHost: ws.gatewayHost,
         phase: action === "start" ? "delete" : "quiesce", status: "pending", claim: null,
         phaseStartedAtMs: startedAtMs, phaseTimingsMs: {}, phaseAttempts: {},
@@ -84,6 +86,24 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         }
       }
       const completedAtMs = now();
+      if (op.phase === "delete" && op.action !== "create") {
+        const oldSessionRef = wr.collection("sessions").doc(op.oldSessionId);
+        const oldSession = (await tx.get(oldSessionRef)).data() || {};
+        await recordVmUsageInTransaction({
+          db,
+          tx,
+          workspaceRef: wr,
+          sessionRef: oldSessionRef,
+          workspaceId: op.workspaceId,
+          workspace: w.data() || {},
+          session: oldSession,
+          ownerUid: op.ownerUid,
+          generation: op.oldGeneration,
+          operationId,
+          endedAtMs: completedAtMs,
+          includeActiveRuntime: op.oldWorkspaceState === "active" && op.oldSessionState === "active",
+        });
+      }
       tx.update(ref, {phase: nextPhase, claim: null, phaseStartedAtMs: completedAtMs,
         phaseTimingsMs: recordPhaseTiming(op, completedAtMs), lastError: null, lastErrorAtMs: null,
         updatedAtMs: completedAtMs, ...fields});

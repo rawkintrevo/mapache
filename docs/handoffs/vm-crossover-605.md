@@ -413,3 +413,15 @@ pause/replacement: it waits for the durable operation to commit the machine
 stopped, then submits exactly one generation-pinned, API-admitted start request.
 The focused VM workspace runtime suite covers this boundary; it does not count
 as live stopped-target execution evidence.
+
+The usage-accounting continuation adds `functions/vmUsage.service.js` and
+threads it through VM lifecycle transitions. Each completed pause/start/replace
+operation records one deterministic user ledger entry and advances the
+retained-storage cursor in the same Firestore transaction. Active VM runtime,
+retained-disk GiB-seconds, and VM-native automation background seconds are
+reported separately; background duration is not added a second time to
+allocated runtime. Current active VM generations are included dynamically, and
+older records without a known disk-size cursor remain explicitly unknown.
+Focused VM usage, user-usage, VM lifecycle, and VM creation tests pass. This is
+an implementation and accounting proof only; live stopped-target execution,
+cross-machine tools, and release acceptance remain open.

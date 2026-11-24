@@ -221,6 +221,21 @@ test("pause confirms deletion before stopped; start then reserves a fresh genera
   assert.equal(f.ws().generation, 7);
 });
 
+test("pause records one VM runtime and retained-storage interval in the user ledger", async () => {
+  const f = fixture();
+  Object.assign(f.ws(), {createdAtMs: 500, retainedStorageAccruedAtMs: 500, retainedDiskSizeGb: 64});
+  Object.assign(f.docs.get("vmRuntimes_v2/workspace/sessions/old"), {runtimeStartedAt: 900});
+  const {operationId} = await f.request({action: "pause"});
+  await finish(f, operationId);
+
+  const usage = f.docs.get(`users/owner/sessionUsage/vm-workspace-${operationId}`);
+  assert.equal(usage.runtimeSeconds, 0.1);
+  assert.equal(usage.vmRuntimeSeconds, 0.1);
+  assert.equal(usage.retainedStorageGbSeconds, 32);
+  assert.equal(f.ws().retainedStorageAccruedAtMs, 1000);
+  assert.equal(f.docs.get("vmRuntimes_v2/workspace/sessions/old").usageAccountedAt, 1000);
+});
+
 test("stale worker completion cannot overwrite a newer claim", async () => {
   const f = fixture(); const {operationId} = await f.request();
   while (f.op(operationId).phase !== "provision") await f.service.step(operationId);

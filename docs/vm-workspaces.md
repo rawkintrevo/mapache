@@ -549,6 +549,16 @@ uncertain acknowledgements, and VM replacement. An uncertain external side
 effect is not replayed automatically. Pause waits for admitted work according
 to the existing exclusion policy; it does not silently kill a scheduled task.
 Usage records distinguish active VM time, retained disk, and background work.
+`functions/vmUsage.service.js` writes one operation-keyed ledger entry when a
+VM pause/start/replace transition finishes. The entry accrues active runtime
+from the runner's `runtimeStartedAt` independently from retained-disk
+GiB-seconds, so starting a stopped machine cannot replay the prior generation's
+runtime interval. The retained-storage cursor is advanced in the same
+transaction as the ledger entry. The profile/admin usage reader also includes
+the current active VM interval and VM-native automation durations; background
+seconds are reported separately and are not added to allocated runtime a
+second time. Older VM records without a known disk-size cursor remain explicit
+about unknown retained-storage accounting rather than inventing a capacity.
 
 ## Configuration contract
 

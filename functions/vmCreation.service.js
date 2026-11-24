@@ -3,6 +3,7 @@ const {createHash, randomBytes} = require("node:crypto");
 const {createRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {tokenHash} = require("./vmRuntimeControl.service");
 const {httpError} = require("./backendUtils.helpers");
+const {DEFAULT_DATA_DISK_SIZE_GB} = require("./computeEngine.service");
 
 // Backend-authored, single-workspace admissions keep creation bounded while
 // gateway host allocation and migration cohort policy are being rolled out.
@@ -42,11 +43,12 @@ function createVmCreationService({db, now = Date.now}) {
       tx.set(cr, secrets);
       tx.set(sr, {ownerUid, generation: 1, state: "reserved", runtimeProvider: descriptor,
         authSelection: {harness: "pi", providers: {}}, piScopedModels: [], controlTokenHash: tokenHash(secrets.controlToken)});
+      const createdAtMs = now();
       tx.set(wr, {ownerUid, name, backend: "compute-engine", generation: 1, state: "reserved", currentSessionId: sessionId,
         apiEnabled: true, lifecycleEnabled: true, runnerImage: admission.runnerImage, gatewayHost: admission.gatewayHost,
-        activeOperationId: operationId, initialOperationId: operationId, bootId: null, leaseExpiresAt: 0});
+        activeOperationId: operationId, initialOperationId: operationId, bootId: null, leaseExpiresAt: 0,
+        createdAtMs, retainedStorageAccruedAtMs: createdAtMs, retainedDiskSizeGb: DEFAULT_DATA_DISK_SIZE_GB});
       tx.set(rr, {ownerUid, workspaceId, generation: 1, sessionId, enabled: false});
-      const createdAtMs = now();
       tx.set(or, {workspaceId, ownerUid, name, action: "create", oldGeneration: 0, descriptor, sessionId,
         runnerImage: admission.runnerImage, gatewayHost: admission.gatewayHost, phase: "disk", status: "pending",
         claim: null, phaseStartedAtMs: createdAtMs, phaseTimingsMs: {}, phaseAttempts: {},

@@ -9,6 +9,7 @@ const {
   prorateUsageEntry,
   sessionUsageEntry,
 } = require("./userUsage.service");
+const {vmBackgroundUsageEntry, vmUsageEntry} = require("./vmUsage.service");
 
 const startedAt = Date.parse("2026-06-17T10:00:00.000Z");
 const stoppedAt = Date.parse("2026-06-17T10:30:00.000Z");
@@ -62,5 +63,36 @@ assert.strictEqual(prorated.runtimeSeconds, 900);
 assert.strictEqual(prorated.cpuSeconds, 1800);
 assert.strictEqual(prorated.memoryGbSeconds, 450);
 assert.strictEqual(prorated.sessionCount, 1);
+
+const vmEntry = vmUsageEntry({
+  workspaceId: "workspace-1", ownerUid: "user-1", generation: 1, operationId: "operation-1",
+  workspace: {retainedStorageAccruedAtMs: startedAt - 15 * 60 * 1000, retainedDiskSizeGb: 64},
+  session: {runtimeStartedAt: startedAt - 5 * 60 * 1000},
+  endedAtMs: startedAt + 15 * 60 * 1000,
+});
+const vmRecent = prorateUsageEntry(vmEntry, startedAt, startedAt + 30 * 60 * 1000);
+assert.strictEqual(vmRecent.runtimeSeconds, 900);
+assert.strictEqual(vmRecent.vmRuntimeSeconds, 900);
+assert.strictEqual(vmRecent.retainedStorageGbSeconds, 57600);
+
+const stoppedVmEntry = vmUsageEntry({
+  workspaceId: "workspace-1", ownerUid: "user-1", generation: 1, operationId: "operation-2",
+  workspace: {retainedStorageAccruedAtMs: startedAt - 15 * 60 * 1000, retainedDiskSizeGb: 64},
+  session: {},
+  endedAtMs: startedAt + 15 * 60 * 1000,
+  includeActiveRuntime: false,
+});
+const stoppedVmRecent = prorateUsageEntry(stoppedVmEntry, startedAt, startedAt + 30 * 60 * 1000);
+assert.strictEqual(stoppedVmRecent.runtimeSeconds, 0);
+assert.strictEqual(stoppedVmRecent.sessionCount, 0);
+assert.strictEqual(stoppedVmRecent.retainedStorageGbSeconds, 57600);
+
+const backgroundRecent = prorateUsageEntry(vmBackgroundUsageEntry({
+  executionRoute: "vm-native-v1", executionStartedAt: startedAt + 5 * 60 * 1000,
+  completedAt: startedAt + 10 * 60 * 1000, status: "succeeded",
+}), startedAt, startedAt + 30 * 60 * 1000);
+assert.strictEqual(backgroundRecent.runtimeSeconds, 0);
+assert.strictEqual(backgroundRecent.backgroundRuntimeSeconds, 300);
+assert.strictEqual(backgroundRecent.backgroundRunCount, 1);
 
 console.log("user usage service tests passed");

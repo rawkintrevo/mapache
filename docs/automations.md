@@ -140,8 +140,11 @@ run records.
   available, provisioning/cleanup fails closed. Focused tests cover the
   boundary, including startup cancellation and child-exit races: a native child
   that exits or is canceled before prompt submission is finalized durably and
-  never receives a late `startAutomation` call. Live stopped-target execution,
-  cross-machine tools, usage accounting, and release acceptance remain open.
+  never receives a late `startAutomation` call. VM usage accounting is now
+  generation- and operation-fenced: active VM seconds, retained-disk
+  GiB-seconds, and VM-native background seconds are separate counters, with
+  background time excluded from allocated runtime totals. Live stopped-target
+  execution, cross-machine tools, and release acceptance remain open.
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.
