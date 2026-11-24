@@ -1009,8 +1009,7 @@ published directory and exited 137. `resume` confirmed the disk had one
 published directory and no receipt before continuing. After unmount and
 remount, `verify` confirmed the same receipt, agent history bytes, and
 executable behavior. The installed tree passed the runner's
-`prepareRetainedDisk` check with `initialized=false`. Full runner
-container startup, health, and real workspace cutover remain separate gates.
+`prepareRetainedDisk` check with `initialized=false`.
 Local evidence is `artifacts/qa/vm-retained-import/live.log`. The proof VM
 and disk were detached and deleted after verification.
 
@@ -1024,6 +1023,33 @@ it as ext4 and mounting at `/mnt/mapache-import-proof-605`. With Node
 mount-directory lock. Unmount, remount, then run `verify`. The last phase
 also creates the remaining runtime directories, so it is the final phase.
 Unmount and remove the disposable disk and VM after collecting evidence.
+
+To extend the disk proof through normal runner startup, provision the
+fixture disk through `ensureDataDisk` with the fixture workspace and
+operation IDs in `scripts/vm-retained-import-boot.mjs`. This supplies the
+ownership and creation labels the Compute service checks. Stop after
+`resume`, unmount, and detach from the maintenance VM. Run
+`node scripts/vm-retained-import-boot.mjs start <pinned-runner-image>`.
+The helper reserves only the fixed synthetic registry records and starts
+ordinary Compute Engine provisioning with disk creation disabled. Once
+the VM is ready, stream `scripts/vm-retained-import-runtime-proof.cjs`
+over IAP SSH to `sudo -n docker exec -i mapache-runner node`. The probe
+checks authorized and anonymous `/runner/health` behavior, actual agent
+readiness and imported history and executable bytes inside the container.
+Use `node scripts/vm-retained-import-boot.mjs cleanup` to delete the fixture
+runner and its registry records, then remove the detached proof disk.
+
+The full synthetic runner proof passed on 2026-11-23. COS VM
+`mapache-vm-98cfff5f3f7513451bc97216` started the regular runner from the
+disk populated on the maintenance VM. The authenticated health response
+was 200 with agent readiness true, and the unauthenticated response was
+404. The imported executable ran and the session history matched in
+the paths selected by the runner configuration. The disk receipt digest
+matched the maintenance VM's import. Evidence is in
+`artifacts/qa/vm-retained-import/{boot-seed,runner-health,runner-cleanup}.log`.
+The proof exercises the synthetic path through storage and ordinary
+runner startup. Importing complete legacy state, application-level use
+of recovered transcripts, and real workspace cutover remain open.
 
 ## Cost model and guardrails
 
