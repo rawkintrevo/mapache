@@ -16,6 +16,7 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
+  DEFAULT_REGION,
   DEFAULT_FUNCTION_REGION,
   AUTOMATION_AGENT_TOKEN_SECRET,
   GITHUB_APP_CLIENT_ID_SECRET,
@@ -658,7 +659,8 @@ exports.vmMigrationPreflight_v2 = onRequest({invoker: "private", timeoutSeconds:
   try {
     const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
     const {createVmLegacyComputeObserver} = require("./vmLegacyComputeObservation.service");
-    const inspectCompute = createVmLegacyComputeObserver({auth, projectNumber: "299764728235"});
+    const inspectCompute = createVmLegacyComputeObserver({auth, projectNumber: "299764728235",
+      defaultRegion: DEFAULT_REGION, defaultBucket: DEFAULT_BUCKET});
     res.json(await createVmMigrationPreflight({db, inspectCompute})({workspaceId: req.query.workspaceId,
       ownerUid: req.query.ownerUid, checkCompute: req.query.checkCompute === "1"}));
   } catch (error) {

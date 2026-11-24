@@ -934,6 +934,18 @@ provider error payloads. `recordedComputeClear` covers only recorded
 references. Orphan discovery, confirmed runner quiesce, and Storage authority
 still gate the final capture.
 
+The same option returns a separate `compute.discovery` result. It scans
+paginated Cloud Run service templates in the configured default and recorded
+regions, up to four regions and five pages per region. It checks workspace
+identity in runner environment fields and automation labels. It also flags
+another service pointing to the exact workspace bucket and prefix. The code
+keeps provider responses in memory and reports only counts, region names,
+blocker codes and a digest. Repeated cursors, missing runner identity,
+provider errors and capped scans block a clear result. The scan covers the
+current service templates in those regions. Other regions, tagged historical
+revisions, and aliases outside the matched prefix still require reconciliation.
+See the [Cloud Run services list API](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.services/list).
+
 The endpoint reports both `readyForFreeze` and `readyForCutover` as false.
 The existing `sharedStorageMigration` state is checked by Cloud Run
 session reservation and automation enqueue, but those checks do not fence

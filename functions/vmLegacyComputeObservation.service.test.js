@@ -43,3 +43,36 @@ test("foreign references and missing operation names fail before provider reads"
   const unknown = await run(unexpected)([{...known, provisioningState: "running", provisioningCloudRunOperationName: null}]);
   assert.ok(unknown.blockers.includes("legacy_compute_operation_reference_missing"));
 });
+
+test("regional discovery follows pages and detects a detached registry service and a Storage alias", async () => {
+  const identity = {workspaceId: "target-ws", ownerUid: "target-owner", workspace: {bucket: "bucket", storagePrefix: "owned-tree"}};
+  const service = (name, env) => ({
+    name: `projects/123/locations/us-central1/services/${name}`,
+    template: {containers: [{env: Object.entries(env).map(([name, value]) => ({name, value}))}]},
+  });
+  const result = await run(({url, params}) => {
+    assert.ok(url.endsWith("/locations/us-central1/services"));
+    if (!params.pageToken) return {data: {nextPageToken: "next", services: [
+      service("session-orphan", {WORKSPACE_ID: "target-ws", OWNER_UID: "target-owner", PRIVATE: "secret"}),
+    ]}};
+    return {data: {services: [
+      service("session-alias", {WORKSPACE_ID: "other-ws", STORAGE_BUCKET: "bucket", STORAGE_PREFIX: "owned-tree"}),
+      service("session-unknown", {}),
+      service("session-other", {WORKSPACE_ID: "different"}),
+    ]}};
+  })([], identity);
+  assert.equal(result.discovery.inspectedServices, 4);
+  assert.equal(result.discovery.unrecordedMatches, 2);
+  assert.equal(result.discovery.scannedRegionsClear, false);
+  assert.deepEqual(result.blockers, ["legacy_cloud_run_runner_identity_unresolved", "legacy_cloud_run_storage_alias_present",
+    "legacy_cloud_run_unrecorded_service_present"]);
+  assert.ok(!/session-orphan|secret/.test(JSON.stringify(result)));
+});
+
+test("repeated provider page token leaves regional discovery incomplete", async () => {
+  const result = await run(() => ({data: {nextPageToken: "same"}}))([], {
+    workspaceId: "target-ws", ownerUid: "target-owner", workspace: {},
+  });
+  assert.equal(result.discovery.scannedRegionsClear, false);
+  assert.ok(result.blockers.includes("legacy_cloud_run_discovery_incomplete"));
+});

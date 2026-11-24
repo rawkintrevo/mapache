@@ -97,12 +97,14 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
 function createVmMigrationPreflight({db, now = Date.now, inspectCompute}) {
   return async ({workspaceId, ownerUid, checkCompute = false}) => {
     const read = () => db.runTransaction(transaction => observeVmMigration(transaction, {db, workspaceId, ownerUid, now}), {readOnly: true});
-    const {workspace: _workspace, sessions, ...result} = await read();
+    const {workspace, sessions, ...result} = await read();
     let compute;
     if (checkCompute && inspectCompute && !result.blockers.includes("legacy_writer_inventory_truncated")) {
-      compute = await inspectCompute(sessions);
+      compute = await inspectCompute(sessions, {workspace, workspaceId, ownerUid});
       if ((await read()).observationSha256 !== result.observationSha256) {
-        compute = {...compute, recordedComputeClear: false, blockers: [...compute.blockers, "legacy_compute_source_changed"]};
+        compute = {...compute, recordedComputeClear: false,
+          ...(compute.discovery ? {discovery: {...compute.discovery, scannedRegionsClear: false}} : {}),
+          blockers: [...compute.blockers, "legacy_compute_source_changed"]};
       }
     }
     return {...result, ...(compute ? {compute} : {}), readOnly: true, readyForFreeze: false, readyForCutover: false,
