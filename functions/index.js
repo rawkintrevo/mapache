@@ -646,6 +646,21 @@ exports.vmRuntimePreflight_v2 = onRequest({
   }
 });
 
+exports.vmMigrationPreflight_v2 = onRequest({invoker: "private", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (req.method !== "GET") {
+    res.set("Allow", "GET").status(405).json({error: "method_not_allowed"});
+    return;
+  }
+  try {
+    const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
+    res.json(await createVmMigrationPreflight({db})({workspaceId: req.query.workspaceId, ownerUid: req.query.ownerUid}));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_migration_preflight_unavailable"});
+  }
+});
+
 exports.api = onRequest({
   cors: true,
   timeoutSeconds: 540,

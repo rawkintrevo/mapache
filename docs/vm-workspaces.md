@@ -912,6 +912,39 @@ preflight -> reserve/freeze -> quiesce writers -> final capture
           -> validate VM -> release admission
 ```
 
+`vmMigrationPreflight_v2` is a read-only IAM-private operator endpoint
+for the first step. Pass the expected `workspaceId` and `ownerUid` as GET
+query parameters. A Firestore read-only transaction observes the source
+workspace, destination registry record, up to 500 source sessions, and up
+to 100 queued or active automation runs. The response includes counts,
+blocker codes, the source generation and a digest of the observed document
+paths and update times. It returns 404 for a mismatched owner. A truncated
+inventory or an uncertain session status blocks progress. The digest is
+diagnostic evidence from one observation, with no writer admission or
+authority attached to it.
+
+The endpoint reports both `readyForFreeze` and `readyForCutover` as false.
+The existing `sharedStorageMigration` state is checked by Cloud Run
+session reservation and automation enqueue, but those checks do not fence
+already queued workers or dispatch to an existing session. Workspace
+deletion and other conflicting operations need the same transactional
+admission contract. Firestore rules currently allow owners to modify the
+legacy workspace record and delete it directly. Any coordinator that
+uses that record as its authority must first protect those fields and
+deletion through the rules and verify the deployed writer paths. Compute
+absence and final Storage generations need separate verification after
+quiesce. Do not reuse the legacy migration record as an authoritative
+VM cutover lock.
+
+Deploy only the new endpoint with
+`firebase deploy --only functions:vmMigrationPreflight_v2 --project pi-agents-cloud`.
+This succeeded on 2026-11-23 with the `mapache-api` service account. The live
+`vm-test` check returned one stopped session and zero queued/active
+automation runs. Anonymous access returned 403, a mismatched owner
+returned 404, and POST returned 405. The source document update time was
+unchanged and no destination record was created. Local evidence is
+`artifacts/qa/vm-migration-preflight/result.json`.
+
 Every transition is resumable and records the source generation, destination
 disk/generation, operation owner, progress, and blocker. Before destination
 writes, rollback restores source authority only after every destination writer
