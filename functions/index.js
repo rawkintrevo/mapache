@@ -663,6 +663,22 @@ exports.vmMigrationPreflight_v2 = onRequest({invoker: "private", timeoutSeconds:
   }
 });
 
+exports.vmMigrationStatus_v2 = onRequest({invoker: "private", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (req.method !== "GET") {
+    res.set("Allow", "GET").status(405).json({error: "method_not_allowed"});
+    return;
+  }
+  try {
+    const {createVmMigrationCoordinator} = require("./vmMigrationCoordinator.service");
+    const {workspaceId, ownerUid, operationId} = req.query;
+    res.json(await createVmMigrationCoordinator({db}).getStatus({workspaceId, ownerUid, operationId}));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_migration_status_unavailable"});
+  }
+});
+
 exports.api = onRequest({
   cors: true,
   timeoutSeconds: 540,

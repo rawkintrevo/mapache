@@ -1007,9 +1007,39 @@ Compute absence and final Storage generations need separate verification after
 quiesce. Do not reuse the legacy migration record as an authoritative
 VM cutover lock.
 
-Deploy only the new endpoint with
-`firebase deploy --only functions:vmMigrationPreflight_v2 --project pi-agents-cloud`.
-This succeeded on 2026-11-23 with the `mapache-api` service account. The live
+The reservation coordinator in `functions/vmMigrationCoordinator.service.js`
+recomputes the same preflight inside a write transaction. With a verified
+admission policy, it creates an operation record, the workspace fence, and
+the Storage-prefix fence atomically. It checks the owner, observation digest,
+destination absence, and the canonical bucket/prefix against an owner registry
+scan. It refuses ambiguous prefixes, custom external HOME storage and shared
+trees that need a separately proven fence. Drain blockers such as in-flight
+uploads remain blockers for final capture after the reservation.
+
+Operation IDs are scoped to a workspace. Repeating the same request returns
+the existing operation. A different observation cannot reuse its ID.
+Aborting a reserved operation atomically releases both fences only if they
+still belong to it, the source scope and generation are unchanged, and no
+VM authority exists. The reservation and abort methods require a trusted
+admission policy. Production Functions expose only the existing preflight
+and IAM-private GET status at `vmMigrationStatus_v2`, which takes
+`workspaceId`, `ownerUid` and `operationId`. No production writer invokes the
+coordinator methods yet. Quiesce, capture, authority switching and rollback
+after VM writes require further implementation and validation.
+
+An emulator test exercises both reservation and release with real Firestore
+transactions, including competing requests, stale observations, duplicate
+retries, alias conflicts, and refusal to release after authority changes:
+
+```bash
+firebase emulators:exec --only firestore --project demo-mapache-cutover \
+  'node --test functions/vmMigrationCoordinator.service.test.js'
+```
+
+Deploy the isolated operator endpoints with
+`firebase deploy --only functions:vmMigrationPreflight_v2,functions:vmMigrationStatus_v2 --project pi-agents-cloud`.
+The original preflight deployment succeeded on 2026-11-23 with the
+`mapache-api` service account. The live
 `vm-test` check returned one stopped session and zero queued/active
 automation runs. Anonymous access returned 403, a mismatched owner
 returned 404, and POST returned 405. The source document update time was
