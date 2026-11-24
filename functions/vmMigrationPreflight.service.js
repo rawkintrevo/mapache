@@ -46,6 +46,10 @@ function classify(workspace, legacySessions, runs, existingVm) {
     blockers.push("legacy_sessions_require_quiesce");
   }
   if (runs.length) blockers.push("background_runs_require_drain");
+  if (legacySessions.some(session => ["queued", "running"].includes(normalize(session.resizeOperationState)) ||
+      ["queued", "pending", "running"].includes(normalize(session.provisioningState)))) {
+    blockers.push("legacy_compute_operations_require_reconciliation");
+  }
   return {blockers, counts: {observedSessions: legacySessions.length, possiblyActiveSessions: active.length,
     failedStops: failures.length, observedQueuedOrActiveRuns: runs.length}};
 }

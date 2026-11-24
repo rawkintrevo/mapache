@@ -955,9 +955,16 @@ deletion tombstone. A fence blocks these transitions without consuming the
 queued job or initiating deletion. Existing request claims can still be observed
 and reconciled. The coordinator must account for work committed before the
 fence, including resumed deletions and already submitted cloud operations.
-Direct legacy restart paths without a new reservation, runner-side work and
-signed Storage writes still need full coverage. The preflight now includes the
-fence in its observation digest and reports its presence as a blocker.
+Direct legacy restart and resize now check the fence in the same transaction
+that records the lifecycle transition, before a Cloud Run patch or a stop for
+recreation. The update also rejects a changed session state or operation
+identity. Legacy sync and Git reservations consult the same fence. Cloud Run
+provisioning with an operation ID checks it when claiming a fresh create.
+It can still poll an operation already submitted before the fence. The
+preflight includes the fence in its observation digest and reports
+unfinished provisioning or resize records even if the session says stopped.
+Runtime-side writers and operations without a durable claim still require
+provider reconciliation and confirmed quiesce before migration.
 Only the updated read-only preflight is deployed in this increment. The
 legacy server guards and Firestore rules require coordinated rollout and do
 not yet authorize creating production fences.

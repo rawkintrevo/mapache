@@ -1,6 +1,7 @@
 "use strict";
 
 const {createWorkspaceUploadsService} = require("./workspaceUploads.service");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {createBrowserEgressManagementService} = require("./browserEgressManagement.service");
 
 const {onRequest} = require("firebase-functions/v2/https");
@@ -981,6 +982,7 @@ async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, opt
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    await assertVmMigrationAdmission(transaction, db, workspaceId);
     const lease = resolveSyncWriterLease(
         workspaceSnap.data(),
         sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
@@ -1007,6 +1009,7 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    await assertVmMigrationAdmission(transaction, db, workspaceId);
     const activeSession = sessionsSnap.docs.find((doc) => {
       const active = doc.data();
       return isActiveGithubWorkspaceSession(active);

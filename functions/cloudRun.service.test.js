@@ -790,13 +790,19 @@ assert.deepStrictEqual(terminalCommandEnv({
   };
   let idempotentDoc = {...idempotentSession};
   let idempotentPostCount = 0;
+  let fenced = true;
+  const fenceRef = {};
   const idempotentRef = {
     get: async () => ({exists: true, data: () => idempotentDoc}),
     update: async (updates) => Object.assign(idempotentDoc, updates),
   };
   const idempotentDb = {
+    collection: name => {
+      assert.strictEqual(name, "vmMigrationFences_v2");
+      return {doc: () => fenceRef};
+    },
     runTransaction: async (callback) => callback({
-      get: async () => ({exists: true, data: () => idempotentDoc}),
+      get: async ref => ref === fenceRef ? {exists: fenced} : ({exists: true, data: () => idempotentDoc}),
       update: (ref, updates) => Object.assign(idempotentDoc, updates),
     }),
   };
@@ -822,6 +828,14 @@ assert.deepStrictEqual(terminalCommandEnv({
     operationPollIntervalMs: 2000,
     sleep: async () => {},
   });
+  await idempotentService.provisionSessionService({
+    id: "workspace-1",
+    bucket: "bucket-1",
+    storagePrefix: "workspaces/uid-1/demo",
+  }, idempotentRef, idempotentSession);
+  assert.strictEqual(idempotentPostCount, 0);
+  assert.strictEqual(idempotentDoc.provisioningState, "pending");
+  fenced = false;
   await idempotentService.provisionSessionService({
     id: "workspace-1",
     bucket: "bucket-1",

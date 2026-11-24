@@ -1,5 +1,7 @@
 "use strict";
 
+const {hasVmMigrationFence} = require("./vmMigrationFence.helpers");
+
 const {buildUploadsStorageTemplate} = require("./workspaceUploads.service");
 
 const crypto = require("node:crypto");
@@ -102,7 +104,7 @@ async function provisionSessionService(workspace, sessionRef, session, dependenc
     let claim;
     if (session.provisioningOperationId) {
       claim = await claimProvisioningAttempt(sessionRef, session, dependencies);
-      if (["completed", "failed", "in_progress", "stale"].includes(claim.action)) return;
+      if (["completed", "failed", "in_progress", "stale", "fenced"].includes(claim.action)) return;
       claimedSession = claim.session;
       operationName = claim.operationName || operationName;
     }
@@ -271,6 +273,9 @@ async function claimProvisioningAttempt(sessionRef, session, dependencies = {}) 
       return {action: "in_progress", session: latest};
     }
 
+    if (transaction && latest.workspaceId && await hasVmMigrationFence(transaction, firestore, latest.workspaceId)) {
+      return {action: "fenced", session: latest};
+    }
     const updates = {
       provisioningAttempt: Number(latest.provisioningAttempt || 0) + 1,
       provisioningState: "running",

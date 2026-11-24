@@ -19,6 +19,7 @@ const {isChromeSession} = require("./chromeReservation.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
 const {resolveAutomationAssignment} = require("./automationAssignment.service");
 const {assertNoActiveResize} = require("./sessionResize.service");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {sessionSourceMetadata} = require("./github.service");
 const {mcpConfigForRunner} = require("./mcpConfig.helpers");
 const {sessionSyncPolicyMetadata} = require("./sessionCreation.service");
@@ -112,15 +113,15 @@ async function resizeSession(uid, workspaceId, sessionId, payload, dependencies 
   const resources = dependencies.normalizeRequestedSessionResources(payload, {defaultResources: null});
   if (isMarkedRuntimeSession(session)) {
     assertRuntimeRecreationAllowed(session);
-    const stoppedSession = await stopSessionBeforeRecreation(sessionRef, session, dependencies);
+    const stoppedSession = await stopSessionBeforeRecreation(workspaceId, sessionRef, session, dependencies);
     return recreateSessionService(workspace, workspaceId, sessionRef, stoppedSession, dependencies, {resources});
   }
   const resizedAt = dependencies.admin.firestore.Timestamp.now();
-  await sessionRef.update(sessionStatusUpdate(session, "resizing", {
+  await admitLegacySessionUpdate(workspaceId, sessionRef, session, sessionStatusUpdate(session, "resizing", {
     ...accrueSessionUsage(session, resizedAt),
     resources,
     updatedAt: resizedAt,
-  }));
+  }), dependencies);
   await dependencies.patchSessionService(sessionRef, {...session, resources}, {
     trustedStorageDescriptor: workspace.sharedStorage,
   });
@@ -138,13 +139,13 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}, op
   assertMainAdmissionAllowed(workspace, dependencies);
   assertNoActiveResize(session);
   if (session.resizeOperationState === "failed") {
-    await sessionRef.update({resizeOperationState: null, resizeOperationError: null});
+    await admitLegacySessionUpdate(workspaceId, sessionRef, session, {resizeOperationState: null, resizeOperationError: null}, dependencies);
     session = {...session, resizeOperationState: null, resizeOperationError: null};
   }
   assertSupportedSessionLaunch(session);
   if (isMarkedRuntimeSession(session)) {
     assertRuntimeRecreationAllowed(session);
-    session = await stopSessionBeforeRecreation(sessionRef, session, dependencies);
+    session = await stopSessionBeforeRecreation(workspaceId, sessionRef, session, dependencies);
     return recreateSessionService(workspace, workspaceId, sessionRef, session, dependencies, {
       deferProvisioning: true,
       scheduled: options.scheduled,
@@ -207,7 +208,7 @@ async function restartSession(uid, workspaceId, sessionId, dependencies = {}, op
     });
   }
 
-  await sessionRef.update(restartUpdate);
+  await admitLegacySessionUpdate(workspaceId, sessionRef, session, restartUpdate, dependencies);
   if (!options.scheduled) await recordManualRuntimeStart(workspaceId, workspace, dependencies);
 
   const serviceId = resolveCloudRunServiceId(sessionId, session.serviceId);
@@ -306,7 +307,7 @@ async function recreateSessionService(workspace, workspaceId, sessionRef, sessio
     activeSocketCount: 0,
   });
 
-  await sessionRef.update(restartUpdate);
+  await admitLegacySessionUpdate(workspaceId, sessionRef, session, restartUpdate, dependencies);
 
   if (!options.scheduled) await recordManualRuntimeStart(workspaceId, workspace, dependencies);
 
@@ -344,15 +345,28 @@ async function recreateSessionService(workspace, workspaceId, sessionRef, sessio
   return toClientDoc(await sessionRef.get());
 }
 
-async function stopSessionBeforeRecreation(sessionRef, session, dependencies) {
+async function admitLegacySessionUpdate(workspaceId, sessionRef, expected, updates, {db}) {
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(sessionRef);
+    if (!snapshot.exists) throw httpError(404, "session_not_found");
+    const current = snapshot.data();
+    if (["ownerUid", "status", "restartNonce", "provisioningOperationId", "resizeOperationId"].some(
+        field => current[field] !== expected[field],
+    )) throw httpError(409, "session_operation_in_progress");
+    await assertVmMigrationAdmission(transaction, db, workspaceId);
+    transaction.update(sessionRef, updates);
+  });
+}
+
+async function stopSessionBeforeRecreation(workspaceId, sessionRef, session, dependencies) {
   const status = normalizeSessionState(session.status);
   if (["stopped", "needs_image"].includes(status)) return session;
 
   const stoppingAt = dependencies.admin.firestore.Timestamp.now();
-  await sessionRef.update(sessionStatusUpdate(session, "stopping", {
+  await admitLegacySessionUpdate(workspaceId, sessionRef, session, sessionStatusUpdate(session, "stopping", {
     ...runtimeSessionStateUpdate(session, "stopping"),
     updatedAt: stoppingAt,
-  }));
+  }), dependencies);
   if (isChromeSession(session) && typeof dependencies.markChromeWorkspaceSessionStopping === "function") {
     await dependencies.markChromeWorkspaceSessionStopping(sessionRef, session);
   }

@@ -75,3 +75,11 @@ test("preflight reports unresolved minting and the recorded drain window", async
   assert.ok(!elapsed.blockers.includes("legacy_upload_sessions_require_drain"));
   assert.ok(elapsed.blockers.includes("untracked_legacy_upload_sessions_unverified"));
 });
+
+test("stopped session with an uncompleted compute operation remains a blocker", async () => {
+  for (const session of [{provisioningState: "running"}, {resizeOperationState: "queued"}]) {
+    const result = await fixture({sessions: [{status: "stopped", ...session}]}).inspect();
+    assert.equal(result.counts.possiblyActiveSessions, 0);
+    assert.ok(result.blockers.includes("legacy_compute_operations_require_reconciliation"));
+  }
+});
