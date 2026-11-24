@@ -928,10 +928,24 @@ The existing `sharedStorageMigration` state is checked by Cloud Run
 session reservation and automation enqueue, but those checks do not fence
 already queued workers or dispatch to an existing session. Workspace
 deletion and other conflicting operations need the same transactional
-admission contract. Firestore rules currently allow owners to modify the
-legacy workspace record and delete it directly. Any coordinator that
-uses that record as its authority must first protect those fields and
-deletion through the rules and verify the deployed writer paths. Compute
+admission contract. The checked-in Firestore rules protect backend-owned
+runtime authority, source descriptors and storage pointers on client create
+and update. They use the presence of a backend-only document at
+`vmMigrationFences_v2/{workspaceId}` to reject direct client creates,
+updates and deletes while fenced, including when the workspace document is
+missing. Direct client deletion of a workspace with a runtime provider
+descriptor is also denied so deletion goes through the lifecycle API.
+Ordinary unfenced workspace metadata edits and legacy descriptor-free
+deletes remain available. The shipped browser uses the API for workspace
+creation and deletion.
+
+The emulator verifies owner metadata edits, denial of direct provider and
+source edits, privacy of the fence document, denial under an empty fence,
+and behavior after fence release. These rule changes are in the draft;
+production rollout must be coordinated with the backend writer checks.
+Rules apply to Firebase clients. Admin SDK operations, existing session
+dispatch, queued workers and signed Storage writes need their own admission
+and drain checks. Compute
 absence and final Storage generations need separate verification after
 quiesce. Do not reuse the legacy migration record as an authoritative
 VM cutover lock.

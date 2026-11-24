@@ -11,6 +11,8 @@ const {
 } = require("@firebase/rules-unit-testing");
 const {
   collection,
+  deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -123,6 +125,38 @@ async function main() {
       userPath: "users/alice",
       runtimePolicy: {mode: "scheduled", schedule: {}},
     }));
+
+    const workspace = doc(alice, "workspaces/workspace-a");
+    const ownerFields = {ownerUid: "alice", userPath: "users/alice", name: "Client workspace"};
+    await assertSucceeds(updateDoc(workspace, {name: "Renamed"}));
+    await assertFails(updateDoc(workspace, {runtimeProvider: {backend: "compute-engine"}}));
+    await assertFails(updateDoc(workspace, {agentRuntimeGeneration: 9, storagePrefix: "other"}));
+    await assertFails(setDoc(doc(alice, "workspaces/client-created"), {
+      ...ownerFields, runtimeProviderDescriptor: {backend: "compute-engine"},
+    }));
+    await assertSucceeds(setDoc(doc(alice, "workspaces/client-created"), ownerFields));
+    await assertSucceeds(deleteDoc(doc(alice, "workspaces/client-created")));
+
+    const fence = doc(alice, "vmMigrationFences_v2/workspace-a");
+    await assertFails(setDoc(fence, {}));
+    await testEnv.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), fence.path), {});
+      await setDoc(doc(context.firestore(), "vmMigrationFences_v2/fenced-missing"), {});
+    });
+    await assertFails(getDoc(fence));
+    await assertFails(deleteDoc(fence));
+    await assertSucceeds(getDoc(workspace));
+    await assertFails(updateDoc(workspace, {name: "During import"}));
+    await assertFails(deleteDoc(workspace));
+    await assertFails(setDoc(doc(alice, "workspaces/fenced-missing"), ownerFields));
+    await testEnv.withSecurityRulesDisabled(async context => {
+      const db = context.firestore();
+      await updateDoc(doc(db, workspace.path), {runtimeProvider: {backend: "compute-engine"}});
+      await deleteDoc(doc(db, fence.path));
+    });
+    await assertSucceeds(updateDoc(workspace, {name: "After import"}));
+    await assertFails(updateDoc(workspace, {runtimeProvider: deleteField()}));
+    await assertFails(deleteDoc(workspace));
   } finally {
     await testEnv.cleanup();
   }
