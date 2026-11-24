@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 
-function fixture({workspace = {}, sessions = [], runs = [], destination, fence, version = 1} = {}) {
+function fixture({workspace = {}, sessions = [], runs = [], destination, fence, uploads, pending = [], version = 1} = {}) {
   const workspacePath = "workspaces/fixture";
   const pathSnapshots = new Map();
   const snapshot = (path, data) => ({
@@ -15,7 +15,8 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
   pathSnapshots.set(workspacePath, snapshot(workspacePath, {ownerUid: "owner", agentRuntimeGeneration: 3, ...workspace}));
   pathSnapshots.set("vmRuntimes_v2/fixture", snapshot("vmRuntimes_v2/fixture", destination));
   pathSnapshots.set("vmMigrationFences_v2/fixture", snapshot("vmMigrationFences_v2/fixture", fence));
-  for (const [path, values] of [[workspacePath + "/sessions", sessions], ["automationRuns", runs]]) {
+  pathSnapshots.set("vmLegacyUploads_v2/fixture", snapshot("vmLegacyUploads_v2/fixture", uploads));
+  for (const [path, values] of [[workspacePath + "/sessions", sessions], ["automationRuns", runs], ["vmLegacyUploads_v2/fixture/pending", pending]]) {
     pathSnapshots.set(path, {size: values.length, docs: values.map((row, i) => snapshot(path + "/" + i, row))});
   }
   const ref = path => ({
@@ -30,7 +31,7 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
     assert.deepEqual(options, {readOnly: true});
     return body({get: async query => { reads.push(query.path); return pathSnapshots.get(query.path); }});
   }};
-  return {reads, inspect: (ownerUid = "owner") => createVmMigrationPreflight({db})({workspaceId: "fixture", ownerUid})};
+  return {reads, inspect: (ownerUid = "owner") => createVmMigrationPreflight({db, now: () => 5})({workspaceId: "fixture", ownerUid})};
 }
 
 test("reports possibly live and failed legacy writers without exposing record contents", async () => {
@@ -60,8 +61,17 @@ test("inventory truncation and apparently stopped source both fail closed", asyn
   assert.ok(result.blockers.includes("legacy_writer_inventory_truncated"));
   const paused = await fixture({sessions: [{status: "stopped"}]}).inspect();
   assert.equal(paused.counts.possiblyActiveSessions, 0);
-  assert.deepEqual(paused.blockers, ["legacy_admission_fence_unverified", "live_compute_and_storage_authority_unverified"]);
+  assert.deepEqual(paused.blockers, ["legacy_admission_fence_unverified", "live_compute_and_storage_authority_unverified", "untracked_legacy_upload_sessions_unverified"]);
   const fenced = await fixture({fence: {}}).inspect();
   assert.ok(fenced.blockers.includes("migration_fence_already_exists"));
   assert.notEqual(fenced.observationSha256, (await fixture().inspect()).observationSha256);
+});
+
+test("preflight reports unresolved minting and the recorded drain window", async () => {
+  const pending = await fixture({uploads: {drainUntilMs: 6}, pending: [{}]}).inspect();
+  assert.ok(pending.blockers.includes("legacy_upload_issuance_unresolved"));
+  assert.ok(pending.blockers.includes("legacy_upload_sessions_require_drain"));
+  const elapsed = await fixture({uploads: {drainUntilMs: 4}}).inspect();
+  assert.ok(!elapsed.blockers.includes("legacy_upload_sessions_require_drain"));
+  assert.ok(elapsed.blockers.includes("untracked_legacy_upload_sessions_unverified"));
 });

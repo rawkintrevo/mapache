@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const {DEFAULT_BUCKET} = require("./backendConfig");
 const {httpError} = require("./backendUtils.helpers");
 const {signSessionBrowserAccessToken} = require("./preview.service");
+const {mintLegacyUpload} = require("./vmLegacyUploadAdmission.service");
 const MAX_UPLOAD_BYTES = 1024 ** 3;
 
 function uploadsForWorkspace(workspace) {
@@ -30,7 +31,7 @@ function validateUpload(body = {}) {
   return {name, size};
 }
 
-function createWorkspaceUploadsService({requireWorkspace, sessionCollection, storage, browserAccessTtlMs = 60 * 60 * 1000}) {
+function createWorkspaceUploadsService({db, requireWorkspace, sessionCollection, storage, browserAccessTtlMs = 60 * 60 * 1000}) {
   return {
     async createUpload(uid, workspaceId, body, origin) {
       const workspace = await requireWorkspace(uid, workspaceId);
@@ -53,10 +54,22 @@ function createWorkspaceUploadsService({requireWorkspace, sessionCollection, sto
       if (exists) throw httpError(409, "upload_filename_already_exists_rename_file");
       // GCS enforces the declared content length. A generation precondition also
       // prevents a concurrent upload from replacing a completed file.
-      const [uploadUrl] = await file.createResumableUpload({
-        origin: origin || undefined,
-        metadata: {contentType: "application/octet-stream", contentLength: size},
-        preconditionOpts: {ifGenerationMatch: 0},
+      const uploadUrl = await mintLegacyUpload({
+        db, uid, workspaceId,
+        validateWorkspace: current => {
+          const currentRuntime = current.runtimeProvider || current.runtimeProviderDescriptor;
+          const currentDescriptor = uploadsForWorkspace(current);
+          if ((currentRuntime && currentRuntime.backend !== "cloud-run") ||
+              (typeof current.source === "string" ? current.source : current.source?.type) === "ssh" ||
+              currentDescriptor.bucketName !== descriptor.bucketName || currentDescriptor.prefix !== descriptor.prefix) {
+            throw httpError(409, "workspace_upload_storage_changed");
+          }
+        },
+        mint: async () => (await file.createResumableUpload({
+          origin: origin || undefined,
+          metadata: {contentType: "application/octet-stream", contentLength: size},
+          preconditionOpts: {ifGenerationMatch: 0},
+        }))[0],
       });
       return {uploadUrl, path: `/uploads/${name}`, size};
     },

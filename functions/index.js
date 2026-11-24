@@ -508,6 +508,7 @@ function googleMcpTokenRefreshUrl() {
 }
 
 const workspaceUploadsService = createWorkspaceUploadsService({
+  db,
   browserAccessTtlMs: SESSION_BROWSER_ACCESS_TTL_MS,
   requireWorkspace,
   sessionCollection,

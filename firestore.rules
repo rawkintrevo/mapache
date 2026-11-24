@@ -92,6 +92,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /vmMigrationStorageFences_v2/{path=**} {
+      allow read, write: if false;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn() &&

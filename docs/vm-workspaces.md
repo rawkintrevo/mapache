@@ -962,6 +962,40 @@ Only the updated read-only preflight is deployed in this increment. The
 legacy server guards and Firestore rules require coordinated rollout and do
 not yet authorize creating production fences.
 
+The draft legacy upload issuer now records its intent under
+`vmLegacyUploads_v2/{workspaceId}/pending/{operationId}` in a transaction
+that checks the fence, owner, workspace state and current Storage
+descriptor. Before returning a resumable session URI, it replaces the
+intent with a per-workspace drain deadline. The URI itself never goes
+into Firestore. The deadline is set to seven days plus five minutes after
+the provider response, and concurrent issuances can only extend it. A
+failed or ambiguous provider call leaves the intent so an operator can
+reconcile it. The preflight distinguishes unresolved issuance from an
+active drain deadline.
+
+Cloud Storage resumable session URIs remain usable for up to one week.
+The current legacy deployment can still issue untracked URIs. An empty
+ledger is insufficient evidence that there are no active upload sessions.
+Disabling all old issuance paths and proving that earlier sessions have
+expired or been canceled remains part of the final capture gate. Direct
+Firebase Storage SDK writes have a separate draft guard in `storage.rules`.
+An Admin-only document at
+`vmMigrationStorageFences_v2/{bucket}/owners/{uid}/prefixes/{workspaceKey}`
+blocks client writes and deletes at `workspaces/{uid}/{workspaceKey}/...`
+while preserving owner reads and writes in sibling prefixes. The key is the
+actual Storage path segment, which can differ from the Firestore workspace
+ID. Before creating a fence, the coordinator must verify that the bucket and
+prefix uniquely identify the source and account for custom paths and aliases.
+The rules need cross-service Firestore access and a coordinated rollout.
+Other GCS writers require their own quiesce and access revocation checks.
+[Cloud Storage resumable uploads](https://docs.cloud.google.com/storage/docs/resumable-uploads)
+
+The Firestore/Storage emulator test runs with
+`firebase emulators:exec --only firestore,storage --project mapache-rules-test 'node storage.rules.test.cjs && node firestore.rules.test.cjs'`.
+It covers owner reads under a fence, refusal of fenced creates/replacements/
+deletes, a neighboring unfenced prefix, foreign access and release. Production
+changes for this increment are limited to the read-only preflight.
+
 Compute absence and final Storage generations need separate verification after
 quiesce. Do not reuse the legacy migration record as an authoritative
 VM cutover lock.
