@@ -859,6 +859,32 @@ This does not establish VM/noVNC behavior, runner-version compatibility,
 encrypted credential recovery or external login validity. No cloud deployment
 or source/provider change occurred.
 
+`scripts/lib/vm-owner-tools-import.mjs` captures the existing
+`owner-gcsfuse-v1` tools source. It derives the owner-hashed prefix through the
+backend's `userToolsStorageForOwner`, requires a complete bounded listing and
+an explicit byte budget, and pins each object generation. File bytes are checked
+against available GCS MD5/CRC32C values while computing SHA-256 for resumable
+local staging. It rejects namespace/path conflicts, missing checksums, changed
+generations, nonempty directory markers and unsupported custom metadata before
+accepting a plan. The observed `gcsfuse_mtime` string is retained without losing
+its precision; applying it is still assembly work.
+
+The old mount explicitly uses `file-mode=0755` and `dir-mode=0755`. Accordingly,
+plans map both explicit markers and implicit directories to retained
+`home/.local` with those modes instead of guessing from file names. A capture
+is not a consistent snapshot: other owner workspaces can still write this
+shared source, so final writer reconciliation remains necessary. Staging does
+not alter owner-wide sharing or choose how this source merges with a HOME
+archive. Destination assembly remains outstanding for this format.
+
+The real `vm-test` owner-tools proof verified and staged three files totaling
+65,988 bytes and captured five empty directory markers on 2026-11-23. Private
+evidence: `artifacts/qa/vm-owner-tools-import/result.json` and
+`stage/owner-tools-plan.json`. No cloud source data or deployment changed.
+Tests: `node --test scripts/lib/vm-owner-tools-import.test.mjs` (owner identity,
+listing/budget/metadata refusal, CRC-only sources, generation/checksum failure,
+fixed mount modes, timestamps and resume without remote reads).
+
 Cutover is:
 
 ```text
