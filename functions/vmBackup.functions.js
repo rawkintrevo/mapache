@@ -11,7 +11,9 @@ const {createVmBackupSchedulerService} = require("./vmBackupScheduler.service");
 const backup = createComputeEngineBackupService({projectId: "pi-agents-cloud"});
 const compute = createComputeEngineService({projectId: "pi-agents-cloud"});
 const service = createVmBackupSchedulerService({db, backup});
-const inventory = createVmBackupInventoryService({db, provider: {inspect: compute.inspect, listSnapshots: backup.listSnapshots}});
+const inventory = createVmBackupInventoryService({db, provider: {
+  inspect: compute.inspect, listOwnedResources: compute.listOwnedResources, listSnapshots: backup.listSnapshots,
+}});
 
 // Workspaces opt in by setting backupPolicy.enabled=true on their backend-owned
 // VM registry document. The existing Cloud Run path and all VM records without

@@ -81,6 +81,32 @@ test("ownership labels prevent cleanup of another workspace", async () => {
   await assert.rejects(service.pause(descriptor()), /ownership/);
 });
 
+test("owned resource inventory paginates aggregated Compute listings and filters foreign labels", async () => {
+  const d = descriptor();
+  const label = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
+  const owned = {"mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+    "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND};
+  const calls = [];
+  const service = createComputeEngineService({projectId: "pi-agents-cloud", request: async request => {
+    calls.push(request);
+    if (request.url.endsWith("/aggregated/instances")) {
+      return request.params.pageToken ? {data: {items: {"zones/us-central1-b": {instances: [
+        {name: "owned-instance-2", status: "TERMINATED", labels: owned},
+      ]}}}} : {data: {nextPageToken: "page-2", items: {"zones/us-central1-a": {instances: [
+        {name: "foreign-instance", status: "RUNNING", labels: {...owned, "mapache-workspace-id": label("other")}},
+        {name: "owned-instance-1", status: "RUNNING", labels: owned},
+      ]}}}};
+    }
+    return {data: {items: {"zones/us-central1-a": {disks: [
+      {name: "owned-disk", status: "READY", sizeGb: 64, users: [], labels: owned},
+    ]}}}};
+  }});
+  const result = await service.listOwnedResources(d);
+  assert.deepEqual(result.instances.map(item => item.name), ["owned-instance-1", "owned-instance-2"]);
+  assert.deepEqual(result.disks.map(item => item.name), ["owned-disk"]);
+  assert.equal(calls.filter(call => call.url.endsWith("/aggregated/instances")).length, 2);
+});
+
 function lifecycleFixture() {
   const d = descriptor();
   const prefix = "https://www.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/us-central1-a";

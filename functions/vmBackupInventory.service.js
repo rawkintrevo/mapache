@@ -37,20 +37,22 @@ function createVmBackupInventoryService({db, provider, now = Date.now, logger = 
         runtime.backupPolicy?.enabled !== true) throw inventoryError("vm_backup_inventory_runtime_not_admitted");
     const descriptor = normalizeRuntimeDescriptor(runtime.runtimeProvider || runtime.runtimeProviderDescriptor,
         {workspaceId, ownerUid: runtime.ownerUid});
-    const [compute, providerSnapshots, backupItems] = await Promise.all([
+    const [compute, providerResources, providerSnapshots, backupItems] = await Promise.all([
       provider.inspect(descriptor),
+      typeof provider.listOwnedResources === "function" ? provider.listOwnedResources(descriptor) : null,
       provider.listSnapshots(descriptor),
       db.collection("vmBackups_v2").doc(workspaceId).collection("items").limit(MAX_SCAN).get(),
     ]);
     const snapshots = backupItems.docs.map(doc => ({id: doc.id, ...doc.data()}));
     const report = buildInventoryReport({workspaceId, ownerUid: runtime.ownerUid, runtime, compute, snapshots,
-      providerSnapshots, observedAtMs: now()});
+      providerResources, providerSnapshots, observedAtMs: now()});
     await db.collection(REPORTS).doc(workspaceId).set(report);
     return report;
   }
 }
 
-function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}, snapshots = [], providerSnapshots = snapshots,
+function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}, providerResources = null,
+  snapshots = [], providerSnapshots = snapshots,
   observedAtMs = Date.now()} = {}) {
   const observedAt = new Date(observedAtMs);
   if (Number.isNaN(observedAt.getTime())) throw inventoryError("vm_backup_inventory_time_invalid");
@@ -70,8 +72,11 @@ function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}
   const backupAgeMs = lastVerified === null ? null : Math.max(0, observedAt.getTime() - lastVerified);
   const cost = estimatedCost({diskGiB: diskSizeGb, snapshotGiB, instanceRunning,
     activeHours: instanceRunning ? 24 * 30 : 0});
+  const resourceInventory = summarizeProviderResources(providerResources);
+  const expectedInstanceName = runtime.runtimeProvider?.instanceName || runtime.runtimeProviderDescriptor?.instanceName || instance?.name || null;
+  const expectedDiskName = runtime.runtimeProvider?.dataDiskName || runtime.runtimeProviderDescriptor?.dataDiskName || disk?.name || null;
   return {
-    version: 1,
+    version: 2,
     kind: "compute-engine-backup-inventory",
     workspaceId,
     ownerUid,
@@ -88,6 +93,7 @@ function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}
       diskSizeGb,
       headroomKnown: false,
     },
+    providerResources: resourceInventory,
     backups: {
       observed: snapshots.length,
       providerObserved: providerSnapshots.length,
@@ -102,10 +108,27 @@ function buildInventoryReport({workspaceId, ownerUid, runtime = {}, compute = {}
       diskDetached: Array.isArray(disk?.users) ? disk.users.length === 0 : null,
       instanceWithoutDisk: Boolean(instance) && !disk,
       diskWithoutInstance: Boolean(disk) && !instance,
+      ownedInstanceCount: resourceInventory.known ? resourceInventory.instances.length : null,
+      ownedDiskCount: resourceInventory.known ? resourceInventory.disks.length : null,
+      unexpectedOwnedInstances: resourceInventory.known ? resourceInventory.instances.filter(item => item.name !== expectedInstanceName).map(item => item.name) : [],
+      unexpectedOwnedDisks: resourceInventory.known ? resourceInventory.disks.filter(item => item.name !== expectedDiskName).map(item => item.name) : [],
+      resourceInventoryKnown: resourceInventory.known,
       cleanupAllowed: false,
       reason: "inventory_is_read_only",
     },
     cost,
+  };
+}
+
+function summarizeProviderResources(resources) {
+  if (!resources || !Array.isArray(resources.instances) || !Array.isArray(resources.disks)) {
+    return {known: false, instances: [], disks: []};
+  }
+  return {
+    known: true,
+    instances: resources.instances.slice(0, MAX_SCAN).map(resource => ({name: resource.name || null, status: resource.status || null})),
+    disks: resources.disks.slice(0, MAX_SCAN).map(resource => ({name: resource.name || null, status: resource.status || null,
+      sizeGb: finitePositive(resource.sizeGb), users: Array.isArray(resource.users) ? resource.users.length : null})),
   };
 }
 

@@ -34,6 +34,7 @@ function createComputeEngineService(dependencies = {}) {
     ensureDataDisk: (descriptor, options) => ensureDataDisk(descriptor, options),
     ensureInstance: (descriptor, options) => ensureInstance(descriptor, options),
     inspect: (descriptor) => inspect(descriptor),
+    listOwnedResources: (descriptor, options) => listOwnedResources(descriptor, options),
     inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
     inspectMigrationRuntime: (descriptor, options) => inspectMigrationRuntime(descriptor, options),
     deleteMigrationImportedDisk: (descriptor, options) => deleteMigrationImportedDisk(descriptor, options),
@@ -165,6 +166,39 @@ function createComputeEngineService(dependencies = {}) {
       state: instance?.status === "RUNNING" ? "running" : "stopped",
       observedAt: new Date().toISOString(),
     };
+  }
+
+  async function listOwnedResources(rawDescriptor, {maxResults = 100} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    const limit = Number(maxResults);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+      throw computeError("runtime_resource_inventory_limit_invalid", "Compute resource inventory limit is invalid");
+    }
+    const [instances, disks] = await Promise.all([
+      listAggregatedResources("instances", limit),
+      listAggregatedResources("disks", limit),
+    ]);
+    return {
+      instances: instances.filter(resource => hasOwnershipLabels(resource, descriptor)),
+      disks: disks.filter(resource => hasOwnershipLabels(resource, descriptor)),
+    };
+  }
+
+  async function listAggregatedResources(kind, limit) {
+    const items = [];
+    let pageToken = null;
+    do {
+      const response = await requestImpl({url: `${COMPUTE_API}/projects/${encodeURIComponent(projectId)}/aggregated/${kind}`,
+        method: "GET", params: {maxResults: Math.min(limit - items.length, 500), ...(pageToken ? {pageToken} : {})}});
+      const entries = response.data?.items && typeof response.data.items === "object" ? Object.values(response.data.items) : [];
+      for (const entry of entries) {
+        const resources = Array.isArray(entry?.[kind]) ? entry[kind] : [];
+        items.push(...resources.slice(0, Math.max(0, limit - items.length)));
+        if (items.length >= limit) break;
+      }
+      pageToken = items.length >= limit ? null : response.data?.nextPageToken || null;
+    } while (pageToken);
+    return items;
   }
 
   async function ensureDataDisk(rawDescriptor, options = {}) {
@@ -644,10 +678,16 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   function assertOwnership(resource, descriptor) {
-    const labels = resource?.labels || {};
-    if (labels["mapache-owner-uid"] !== identityLabel(descriptor.ownerUid) || labels["mapache-workspace-id"] !== identityLabel(descriptor.workspaceId) || labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
+    if (!hasOwnershipLabels(resource, descriptor)) {
       throw computeError("runtime_resource_ownership_mismatch", "Compute resource ownership labels do not match the admitted workspace");
     }
+  }
+
+  function hasOwnershipLabels(resource, descriptor) {
+    const labels = resource?.labels || {};
+    return labels["mapache-owner-uid"] === identityLabel(descriptor.ownerUid) &&
+      labels["mapache-workspace-id"] === identityLabel(descriptor.workspaceId) &&
+      labels["mapache-runtime-provider"] === COMPUTE_ENGINE_BACKEND;
   }
 
   function operationId(value) {

@@ -10,6 +10,8 @@ const NOW = Date.parse("2026-01-10T00:00:00.000Z");
 test("inventory reports backup age, stranded state, retention decisions, and unknown cost components", () => {
   const report = buildInventoryReport({workspaceId: "workspace-1", ownerUid: "owner-1", observedAtMs: NOW,
     runtime: {backupPolicy: {enabled: true, schedule: "daily"}},
+    providerResources: {instances: [{name: "unexpected-instance", status: "TERMINATED"}],
+      disks: [{name: "mapache-disk-workspace-1", status: "READY", sizeGb: 64, users: []}]},
     compute: {disk: {status: "READY", sizeGb: 64, users: []}, instance: null},
     snapshots: [
       {name: "verified", workspaceId: "workspace-1", ownerUid: "owner-1", state: "verified",
@@ -22,6 +24,9 @@ test("inventory reports backup age, stranded state, retention decisions, and unk
   assert.deepEqual(report.backups.retentionCandidates.map(item => item.name), ["verified"]);
   assert.deepEqual(report.backups.quarantined.map(item => item.name), ["foreign"]);
   assert.equal(report.strandedResources.cleanupAllowed, false);
+  assert.equal(report.providerResources.known, true);
+  assert.deepEqual(report.strandedResources.unexpectedOwnedInstances, ["unexpected-instance"]);
+  assert.equal(report.strandedResources.ownedDiskCount, 1);
   assert.equal(report.cost.retainedStorageMonthlyUsd, 6.4);
   assert.ok(report.cost.unknownComponents.includes("network"));
   assert.ok(report.cost.unknownComponents.includes("compute"));
@@ -39,6 +44,7 @@ test("inventory service only reports explicitly opted-in runtimes", async () => 
   const calls = [];
   const service = createVmBackupInventoryService({db, now: () => NOW, provider: {
     inspect: async () => ({disk: {sizeGb: 10, users: []}, instance: null}),
+    listOwnedResources: async () => ({instances: [], disks: []}),
     listSnapshots: async () => [],
   }});
   const result = await service.runTick();
