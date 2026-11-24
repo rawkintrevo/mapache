@@ -8,12 +8,18 @@ const {
 } = require("./automationAgentAuth.service");
 
 class Ref {
-  constructor(value) {
+  constructor(value, db, path) {
     this.value = value;
+    this.db = db;
+    this.path = path;
   }
 
   async get() {
     return {exists: this.value !== undefined, data: () => this.value};
+  }
+
+  collection(name) {
+    return {doc: (id) => new Ref(this.db.data.get(`${this.path}/${name}/${id}`), this.db, `${this.path}/${name}/${id}`)};
   }
 }
 
@@ -23,7 +29,7 @@ class Db {
   }
 
   collection(name) {
-    return {doc: (id) => new Ref(this.data.get(`${name}/${id}`))};
+    return {doc: (id) => new Ref(this.data.get(`${name}/${id}`), this, `${name}/${id}`)};
   }
 }
 
@@ -96,4 +102,25 @@ test("does not enumerate sibling workspaces or accept the runner secret as an AP
       () => service.verifyToken("runner-secret"),
       (error) => error.status === 401 && error.publicMessage === "automation_agent_unauthorized",
   );
+});
+
+test("mints a scoped token for an admitted VM runtime using its separate credentials document", async () => {
+  const {data, service} = createHarness();
+  const lease = Date.now() + 60_000;
+  data.set("vmRuntimes_v2/workspace-1", {
+    ownerUid: "user-1", backend: "compute-engine", apiEnabled: true, lifecycleEnabled: true,
+    state: "active", generation: 4, currentSessionId: "vm-session-4", bootId: "vm-boot-4", leaseExpiresAt: lease,
+  });
+  data.set("vmRuntimes_v2/workspace-1/sessions/vm-session-4", {
+    ownerUid: "user-1", generation: 4, state: "active", bootId: "vm-boot-4", leaseExpiresAt: lease,
+    runtimeProvider: {version: 1, backend: "compute-engine", workspaceId: "workspace-1", ownerUid: "user-1", generation: 4},
+  });
+  data.set("vmRuntimeCredentials_v2/vm-session-4", {ownerUid: "user-1", generation: 4, shutdownToken: "vm-secret"});
+  const minted = await service.mintToken(request({workspaceId: "workspace-1", sessionId: "vm-session-4"}, "vm-secret"));
+  const claims = service.verifyToken(minted.accessToken);
+  assert.equal(claims.ownerUid, "user-1");
+  assert.equal(claims.workspaceId, "workspace-1");
+  assert.equal(claims.sessionId, "vm-session-4");
+  assert.equal(claims.generation, "4");
+  assert.equal(claims.bootInstanceId, "vm-boot-4");
 });

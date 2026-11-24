@@ -9,6 +9,7 @@ const DEFAULT_MACHINE_TYPE = "e2-standard-2";
 const DEFAULT_DATA_DISK_TYPE = "pd-balanced";
 const DEFAULT_DATA_DISK_SIZE_GB = 64;
 const DEFAULT_ZONE = "us-central1-a";
+const DEFAULT_FUNCTION_REGION = "us-central1";
 
 function computeError(code, message, details = {}) {
   const error = new Error(message || code);
@@ -718,6 +719,7 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   function runtimeEnvArgs(descriptor, options) {
+    const functionBase = `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net`;
     const env = {
       RUNTIME_PROVIDER: COMPUTE_ENGINE_BACKEND,
       MAPACHE_RETAINED_DISK_ROOT: "/var/lib/mapache/workspace",
@@ -725,6 +727,8 @@ function createComputeEngineService(dependencies = {}) {
       MAPACHE_ALLOW_FORMAT_NEW_DISK: options.allowNewDisk === true ? "true" : "false",
       MAPACHE_RUNTIME_PROVIDER: COMPUTE_ENGINE_BACKEND,
       MAPACHE_AGENT_RUNTIME_GENERATION: String(descriptor.generation),
+      MAPACHE_AUTOMATION_AGENT_TOKEN_URL: `${functionBase}/automationAgentToken`,
+      MAPACHE_AUTOMATION_AGENT_API_URL: `${functionBase}/api`,
       WORKSPACE_ID: descriptor.workspaceId,
       OWNER_UID: descriptor.ownerUid,
       WORKSPACE_STORAGE_MODE: "retained-disk",

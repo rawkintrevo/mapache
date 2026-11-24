@@ -65,6 +65,8 @@ test("VM startup creates a labeled retained disk and a private instance without 
   assert.match(script, /docker run/);
   assert.doesNotMatch(script, /gce-container-declaration|konlet/);
   assert.match(script, /runner\/health|MAPACHE_RUNTIME_PROVIDER|mapache-runner/);
+  assert.match(script, /MAPACHE_AUTOMATION_AGENT_TOKEN_URL=https:\/\/us-central1-pi-agents-cloud\.cloudfunctions\.net\/automationAgentToken/);
+  assert.match(script, /MAPACHE_AUTOMATION_AGENT_API_URL=https:\/\/us-central1-pi-agents-cloud\.cloudfunctions\.net\/api/);
   assert.match(script, /DOCKER-USER.*169\.254\.169\.254/);
   assert.equal(instanceRequest.data.networkInterfaces[0].accessConfigs, undefined);
 });

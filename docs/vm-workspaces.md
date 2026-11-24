@@ -549,6 +549,11 @@ uncertain acknowledgements, and VM replacement. An uncertain external side
 effect is not replayed automatically. Pause waits for admitted work according
 to the existing exclusion policy; it does not silently kill a scheduled task.
 Usage records distinguish active VM time, retained disk, and background work.
+The VM bootstrap also injects the Functions-owned automation-agent token and
+API URLs. Token minting joins the nested VM session with its separate
+credential record and validates the current generation, boot ID, lease, and
+explicit API admission; it does not treat a legacy Cloud Run session record as
+the VM authority.
 `functions/vmUsage.service.js` writes one operation-keyed ledger entry when a
 VM pause/start/replace transition finishes. The entry accrues active runtime
 from the runner's `runtimeStartedAt` independently from retained-disk
