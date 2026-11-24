@@ -1,13 +1,15 @@
 # VM crossover #605 handoff
 
-Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation is complete; the broader migration remains open.
+Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation and VM automation-agent authority boundary are complete; the broader migration remains open.
 
 ## Start here
 
 - Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
 - Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
 - The last verified clone-copy increment is `773098d`. The PR head preserves the clone-boot implementation, and the validation boot operator path is now implemented and has passed a disposable live proof on the continuation branch.
-- Rough overall estimate: **73%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Commit `1818c9d` closes the VM automation-agent admission gap: VM bootstrap injects the Functions-owned token/API URLs, and token/API admission joins the nested VM session with its separate credential record while fencing generation, boot ID, lease, and explicit API admission.
+- A live probe against `vm-proof-605` minted a token from the deployed `automationAgentToken` revision and received `200` from `/api/agent/workspace-requests/targets`; the temporary API admission was restored to `false`.
+- Rough overall estimate: **75%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -20,8 +22,8 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 
 ## Live state rechecked at handoff
 
-- Synthetic workspace `vm-proof-605`, generation 11, registry state `active`, desired configuration version 1, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`.
-- Current session: `vm-1977e861d998de7357678d53-g11`.
+- Synthetic workspace `vm-proof-605`, generation 19, registry state `active`, desired configuration version 1, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`.
+- Current session: `vm-930595c51f3f45655e347977-g19`. Its current boot ID and lease were accepted by the live token/API probe; no temporary QA marker remains.
 - VM `mapache-vm-0d357714e0867ab67c057652` is RUNNING in `us-central1-a`, machine type `e2-standard-2`.
 - Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 64 GiB `pd-balanced`. The running VM, retained disk and private networking continue to incur costs. Nothing was stopped or deleted for this handoff.
 - Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` are ACTIVE in `pi-agents-cloud`. Firebase created `vmMigrationValidationControl_v2` and updated `vmMigrationStatus_v2` before the pause. The validation broker accepts runner requests over public HTTPS using a validation-session bearer token. A GET returned 405 and a POST for an unknown validation session returned 404. Anonymous status returned 403. Legacy writer guards and Firestore/Storage rules remain staged, and the opt-in frontend remains off production Hosting.
@@ -143,7 +145,7 @@ Fully evidenced original acceptance criteria: 4.
 
 ### #613: Partial — VM request wake-up and native automation dispatch implemented, end-to-end gate remains open
 
-Evidence: `functions/vmWorkspaceRuntime.service.js` recognizes an owner-matched, API-admitted Compute Engine workspace, submits one idempotent durable `start` lifecycle request for a stopped machine, waits for the current generation's boot/lease/gateway/readiness authority, and creates a short-lived agent access token without putting credentials in the ticket or run contract. The existing shared workspace-request broker reuses that canonical VM runner, re-reads VM identity before acknowledging dispatch, and retains the existing no-blind-replay and cancellation rules. Scheduled automation now records `executionRoute: vm-native-v1`, wakes or reuses the canonical VM, and dispatches only its run ID to authenticated runner control routes. `session-runner/lib/vmAutomationRuntime.service.js` creates a run-private bubblewrap child with a filtered read-only input snapshot, a hidden live workspace mount, private state, and durable retained-disk output. Cleanup retains output and releases the slot only after durable cancellation/terminal state; reconciliation probes canonical `/runner/health` and the run status. Focused tests cover stopped-target wake-up, API-admission gating, ready-target reuse, owner isolation, request dispatch without a Cloud Run sibling, native assignment/identity checks, snapshot/link isolation, restart-safe cancellation, provisioning, cleanup, and reconciliation.
+Evidence: `functions/vmWorkspaceRuntime.service.js` recognizes an owner-matched, API-admitted Compute Engine workspace, submits one idempotent durable `start` lifecycle request for a stopped machine, waits for the current generation's boot/lease/gateway/readiness authority, and creates a short-lived agent access token without putting credentials in the ticket or run contract. The existing shared workspace-request broker reuses that canonical VM runner, re-reads VM identity before acknowledging dispatch, and retains the existing no-blind-replay and cancellation rules. Scheduled automation now records `executionRoute: vm-native-v1`, wakes or reuses the canonical VM, and dispatches only its run ID to authenticated runner control routes. `session-runner/lib/vmAutomationRuntime.service.js` creates a run-private bubblewrap child with a filtered read-only input snapshot, a hidden live workspace mount, private state, and durable retained-disk output. Cleanup retains output and releases the slot only after durable cancellation/terminal state; reconciliation probes canonical `/runner/health` and the run status. Focused tests cover stopped-target wake-up, API-admission gating, ready-target reuse, owner isolation, request dispatch without a Cloud Run sibling, native assignment/identity checks, snapshot/link isolation, restart-safe cancellation, provisioning, cleanup, and reconciliation. Commit `1818c9d` also injects the token/API URLs into VM bootstrap and makes the deployed token/API boundary understand the nested VM session plus separate credential document. A live generation-19 probe minted the VM token and called the agent target-discovery route successfully, with temporary admission restored afterward.
 
 Remaining: Deploy and exercise this path against an eligible live VM with a real external request, model discovery, and a stopped-target scheduled/Run-now run. Verify real bubblewrap startup, provider/model selection, child crash and cancellation races, concurrent-run admission, output visibility and retention, safe idle/scheduled shutdown, cross-machine tool sharing, and correct usage accounting. No full #613 acceptance criterion is met; the native implementation is staged but not live-proven.
 
