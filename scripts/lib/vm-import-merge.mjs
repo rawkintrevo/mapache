@@ -17,6 +17,14 @@ const receipts = {
   'owner-tools': 'owner-tools-tree.json',
 };
 
+export function normalizePrefixCapture(value) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value.operationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.operationId) ||
+      typeof value.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.sha256) ||
+      (value.sourceGeneration !== null && !Number.isSafeInteger(value.sourceGeneration))) fail('merge_capture_invalid');
+  return {operationId: value.operationId, sourceGeneration: value.sourceGeneration, sha256: value.sha256};
+}
+
 async function loadSource(source, ownerUid, workspaceId) {
   if (!Object.hasOwn(receipts, source.kind) || !path.isAbsolute(source.root) ||
       await fs.realpath(source.root) !== source.root) fail('merge_source_invalid');
@@ -28,10 +36,18 @@ async function loadSource(source, ownerUid, workspaceId) {
       receipt.sourcePlanSha256 !== identity.sourcePlanSha256) fail('merge_source_identity_mismatch');
   let entries;
   let tombstones = [];
+  let prefixCapture;
+  let component;
   if (source.kind === 'archive') {
     const doc = await readJson(path.join(source.root, 'archive-plan.json'));
     if (digest(JSON.stringify(doc.sourcePlan)) !== identity.sourcePlanSha256) fail('merge_source_plan_changed');
     entries = doc.entries;
+    prefixCapture = doc.sourcePlan.prefixCapture;
+    component = prefixCapture?.archiveKind;
+    if (prefixCapture && (receipt.archivePlanSha256 !== digest(JSON.stringify(doc)) ||
+        !['home', 'browser'].includes(component) || doc.sourcePlan.destination !== (component === 'home' ? 'home' : 'browser/profile'))) {
+      fail('merge_capture_archive_plan_changed');
+    }
   } else {
     const plan = source.kind === 'owner-tools'
       ? (await readJson(path.join(source.root, 'owner-tools-plan.json'))).plan
@@ -39,10 +55,32 @@ async function loadSource(source, ownerUid, workspaceId) {
     if (digest(JSON.stringify(plan.document)) !== identity.sourcePlanSha256) fail('merge_source_plan_changed');
     entries = plan.document.entries;
     tombstones = plan.document.tombstones || [];
+    prefixCapture = plan.document.prefixCapture;
+    component = prefixCapture?.checkpointKind;
+    if (prefixCapture && (source.kind !== 'checkpoint' || !['agent', 'workspace'].includes(component))) fail('merge_capture_invalid');
   }
   const tree = path.join(source.root, 'tree');
   await plainDirectory(tree);
-  return {tree, entries, tombstones, sourcePlanSha256: identity.sourcePlanSha256};
+  return {tree, entries, tombstones, sourcePlanSha256: identity.sourcePlanSha256,
+    prefixCapture, component, operationId: identity.operationId};
+}
+
+function bindPrefixCapture(expected, sources) {
+  if (!expected) {
+    if (sources.some(source => source.prefixCapture !== undefined)) fail('merge_capture_required');
+    return undefined;
+  }
+  const components = new Set();
+  for (const {prefixCapture, operationId, component, entries, tombstones} of sources) {
+    if (!prefixCapture || operationId !== expected.operationId ||
+        Object.keys(expected).some(key => prefixCapture[key] !== expected[key])) fail('merge_capture_source_mismatch');
+    const root = component === 'browser' ? 'browser/profile' : component;
+    const belongs = name => validPath(name) && within(name, root);
+    if (components.has(component) || entries.some(entry => !belongs(entry.path)) ||
+        tombstones.some(name => !belongs(name))) fail('merge_capture_component_invalid');
+    components.add(component);
+  }
+  return {...expected, components: [...components].sort()};
 }
 
 function mergeEntries(sources) {
@@ -127,12 +165,13 @@ async function sourceMember(source, entry) {
 }
 
 // The maintenance operator supplies private stages and exclusive destination access.
-export async function assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes}, {beforeStage} = {}) {
+export async function assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes, prefixCapture}, {beforeStage} = {}) {
   if (typeof root !== 'string' || !path.isAbsolute(root) ||
       !Array.isArray(sources) || !sources.length || !Number.isSafeInteger(maxBytes) || maxBytes < 0) fail('merge_input_invalid');
   root = path.resolve(root);
   const loaded = [];
   for (const source of sources) loaded.push(await loadSource(source, ownerUid, workspaceId));
+  const captured = bindPrefixCapture(normalizePrefixCapture(prefixCapture), loaded);
   if (loaded.some(source => within(root, path.dirname(source.tree)) || within(path.dirname(source.tree), root))) fail('merge_destination_overlaps_source');
   const entries = mergeEntries(loaded);
   const bytes = entries.reduce((sum, e) => sum + (e.kind === 'file' ? e.byteLength : 0), 0);
@@ -148,7 +187,8 @@ export async function assembleMergedImport({root, ownerUid, workspaceId, operati
       await sourceMember(loaded[entry.sourceIndex], entry);
     }
   }
-  const document = {schemaVersion: 1, ownerUid, workspaceId, entries, sources: loaded.map(s => s.sourcePlanSha256)};
+  const document = {schemaVersion: 1, ownerUid, workspaceId, entries, sources: loaded.map(s => s.sourcePlanSha256),
+    ...(captured ? {prefixCapture: captured} : {})};
   const sha256 = digest(JSON.stringify(document));
   await beforeStage?.({document, sha256});
   const stage = await openImportStage({root, ownerUid, workspaceId, operationId, sourcePlanSha256: sha256});
@@ -165,5 +205,5 @@ export async function assembleMergedImport({root, ownerUid, workspaceId, operati
     stagedEntries.push({...entry, stagedObjectKey: object.key});
   }
   return assembleStagedTree({plan: {document, sha256}, staged: {stage, sourcePlanSha256: sha256, entries: stagedEntries},
-    receiptName: 'merged-tree.json', scope: 'selected source trees merged and verified in private staging'});
+    receiptName: 'merged-tree.json', prefixCapture: captured, scope: 'selected source trees merged and verified in private staging'});
 }

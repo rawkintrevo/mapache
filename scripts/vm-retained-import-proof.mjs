@@ -21,6 +21,10 @@ const sourceParent = '/var/tmp/mapache-import-proof-605';
 const hash = data => createHash('sha256').update(data).digest('hex');
 const action = process.argv[2];
 assert.ok(['seed', 'interrupt', 'resume', 'verify'].includes(action), 'invalid_action');
+assert.ok(!process.argv[3] || process.argv[3] === '--captured', 'invalid_mode');
+const prefixCapture = process.argv[3] === '--captured'
+  ? {operationId: 'synthetic-source-capture-605', sourceGeneration: 7, sha256: hash('synthetic-source-inventory')}
+  : undefined;
 await verifyDiskMount(mountRoot, '/dev/disk/by-id/google-' + disk);
 
 const fixture = [
@@ -31,7 +35,7 @@ const sources = fixture.map(({name}) => {
   const root = path.join(sourceParent, name);
   return {kind: 'checkpoint', root, planFile: path.join(root, 'plan.json')};
 });
-const args = {mountRoot, workspaceId, ownerUid, generation, operationId, maxBytes: 1048576, sources};
+const args = {mountRoot, workspaceId, ownerUid, generation, operationId, maxBytes: 1048576, sources, prefixCapture};
 
 if (action === 'seed') {
   assert.ok((await fs.readdir(mountRoot)).every(name => name === 'lost+found'), 'disk_not_empty');
@@ -41,11 +45,14 @@ if (action === 'seed') {
     const target = path.join(source.root, 'tree', file);
     await fs.mkdir(path.dirname(target), {recursive: true, mode: 0o700});
     await fs.writeFile(target, value, {mode, flag: 'wx'});
+    await fs.chmod(target, mode);
     const entry = {path: file, kind: 'file', mode, sha256: hash(value), byteLength: Buffer.byteLength(value)};
-    const document = {ownerUid, workspaceId, entries: [entry], tombstones: []};
+    const document = {ownerUid, workspaceId, entries: [entry], tombstones: [],
+      ...(prefixCapture ? {prefixCapture: {...prefixCapture, checkpointKind: fixture[index].name}} : {})};
     const sha256 = hash(JSON.stringify(document));
     await publishRecord(source.root, 'plan.json', Buffer.from(JSON.stringify({document, sha256})));
-    await publishRecord(source.root, 'identity.json', Buffer.from(JSON.stringify({ownerUid, workspaceId, sourcePlanSha256: sha256})));
+    await publishRecord(source.root, 'identity.json', Buffer.from(JSON.stringify({ownerUid, workspaceId, sourcePlanSha256: sha256,
+      ...(prefixCapture ? {operationId: prefixCapture.operationId} : {})})));
     await publishRecord(source.root, 'checkpoint-tree.json', Buffer.from(JSON.stringify({sourcePlanSha256: sha256})));
   }
   await publishRecord(mountRoot, '.mapache-vm-disk.json', Buffer.from(JSON.stringify(retainedDiskMarker(args))));
@@ -60,6 +67,11 @@ if (action === 'seed') {
   }
   const receipt = await importToRetainedDisk(args);
   assert.equal(receipt.directoriesPublished, 2);
+  if (prefixCapture) {
+    assert.deepEqual(receipt.prefixCapture, {...prefixCapture, components: ['agent', 'workspace']});
+    assert.equal(receipt.destination.operationId, operationId);
+    assert.equal(receipt.destination.diskName, disk);
+  }
   const executable = path.join(mountRoot, fixture[0].file);
   assert.equal(execFileSync(executable, {encoding: 'utf8'}), 'retained-import-ok');
   assert.equal(await fs.readFile(path.join(mountRoot, fixture[1].file), 'utf8'), fixture[1].value);

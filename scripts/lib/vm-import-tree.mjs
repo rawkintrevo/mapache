@@ -104,7 +104,7 @@ export async function assembleCheckpointTree({plan, staged, afterPublish = async
 }
 
 // Both callers supply a verified plan within an exclusively managed stage.
-export async function assembleStagedTree({plan, staged, receiptName, scope, afterPublish = async () => {}}) {
+export async function assembleStagedTree({plan, staged, receiptName, scope, prefixCapture, afterPublish = async () => {}}) {
   if (digest(JSON.stringify(plan.document)) !== plan.sha256 || staged.sourcePlanSha256 !== plan.sha256 ||
       JSON.stringify(staged.entries.map(({stagedObjectKey: _key, ...entry}) => entry)) !== JSON.stringify(plan.document.entries)) fail('import_tree_plan_changed');
   const stage = staged.stage;
@@ -186,6 +186,7 @@ export async function assembleStagedTree({plan, staged, receiptName, scope, afte
   await inspectTree(tree, entries, directories, true);
   const receipt = {schemaVersion: 1, sourcePlanSha256: plan.sha256, files: staged.entries.filter(e => e.kind === 'file').length,
     symlinks: staged.entries.filter(e => e.kind === 'symlink').length, directories: directories.size,
+    ...(prefixCapture ? {prefixCapture} : {}),
     scope};
   await publishRecord(stage.root, receiptName, Buffer.from(JSON.stringify(receipt)));
   return receipt;

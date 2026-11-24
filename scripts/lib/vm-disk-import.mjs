@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
-import {assembleMergedImport} from './vm-import-merge.mjs';
+import {assembleMergedImport, normalizePrefixCapture} from './vm-import-merge.mjs';
 import {plainDirectory, publishRecord, readPlain, syncDirectory} from './vm-import-stage.mjs';
 import {verifyImportSubtree} from './vm-import-tree.mjs';
 
@@ -70,7 +70,9 @@ export async function importToRetainedDisk(config, {checkMount = verifyDiskMount
   if (typeof mountRoot !== 'string' || !path.isAbsolute(mountRoot) || mountRoot === '/' ||
       await fs.realpath(mountRoot) !== mountRoot || !Number.isSafeInteger(generation) || generation < 1 ||
       ![ownerUid, workspaceId, operationId].every(value => typeof value === 'string' && value)) fail('disk_import_config_invalid');
-  const device = '/dev/disk/by-id/google-' + workspaceDiskName(workspaceId);
+  const prefixCapture = normalizePrefixCapture(config.prefixCapture);
+  const diskName = workspaceDiskName(workspaceId);
+  const device = '/dev/disk/by-id/google-' + diskName;
   await checkMount(mountRoot, device);
   const marker = JSON.parse(await readPlain(path.join(mountRoot, DISK_MARKER_NAME), 8192));
   const expected = retainedDiskMarker({workspaceId, ownerUid, generation, operationId});
@@ -83,7 +85,7 @@ export async function importToRetainedDisk(config, {checkMount = verifyDiskMount
   const intentName = 'disk-import-intent.json';
   const intentPath = path.join(root, intentName);
   const intentBytes = await readOptional(intentPath, 8192);
-  const configSha256 = digest(JSON.stringify({device, ownerUid, workspaceId, generation, operationId, sources, maxBytes}));
+  const configSha256 = digest(JSON.stringify({device, ownerUid, workspaceId, generation, operationId, sources, maxBytes, prefixCapture}));
   let intent;
   if (intentBytes) {
     intent = JSON.parse(intentBytes);
@@ -91,18 +93,21 @@ export async function importToRetainedDisk(config, {checkMount = verifyDiskMount
   } else {
     const allowed = new Set([DISK_MARKER_NAME, 'lost+found', stageName]);
     if (initialNames.some(name => !allowed.has(name))) fail('disk_import_destination_populated');
-    const merged = await assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes}, {
+    const merged = await assembleMergedImport({root, ownerUid, workspaceId, operationId, sources, maxBytes, prefixCapture}, {
       beforeStage: async ({document}) => {
         plannedRoots(document.entries);
         if (!stageExists) await requireCapacity(mountRoot, document.entries);
       },
     });
-    intent = {configSha256, sourcePlanSha256: merged.sourcePlanSha256};
+    intent = {configSha256, sourcePlanSha256: merged.sourcePlanSha256,
+      ...(merged.prefixCapture ? {prefixCapture: merged.prefixCapture} : {})};
     await publishRecord(root, intentName, Buffer.from(JSON.stringify(intent)));
   }
   const planBytes = await readPlain(path.join(root, 'merge-plan.json'), 64 * 1024 * 1024);
   if (digest(planBytes) !== intent.sourcePlanSha256) fail('disk_import_plan_changed');
-  const {entries} = JSON.parse(planBytes);
+  const {entries, prefixCapture: mergedCapture} = JSON.parse(planBytes);
+  if (JSON.stringify(normalizePrefixCapture(mergedCapture)) !== JSON.stringify(prefixCapture) ||
+      JSON.stringify(mergedCapture) !== JSON.stringify(intent.prefixCapture)) fail('disk_import_capture_changed');
   const roots = plannedRoots(entries);
   const tree = path.join(root, 'tree');
   await plainDirectory(tree);
@@ -125,6 +130,7 @@ export async function importToRetainedDisk(config, {checkMount = verifyDiskMount
   }
   for (const name of roots) await verifyImportSubtree(mountRoot, entries, name);
   const receipt = {schemaVersion: 1, ...intent, directoriesPublished: roots.size, selectedEntries: entries.length,
+    ...(prefixCapture ? {destination: {ownerUid, workspaceId, generation, operationId, diskName}} : {}),
     scope: 'selected recovery trees verified on the retained disk'};
   await publishRecord(root, 'disk-import-receipt.json', Buffer.from(JSON.stringify(receipt)));
   return receipt;

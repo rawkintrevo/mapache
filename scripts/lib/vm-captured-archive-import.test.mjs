@@ -9,6 +9,7 @@ import test from 'node:test';
 import {gzipSync} from 'node:zlib';
 import tar from 'tar-stream';
 import {importCapturedArchive} from './vm-captured-archive-import.mjs';
+import {assembleMergedImport} from './vm-import-merge.mjs';
 
 const require = createRequire(import.meta.url);
 const {CRC32C} = require('../../functions/node_modules/@google-cloud/storage');
@@ -77,6 +78,11 @@ test('HOME prefers the canonical archive and can restore the legacy spelling whe
   const plan = JSON.parse(await fs.readFile(path.join(f.parent, 'canonical/archive-plan.json')));
   assert.equal(plan.sourcePlan.prefixCapture.sha256, current.captureSha256);
   assert.equal(plan.sourcePlan.descriptor.generation, '101');
+  plan.entries = [];
+  await fs.writeFile(path.join(f.parent, 'canonical/archive-plan.json'), JSON.stringify(plan));
+  await assert.rejects(assembleMergedImport({root: path.join(f.parent, 'altered'), ownerUid: 'owner', workspaceId: 'workspace',
+    operationId: 'disk-operation', prefixCapture: plan.sourcePlan.prefixCapture,
+    sources: [{kind: 'archive', root: path.join(f.parent, 'canonical')}], maxBytes: 4096}), /merge_capture_archive_plan_changed/);
   const object = f.provider.get(canonical);
   object.bytes = Buffer.from(object.bytes);
   object.bytes[1] ^= 1;

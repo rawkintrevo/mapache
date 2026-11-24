@@ -140,6 +140,8 @@ export async function assembleArchiveTree({staged, maxCompressedBytes, maxExpand
   const receipt = {schemaVersion: 1, sourcePlanSha256: document.sourcePlanSha256, files: document.entries.filter(e => e.kind === 'file').length,
     directories: directories.size, hardlinks: document.entries.filter(e => e.kind === 'hardlink').length,
     symlinks: document.entries.filter(e => e.kind === 'symlink').length,
+    ...(document.sourcePlan.prefixCapture ?
+      {archivePlanSha256: createHash('sha256').update(JSON.stringify(document)).digest('hex')} : {}),
     scope: 'selected archive tree verified; not application validation or complete machine cutover'};
   await publishRecord(stage.root, 'archive-tree.json', Buffer.from(JSON.stringify(receipt)));
   return receipt;

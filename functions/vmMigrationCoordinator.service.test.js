@@ -519,8 +519,10 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     assert.deepEqual(readGenerations, ["100", "100", "100", "100"]);
     const mergedRoot = path.join(folder, "merged");
     const merged = await assembleMergedImport({root: mergedRoot, ownerUid, workspaceId, operationId: input.operationId,
-      sources, maxBytes: 4096});
+      sources, maxBytes: 4096,
+      prefixCapture: {operationId: input.operationId, sha256: inventory.sha256, sourceGeneration: inventory.sourceGeneration}});
     assert.equal(merged.files, 3);
+    assert.deepEqual(merged.prefixCapture.components, ["browser", "home", "workspace"]);
     assert.deepEqual(await fs.readFile(path.join(mergedRoot, "tree/workspace/file.txt")), file);
     assert.equal(await fs.readFile(path.join(mergedRoot, "tree/home/fixture.txt"), "utf8"), home);
     assert.equal(await fs.readFile(path.join(mergedRoot, "tree/browser/profile/fixture.txt"), "utf8"), profile);

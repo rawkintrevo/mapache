@@ -12,7 +12,7 @@ async function fixture(t) {
   const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'vm-import-merge-'));
   t.after(() => fs.rm(parent, {recursive: true, force: true}));
   const identity = {ownerUid: 'owner', workspaceId: 'workspace'};
-  async function source(name, files, tombstones = [], links = []) {
+  async function source(name, files, tombstones = [], links = [], prefixCapture) {
     const root = path.join(parent, name);
     const entries = [];
     await fs.mkdir(path.join(root, 'tree'), {recursive: true, mode: 0o700});
@@ -26,11 +26,12 @@ async function fixture(t) {
       await fs.symlink(link.target, path.join(root, 'tree', link.path));
       entries.push({...link, kind: 'symlink'});
     }
-    const document = {...identity, entries, tombstones};
+    const document = {...identity, entries, tombstones, ...(prefixCapture ? {prefixCapture} : {})};
     const sha256 = digest(JSON.stringify(document));
     const planFile = path.join(root, 'plan.json');
     await fs.writeFile(planFile, JSON.stringify({document, sha256}));
-    await fs.writeFile(path.join(root, 'identity.json'), JSON.stringify({...identity, sourcePlanSha256: sha256}));
+    await fs.writeFile(path.join(root, 'identity.json'), JSON.stringify({...identity, sourcePlanSha256: sha256,
+      ...(prefixCapture ? {operationId: prefixCapture.operationId} : {})}));
     await fs.writeFile(path.join(root, 'checkpoint-tree.json'), JSON.stringify({sourcePlanSha256: sha256}));
     return {root, kind: 'checkpoint', planFile};
   }
@@ -47,6 +48,25 @@ test('combines separate sources into a verified tree and safely reopens it', asy
   assert.deepEqual(await assembleMergedImport({...options, sources}), result);
   await fs.writeFile(path.join(sources[0].root, 'tree/workspace/a'), 'stale');
   await assert.rejects(assembleMergedImport({...options, sources}), /destination_changed/);
+});
+
+test('captured merges require one operation and reject recovery trees or duplicate components', async t => {
+  const {source, options} = await fixture(t);
+  const prefixCapture = {operationId: 'capture-one', sourceGeneration: 4, sha256: 'a'.repeat(64)};
+  const first = await source('workspace', {'workspace/a': 'alpha'}, [], [], {...prefixCapture, checkpointKind: 'workspace'});
+  const second = await source('agent', {'agent/pi/b': 'beta'}, [], [], {...prefixCapture, checkpointKind: 'agent'});
+  const unbound = await source('unbound', {'agent/pi/c': 'other'});
+  const other = await source('other', {'agent/pi/c': 'other'}, [], [],
+    {...prefixCapture, operationId: 'capture-two', checkpointKind: 'agent'});
+  const duplicate = await source('duplicate', {'workspace/b': 'other'}, [], [], {...prefixCapture, checkpointKind: 'workspace'});
+  await assert.rejects(assembleMergedImport({...options, sources: [first]}), /merge_capture_required/);
+  for (const invalid of [unbound, other]) {
+    await assert.rejects(assembleMergedImport({...options, sources: [first, invalid], prefixCapture}), /merge_capture_source_mismatch/);
+  }
+  await assert.rejects(assembleMergedImport({...options, sources: [first, duplicate], prefixCapture}), /merge_capture_component_invalid/);
+  await assert.rejects(fs.stat(options.root), {code: 'ENOENT'});
+  const receipt = await assembleMergedImport({...options, sources: [first, second], prefixCapture});
+  assert.deepEqual(receipt.prefixCapture, {...prefixCapture, components: ['agent', 'workspace']});
 });
 
 test('rejects path collisions, cross-source tombstones, foreign ownership and source aliasing before writes', async t => {
@@ -98,13 +118,13 @@ test('keeps archive hard links on one inode and rejects a replaced source link',
   await assert.rejects(assembleMergedImport(args), /merge_source_hardlink_changed/);
 });
 
-async function diskFixture(t) {
+async function diskFixture(t, prefixCapture) {
   const {source, options} = await fixture(t);
   const {root: mountRoot, ...rest} = options;
   const config = {...rest, mountRoot, generation: 1, sources: [
-    await source('first', {'workspace/a': 'alpha'}),
-    await source('second', {'agent/pi/b': 'beta'}),
-  ]};
+    await source('first', {'workspace/a': 'alpha'}, [], [], prefixCapture && {...prefixCapture, checkpointKind: 'workspace'}),
+    await source('second', {'agent/pi/b': 'beta'}, [], [], prefixCapture && {...prefixCapture, checkpointKind: 'agent'}),
+  ], prefixCapture};
   await fs.mkdir(mountRoot);
   const marker = {version: 1, kind: 'retained-disk', workspaceId: config.workspaceId, ownerUid: config.ownerUid,
     generation: config.generation, operationId: config.operationId};
@@ -126,6 +146,24 @@ test('disk import resumes after publishing only one directory and verifies insta
   assert.deepEqual(await importToRetainedDisk(config, options), receipt);
   await fs.writeFile(path.join(config.mountRoot, 'workspace/a'), 'wrong');
   await assert.rejects(importToRetainedDisk(config, options), /destination_changed/);
+});
+
+test('retained disk resume binds the source capture and the separate destination operation', async t => {
+  const prefixCapture = {operationId: 'source-operation', sourceGeneration: 9, sha256: 'b'.repeat(64)};
+  const config = await diskFixture(t, prefixCapture);
+  const options = {checkMount: async () => {}};
+  await assert.rejects(importToRetainedDisk(config, {...options, afterPublish: () => {
+    throw Error('simulated_interruption');
+  }}), /simulated_interruption/);
+  for (const capture of [undefined, {...prefixCapture, sourceGeneration: 10}]) {
+    await assert.rejects(importToRetainedDisk({...config, prefixCapture: capture}, options), /disk_import_operation_changed/);
+  }
+  const receipt = await importToRetainedDisk(config, options);
+  assert.deepEqual(receipt.prefixCapture, {...prefixCapture, components: ['agent', 'workspace']});
+  assert.equal(receipt.destination.operationId, config.operationId);
+  assert.equal(receipt.destination.generation, config.generation);
+  assert.match(receipt.destination.diskName, /^mapache-ws-/);
+  assert.deepEqual(await importToRetainedDisk(config, options), receipt);
 });
 
 test('disk import rejects ordinary directories, a foreign marker and existing workspace data', async t => {

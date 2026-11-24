@@ -1189,9 +1189,11 @@ and entry limits, then rechecks source authority. For legacy archives the
 stage needs room for both the temporary compressed download and the
 verified copy during import.
 
-The checkpoint and archive trees can be merged locally with the existing
-verified tree merger. Owner tools, other legacy formats, disk import
-binding, authority switching and rollback remain open.
+The checkpoint and archive trees can be merged locally or installed on a
+retained disk using the same captured-prefix provenance. Owner tools and
+other legacy formats need their own binding before a complete workspace
+can switch authority. The coordinator still needs destination receipt
+verification and rollback.
 
 Emulator tests exercise reservation, quiesce, prefix capture and release with real Firestore
 transactions. They cover competing requests, stale observations, duplicate
@@ -1296,6 +1298,21 @@ final verification. Staged objects remain on disk for inspection and
 consume extra capacity. The caller still owns Compute attachment and
 writer coordination, missing-source decisions, and boot validation.
 
+For a captured import, set `prefixCapture` in the merge or disk config to
+`{operationId, sourceGeneration, sha256}` from the coordinator's verified
+capture. The destination `operationId` in the disk config identifies the
+disk provisioning marker and can differ from the source capture operation.
+Every selected source must match the capture and declare a distinct agent,
+workspace, HOME or browser component. Captured archive receipts also hash
+the member plan. Rebuild archives staged before that receipt field existed
+in a fresh private stage. The merger refuses mixing captured and ordinary
+recovery trees. The disk intent and final receipt retain the source
+generation, capture digest and selected components, and the receipt
+identifies the destination disk name, provisioning operation and generation.
+Changing the capture during resume fails before further publication.
+These receipts record a verified local import. Cutover still requires
+independent destination identity, source authority and boot checks.
+
 Focused tests exercise interrupted directory publication, retry,
 ownership rejection and changed destination data. A real tmpfs mount was
 rejected by the production guard.
@@ -1313,6 +1330,16 @@ executable behavior. The installed tree passed the runner's
 `prepareRetainedDisk` check with `initialized=false`.
 Local evidence is `artifacts/qa/vm-retained-import/live.log`. The proof VM
 and disk were detached and deleted after verification.
+
+The captured variant of that proof uses `--captured` on all four phases.
+On 2026-11-23 the synthetic capture used source generation 7 and a
+separate destination provisioning operation at generation 1. After the
+exit-137 interruption, a private Debian maintenance VM resumed the import
+on an actual 10 GiB Persistent Disk. The receipt still named both
+operations and the same capture digest after remount. Runner storage
+bootstrap, executable mode and agent history passed. The maintenance VM
+and disposable disk were removed. Local evidence is
+`artifacts/qa/vm-retained-import/captured-live.log`.
 
 For a repeat run, create a fresh fixture disk named
 `mapache-ws-9f45ab7766711f54018f3551` in `pi-agents-cloud/us-central1-a`.
