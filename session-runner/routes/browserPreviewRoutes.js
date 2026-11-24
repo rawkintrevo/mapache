@@ -8,6 +8,7 @@ function registerBrowserRoutes({
   chromeRuntime,
   chromeProfileSeed,
   config,
+  diskStatus,
   activity,
   piWebUi,
   expressStatic,
@@ -38,6 +39,7 @@ function registerBrowserRoutes({
       lastCheckpointAt: checkpoint.lastCheckpointAt || null,
       checkpointError: checkpoint.checkpointError || null,
     };
+    if (diskStatus?.status) health.disk = await diskStatus.status();
     if (chromeProfileSeed?.status) health.chromeProfileSeed = chromeProfileSeed.status();
     if (piWebUi) {
       health.agentRuntime = piWebUi.status?.() || null;

@@ -494,6 +494,14 @@ canonical endpoint. Rebuild/publish `gcp-runner` before deploying the caller.
 Existing runner services require recreation; do not restore an old-path
 fallback for compatibility.
 
+The authenticated health response also includes a bounded `disk` projection
+from `session-runner/lib/diskStatus.js` for the runner's workspace filesystem:
+provider-independent capacity, used/free/available bytes, headroom percentage,
+storage mode, and measurement time. It never exposes the filesystem path or
+turns an unavailable `statfs` probe into a false capacity value; callers must
+treat `disk.known=false` as unknown. Provider disk capacity and guest
+filesystem headroom are separate recovery facts.
+
 The one-minute automation reconciler uses `/runner/health` with the runner shutdown
 credential for stale-heartbeat probes. It may reconcile setup polling or
 cleanup, but it never restarts an automation prompt. Cloud Run orphan cleanup

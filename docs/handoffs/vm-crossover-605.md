@@ -223,6 +223,12 @@ the detached Compute resize step after owner, generation, and migration-fence
 checks. It does not resize the guest filesystem or claim fresh-VM recovery;
 those and live cost/release evidence remain open.
 
+The authenticated `/runner/health` response now includes a bounded `disk`
+projection from `statfs` when available, with capacity, used/free/available
+bytes, headroom percentage, storage mode, and measurement time. An unknown
+probe remains explicitly unknown; provider capacity is not treated as guest
+headroom.
+
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 surface backup/runtime startup, attach, and mount timings and actual costs; and

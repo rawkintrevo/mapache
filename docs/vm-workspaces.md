@@ -1495,7 +1495,9 @@ instances/disks before any future cleanup. The fail-closed disk-full/zone-loss p
 [VM disk recovery runbook](runbooks/vm-disk-recovery.md), but its resize and
 fresh-VM recovery actions remain unwired. The explicit expansion-only operator
 command `scripts/vm-resize-disk.mjs` now covers the detached-disk provider step;
-guest filesystem growth, fresh-VM recovery, and release evidence remain open.
+the authenticated runner health response now reports bounded guest filesystem
+headroom when `statfs` succeeds; guest filesystem growth, fresh-VM recovery,
+and release evidence remain open.
 No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was invoked by this change.

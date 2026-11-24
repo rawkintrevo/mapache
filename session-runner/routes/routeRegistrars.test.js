@@ -129,6 +129,7 @@ test("health route exposes checkpoint status without runner error details", asyn
       bucketName: "bucket",
       prefix: "prefix",
     },
+    diskStatus: {status: async () => ({known: true, storageMode: "retained-disk", availableBytes: 1024})},
     expressStatic: () => () => {},
     preview: {capabilityStatus: () => ({enabled: false})},
     requireBrowserAccess: (req, res, next) => next(),
@@ -148,6 +149,7 @@ test("health route exposes checkpoint status without runner error details", asyn
     prefix: "prefix",
     lastCheckpointAt: "2026-09-11T12:00:00.000Z",
     checkpointError: "checkpoint_upload_failed",
+    disk: {known: true, storageMode: "retained-disk", availableBytes: 1024},
   });
 });
 
