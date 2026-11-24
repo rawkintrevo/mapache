@@ -14,6 +14,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation and
 - The current continuation also closes a VM automation admission race: a main-exclusive run now reads the canonical VM runtime in the same Firestore transaction, so a stopped legacy session cannot mask an active or transitioning Compute Engine machine. Focused admission coverage proves it remains queued until the VM is stopped.
 - The scheduler now applies the migration fence to its direct run/pointer transaction as well. A fenced tick leaves the due occurrence and `nextRunAt` untouched, then resumes it after fence release; focused coverage proves no run or queue wake is emitted while fenced.
 - Automation definition and workspace concurrency-setting CRUD now checks the migration fence in the same transaction as each create, update, delete, or settings write, so schedule control cannot change after migration admission.
+- New owner/agent workspace-request ticket creation checks the migration fence before publishing `workspaceTickets/{id}`; existing ticket reads and idempotent lookups remain available while queued work stays reconcilable.
 - Rough overall estimate: **75%** by engineering judgment. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
