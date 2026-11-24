@@ -1446,6 +1446,18 @@ rollback-protected snapshot. The scheduler refuses reservations while a VM
 migration fence exists. The worker records provider acceptance and deletion
 state, but it does not claim fresh-VM file/runtime verification.
 
+The same opt-in scheduler performs a read-only inventory pass for each
+eligible VM and writes `vmBackupInventoryReports_v2/{workspaceId}`. The report
+records whether the owned instance and disk are present, whether the retained
+disk is detached, backup age, verified/pending/held/quarantined retention
+decisions, and an explicit stranded-resource reason. Inventory never deletes a
+resource and always reports `cleanupAllowed=false`; unknown or foreign snapshot
+ownership is quarantined rather than treated as billable workspace state.
+Known storage cost is estimated from provisioned disk and observed snapshot
+bytes (or the snapshot disk-size upper bound). Compute, gateway, NAT, and
+network cost remain explicitly unknown until current billing rates and usage
+meters are supplied; missing rates are never converted to zero.
+
 This is durable scheduling and provider-operation plumbing, not evidence of a
 `functions/vmBackupRecovery.service.js` adds the durable restore boundary. It
 requires a verified owner-matched backup record and an opt-in VM policy before
@@ -1458,8 +1470,8 @@ retry. The adapter is intentionally not wired to a production VM boot yet, so
 these reports are contract/test evidence rather than a live recovery claim.
 
 Fresh-VM verification with a real runtime adapter, asynchronous provider
-operation reconciliation, stranded-resource inventory, numeric cost
-measurements, and disk-full/zone-loss runbooks remain release work. No
+operation reconciliation, numeric cost measurements, and disk-full/zone-loss
+runbooks remain release work. No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was invoked by this change.
 

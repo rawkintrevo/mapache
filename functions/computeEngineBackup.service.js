@@ -22,6 +22,7 @@ function createComputeEngineBackupService(dependencies = {}) {
   return {
     createSnapshot,
     inspectSnapshot,
+    listSnapshots,
     restoreSnapshot,
     deleteSnapshot,
     costSummary,
@@ -66,6 +67,31 @@ function createComputeEngineBackupService(dependencies = {}) {
     const response = await requestImpl({url: `${baseUrl()}/global/snapshots/${encodeURIComponent(safeName(snapshotName))}`, method: "GET"});
     assertOwnership(response.data, descriptor);
     return response.data;
+  }
+
+  async function listSnapshots(rawDescriptor, {maxResults = 100} = {}) {
+    const descriptor = normalizeRuntimeDescriptor(rawDescriptor, {workspaceId: rawDescriptor.workspaceId, ownerUid: rawDescriptor.ownerUid});
+    const limit = Number(maxResults);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+      const error = new Error("vm_backup_snapshot_list_limit_invalid");
+      error.code = "vm_backup_snapshot_list_limit_invalid";
+      throw error;
+    }
+    const items = [];
+    let pageToken;
+    do {
+      const response = await requestImpl({url: `${baseUrl()}/global/snapshots`, method: "GET",
+        params: {maxResults: Math.min(limit - items.length, 500),
+          ...(pageToken ? {pageToken} : {})}});
+      for (const snapshot of Array.isArray(response.data?.items) ? response.data.items : []) {
+        if (items.length >= limit) break;
+        items.push(snapshot);
+      }
+      pageToken = items.length >= limit ? null : response.data?.nextPageToken || null;
+    } while (pageToken);
+    return items.filter(snapshot => snapshot?.labels?.["mapache-workspace-id"] === descriptor.workspaceId &&
+      snapshot?.labels?.["mapache-owner-uid"] === descriptor.ownerUid &&
+      snapshot?.labels?.["mapache-runtime-provider"] === COMPUTE_ENGINE_BACKEND);
   }
 
   async function restoreSnapshot(rawDescriptor, {snapshotName, diskName, sizeGb, operationId} = {}) {

@@ -55,6 +55,25 @@ test("backup restore creates a fresh owned disk receipt and rejects undersized t
   assert.equal(calls.at(-1).data.labels["mapache-backup-state"], "restoring");
 });
 
+test("snapshot inventory paginates and filters to the workspace label", async () => {
+  const requests = [];
+  const service = createComputeEngineBackupService({
+    request: async request => {
+      requests.push(request);
+      return requests.length === 1 ? {data: {items: [
+        {name: "owned", labels: {"mapache-workspace-id": "workspace-1", "mapache-owner-uid": "owner-1", "mapache-runtime-provider": "compute-engine"}},
+        {name: "foreign", labels: {"mapache-workspace-id": "workspace-2", "mapache-owner-uid": "owner-1"}},
+      ], nextPageToken: "next"}} : {data: {items: [
+        {name: "owned-2", labels: {"mapache-workspace-id": "workspace-1", "mapache-owner-uid": "owner-1", "mapache-runtime-provider": "compute-engine"}},
+      ]}};
+    },
+  });
+  const result = await service.listSnapshots(descriptor, {maxResults: 10});
+  assert.deepEqual(result.map(snapshot => snapshot.name), ["owned", "owned-2"]);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].params.pageToken, "next");
+});
+
 test("snapshot deletion requires an expired verified policy receipt", async () => {
   const calls = [];
   const service = createComputeEngineBackupService({

@@ -194,6 +194,14 @@ RTO targets, and records sanitized startup-timing reports with bounded retry on
 transient readiness errors. Existing legacy storage backup code is not VM
 evidence.
 
+The same opt-in scheduler now writes a read-only
+`vmBackupInventoryReports_v2/{workspaceId}` report. It records instance/disk
+presence and attachment, backup age, retention holds/quarantine decisions,
+stranded-resource observations, and known storage estimates while preserving
+unknown compute/gateway/network cost components. It never authorizes cleanup
+or deletes an orphan; provider pagination and ownership filtering remain
+bounded at the backup-service boundary.
+
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 reconcile asynchronous provider operations before declaring deletion complete;
