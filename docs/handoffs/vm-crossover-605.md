@@ -390,3 +390,9 @@ This is an iteration-velocity improvement only; live provider/model execution,
 stopped-target scheduled/Run-now execution, cross-machine tools, usage
 accounting, migration cutover/rollback, recovery, and release cohorts remain
 open.
+
+The VM request wake path also now handles a request racing an in-flight
+pause/replacement: it waits for the durable operation to commit the machine
+stopped, then submits exactly one generation-pinned, API-admitted start request.
+The focused VM workspace runtime suite covers this boundary; it does not count
+as live stopped-target execution evidence.

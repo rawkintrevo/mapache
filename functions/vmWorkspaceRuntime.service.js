@@ -52,17 +52,16 @@ function createVmWorkspaceRuntimeService({
     if (runtime.lifecycleEnabled !== true) throw httpError(409, "vm_lifecycle_not_admitted");
 
     const requestId = normalizeRequestId(options.requestId || `background-${normalizedWorkspaceId}`);
-    if (runtime.state === "stopped" && !runtime.activeOperationId) {
+    return waitForReady(ownerUid, normalizedWorkspaceId, options, async (current) => {
       await lifecycle.request({
         workspaceId: normalizedWorkspaceId,
         ownerUid,
         requestId,
         action: "start",
-        expectedGeneration: runtime.generation,
+        expectedGeneration: current.generation,
         requireApiAdmission: true,
       });
-    }
-    return waitForReady(ownerUid, normalizedWorkspaceId, options);
+    });
   }
 
   async function readSession(ownerUid, workspaceId) {
@@ -74,8 +73,9 @@ function createVmWorkspaceRuntimeService({
     return buildRunnerSession(ownerUid, normalizedWorkspaceId, runtime, {allowNotReady: true});
   }
 
-  async function waitForReady(ownerUid, workspaceId, options = {}) {
+  async function waitForReady(ownerUid, workspaceId, options = {}, requestStart) {
     const deadline = currentTime() + positiveNumber(options.startupTimeoutMs, startupTimeoutMs);
+    let startRequested = false;
     while (currentTime() <= deadline) {
       const runtime = await readRuntime(workspaceId);
       if (!runtime) throw httpError(404, "workspace_not_found");
@@ -83,6 +83,15 @@ function createVmWorkspaceRuntimeService({
       if (runtime.backend !== COMPUTE_ENGINE_BACKEND) return null;
       if (isReady(runtime)) return buildRunnerSession(ownerUid, workspaceId, runtime);
       if (runtime.lifecycleEnabled !== true) throw httpError(409, "vm_lifecycle_not_admitted");
+      // A request can race a durable pause/replace operation. Wait for that
+      // operation to commit stopped, then enqueue one idempotent start using
+      // the current generation. Never submit start while another operation is
+      // still fencing the runtime.
+      if (runtime.state === "stopped" && !runtime.activeOperationId && !startRequested) {
+        startRequested = true;
+        await requestStart(runtime);
+        continue;
+      }
       const remaining = deadline - currentTime();
       if (remaining <= 0) break;
       await delay(Math.min(positiveNumber(options.pollIntervalMs, pollIntervalMs), remaining));

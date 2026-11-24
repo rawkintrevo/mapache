@@ -23,7 +23,7 @@ class Db {
   collection(name) { return new Collection(this, name); }
 }
 
-function setup({state = "active"} = {}) {
+function setup({state = "active", onDelay} = {}) {
   const db = new Db();
   const now = 1_000_000;
   db.values.set(`${VM_COLLECTION}/workspace-1`, {
@@ -67,7 +67,7 @@ function setup({state = "active"} = {}) {
       },
     },
     now: () => now,
-    delay: async () => {},
+    delay: async (delayMs) => onDelay?.({db, delayMs}),
     startupTimeoutMs: 100,
     pollIntervalMs: 1,
   });
@@ -90,6 +90,32 @@ test("wakes a stopped VM through the durable lifecycle and returns a fresh agent
   assert.equal(session.shutdownToken, "shutdown-secret");
   assert.match(session.runnerAccessToken, /^[^.]+\.[^.]+$/);
   assert.equal(JSON.parse(Buffer.from(session.runnerAccessToken.split(".")[0], "base64url").toString()).aud, "agent");
+});
+
+test("waits for an in-flight pause before issuing one idempotent start", async () => {
+  let pauseCompleted = false;
+  const fixture = setup({
+    state: "stopping",
+    onDelay: async ({db}) => {
+      if (pauseCompleted) return;
+      pauseCompleted = true;
+      const runtimePath = `${VM_COLLECTION}/workspace-1`;
+      const runtime = db.values.get(runtimePath);
+      db.values.set(runtimePath, {...runtime, state: "stopped", activeOperationId: null, bootId: null,
+        lifecycleReadyGeneration: null, leaseExpiresAt: 0});
+      const sessionPath = `${VM_COLLECTION}/workspace-1/sessions/vm-session-4`;
+      db.values.set(sessionPath, {...db.values.get(sessionPath), state: "reserved", bootId: null, leaseExpiresAt: 0});
+    },
+  });
+  const runtimePath = `${VM_COLLECTION}/workspace-1`;
+  fixture.db.values.set(runtimePath, {...fixture.db.values.get(runtimePath), activeOperationId: "pause-operation"});
+
+  const session = await fixture.service.ensureReady("owner-1", "workspace-1", {requestId: "run-after-pause"});
+  assert.equal(fixture.calls.length, 1);
+  assert.equal(fixture.calls[0].requestId, "run-after-pause");
+  assert.equal(fixture.calls[0].expectedGeneration, 4);
+  assert.equal(fixture.calls[0].action, "start");
+  assert.equal(session.id, "vm-session-4");
 });
 
 test("reuses an already-ready VM without creating a second lifecycle operation", async () => {
