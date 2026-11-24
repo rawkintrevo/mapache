@@ -49,10 +49,12 @@ async function admitNextEligibleRun(workspaceId, dependencies = {}) {
     const workspaceRef = firestore.collection("workspaces").doc(normalizedWorkspaceId);
     const runsQuery = automationRunsQuery(firestore, normalizedWorkspaceId);
     const sessionsRef = workspaceRef.collection("sessions");
-    const [workspaceSnap, runsSnap, sessionsSnap] = await Promise.all([
+    const vmRuntimeRef = firestore.collection("vmRuntimes_v2").doc(normalizedWorkspaceId);
+    const [workspaceSnap, runsSnap, sessionsSnap, vmRuntimeSnap] = await Promise.all([
       transaction.get(workspaceRef),
       transaction.get(runsQuery),
       transaction.get(sessionsRef),
+      transaction.get(vmRuntimeRef),
     ]);
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     if (await hasVmMigrationFence(transaction, firestore, normalizedWorkspaceId)) {
@@ -84,7 +86,8 @@ async function admitNextEligibleRun(workspaceId, dependencies = {}) {
 
     const sessions = Array.isArray(sessionsSnap?.docs) ?
       sessionsSnap.docs.map((doc) => ({id: doc.id, ...(doc.data() || {})})) : [];
-    const mainStopped = isMainFullyStopped(workspace, sessions);
+    const vmRuntime = vmRuntimeSnap?.exists ? vmRuntimeSnap.data() || {} : null;
+    const mainStopped = isMainFullyStopped(workspace, sessions, vmRuntime);
     const exclusionRunId = String(workspace[AUTOMATION_EXCLUSION_FIELD] || "").trim();
     const candidates = runs
         .filter((run) => normalize(run.status) === "queued")
@@ -220,7 +223,9 @@ function runAllowsParallelWithMain(run = {}) {
   return value !== false;
 }
 
-function isMainFullyStopped(workspace = {}, sessions = []) {
+function isMainFullyStopped(workspace = {}, sessions = [], vmRuntime = null) {
+  if (vmRuntime?.backend === "compute-engine" &&
+      (normalize(vmRuntime.state) !== "stopped" || vmRuntime.activeOperationId)) return false;
   const admissionState = normalize(workspace.automationMainAdmissionState);
   if (String(workspace.automationMainAdmissionSessionId || "").trim() &&
       !["stopped", "released"].includes(admissionState)) return false;

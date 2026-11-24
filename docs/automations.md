@@ -111,7 +111,10 @@ run records.
 - Admission is transactional. `automationMaxConcurrency` defaults to one;
   lowering it never evicts active runs. `allowParallelWithMain: false` holds an
   explicit main-session exclusion, queues while main is active, rejects main
-  Play/Restart/Resize during the exclusion, and wakes when main is paused.
+  Play/Restart/Resize during the exclusion, and wakes when main is paused. For
+  a migrated Compute Engine workspace the same transaction also reads the
+  canonical `vmRuntimes_v2/{workspaceId}` record; a stopped legacy session does
+  not make an active or transitioning VM eligible for an exclusive run.
 - Provisioning creates only the labeled run service after admission. The
   automation session is not the workspace canonical session, does not claim the
   main sync-writer lease, and is excluded from the user session list and idle
