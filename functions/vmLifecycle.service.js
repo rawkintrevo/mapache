@@ -39,10 +39,12 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       if (!ss || ss.ownerUid !== ownerUid || ss.generation !== ws.generation) throw httpError(409, "vm_session_mismatch");
       const descriptor = normalizeRuntimeDescriptor(ss.runtimeProvider, {workspaceId, ownerUid});
       if (descriptor.backend !== "compute-engine" || descriptor.generation !== ws.generation) throw httpError(409, "vm_descriptor_mismatch");
+      const startedAtMs = now();
       const operation = {workspaceId, ownerUid, action, oldGeneration: ws.generation,
         oldSessionId: ws.currentSessionId, descriptor, runnerImage: ws.runnerImage, gatewayHost: ws.gatewayHost,
         phase: action === "start" ? "delete" : "quiesce", status: "pending", claim: null,
-        createdAtMs: now(), updatedAtMs: now()};
+        phaseStartedAtMs: startedAtMs, phaseTimingsMs: {}, phaseAttempts: {},
+        lastError: null, lastErrorAtMs: null, createdAtMs: startedAtMs, updatedAtMs: startedAtMs};
       tx.set(ref, operation);
       tx.update(wr, {activeOperationId: id, state: "stopping"});
       tx.update(wr.collection("sessions").doc(ws.currentSessionId), {state: "stopping"});
@@ -81,7 +83,10 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
             state: ws.machineConfig.desiredVersion === op.configVersion ? "applied" : "pending-restart"};
         }
       }
-      tx.update(ref, {phase: nextPhase, claim: null, lastError: null, updatedAtMs: now(), ...fields});
+      const completedAtMs = now();
+      tx.update(ref, {phase: nextPhase, claim: null, phaseStartedAtMs: completedAtMs,
+        phaseTimingsMs: recordPhaseTiming(op, completedAtMs), lastError: null, lastErrorAtMs: null,
+        updatedAtMs: completedAtMs, ...fields});
       if (Object.keys(workspaceFields).length) tx.update(wr, workspaceFields);
       if (workspaceFields.state === "stopped") tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "stopped", leaseExpiresAt: 0});
     });
@@ -127,7 +132,10 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
             environmentEntryIds: selected.environmentEntryIds || [], configVersion,
             controlTokenHash: tokenHash(secrets.controlToken)});
           tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
-          tx.update(ref, {phase: "provision", descriptor, sessionId, configVersion, claim: null, updatedAtMs: now()});
+          const committedAtMs = now();
+          tx.update(ref, {phase: "provision", descriptor, sessionId, configVersion, claim: null,
+            phaseStartedAtMs: committedAtMs, phaseTimingsMs: recordPhaseTiming(op, committedAtMs),
+            lastError: null, lastErrorAtMs: null, updatedAtMs: committedAtMs});
         });
       } else if (operation.phase === "provision") {
         const currentWorkspace = (await wr.get()).data();
@@ -163,12 +171,25 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       // reconciles the same phase and operation ID; it never releases admission.
       await db.runTransaction(async tx => {
         const current = (await tx.get(ref)).data();
-        if (current?.claim?.id === claimId) tx.update(ref, {lastError: error.publicMessage || error.code || "vm_operation_failed", updatedAtMs: now()});
+        if (current?.claim?.id === claimId) {
+          const failedAtMs = now();
+          tx.update(ref, {lastError: error.publicMessage || error.code || "vm_operation_failed",
+            lastErrorAtMs: failedAtMs, failedPhase: operation.phase, updatedAtMs: failedAtMs});
+        }
       });
       throw error;
     }
   }
   return {request, step};
+}
+
+function recordPhaseTiming(operation, completedAtMs) {
+  const startedAtMs = Number(operation?.phaseStartedAtMs || operation?.createdAtMs);
+  const elapsedMs = Number.isSafeInteger(startedAtMs) && Number.isSafeInteger(completedAtMs) && completedAtMs >= startedAtMs
+    ? completedAtMs - startedAtMs : null;
+  const current = operation?.phaseTimingsMs && typeof operation.phaseTimingsMs === "object" && !Array.isArray(operation.phaseTimingsMs)
+    ? operation.phaseTimingsMs : {};
+  return elapsedMs === null ? current : {...current, [operation.phase]: elapsedMs};
 }
 function assertOperation(ws, op, operationId) {
   if (!ws || !op || ws.ownerUid !== op.ownerUid || ws.activeOperationId !== operationId ||

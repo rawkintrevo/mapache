@@ -282,6 +282,13 @@ the controller's distinct health/shutdown credential remains allowed until the
 lease is released. Failed/unreachable quiesce is recorded explicitly before
 deletion; it is not reported as successful graceful shutdown.
 
+Each lifecycle operation also records `phaseStartedAtMs`, bounded
+`phaseTimingsMs`, and (when a worker fails) `failedPhase`, `lastError`, and
+`lastErrorAtMs`. The owner-scoped `GET /workspaces/{id}/operations/{id}`
+projection exposes only those sanitized diagnostics. Operators can identify the
+failed phase and its recovery state before retrying; a failed operation is not
+treated as a reason to blindly start another VM.
+
 `functions/vmEnvironment.service.js` resolves only those selected environment
 entries from the owner's private store at provisioning time. Values are injected
 into Compute bootstrap, never copied into workspace/session/operation records.
@@ -1473,9 +1480,8 @@ digest or target mismatch; transient runtime readiness errors retain a bounded
 retry. The adapter is intentionally not wired to a production VM boot yet, so
 these reports are contract/test evidence rather than a live recovery claim.
 
-Fresh-VM verification with a real runtime adapter, asynchronous provider
-operation reconciliation, numeric cost measurements, and disk-full/zone-loss
-runbooks remain release work. No
+Fresh-VM verification with a real runtime adapter, numeric cost measurements,
+and disk-full/zone-loss runbooks remain release work. No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was invoked by this change.
 

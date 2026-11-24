@@ -199,6 +199,11 @@ global provider operations before completion; a pending retention delete keeps
 its provider operation in the durable retry record and never issues a blind
 second delete. The operation-polling boundary is covered by focused tests.
 
+VM lifecycle receipts now record bounded per-phase durations and sanitized
+failure phase/timestamp fields. The owner-scoped operation status projection
+exposes those diagnostics so operators can identify a stuck or failed phase
+before retrying; it does not start a replacement or change authority.
+
 The same opt-in scheduler now writes a read-only
 `vmBackupInventoryReports_v2/{workspaceId}` report. It records instance/disk
 presence and attachment, backup age, retention holds/quarantine decisions,
@@ -209,9 +214,9 @@ bounded at the backup-service boundary.
 
 Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
-reconcile asynchronous provider operations before declaring deletion complete;
-inventory Compute resources before orphan cleanup; surface startup/attach/mount
-timings and actual costs; and publish the disk-full/zone-loss runbooks. No
+inventory Compute resources before orphan cleanup; surface backup/runtime
+startup, attach, and mount timings and actual costs; and publish the
+disk-full/zone-loss runbooks. No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was performed.
 

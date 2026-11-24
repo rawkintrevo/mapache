@@ -46,9 +46,11 @@ function createVmCreationService({db, now = Date.now}) {
         apiEnabled: true, lifecycleEnabled: true, runnerImage: admission.runnerImage, gatewayHost: admission.gatewayHost,
         activeOperationId: operationId, initialOperationId: operationId, bootId: null, leaseExpiresAt: 0});
       tx.set(rr, {ownerUid, workspaceId, generation: 1, sessionId, enabled: false});
+      const createdAtMs = now();
       tx.set(or, {workspaceId, ownerUid, name, action: "create", oldGeneration: 0, descriptor, sessionId,
         runnerImage: admission.runnerImage, gatewayHost: admission.gatewayHost, phase: "disk", status: "pending",
-        claim: null, createdAtMs: now(), updatedAtMs: now()});
+        claim: null, phaseStartedAtMs: createdAtMs, phaseTimingsMs: {}, phaseAttempts: {},
+        lastError: null, lastErrorAtMs: null, createdAtMs, updatedAtMs: createdAtMs});
       tx.update(ar, {operationId, consumedAtMs: now()});
       return {workspaceId, operationId, status: "pending"};
     });

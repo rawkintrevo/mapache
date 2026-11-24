@@ -143,6 +143,33 @@ test("duplicate requests share one operation and competing requests cannot acqui
   assert.deepEqual(f.effects, ["quiesce", "delete", "provision", "route", "health"]);
 });
 
+test("lifecycle receipts retain bounded phase timings and failed phase evidence", async () => {
+  const f = fixture();
+  const {operationId} = await f.request();
+  while (f.op(operationId).phase !== "provision") await f.service.step(operationId);
+  f.dependencies.compute.start = async () => {
+    const error = new Error("runner_image_rejected");
+    error.code = "runner_image_rejected";
+    throw error;
+  };
+  await assert.rejects(f.service.step(operationId), /runner_image_rejected/);
+  const operation = f.op(operationId);
+  assert.equal(operation.failedPhase, "provision");
+  assert.equal(operation.lastError, "runner_image_rejected");
+  assert.equal(operation.lastErrorAtMs, 1000);
+  assert.deepEqual(operation.phaseTimingsMs, {quiesce: 0, delete: 0, reserve: 0});
+});
+
+test("successful lifecycle receipts record every completed phase", async () => {
+  const f = fixture();
+  const {operationId} = await f.request();
+  await finish(f, operationId);
+  assert.deepEqual(Object.keys(f.op(operationId).phaseTimingsMs).sort(),
+    ["delete", "health", "provision", "quiesce", "reserve", "route"]);
+  assert.equal(f.op(operationId).lastError, null);
+  assert.equal(f.op(operationId).lastErrorAtMs, null);
+});
+
 test("unadmitted and stale machine requests do not create operations", async () => {
   const f = fixture(); f.ws().lifecycleEnabled = false;
   await assert.rejects(f.request(), /vm_lifecycle_not_admitted/);

@@ -40,7 +40,12 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
       const op = (await db.collection(OPERATIONS).doc(operationId).get()).data();
       if (!op || op.ownerUid !== uid || op.workspaceId !== workspaceId) throw httpError(404, "not_found");
       return {status: 200, body: {operationId, action: op.action, status: op.status, phase: op.phase,
-        generation: op.descriptor.generation, lastError: op.lastError || null, quiesceResult: op.quiesceResult || null}};
+        generation: op.descriptor.generation, lastError: op.lastError || null,
+        lastErrorAtMs: Number.isSafeInteger(op.lastErrorAtMs) ? op.lastErrorAtMs : null,
+        failedPhase: op.failedPhase || null,
+        phaseStartedAtMs: Number.isSafeInteger(op.phaseStartedAtMs) ? op.phaseStartedAtMs : null,
+        phaseTimingsMs: publicPhaseTimings(op.phaseTimingsMs),
+        quiesceResult: op.quiesceResult || null}};
     }
     if (req.method !== "POST" || operationId || !["access", "start", "pause", "replace"].includes(action)) throw httpError(405, "method_not_allowed");
     const body = req.body || {};
@@ -86,6 +91,11 @@ function createVmApiService({db, requireUser, lifecycle, now = Date.now}) {
         previewUrl: url("/preview/"), browserUrl: session.capabilities?.chrome === true ? url("/browser/") : null}};
     });
   };
+  function publicPhaseTimings(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter(([key, item]) => /^[a-z][a-z0-9-]{0,31}$/.test(key) &&
+      Number.isSafeInteger(item) && item >= 0 && item <= 24 * 60 * 60 * 1000));
+  }
   async function ownedWorkspace(ref, uid) {
     const ws = (await ref.get()).data(); checkOwned(ws, uid); return ws;
   }
