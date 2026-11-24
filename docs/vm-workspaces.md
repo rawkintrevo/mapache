@@ -938,6 +938,33 @@ blockers. The handoff scan of the sole shared-tree record returned
 `artifacts/qa/vm-shared-tree-inventory/handoff.json`. Four focused tests cover
 valid provenance, refusal paths and preservation of migration blockers.
 
+### Merge selected recovery trees
+
+Run `node scripts/vm-merge-import.mjs <private-config.json>` after the
+individual checkpoint, archive and owner-tool stages have assembled receipts.
+The config takes an absolute destination stage `root`, the `ownerUid`,
+`workspaceId`, an `operationId`, a logical file byte budget `maxBytes`, and
+an ordered `sources` array. Each source has a `kind` of `checkpoint`,
+`archive` or `owner-tools` and an absolute private stage `root`.
+Checkpoint sources also specify the original `planFile`. Use an exclusively
+managed stage and keep the configuration and recovered files private.
+
+The merger verifies the selected source files against the plans, rejects
+ownership mismatches and path conflicts before writing, and preserves
+supported modes, empty directories, symlinks and hard links. Explicit
+directories can overlap only when their modes match. A file collision or
+another source's tombstone requires explicit reconciliation. Both staged
+objects and the assembled tree consume disk space, so the logical byte
+budget alone does not establish capacity. Keep the same source order and
+operation ID to resume. The receipt `merged-tree.json` covers the selected
+plans and their assembled paths. Eligibility and missing-source decisions
+remain with the migration coordinator.
+
+The local `vm-test` exercise combined its published agent and workspace
+checkpoints, browser archive and owner tools into 371 files and 146 directories
+under `artifacts/qa/vm-merged-import/`. Reopening the same operation verified
+the same receipt. Full HOME recovery remains unproven.
+
 ## Cost model and guardrails
 
 These are planning estimates, not measured usage. The pricing references were

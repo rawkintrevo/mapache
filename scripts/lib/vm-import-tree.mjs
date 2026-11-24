@@ -32,6 +32,16 @@ async function verifyDirectory(target, mode, complete) {
       (actualMode !== mode && (complete || actualMode !== 0o700))) fail('import_stage_directory_invalid');
 }
 
+async function verifyTreeEntry(root, entry) {
+  const target = path.join(root, entry.path);
+  await verifyEntry(target, entry);
+  if (entry.kind === 'hardlink') {
+    const stat = await fs.lstat(target);
+    const original = await fs.lstat(path.join(root, entry.target));
+    if (!original.isFile() || stat.dev !== original.dev || stat.ino !== original.ino) fail('import_tree_hardlink_changed');
+  }
+}
+
 async function inspectTree(root, entries, directories, complete) {
   const found = new Set();
   async function visit(relative) {
@@ -43,7 +53,7 @@ async function inspectTree(root, entries, directories, complete) {
       } else {
         const entry = entries.get(child);
         if (!entry) fail('import_tree_unexpected_entry');
-        await verifyEntry(target, entry);
+        await verifyTreeEntry(root, entry);
       }
       found.add(child);
     }
@@ -94,15 +104,19 @@ export async function assembleStagedTree({plan, staged, receiptName, scope, afte
         entry.path.split('/').some(part => !part || part === '.' || part === '..') ||
         entries.has(entry.path) || directories.has(entry.path)) fail('import_tree_path_invalid');
     if (entry.kind === 'directory') {
-      if (![0o700, 0o755].includes(entry.mode)) fail('import_tree_directory_mode_invalid');
+      if (!Number.isInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o777) fail('import_tree_directory_mode_invalid');
       directories.set(entry.path, entry.mode);
     } else {
-      if (!['file', 'symlink'].includes(entry.kind)) fail('import_tree_entry_invalid');
+      if (!['file', 'symlink', 'hardlink'].includes(entry.kind)) fail('import_tree_entry_invalid');
       entries.set(entry.path, entry);
     }
     if (entry.kind === 'file' && !/^[a-f0-9]{64}$/.test(entry.stagedObjectKey || '')) fail('import_tree_source_invalid');
   }
   for (const entry of staged.entries) {
+    if (entry.kind === 'hardlink') {
+      const original = entries.get(entry.target);
+      if (original?.kind !== 'file' || ['sha256', 'mode', 'byteLength'].some(key => original[key] !== entry[key])) fail('import_tree_hardlink_invalid');
+    }
     let parent = path.posix.dirname(entry.path);
     while (parent !== '.') {
       if (entries.has(parent)) fail('import_tree_path_invalid');
@@ -125,12 +139,14 @@ export async function assembleStagedTree({plan, staged, receiptName, scope, afte
     }
     await verifyDirectory(target, mode, complete);
   }
-  for (const entry of entries.values()) {
+  const leaves = [...entries.values()];
+  for (const entry of [...leaves.filter(e => e.kind !== 'hardlink'), ...leaves.filter(e => e.kind === 'hardlink')]) {
     const target = path.join(tree, entry.path);
     let exists = true;
     try { await fs.lstat(target); } catch (error) { if (error.code !== 'ENOENT') throw error; exists = false; }
     if (!exists) {
       if (entry.kind === 'symlink') await fs.symlink(entry.target, target);
+      else if (entry.kind === 'hardlink') await fs.link(path.join(tree, entry.target), target);
       else {
         const temporary = path.join(partials, randomUUID());
         try {
@@ -142,7 +158,7 @@ export async function assembleStagedTree({plan, staged, receiptName, scope, afte
       await syncDirectory(path.dirname(target));
       await afterPublish();
     }
-    await verifyEntry(target, entry);
+    await verifyTreeEntry(tree, entry);
   }
   for (const [relative, mode] of ordered.reverse()) {
     const target = path.join(tree, relative);
