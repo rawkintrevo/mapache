@@ -87,6 +87,19 @@ The default root command is:
 npm run check
 ```
 
+For rapid VM-automation iteration, use the focused command:
+
+```bash
+npm run check:fast
+```
+
+It validates developer-doc links, Functions and runner syntax, and the focused
+VM lifecycle, admission, request, automation, isolation, and runner-startup
+tests. It intentionally skips the Firestore emulator, unrelated unit tests,
+frontend tests, production builds, and the full upstream runner suite. Run the
+full `npm run check` before handoff or after a small batch of focused
+iterations; `check:fast` is a feedback loop, not a release gate.
+
 It runs:
 
 1. Developer docs relative-link validation.
