@@ -29,6 +29,7 @@ function setup({state = "active"} = {}) {
   db.values.set(`${VM_COLLECTION}/workspace-1`, {
     ownerUid: "owner-1",
     backend: "compute-engine",
+    apiEnabled: true,
     lifecycleEnabled: true,
     state,
     generation: 4,
@@ -83,6 +84,7 @@ test("wakes a stopped VM through the durable lifecycle and returns a fresh agent
     requestId: "run-1",
     action: "start",
     expectedGeneration: 4,
+    requireApiAdmission: true,
   });
   assert.equal(session.serviceUrl, "https://vm-1.example.com");
   assert.equal(session.shutdownToken, "shutdown-secret");
@@ -105,6 +107,18 @@ test("does not disclose or operate a VM owned by another user", async () => {
     assert.equal(error.publicMessage, "workspace_not_found");
     return true;
   });
+});
+
+test("does not wake a VM that is not API-admitted", async () => {
+  const {db, calls, service} = setup({state: "stopped"});
+  const runtimePath = `${VM_COLLECTION}/workspace-1`;
+  db.values.set(runtimePath, {...db.values.get(runtimePath), apiEnabled: false});
+  await assert.rejects(() => service.ensureReady("owner-1", "workspace-1", {requestId: "run-1"}), (error) => {
+    assert.equal(error.status, 404);
+    assert.equal(error.publicMessage, "workspace_not_found");
+    return true;
+  });
+  assert.equal(calls.length, 0);
 });
 
 console.log("vm workspace runtime service tests passed");

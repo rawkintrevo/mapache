@@ -27,6 +27,7 @@ function createAutomationProvisioningService(dependencies = {}) {
     requireWorkspace: dependencies.requireWorkspace,
     sessionCollection: dependencies.sessionCollection,
     storage: dependencies.storage,
+    vmRuntime: dependencies.vmRuntime,
     workspaceRequestRuntime: dependencies.workspaceRequestRuntime,
   };
   if (typeof shared.createSession !== "function") {
@@ -91,6 +92,12 @@ async function provisionAutomationRun(runId, dependencies = {}) {
   const run = claim.run;
   if (isSharedWorkspaceRequest(run) && typeof dependencies.workspaceRequestRuntime?.provision === "function") {
     return dependencies.workspaceRequestRuntime.provision(normalizedRunId);
+  }
+  if (typeof dependencies.vmRuntime?.isVmWorkspace === "function" &&
+      await dependencies.vmRuntime.isVmWorkspace(run.ownerUid, run.workspaceId)) {
+    const errorCode = "vm_automation_execution_not_admitted";
+    await markAutomationRunFailure(runRef, errorCode, null, dependencies);
+    return {provisioned: false, runId: normalizedRunId, error: errorCode};
   }
   let sessionRef;
   try {

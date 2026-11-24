@@ -48,6 +48,7 @@ function createVmWorkspaceRuntimeService({
     if (!runtime) return null;
     assertOwner(runtime, ownerUid, normalizedWorkspaceId);
     if (runtime.backend !== COMPUTE_ENGINE_BACKEND) return null;
+    if (runtime.apiEnabled !== true) throw httpError(404, "workspace_not_found");
     if (runtime.lifecycleEnabled !== true) throw httpError(409, "vm_lifecycle_not_admitted");
 
     const requestId = normalizeRequestId(options.requestId || `background-${normalizedWorkspaceId}`);
@@ -58,6 +59,7 @@ function createVmWorkspaceRuntimeService({
         requestId,
         action: "start",
         expectedGeneration: runtime.generation,
+        requireApiAdmission: true,
       });
     }
     return waitForReady(ownerUid, normalizedWorkspaceId, options);

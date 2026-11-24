@@ -42,7 +42,8 @@ ready.
 
 For a workspace whose backend-owned `vmRuntimes_v2/{workspaceId}` record uses
 `backend: compute-engine`, `functions/vmWorkspaceRuntime.service.js` takes the
-VM path instead. A stopped admitted VM receives one idempotent durable
+VM path instead. Only a VM with explicit API admission (`apiEnabled: true`) is
+eligible for background wake-up. A stopped admitted VM receives one idempotent durable
 `start` lifecycle request, the adapter waits for the current generation's
 `active` state, boot, lease, gateway route and authenticated runner readiness,
 then mints a short-lived `aud: agent` access token. The broker sends that token
@@ -54,6 +55,14 @@ Generation changes are re-read before dispatch and ambiguous outcomes retain
 the existing no-blind-replay behavior. If the VM is fenced, not lifecycle
 admitted, missing its current session/credentials, or cannot become ready in
 the bounded startup window, the request fails closed.
+
+Scheduled automation still uses the dedicated Cloud Run automation contract.
+Until a VM-native isolated automation executor is admitted, the automation
+provisioner detects a Compute Engine workspace and records
+`vm_automation_execution_not_admitted` without creating an automation session,
+starting a sibling service, or allowing cleanup to pause the canonical VM.
+This is an intentional safety boundary; it does not satisfy stopped-target
+scheduled/Run-now execution.
 
 The runner catalog request has separate deadlines: the Functions-to-runner HTTP
 call allows 45 seconds, while the pi-web-ui control socket allows 30 seconds

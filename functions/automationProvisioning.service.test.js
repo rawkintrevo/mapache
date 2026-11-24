@@ -143,6 +143,21 @@ function setup({run = baseRun(), existingSession, pending = false} = {}) {
   return {calls, db, service};
 }
 
+function vmSetup() {
+  const fixture = setup();
+  const service = createAutomationProvisioningService({
+    admin,
+    createSession: async () => { throw new Error("must_not_create_vm_automation_session"); },
+    db: fixture.db,
+    featureEnabled: async () => true,
+    provisionSessionService: async () => { throw new Error("must_not_provision_vm_automation_session"); },
+    requireWorkspace: async () => ({id: "workspace-1", ownerUid: "user-1"}),
+    sessionCollection: (workspaceId) => fixture.db.collection("workspaces").doc(workspaceId).collection("sessions"),
+    vmRuntime: {isVmWorkspace: async () => true},
+  });
+  return {...fixture, service};
+}
+
 test("claims and provisions an admitted run without changing the canonical main session", async () => {
   const {calls, db, service} = setup();
   const result = await service.provisionAutomationRun("run-1");
@@ -188,6 +203,15 @@ test("routes an identity mismatch to failed cleanup while retaining the run slot
 test("uses stable failure codes and does not serialize arbitrary provider errors", () => {
   assert.equal(stableAutomationFailureCode({message: "quota exhausted for secret token"}), "cloud_run_quota_exceeded");
   assert.equal(stableAutomationFailureCode({message: "provider returned a bearer token"}), "automation_provisioning_failed");
+});
+
+test("fails closed instead of creating a dedicated runner for a VM workspace", async () => {
+  const {calls, db, service} = vmSetup();
+  const result = await service.provisionAutomationRun("run-1");
+  assert.deepEqual(result, {provisioned: false, runId: "run-1", error: "vm_automation_execution_not_admitted"});
+  assert.equal(db.data.get("automationRuns/run-1").status, "failed");
+  assert.equal(db.data.get("automationRuns/run-1").provisioningErrorCode, "vm_automation_execution_not_admitted");
+  assert.equal(calls.length, 0);
 });
 
 test("pending provisioning does not generate a recursive Firestore event loop", async () => {

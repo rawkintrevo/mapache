@@ -361,6 +361,7 @@ const automationProvisioningService = createAutomationProvisioningService({
   requestRunnerJson,
   sessionCollection,
   storage,
+  vmRuntime: vmWorkspaceRuntimeService,
   workspaceRequestRuntime: workspaceRequestRuntimeService,
 });
 const {
