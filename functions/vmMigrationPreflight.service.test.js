@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
 
-function fixture({workspace = {}, sessions = [], runs = [], destination, fence, uploads, pending = [], version = 1} = {}) {
+function fixture({workspace = {}, sessions = [], runs = [], destination, fence, uploads, pending = [],
+  sharedStorageClaims = [], version = 1} = {}) {
   const workspacePath = "workspaces/fixture";
   const pathSnapshots = new Map();
   const snapshot = (path, data) => ({
@@ -16,7 +17,8 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
   pathSnapshots.set("vmRuntimes_v2/fixture", snapshot("vmRuntimes_v2/fixture", destination));
   pathSnapshots.set("vmMigrationFences_v2/fixture", snapshot("vmMigrationFences_v2/fixture", fence));
   pathSnapshots.set("vmLegacyUploads_v2/fixture", snapshot("vmLegacyUploads_v2/fixture", uploads));
-  for (const [path, values] of [[workspacePath + "/sessions", sessions], ["automationRuns", runs], ["vmLegacyUploads_v2/fixture/pending", pending]]) {
+  for (const [path, values] of [[workspacePath + "/sessions", sessions], ["automationRuns", runs],
+    ["vmLegacyUploads_v2/fixture/pending", pending], ["vmLegacySharedStorage_v2/fixture/pending", sharedStorageClaims]]) {
     pathSnapshots.set(path, {size: values.length, docs: values.map((row, i) => snapshot(path + "/" + i, row))});
   }
   const ref = path => ({
@@ -36,6 +38,14 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
       workspaceId: "fixture", ownerUid, checkCompute: !!inspectCompute, checkStorage: !!inspectStorage,
     })};
 }
+
+test("an unresolved legacy IAM claim changes the observation and blocks drainage", async () => {
+  const before = await fixture().inspect();
+  const after = await fixture({sharedStorageClaims: [{bucketName: "private-bucket"}]}).inspect();
+  assert.ok(after.blockers.includes("legacy_shared_storage_iam_unresolved"));
+  assert.notEqual(before.observationSha256, after.observationSha256);
+  assert.ok(!JSON.stringify(after).includes("private-bucket"));
+});
 
 test("reports possibly live and failed legacy writers without exposing record contents", async () => {
   const input = {sessions: [{status: "stop_failed"}, {status: "unknown", secret: "private"}],

@@ -25,6 +25,9 @@ function createHarness(options = {}) {
   let createCalls = 0;
   let deleteFilesCalls = 0;
   let deleteBucketCalls = 0;
+  let iamCalls = 0;
+  const claims = new Map();
+  let fenced = options.fenced;
   const updates = [];
   const bucket = {
     async getMetadata() {
@@ -41,6 +44,12 @@ function createHarness(options = {}) {
   };
   const db = {
     collection(name) {
+      if (name === "vmMigrationFences_v2") {
+        return {doc: () => ({get: async () => ({exists: !!fenced})})};
+      }
+      if (name === "vmLegacySharedStorage_v2") {
+        return {doc: () => ({collection: () => ({doc: id => ({id, delete: async () => claims.delete(id)})})})};
+      }
       assert.equal(name, "workspaces");
       return {
         doc(id) {
@@ -68,6 +77,9 @@ function createHarness(options = {}) {
         },
       };
     },
+    async runTransaction(body) {
+      return body({get: ref => ref.get(), create: (ref, value) => claims.set(ref.id, value)});
+    },
   };
   const storage = {
     bucket(name) {
@@ -91,6 +103,8 @@ function createHarness(options = {}) {
     bucketAccessService: {
       ensureRunnerObjectAccess: async (binding) => {
         assert.equal(binding.bucketName, bucketName);
+        iamCalls++;
+        assert.equal(claims.size, 1, "IAM repair requires a durable claim");
         if (options.iamError) throw options.iamError;
       },
     },
@@ -107,6 +121,9 @@ function createHarness(options = {}) {
     getDeleteFilesCalls: () => deleteFilesCalls,
     getDeleteBucketCalls: () => deleteBucketCalls,
     getUpdates: () => updates,
+    getIamCalls: () => iamCalls,
+    getClaimCount: () => claims.size,
+    setFence: () => { fenced = true; },
   };
 }
 
@@ -161,6 +178,11 @@ assert.equal(
     errorCode: null,
   });
   assert.equal(existing.getCreateCalls(), 0, "existing shared storage must be reused");
+  assert.equal(existing.getClaimCount(), 0, "successful IAM repair clears the claim");
+  existing.setFence();
+  await assert.rejects(existing.service.prepareWorkspaceSharedStorage(ownerUid, workspaceId), /workspace_vm_migration_active/);
+  assert.equal(existing.getIamCalls(), 1, "a fence prevents new IAM repair");
+  assert.equal(existing.getClaimCount(), 0);
 
   const foreign = createHarness({
     metadata: validMetadata({labels: {"mapache-workspace-id": "other", "mapache-owner-uid": "other"}}),
@@ -191,6 +213,7 @@ assert.equal(
       /workspace_bucket_iam_failed/,
   );
   assert.equal(iamFailure.getWorkspace().sharedStorage.errorCode, undefined, "validation must not rewrite workspace state");
+  assert.equal(iamFailure.getClaimCount(), 1, "an ambiguous provider failure leaves its claim");
 
   const active = createHarness({sessions: [{id: "main", status: "running"}]});
   await assert.rejects(

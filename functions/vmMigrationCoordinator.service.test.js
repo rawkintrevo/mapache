@@ -6,6 +6,7 @@ const {randomUUID} = require("node:crypto");
 const admin = require("firebase-admin");
 const {createVmMigrationCoordinator} = require("./vmMigrationCoordinator.service");
 const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
+const {createWorkspaceSharedStorageService, deriveWorkspaceBucketName} = require("./workspaceSharedStorage.service");
 
 test("reservation and abort are atomic under concurrent callers and fail closed on changed authority", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
@@ -103,6 +104,11 @@ test("quiesce records a historical receipt only for stable source and fence obse
     await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_writers_not_drained"});
     assert.equal(probes, 0);
     await pending.delete();
+    const iam = db.doc(`vmLegacySharedStorage_v2/${workspaceId}/pending/ambiguous`);
+    await iam.create({});
+    await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_writers_not_drained"});
+    assert.equal(probes, 0);
+    await iam.delete();
 
     computeProbe = async () => ({...computeEvidence, discovery: {scannedRegionsClear: false}});
     await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_compute_not_quiesced"});
@@ -143,6 +149,62 @@ test("quiesce records a historical receipt only for stable source and fence obse
     assert.equal((await workspaceFence.get()).exists, false);
     assert.equal((await prefix.get()).exists, false);
   } finally {
+    await app.delete();
+  }
+});
+
+test("legacy IAM repair remains visible to preflight while a VM fence prevents a second repair", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  const providerStarted = Promise.withResolvers();
+  const releaseProvider = Promise.withResolvers();
+  let repair;
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const projectId = "demo-mapache-cutover";
+    const projectNumber = "1234567890";
+    const bucketName = deriveWorkspaceBucketName(projectNumber, workspaceId);
+    const source = db.collection("workspaces").doc(workspaceId);
+    await source.create({ownerUid, sharedStorage: {bucketName, projectId, projectNumber, storageGeneration: "fixture"}});
+    const bucketMetadata = {
+      name: bucketName, project: projectId, projectNumber, location: "US-CENTRAL1", storageClass: "STANDARD",
+      labels: {"mapache-workspace-id": workspaceId, "mapache-owner-uid": ownerUid},
+      hierarchicalNamespace: {enabled: true},
+      iamConfiguration: {uniformBucketLevelAccess: {enabled: true}, publicAccessPrevention: "enforced"},
+      softDeletePolicy: {retentionDurationSeconds: 604800},
+    };
+    let iamCalls = 0;
+    const sharedStorage = createWorkspaceSharedStorageService({
+      db, storage: {bucket: () => ({getMetadata: async () => [bucketMetadata]})},
+      bucketAccessService: {ensureRunnerObjectAccess: async () => {
+        iamCalls++;
+        providerStarted.resolve();
+        await releaseProvider.promise;
+      }},
+    });
+    const probe = () => createVmMigrationPreflight({db})({workspaceId, ownerUid});
+    const initial = await probe();
+    repair = sharedStorage.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId);
+    await Promise.race([providerStarted.promise, repair]);
+    const pending = await probe();
+    assert.ok(pending.blockers.includes("legacy_shared_storage_iam_unresolved"));
+    assert.notEqual(pending.observationSha256, initial.observationSha256);
+
+    await db.collection("vmMigrationFences_v2").doc(workspaceId).create({ownerUid, operationId: "fixture"});
+    await assert.rejects(sharedStorage.validateExistingWorkspaceSharedStorage(ownerUid, workspaceId),
+        {publicMessage: "workspace_vm_migration_active"});
+    assert.equal(iamCalls, 1);
+    releaseProvider.resolve();
+    await repair;
+    const drained = await probe();
+    assert.ok(drained.blockers.includes("migration_fence_already_exists"));
+    assert.ok(!drained.blockers.includes("legacy_shared_storage_iam_unresolved"));
+  } finally {
+    releaseProvider.resolve();
+    await repair?.catch(() => {});
     await app.delete();
   }
 });

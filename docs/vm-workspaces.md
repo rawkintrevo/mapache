@@ -1037,6 +1037,20 @@ The rules need cross-service Firestore access and a coordinated rollout.
 Other GCS writers require their own quiesce and access revocation checks.
 [Cloud Storage resumable uploads](https://docs.cloud.google.com/storage/docs/resumable-uploads)
 
+Legacy shared-storage reconciliation in
+`functions/workspaceStorageMigration.service.js` checks the workspace fence
+at entry and in the transactions that publish a descriptor or error.
+`functions/workspaceSharedStorage.service.js` also reserves an Admin-only
+claim at `vmLegacySharedStorage_v2/{workspaceId}/pending/{operationId}`
+before repairing bucket IAM. The transaction checks the fence, owner and
+storage identity. A successful provider response clears the claim. An
+ambiguous failure or an interrupted worker leaves the claim for
+reconciliation. Preflight reports `legacy_shared_storage_iam_unresolved`
+while any claim remains, and the coordinator can reserve a fence but cannot
+record quiesce. Deployed legacy handlers may still have untracked work until
+the staged guards roll out and existing requests drain. A shared-tree
+source still requires its own Storage scope and writer-reconciliation proof.
+
 The Firestore/Storage emulator test runs with
 `firebase emulators:exec --only firestore,storage --project mapache-rules-test 'node storage.rules.test.cjs && node firestore.rules.test.cjs'`.
 It covers owner reads under a fence, refusal of fenced creates/replacements/

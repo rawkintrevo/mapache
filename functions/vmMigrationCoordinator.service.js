@@ -10,6 +10,7 @@ const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
   "legacy_compute_operations_require_reconciliation", "legacy_upload_issuance_unresolved",
   "legacy_upload_sessions_require_drain",
+  "legacy_shared_storage_iam_unresolved",
 ]);
 const ALIAS_LIMIT = 500;
 const DIGEST = /^[a-f0-9]{64}$/;
