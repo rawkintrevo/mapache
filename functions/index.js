@@ -380,6 +380,7 @@ const automationCleanupService = createAutomationCleanupService({
   scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
   sessionCollection,
   cancelWorkspaceRequest: workspaceRequestRuntimeService.cancel,
+  vmRuntime: vmWorkspaceRuntimeService,
   wakeQueue: wakeAutomationQueue,
 });
 const {

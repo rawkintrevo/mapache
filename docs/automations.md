@@ -119,6 +119,16 @@ run records.
   deadline because creating the first SDK conversation and selecting its model
   can exceed the five-second shutdown/quiesce deadline. The upstream socket
   allows 75 seconds so the runner remains the earlier timeout authority.
+- Compute Engine workspaces are an explicit safety boundary until a VM-native
+  isolated automation executor exists. Provisioning fails closed with
+  `vm_automation_execution_not_admitted` before creating a dedicated session or
+  sibling service. Cleanup also refuses to dispatch an existing Compute-backed
+  automation session through the generic runtime provider because that provider
+  owns the canonical VM; it records
+  `vm_automation_cleanup_not_admitted` for operator recovery. A failed admission
+  with no dedicated session is finalized without a runtime deletion. This keeps
+  scheduled automation from pausing or deleting the user's VM and does not claim
+  VM automation compatibility.
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.

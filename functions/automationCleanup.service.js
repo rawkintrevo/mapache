@@ -11,6 +11,7 @@ const {validateAutomationId} = require("./automationValidation.helpers");
 const {recordSinkDeliveryAttempt} = require("./workspaceRunDelivery.helpers");
 const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
 const {errorDescriptor} = require("./workspaceRequestErrors.helpers");
+const {isComputeEngineRuntime} = require("./runtimeProvider.helpers");
 
 const TERMINAL_OUTCOMES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
 
@@ -26,6 +27,7 @@ function createAutomationCleanupService(dependencies = {}) {
     sessionCollection: dependencies.sessionCollection,
     deliverRunSinks: dependencies.deliverRunSinks || deliverRunSinks,
     cancelWorkspaceRequest: dependencies.cancelWorkspaceRequest,
+    vmRuntime: dependencies.vmRuntime,
     wakeQueue: dependencies.wakeQueue,
   };
   if (typeof shared.deleteSessionService !== "function") {
@@ -173,15 +175,35 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
     workspaceId: run.workspaceId,
     ownerUid: run.ownerUid,
   };
+  let isVmWorkspace = false;
+  if (typeof dependencies.vmRuntime?.isVmWorkspace === "function") {
+    try {
+      isVmWorkspace = await dependencies.vmRuntime.isVmWorkspace(run.ownerUid, run.workspaceId);
+    } catch (error) {
+      return markCleanupError(runRef, normalizedRunId, {code: "vm_automation_workspace_lookup_failed"}, dependencies);
+    }
+  }
+  if (isVmWorkspace && sessionExists && isComputeEngineRuntime(session)) {
+    // The dedicated automation contract has no VM-native executor yet. Never
+    // dispatch a Compute Engine automation session through generic cleanup:
+    // that provider owns the canonical VM and could pause/delete user state.
+    return markCleanupError(runRef, normalizedRunId, {code: "vm_automation_cleanup_not_admitted"}, dependencies);
+  }
   let deletion;
-  try {
-    deletion = await dependencies.deleteSessionService(sessionRef, session, {
-      reason: "automation_cleanup",
-      returnDetails: true,
-      skipSessionState: !sessionExists,
-    });
-  } catch (error) {
-    return markCleanupError(runRef, normalizedRunId, error, dependencies);
+  if (isVmWorkspace && !sessionExists) {
+    // The VM provisioning guard can fail a run before a dedicated session is
+    // created. There is no runtime to delete in that case.
+    deletion = {serviceAbsent: true};
+  } else {
+    try {
+      deletion = await dependencies.deleteSessionService(sessionRef, session, {
+        reason: "automation_cleanup",
+        returnDetails: true,
+        skipSessionState: !sessionExists,
+      });
+    } catch (error) {
+      return markCleanupError(runRef, normalizedRunId, error, dependencies);
+    }
   }
   const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
   if (details.serviceAbsent !== true) {
