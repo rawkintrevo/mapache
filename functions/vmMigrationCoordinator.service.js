@@ -1,5 +1,6 @@
 "use strict";
 
+const {createHash} = require("node:crypto");
 const {DEFAULT_BUCKET} = require("./backendConfig");
 const {httpError} = require("./backendUtils.helpers");
 const {vmMigrationFenceRef} = require("./vmMigrationFence.helpers");
@@ -8,6 +9,7 @@ const {covers, resolveMigrationPrefix} = require("./vmMigrationStorageScope.help
 const {prepareStorageCapture, MAX_CAPTURE_CHUNKS} = require("./vmMigrationStorageObservation.service");
 const {isMainRuntime} = require("./runtimePaths.helpers");
 const {sessionHomePolicyMetadata} = require("./sessionCreation.service");
+const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -19,6 +21,8 @@ const DRAIN_AFTER_FREEZE = new Set([
 ]);
 const ALIAS_LIMIT = 500;
 const DIGEST = /^[a-f0-9]{64}$/;
+const DISK_ID = /^[1-9][0-9]{0,19}$/;
+const CAPTURE_COMPONENTS = new Set(["agent", "browser", "home", "workspace"]);
 const versionStamp = ({updateTime}) => [updateTime.seconds, updateTime.nanoseconds];
 
 function ownsFence(snapshot, identity) {
@@ -40,8 +44,42 @@ function referencesPrefix(data, scope, defaultBucket) {
     (covers(scope.prefix, prefix) || covers(prefix, scope.prefix)));
 }
 
+function normalizeDiskDestination(input) {
+  const {zone, generation, operationId} = input.destination || {};
+  const region = typeof zone === "string" ? /^([a-z]+-[a-z]+[0-9]+)-[a-z]$/.exec(zone)?.[1] : null;
+  if (!region || !Number.isSafeInteger(generation) || generation < 1) throw httpError(400, "vm_migration_disk_destination_invalid");
+  identify(operationId);
+  return {zone, region, generation, operationId};
+}
+
+function verifyDiskReceipt(evidence, record) {
+  const destination = record.importDestination;
+  const receipt = evidence?.receipt;
+  const capture = receipt?.prefixCapture;
+  if (evidence?.diskId !== destination.diskId || receipt?.schemaVersion !== 1 ||
+      !DIGEST.test(receipt.configSha256 || "") || !DIGEST.test(receipt.sourcePlanSha256 || "") ||
+      !Number.isSafeInteger(receipt.directoriesPublished) || receipt.directoriesPublished < 1 || receipt.directoriesPublished > 5 ||
+      !Number.isSafeInteger(receipt.selectedEntries) || receipt.selectedEntries < receipt.directoriesPublished ||
+      capture?.operationId !== record.operationId || capture.sourceGeneration !== record.sourceGeneration ||
+      capture.sha256 !== record.prefixCapture.sha256 || !Array.isArray(capture.components) ||
+      !capture.components.length || capture.components.length > CAPTURE_COMPONENTS.size ||
+      capture.components.some((name, index) => !CAPTURE_COMPONENTS.has(name) || (index > 0 && capture.components[index - 1] >= name)) ||
+      ["workspaceId", "ownerUid"].some(key => receipt.destination?.[key] !== record[key]) ||
+      ["operationId", "generation", "diskName"].some(key => receipt.destination?.[key] !== destination[key])) {
+    throw httpError(409, "vm_migration_disk_receipt_invalid");
+  }
+  const canonical = {diskId: evidence.diskId, workspaceId: record.workspaceId, ownerUid: record.ownerUid,
+    generation: destination.generation, operationId: destination.operationId, diskName: destination.diskName, zone: destination.zone,
+    captureSha256: capture.sha256, sourceGeneration: capture.sourceGeneration, components: capture.components,
+    configSha256: receipt.configSha256, sourcePlanSha256: receipt.sourcePlanSha256,
+    directoriesPublished: receipt.directoriesPublished, selectedEntries: receipt.selectedEntries};
+  return {receiptSha256: createHash("sha256").update(JSON.stringify(canonical)).digest("hex"),
+    sourcePlanSha256: receipt.sourcePlanSha256, components: capture.components, selectedEntries: receipt.selectedEntries};
+}
+
 function createVmMigrationCoordinator({
-  db, authorize = async () => false, inspectCompute, inspectStorage, defaultBucket = DEFAULT_BUCKET, now = Date.now,
+  db, authorize = async () => false, inspectCompute, inspectStorage, inspectDestinationDisk, readDiskImportEvidence,
+  defaultBucket = DEFAULT_BUCKET, now = Date.now,
 }) {
   function refs(input) {
     const workspaceId = identify(input.workspaceId);
@@ -56,6 +94,8 @@ function createVmMigrationCoordinator({
       quiescedAtMs: record.quiesce?.confirmedAtMs ?? null,
       prefixCapturedAtMs: record.prefixCapture?.confirmedAtMs ?? null,
       prefixCapturedObjects: record.prefixCapture?.objectCount ?? null,
+      diskImportVerifiedAtMs: record.diskImport?.verifiedAtMs ?? null,
+      diskImportedComponents: record.diskImport?.components ?? null,
       readyForCutover: false};
   }
   function requireOwner(record, input) {
@@ -102,13 +142,13 @@ function createVmMigrationCoordinator({
       return status(record);
     });
   }
-  async function readFencedSource(transaction, input, {operation, fence}, {phase, completed, invalidPhase}) {
+  async function readFencedSource(transaction, input, {operation, fence}, {phases, completed, invalidPhase}) {
     const previous = await transaction.get(operation);
     if (!previous.exists) throw httpError(404, "vm_migration_operation_not_found");
     const record = previous.data();
     requireOwner(record, input);
     if (completed.includes(record.phase)) return {record};
-    if (record.phase !== phase) throw httpError(409, invalidPhase);
+    if (!phases.includes(record.phase)) throw httpError(409, invalidPhase);
     const observation = await observeVmMigration(transaction, {db, workspaceId: input.workspaceId, ownerUid: input.ownerUid, now});
     const scope = resolveMigrationPrefix(observation.workspace, input.ownerUid, defaultBucket);
     const prefixFence = storageFenceRef(db, scope, input.ownerUid);
@@ -151,7 +191,8 @@ function createVmMigrationCoordinator({
       throw httpError(409, "vm_migration_quiesce_unverified");
     }
     const read = transaction => readFencedSource(transaction, input, references, {
-      phase: "reserved", completed: ["quiesced", "prefix-captured"], invalidPhase: "vm_migration_quiesce_phase_invalid",
+      phases: ["reserved"], completed: ["quiesced", "prefix-captured", "disk-import-verified"],
+      invalidPhase: "vm_migration_quiesce_phase_invalid",
     });
     const before = await db.runTransaction(read, {readOnly: true});
     if (!before.observation) return status(before.record);
@@ -174,7 +215,7 @@ function createVmMigrationCoordinator({
       throw httpError(409, "vm_migration_prefix_capture_unverified");
     }
     const read = transaction => readFencedSource(transaction, input, references, {
-      phase: "quiesced", completed: ["prefix-captured"], invalidPhase: "vm_migration_prefix_capture_phase_invalid",
+      phases: ["quiesced"], completed: ["prefix-captured", "disk-import-verified"], invalidPhase: "vm_migration_prefix_capture_phase_invalid",
     });
     const before = await db.runTransaction(read, {readOnly: true});
     if (!before.observation) return status(before.record);
@@ -214,12 +255,89 @@ function createVmMigrationCoordinator({
       record.quiesce.fenceVersions === fenceVersions;
   }
 
+  async function inspectDisk(input, destination) {
+    const {workspaceId, ownerUid} = input;
+    const {zone, region, generation, operationId} = destination;
+    const descriptor = createRuntimeDescriptor({backend: COMPUTE_ENGINE_BACKEND, workspaceId, ownerUid, zone, region, generation});
+    const disk = await inspectDestinationDisk(descriptor, {operationId});
+    if (disk?.diskName !== descriptor.dataDiskName || disk.zone !== zone ||
+        typeof disk.diskId !== "string" || !DISK_ID.test(disk.diskId)) throw httpError(409, "vm_migration_disk_unverified");
+    return {diskId: disk.diskId, diskName: disk.diskName};
+  }
+
+  async function readImportState(transaction, input, references, completed = []) {
+    const current = await readFencedSource(transaction, input, references, {
+      phases: ["prefix-captured"], completed, invalidPhase: "vm_migration_disk_import_phase_invalid",
+    });
+    if (current.observation) {
+      const {prefixCapture, quiesce} = current.record;
+      if (!matchesQuiesce(current)) throw httpError(409, "vm_migration_prefix_capture_source_changed");
+      if (prefixCapture?.version !== 1 || !DIGEST.test(prefixCapture.sha256 || "") || prefixCapture.sha256 !== quiesce.storageSha256) {
+        throw httpError(409, "legacy_storage_capture_invalid");
+      }
+    }
+    return current;
+  }
+
+  async function registerImportDisk(input) {
+    const references = refs(input);
+    const destination = normalizeDiskDestination(input);
+    if (!inspectDestinationDisk || !await authorize(input, "register-import-disk")) {
+      throw httpError(409, "vm_migration_disk_import_unverified");
+    }
+    const read = transaction => readImportState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    const disk = await inspectDisk(input, destination);
+    const importDestination = {...destination, ...disk};
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.importDestination) {
+        if (Object.keys(importDestination).some(key => current.record.importDestination[key] !== importDestination[key])) {
+          throw httpError(409, "vm_migration_disk_destination_conflict");
+        }
+        return status(current.record);
+      }
+      if (before.observation.observationSha256 !== current.observation.observationSha256 ||
+          before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_disk_observation_stale");
+      transaction.update(references.operation, {importDestination});
+      return status({...current.record, importDestination});
+    });
+  }
+
+  async function verifyDiskImport(input) {
+    const references = refs(input);
+    if (!inspectDestinationDisk || !readDiskImportEvidence || !await authorize(input, "verify-disk-import")) {
+      throw httpError(409, "vm_migration_disk_import_unverified");
+    }
+    const read = transaction => readImportState(transaction, input, references, ["disk-import-verified"]);
+    const before = await db.runTransaction(read, {readOnly: true});
+    if (!before.observation) return status(before.record);
+    const destination = before.record.importDestination;
+    if (!destination) throw httpError(409, "vm_migration_disk_destination_unregistered");
+    const capture = before.record.prefixCapture;
+    const {workspaceId, ownerUid, operationId, sourceGeneration} = before.record;
+    const evidence = await readDiskImportEvidence({workspaceId, ownerUid, destination,
+      prefixCapture: {operationId, sourceGeneration, sha256: capture.sha256}});
+    const verified = verifyDiskReceipt(evidence, before.record);
+    const disk = await inspectDisk(input, destination);
+    if (disk.diskId !== destination.diskId) throw httpError(409, "vm_migration_disk_identity_changed");
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (!current.observation) return status(current.record);
+      if (before.observation.observationSha256 !== current.observation.observationSha256 ||
+          before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_disk_observation_stale");
+      const update = {phase: "disk-import-verified", diskImport: {...verified, verifiedAtMs: now()}};
+      transaction.update(references.operation, update);
+      return status({...current.record, ...update});
+    });
+  }
+
   async function getCapturedPrefix(input) {
     const references = refs(input);
     if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
     return db.runTransaction(async transaction => {
       const current = await readFencedSource(transaction, input, references, {
-        phase: "prefix-captured", completed: [], invalidPhase: "vm_migration_prefix_capture_phase_invalid",
+        phases: ["prefix-captured", "disk-import-verified"], completed: [], invalidPhase: "vm_migration_prefix_capture_phase_invalid",
       });
       if (!matchesQuiesce(current)) throw httpError(409, "vm_migration_prefix_capture_source_changed");
       const {prefixCapture: capture, scope, quiesce} = current.record;
@@ -266,7 +384,9 @@ function createVmMigrationCoordinator({
       const record = previous.data();
       requireOwner(record, input);
       if (record.phase === "aborted") return status(record);
-      if (!["reserved", "quiesced", "prefix-captured"].includes(record.phase)) throw httpError(409, "vm_migration_abort_phase_invalid");
+      if (!["reserved", "quiesced", "prefix-captured", "disk-import-verified"].includes(record.phase)) {
+        throw httpError(409, "vm_migration_abort_phase_invalid");
+      }
       const prefixFence = storageFenceRef(db, record.scope, input.ownerUid);
       const [workspace, workspaceFence, prefix, destination] = await Promise.all([
         transaction.get(source), transaction.get(fence), transaction.get(prefixFence),
@@ -289,7 +409,7 @@ function createVmMigrationCoordinator({
       return status({...record, ...update});
     });
   }
-  return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, abort};
+  return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

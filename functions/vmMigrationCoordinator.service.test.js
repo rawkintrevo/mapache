@@ -447,6 +447,11 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     const prefixFence = db.doc(`vmMigrationStorageFences_v2/${bucket}/owners/${ownerUid}/prefixes/staging`);
     let generation = "100";
     let changeOperationDuringRead = false;
+    const initialDiskId = "9007199254740993";
+    let diskId = initialDiskId;
+    let receiptFile;
+    let substituteEvidence = false;
+    let changeDuringEvidence = false;
     const inspectStorage = createVmMigrationStorageObserver({defaultBucket: bucket, listPage: async () => ({
       objects: [
         ...Array.from({length: 70}, (_, index) => ({name: `${prefix}/private-${index.toString().padStart(2, "0")}`,
@@ -455,6 +460,16 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
       ],
     })});
     const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true, inspectStorage,
+      inspectDestinationDisk: async (descriptor, {operationId}) => {
+        assert.equal(operationId, "destination");
+        return {diskId, diskName: descriptor.dataDiskName, zone: descriptor.zone};
+      },
+      readDiskImportEvidence: async ({destination}) => {
+        assert.equal(destination.diskId, initialDiskId);
+        if (changeDuringEvidence) await operation.update({changedDuringVerification: true});
+        const receipt = JSON.parse(await fs.readFile(receiptFile, "utf8"));
+        return {diskId: initialDiskId, receipt: substituteEvidence ? {...receipt, prefixCapture: {...receipt.prefixCapture, sha256: "c".repeat(64)}} : receipt};
+      },
       inspectCompute: async () => {
         if (changeOperationDuringRead) await operation.update({concurrentChange: true});
         return {recordedComputeClear: true, providerObservationSha256: "a".repeat(64), blockers: [],
@@ -526,6 +541,37 @@ test("prefix capture binds immutable object generations to the fenced quiesce re
     assert.deepEqual(await fs.readFile(path.join(mergedRoot, "tree/workspace/file.txt")), file);
     assert.equal(await fs.readFile(path.join(mergedRoot, "tree/home/fixture.txt"), "utf8"), home);
     assert.equal(await fs.readFile(path.join(mergedRoot, "tree/browser/profile/fixture.txt"), "utf8"), profile);
+    const destination = {zone: "us-central1-a", generation: 1, operationId: "destination"};
+    await assert.rejects(coordinator.verifyDiskImport(input), {publicMessage: "vm_migration_disk_destination_unregistered"});
+    await coordinator.registerImportDisk({...input, destination});
+    await coordinator.registerImportDisk({...input, destination});
+    diskId = "9007199254740994";
+    await assert.rejects(coordinator.registerImportDisk({...input, destination}), {publicMessage: "vm_migration_disk_destination_conflict"});
+    diskId = initialDiskId;
+    const mountRoot = path.join(folder, "disk");
+    await fs.mkdir(mountRoot, {mode: 0o700});
+    const {retainedDiskMarker, DISK_MARKER_NAME} = require("../session-runner/lib/retainedDiskStorage");
+    await fs.writeFile(path.join(mountRoot, DISK_MARKER_NAME), JSON.stringify(retainedDiskMarker({...source, ...destination})));
+    const {importToRetainedDisk} = await import("../scripts/lib/vm-disk-import.mjs");
+    await importToRetainedDisk({...source, mountRoot, generation: destination.generation,
+      operationId: destination.operationId, sources, maxBytes: 4096, prefixCapture: merged.prefixCapture}, {checkMount: async () => {}});
+    receiptFile = path.join(mountRoot, ".mapache-import-stage/disk-import-receipt.json");
+    substituteEvidence = true;
+    await assert.rejects(coordinator.verifyDiskImport(input), {publicMessage: "vm_migration_disk_receipt_invalid"});
+    substituteEvidence = false;
+    diskId = "9007199254740994";
+    await assert.rejects(coordinator.verifyDiskImport(input), {publicMessage: "vm_migration_disk_identity_changed"});
+    diskId = initialDiskId;
+    changeDuringEvidence = true;
+    await assert.rejects(coordinator.verifyDiskImport(input), {publicMessage: "vm_migration_disk_observation_stale"});
+    changeDuringEvidence = false;
+    const verified = await coordinator.verifyDiskImport(input);
+    assert.deepEqual(await coordinator.verifyDiskImport(input), verified);
+    assert.equal(verified.phase, "disk-import-verified");
+    assert.deepEqual(verified.diskImportedComponents, ["browser", "home", "workspace"]);
+    assert.equal(verified.readyForCutover, false);
+    assert.ok(!JSON.stringify(verified).includes(initialDiskId));
+    assert.ok(!(await db.collection("vmRuntimes_v2").doc(workspaceId).get()).exists);
     const chunk = chunks.doc("0");
     const original = (await chunk.get()).get("rowsJson");
     await chunk.update({rowsJson: original.replace('"100"', '"101"')});

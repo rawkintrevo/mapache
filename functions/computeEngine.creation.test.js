@@ -103,3 +103,23 @@ test("initial controller provisioning can initialize its confirmed disk without 
   await assert.rejects(f.service().start(f.descriptor, {...f.options, allowCreateDisk: false, allowInitializeDisk: true}), error => error.code === "runtime_data_disk_missing");
   assert.equal(f.state.diskCreates, 1);
 });
+
+test("migration observation requires the exact creation operation and an unattached disk with a lossless provider ID", async () => {
+  const f = fixture();
+  const service = f.service();
+  const request = {operationId: f.options.operationId};
+  await service.ensureDataDisk(f.descriptor, f.options);
+  const stringId = "9007199254740993";
+  const zone = "https://compute.googleapis.com/compute/v1/projects/pi-agents-cloud/zones/" + f.descriptor.zone;
+  Object.assign(f.state.disk, {id: stringId, zone});
+  assert.deepEqual(await service.inspectMigrationDisk(f.descriptor, request),
+      {diskId: stringId, diskName: f.descriptor.dataDiskName, zone: f.descriptor.zone});
+  await assert.rejects(service.inspectMigrationDisk(f.descriptor, {operationId: "another"}), {code: "runtime_data_disk_creation_conflict"});
+  for (const invalid of [{id: Number(stringId)}, {users: ["foreign-instance"]}, {zone: "other-zone"}, {status: "CREATING"}]) {
+    const previous = f.state.disk;
+    f.state.disk = {...previous, ...invalid};
+    await assert.rejects(service.inspectMigrationDisk(f.descriptor, request), {code: "runtime_migration_disk_unverified"});
+    f.state.disk = previous;
+  }
+  assert.equal(f.state.diskCreates, 1);
+});

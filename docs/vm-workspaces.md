@@ -1192,8 +1192,8 @@ verified copy during import.
 The checkpoint and archive trees can be merged locally or installed on a
 retained disk using the same captured-prefix provenance. Owner tools and
 other legacy formats need their own binding before a complete workspace
-can switch authority. The coordinator still needs destination receipt
-verification and rollback.
+can switch authority. Import verification and authority switching are
+separate coordinator transitions.
 
 Emulator tests exercise reservation, quiesce, prefix capture and release with real Firestore
 transactions. They cover competing requests, stale observations, duplicate
@@ -1312,6 +1312,27 @@ identifies the destination disk name, provisioning operation and generation.
 Changing the capture during resume fails before further publication.
 These receipts record a verified local import. Cutover still requires
 independent destination identity, source authority and boot checks.
+
+The internal coordinator first calls `registerImportDisk` with the
+destination zone, provisioning operation and VM generation. The Compute
+observer checks ownership labels, creation labels, disk readiness and
+detachment, and reads the provider's numeric disk ID as a string. Once
+registered, the same name cannot adopt another provider disk ID.
+`verifyDiskImport` uses a trusted maintenance evidence reader that must
+independently bind the on-disk receipt to that provider ID. It validates
+the source capture, imported components and destination fields, then
+rechecks that the exact disk is ready and detached. Before committing
+`disk-import-verified` it compares the Firestore operation, source and
+both fences again. Read-only status reports the verified components and
+timestamp. It keeps cutover readiness false. These mutation methods still
+need a production maintenance evidence channel, full source coverage,
+boot validation, an authority switch and rollback.
+
+The emulator passes a locally installed receipt through coordinator
+verification and rejects a substituted capture, a same-name provider
+disk replacement and a concurrent Firestore record change. A separate
+live Compute check read a disposable disk's provider ID without rounding,
+rejected a different creation operation and confirmed disk removal.
 
 Focused tests exercise interrupted directory publication, retry,
 ownership rejection and changed destination data. A real tmpfs mount was

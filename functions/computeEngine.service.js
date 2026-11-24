@@ -34,6 +34,7 @@ function createComputeEngineService(dependencies = {}) {
     ensureDataDisk: (descriptor, options) => ensureDataDisk(descriptor, options),
     ensureInstance: (descriptor, options) => ensureInstance(descriptor, options),
     inspect: (descriptor) => inspect(descriptor),
+    inspectMigrationDisk: (descriptor, options) => inspectMigrationDisk(descriptor, options),
     pause: (descriptor, options) => pause(descriptor, options),
     start: (descriptor, options) => start(descriptor, options),
     replace: (descriptor, options) => replace(descriptor, options),
@@ -169,10 +170,7 @@ function createComputeEngineService(dependencies = {}) {
     });
     if (existing) {
       assertOwnership(existing, descriptor);
-      if (options.requireCreationMatch === true && (existing.labels?.["mapache-created-generation"] !== String(descriptor.generation) ||
-          existing.labels?.["mapache-operation-id"] !== identityLabel(String(options.operationId || descriptor.generation)))) {
-        throw computeError("runtime_data_disk_creation_conflict", "Existing disk belongs to another creation operation");
-      }
+      if (options.requireCreationMatch === true) assertDiskCreation(existing, descriptor, options.operationId);
       if (existing.status !== "READY") throw computeError("runtime_data_disk_unusable", `Data disk is ${existing.status}`);
       if (options.expectedSizeGb && Number(existing.sizeGb) < Number(options.expectedSizeGb)) {
         throw computeError("runtime_data_disk_resize_required", "Data disk is smaller than the requested capacity");
@@ -201,6 +199,27 @@ function createComputeEngineService(dependencies = {}) {
     const created = await getDisk(descriptor);
     assertOwnership(created, descriptor);
     return created;
+  }
+
+  function assertDiskCreation(disk, descriptor, operationId) {
+    if (disk.labels?.["mapache-created-generation"] !== String(descriptor.generation) ||
+        disk.labels?.["mapache-operation-id"] !== identityLabel(String(operationId || descriptor.generation))) {
+      throw computeError("runtime_data_disk_creation_conflict", "Existing disk belongs to another creation operation");
+    }
+  }
+
+  async function inspectMigrationDisk(rawDescriptor, {operationId} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    if (typeof operationId !== "string" || !operationId) throw computeError("runtime_disk_operation_required");
+    const disk = await getDisk(descriptor);
+    assertOwnership(disk, descriptor);
+    assertDiskCreation(disk, descriptor, operationId);
+    if (disk.name !== descriptor.dataDiskName || typeof disk.id !== "string" || !/^[1-9][0-9]{0,19}$/.test(disk.id) ||
+        disk.status !== "READY" || !disk.zone?.endsWith("/zones/" + descriptor.zone) ||
+        (disk.users !== undefined && (!Array.isArray(disk.users) || disk.users.length))) {
+      throw computeError("runtime_migration_disk_unverified", "Migration disk identity or detachment is unverified");
+    }
+    return {diskId: disk.id, diskName: disk.name, zone: descriptor.zone};
   }
 
   async function ensureInstance(rawDescriptor, options = {}) {
