@@ -1499,8 +1499,10 @@ exposes only authenticated `/runner/health`, `/runner/recovery-digest`, and
 shutdown through a `recoveryOnly` gateway route; and compares the fresh
 file/runtime evidence and startup timings. The controller records a sanitized
 `vmBackupRecoveryReports_v2` report with measured RPO/RTO and fails closed on a
-digest or target mismatch; transient runtime readiness errors retain a bounded
-retry. A failed verification now requires the adapter to prove exact
+digest or target mismatch, including an explicit failure when either source
+file or source runtime-state digest is missing; target-only evidence is never
+treated as a successful recovery. Transient runtime readiness errors retain a
+bounded retry. A failed verification now requires the adapter to prove exact
 operation-owned instance and disk cleanup; an unconfirmed cleanup remains in a
 bounded retryable `cleanup` phase instead of becoming a terminal failure with
 stranded resources. The scheduled function runs pending recovery operations,

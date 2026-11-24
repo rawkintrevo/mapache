@@ -76,6 +76,30 @@ test("restore verification fails closed on a file digest mismatch", async () => 
   assert.equal(db.docs("vmBackupRecoveryReports_v2/workspace-1/reports")[0].data.passed, false);
 });
 
+test("restore verification fails closed when the backup has no source digests", async () => {
+  const db = memoryDb();
+  seedRuntime(db);
+  db.seed("vmBackups_v2/workspace-1/items/backup-1", verifiedBackup({}, {fileDigest: null, runtimeStateDigest: null}));
+  let cleanupCalls = 0;
+  const service = createVmBackupRecoveryService({db, now: () => NOW, backup: {
+    restoreSnapshot: async (_descriptor, options) => createRestoreReceipt({workspaceId: "workspace-1", ownerUid: "owner-1",
+      operationId: options.operationId, sourceSnapshot: "snapshot-1", sourceGeneration: 1, targetDisk: options.diskName,
+      targetZone: "us-central1-a", targetDiskSizeGb: 64, createdAt: new Date(NOW).toISOString()}),
+  }, restoreRuntime: {
+    verify: async () => ({runtimeReady: true, fileDigest: "sha256:target-files", runtimeStateDigest: "sha256:target-runtime"}),
+    cleanup: async () => { cleanupCalls++; return {instanceDeleted: true, diskDeleted: true}; },
+  }});
+  await service.requestRestore({workspaceId: "workspace-1", ownerUid: "owner-1", requestId: "restore-request-undigested", backupId: "backup-1"});
+  await service.runTick();
+  await service.runTick();
+  const operation = db.docs("vmBackupRecoveryOperations_v2")[0].data;
+  assert.equal(operation.status, "failed");
+  assert.equal(operation.lastError, "vm_restore_source_file_digest_missing");
+  assert.equal(operation.verification.sourceFileDigestCompared, false);
+  assert.equal(operation.verification.sourceRuntimeStateDigestCompared, false);
+  assert.equal(cleanupCalls, 1);
+});
+
 test("failed recovery cleanup stays pending until exact resources are confirmed gone", async () => {
   const db = memoryDb();
   seedRuntime(db);
@@ -160,12 +184,13 @@ function seedRuntime(db) {
     state: "stopped", lifecycleEnabled: true, runtimeProvider: descriptor, backupPolicy: {enabled: true, schedule: "daily"}});
 }
 
-function verifiedBackup(overrides = {}) {
+function verifiedBackup(overrides = {}, evidenceOverrides = {}) {
   const record = createBackupRecord({workspaceId: "workspace-1", ownerUid: "owner-1", operationId: "backup-operation-1",
     sourceDisk: "mapache-disk-1", sourceGeneration: 1, capturedAt: "2026-01-01T23:50:00.000Z"});
   return {name: "snapshot-1", ...markBackupVerified({...record, ...overrides}, {
     workspaceId: overrides.workspaceId || "workspace-1", ownerUid: overrides.ownerUid || "owner-1",
     operationId: "backup-operation-1", verifiedAt: "2026-01-01T23:55:00.000Z", fileDigest: "sha256:files",
+    runtimeStateDigest: "sha256:runtime", ...evidenceOverrides,
   })};
 }
 

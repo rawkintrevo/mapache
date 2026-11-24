@@ -205,11 +205,15 @@ function recoveryReport(operation, evidence = {}, observedAtMs) {
   const rtoTargetMs = Number(target.rtoMs || target.rtoTargetMs || DEFAULT_RTO_TARGET_MS);
   const expectedFileDigest = operation.backupRecord?.verification?.fileDigest;
   const expectedRuntimeStateDigest = operation.backupRecord?.verification?.runtimeStateDigest;
-  const fileDigestMatch = typeof evidence.fileDigest === "string" &&
-    (!expectedFileDigest || evidence.fileDigest === expectedFileDigest);
-  const runtimeStateMatch = typeof evidence.runtimeStateDigest === "string" &&
-    (!expectedRuntimeStateDigest || evidence.runtimeStateDigest === expectedRuntimeStateDigest);
+  const sourceFileDigestCompared = typeof expectedFileDigest === "string" && expectedFileDigest.length > 0;
+  const sourceRuntimeStateDigestCompared = typeof expectedRuntimeStateDigest === "string" && expectedRuntimeStateDigest.length > 0;
+  const fileDigestMatch = sourceFileDigestCompared && typeof evidence.fileDigest === "string" &&
+    evidence.fileDigest === expectedFileDigest;
+  const runtimeStateMatch = sourceRuntimeStateDigestCompared && typeof evidence.runtimeStateDigest === "string" &&
+    evidence.runtimeStateDigest === expectedRuntimeStateDigest;
   const failureCode = !evidence.runtimeReady ? "vm_restore_runtime_not_ready" :
+    !sourceFileDigestCompared ? "vm_restore_source_file_digest_missing" :
+    !sourceRuntimeStateDigestCompared ? "vm_restore_source_runtime_digest_missing" :
     !fileDigestMatch ? "vm_restore_file_digest_mismatch" :
     !runtimeStateMatch ? "vm_restore_runtime_state_mismatch" :
     rpoMs === null || rpoMs > rpoTargetMs ? "vm_restore_rpo_target_exceeded" :
@@ -227,6 +231,8 @@ function recoveryReport(operation, evidence = {}, observedAtMs) {
     runtimeReady: evidence.runtimeReady === true,
     fileDigest: evidence.fileDigest || null,
     runtimeStateDigest: evidence.runtimeStateDigest || null,
+    sourceFileDigestCompared,
+    sourceRuntimeStateDigestCompared,
     startupStageTimingsMs: boundedTimings(evidence.startupStageTimingsMs),
     rpoMs,
     rtoMs,

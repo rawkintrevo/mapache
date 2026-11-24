@@ -277,11 +277,14 @@ unknown-cost behavior. No current billing export was supplied or treated as a
 measured production cost result.
 
 The durable recovery controller now also requires its runtime adapter to expose
-exact-operation cleanup. A file/runtime verification mismatch enters a bounded
+exact-operation cleanup. It now also requires both source file and source
+runtime-state digests before accepting target evidence; an undigested backup
+fails closed and is cleaned up rather than being reported as file-verified
+recovery. A file/runtime verification mismatch enters a bounded
 retryable `cleanup` phase until both the recovery VM and target disk are
 confirmed absent; it cannot become a terminal failed report while resources are
-unknown. The production runtime adapter remains unwired, so this is contract and
-unit-test evidence only.
+unknown. The production adapter is deployed but remains fail-closed until its
+dedicated gateway host and immutable runner image are configured.
 
 The guarded scheduler deployment completed with
 `firebase deploy --only functions:vmBackupReconcile_v2 --project

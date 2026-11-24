@@ -174,7 +174,8 @@ report. A successful recovery requires matching source/target file and
 runtime-state digests, authenticated readiness, and measured RPO/RTO. A failed
 verification cannot become terminal until the exact recovery VM and restored
 disk are confirmed absent; uncertain cleanup remains retryable with the source
-backup retained.
+backup retained. The durable controller also fails closed when either source
+digest is missing; a target-only digest cannot satisfy the recovery check.
 
 ## Cost evidence
 
