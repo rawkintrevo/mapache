@@ -1245,10 +1245,16 @@ unchanged and no destination record was created. Local evidence is
 Every transition is resumable and records the source generation, destination
 disk/generation, operation owner, progress, and blocker. Before destination
 writes, rollback restores source authority only after every destination writer
-stops. After destination writes, rollback requires a verified reverse export or
-remains visibly blocked; flipping back to an old checkpoint is never accepted.
-Sources and backups remain through the rollback window. No source is deleted
-because an import job merely reported success.
+stops. After destination writes, rollback requires a verified
+`mapache-reverse-import-v1` receipt bound to the migration operation, source
+generation, destination generation, and a content digest; an unsupported format,
+stale generation, or unbound receipt remains visibly blocked. Flipping back to
+an old checkpoint is never accepted. Sources and destination evidence remain
+through the rollback window. No source is deleted because an import job merely
+reported success. The contract is owned by
+`functions/workspaceMigrationCoordinator.service.js` and covered by its focused
+rollback tests; it is a rollback-evidence gate, not permission to switch VM
+authority.
 
 Backups are separate from retained storage. The selected initial policy is
 daily crash-consistent snapshots with a 14-day retention target, plus an

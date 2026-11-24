@@ -14,6 +14,8 @@ const NEXT_STATE = Object.freeze({
   switched: "validated",
   validated: "released",
 });
+const REVERSE_IMPORT_FORMAT = "mapache-reverse-import-v1";
+const DIGEST = /^[a-f0-9]{64}$/;
 
 function createWorkspaceMigrationCoordinator(dependencies = {}) {
   const now = dependencies.now || (() => new Date().toISOString());
@@ -65,8 +67,21 @@ function createWorkspaceMigrationCoordinator(dependencies = {}) {
     if (current.authority === "source" && !current.destinationWritesStarted) {
       return {...current, state: "released", authority: "source", rollback: {state: "source-restored", verified: true}, updatedAt: now()};
     }
-    if (current.destinationWritesStarted && evidence.destinationWritersStopped && evidence.reverseImportVerified) {
-      return {...current, state: "released", authority: "source", rollback: {state: "source-restored", verified: true, reverseImport: true}, updatedAt: now()};
+    const reverseImport = evidence.reverseImport;
+    if (current.destinationWritesStarted && evidence.destinationWritersStopped && evidence.reverseImportVerified &&
+        reverseImport?.format === REVERSE_IMPORT_FORMAT &&
+        reverseImport.operationId === current.operationId &&
+        reverseImport.sourceGeneration === current.sourceGeneration &&
+        reverseImport.destinationGeneration === current.destinationGeneration &&
+        DIGEST.test(reverseImport.sha256 || "")) {
+      return {...current, state: "released", authority: "source", rollback: {
+        state: "source-restored", verified: true, sourceRetained: true, destinationRetained: true,
+        reverseImport: {
+          format: reverseImport.format, operationId: reverseImport.operationId,
+          sourceGeneration: reverseImport.sourceGeneration, destinationGeneration: reverseImport.destinationGeneration,
+          sha256: reverseImport.sha256,
+        },
+      }, updatedAt: now()};
     }
     return {
       ...current,
@@ -94,4 +109,4 @@ function migrationError(code) {
   return error;
 }
 
-module.exports = {MIGRATION_STATES, NEXT_STATE, createWorkspaceMigrationCoordinator};
+module.exports = {MIGRATION_STATES, NEXT_STATE, REVERSE_IMPORT_FORMAT, createWorkspaceMigrationCoordinator};
