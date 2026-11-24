@@ -31,7 +31,8 @@ function fixture({workspace = {}, sessions = [], runs = [], destination, fence, 
     assert.deepEqual(options, {readOnly: true});
     return body({get: async query => { reads.push(query.path); return pathSnapshots.get(query.path); }});
   }};
-  return {reads, inspect: (ownerUid = "owner") => createVmMigrationPreflight({db, now: () => 5})({workspaceId: "fixture", ownerUid})};
+  return {reads, pathSnapshots, inspect: (ownerUid = "owner", inspectCompute) =>
+    createVmMigrationPreflight({db, now: () => 5, inspectCompute})({workspaceId: "fixture", ownerUid, checkCompute: !!inspectCompute})};
 }
 
 test("reports possibly live and failed legacy writers without exposing record contents", async () => {
@@ -82,4 +83,17 @@ test("stopped session with an uncompleted compute operation remains a blocker", 
     assert.equal(result.counts.possiblyActiveSessions, 0);
     assert.ok(result.blockers.includes("legacy_compute_operations_require_reconciliation"));
   }
+});
+
+test("provider absence observation is invalidated when the source changes during its read", async () => {
+  const f = fixture({sessions: [{status: "stopped", serviceId: "session-old"}]});
+  const data = await f.inspect("owner", async sessions => {
+    assert.equal(sessions[0].serviceId, "session-old");
+    const workspace = f.pathSnapshots.get("workspaces/fixture");
+    workspace.updateTime.nanoseconds++;
+    return {recordedComputeClear: true, blockers: []};
+  });
+  assert.equal(data.compute.recordedComputeClear, false);
+  assert.ok(data.blockers.includes("legacy_compute_source_changed"));
+  assert.equal(data.readyForCutover, false);
 });

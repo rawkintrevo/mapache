@@ -657,7 +657,10 @@ exports.vmMigrationPreflight_v2 = onRequest({invoker: "private", timeoutSeconds:
   }
   try {
     const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
-    res.json(await createVmMigrationPreflight({db})({workspaceId: req.query.workspaceId, ownerUid: req.query.ownerUid}));
+    const {createVmLegacyComputeObserver} = require("./vmLegacyComputeObservation.service");
+    const inspectCompute = createVmLegacyComputeObserver({auth, projectNumber: "299764728235"});
+    res.json(await createVmMigrationPreflight({db, inspectCompute})({workspaceId: req.query.workspaceId,
+      ownerUid: req.query.ownerUid, checkCompute: req.query.checkCompute === "1"}));
   } catch (error) {
     res.status(error.status || 503).json({error: error.publicMessage || "vm_migration_preflight_unavailable"});
   }

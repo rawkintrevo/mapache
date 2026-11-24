@@ -923,6 +923,17 @@ inventory or an uncertain session status blocks progress. The digest is
 diagnostic evidence from one observation, with no writer admission or
 authority attached to it.
 
+Pass `checkCompute=1` to observe the recorded Cloud Run services and
+unfinished provisioning operations through the provider API. The read is
+bounded to 96 distinct references. It checks the original and deterministic
+service names, rejects foreign or malformed references, and treats an unknown
+operation result as a blocker. The endpoint reads Firestore again after the
+provider calls and invalidates the observation if the source digest changed.
+It reports counts and a provider observation digest without service names or
+provider error payloads. `recordedComputeClear` covers only recorded
+references. Orphan discovery, confirmed runner quiesce, and Storage authority
+still gate the final capture.
+
 The endpoint reports both `readyForFreeze` and `readyForCutover` as false.
 The existing `sharedStorageMigration` state is checked by Cloud Run
 session reservation and automation enqueue, but those checks do not fence

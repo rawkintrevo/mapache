@@ -88,19 +88,26 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
   const evidence = [workspace, destination, fence, uploads, ...pending.docs, ...sessionRecords, ...runRecords].map(stamp)
       .sort(([a], [b]) => a.localeCompare(b));
   return {...result, workspace: workspace.data(), workspaceId,
+    sessions: sessionRecords.map(snapshot => ({...snapshot.data(), id: snapshot.id || snapshot.ref.path.split("/").at(-1)})),
     // This fingerprint binds the observed records, not Cloud Run or Storage.
     observationSha256: createHash("sha256").update(JSON.stringify(evidence)).digest("hex"),
     sourceGeneration: Number.isSafeInteger(observedSourceGeneration) ? observedSourceGeneration : null};
 }
 
-function createVmMigrationPreflight({db, now = Date.now}) {
-  return async ({workspaceId, ownerUid}) => {
-    return db.runTransaction(async transaction => {
-      const {workspace: _workspace, ...result} = await observeVmMigration(transaction, {db, workspaceId, ownerUid, now});
-      return {...result, readOnly: true, readyForFreeze: false, readyForCutover: false,
-        blockers: [...result.blockers, "legacy_admission_fence_unverified", "live_compute_and_storage_authority_unverified",
-          "untracked_legacy_upload_sessions_unverified"]};
-    }, {readOnly: true});
+function createVmMigrationPreflight({db, now = Date.now, inspectCompute}) {
+  return async ({workspaceId, ownerUid, checkCompute = false}) => {
+    const read = () => db.runTransaction(transaction => observeVmMigration(transaction, {db, workspaceId, ownerUid, now}), {readOnly: true});
+    const {workspace: _workspace, sessions, ...result} = await read();
+    let compute;
+    if (checkCompute && inspectCompute && !result.blockers.includes("legacy_writer_inventory_truncated")) {
+      compute = await inspectCompute(sessions);
+      if ((await read()).observationSha256 !== result.observationSha256) {
+        compute = {...compute, recordedComputeClear: false, blockers: [...compute.blockers, "legacy_compute_source_changed"]};
+      }
+    }
+    return {...result, ...(compute ? {compute} : {}), readOnly: true, readyForFreeze: false, readyForCutover: false,
+      blockers: [...result.blockers, ...(compute?.blockers || []), "legacy_admission_fence_unverified",
+        "live_compute_and_storage_authority_unverified", "untracked_legacy_upload_sessions_unverified"]};
   };
 }
 
