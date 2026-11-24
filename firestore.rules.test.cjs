@@ -130,6 +130,7 @@ async function main() {
     const ownerFields = {ownerUid: "alice", userPath: "users/alice", name: "Client workspace"};
     await assertSucceeds(updateDoc(workspace, {name: "Renamed"}));
     await assertFails(updateDoc(workspace, {runtimeProvider: {backend: "compute-engine"}}));
+    await assertFails(updateDoc(workspace, {migrationAuthority: "compute-engine"}));
     await assertFails(updateDoc(workspace, {agentRuntimeGeneration: 9, storagePrefix: "other"}));
     await assertFails(setDoc(doc(alice, "workspaces/client-created"), {
       ...ownerFields, runtimeProviderDescriptor: {backend: "compute-engine"},

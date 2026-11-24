@@ -11,7 +11,7 @@ const {isMainRuntime} = require("./runtimePaths.helpers");
 const {sessionHomePolicyMetadata} = require("./sessionCreation.service");
 const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 const {reserveValidationRuntime} = require("./vmMigrationValidationBoot.service");
-const {cutoverReview, validateDestinationRuntimeEvidence} = require("./vmMigrationCutover.service");
+const {DESTINATION_AUTHORITY, cutoverReview, validateDestinationRuntimeEvidence} = require("./vmMigrationCutover.service");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -31,6 +31,7 @@ const STATUS_ACTIONS = Object.freeze({
   quiesced: "capture-prefix",
   "prefix-captured": "verify-disk-import",
   "disk-import-verified": "review-cutover-gates",
+  "authority-switched": "reconcile-source",
   aborted: null,
 });
 const versionStamp = ({updateTime}) => [updateTime.seconds, updateTime.nanoseconds];
@@ -130,6 +131,8 @@ function createVmMigrationCoordinator({
       validationInstanceStartedAtMs: record.validation?.instanceStartedAtMs ?? null,
       validationCleanedAtMs: record.validation?.cleanedAtMs ?? null,
       destinationDiskCleanedAtMs: record.destinationCleanup?.cleanedAtMs ?? null,
+      authoritySwitchedAtMs: record.authoritySwitch?.switchedAtMs ?? null,
+      authority: record.phase === "authority-switched" ? "destination" : "legacy",
       nextAction, blockers, recoveryAction, sourceRetained: true,
       readyForCutover: false};
   }
@@ -178,7 +181,7 @@ function createVmMigrationCoordinator({
       return status(record);
     });
   }
-  async function readFencedSource(transaction, input, {operation, fence}, {phases, completed, invalidPhase}) {
+  async function readFencedSource(transaction, input, {operation, fence}, {phases, completed, invalidPhase, allowedBlockers = []}) {
     const previous = await transaction.get(operation);
     if (!previous.exists) throw httpError(404, "vm_migration_operation_not_found");
     const record = previous.data();
@@ -197,7 +200,8 @@ function createVmMigrationCoordinator({
         observation.sourceGeneration !== record.sourceGeneration || JSON.stringify(scope) !== JSON.stringify(record.scope)) {
       throw httpError(409, "vm_migration_authority_changed");
     }
-    if (observation.blockers.some(blocker => blocker !== "migration_fence_already_exists")) {
+    const allowed = new Set(allowedBlockers);
+    if (observation.blockers.some(blocker => blocker !== "migration_fence_already_exists" && !allowed.has(blocker))) {
       throw httpError(409, "vm_migration_writers_not_drained");
     }
     if (candidates.size > ALIAS_LIMIT || candidates.docs.some(doc => doc.id !== input.workspaceId &&
@@ -239,6 +243,7 @@ function createVmMigrationCoordinator({
       if (before.observation.observationSha256 !== current.observation.observationSha256 ||
           before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_quiesce_observation_stale");
       const update = {phase: "quiesced", drainBlockers: [], quiesce: {confirmedAtMs: now(), observationSha256: current.observation.observationSha256,
+        sourceObservationSha256: current.observation.sourceObservationSha256 || current.observation.observationSha256,
         fenceVersions: current.fenceVersions, providerSha256, discoverySha256, storageSha256}};
       transaction.update(references.operation, update);
       return status({...current.record, ...update});
@@ -287,7 +292,8 @@ function createVmMigrationCoordinator({
   }
 
   function matchesQuiesce({record, observation, fenceVersions}) {
-    return record.quiesce?.observationSha256 === observation.observationSha256 &&
+    return (record.quiesce?.sourceObservationSha256 || record.quiesce?.observationSha256) ===
+      (observation.sourceObservationSha256 || observation.observationSha256) &&
       record.quiesce.fenceVersions === fenceVersions;
   }
 
@@ -372,6 +378,7 @@ function createVmMigrationCoordinator({
   async function readValidationState(transaction, input, references) {
     const current = await readFencedSource(transaction, input, references, {
       phases: ["disk-import-verified"], completed: [], invalidPhase: "vm_migration_validation_phase_invalid",
+      allowedBlockers: ["destination_registry_exists"],
     });
     if (!matchesQuiesce(current) || !DIGEST.test(current.record.diskImport?.receiptSha256 || "")) {
       throw httpError(409, "vm_migration_validation_source_changed");
@@ -619,6 +626,111 @@ function createVmMigrationCoordinator({
     }, {readOnly: true});
   }
 
+  async function switchAuthority(input) {
+    const references = refs(input);
+    if (!inspectDestinationRuntime || !await authorize(input, "switch-authority")) {
+      throw httpError(409, "vm_migration_cutover_unverified");
+    }
+    const existing = await references.operation.get();
+    if (existing.exists) {
+      const existingRecord = existing.data();
+      requireOwner(existingRecord, input);
+      if (existingRecord.authoritySwitch) return status(existingRecord);
+    }
+    const read = transaction => readValidationState(transaction, input, references);
+    const before = await db.runTransaction(read, {readOnly: true});
+    if (before.record.authoritySwitch) return status(before.record);
+    let runtimeEvidence;
+    try {
+      const evidence = await inspectDestinationRuntime({workspaceId: input.workspaceId, ownerUid: input.ownerUid,
+        operationId: input.operationId, record: before.record});
+      runtimeEvidence = validateDestinationRuntimeEvidence(evidence, before.record);
+    } catch {
+      throw httpError(409, "vm_migration_destination_runtime_unverified");
+    }
+    const review = cutoverReview(before.record, {runtimeEvidence, sourceBlockers: before.observation.blockers});
+    if (!review.readyForCutover) throw httpError(409, "vm_migration_cutover_gates_blocked");
+    return db.runTransaction(async transaction => {
+      const current = await read(transaction);
+      if (current.record.authoritySwitch) return status(current.record);
+      if (before.observation.observationSha256 !== current.observation.observationSha256 ||
+          before.authorityStamps !== current.authorityStamps) throw httpError(409, "vm_migration_cutover_switch_stale");
+
+      const sourceData = current.observation.workspace || {};
+      if (sourceData.migrationAuthority && sourceData.migrationAuthority !== "legacy") {
+        throw httpError(409, "vm_migration_authority_changed");
+      }
+      if (sourceData.ownerUid !== input.ownerUid ||
+          sourceData.agentRuntimeGeneration !== current.record.sourceGeneration ||
+          sourceData.agentRuntimeBootInstanceId) {
+        throw httpError(409, "vm_migration_authority_changed");
+      }
+
+      const destinationRef = db.collection("vmRuntimes_v2").doc(input.workspaceId);
+      const destination = await transaction.get(destinationRef);
+      const destinationData = destination.data() || {};
+      const sessionRef = destinationRef.collection("sessions").doc(runtimeEvidence.sessionId);
+      const routeRef = db.collection("vmGatewayRoutes_v2").doc(destinationData.gatewayHost || "invalid");
+      const [session, route] = await Promise.all([transaction.get(sessionRef), transaction.get(routeRef)]);
+      const sessionData = session.data() || {};
+      const routeData = route.data() || {};
+      if (!destination.exists || destinationData.ownerUid !== input.ownerUid ||
+          destinationData.backend !== "compute-engine" || destinationData.apiEnabled === true ||
+          destinationData.state !== "active" || destinationData.generation !== runtimeEvidence.destinationGeneration ||
+          destinationData.currentSessionId !== runtimeEvidence.sessionId ||
+          (destinationData.migrationOperationId && destinationData.migrationOperationId !== input.operationId) ||
+          sessionData.ownerUid !== input.ownerUid || sessionData.generation !== destinationData.generation ||
+          sessionData.state !== "active" || routeData.workspaceId !== input.workspaceId ||
+          routeData.ownerUid !== input.ownerUid || routeData.enabled !== true ||
+          routeData.generation !== destinationData.generation || routeData.sessionId !== runtimeEvidence.sessionId) {
+        throw httpError(409, "vm_migration_destination_authority_changed");
+      }
+
+      const switchedAtMs = now();
+      const authoritySwitch = {
+        version: 1,
+        state: "switched",
+        switchedAtMs,
+        sourceGeneration: current.record.sourceGeneration,
+        destinationGeneration: runtimeEvidence.destinationGeneration,
+        destinationSessionId: runtimeEvidence.sessionId,
+        diskReceiptSha256: runtimeEvidence.diskReceiptSha256,
+        runnerImageRefSha256: runtimeEvidence.runnerImageRefSha256,
+        healthPath: runtimeEvidence.healthPath,
+      };
+      transaction.update(references.source, {
+        migrationAuthority: DESTINATION_AUTHORITY,
+        migrationOperationId: input.operationId,
+        migrationSourceGeneration: current.record.sourceGeneration,
+        migrationDestinationGeneration: runtimeEvidence.destinationGeneration,
+        migrationCutoverAtMs: switchedAtMs,
+        agentRuntimeAuthorityState: "released",
+        agentRuntimeSessionId: null,
+        agentRuntimeState: "released",
+        agentRuntimeBootInstanceId: null,
+      });
+      transaction.update(destinationRef, {
+        apiEnabled: true,
+        migrationOperationId: input.operationId,
+        migrationSourceGeneration: current.record.sourceGeneration,
+        migrationAuthority: DESTINATION_AUTHORITY,
+        migrationCutoverAtMs: switchedAtMs,
+      });
+      transaction.update(references.fence, {
+        phase: "cutover",
+        authority: "destination",
+        destinationGeneration: runtimeEvidence.destinationGeneration,
+        cutoverAtMs: switchedAtMs,
+      });
+      transaction.update(references.operation, {
+        phase: "authority-switched",
+        authoritySwitch,
+        updatedAtMs: switchedAtMs,
+      });
+      return status({...current.record, phase: "authority-switched", authoritySwitch});
+    });
+  }
+
   async function getCapturedPrefix(input) {
     const references = refs(input);
     if (!await authorize(input, "read-prefix-capture")) throw httpError(409, "vm_migration_prefix_capture_unverified");
@@ -702,7 +814,7 @@ function createVmMigrationCoordinator({
   }
   return {getStatus, reserve, confirmQuiesced, capturePrefix, getCapturedPrefix, registerImportDisk, verifyDiskImport,
     reserveValidationBoot, prepareValidationClone, startValidationBoot, cleanupValidationBoot, cleanupImportedDisk,
-    reviewCutoverGates, abort};
+    reviewCutoverGates, switchAuthority, abort};
 }
 
 module.exports = {createVmMigrationCoordinator};

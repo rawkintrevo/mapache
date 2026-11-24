@@ -42,21 +42,21 @@ test("destination runtime attestation is generation- and receipt-bound", () => {
   }
 });
 
-test("cutover review reports verified prerequisites but keeps the authority switch blocked", () => {
+test("cutover review reports verified prerequisites and authorizes the atomic switch", () => {
   const result = cutoverReview(record, {runtimeEvidence: {healthPath: HEALTH_PATH},
     sourceBlockers: ["migration_fence_already_exists"]});
   assert.equal(result.runtimeAttested, true);
-  assert.equal(result.readyForCutover, false);
-  assert.deepEqual(result.blockers, ["authority_switch_not_wired"]);
+  assert.equal(result.readyForCutover, true);
+  assert.deepEqual(result.blockers, []);
   assert.equal(result.sourceAuthority, "legacy");
   assert.equal(result.destinationRetained, true);
-  assert.equal(result.nextAction, "implement-atomic-authority-switch");
+  assert.equal(result.nextAction, "switch-authority");
 });
 
 test("cutover review keeps incomplete validation and runtime evidence blocked", () => {
   const result = cutoverReview({...record, validation: {}}, {sourceBlockers: ["legacy_upload_sessions_require_drain"]});
   assert.equal(result.readyForCutover, false);
   assert.deepEqual(result.blockers, ["legacy_upload_sessions_require_drain", "validation_cleanup_required",
-    "destination_runtime_attestation_unverified", "authority_switch_not_wired"]);
+    "destination_runtime_attestation_unverified"]);
   assert.equal(result.nextAction, "attest-destination-runtime");
 });

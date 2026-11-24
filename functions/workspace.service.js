@@ -62,7 +62,10 @@ async function listWorkspaces(uid, dependencies = {}) {
   const snap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
-  const workspaces = await Promise.all(snap.docs.filter((doc) => !isWorkspaceDeleted(doc.data() || {})).map((doc) =>
+  const workspaces = await Promise.all(snap.docs.filter((doc) => {
+    const data = doc.data() || {};
+    return !isWorkspaceDeleted(data) && !isWorkspaceMigrated(data);
+  }).map((doc) =>
     ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
   ));
   return workspaces.filter(Boolean).map(serializeWorkspaceForClient).sort(sortByUpdatedAtDesc);
@@ -464,6 +467,11 @@ function isWorkspaceDeleted(workspace = {}) {
 
 function assertWorkspaceMutable(workspace = {}) {
   if (isWorkspaceDeleted(workspace)) throw httpError(409, "workspace_deleted");
+  if (isWorkspaceMigrated(workspace)) throw httpError(409, "workspace_migrated_to_vm");
+}
+
+function isWorkspaceMigrated(workspace = {}) {
+  return workspace.migrationAuthority === "compute-engine";
 }
 
 async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
@@ -476,6 +484,7 @@ async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
     const workspace = {id: snapshot.id, ...snapshot.data()};
     if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
     if (isWorkspaceDeleted(workspace)) return null;
+    if (isWorkspaceMigrated(workspace)) return null;
     if (await hasVmMigrationFence(transaction, workspaceDb, snapshot.id)) return workspace;
     const canonical = await readCanonicalSession(transaction, workspaceRef, workspace);
     const canonicalSessionId = canonical?.id ?? null;
@@ -527,4 +536,5 @@ module.exports = {
   renameWorkspace,
   saveWorkspaceMcpConfig,
   isWorkspaceDeleted,
+  isWorkspaceMigrated,
 };

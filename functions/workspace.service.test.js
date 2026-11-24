@@ -102,6 +102,11 @@ async function testRenameWorkspace() {
       renameWorkspace("user-2", "workspace-1", {name: "Nope"}, dependencies),
       /workspace_forbidden/,
   );
+  workspace.migrationAuthority = "compute-engine";
+  await assert.rejects(
+      renameWorkspace("user-1", "workspace-1", {name: "Legacy must stay retained"}, dependencies),
+      /workspace_migrated_to_vm/,
+  );
 }
 
 async function testCreateWorkspaceUsesManagedDefaults() {
@@ -169,10 +174,20 @@ async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
   assert.strictEqual(workspace.canonicalSessionId, "running");
 }
 
+async function testMigratedWorkspaceLeavesLegacyListing() {
+  const migrated = {ownerUid: "user-1", migrationAuthority: "compute-engine", name: "Retained source"};
+  const service = createWorkspaceService({
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
+    db: {collection: () => ({where: () => ({get: async () => ({docs: [{data: () => migrated}]})})})},
+  });
+  assert.deepStrictEqual(await service.listWorkspaces("user-1"), []);
+}
+
 Promise.all([
   testRenameWorkspace(),
   testCreateWorkspaceUsesManagedDefaults(),
   testCanonicalSessionAdoptionPrefersActiveRuntime(),
+  testMigratedWorkspaceLeavesLegacyListing(),
 ]).then(() => {
   console.log("workspace service tests passed");
 }).catch((error) => {

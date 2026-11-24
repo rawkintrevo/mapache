@@ -1130,9 +1130,10 @@ known drain blocker codes, the next bounded action, a recovery instruction and
 that the source remains retained. It never includes credentials, provider
 addresses, object names or private error text. A reserved operation exposes
 the writer blockers observed at reservation; successful quiesce clears that
-list only after the provider and Storage observations commit. `readyForCutover`
-remains false until a separately reviewed authority-switch implementation is
-available.
+list only after the provider and Storage observations commit. The cutover review
+returns `readyForCutover: true` only after validation cleanup, the import receipt,
+the fenced source, and the live destination attestation all pass. The ordinary
+status projection remains false until the switch transaction has committed.
 
 If a verified import created a destination disk, the coordinator will not
 release the migration fences through `abort` until the validation boot has been
@@ -1164,13 +1165,31 @@ private VM, a pinned runner image, and an authenticated `GET /runner/health`
 response with a ready Agent runtime. Its attestation is bound to the migration
 operation, source and destination generations, disk identity, and import
 receipt digest. The command never writes Firestore or Compute resources and
-does not expose credentials, gateway addresses, or provider errors. The result
-continues to report `readyForCutover: false` with
-`authority_switch_not_wired`; an atomic authority-switch transaction must bind
-this evidence to the legacy writer fence before any source or route authority
-can change. The validator is owned by
+does not expose credentials, gateway addresses, or provider errors. When all
+gates pass it reports `readyForCutover: true` and the next action
+`switch-authority`; it still does not change authority. The validator is owned by
 `functions/vmMigrationCutover.service.js` and provider identity checks by
 `computeEngine.service.js`.
+
+The bounded authority switch is a separate operator action and requires an
+explicit confirmation token:
+
+```bash
+node scripts/vm-migration-switch-authority.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \
+  --confirm authority-switch
+```
+
+It repeats the destination disk, route, pinned-image and authenticated
+`/runner/health` attestation, then uses one Firestore transaction to compare the
+fenced legacy source, destination registry/session/route and migration record.
+The transaction marks the retained source as VM-owned, enables the previously
+hidden destination registry, records the destination authority on the fence,
+and advances the operation to `authority-switched`. It never deletes the source
+workspace, source disk or legacy records. A destination that was already
+exposed, a changed source generation, or a mismatched operation fails closed.
+The production migration workflow has not invoked this action; post-switch
+rollback and complete source reconciliation remain separate gates.
 
 The coordinator records a `quiesced` receipt only when the exact operation
 owns both fences and the source scope still matches the reservation. It

@@ -289,11 +289,78 @@ test("cutover review binds a live destination attestation without changing autho
     });
     const review = await coordinator.reviewCutoverGates(input);
     assert.equal(review.runtimeAttested, true);
-    assert.equal(review.readyForCutover, false);
-    assert.deepEqual(review.blockers, ["authority_switch_not_wired"]);
+    assert.equal(review.readyForCutover, true);
+    assert.deepEqual(review.blockers, []);
     assert.equal(review.sourceAuthority, "legacy");
     assert.equal((await db.doc(`vmRuntimes_v2/${workspaceId}`).get()).exists, false);
     assert.equal((await source.get()).get("agentRuntimeGeneration"), 7);
+  } finally {
+    await app.delete();
+  }
+});
+
+test("authority switch atomically hides the legacy source and exposes the verified VM", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucket = "fixture-bucket";
+    const source = db.collection("workspaces").doc(workspaceId);
+    await source.create({ownerUid, bucket, storagePrefix: `workspaces/${ownerUid}/staging`, agentRuntimeGeneration: 7,
+      agentRuntimeAuthorityState: "released"});
+    const target = {ownerUid, workspaceId};
+    const {observationSha256} = await createVmMigrationPreflight({db})(target);
+    const input = {...target, observationSha256, operationId: "switch-authority"};
+    const receiptSha256 = "a".repeat(64);
+    const destination = {zone: "us-central1-a", region: "us-central1", generation: 2,
+      operationId: "destination", diskId: "123", diskName: "mapache-ws-imported"};
+    const sessionId = "vm-destination-session";
+    const gatewayHost = "gateway.example.com";
+    const runnerImage = "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:" + "b".repeat(64);
+    const runtimeEvidence = {schemaVersion: 1, workspaceId, ownerUid, migrationOperationId: input.operationId,
+      destinationOperationId: destination.operationId, sourceGeneration: 7, destinationGeneration: 2,
+      diskId: destination.diskId, diskName: destination.diskName, diskReceiptSha256: receiptSha256, sessionId,
+      runtime: {state: "active", generation: 2, runnerImage, gatewayHost,
+        health: {path: "/runner/health", status: 200, agentReady: true},
+        disk: {diskId: destination.diskId, diskName: destination.diskName, attached: true, instanceReady: true}}};
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, authorize: async () => true,
+      inspectCompute: async () => ({recordedComputeClear: true, providerObservationSha256: "b".repeat(64), blockers: [],
+        discovery: {scannedRegionsClear: true, evidenceSha256: "c".repeat(64)}}),
+      inspectStorage: async () => ({stable: true, firstSha256: "d".repeat(64), secondSha256: "d".repeat(64), blockers: []}),
+      inspectDestinationRuntime: async () => runtimeEvidence,
+      now: () => 99,
+    });
+    await coordinator.reserve(input);
+    await coordinator.confirmQuiesced(input);
+    await db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`).update({
+      phase: "disk-import-verified", importDestination: destination,
+      diskImport: {receiptSha256, verifiedAtMs: 42}, validation: {cleanedAtMs: 42},
+    });
+    await db.doc(`vmRuntimes_v2/${workspaceId}`).create({ownerUid, backend: "compute-engine", apiEnabled: false,
+      state: "active", generation: 2, currentSessionId: sessionId, gatewayHost, runnerImage});
+    await db.doc(`vmRuntimes_v2/${workspaceId}/sessions/${sessionId}`).create({ownerUid, state: "active", generation: 2});
+    await db.doc(`vmGatewayRoutes_v2/${gatewayHost}`).create({ownerUid, workspaceId, generation: 2, sessionId, enabled: true});
+
+    const destinationRef = db.doc(`vmRuntimes_v2/${workspaceId}`);
+    await destinationRef.update({apiEnabled: true});
+    await assert.rejects(coordinator.switchAuthority(input), {publicMessage: "vm_migration_destination_authority_changed"});
+    assert.equal((await source.get()).get("migrationAuthority"), undefined);
+    assert.equal((await db.doc(`vmMigrationFences_v2/${workspaceId}`).get()).get("authority"), undefined);
+    await destinationRef.update({apiEnabled: false});
+    const switched = await coordinator.switchAuthority(input);
+    assert.equal(switched.phase, "authority-switched");
+    assert.equal(switched.authority, "destination");
+    assert.equal(switched.authoritySwitchedAtMs, 99);
+    assert.equal(switched.sourceRetained, true);
+    assert.equal((await source.get()).get("migrationAuthority"), "compute-engine");
+    assert.equal((await source.get()).get("agentRuntimeSessionId"), null);
+    assert.equal((await db.doc(`vmRuntimes_v2/${workspaceId}`).get()).get("apiEnabled"), true);
+    assert.equal((await db.doc(`vmMigrationFences_v2/${workspaceId}`).get()).get("authority"), "destination");
+    assert.equal((await db.doc(`vmMigrationOperations_v2/${workspaceId}/operations/${input.operationId}`).get()).get("phase"), "authority-switched");
+    assert.deepEqual(await coordinator.switchAuthority(input), switched);
   } finally {
     await app.delete();
   }

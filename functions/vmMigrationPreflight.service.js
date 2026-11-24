@@ -92,13 +92,17 @@ async function observeVmMigration(transaction, {db, workspaceId, ownerUid, now =
   if (truncated) result.blockers.push("legacy_writer_inventory_truncated");
   const observedSourceGeneration = workspace.get("agentRuntimeGeneration");
   const stamp = snapshot => [snapshot.ref.path, snapshot.updateTime?.seconds ?? null, snapshot.updateTime?.nanoseconds ?? null];
-  const evidence = [workspace, destination, fence, uploads, recovery, ...pending.docs, ...sharedStorage.docs,
+  const sourceEvidence = [workspace, fence, uploads, recovery, ...pending.docs, ...sharedStorage.docs,
     ...recoveryWrites.docs, ...sessionRecords, ...runRecords].map(stamp)
       .sort(([a], [b]) => a.localeCompare(b));
+  const evidence = [stamp(destination), ...sourceEvidence].sort(([a], [b]) => a.localeCompare(b));
   return {...result, workspace: workspace.data(), workspaceId,
     sessions: sessionRecords.map(snapshot => ({...snapshot.data(), id: snapshot.id || snapshot.ref.path.split("/").at(-1)})),
     // This fingerprint binds the observed records, not Cloud Run or Storage.
     observationSha256: createHash("sha256").update(JSON.stringify(evidence)).digest("hex"),
+    // Destination registry creation is expected after import and must not look
+    // like a legacy source mutation during the authority switch.
+    sourceObservationSha256: createHash("sha256").update(JSON.stringify(sourceEvidence)).digest("hex"),
     sourceGeneration: Number.isSafeInteger(observedSourceGeneration) ? observedSourceGeneration : null};
 }
 

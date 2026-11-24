@@ -4,6 +4,7 @@ const {createHash} = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
 
 const HEALTH_PATH = "/runner/health";
+const DESTINATION_AUTHORITY = "compute-engine";
 const DIGEST = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 const HOST = /^[a-z0-9][a-z0-9.-]{0,252}$/;
@@ -55,17 +56,29 @@ function validateDestinationRuntimeEvidence(evidence, record) {
 }
 
 function cutoverReview(record, {runtimeEvidence, sourceBlockers = []} = {}) {
-  const blockers = [...new Set(sourceBlockers.filter(blocker => blocker !== "migration_fence_already_exists"))];
+  const blockers = [...new Set(sourceBlockers.filter(blocker =>
+    !["migration_fence_already_exists", "destination_registry_exists"].includes(blocker)))];
   if (record?.phase !== "disk-import-verified") blockers.push("disk_import_not_verified");
   if (record?.validation?.cleanedAtMs === undefined) blockers.push("validation_cleanup_required");
   if (!record?.diskImport?.receiptSha256 || !DIGEST.test(record.diskImport.receiptSha256)) {
     blockers.push("disk_import_receipt_missing");
   }
   if (!runtimeEvidence) blockers.push("destination_runtime_attestation_unverified");
-  // The review is deliberately not the authority switch. A future mutation must
-  // bind the attestation to the source writer fence and atomically publish the
-  // destination registry before this blocker can be removed.
-  blockers.push("authority_switch_not_wired");
+  if (!blockers.length) {
+    return {
+      workspaceId: record.workspaceId,
+      operationId: record.operationId,
+      phase: record.phase,
+      sourceGeneration: record.sourceGeneration,
+      destinationGeneration: record.importDestination.generation,
+      sourceAuthority: "legacy",
+      destinationRetained: true,
+      readyForCutover: true,
+      blockers: [],
+      runtimeAttested: true,
+      nextAction: "switch-authority",
+    };
+  }
   return {
     workspaceId: record?.workspaceId ?? null,
     operationId: record?.operationId ?? null,
@@ -77,8 +90,8 @@ function cutoverReview(record, {runtimeEvidence, sourceBlockers = []} = {}) {
     readyForCutover: false,
     blockers: [...new Set(blockers)],
     runtimeAttested: Boolean(runtimeEvidence),
-    nextAction: runtimeEvidence ? "implement-atomic-authority-switch" : "attest-destination-runtime",
+    nextAction: runtimeEvidence ? "resolve-cutover-blockers" : "attest-destination-runtime",
   };
 }
 
-module.exports = {HEALTH_PATH, cutoverReview, validateDestinationRuntimeEvidence};
+module.exports = {DESTINATION_AUTHORITY, HEALTH_PATH, cutoverReview, validateDestinationRuntimeEvidence};
