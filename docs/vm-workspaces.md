@@ -1480,8 +1480,10 @@ digest or target mismatch; transient runtime readiness errors retain a bounded
 retry. The adapter is intentionally not wired to a production VM boot yet, so
 these reports are contract/test evidence rather than a live recovery claim.
 
-Fresh-VM verification with a real runtime adapter, numeric cost measurements,
-and disk-full/zone-loss runbooks remain release work. No
+Fresh-VM verification with a real runtime adapter and numeric cost measurements
+remain release work. The fail-closed disk-full/zone-loss procedure is in the
+[VM disk recovery runbook](runbooks/vm-disk-recovery.md), but its resize and
+fresh-VM recovery actions remain unwired. No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was invoked by this change.
 

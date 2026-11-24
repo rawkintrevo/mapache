@@ -216,7 +216,9 @@ Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
 fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
 inventory Compute resources before orphan cleanup; surface backup/runtime
 startup, attach, and mount timings and actual costs; and publish the
-disk-full/zone-loss runbooks. No
+numeric cost model. The fail-closed disk-full/zone-loss procedure is now in
+`docs/runbooks/vm-disk-recovery.md`, but its resize and fresh-VM recovery
+actions remain unwired. No
 production snapshot, restore, retention deletion, or synthetic-fixture
 mutation was performed.
 
