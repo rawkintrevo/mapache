@@ -233,27 +233,24 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     runtimeOperationId: provisioningOperationId,
     singleRunner: !isAutomationRuntime(session),
     syncWriterEligible,
-  });
-
-  if (dependencies.db && typeof dependencies.db.collection === "function") {
-    const workspaceRef = dependencies.db.collection("workspaces").doc(workspaceId);
-    const latestWorkspaceSnap = await workspaceRef.get();
-    const workspaceUpdates = {};
-    if (latestWorkspaceSnap.exists && !latestWorkspaceSnap.data().canonicalSessionId && !isAutomationRuntime(session)) {
-      workspaceUpdates.canonicalSessionId = sessionRef.id;
-      workspaceUpdates.updatedAt = dependencies.admin.firestore.FieldValue.serverTimestamp();
-    }
-    if (!payload.runtimeScheduleStart) {
-      workspaceUpdates.runtimeScheduleManualPauseWindowKey = dependencies.admin.firestore.FieldValue.delete();
-      const scheduleState = getRuntimeScheduleManualStartState(workspace, new Date());
-      if (scheduleState) {
-        workspaceUpdates.runtimeScheduleStatus = scheduleState.status;
-        workspaceUpdates.runtimeScheduleNextEvent = scheduleState.nextEvent;
-        workspaceUpdates.runtimeScheduleError = null;
+    workspaceReservationUpdates: (latestWorkspace, {at}) => {
+      const workspaceUpdates = {};
+      if (!isAutomationRuntime(session) && !latestWorkspace.canonicalSessionId) {
+        workspaceUpdates.canonicalSessionId = sessionRef.id;
+        workspaceUpdates.updatedAt = dependencies.admin.firestore.FieldValue.serverTimestamp();
       }
-    }
-    if (Object.keys(workspaceUpdates).length) await workspaceRef.update(workspaceUpdates);
-  }
+      if (!payload.runtimeScheduleStart) {
+        workspaceUpdates.runtimeScheduleManualPauseWindowKey = dependencies.admin.firestore.FieldValue.delete();
+        const scheduleState = getRuntimeScheduleManualStartState(latestWorkspace, at);
+        if (scheduleState) {
+          workspaceUpdates.runtimeScheduleStatus = scheduleState.status;
+          workspaceUpdates.runtimeScheduleNextEvent = scheduleState.nextEvent;
+          workspaceUpdates.runtimeScheduleError = null;
+        }
+      }
+      return workspaceUpdates;
+    },
+  });
 
   if (!runnerImage.canProvision) {
     await dependencies.releaseChromeWorkspaceSession(sessionRef, session, "needs_image");

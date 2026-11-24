@@ -133,10 +133,17 @@ function sessionRef(sessionsRef, id) {
   const frozen = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
   frozen.state.fenced = true;
   const fencedService = createWorkspaceSessionReservationService({db: frozen.firestore, admin});
+  let fencedMetadataCallbackCalled = false;
   await assert.rejects(fencedService.reserveChromeWorkspaceSession("workspace-1",
-      sessionRef(frozen.sessionsRef, "frozen"), session("frozen", "operation-frozen")),
+      sessionRef(frozen.sessionsRef, "frozen"), session("frozen", "operation-frozen"), {
+        workspaceReservationUpdates: () => {
+          fencedMetadataCallbackCalled = true;
+          return {shouldNotWrite: true};
+        },
+      }),
   {publicMessage: "workspace_vm_migration_active"});
   assert.equal(frozen.state.sessions.size, 0);
+  assert.equal(fencedMetadataCallbackCalled, false);
   const equal = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
   const equalService = createWorkspaceSessionReservationService({db: equal.firestore, admin});
   const equalA = session("session-equal", "operation-equal");
@@ -156,6 +163,26 @@ function sessionRef(sessionsRef, id) {
   assert.strictEqual(equal.state.sessions.size, 1);
   assert.strictEqual(equal.state.workspace.agentRuntimeGeneration, 1);
   assert.strictEqual(equal.state.workspace.agentRuntimeSessionId, "session-equal");
+
+  const atomicMetadata = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
+  const atomicMetadataService = createWorkspaceSessionReservationService({db: atomicMetadata.firestore, admin});
+  let reservationWorkspace;
+  let reservationClock;
+  await atomicMetadataService.reserveChromeWorkspaceSession(
+      "workspace-1", sessionRef(atomicMetadata.sessionsRef, "session-metadata"),
+      session("session-metadata", "operation-metadata"),
+      {
+        workspaceReservationUpdates: (workspace, {at}) => {
+          reservationWorkspace = workspace;
+          reservationClock = at;
+          return {canonicalSessionId: "session-metadata", metadataUpdatedAt: "SERVER_TIMESTAMP"};
+        },
+      },
+  );
+  assert.equal(reservationWorkspace.canonicalSessionId, undefined);
+  assert.ok(reservationClock instanceof Date);
+  assert.equal(atomicMetadata.state.workspace.canonicalSessionId, "session-metadata");
+  assert.equal(atomicMetadata.state.workspace.metadataUpdatedAt, "SERVER_TIMESTAMP");
 
   const different = createFakeFirestore({agentUiVersion: AGENT_UI_VERSION});
   const differentService = createWorkspaceSessionReservationService({db: different.firestore, admin});

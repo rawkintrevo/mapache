@@ -121,7 +121,9 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
           now: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
         },
     );
-    const workspaceUpdates = automationRuntime ? {} : {
+    const workspaceReservationUpdates = typeof options.workspaceReservationUpdates === "function" ?
+      options.workspaceReservationUpdates(workspace, {at: new Date()}) || {} : {};
+    const workspaceUpdates = automationRuntime ? workspaceReservationUpdates : {
       activeChromeSessionId: sessionRef.id,
       activeChromeSessionState: session.status || "provisioning",
       activeChromeSessionUpdatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
@@ -129,6 +131,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       automationMainAdmissionState: session.status || "provisioning",
       automationMainAdmissionUpdatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
       updatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
+      ...workspaceReservationUpdates,
       ...lease.workspaceUpdates,
       ...runtime.workspaceUpdates,
     };

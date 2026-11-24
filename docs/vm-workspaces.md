@@ -1052,6 +1052,10 @@ return fenced workspaces without repairing their canonical session pointers.
 Unfenced repairs check the workspace, fence and candidate sessions in one
 transaction. Workspace rename and resource edits, including propagation to
 the canonical session, and MCP config saves use the same admission check.
+Session creation keeps its canonical-session and manual-schedule metadata
+updates inside that same fenced reservation transaction; it cannot reserve a
+session successfully and then publish those follow-up workspace changes after
+a migration fence wins the race.
 Legacy desired configuration changes and applied-version callbacks in
 `functions/machineConfiguration.service.js` also read the fence before
 writing. An older applied callback cannot lower the recorded applied version.
