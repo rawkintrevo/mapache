@@ -397,6 +397,17 @@ mode now restores only a verified full-mode cache when available; a fast cache
 miss remains unpublished. This keeps the full-mode release boundary while
 removing the upstream rebuild from the common unchanged-input iteration path.
 
+The cache-hit path was subsequently verified on a fresh Cloud Build worker for
+PR head `a34a7f8`: Cloud Build `113b4817-5200-4749-b99c-527da563f37e` logged
+`cache decision=hit reason=verified`, completed in 13m2s wall clock (8m23s
+Docker assembly and 2m34s image push), and passed the runner smoke test. The
+immutable image digest was
+`sha256:81f59ef6dbbcc2517023b603cb62a916503453e57058c5ef7e76063df039ebae`;
+GitHub Actions run [45465470914](https://github.com/rawkintrevo/mapache/actions/runs/45465470914)
+also passed. This confirms that unchanged-input fast iterations skip the
+upstream test/build phase; the base/runtime Docker layers and image push remain
+the dominant cost.
+
 The VM request wake path also now handles a request racing an in-flight
 pause/replacement: it waits for the durable operation to commit the machine
 stopped, then submits exactly one generation-pinned, API-admitted start request.
