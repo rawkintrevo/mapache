@@ -52,8 +52,16 @@ if (['start', 'replace'].includes(action)) {
     const credentials = {ownerUid: descriptor.ownerUid, generation: descriptor.generation,
       controlToken: randomBytes(32).toString('hex'), browserToken: randomBytes(32).toString('hex'), shutdownToken: randomBytes(32).toString('hex')};
     tx.set(secretRef, credentials);
-    tx.set(workspaceRef, {ownerUid: descriptor.ownerUid, backend: 'compute-engine', currentSessionId: sessionId,
-      generation: descriptor.generation, state: 'reserved'});
+    tx.set(workspaceRef, {
+      ...(ws.exists ? ws.data() : {}),
+      ownerUid: descriptor.ownerUid,
+      backend: 'compute-engine',
+      currentSessionId: sessionId,
+      generation: descriptor.generation,
+      state: 'reserved',
+      // This fixed workspace is the explicitly admitted lifecycle fixture.
+      lifecycleEnabled: true,
+    });
     tx.set(sessionRef, {ownerUid: descriptor.ownerUid, generation: descriptor.generation, state: 'reserved',
       allowCreateDisk: !ws.exists,
       controlTokenHash: tokenHash(credentials.controlToken), authSelection: {harness: 'pi', providers: {}}, runtimeProvider: descriptor});
