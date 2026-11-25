@@ -111,7 +111,11 @@ async function main() {
     request: async options => (await computeAuth.getClient()).request({...options, timeout: 30_000}),
   });
   const startedAtMs = Date.now();
-  const operationId = createHash("sha256").update(`${options.workspace}:backup-recovery:${options.backup}`).digest("hex");
+  // Compute request IDs remain idempotent after a completed operation. Each
+  // disposable proof therefore needs a fresh operation identity after cleanup;
+  // otherwise a rerun can receive the old insert operation instead of creating
+  // its fresh VM.
+  const operationId = createHash("sha256").update(`${options.workspace}:backup-recovery:${options.backup}:${randomBytes(16).toString("hex")}`).digest("hex");
   const sessionId = `recovery-${operationId.slice(0, 24)}`;
   const shutdownToken = randomBytes(32).toString("hex");
   let target;
