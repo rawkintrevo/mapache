@@ -1694,7 +1694,19 @@ remain with the migration coordinator.
 The local `vm-test` exercise combined its published agent and workspace
 checkpoints, browser archive and owner tools into 371 files and 146 directories
 under `artifacts/qa/vm-merged-import/`. Reopening the same operation verified
-the same receipt. Full HOME recovery remains unproven.
+the same receipt. On 2026-11-25, those actual private source stages were copied
+to a fresh 10 GiB balanced Persistent Disk on the disposable private maintenance
+VM `mapache-import-complete-605`. The retained-disk importer published four
+durable roots with 495 selected entries and merge-plan digest
+`6ba37711080a5cfd141bb58d4fa2308bcf24d1c6a70a1627a9d3b45cb7ca7a7e`. A second
+mount with both the filesystem and block device read-only reverified every
+imported entry against the merge plan and found only the marker, stage,
+`lost+found`, and the four selected roots. The disposable VM and disk were
+deleted after verification; private evidence is
+`artifacts/qa/vm-merged-import/complete-live.log`. This proves a real
+selected-source import, not a complete legacy cutover: the source stages do not
+share one coordinator capture, full HOME/private-Git/live-only reconciliation
+remains open, and no source authority was changed.
 
 ### Install selected sources on a retained disk
 
