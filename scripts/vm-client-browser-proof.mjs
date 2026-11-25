@@ -64,7 +64,7 @@ try {
   if (caseId === 'vm-configuration') {
     await waitBody('Saved settings are applied.');
     assert.equal(await evaluate('document.body.textContent.includes("fixture-secret-never-render")'), false);
-    await evaluate(`const select = document.querySelector('select'); select.value = 'key'; select.dispatchEvent(new Event('change', {bubbles: true})); document.querySelector('input[type="checkbox"]').click()`);
+    await evaluate(`const select = document.querySelector('select[aria-label="OpenAI credential"]'); select.value = 'key'; select.dispatchEvent(new Event('change', {bubbles: true})); document.querySelector('input[type="checkbox"]').click()`);
     await clickButton('Save settings');
     await waitBody('Saved. Restart required'); await captureScreen('pending');
     await evaluate(`window.vmConfigurationFixture.advance(); document.querySelector('input[type="checkbox"]').click()`);
