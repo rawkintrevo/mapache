@@ -789,3 +789,27 @@ a multi-page retained prefix. A live read-only preflight of inactive workspace
 `legacy_storage_listing_limit_exceeded`. That source still correctly reports
 `legacy_persistent_home_archive_missing`, so it remains ineligible for
 cutover and no migration mutation was attempted.
+
+## Continuation evidence — 2026-11-25 source audit and hosted build
+
+The widened observer is deployed at `vmMigrationPreflight_v2` revision
+`vmmigrationpreflight-v2-00020-sev`. A read-only call to that deployed endpoint
+for `83t09pcpJ44mRs9RkILg` observed all 4,788 Storage objects stably and
+reported the concrete missing persistent-HOME source blocker in addition to
+the generic safety gates. The source was then recorded as a durable `blocked`
+/ `source-retained` report after one stale-digest retry; no fence, VM, disk,
+authority switch, or source deletion occurred.
+
+The resulting read-only registry inventory still contains 86 records, with 0
+cutover-ready and 2 explicitly blocked sources. A separate inactive blank
+source (`Fl09y597EgcvMPxGp3io`, owner `KyOcBZ4bAZMaI8VE0SNbQXN4sFY2`) has a
+clean Compute observation and a stable 10-object prefix, with no persistent
+HOME archive, browser archive, uploads, or owner-tool objects. It is not a
+canary: the inventory still requires flat-prefix/internal-format and
+unpublished/live-state reconciliation, so a clean preflight is not treated as
+source-complete or as authority-switch permission.
+
+Hosted Firebase Preview and Runner Images checks for `90bc4c4` succeeded. The
+latest runner image Cloud Build `8d659e4a-ea96-4018-8a4f-47f95440385c` took
+13m29.137s wall clock (Docker step 9m21.587s) and published digest
+`sha256:dba9cc1eb92c1e0dde5bb99394c6aa9fc157389cb2f2134de8b1da3a85a65bf3`.
