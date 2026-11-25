@@ -1,0 +1,20 @@
+{
+  "id": "remote-hosts.onboarding",
+  "title": "Remote host onboarding page shows safe setup entry",
+  "description": "Open the owner-scoped remote host surface and verify the first-run form explains the public-key setup boundary without asking for a personal private key. The QA account must remain without a registered host for this case.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/remote-hosts.onboarding",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-remote-hosts.json"},
+    {"assert": "snapshot-text", "expected": "Add your home machine"},
+    {"assert": "snapshot-text", "expected": "personal SSH private key is never requested or shown"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/remote-hosts", "method": "GET", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "remote-hosts-onboarding.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ],
+  "cleanup": [
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaLogin", "mapache.qaSecret"]}
+  ]
+}

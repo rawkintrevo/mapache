@@ -20,6 +20,7 @@ Mapache owns the surrounding workspace/session shell and account connections.
 - Workspace runtime availability policy editor: `src/components/sessions/SessionRuntimePolicy.jsx`
 - Workspace request grant management: `src/controllers/requestGrantsController.js`, `src/components/modals/WorkspaceRequestGrantsModal.jsx`, and `src/services/api.js`
 - SSH gateway assignment management: `src/controllers/sshGatewaysController.js`, `src/components/sshGateways/SshGatewaysPage.jsx`, and `src/services/api.js`
+- Remote host onboarding: `src/controllers/remoteHostsController.js`, `src/components/remoteHosts/RemoteHostsPage.jsx`, and `src/services/api.js`
 - Account/connection workflows: `src/workflows/piAuth.js`,
   `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
   `src/workflows/githubConnection.js`
@@ -233,6 +234,17 @@ The avatar menu also opens the lazy `SshGatewaysPage` through
 `sshGatewaysController`. Its API responses are fenced to the authenticated
 identity, expose only safe gateway metadata, and keep saved assignment state
 separate from the operator-managed connection secret.
+
+The avatar menu also opens the lazy `RemoteHostsPage` through
+`remoteHostsController`. The single-host v1 flow registers an owner-scoped
+public host address, renders the generated Mapache public key and inspectable
+sudo setup directions, tests SSH/libvirt readiness, and requires explicit host
+fingerprint confirmation before marking a host ready. The controller fences
+every request by authenticated user and epoch so sign-out or account changes
+cannot publish a prior owner's host. It never requests or renders a personal
+SSH private key. Workspace creation includes a setup entry point; the explicit
+remote VM workspace provider remains owned by the later workspace integration
+ticket.
 
 The automation editor is a controlled component owned by the automation workflow.
 `WorkspacePanel` displays global action errors above an existing session as well

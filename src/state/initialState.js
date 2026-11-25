@@ -156,6 +156,21 @@ export function createSshGatewaysState(overrides = {}) {
   };
 }
 
+export function createRemoteHostsState(overrides = {}) {
+  return {
+    loading: false,
+    saving: false,
+    testing: false,
+    removing: false,
+    error: "",
+    message: "",
+    attempted: false,
+    hosts: [],
+    pendingFingerprint: null,
+    ...overrides,
+  };
+}
+
 export function createAdminState(overrides = {}) {
   return {
     users: [],
@@ -190,6 +205,7 @@ export function createInitialState() {
     automations: createAutomationsState(),
     instances: createInstancesState(),
     sshGateways: createSshGatewaysState(),
+    remoteHosts: createRemoteHostsState(),
     collapsedDrawerSections: new Set(),
     sessionModalOpen: false,
     sessionEditModalSessionId: null,

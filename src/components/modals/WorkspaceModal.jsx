@@ -9,6 +9,7 @@ export function WorkspaceModal({
   onConnectGithub,
   onCreateWorkspace,
   onLoadConnectedRepos,
+  onShowRemoteHosts,
   repoPicker,
   environmentEntries = [],
 }) {
@@ -160,6 +161,13 @@ export function WorkspaceModal({
               </label>
             </div>
           ) : null}
+          <div className="workspace-remote-host-callout">
+            <div>
+              <strong>Using a home machine?</strong>
+              <p className="subtle">Set up its restricted SSH connection before choosing the remote VM workspace option.</p>
+            </div>
+            <Button type="button" variant="secondary" onClick={onShowRemoteHosts}>Set up remote host</Button>
+          </div>
           <label>
             <span>Workspace env</span>
             <textarea name="env" placeholder={"FOO=workspace-value\nNODE_ENV=development"} rows={4} />

@@ -17,10 +17,11 @@ const SessionLogsModal = lazy(() => import("../modals/SessionLogsModal.jsx").the
 const AutomationManagementPage = lazy(() => import("../automations/AutomationManagementPage.jsx").then(({AutomationManagementPage: page}) => ({default: page})));
 const InstancesPage = lazy(() => import("../instances/InstancesPage.jsx").then(({InstancesPage: page}) => ({default: page})));
 const SshGatewaysPage = lazy(() => import("../sshGateways/SshGatewaysPage.jsx").then(({SshGatewaysPage: page}) => ({default: page})));
+const RemoteHostsPage = lazy(() => import("../remoteHosts/RemoteHostsPage.jsx").then(({RemoteHostsPage: page}) => ({default: page})));
 
 export function AppShell(props) {
   const {handlers, state} = props;
-  const {admin, app, automations, github, instances, modals, sessions, sshGateways, workspaces} = handlers;
+  const {admin, app, automations, github, instances, modals, remoteHosts, sessions, sshGateways, workspaces} = handlers;
   const selectedWorkspace = state.workspaces.find(
       (workspace) => workspace.id === state.selectedWorkspaceId,
   );
@@ -106,6 +107,7 @@ export function AppShell(props) {
         onShowLogs={() => setLogsOpen(true)}
         onShowUpload={() => setUploadOpen(true)}
         onShowProfile={modals.showProfile}
+        onShowRemoteHosts={app.showRemoteHosts}
         onShowSshGateways={app.showSshGateways}
         onSignOut={app.signOut}
         onSetRuntimePolicy={sessions.setRuntimePolicy}
@@ -156,6 +158,23 @@ export function AppShell(props) {
             <SshGatewaysPage
               onLoad={sshGateways.load}
               onSaveAssignments={sshGateways.saveAssignments}
+              state={state}
+            />
+          </Suspense>
+        ) : state.activePage === "remote-hosts" ? (
+          <Suspense fallback={<LazySurfaceFallback label="Loading remote hosts..." />}>
+            <RemoteHostsPage
+              onConfirmFingerprint={remoteHosts.confirmFingerprint}
+              onLoad={remoteHosts.load}
+              onRegisterHost={remoteHosts.registerHost}
+              onRemoveHost={(hostId) => {
+                const host = state.remoteHosts.hosts.find((candidate) => (candidate.id || candidate.hostId) === hostId);
+                if (!host || window.confirm(`Remove remote host ${host.displayName || host.address}? This revokes its generated access key.`)) {
+                  return remoteHosts.removeHost(hostId);
+                }
+                return false;
+              }}
+              onTestHost={remoteHosts.testHost}
               state={state}
             />
           </Suspense>

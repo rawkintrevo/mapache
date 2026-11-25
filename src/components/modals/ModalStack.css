@@ -35,6 +35,21 @@
   gap: 10px;
 }
 
+.workspace-remote-host-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.workspace-remote-host-callout p {
+  margin: 4px 0 0;
+}
+
 .repo-picker {
   display: grid;
   gap: 6px;
